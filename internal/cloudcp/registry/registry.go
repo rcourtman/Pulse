@@ -733,6 +733,34 @@ func (r *TenantRegistry) GetStripeAccountByCustomerID(customerID string) (*Strip
 	return scanStripeAccount(row)
 }
 
+// ListStripeAccounts returns all Stripe account mappings.
+func (r *TenantRegistry) ListStripeAccounts() ([]*StripeAccount, error) {
+	rows, err := r.db.Query(`SELECT
+		account_id, stripe_customer_id, stripe_subscription_id, stripe_sub_item_workspaces_id,
+		plan_version, subscription_state, trial_ends_at, current_period_end, updated_at
+		FROM stripe_accounts
+		ORDER BY updated_at DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("list stripe accounts: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*StripeAccount
+	for rows.Next() {
+		sa, scanErr := scanStripeAccount(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		if sa != nil {
+			out = append(out, sa)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate stripe accounts: %w", err)
+	}
+	return out, nil
+}
+
 // UpdateStripeAccount modifies an existing StripeAccount row.
 func (r *TenantRegistry) UpdateStripeAccount(sa *StripeAccount) error {
 	if sa == nil {

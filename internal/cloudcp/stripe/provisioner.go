@@ -186,15 +186,79 @@ func (p *Provisioner) writeBillingState(tenantDataDir string, state *entitlement
 	return nil
 }
 
+func allowDockerlessProvisioning() bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("CP_ALLOW_DOCKERLESS_PROVISIONING")))
+	return v == "1" || v == "true" || v == "yes" || v == "on"
+}
+
 func (p *Provisioner) maybeStartContainer(ctx context.Context, tenantID, tenantDataDir string) (containerID string, err error) {
 	if p.docker == nil {
-		return "", nil
+		if allowDockerlessProvisioning() {
+			log.Warn().
+				Str("tenant_id", tenantID).
+				Msg("Docker unavailable; CP_ALLOW_DOCKERLESS_PROVISIONING enabled")
+			return "", nil
+		}
+		return "", fmt.Errorf("docker manager unavailable")
 	}
 	id, err := p.docker.CreateAndStart(ctx, tenantID, tenantDataDir)
 	if err != nil {
 		return "", err
 	}
 	return id, nil
+}
+
+func (p *Provisioner) ensureAccountOwnerMembership(accountID, email string) error {
+	accountID = strings.TrimSpace(accountID)
+	email = strings.ToLower(strings.TrimSpace(email))
+	if accountID == "" || email == "" {
+		return nil
+	}
+
+	user, err := p.registry.GetUserByEmail(email)
+	if err != nil {
+		return fmt.Errorf("lookup user by email: %w", err)
+	}
+	if user == nil {
+		userID, genErr := registry.GenerateUserID()
+		if genErr != nil {
+			return fmt.Errorf("generate user id: %w", genErr)
+		}
+		candidate := &registry.User{
+			ID:    userID,
+			Email: email,
+		}
+		if createErr := p.registry.CreateUser(candidate); createErr != nil {
+			reloaded, reloadErr := p.registry.GetUserByEmail(email)
+			if reloadErr != nil || reloaded == nil {
+				return fmt.Errorf("create user: %w", createErr)
+			}
+			user = reloaded
+		} else {
+			user = candidate
+		}
+	}
+
+	m, err := p.registry.GetMembership(accountID, user.ID)
+	if err != nil {
+		return fmt.Errorf("lookup membership: %w", err)
+	}
+	if m == nil {
+		m = &registry.AccountMembership{
+			AccountID: accountID,
+			UserID:    user.ID,
+			Role:      registry.MemberRoleOwner,
+		}
+		if createErr := p.registry.CreateMembership(m); createErr != nil {
+			reloaded, reloadErr := p.registry.GetMembership(accountID, user.ID)
+			if reloadErr != nil || reloaded == nil {
+				return fmt.Errorf("create membership: %w", createErr)
+			}
+		}
+	}
+
+	_ = p.registry.UpdateUserLastLogin(user.ID)
+	return nil
 }
 
 func (p *Provisioner) maybeStopAndRemoveContainer(ctx context.Context, containerID string) error {
@@ -379,6 +443,10 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 		}
 	}
 
+	if err := p.ensureAccountOwnerMembership(accountID, email); err != nil {
+		return fmt.Errorf("ensure account owner membership: %w", err)
+	}
+
 	tenantDataDir, secretsDir, err := p.ensureTenantDirs(tenantID)
 	if err != nil {
 		return fmt.Errorf("prepare tenant directories for %s: %w", tenantID, err)
@@ -429,25 +497,32 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 	cleanup.containerID = containerID
 
 	// Poll health check before declaring the tenant active.
-	if containerID != "" && p.pollHealth(ctx, containerID) {
+	if containerID == "" {
+		if allowDockerlessProvisioning() {
+			tenant.State = registry.TenantStateActive
+			if err := p.registry.Update(tenant); err != nil {
+				return fmt.Errorf("update tenant record: %w", err)
+			}
+			p.generateAndLogMagicLink(email, tenantID)
+			log.Warn().
+				Str("tenant_id", tenantID).
+				Msg("Provisioned without container because CP_ALLOW_DOCKERLESS_PROVISIONING is enabled")
+			return nil
+		}
+		return fmt.Errorf("container did not start for tenant %s", tenantID)
+	}
+	if p.pollHealth(ctx, containerID) {
 		tenant.State = registry.TenantStateActive
 		if err := p.registry.Update(tenant); err != nil {
 			return fmt.Errorf("update tenant record: %w", err)
 		}
 		p.generateAndLogMagicLink(email, tenantID)
 	} else {
-		if containerID != "" {
-			log.Warn().
-				Str("tenant_id", tenantID).
-				Str("container_id", containerID[:min(12, len(containerID))]).
-				Msg("Container health check timed out, leaving tenant in provisioning state")
-		}
-		// No Docker or timeout — still mark active for now, magic link generated without health gate.
-		tenant.State = registry.TenantStateActive
-		if err := p.registry.Update(tenant); err != nil {
-			return fmt.Errorf("update tenant record: %w", err)
-		}
-		p.generateAndLogMagicLink(email, tenantID)
+		log.Warn().
+			Str("tenant_id", tenantID).
+			Str("container_id", containerID[:min(12, len(containerID))]).
+			Msg("Container health check timed out; aborting provisioning")
+		return fmt.Errorf("tenant %s container failed health check", tenantID)
 	}
 
 	log.Info().
@@ -555,8 +630,24 @@ func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, display
 	if err != nil {
 		return nil, fmt.Errorf("start container: %w", err)
 	}
+	if containerID == "" {
+		if allowDockerlessProvisioning() {
+			tenant.State = registry.TenantStateActive
+			if err := p.registry.Update(tenant); err != nil {
+				return nil, fmt.Errorf("update tenant record: %w", err)
+			}
+			log.Warn().
+				Str("tenant_id", tenantID).
+				Msg("Provisioned workspace without container because CP_ALLOW_DOCKERLESS_PROVISIONING is enabled")
+			return tenant, nil
+		}
+		return nil, fmt.Errorf("container did not start for tenant %s", tenantID)
+	}
 	tenant.ContainerID = containerID
 	cleanup.containerID = containerID
+	if !p.pollHealth(ctx, containerID) {
+		return nil, fmt.Errorf("tenant %s container failed health check", tenantID)
+	}
 	tenant.State = registry.TenantStateActive
 	if err := p.registry.Update(tenant); err != nil {
 		return nil, fmt.Errorf("update tenant record: %w", err)
@@ -595,6 +686,9 @@ func (p *Provisioner) HandleSubscriptionUpdated(ctx context.Context, sub Subscri
 	subState := MapSubscriptionStatus(sub.Status)
 	priceID := sub.FirstPriceID()
 	planVersion := DerivePlanVersion(sub.Metadata, priceID)
+	if (planVersion == "" || planVersion == "stripe") && strings.TrimSpace(tenant.PlanVersion) != "" {
+		planVersion = strings.TrimSpace(tenant.PlanVersion)
+	}
 
 	// Update billing.json
 	var caps []string
@@ -625,9 +719,24 @@ func (p *Provisioner) HandleSubscriptionUpdated(ctx context.Context, sub Subscri
 		tenant.State = registry.TenantStateSuspended
 	} else if subState == entitlements.SubStateActive || subState == entitlements.SubStateTrial || subState == entitlements.SubStateGrace {
 		tenant.State = registry.TenantStateActive
+	} else if subState == entitlements.SubStateCanceled || subState == entitlements.SubStateExpired {
+		tenant.State = registry.TenantStateCanceled
 	}
 	if err := p.registry.Update(tenant); err != nil {
 		return fmt.Errorf("update tenant record: %w", err)
+	}
+
+	if sa, saErr := p.registry.GetStripeAccountByCustomerID(customerID); saErr == nil && sa != nil {
+		sa.StripeSubscriptionID = strings.TrimSpace(sub.ID)
+		sa.PlanVersion = planVersion
+		sa.SubscriptionState = normalizeStripeAccountSubscriptionState(sub.Status)
+		if updateErr := p.registry.UpdateStripeAccount(sa); updateErr != nil {
+			log.Warn().
+				Err(updateErr).
+				Str("tenant_id", tenant.ID).
+				Str("customer_id", customerID).
+				Msg("Failed to update stripe account mapping after subscription update")
+		}
 	}
 
 	log.Info().
@@ -675,6 +784,17 @@ func (p *Provisioner) HandleSubscriptionDeleted(ctx context.Context, sub Subscri
 	if err := p.registry.Update(tenant); err != nil {
 		return fmt.Errorf("update tenant record: %w", err)
 	}
+	if sa, saErr := p.registry.GetStripeAccountByCustomerID(customerID); saErr == nil && sa != nil {
+		sa.StripeSubscriptionID = strings.TrimSpace(sub.ID)
+		sa.SubscriptionState = "canceled"
+		if updateErr := p.registry.UpdateStripeAccount(sa); updateErr != nil {
+			log.Warn().
+				Err(updateErr).
+				Str("tenant_id", tenant.ID).
+				Str("customer_id", customerID).
+				Msg("Failed to update stripe account mapping after subscription delete")
+		}
+	}
 
 	log.Info().
 		Str("tenant_id", tenant.ID).
@@ -682,6 +802,20 @@ func (p *Provisioner) HandleSubscriptionDeleted(ctx context.Context, sub Subscri
 		Msg("Subscription deleted, capabilities revoked")
 
 	return nil
+}
+
+// HandleInvoicePaymentFailed transitions subscription state to grace/past_due.
+func (p *Provisioner) HandleInvoicePaymentFailed(ctx context.Context, invoice Invoice) error {
+	customerID := strings.TrimSpace(invoice.Customer)
+	if customerID == "" {
+		return fmt.Errorf("invoice missing customer")
+	}
+	sub := Subscription{
+		ID:       strings.TrimSpace(invoice.Subscription),
+		Customer: customerID,
+		Status:   "past_due",
+	}
+	return p.HandleSubscriptionUpdated(ctx, sub)
 }
 
 // HandleMSPSubscriptionUpdated updates billing state for all tenants under an MSP account.

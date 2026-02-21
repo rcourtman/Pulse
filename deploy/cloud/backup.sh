@@ -141,11 +141,35 @@ main() {
   for tenant_path in "${TENANTS_DIR}"/*; do
     [[ -d "${tenant_path}" ]] || continue
     tenant_id="$(basename "${tenant_path}")"
+    local container_name="pulse-${tenant_id}"
+    local paused="0"
 
-    # Copy one tenant at a time to avoid an I/O spike.
-    log "rsync tenant: ${tenant_id}"
+    # Copy one tenant at a time to avoid an I/O spike. If the tenant container is
+    # running, briefly pause it for a crash-consistent snapshot.
+    if docker ps --format '{{.Names}}' | grep -qx "${container_name}"; then
+      if docker pause "${container_name}" >/dev/null 2>&1; then
+        paused="1"
+        log "tenant paused for snapshot: ${tenant_id}"
+      else
+        log "warning: failed to pause tenant container ${container_name}; proceeding with live copy"
+      fi
+    fi
+
+    log "rsync tenant: ${tenant_id} (paused=${paused})"
     mkdir -p "${dest}/tenants/${tenant_id}"
-    rsync -a --delete --numeric-ids "${tenant_path}/" "${dest}/tenants/${tenant_id}/"
+    if ! rsync -a --delete --numeric-ids "${tenant_path}/" "${dest}/tenants/${tenant_id}/"; then
+      if [[ "${paused}" == "1" ]]; then
+        docker unpause "${container_name}" >/dev/null 2>&1 || true
+      fi
+      die "rsync failed for tenant ${tenant_id}"
+    fi
+    if [[ "${paused}" == "1" ]]; then
+      if docker unpause "${container_name}" >/dev/null 2>&1; then
+        log "tenant resumed after snapshot: ${tenant_id}"
+      else
+        log "warning: failed to unpause tenant container ${container_name}; manual intervention may be required"
+      fi
+    fi
   done
 
   if [[ -d "${CONTROL_PLANE_DIR}" ]]; then
@@ -180,4 +204,3 @@ main() {
 }
 
 main "$@"
-

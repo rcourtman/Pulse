@@ -109,6 +109,7 @@ func TestHandleCheckoutRollbackAllowsRetry(t *testing.T) {
 	}
 
 	retryProvisioner := NewProvisioner(reg, tenantsDir, nil, nil, "https://cloud.example.com", nil, "")
+	t.Setenv("CP_ALLOW_DOCKERLESS_PROVISIONING", "true")
 	if err := retryProvisioner.HandleCheckout(context.Background(), session); err != nil {
 		t.Fatalf("retry HandleCheckout: %v", err)
 	}

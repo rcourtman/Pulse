@@ -204,9 +204,11 @@ Created ${env_path} from .env.example.
 Edit it now and set required values:
   - DOMAIN
   - ACME_EMAIL
-  - CF_API_EMAIL
-  - CF_API_KEY
+  - CF_DNS_API_TOKEN
+  - TRAEFIK_IMAGE (digest pinned)
+  - CONTROL_PLANE_IMAGE (digest pinned)
   - CP_ADMIN_KEY
+  - CP_PULSE_IMAGE (digest pinned)
   - STRIPE_WEBHOOK_SECRET
   - STRIPE_API_KEY
 
@@ -225,7 +227,7 @@ validate_env_file() {
 
   local missing=()
   local k v
-  for k in DOMAIN ACME_EMAIL CF_API_EMAIL CF_API_KEY CP_ADMIN_KEY STRIPE_WEBHOOK_SECRET STRIPE_API_KEY; do
+  for k in DOMAIN ACME_EMAIL CF_DNS_API_TOKEN TRAEFIK_IMAGE CONTROL_PLANE_IMAGE CP_ADMIN_KEY CP_PULSE_IMAGE STRIPE_WEBHOOK_SECRET STRIPE_API_KEY; do
     v="$(grep -E "^${k}=" "${env_path}" | tail -n 1 | cut -d= -f2- || true)"
     # Trim surrounding quotes and whitespace.
     v="${v%\"}"; v="${v#\"}"
@@ -239,6 +241,17 @@ validate_env_file() {
   if [[ "${#missing[@]}" -ne 0 ]]; then
     die "missing required values in ${env_path}: ${missing[*]}"
   fi
+
+  local image_ref
+  for k in TRAEFIK_IMAGE CONTROL_PLANE_IMAGE CP_PULSE_IMAGE; do
+    image_ref="$(grep -E "^${k}=" "${env_path}" | tail -n 1 | cut -d= -f2- || true)"
+    image_ref="${image_ref%\"}"; image_ref="${image_ref#\"}"
+    image_ref="${image_ref%\'}"; image_ref="${image_ref#\'}"
+    image_ref="$(echo "${image_ref}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    if [[ "${image_ref}" != *@sha256:* ]]; then
+      die "${k} must be digest-pinned (expected ...@sha256:...)"
+    fi
+  done
 }
 
 compose_up() {
@@ -265,6 +278,10 @@ verify_health() {
   local url="https://${domain}/healthz"
   local ready="https://${domain}/readyz"
   local status="https://${domain}/status"
+  local admin_key
+  admin_key="$(grep -E '^CP_ADMIN_KEY=' "${env_path}" | tail -n 1 | cut -d= -f2-)"
+  admin_key="${admin_key%\"}"; admin_key="${admin_key#\"}"
+  admin_key="${admin_key%\'}"; admin_key="${admin_key#\'}"
 
   # Use --resolve to avoid depending on public DNS being set up yet.
   local resolve=(--resolve "${domain}:443:127.0.0.1")
@@ -279,7 +296,7 @@ verify_health() {
 
   curl -fsS -k "${resolve[@]}" "${url}" >/dev/null
   curl -fsS -k "${resolve[@]}" "${ready}" >/dev/null
-  curl -fsS -k "${resolve[@]}" "${status}" >/dev/null
+  curl -fsS -k "${resolve[@]}" "${status}" -H "X-Admin-Key: ${admin_key}" >/dev/null
 }
 
 print_summary() {
@@ -303,7 +320,7 @@ Paths:
 
 Health:
   - Control plane: https://${domain}/healthz
-  - Status:        https://${domain}/status
+  - Status (admin key required): https://${domain}/status
 
 Next steps:
   1) DNS:

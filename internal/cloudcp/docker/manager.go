@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
@@ -78,6 +79,24 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 					Type:   mount.TypeBind,
 					Source: tenantDataDir,
 					Target: "/etc/pulse",
+				},
+				{
+					Type:     mount.TypeBind,
+					Source:   filepath.Join(tenantDataDir, "billing.json"),
+					Target:   "/etc/pulse/billing.json",
+					ReadOnly: true,
+				},
+				{
+					Type:     mount.TypeBind,
+					Source:   filepath.Join(tenantDataDir, "secrets", "handoff.key"),
+					Target:   "/etc/pulse/secrets/handoff.key",
+					ReadOnly: true,
+				},
+				{
+					Type:     mount.TypeBind,
+					Source:   filepath.Join(tenantDataDir, ".cloud_handoff_key"),
+					Target:   "/etc/pulse/.cloud_handoff_key",
+					ReadOnly: true,
 				},
 			},
 		},

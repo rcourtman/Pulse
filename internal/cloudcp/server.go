@@ -95,11 +95,13 @@ func Run(ctx context.Context, version string) error {
 
 	// Build HTTP routes
 	mux := http.NewServeMux()
+	provisioner := cpstripe.NewProvisioner(reg, cfg.TenantsDir(), dockerMgr, magicLinkSvc, cfg.BaseURL, emailSender, cfg.EmailFrom)
 	deps := &Deps{
 		Config:      cfg,
 		Registry:    reg,
 		Docker:      dockerMgr,
 		MagicLinks:  magicLinkSvc,
+		Provisioner: provisioner,
 		Version:     version,
 		EmailSender: emailSender,
 	}
@@ -130,6 +132,10 @@ func Run(ctx context.Context, version string) error {
 	// Start grace period enforcer
 	graceEnforcer := cpstripe.NewGraceEnforcer(reg)
 	go graceEnforcer.Run(ctx)
+
+	// Start Stripe billing reconciler (best effort; no-op when STRIPE_API_KEY is unset).
+	reconciler := cpstripe.NewReconciler(reg, provisioner, cfg.StripeAPIKey)
+	go reconciler.Run(ctx)
 
 	// Start stuck provisioning cleanup
 	stuckCleanup := NewStuckProvisioningCleanup(reg)

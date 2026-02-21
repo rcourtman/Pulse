@@ -37,7 +37,8 @@ type handoffHTMLData struct {
 // HandleHandoff mints a tenant handoff token and returns an auto-submit HTML page.
 // Route (wiring happens elsewhere): POST /api/accounts/{account_id}/tenants/{tenant_id}/handoff
 //
-// Auth: admin-key for now. User identity is provided by X-User-ID (temporary; session auth replaces this).
+// Auth: control-plane session + account membership middleware. User identity is
+// propagated from middleware via X-User-ID.
 func HandleHandoff(reg *registry.TenantRegistry, tenantsDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {

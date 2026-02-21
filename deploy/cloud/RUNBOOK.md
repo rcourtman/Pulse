@@ -2,7 +2,7 @@
 
 This runbook is for the Phase 1 architecture: a single DigitalOcean droplet running:
 
-- Traefik as the public edge (`:80`/`:443`) with DigitalOcean DNS-01 wildcard TLS
+- Traefik as the public edge (`:80`/`:443`) with Cloudflare DNS-01 wildcard TLS
 - Pulse Control Plane behind Traefik at `https://<DOMAIN>/`
 - One Docker container per tenant (`pulse-<tenant_id>`) on the `pulse-cloud` Docker network
 
@@ -14,8 +14,8 @@ Secrets and credentials are stored separately and not checked into this reposito
 
 - DigitalOcean droplet: Ubuntu 24.04 (size per capacity plan in `docs/architecture/cloud-container-per-tenant-2026-02.md`)
 - Inbound ports allowed: `22/tcp`, `80/tcp`, `443/tcp`
-- DNS zone hosted on DigitalOcean (required for Traefik DNS-01 via `DO_AUTH_TOKEN`)
-- A DigitalOcean API token with permission to manage DNS in the zone
+- DNS hosted in Cloudflare (required for Traefik DNS-01 via `CF_DNS_API_TOKEN`)
+- A Cloudflare API token with DNS edit permission for the zone
 - Stripe secret key and a webhook signing secret
 
 ### DNS Setup
@@ -65,8 +65,11 @@ Required values:
 
 - `DOMAIN` (example: `cloud.pulserelay.pro`)
 - `ACME_EMAIL` (Let’s Encrypt contact email)
-- `DO_AUTH_TOKEN` (DigitalOcean token for DNS-01 challenges)
+- `CF_DNS_API_TOKEN` (Cloudflare token for DNS-01 challenges)
+- `TRAEFIK_IMAGE` (digest-pinned Traefik image ref)
+- `CONTROL_PLANE_IMAGE` (digest-pinned control-plane image ref)
 - `CP_ADMIN_KEY` (control plane admin API key)
+- `CP_PULSE_IMAGE` (digest-pinned tenant image ref)
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_API_KEY`
 
@@ -82,9 +85,10 @@ From the droplet:
 
 ```bash
 DOMAIN="$(grep '^DOMAIN=' /opt/pulse-cloud/.env | cut -d= -f2-)"
+ADMIN_KEY="$(grep '^CP_ADMIN_KEY=' /opt/pulse-cloud/.env | cut -d= -f2-)"
 curl -fsS -k --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/healthz"
 curl -fsS -k --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/readyz"
-curl -fsS -k --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/status" | jq
+curl -fsS -k --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/status" -H "X-Admin-Key: ${ADMIN_KEY}" | jq
 docker compose -f /opt/pulse-cloud/docker-compose.yml ps
 ```
 
@@ -105,11 +109,12 @@ Then set `STRIPE_WEBHOOK_SECRET` in `/opt/pulse-cloud/.env` to the signing secre
 
 ## Monitoring Tenants
 
-### Public Status
+### Control Plane Status (Admin-Key Protected)
 
 ```bash
 DOMAIN="$(grep '^DOMAIN=' /opt/pulse-cloud/.env | cut -d= -f2-)"
-curl -fsS "https://${DOMAIN}/status" | jq
+ADMIN_KEY="$(grep '^CP_ADMIN_KEY=' /opt/pulse-cloud/.env | cut -d= -f2-)"
+curl -fsS "https://${DOMAIN}/status" -H "X-Admin-Key: ${ADMIN_KEY}" | jq
 ```
 
 ### Admin Tenant Listing
@@ -125,6 +130,14 @@ Example:
 DOMAIN="$(grep '^DOMAIN=' /opt/pulse-cloud/.env | cut -d= -f2-)"
 ADMIN_KEY="$(grep '^CP_ADMIN_KEY=' /opt/pulse-cloud/.env | cut -d= -f2-)"
 curl -fsS "https://${DOMAIN}/admin/tenants" -H "X-Admin-Key: ${ADMIN_KEY}" | jq
+```
+
+### Prometheus Metrics (Admin-Key Protected by Default)
+
+```bash
+DOMAIN="$(grep '^DOMAIN=' /opt/pulse-cloud/.env | cut -d= -f2-)"
+ADMIN_KEY="$(grep '^CP_ADMIN_KEY=' /opt/pulse-cloud/.env | cut -d= -f2-)"
+curl -fsS "https://${DOMAIN}/metrics" -H "X-Admin-Key: ${ADMIN_KEY}" | head
 ```
 
 ## Restart A Tenant
@@ -146,17 +159,10 @@ For ad-hoc testing on a non-production droplet, the simplest path is:
    - DB path: `/data/control-plane/tenants.db`
    - You must create an `accounts` row before calling `POST /api/accounts/{account_id}/tenants`.
 
-If you already have an `account_id`:
+If you already have an `account_id`, you must call workspace APIs using a valid control-plane session (magic link login). These account-scoped APIs are no longer admin-key authenticated in production.
 
 ```bash
-DOMAIN="$(grep '^DOMAIN=' /opt/pulse-cloud/.env | cut -d= -f2-)"
-ADMIN_KEY="$(grep '^CP_ADMIN_KEY=' /opt/pulse-cloud/.env | cut -d= -f2-)"
-ACCOUNT_ID="a_0123456789"
-
-curl -fsS -X POST "https://${DOMAIN}/api/accounts/${ACCOUNT_ID}/tenants" \
-  -H "X-Admin-Key: ${ADMIN_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{"display_name":"Test Workspace"}' | jq
+echo "Use the cloud UI/session cookie, then call /api/accounts/{account_id}/tenants"
 ```
 
 ## Backup And Restore
@@ -329,8 +335,8 @@ docker logs --tail 200 "pulse-t-ABCDEFGHJK"
 ### Common Issues
 
 - TLS not issuing:
-  - Ensure `DO_AUTH_TOKEN` is valid and has DNS permissions
-  - Ensure DNS zone is hosted on DigitalOcean
+  - Ensure `CF_DNS_API_TOKEN` is valid and has DNS edit permissions
+  - Ensure DNS zone is hosted on Cloudflare
   - Check Traefik logs for DNS-01 errors
 - Control plane 5xx:
   - Check `docker logs control-plane`

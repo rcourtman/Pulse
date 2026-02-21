@@ -15,7 +15,10 @@ import (
 	cpstripe "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/stripe"
 )
 
-func newTestTenantMux(reg *registry.TenantRegistry, tenantsDir string) (*http.ServeMux, *cpstripe.Provisioner) {
+func newTestTenantMux(t *testing.T, reg *registry.TenantRegistry, tenantsDir string) (*http.ServeMux, *cpstripe.Provisioner) {
+	t.Helper()
+	t.Setenv("CP_ALLOW_DOCKERLESS_PROVISIONING", "true")
+
 	mux := http.NewServeMux()
 	provisioner := cpstripe.NewProvisioner(reg, tenantsDir, nil, nil, "https://cloud.example.com", nil, "")
 
@@ -53,7 +56,7 @@ func newTestTenantMux(reg *registry.TenantRegistry, tenantsDir string) (*http.Se
 func TestCreateWorkspace(t *testing.T) {
 	reg := newTestRegistry(t)
 	tenantsDir := t.TempDir()
-	mux, _ := newTestTenantMux(reg, tenantsDir)
+	mux, _ := newTestTenantMux(t, reg, tenantsDir)
 
 	accountID, err := registry.GenerateAccountID()
 	if err != nil {
@@ -102,7 +105,7 @@ func TestCreateWorkspace(t *testing.T) {
 func TestListWorkspaces(t *testing.T) {
 	reg := newTestRegistry(t)
 	tenantsDir := t.TempDir()
-	mux, provisioner := newTestTenantMux(reg, tenantsDir)
+	mux, provisioner := newTestTenantMux(t, reg, tenantsDir)
 
 	accountID, err := registry.GenerateAccountID()
 	if err != nil {
@@ -151,7 +154,7 @@ func TestListWorkspaces(t *testing.T) {
 func TestDeleteWorkspace(t *testing.T) {
 	reg := newTestRegistry(t)
 	tenantsDir := t.TempDir()
-	mux, provisioner := newTestTenantMux(reg, tenantsDir)
+	mux, provisioner := newTestTenantMux(t, reg, tenantsDir)
 
 	accountID, err := registry.GenerateAccountID()
 	if err != nil {
@@ -188,7 +191,7 @@ func TestDeleteWorkspace(t *testing.T) {
 func TestTenantBelongsToAccount(t *testing.T) {
 	reg := newTestRegistry(t)
 	tenantsDir := t.TempDir()
-	mux, provisioner := newTestTenantMux(reg, tenantsDir)
+	mux, provisioner := newTestTenantMux(t, reg, tenantsDir)
 
 	account1, err := registry.GenerateAccountID()
 	if err != nil {

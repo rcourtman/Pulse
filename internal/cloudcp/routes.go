@@ -2,6 +2,7 @@ package cloudcp
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -22,22 +23,53 @@ type Deps struct {
 	Registry    *registry.TenantRegistry
 	Docker      *docker.Manager // nil if Docker is unavailable
 	MagicLinks  *cpauth.Service // control plane magic link service
+	Provisioner *cpstripe.Provisioner
 	Version     string
 	EmailSender email.Sender
 }
 
 // RegisterRoutes wires all HTTP handlers onto the given ServeMux.
 func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
-	// Health / readiness / status (unauthenticated)
+	adminAuth := func(next http.Handler) http.Handler {
+		return admin.AdminKeyMiddleware(deps.Config.AdminKey, next)
+	}
+	sessionAuth := func(next http.Handler) http.Handler {
+		if deps.MagicLinks == nil {
+			return adminAuth(next)
+		}
+		return requireSessionAuth(deps.MagicLinks, next)
+	}
+	accountSessionAuth := func(extract accountIDExtractor, next http.Handler) http.Handler {
+		if deps.MagicLinks == nil {
+			return adminAuth(next)
+		}
+		return sessionAuth(requireAccountMembership(deps.Registry, extract, next))
+	}
+
+	// Health / readiness are unauthenticated liveness/readiness probes.
 	mux.HandleFunc("/healthz", admin.HandleHealthz)
 	mux.HandleFunc("/readyz", admin.HandleReadyz(deps.Registry))
-	mux.HandleFunc("/status", admin.HandleStatus(deps.Registry, deps.Version))
 
-	// Prometheus metrics
-	mux.Handle("/metrics", promhttp.Handler())
+	// Status and metrics are private by default.
+	statusHandler := http.HandlerFunc(admin.HandleStatus(deps.Registry, deps.Version))
+	if deps.Config.PublicStatus {
+		mux.Handle("/status", statusHandler)
+	} else {
+		mux.Handle("/status", adminAuth(statusHandler))
+	}
+
+	metricsHandler := promhttp.Handler()
+	if deps.Config.PublicMetrics {
+		mux.Handle("/metrics", metricsHandler)
+	} else {
+		mux.Handle("/metrics", adminAuth(metricsHandler))
+	}
 
 	// Stripe webhook (signature-authenticated)
-	provisioner := cpstripe.NewProvisioner(deps.Registry, deps.Config.TenantsDir(), deps.Docker, deps.MagicLinks, deps.Config.BaseURL, deps.EmailSender, deps.Config.EmailFrom)
+	provisioner := deps.Provisioner
+	if provisioner == nil {
+		provisioner = cpstripe.NewProvisioner(deps.Registry, deps.Config.TenantsDir(), deps.Docker, deps.MagicLinks, deps.Config.BaseURL, deps.EmailSender, deps.Config.EmailFrom)
+	}
 	webhookHandler := cpstripe.NewWebhookHandler(deps.Config.StripeWebhookSecret, provisioner)
 	webhookLimiter := NewCPRateLimiter(120, time.Minute)
 	mux.Handle("/api/stripe/webhook", webhookLimiter.Middleware(webhookHandler))
@@ -48,10 +80,10 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 
 	// Admin API (key-authenticated)
 	tenantsHandler := admin.HandleListTenants(deps.Registry)
-	mux.Handle("/admin/tenants", admin.AdminKeyMiddleware(deps.Config.AdminKey, tenantsHandler))
-	mux.Handle("/admin/magic-link", admin.AdminKeyMiddleware(deps.Config.AdminKey, cpauth.HandleAdminGenerateMagicLink(deps.MagicLinks, deps.Config.BaseURL, deps.EmailSender, deps.Config.EmailFrom)))
+	mux.Handle("/admin/tenants", adminAuth(tenantsHandler))
+	mux.Handle("/admin/magic-link", adminAuth(cpauth.HandleAdminGenerateMagicLink(deps.MagicLinks, deps.Config.BaseURL, deps.EmailSender, deps.Config.EmailFrom)))
 
-	// Account membership (admin-key authenticated for now; session auth in M-4)
+	// Account membership (session + account-membership authenticated)
 	listMembers := account.HandleListMembers(deps.Registry)
 	inviteMember := account.HandleInviteMember(deps.Registry)
 	updateRole := account.HandleUpdateMemberRole(deps.Registry)
@@ -78,10 +110,26 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 		}
 	})
 
-	mux.Handle("/api/accounts/{account_id}/members", admin.AdminKeyMiddleware(deps.Config.AdminKey, membersCollection))
-	mux.Handle("/api/accounts/{account_id}/members/{user_id}", admin.AdminKeyMiddleware(deps.Config.AdminKey, member))
+	accountIDFromPath := func(r *http.Request) string {
+		return r.PathValue("account_id")
+	}
+	accountIDFromPortalRequest := func(r *http.Request) string {
+		if v := strings.TrimSpace(r.URL.Query().Get("account_id")); v != "" {
+			return v
+		}
+		if v := strings.TrimSpace(r.Header.Get("X-Account-ID")); v != "" {
+			return v
+		}
+		if v := strings.TrimSpace(r.Header.Get("X-Account-Id")); v != "" {
+			return v
+		}
+		return ""
+	}
 
-	// Workspace management (admin-key authenticated for now; session auth in M-4)
+	mux.Handle("/api/accounts/{account_id}/members", accountSessionAuth(accountIDFromPath, membersCollection))
+	mux.Handle("/api/accounts/{account_id}/members/{user_id}", accountSessionAuth(accountIDFromPath, member))
+
+	// Workspace management (session + account-membership authenticated)
 	listTenants := account.HandleListTenants(deps.Registry)
 	createTenant := account.HandleCreateTenant(deps.Registry, provisioner)
 	updateTenant := account.HandleUpdateTenant(deps.Registry)
@@ -108,14 +156,14 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 		}
 	})
 
-	mux.Handle("/api/accounts/{account_id}/tenants", admin.AdminKeyMiddleware(deps.Config.AdminKey, tenantsCollection))
-	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}", admin.AdminKeyMiddleware(deps.Config.AdminKey, tenant))
+	mux.Handle("/api/accounts/{account_id}/tenants", accountSessionAuth(accountIDFromPath, tenantsCollection))
+	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}", accountSessionAuth(accountIDFromPath, tenant))
 
-	// Tenant switching handoff (admin-key authenticated for now; session auth in M-4)
+	// Tenant switching handoff (session + account-membership authenticated)
 	handoffHandler := handoff.HandleHandoff(deps.Registry, deps.Config.TenantsDir())
-	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}/handoff", admin.AdminKeyMiddleware(deps.Config.AdminKey, handoffHandler))
+	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}/handoff", accountSessionAuth(accountIDFromPath, handoffHandler))
 
-	// MSP portal API (admin-key authenticated for now; session auth in M-4)
-	mux.Handle("/api/portal/dashboard", admin.AdminKeyMiddleware(deps.Config.AdminKey, portal.HandlePortalDashboard(deps.Registry)))
-	mux.Handle("/api/portal/workspaces/{tenant_id}", admin.AdminKeyMiddleware(deps.Config.AdminKey, portal.HandlePortalWorkspaceDetail(deps.Registry)))
+	// MSP portal API (session + account-membership authenticated)
+	mux.Handle("/api/portal/dashboard", accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalDashboard(deps.Registry)))
+	mux.Handle("/api/portal/workspaces/{tenant_id}", accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalWorkspaceDetail(deps.Registry)))
 }

@@ -23,6 +23,7 @@ type Monitor struct {
 	registry *registry.TenantRegistry
 	docker   *docker.Manager
 	cfg      MonitorConfig
+	failures map[string]int
 }
 
 // NewMonitor creates a health monitor.
@@ -37,6 +38,7 @@ func NewMonitor(reg *registry.TenantRegistry, mgr *docker.Manager, cfg MonitorCo
 		registry: reg,
 		docker:   mgr,
 		cfg:      cfg,
+		failures: make(map[string]int),
 	}
 }
 
@@ -62,6 +64,7 @@ func (m *Monitor) Run(ctx context.Context) {
 }
 
 func (m *Monitor) checkAll(ctx context.Context) {
+	activeContainerIDs := make(map[string]struct{})
 	tenants, err := m.registry.ListByState(registry.TenantStateActive)
 	if err != nil {
 		log.Error().Err(err).Msg("Health monitor: failed to list active tenants")
@@ -75,6 +78,7 @@ func (m *Monitor) checkAll(ctx context.Context) {
 		if tenant.ContainerID == "" {
 			continue
 		}
+		activeContainerIDs[tenant.ContainerID] = struct{}{}
 
 		healthy, err := m.docker.HealthCheck(ctx, tenant.ContainerID)
 		if err != nil {
@@ -90,8 +94,10 @@ func (m *Monitor) checkAll(ctx context.Context) {
 
 		if healthy {
 			cpmetrics.HealthCheckResults.WithLabelValues("healthy").Inc()
+			m.failures[tenant.ContainerID] = 0
 		} else {
 			cpmetrics.HealthCheckResults.WithLabelValues("unhealthy").Inc()
+			m.failures[tenant.ContainerID] = m.failures[tenant.ContainerID] + 1
 		}
 
 		if err := m.registry.Update(tenant); err != nil {
@@ -103,10 +109,12 @@ func (m *Monitor) checkAll(ctx context.Context) {
 			continue
 		}
 
-		if !healthy && m.cfg.RestartOnFail {
+		if !healthy && m.cfg.RestartOnFail && m.failures[tenant.ContainerID] >= m.cfg.FailThreshold {
 			log.Warn().
 				Str("tenant_id", tenant.ID).
 				Str("container_id", tenant.ContainerID).
+				Int("consecutive_failures", m.failures[tenant.ContainerID]).
+				Int("fail_threshold", m.cfg.FailThreshold).
 				Msg("Container unhealthy, attempting restart")
 
 			if err := m.docker.Stop(ctx, tenant.ContainerID); err != nil {
@@ -117,6 +125,13 @@ func (m *Monitor) checkAll(ctx context.Context) {
 					Msg("Failed to stop unhealthy container")
 			}
 			// Docker restart policy (unless-stopped) will restart the container
+			m.failures[tenant.ContainerID] = 0
+		}
+	}
+
+	for containerID := range m.failures {
+		if _, ok := activeContainerIDs[containerID]; !ok {
+			delete(m.failures, containerID)
 		}
 	}
 }

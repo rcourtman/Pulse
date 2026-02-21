@@ -64,7 +64,7 @@ func accountIDFromRequest(r *http.Request) string {
 // HandlePortalDashboard returns a portal-oriented dashboard response for an account.
 // Route: GET /api/portal/dashboard?account_id=...
 //
-// Auth: admin-key for now (session auth in M-4).
+// Auth: control-plane session + account membership middleware.
 func HandlePortalDashboard(reg *registry.TenantRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -148,7 +148,7 @@ func HandlePortalDashboard(reg *registry.TenantRegistry) http.HandlerFunc {
 // HandlePortalWorkspaceDetail returns a portal-oriented detail response for a single tenant.
 // Route: GET /api/portal/workspaces/{tenant_id}?account_id=...
 //
-// Auth: admin-key for now (session auth in M-4).
+// Auth: control-plane session + account membership middleware.
 func HandlePortalWorkspaceDetail(reg *registry.TenantRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

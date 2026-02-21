@@ -113,6 +113,31 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 		redirectURL := fmt.Sprintf("https://%s.%s/auth/cloud-handoff?token=%s",
 			tenant.ID, baseDomain, handoffToken)
 
+		if userID, err := ensureAccountUserAndMembership(reg, tenant, token.Email); err != nil {
+			log.Warn().
+				Err(err).
+				Str("tenant_id", tenant.ID).
+				Str("email", token.Email).
+				Msg("Failed to establish control-plane session identity")
+		} else if sessionToken, err := svc.GenerateSessionToken(userID, token.Email, SessionTTL); err != nil {
+			log.Warn().
+				Err(err).
+				Str("tenant_id", tenant.ID).
+				Str("email", token.Email).
+				Msg("Failed to issue control-plane session")
+		} else {
+			http.SetCookie(w, &http.Cookie{
+				Name:     SessionCookieName,
+				Value:    sessionToken,
+				Path:     "/",
+				HttpOnly: true,
+				Secure:   true,
+				SameSite: http.SameSiteLaxMode,
+				MaxAge:   int(SessionTTL.Seconds()),
+				Expires:  time.Now().UTC().Add(SessionTTL),
+			})
+		}
+
 		auditEvent(r, "cp_magic_link_verify", "success").
 			Str("tenant_id", tenant.ID).
 			Str("email", token.Email).
@@ -237,4 +262,69 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	}); err != nil {
 		log.Error().Err(err).Msg("cloudcp.auth: encode error response")
 	}
+}
+
+func ensureAccountUserAndMembership(reg *registry.TenantRegistry, tenant *registry.Tenant, email string) (string, error) {
+	if reg == nil {
+		return "", fmt.Errorf("registry unavailable")
+	}
+	if tenant == nil {
+		return "", fmt.Errorf("tenant is required")
+	}
+	accountID := strings.TrimSpace(tenant.AccountID)
+	if accountID == "" {
+		return "", fmt.Errorf("tenant has no account id")
+	}
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return "", fmt.Errorf("email is required")
+	}
+
+	user, err := reg.GetUserByEmail(email)
+	if err != nil {
+		return "", fmt.Errorf("lookup user by email: %w", err)
+	}
+	if user == nil {
+		userID, genErr := registry.GenerateUserID()
+		if genErr != nil {
+			return "", fmt.Errorf("generate user id: %w", genErr)
+		}
+		candidate := &registry.User{
+			ID:    userID,
+			Email: email,
+		}
+		if createErr := reg.CreateUser(candidate); createErr != nil {
+			reloaded, reloadErr := reg.GetUserByEmail(email)
+			if reloadErr != nil || reloaded == nil {
+				return "", fmt.Errorf("create user: %w", createErr)
+			}
+			user = reloaded
+		} else {
+			user = candidate
+		}
+	}
+	if user == nil || strings.TrimSpace(user.ID) == "" {
+		return "", fmt.Errorf("user resolution failed")
+	}
+
+	m, err := reg.GetMembership(accountID, user.ID)
+	if err != nil {
+		return "", fmt.Errorf("lookup membership: %w", err)
+	}
+	if m == nil {
+		newMembership := &registry.AccountMembership{
+			AccountID: accountID,
+			UserID:    user.ID,
+			Role:      registry.MemberRoleOwner,
+		}
+		if createErr := reg.CreateMembership(newMembership); createErr != nil {
+			reloaded, reloadErr := reg.GetMembership(accountID, user.ID)
+			if reloadErr != nil || reloaded == nil {
+				return "", fmt.Errorf("create membership: %w", createErr)
+			}
+		}
+	}
+
+	_ = reg.UpdateUserLastLogin(user.ID)
+	return user.ID, nil
 }

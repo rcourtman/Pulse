@@ -88,7 +88,24 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	eventType = string(event.Type)
 
+	alreadyProcessed, err := h.provisioner.registry.RecordStripeEvent(event.ID, eventType)
+	if err != nil {
+		log.Error().Err(err).
+			Str("event_id", event.ID).
+			Str("type", eventType).
+			Msg("Stripe webhook: failed to record event idempotency marker")
+		status = http.StatusInternalServerError
+		writeJSON(w, http.StatusInternalServerError, webhookErrorResponse{Error: "processing failed"})
+		return
+	}
+	if alreadyProcessed {
+		status = http.StatusOK
+		writeJSON(w, http.StatusOK, webhookReceivedResponse{Received: true})
+		return
+	}
+
 	if err := h.handleEvent(r, &event); err != nil {
+		_ = h.provisioner.registry.MarkStripeEventProcessed(event.ID, err.Error())
 		log.Error().Err(err).
 			Str("event_id", event.ID).
 			Str("type", string(event.Type)).
@@ -96,6 +113,12 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusInternalServerError
 		writeJSON(w, http.StatusInternalServerError, webhookErrorResponse{Error: "processing failed"})
 		return
+	}
+	if err := h.provisioner.registry.MarkStripeEventProcessed(event.ID, ""); err != nil {
+		log.Warn().Err(err).
+			Str("event_id", event.ID).
+			Str("type", eventType).
+			Msg("Stripe webhook: failed to mark event as processed")
 	}
 
 	status = http.StatusOK
@@ -124,6 +147,13 @@ func (h *WebhookHandler) handleEvent(r *http.Request, event *stripelib.Event) er
 			return fmt.Errorf("decode subscription: %w", err)
 		}
 		return h.routeSubscriptionDeleted(r, sub)
+
+	case "invoice.payment_failed":
+		var inv Invoice
+		if err := json.Unmarshal(event.Data.Raw, &inv); err != nil {
+			return fmt.Errorf("decode invoice.payment_failed: %w", err)
+		}
+		return h.routeInvoicePaymentFailed(r, inv)
 
 	default:
 		log.Info().
@@ -174,6 +204,19 @@ func (h *WebhookHandler) routeSubscriptionDeleted(r *http.Request, sub Subscript
 	return h.provisioner.HandleSubscriptionDeleted(r.Context(), sub)
 }
 
+func (h *WebhookHandler) routeInvoicePaymentFailed(r *http.Request, inv Invoice) error {
+	customerID := strings.TrimSpace(inv.Customer)
+	if customerID == "" {
+		return fmt.Errorf("invoice missing customer")
+	}
+	sub := Subscription{
+		ID:       strings.TrimSpace(inv.Subscription),
+		Customer: customerID,
+		Status:   "past_due",
+	}
+	return h.routeSubscriptionUpdated(r, sub)
+}
+
 // CheckoutSession is a minimal representation of a Stripe checkout.session event.
 type CheckoutSession struct {
 	ID              string `json:"id"`
@@ -202,6 +245,13 @@ type Subscription struct {
 		} `json:"data"`
 	} `json:"items"`
 	Metadata map[string]string `json:"metadata"`
+}
+
+// Invoice is a minimal representation of an invoice.payment_failed event.
+type Invoice struct {
+	ID           string `json:"id"`
+	Customer     string `json:"customer"`
+	Subscription string `json:"subscription"`
 }
 
 // FirstPriceID returns the price ID from the first subscription item.

@@ -18,6 +18,8 @@ type CPConfig struct {
 	Port                int
 	AdminKey            string
 	BaseURL             string
+	PublicStatus        bool
+	PublicMetrics       bool
 	PulseImage          string
 	DockerNetwork       string
 	TenantMemoryLimit   int64 // bytes
@@ -63,6 +65,8 @@ func LoadConfig() (*CPConfig, error) {
 		Port:                port,
 		AdminKey:            strings.TrimSpace(os.Getenv("CP_ADMIN_KEY")),
 		BaseURL:             strings.TrimSpace(os.Getenv("CP_BASE_URL")),
+		PublicStatus:        envOrDefaultBool("CP_PUBLIC_STATUS", false),
+		PublicMetrics:       envOrDefaultBool("CP_PUBLIC_METRICS", false),
 		PulseImage:          envOrDefault("CP_PULSE_IMAGE", "ghcr.io/rcourtman/pulse:latest"),
 		DockerNetwork:       envOrDefault("CP_DOCKER_NETWORK", "pulse-cloud"),
 		TenantMemoryLimit:   tenantMemoryLimit,
@@ -144,4 +148,16 @@ func envOrDefaultInt64(key string, fallback int64) (int64, error) {
 		return n, nil
 	}
 	return fallback, nil
+}
+
+func envOrDefaultBool(key string, fallback bool) bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	switch v {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
+	}
 }

@@ -1,6 +1,6 @@
 services:
   traefik:
-    image: traefik:latest
+    image: ${TRAEFIK_IMAGE:?TRAEFIK_IMAGE must be set to a digest-pinned image}
     ports:
       - "80:80"
       - "443:443"
@@ -12,8 +12,7 @@ services:
     env_file:
       - .env
     environment:
-      - CF_API_EMAIL=${CF_API_EMAIL}
-      - CF_API_KEY=${CF_API_KEY}
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
       # Avoid relying on YAML interpolation support; force ACME email via env override.
       - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=${ACME_EMAIL}
       - TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_EMAIL=${ACME_EMAIL}
@@ -22,9 +21,7 @@ services:
     restart: unless-stopped
 
   control-plane:
-    # Choose ONE:
-    # - Use a prebuilt image (recommended for production)
-    image: ghcr.io/rcourtman/pulse-control-plane:latest
+    image: ${CONTROL_PLANE_IMAGE:?CONTROL_PLANE_IMAGE must be set to a digest-pinned image}
     # - Or build locally from this repo:
     # build:
     #   context: ../../
@@ -41,7 +38,7 @@ services:
       - CP_PORT=8443
       - CP_ADMIN_KEY=${CP_ADMIN_KEY}
       - CP_BASE_URL=https://${DOMAIN}
-      - CP_PULSE_IMAGE=${CP_PULSE_IMAGE:-ghcr.io/rcourtman/pulse:latest}
+      - CP_PULSE_IMAGE=${CP_PULSE_IMAGE}
       - CP_DOCKER_NETWORK=pulse-cloud
       - CP_TENANT_MEMORY_LIMIT=${CP_TENANT_MEMORY_LIMIT:-536870912}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}

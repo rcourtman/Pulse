@@ -28,6 +28,7 @@ func TestRegisterRoutes_ExposesMetrics(t *testing.T) {
 			DataDir:             dir,
 			AdminKey:            "test-admin-key",
 			BaseURL:             "https://cloud.example.com",
+			PublicMetrics:       true,
 			StripeWebhookSecret: "whsec_test",
 		},
 		Registry: reg,
