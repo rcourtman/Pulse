@@ -122,6 +122,104 @@ func TestOpenAIClient_ChatStream_ToolCall(t *testing.T) {
 	assert.Equal(t, map[string]interface{}{"location": "NYC"}, toolCalls[0].Input)
 }
 
+func TestOpenAIClient_Chat_ToolChoiceNone_DropsTools(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var got map[string]interface{}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+
+		if tools, ok := got["tools"]; ok {
+			toolList, isList := tools.([]interface{})
+			require.True(t, isList, "tools field should be a JSON array when present")
+			assert.Len(t, toolList, 0, "tools should be omitted or empty when tool_choice is none")
+		}
+		_, hasToolChoice := got["tool_choice"]
+		assert.False(t, hasToolChoice, "tool_choice should be omitted when tools are dropped")
+
+		_ = json.NewEncoder(w).Encode(openaiResponse{
+			ID:    "chatcmpl-none-tools",
+			Model: "gpt-4",
+			Choices: []openaiChoice{
+				{
+					Message:      openaiRespMsg{Role: "assistant", Content: "No tools"},
+					FinishReason: "stop",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "gpt-4", server.URL, 0)
+	resp, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+		Tools: []Tool{
+			{
+				Name:        "get_time",
+				Description: "get time",
+				InputSchema: map[string]interface{}{"type": "object"},
+			},
+		},
+		ToolChoice: &ToolChoice{Type: ToolChoiceNone},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "No tools", resp.Content)
+}
+
+func TestOpenAIClient_ChatStream_ToolChoiceNone_DropsTools(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var got map[string]interface{}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+
+		if tools, ok := got["tools"]; ok {
+			toolList, isList := tools.([]interface{})
+			require.True(t, isList, "tools field should be a JSON array when present")
+			assert.Len(t, toolList, 0, "tools should be omitted or empty when tool_choice is none")
+		}
+		_, hasToolChoice := got["tool_choice"]
+		assert.False(t, hasToolChoice, "tool_choice should be omitted when tools are dropped")
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		events := []string{
+			`{"id":"chatcmpl-1","choices":[{"delta":{"content":"Hello"}}],"object":"chat.completion.chunk"}`,
+			`[DONE]`,
+		}
+		for _, event := range events {
+			fmt.Fprintf(w, "data: %s\n\n", event)
+			w.(http.Flusher).Flush()
+			time.Sleep(10 * time.Millisecond)
+		}
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "gpt-4", server.URL, 0)
+	var content string
+	var doneCalled bool
+
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+		Tools: []Tool{
+			{
+				Name:        "get_time",
+				Description: "get time",
+				InputSchema: map[string]interface{}{"type": "object"},
+			},
+		},
+		ToolChoice: &ToolChoice{Type: ToolChoiceNone},
+	}, func(event StreamEvent) {
+		switch event.Type {
+		case "content":
+			if data, ok := event.Data.(ContentEvent); ok {
+				content += data.Text
+			}
+		case "done":
+			doneCalled = true
+		}
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Hello", content)
+	assert.True(t, doneCalled)
+}
+
 func TestOpenAIClient_ChatStream_Errors(t *testing.T) {
 	t.Run("401 Unauthorized", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

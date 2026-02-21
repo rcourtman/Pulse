@@ -165,6 +165,51 @@ func TestAnthropicClient_Chat_Success_TextAndToolCalls(t *testing.T) {
 	}
 }
 
+func TestAnthropicClient_Chat_ToolChoiceNone_DropsTools(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var got map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		if _, ok := got["tools"]; ok {
+			t.Fatalf("tools field should be omitted when tool_choice is none: %+v", got["tools"])
+		}
+		if _, ok := got["tool_choice"]; ok {
+			t.Fatalf("tool_choice field should be omitted when tools are dropped: %+v", got["tool_choice"])
+		}
+
+		_ = json.NewEncoder(w).Encode(anthropicResponse{
+			ID:         "msg_123",
+			Type:       "message",
+			Role:       "assistant",
+			Model:      "claude-3-5-sonnet",
+			StopReason: "end_turn",
+			Content:    []anthropicContent{{Type: "text", Text: "No tools"}},
+		})
+	}))
+	defer server.Close()
+
+	client := NewAnthropicClientWithBaseURL("test-key", "claude-3-5-sonnet", server.URL+"/v1/messages", 0)
+	out, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hello"}},
+		Tools: []Tool{
+			{
+				Name:        "get_time",
+				Description: "get time",
+				InputSchema: map[string]any{"type": "object"},
+			},
+		},
+		ToolChoice: &ToolChoice{Type: ToolChoiceNone},
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if out.Content != "No tools" {
+		t.Fatalf("Content = %q, want No tools", out.Content)
+	}
+}
+
 func TestAnthropicClient_Chat_ToolResultInRequest(t *testing.T) {
 	var got map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -459,6 +504,72 @@ func TestAnthropicClient_ChatStream_ToolUse(t *testing.T) {
 	}
 	if done.ToolCalls[0].Name != "get_time" || done.InputTokens != 5 || done.OutputTokens != 7 {
 		t.Fatalf("unexpected tool call or usage: %+v", done)
+	}
+}
+
+func TestAnthropicClient_ChatStream_ToolChoiceNone_DropsTools(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var got map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		if _, ok := got["tools"]; ok {
+			t.Fatalf("tools field should be omitted when tool_choice is none: %+v", got["tools"])
+		}
+		if _, ok := got["tool_choice"]; ok {
+			t.Fatalf("tool_choice field should be omitted when tools are dropped: %+v", got["tool_choice"])
+		}
+
+		stream := []string{
+			`{"type":"message_start","message":{"usage":{"input_tokens":2}}}`,
+			`{"type":"content_block_delta","delta":{"type":"text_delta","text":"Hello"}}`,
+			`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":3}}`,
+			`{"type":"message_stop"}`,
+		}
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		for _, event := range stream {
+			_, _ = w.Write([]byte("data: " + event + "\n\n"))
+			w.(http.Flusher).Flush()
+		}
+	}))
+	defer server.Close()
+
+	client := NewAnthropicClientWithBaseURL("test-key", "claude-3-5-sonnet", server.URL, 0)
+
+	var content string
+	var doneCalled bool
+
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+		Tools: []Tool{
+			{
+				Name:        "get_time",
+				Description: "get time",
+				InputSchema: map[string]any{"type": "object"},
+			},
+		},
+		ToolChoice: &ToolChoice{Type: ToolChoiceNone},
+	}, func(event StreamEvent) {
+		switch event.Type {
+		case "content":
+			if data, ok := event.Data.(ContentEvent); ok {
+				content += data.Text
+			}
+		case "done":
+			doneCalled = true
+		}
+	})
+	if err != nil {
+		t.Fatalf("ChatStream: %v", err)
+	}
+	if content != "Hello" {
+		t.Fatalf("content = %q, want Hello", content)
+	}
+	if !doneCalled {
+		t.Fatalf("done event not called")
 	}
 }
 

@@ -373,16 +373,16 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				case "content":
 					if data, ok := event.Data.(providers.ContentEvent); ok {
 						attemptEmittedVisibleEvents = true
-						// Check for DeepSeek DSML marker - if detected, stop streaming this chunk
-						// The DSML format indicates the model is outputting internal function call
-						// formatting instead of using the proper tool calling API
-						if containsDeepSeekMarker(data.Text) {
+						// Check for tool call marker leakage - if detected, stop streaming this chunk.
+						// These markers indicate the model is outputting internal tool call
+						// formatting instead of using the proper tool calling API.
+						if containsToolCallMarker(data.Text) {
 							// Don't append or stream this content
 							return
 						}
 						// Also check if the accumulated content already has the marker
 						// (in case it arrived in a previous chunk)
-						if containsDeepSeekMarker(contentBuilder.String()) {
+						if containsToolCallMarker(contentBuilder.String()) {
 							return
 						}
 						contentBuilder.WriteString(data.Text)
@@ -532,8 +532,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		}
 
 		// Create assistant message
-		// Clean DeepSeek artifacts from the content before storing
-		cleanedContent := cleanDeepSeekArtifacts(contentBuilder.String())
+		// Clean tool call artifacts from the content before storing.
+		cleanedContent := cleanToolCallArtifacts(contentBuilder.String())
 		assistantMsg := Message{
 			ID:               uuid.New().String(),
 			Role:             "assistant",

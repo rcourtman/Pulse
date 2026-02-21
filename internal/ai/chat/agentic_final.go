@@ -85,7 +85,7 @@ func (a *AgenticLoop) ensureFinalTextResponse(
 		summaryMsg := Message{
 			ID:        uuid.New().String(),
 			Role:      "assistant",
-			Content:   cleanDeepSeekArtifacts(summaryBuilder.String()),
+			Content:   cleanToolCallArtifacts(summaryBuilder.String()),
 			Timestamp: time.Now(),
 		}
 		resultMessages = append(resultMessages, summaryMsg)

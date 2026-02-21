@@ -314,7 +314,11 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 
 	// Convert tools to OpenAI format
-	if len(req.Tools) > 0 {
+	shouldAddTools := len(req.Tools) > 0
+	if req.ToolChoice != nil && req.ToolChoice.Type == ToolChoiceNone {
+		shouldAddTools = false
+	}
+	if shouldAddTools {
 		for _, t := range req.Tools {
 			// Skip non-function tools (like web_search)
 			if t.Type != "" && t.Type != "function" {
@@ -667,7 +671,11 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		openaiReq.Temperature = req.Temperature
 	}
 
-	if len(req.Tools) > 0 {
+	shouldAddTools := len(req.Tools) > 0
+	if req.ToolChoice != nil && req.ToolChoice.Type == ToolChoiceNone {
+		shouldAddTools = false
+	}
+	if shouldAddTools {
 		for _, t := range req.Tools {
 			if t.Type != "" && t.Type != "function" {
 				continue

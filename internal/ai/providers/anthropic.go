@@ -229,7 +229,11 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 	}
 
 	// Add tools if provided
-	if len(req.Tools) > 0 {
+	shouldAddTools := len(req.Tools) > 0
+	if req.ToolChoice != nil && req.ToolChoice.Type == ToolChoiceNone {
+		shouldAddTools = false
+	}
+	if shouldAddTools {
 		anthropicReq.Tools = make([]anthropicTool, len(req.Tools))
 		for i, t := range req.Tools {
 			if t.Type == "web_search_20250305" {
@@ -254,7 +258,8 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 	// Add tool_choice if specified
 	// This controls whether Claude MUST use tools vs just being able to
 	// See: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/implement-tool-use#forcing-tool-use
-	if req.ToolChoice != nil {
+	// Anthropic may reject tool_choice if tools are not provided.
+	if shouldAddTools && req.ToolChoice != nil {
 		anthropicReq.ToolChoice = &anthropicToolChoice{
 			Type: string(req.ToolChoice.Type),
 			Name: req.ToolChoice.Name,
@@ -614,7 +619,11 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 		anthropicReq.Temperature = req.Temperature
 	}
 
-	if len(req.Tools) > 0 {
+	shouldAddTools := len(req.Tools) > 0
+	if req.ToolChoice != nil && req.ToolChoice.Type == ToolChoiceNone {
+		shouldAddTools = false
+	}
+	if shouldAddTools {
 		anthropicReq.Tools = make([]anthropicTool, len(req.Tools))
 		for i, t := range req.Tools {
 			if t.Type == "web_search_20250305" {
@@ -636,7 +645,8 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 	}
 
 	// Add tool_choice if specified (same as non-streaming)
-	if req.ToolChoice != nil {
+	// Anthropic may reject tool_choice if tools are not provided.
+	if shouldAddTools && req.ToolChoice != nil {
 		anthropicReq.ToolChoice = &anthropicToolChoice{
 			Type: string(req.ToolChoice.Type),
 			Name: req.ToolChoice.Name,
