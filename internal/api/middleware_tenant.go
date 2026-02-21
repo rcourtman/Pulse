@@ -152,9 +152,9 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 		}
 
 		// 4. Authorization Check
-		// Check if the authenticated user/token is allowed to access this organization
-		// Note: This runs AFTER AuthContextMiddleware, so auth context is available
-		if m.authChecker != nil && orgID != "default" {
+		// Check if the authenticated user/token is allowed to access this organization.
+		// Note: This runs AFTER AuthContextMiddleware, so auth context is available.
+		if m.authChecker != nil {
 			// Get API token from context (set by AuthContextMiddleware)
 			var token *config.APITokenRecord
 			if tokenVal := auth.GetAPIToken(r.Context()); tokenVal != nil {

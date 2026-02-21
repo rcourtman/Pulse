@@ -82,6 +82,21 @@ type inviteMemberRequest struct {
 	Role  string `json:"role"`
 }
 
+func requestActorRole(r *http.Request) (registry.MemberRole, bool) {
+	if r == nil {
+		return "", false
+	}
+	role := registry.MemberRole(strings.TrimSpace(r.Header.Get("X-User-Role")))
+	if role == "" {
+		return "", false
+	}
+	return role, true
+}
+
+func actorCanManageAccount(role registry.MemberRole) bool {
+	return role == registry.MemberRoleOwner || role == registry.MemberRoleAdmin
+}
+
 // HandleInviteMember returns an authenticated handler that invites a user to an account.
 func HandleInviteMember(reg *registry.TenantRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -145,6 +160,28 @@ func HandleInviteMember(reg *registry.TenantRegistry) http.HandlerFunc {
 				Str("reason", "invalid_role").
 				Msg("Account member invite failed")
 			http.Error(w, "invalid role", http.StatusBadRequest)
+			return
+		}
+		actorRole, hasActorRole := requestActorRole(r)
+		if hasActorRole && !actorCanManageAccount(actorRole) {
+			auditEvent(r, "cp_account_member_invite", "failure").
+				Str("account_id", accountID).
+				Str("email", email).
+				Str("actor_role", string(actorRole)).
+				Str("reason", "insufficient_role").
+				Msg("Account member invite failed")
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if hasActorRole && role == registry.MemberRoleOwner && actorRole != registry.MemberRoleOwner {
+			auditEvent(r, "cp_account_member_invite", "failure").
+				Str("account_id", accountID).
+				Str("email", email).
+				Str("actor_role", string(actorRole)).
+				Str("requested_role", string(role)).
+				Str("reason", "owner_role_requires_owner_actor").
+				Msg("Account member invite failed")
+			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
 
@@ -273,6 +310,17 @@ func HandleUpdateMemberRole(reg *registry.TenantRegistry) http.HandlerFunc {
 			http.Error(w, "account not found", http.StatusNotFound)
 			return
 		}
+		actorRole, hasActorRole := requestActorRole(r)
+		if hasActorRole && !actorCanManageAccount(actorRole) {
+			auditEvent(r, "cp_account_member_role_update", "failure").
+				Str("account_id", accountID).
+				Str("user_id", userID).
+				Str("actor_role", string(actorRole)).
+				Str("reason", "insufficient_role").
+				Msg("Account member role update failed")
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 
 		var req updateMemberRoleRequest
 		if err := decodeJSON(w, r, &req); err != nil {
@@ -325,6 +373,18 @@ func HandleUpdateMemberRole(reg *registry.TenantRegistry) http.HandlerFunc {
 					Str("reason", "membership_not_found").
 					Msg("Account member role update failed")
 				http.Error(w, "membership not found", http.StatusNotFound)
+				return
+			}
+			if hasActorRole && (role == registry.MemberRoleOwner || existing.Role == registry.MemberRoleOwner) && actorRole != registry.MemberRoleOwner {
+				auditEvent(r, "cp_account_member_role_update", "failure").
+					Str("account_id", accountID).
+					Str("user_id", userID).
+					Str("actor_role", string(actorRole)).
+					Str("target_current_role", string(existing.Role)).
+					Str("target_new_role", string(role)).
+					Str("reason", "owner_role_change_requires_owner_actor").
+					Msg("Account member role update failed")
+				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
 			auditEvent(r, "cp_account_member_role_update", "failure").
@@ -384,6 +444,17 @@ func HandleRemoveMember(reg *registry.TenantRegistry) http.HandlerFunc {
 				Str("reason", "account_not_found").
 				Msg("Account member removal failed")
 			http.Error(w, "account not found", http.StatusNotFound)
+			return
+		}
+		actorRole, hasActorRole := requestActorRole(r)
+		if hasActorRole && !actorCanManageAccount(actorRole) {
+			auditEvent(r, "cp_account_member_remove", "failure").
+				Str("account_id", accountID).
+				Str("user_id", userID).
+				Str("actor_role", string(actorRole)).
+				Str("reason", "insufficient_role").
+				Msg("Account member removal failed")
+			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
 
@@ -446,6 +517,17 @@ func HandleRemoveMember(reg *registry.TenantRegistry) http.HandlerFunc {
 					Str("reason", "membership_not_found").
 					Msg("Account member removal failed")
 				http.Error(w, "membership not found", http.StatusNotFound)
+				return
+			}
+			if hasActorRole && m.Role == registry.MemberRoleOwner && actorRole != registry.MemberRoleOwner {
+				auditEvent(r, "cp_account_member_remove", "failure").
+					Str("account_id", accountID).
+					Str("user_id", userID).
+					Str("actor_role", string(actorRole)).
+					Str("target_role", string(m.Role)).
+					Str("reason", "owner_removal_requires_owner_actor").
+					Msg("Account member removal failed")
+				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
 			auditEvent(r, "cp_account_member_remove", "failure").

@@ -525,7 +525,11 @@ func (h *ResourceHandlers) buildRegistry(orgID string) (*unified.ResourceRegistr
 	key := cacheKey(orgID)
 
 	var snapshot models.StateSnapshot
-	if h.tenantStateProvider != nil && orgID != "" && orgID != "default" {
+	if orgID != "" && orgID != "default" {
+		// Security: non-default orgs must use tenant-scoped state only.
+		if h.tenantStateProvider == nil {
+			return nil, errors.New("tenant state provider unavailable")
+		}
 		snapshot = h.tenantStateProvider.GetStateForTenant(orgID)
 	} else if h.stateProvider != nil {
 		snapshot = h.stateProvider.GetState()

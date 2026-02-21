@@ -53,10 +53,7 @@ func (p *MultiTenantStateProvider) GetStateForTenant(orgID string) models.StateS
 		monitor, err := p.mtMonitor.GetMonitor(orgID)
 		if err != nil {
 			log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to get tenant monitor for state")
-			// Fall back to default monitor
-			if p.defaultMonitor != nil {
-				return p.defaultMonitor.GetState()
-			}
+			// Security: never fall back to default org state for non-default org requests.
 			return models.StateSnapshot{}
 		}
 		if monitor != nil {
@@ -64,10 +61,7 @@ func (p *MultiTenantStateProvider) GetStateForTenant(orgID string) models.StateS
 		}
 	}
 
-	// Fall back to default monitor
-	if p.defaultMonitor != nil {
-		return p.defaultMonitor.GetState()
-	}
+	// Security: fail closed for non-default orgs when tenant monitor is unavailable.
 	return models.StateSnapshot{}
 }
 

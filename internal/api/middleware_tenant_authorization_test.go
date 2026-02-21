@@ -136,3 +136,30 @@ func TestTenantMiddleware_AuthorizationAllowed(t *testing.T) {
 		t.Fatalf("expected token to be passed to auth checker")
 	}
 }
+
+func TestTenantMiddleware_DefaultOrgAuthorizationDenied(t *testing.T) {
+	checker := &recordingAuthorizationChecker{result: AuthorizationResult{Allowed: false, Reason: "denied"}}
+	mw := NewTenantMiddlewareWithConfig(TenantMiddlewareConfig{
+		AuthChecker: checker,
+	})
+
+	handler := mw.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("handler should not be called")
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req = req.WithContext(auth.WithUser(req.Context(), "alice"))
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	}
+	if checker.calls != 1 {
+		t.Fatalf("expected auth checker to be called once, got %d", checker.calls)
+	}
+	if checker.lastOrg != "default" || checker.lastUser != "alice" {
+		t.Fatalf("unexpected auth checker args: org=%q user=%q", checker.lastOrg, checker.lastUser)
+	}
+}

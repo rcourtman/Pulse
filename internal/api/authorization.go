@@ -93,13 +93,20 @@ func (c *DefaultAuthorizationChecker) TokenCanAccessOrg(token *config.APITokenRe
 
 // UserCanAccessOrg checks if a user is a member of the specified organization.
 func (c *DefaultAuthorizationChecker) UserCanAccessOrg(userID, orgID string) bool {
-	// Default org is always accessible
-	if orgID == "default" {
-		return true
+	if userID == "" {
+		return false
 	}
 
-	// If no org loader is configured, deny access to non-default orgs
+	// If no org loader is configured, preserve legacy default-org behavior
+	// for deployments that do not yet persist org membership.
 	if c.orgLoader == nil {
+		if orgID == "default" {
+			log.Warn().
+				Str("user_id", userID).
+				Str("org_id", orgID).
+				Msg("No organization loader configured, allowing default-org access for legacy compatibility")
+			return true
+		}
 		log.Warn().
 			Str("user_id", userID).
 			Str("org_id", orgID).
@@ -109,6 +116,14 @@ func (c *DefaultAuthorizationChecker) UserCanAccessOrg(userID, orgID string) boo
 
 	org, err := c.orgLoader.GetOrganization(orgID)
 	if err != nil {
+		if orgID == "default" {
+			log.Warn().
+				Err(err).
+				Str("user_id", userID).
+				Str("org_id", orgID).
+				Msg("Failed to load default organization; allowing legacy fallback access")
+			return true
+		}
 		log.Error().
 			Err(err).
 			Str("user_id", userID).
@@ -118,11 +133,24 @@ func (c *DefaultAuthorizationChecker) UserCanAccessOrg(userID, orgID string) boo
 	}
 
 	if org == nil {
+		if orgID == "default" {
+			log.Warn().
+				Str("user_id", userID).
+				Str("org_id", orgID).
+				Msg("Default organization metadata missing; allowing legacy fallback access")
+			return true
+		}
 		log.Debug().
 			Str("user_id", userID).
 			Str("org_id", orgID).
 			Msg("Organization not found for access check")
 		return false
+	}
+
+	// Legacy default orgs may not have member metadata; preserve access until
+	// membership is explicitly configured.
+	if orgID == "default" && len(org.Members) == 0 {
+		return true
 	}
 
 	canAccess := org.CanUserAccess(userID)
@@ -188,11 +216,6 @@ func (c *DefaultAuthorizationChecker) CheckAccess(token *config.APITokenRecord, 
 
 // CanAccessOrg implements websocket.OrgAuthChecker for use with the WebSocket hub.
 func (c *DefaultAuthorizationChecker) CanAccessOrg(userID string, tokenInterface interface{}, orgID string) bool {
-	// Default org is always accessible
-	if orgID == "default" {
-		return true
-	}
-
 	// Convert token interface to APITokenRecord
 	var token *config.APITokenRecord
 	if tokenInterface != nil {

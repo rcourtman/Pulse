@@ -30,6 +30,13 @@ type Deps struct {
 
 // RegisterRoutes wires all HTTP handlers onto the given ServeMux.
 func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
+	webhookLimiter := NewCPRateLimiter(120, time.Minute)
+	magicLinkVerifyLimiter := NewCPRateLimiter(30, time.Minute)
+	sessionAuthLimiter := NewCPRateLimiter(60, time.Minute)
+	adminLimiter := NewCPRateLimiter(120, time.Minute)
+	accountAPILimiter := NewCPRateLimiter(300, time.Minute)
+	portalAPILimiter := NewCPRateLimiter(300, time.Minute)
+
 	adminAuth := func(next http.Handler) http.Handler {
 		return admin.AdminKeyMiddleware(deps.Config.AdminKey, next)
 	}
@@ -37,7 +44,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 		if deps.MagicLinks == nil {
 			return adminAuth(next)
 		}
-		return requireSessionAuth(deps.MagicLinks, next)
+		return requireSessionAuth(deps.MagicLinks, deps.Registry, next)
 	}
 	accountSessionAuth := func(extract accountIDExtractor, next http.Handler) http.Handler {
 		if deps.MagicLinks == nil {
@@ -45,6 +52,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 		}
 		return sessionAuth(requireAccountMembership(deps.Registry, extract, next))
 	}
+	accountMutationAuth := requireAnyAccountRole(registry.MemberRoleOwner, registry.MemberRoleAdmin)
 
 	// Health / readiness are unauthenticated liveness/readiness probes.
 	mux.HandleFunc("/healthz", admin.HandleHealthz)
@@ -68,20 +76,22 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	// Stripe webhook (signature-authenticated)
 	provisioner := deps.Provisioner
 	if provisioner == nil {
-		provisioner = cpstripe.NewProvisioner(deps.Registry, deps.Config.TenantsDir(), deps.Docker, deps.MagicLinks, deps.Config.BaseURL, deps.EmailSender, deps.Config.EmailFrom)
+		provisioner = cpstripe.NewProvisioner(deps.Registry, deps.Config.TenantsDir(), deps.Docker, deps.MagicLinks, deps.Config.BaseURL, deps.EmailSender, deps.Config.EmailFrom, deps.Config.AllowDockerlessProvisioning)
 	}
 	webhookHandler := cpstripe.NewWebhookHandler(deps.Config.StripeWebhookSecret, provisioner)
-	webhookLimiter := NewCPRateLimiter(120, time.Minute)
 	mux.Handle("/api/stripe/webhook", webhookLimiter.Middleware(webhookHandler))
 
 	// Magic link verification (public, token-authenticated)
 	baseDomain := baseDomainFromURL(deps.Config.BaseURL)
-	mux.HandleFunc("/auth/magic-link/verify", cpauth.HandleMagicLinkVerify(deps.MagicLinks, deps.Registry, deps.Config.TenantsDir(), baseDomain))
+	mux.Handle("/auth/magic-link/verify", magicLinkVerifyLimiter.Middleware(http.HandlerFunc(cpauth.HandleMagicLinkVerify(deps.MagicLinks, deps.Registry, deps.Config.TenantsDir(), baseDomain))))
+	if deps.MagicLinks != nil {
+		mux.Handle("/auth/logout", sessionAuthLimiter.Middleware(sessionAuth(cpauth.HandleLogout(deps.Registry))))
+	}
 
 	// Admin API (key-authenticated)
 	tenantsHandler := admin.HandleListTenants(deps.Registry)
-	mux.Handle("/admin/tenants", adminAuth(tenantsHandler))
-	mux.Handle("/admin/magic-link", adminAuth(cpauth.HandleAdminGenerateMagicLink(deps.MagicLinks, deps.Config.BaseURL, deps.EmailSender, deps.Config.EmailFrom)))
+	mux.Handle("/admin/tenants", adminLimiter.Middleware(adminAuth(tenantsHandler)))
+	mux.Handle("/admin/magic-link", adminLimiter.Middleware(adminAuth(cpauth.HandleAdminGenerateMagicLink(deps.MagicLinks, deps.Config.BaseURL, deps.EmailSender, deps.Config.EmailFrom))))
 
 	// Account membership (session + account-membership authenticated)
 	listMembers := account.HandleListMembers(deps.Registry)
@@ -94,7 +104,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 		case http.MethodGet:
 			listMembers(w, r)
 		case http.MethodPost:
-			inviteMember(w, r)
+			accountMutationAuth(http.HandlerFunc(inviteMember)).ServeHTTP(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -102,9 +112,9 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	member := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPatch:
-			updateRole(w, r)
+			accountMutationAuth(http.HandlerFunc(updateRole)).ServeHTTP(w, r)
 		case http.MethodDelete:
-			removeMember(w, r)
+			accountMutationAuth(http.HandlerFunc(removeMember)).ServeHTTP(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -126,8 +136,8 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 		return ""
 	}
 
-	mux.Handle("/api/accounts/{account_id}/members", accountSessionAuth(accountIDFromPath, membersCollection))
-	mux.Handle("/api/accounts/{account_id}/members/{user_id}", accountSessionAuth(accountIDFromPath, member))
+	mux.Handle("/api/accounts/{account_id}/members", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, membersCollection)))
+	mux.Handle("/api/accounts/{account_id}/members/{user_id}", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, member)))
 
 	// Workspace management (session + account-membership authenticated)
 	listTenants := account.HandleListTenants(deps.Registry)
@@ -140,7 +150,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 		case http.MethodGet:
 			listTenants(w, r)
 		case http.MethodPost:
-			createTenant(w, r)
+			accountMutationAuth(http.HandlerFunc(createTenant)).ServeHTTP(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -148,22 +158,22 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	tenant := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPatch:
-			updateTenant(w, r)
+			accountMutationAuth(http.HandlerFunc(updateTenant)).ServeHTTP(w, r)
 		case http.MethodDelete:
-			deleteTenant(w, r)
+			accountMutationAuth(http.HandlerFunc(deleteTenant)).ServeHTTP(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
-	mux.Handle("/api/accounts/{account_id}/tenants", accountSessionAuth(accountIDFromPath, tenantsCollection))
-	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}", accountSessionAuth(accountIDFromPath, tenant))
+	mux.Handle("/api/accounts/{account_id}/tenants", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, tenantsCollection)))
+	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, tenant)))
 
 	// Tenant switching handoff (session + account-membership authenticated)
 	handoffHandler := handoff.HandleHandoff(deps.Registry, deps.Config.TenantsDir())
-	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}/handoff", accountSessionAuth(accountIDFromPath, handoffHandler))
+	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}/handoff", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, handoffHandler)))
 
 	// MSP portal API (session + account-membership authenticated)
-	mux.Handle("/api/portal/dashboard", accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalDashboard(deps.Registry)))
-	mux.Handle("/api/portal/workspaces/{tenant_id}", accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalWorkspaceDetail(deps.Registry)))
+	mux.Handle("/api/portal/dashboard", portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalDashboard(deps.Registry))))
+	mux.Handle("/api/portal/workspaces/{tenant_id}", portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalWorkspaceDetail(deps.Registry))))
 }

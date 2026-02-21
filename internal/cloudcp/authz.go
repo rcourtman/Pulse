@@ -11,10 +11,14 @@ import (
 
 type accountIDExtractor func(*http.Request) string
 
-func requireSessionAuth(sessionSvc *cpauth.Service, next http.Handler) http.Handler {
+func requireSessionAuth(sessionSvc *cpauth.Service, reg *registry.TenantRegistry, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if sessionSvc == nil {
 			writeAuthzError(w, http.StatusServiceUnavailable, "session_service_unavailable")
+			return
+		}
+		if reg == nil {
+			writeAuthzError(w, http.StatusServiceUnavailable, "registry_unavailable")
 			return
 		}
 
@@ -27,6 +31,15 @@ func requireSessionAuth(sessionSvc *cpauth.Service, next http.Handler) http.Hand
 		claims, err := sessionSvc.ValidateSessionToken(token)
 		if err != nil {
 			writeAuthzError(w, http.StatusUnauthorized, "invalid_session")
+			return
+		}
+		sessionVersion, err := reg.GetUserSessionVersion(claims.UserID)
+		if err != nil {
+			writeAuthzError(w, http.StatusUnauthorized, "invalid_session")
+			return
+		}
+		if claims.SessionVersion != sessionVersion {
+			writeAuthzError(w, http.StatusUnauthorized, "revoked_session")
 			return
 		}
 
@@ -74,6 +87,33 @@ func requireAccountMembership(reg *registry.TenantRegistry, extract accountIDExt
 		req.Header.Set("X-User-Role", string(m.Role))
 		next.ServeHTTP(w, req)
 	})
+}
+
+func requireAnyAccountRole(allowed ...registry.MemberRole) func(http.Handler) http.Handler {
+	allowedSet := make(map[registry.MemberRole]struct{}, len(allowed))
+	for _, role := range allowed {
+		if role == "" {
+			continue
+		}
+		allowedSet[role] = struct{}{}
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// If role is missing, this request is likely on the admin-key fallback path
+			// (no session/membership middleware). Allow and defer to admin auth.
+			role := strings.TrimSpace(r.Header.Get("X-User-Role"))
+			if role == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if _, ok := allowedSet[registry.MemberRole(role)]; !ok {
+				writeAuthzError(w, http.StatusForbidden, "forbidden_role")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func sessionTokenFromRequest(r *http.Request) string {

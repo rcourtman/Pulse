@@ -23,6 +23,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/conversion"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
@@ -268,18 +269,21 @@ func Run(ctx context.Context, version string) error {
 
 	// Set tenant-aware state getter for multi-tenant support
 	wsHub.SetStateGetterForTenant(func(orgID string) interface{} {
-		mtMonitor := reloadableMonitor.GetMultiTenantMonitor()
-		if mtMonitor == nil {
-			// Fall back to default monitor
+		if orgID == "" || orgID == "default" {
 			state := reloadableMonitor.GetMonitor().GetState()
 			return state.ToFrontend()
 		}
+
+		mtMonitor := reloadableMonitor.GetMultiTenantMonitor()
+		if mtMonitor == nil {
+			// Security: never expose default-org state to non-default org clients.
+			log.Warn().Str("org_id", orgID).Msg("Tenant monitor unavailable for org state request")
+			return models.StateFrontend{}
+		}
 		monitor, err := mtMonitor.GetMonitor(orgID)
 		if err != nil || monitor == nil {
-			// Fall back to default monitor on error
-			log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to get tenant monitor, using default")
-			state := reloadableMonitor.GetMonitor().GetState()
-			return state.ToFrontend()
+			log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to get tenant monitor for org state request")
+			return models.StateFrontend{}
 		}
 		state := monitor.GetState()
 		return state.ToFrontend()

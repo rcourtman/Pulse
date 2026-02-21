@@ -89,8 +89,8 @@ func TestMultiTenantStateProvider_FallbackOnError(t *testing.T) {
 	provider := NewMultiTenantStateProvider(mtm, defaultMonitor)
 
 	snap := provider.GetStateForTenant("../bad")
-	if len(snap.VMs) != 1 || snap.VMs[0].ID != "vm-default" {
-		t.Fatalf("expected fallback snapshot, got %#v", snap.VMs)
+	if len(snap.VMs) != 0 {
+		t.Fatalf("expected empty snapshot for tenant error, got %#v", snap.VMs)
 	}
 }
 
