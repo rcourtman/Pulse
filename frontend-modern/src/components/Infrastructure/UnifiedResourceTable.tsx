@@ -409,508 +409,282 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
           <div class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
             Host Infrastructure
           </div>
-          <Table class="whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : '600px' }}>
-            <TableHeader>
-              <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
-                <TableHead class="text-left pl-2 sm:pl-3" style={resourceColumnStyle()} onClick={() => handleSort('name')}>
-                  Resource {renderSortIndicator('name')}
-                </TableHead>
-                <TableHead style={metricColumnStyle()} onClick={() => handleSort('cpu')}>
-                  CPU {renderSortIndicator('cpu')}
-                </TableHead>
-                <TableHead style={metricColumnStyle()} onClick={() => handleSort('memory')}>
-                  Memory {renderSortIndicator('memory')}
-                </TableHead>
-                <TableHead style={metricColumnStyle()} onClick={() => handleSort('disk')}>
-                  Disk {renderSortIndicator('disk')}
-                </TableHead>
-                <TableHead classList={{ hidden: isMobile() || !isVisible('secondary') }} style={ioColumnStyle()} onClick={() => handleSort('network')}>
-                  Net I/O {renderSortIndicator('network')}
-                </TableHead>
-                <TableHead classList={{ hidden: isMobile() || !isVisible('supplementary') }} style={ioColumnStyle()} onClick={() => handleSort('diskio')}>
-                  Disk I/O {renderSortIndicator('diskio')}
-                </TableHead>
-                <TableHead classList={{ hidden: isMobile() || !isVisible('secondary') }} style={sourceColumnStyle()} onClick={() => handleSort('source')}>
-                  Source {renderSortIndicator('source')}
-                </TableHead>
-                <TableHead classList={{ hidden: isMobile() || !isVisible('supplementary') }} style={uptimeColumnStyle()} onClick={() => handleSort('uptime')}>
-                  Uptime {renderSortIndicator('uptime')}
-                </TableHead>
-                <TableHead classList={{ hidden: isMobile() || !isVisible('supplementary') }} style={tempColumnStyle()} onClick={() => handleSort('temp')}>
-                  Temp {renderSortIndicator('temp')}
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody ref={setHostBodyRef}>
-              <Show when={hostWindowing.isWindowed() && hostTopSpacerHeight() > 0}>
-                <TableRow aria-hidden="true">
-                  <TableCell colspan={9} style={{ height: `${hostTopSpacerHeight()}px`, padding: '0', border: '0' }} />
+          <div class="overflow-x-auto">
+            <Table class="whitespace-nowrap min-w-[max-content]" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : 'max-content' }}>
+              <TableHeader>
+                <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                  <TableHead class="text-left pl-2 sm:pl-3" style={resourceColumnStyle()} onClick={() => handleSort('name')}>
+                    Resource {renderSortIndicator('name')}
+                  </TableHead>
+                  <TableHead style={metricColumnStyle()} onClick={() => handleSort('cpu')}>
+                    CPU {renderSortIndicator('cpu')}
+                  </TableHead>
+                  <TableHead style={metricColumnStyle()} onClick={() => handleSort('memory')}>
+                    Memory {renderSortIndicator('memory')}
+                  </TableHead>
+                  <TableHead style={metricColumnStyle()} onClick={() => handleSort('disk')}>
+                    Disk {renderSortIndicator('disk')}
+                  </TableHead>
+                  <TableHead classList={{ hidden: isMobile() || !isVisible('secondary') }} style={ioColumnStyle()} onClick={() => handleSort('network')}>
+                    Net I/O {renderSortIndicator('network')}
+                  </TableHead>
+                  <TableHead classList={{ hidden: isMobile() || !isVisible('supplementary') }} style={ioColumnStyle()} onClick={() => handleSort('diskio')}>
+                    Disk I/O {renderSortIndicator('diskio')}
+                  </TableHead>
+                  <TableHead classList={{ hidden: isMobile() || !isVisible('secondary') }} style={sourceColumnStyle()} onClick={() => handleSort('source')}>
+                    Source {renderSortIndicator('source')}
+                  </TableHead>
+                  <TableHead classList={{ hidden: isMobile() || !isVisible('supplementary') }} style={uptimeColumnStyle()} onClick={() => handleSort('uptime')}>
+                    Uptime {renderSortIndicator('uptime')}
+                  </TableHead>
+                  <TableHead classList={{ hidden: isMobile() || !isVisible('supplementary') }} style={tempColumnStyle()} onClick={() => handleSort('temp')}>
+                    Temp {renderSortIndicator('temp')}
+                  </TableHead>
                 </TableRow>
-              </Show>
+              </TableHeader>
+              <TableBody ref={setHostBodyRef}>
+                <Show when={hostWindowing.isWindowed() && hostTopSpacerHeight() > 0}>
+                  <TableRow aria-hidden="true">
+                    <TableCell colspan={9} style={{ height: `${hostTopSpacerHeight()}px`, padding: '0', border: '0' }} />
+                  </TableRow>
+                </Show>
 
-              <For each={visibleHostTableItems()}>
-                {(item) => {
-                  if (item.type === 'header') {
-                    const group = item.group;
-                    return (
-                      <TableRow class="bg-slate-50 dark:bg-slate-800">
-                        <TableCell
-                          colspan={9}
-                          class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
-                        >
-                          <div class="flex items-center gap-2">
-                            <Show
-                              when={group.cluster}
-                              fallback={
-                                <span class="text-slate-500 dark:text-slate-400">Standalone</span>
-                              }
-                            >
-                              <span>{group.cluster}</span>
-                              <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-                                Cluster
-                              </span>
-                            </Show>
-                            <span class="text-[10px] text-slate-400 dark:text-slate-500 font-normal">
-                              {group.resources.length} {group.resources.length === 1 ? 'resource' : 'resources'}
-                            </span>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  }
-
-                  const resource = item.resource;
-                  const isExpanded = createMemo(() => props.expandedResourceId === resource.id);
-                  const isHighlighted = createMemo(() => props.highlightedResourceId === resource.id);
-                  const displayName = createMemo(() => getDisplayName(resource));
-                  const statusIndicator = createMemo(() => getHostStatusIndicator({ status: resource.status }));
-                  const metricsKey = createMemo(() => buildMetricKey('host', resource.id));
-
-                  const cpuPercentValue = createMemo(() => (resource.cpu ? Math.round(getCpuPercent(resource)) : null));
-                  const memoryPercentValue = createMemo(() => (resource.memory ? Math.round(getMemoryPercent(resource)) : null));
-                  const diskPercentValue = createMemo(() => (resource.disk ? Math.round(getDiskPercent(resource)) : null));
-
-                  const memorySublabel = createMemo(() => {
-                    if (!resource.memory || resource.memory.used === undefined || resource.memory.total === undefined) return undefined;
-                    return `${formatBytes(resource.memory.used)}/${formatBytes(resource.memory.total)}`;
-                  });
-
-                  const diskSublabel = createMemo(() => {
-                    if (!resource.disk || resource.disk.used === undefined || resource.disk.total === undefined) return undefined;
-                    return `${formatBytes(resource.disk.used)}/${formatBytes(resource.disk.total)}`;
-                  });
-                  const networkTotal = createMemo(() =>
-                    (resource.network?.rxBytes ?? 0) + (resource.network?.txBytes ?? 0),
-                  );
-                  const networkEmphasis = createMemo(() =>
-                    getOutlierEmphasis(networkTotal(), ioScale().network),
-                  );
-                  const diskIOTotal = createMemo(() =>
-                    (resource.diskIO?.readRate ?? 0) + (resource.diskIO?.writeRate ?? 0),
-                  );
-                  const diskIOEmphasis = createMemo(() =>
-                    getOutlierEmphasis(diskIOTotal(), ioScale().diskIO),
-                  );
-
-                  const rowClass = createMemo(() => {
-                    const baseHover = `cursor-pointer transition-all duration-200 relative group hover:bg-slate-50 dark:hover:bg-slate-700`;
-
-                    if (isExpanded()) {
-                      return `cursor-pointer transition-all duration-200 relative z-10 group bg-blue-50 dark:bg-blue-900`;
-                    }
-
-                    let className = baseHover;
-                    if (isHighlighted()) {
-                      className += ' bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300 dark:ring-blue-600';
-                    }
-                    if (props.hoveredResourceId === resource.id && !isHighlighted()) {
-                      className += ' bg-slate-50 dark:bg-slate-700';
-                    }
-                    if (!isResourceOnline(resource)) {
-                      className += ' opacity-60';
-                    }
-
-                    return className;
-                  });
-                  const platformBadge = createMemo(() => getPlatformBadge(resource.platformType));
-                  const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
-                  const unifiedSourceBadges = createMemo(() =>
-                    getUnifiedSourceBadges(getUnifiedSources(resource)),
-                  );
-                  const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
-                  const workloadsHref = createMemo(() => buildWorkloadsHref(resource));
-
-                  return (
-                    <>
-                      <TableRow
-                        ref={(el) => {
-                          if (el) {
-                            rowRefs.set(resource.id, el);
-                          } else {
-                            rowRefs.delete(resource.id);
-                          }
-                        }}
-                        class={rowClass()}
-                        style={{ 'min-height': '32px' }}
-                        onClick={() => toggleExpand(resource.id)}
-                        onMouseEnter={() => props.onHoverChange?.(resource.id)}
-                        onMouseLeave={() => props.onHoverChange?.(null)}
-                      >
-                        <TableCell class="pr-1.5 sm:pr-2 py-0.5 align-middle overflow-hidden pl-2 sm:pl-3">
-                          <div class="flex items-center gap-1.5 min-w-0">
-                            <div
-                              class={`shrink-0 transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}
-                            >
-                              <svg class="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                              </svg>
-                            </div>
-                            <StatusDot
-                              variant={statusIndicator().variant}
-                              title={statusIndicator().label}
-                              ariaLabel={statusIndicator().label}
-                              size="xs"
-                            />
-                            <div class="flex min-w-0 flex-1 items-baseline gap-1">
-                              <span
-                                class="block min-w-0 flex-1 truncate font-medium text-[11px] text-slate-900 dark:text-slate-100 select-text"
-                                title={displayName()}
+                <For each={visibleHostTableItems()}>
+                  {(item) => {
+                    if (item.type === 'header') {
+                      const group = item.group;
+                      return (
+                        <TableRow class="bg-slate-50 dark:bg-slate-800">
+                          <TableCell
+                            colspan={9}
+                            class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
+                          >
+                            <div class="flex items-center gap-2">
+                              <Show
+                                when={group.cluster}
+                                fallback={
+                                  <span class="text-slate-500 dark:text-slate-400">Standalone</span>
+                                }
                               >
-                                {displayName()}
-                              </span>
-                              <Show when={hasAlternateName(resource)}>
-                                <span class="hidden min-w-0 max-w-[28%] shrink truncate text-[9px] text-slate-500 dark:text-slate-400 lg:inline">
-                                  ({resource.name})
+                                <span>{group.cluster}</span>
+                                <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                                  Cluster
                                 </span>
                               </Show>
+                              <span class="text-[10px] text-slate-400 dark:text-slate-500 font-normal">
+                                {group.resources.length} {group.resources.length === 1 ? 'resource' : 'resources'}
+                              </span>
                             </div>
-                            <Show when={workloadsHref()}>
-                              {(href) => (
-                                <a
-                                  href={href()}
-                                  class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:text-blue-300 dark:hover:bg-blue-800 dark:hover:text-blue-200"
-                                  title="View related workloads"
-                                  aria-label={`View workloads for ${displayName()}`}
-                                  onClick={(event) => event.stopPropagation()}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }
+
+                    const resource = item.resource;
+                    const isExpanded = createMemo(() => props.expandedResourceId === resource.id);
+                    const isHighlighted = createMemo(() => props.highlightedResourceId === resource.id);
+                    const displayName = createMemo(() => getDisplayName(resource));
+                    const statusIndicator = createMemo(() => getHostStatusIndicator({ status: resource.status }));
+                    const metricsKey = createMemo(() => buildMetricKey('host', resource.id));
+
+                    const cpuPercentValue = createMemo(() => (resource.cpu ? Math.round(getCpuPercent(resource)) : null));
+                    const memoryPercentValue = createMemo(() => (resource.memory ? Math.round(getMemoryPercent(resource)) : null));
+                    const diskPercentValue = createMemo(() => (resource.disk ? Math.round(getDiskPercent(resource)) : null));
+
+                    const memorySublabel = createMemo(() => {
+                      if (!resource.memory || resource.memory.used === undefined || resource.memory.total === undefined) return undefined;
+                      return `${formatBytes(resource.memory.used)}/${formatBytes(resource.memory.total)}`;
+                    });
+
+                    const diskSublabel = createMemo(() => {
+                      if (!resource.disk || resource.disk.used === undefined || resource.disk.total === undefined) return undefined;
+                      return `${formatBytes(resource.disk.used)}/${formatBytes(resource.disk.total)}`;
+                    });
+                    const networkTotal = createMemo(() =>
+                      (resource.network?.rxBytes ?? 0) + (resource.network?.txBytes ?? 0),
+                    );
+                    const networkEmphasis = createMemo(() =>
+                      getOutlierEmphasis(networkTotal(), ioScale().network),
+                    );
+                    const diskIOTotal = createMemo(() =>
+                      (resource.diskIO?.readRate ?? 0) + (resource.diskIO?.writeRate ?? 0),
+                    );
+                    const diskIOEmphasis = createMemo(() =>
+                      getOutlierEmphasis(diskIOTotal(), ioScale().diskIO),
+                    );
+
+                    const rowClass = createMemo(() => {
+                      const baseHover = `cursor-pointer transition-all duration-200 relative group hover:bg-slate-50 dark:hover:bg-slate-700`;
+
+                      if (isExpanded()) {
+                        return `cursor-pointer transition-all duration-200 relative z-10 group bg-blue-50 dark:bg-blue-900`;
+                      }
+
+                      let className = baseHover;
+                      if (isHighlighted()) {
+                        className += ' bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300 dark:ring-blue-600';
+                      }
+                      if (props.hoveredResourceId === resource.id && !isHighlighted()) {
+                        className += ' bg-slate-50 dark:bg-slate-700';
+                      }
+                      if (!isResourceOnline(resource)) {
+                        className += ' opacity-60';
+                      }
+
+                      return className;
+                    });
+                    const platformBadge = createMemo(() => getPlatformBadge(resource.platformType));
+                    const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
+                    const unifiedSourceBadges = createMemo(() =>
+                      getUnifiedSourceBadges(getUnifiedSources(resource)),
+                    );
+                    const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
+                    const workloadsHref = createMemo(() => buildWorkloadsHref(resource));
+
+                    return (
+                      <>
+                        <TableRow
+                          ref={(el) => {
+                            if (el) {
+                              rowRefs.set(resource.id, el);
+                            } else {
+                              rowRefs.delete(resource.id);
+                            }
+                          }}
+                          class={rowClass()}
+                          style={{ 'min-height': '32px' }}
+                          onClick={() => toggleExpand(resource.id)}
+                          onMouseEnter={() => props.onHoverChange?.(resource.id)}
+                          onMouseLeave={() => props.onHoverChange?.(null)}
+                        >
+                          <TableCell class="pr-1.5 sm:pr-2 py-0.5 align-middle overflow-hidden pl-2 sm:pl-3">
+                            <div class="flex items-center gap-1.5 min-w-0">
+                              <div
+                                class={`shrink-0 transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}
+                              >
+                                <svg class="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                </svg>
+                              </div>
+                              <StatusDot
+                                variant={statusIndicator().variant}
+                                title={statusIndicator().label}
+                                ariaLabel={statusIndicator().label}
+                                size="xs"
+                              />
+                              <div class="flex min-w-0 flex-1 items-baseline gap-1">
+                                <span
+                                  class="block min-w-0 flex-1 truncate font-medium text-[11px] text-slate-900 dark:text-slate-100 select-text"
+                                  title={displayName()}
                                 >
-                                  <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M14 5h5m0 0v5m0-5-8 8" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 10v9h9" />
-                                  </svg>
-                                </a>
-                              )}
-                            </Show>
-                          </div>
-                        </TableCell>
-
-                        <TableCell>
-                          <Show when={cpuPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-slate-400">—</span></div>}>
-                            <ResponsiveMetricCell
-                              class="w-full"
-                              value={cpuPercentValue() ?? 0}
-                              type="cpu"
-                              resourceId={isMobile() ? undefined : metricsKey()}
-                              isRunning={isResourceOnline(resource)}
-                              showMobile={false}
-                            />
-                          </Show>
-                        </TableCell>
-
-                        <TableCell>
-                          <Show when={memoryPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-slate-400">—</span></div>}>
-                            <div class="w-full" title={memorySublabel()}>
-                              <StackedMemoryBar
-                                used={resource.memory?.used ?? 0}
-                                total={resource.memory?.total ?? 0}
-                                percentOnly={(!resource.memory?.total && resource.memory?.current != null) ? resource.memory.current : undefined}
-                                swapUsed={resource.agent?.memory?.swapUsed ?? 0}
-                                swapTotal={resource.agent?.memory?.swapTotal ?? 0}
-                              />
-                            </div>
-                          </Show>
-                        </TableCell>
-
-                        <TableCell>
-                          <Show when={diskPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-slate-400">—</span></div>}>
-                            <div class="w-full" title={diskSublabel()}>
-                              <StackedDiskBar
-                                disks={normalizeDiskArray(resource.agent?.disks)}
-                                aggregateDisk={resource.disk ? { total: resource.disk.total ?? 0, used: resource.disk.used ?? 0, free: resource.disk.free ?? 0, usage: resource.disk.current ?? 0 } as Disk : undefined}
-                              />
-                            </div>
-                          </Show>
-                        </TableCell>
-
-                        <TableCell classList={{ hidden: isMobile() || !isVisible('secondary') }}>
-                          <Show when={resource.network} fallback={<div class="text-center"><span class="text-xs text-slate-400">—</span></div>}>
-                            <div class="grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums">
-                              <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
-                              <span
-                                class={`min-w-0 whitespace-nowrap ${networkEmphasis().className}`}
-                                title={networkEmphasis().showOutlierHint ? `${formatSpeed(resource.network!.rxBytes)} (Top outlier)` : formatSpeed(resource.network!.rxBytes)}
-                              >
-                                {formatSpeed(resource.network!.rxBytes)}
-                              </span>
-                              <span class="inline-flex w-3 justify-center text-orange-400">↑</span>
-                              <span
-                                class={`min-w-0 whitespace-nowrap ${networkEmphasis().className}`}
-                                title={networkEmphasis().showOutlierHint ? `${formatSpeed(resource.network!.txBytes)} (Top outlier)` : formatSpeed(resource.network!.txBytes)}
-                              >
-                                {formatSpeed(resource.network!.txBytes)}
-                              </span>
-                            </div>
-                          </Show>
-                        </TableCell>
-
-                        <TableCell classList={{ hidden: isMobile() || !isVisible('supplementary') }}>
-                          <Show when={resource.diskIO} fallback={<div class="text-center"><span class="text-xs text-slate-400">—</span></div>}>
-                            <div class="grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums">
-                              <span class="inline-flex w-3 justify-center font-mono text-blue-500">R</span>
-                              <span
-                                class={`min-w-0 whitespace-nowrap ${diskIOEmphasis().className}`}
-                                title={diskIOEmphasis().showOutlierHint ? `${formatSpeed(resource.diskIO!.readRate)} (Top outlier)` : formatSpeed(resource.diskIO!.readRate)}
-                              >
-                                {formatSpeed(resource.diskIO!.readRate)}
-                              </span>
-                              <span class="inline-flex w-3 justify-center font-mono text-amber-500">W</span>
-                              <span
-                                class={`min-w-0 whitespace-nowrap ${diskIOEmphasis().className}`}
-                                title={diskIOEmphasis().showOutlierHint ? `${formatSpeed(resource.diskIO!.writeRate)} (Top outlier)` : formatSpeed(resource.diskIO!.writeRate)}
-                              >
-                                {formatSpeed(resource.diskIO!.writeRate)}
-                              </span>
-                            </div>
-                          </Show>
-                        </TableCell>
-
-                        <TableCell classList={{ hidden: isMobile() || !isVisible('secondary') }}>
-                          <div class="flex items-center justify-center gap-1">
-                            <Show
-                              when={hasUnifiedSources()}
-                              fallback={
-                                <>
-                                  <Show when={platformBadge()}>
-                                    {(badge) => (
-                                      <span class={badge().classes} title={badge().title}>
-                                        {badge().label}
-                                      </span>
-                                    )}
-                                  </Show>
-                                  <Show when={sourceBadge()}>
-                                    {(badge) => (
-                                      <span class={badge().classes} title={badge().title}>
-                                        {badge().label}
-                                      </span>
-                                    )}
-                                  </Show>
-                                </>
-                              }
-                            >
-                              <For each={unifiedSourceBadges()}>
-                                {(badge) => (
-                                  <span class={badge.classes} title={badge.title}>
-                                    {badge.label}
+                                  {displayName()}
+                                </span>
+                                <Show when={hasAlternateName(resource)}>
+                                  <span class="hidden min-w-0 max-w-[28%] shrink truncate text-[9px] text-slate-500 dark:text-slate-400 lg:inline">
+                                    ({resource.name})
                                   </span>
-                                )}
-                              </For>
-                            </Show>
-                          </div>
-                        </TableCell>
-
-                        <TableCell classList={{ hidden: isMobile() || !isVisible('supplementary') }}>
-                          <div class="flex justify-center">
-                            <Show when={resource.uptime} fallback={<span class="text-xs text-slate-400">—</span>}>
-                              <span class="text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                                {formatUptime(resource.uptime ?? 0)}
-                              </span>
-                            </Show>
-                          </div>
-                        </TableCell>
-
-                        <TableCell classList={{ hidden: isMobile() || !isVisible('supplementary') }}>
-                          <div class="flex justify-center">
-                            <Show when={resource.temperature != null} fallback={<span class="text-xs text-slate-400">—</span>}>
-                              <span
-                                class={`text-xs whitespace-nowrap font-medium ${(resource.temperature ?? 0) >= 80
-                                  ? 'text-red-600 dark:text-red-400'
-                                  : (resource.temperature ?? 0) >= 65
-                                    ? 'text-amber-600 dark:text-amber-400'
-                                    : 'text-emerald-600 dark:text-emerald-400'
-                                  }`}
-                              >
-                                {formatTemperature(resource.temperature)}
-                              </span>
-                            </Show>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                      <Show when={isExpanded()}>
-                        <TableRow>
-                          <TableCell colspan={9} class="bg-slate-50 dark:bg-slate-800 px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
-                            <ResourceDetailDrawer resource={resource} onClose={() => setExpandedResourceId(null)} />
-                          </TableCell>
-                        </TableRow>
-                      </Show>
-                    </>
-                  );
-                }}
-              </For>
-
-              <Show when={hostWindowing.isWindowed() && hostBottomSpacerHeight() > 0}>
-                <TableRow aria-hidden="true">
-                  <TableCell colspan={9} style={{ height: `${hostBottomSpacerHeight()}px`, padding: '0', border: '0' }} />
-                </TableRow>
-              </Show>
-            </TableBody>
-          </Table>
-        </Card>
-      </Show>
-
-      <Show when={sortedPBSResources().length > 0 || sortedPMGResources().length > 0}>
-        <Card padding="none" tone="card" class="mb-0 overflow-hidden">
-          <div class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-            Service Infrastructure
-          </div>
-
-          <Show when={sortedPBSResources().length > 0}>
-            <div class="border-b border-slate-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-300">
-              PBS Services
-            </div>
-            <Table class="whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : '500px' }}>
-              <TableHeader>
-                <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
-                  <TableHead class="text-left pl-2 sm:pl-3" style={resourceColumnStyle()}>
-                    Resource
-                  </TableHead>
-                  <TableHead classList={{ hidden: !isVisible('primary') && !isMobile() }} style={serviceCountColumnStyle()}>
-                    Datastores
-                  </TableHead>
-                  <TableHead classList={{ hidden: !isVisible('secondary') && !isMobile() }} style={serviceCountColumnStyle()}>
-                    Jobs
-                  </TableHead>
-                  <TableHead style={serviceHealthColumnStyle()}>
-                    Health
-                  </TableHead>
-                  <TableHead classList={{ hidden: !isVisible('secondary') && !isMobile() }} style={sourceColumnStyle()}>
-                    Source
-                  </TableHead>
-                  <TableHead classList={{ hidden: !isVisible('supplementary') && !isMobile() }} style={uptimeColumnStyle()}>
-                    Uptime
-                  </TableHead>
-                  <TableHead style={serviceActionColumnStyle()}>
-                    Action
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <For each={sortedPBSResources()}>
-                  {(resource) => {
-                    const isExpanded = createMemo(() => props.expandedResourceId === resource.id);
-                    const isHighlighted = createMemo(() => props.highlightedResourceId === resource.id);
-                    const displayName = createMemo(() => getDisplayName(resource));
-                    const serviceLink = createMemo(() => buildServiceDetailLinks(resource)[0] ?? null);
-                    const statusIndicator = createMemo(() => getHostStatusIndicator({ status: resource.status }));
-                    const pbsRow = createMemo(() => getPBSTableRow(resource));
-                    const platformBadge = createMemo(() => getPlatformBadge(resource.platformType));
-                    const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
-                    const unifiedSourceBadges = createMemo(() =>
-                      getUnifiedSourceBadges(getUnifiedSources(resource)),
-                    );
-                    const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
-                    const healthClass = createMemo(() => {
-                      const tone = pbsRow()?.tone ?? 'muted';
-                      if (tone === 'ok') return 'text-emerald-600 dark:text-emerald-400';
-                      if (tone === 'warning') return 'text-amber-600 dark:text-amber-400';
-                      return 'text-slate-500 dark:text-slate-400';
-                    });
-
-                    const rowClass = createMemo(() => {
-                      const baseBorder = 'border-b border-slate-100 dark:border-slate-800';
-                      const baseHover = `cursor-pointer transition-all duration-200 relative hover:shadow-sm group ${baseBorder}`;
-
-                      if (isExpanded()) {
-                        return `cursor-pointer transition-all duration-200 relative hover:shadow-sm z-10 group bg-blue-50 dark:bg-blue-900 ${baseBorder}`;
-                      }
-
-                      let className = baseHover;
-                      if (isHighlighted()) {
-                        className += ' bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300 dark:ring-blue-600';
-                      }
-                      if (props.hoveredResourceId === resource.id) {
-                        className += ' bg-blue-100 dark:bg-blue-800';
-                      }
-                      if (!isResourceOnline(resource)) {
-                        className += ' opacity-60';
-                      }
-
-                      return className;
-                    });
-
-                    return (
-                      <>
-                        <TableRow
-                          ref={(el) => {
-                            if (el) {
-                              rowRefs.set(resource.id, el);
-                            } else {
-                              rowRefs.delete(resource.id);
-                            }
-                          }}
-                          class={rowClass()}
-                          style={{ 'min-height': '32px' }}
-                          onClick={() => toggleExpand(resource.id)}
-                          onMouseEnter={() => props.onHoverChange?.(resource.id)}
-                          onMouseLeave={() => props.onHoverChange?.(null)}
-                        >
-                          <TableCell class="pr-1.5 sm:pr-2 py-0.5 align-middle overflow-hidden pl-2 sm:pl-3">
-                            <div class="flex items-center gap-1.5 min-w-0">
-                              <div class={`shrink-0 transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}>
-                                <svg class="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                                </svg>
+                                </Show>
                               </div>
-                              <StatusDot
-                                variant={statusIndicator().variant}
-                                title={statusIndicator().label}
-                                ariaLabel={statusIndicator().label}
-                                size="xs"
-                              />
-                              <span class="block min-w-0 flex-1 truncate font-medium text-[11px] text-slate-900 dark:text-slate-100 select-text" title={displayName()}>
-                                {displayName()}
-                              </span>
-                              <Show when={hasAlternateName(resource)}>
-                                <span class="hidden min-w-0 max-w-[35%] shrink truncate text-[9px] text-slate-500 dark:text-slate-400 lg:inline">
-                                  ({resource.name})
-                                </span>
-                              </Show>
-                            </div>
-                          </TableCell>
-
-                          <TableCell classList={{ hidden: !isVisible('primary') && !isMobile() }}>
-                            <div class="flex justify-center">
-                              <Show when={pbsRow()?.datastores != null} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                <span class="text-xs text-slate-700 dark:text-slate-300">{pbsRow()!.datastores}</span>
-                              </Show>
-                            </div>
-                          </TableCell>
-
-                          <TableCell classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
-                            <div class="flex justify-center">
-                              <Show when={pbsRow()?.jobs != null} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                <span class="text-xs text-slate-700 dark:text-slate-300">{pbsRow()!.jobs}</span>
+                              <Show when={workloadsHref()}>
+                                {(href) => (
+                                  <a
+                                    href={href()}
+                                    class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:text-blue-300 dark:hover:bg-blue-800 dark:hover:text-blue-200"
+                                    title="View related workloads"
+                                    aria-label={`View workloads for ${displayName()}`}
+                                    onClick={(event) => event.stopPropagation()}
+                                  >
+                                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                      <path stroke-linecap="round" stroke-linejoin="round" d="M14 5h5m0 0v5m0-5-8 8" />
+                                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 10v9h9" />
+                                    </svg>
+                                  </a>
+                                )}
                               </Show>
                             </div>
                           </TableCell>
 
                           <TableCell>
-                            <div class="flex justify-center">
-                              <Show when={pbsRow()?.health} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                <span class={`text-xs font-medium ${healthClass()}`}>{pbsRow()!.health}</span>
-                              </Show>
-                            </div>
+                            <Show when={cpuPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-slate-400">—</span></div>}>
+                              <ResponsiveMetricCell
+                                class="w-full"
+                                value={cpuPercentValue() ?? 0}
+                                type="cpu"
+                                resourceId={isMobile() ? undefined : metricsKey()}
+                                isRunning={isResourceOnline(resource)}
+                                showMobile={false}
+                              />
+                            </Show>
                           </TableCell>
 
-                          <TableCell classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
+                          <TableCell>
+                            <Show when={memoryPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-slate-400">—</span></div>}>
+                              <div class="w-full" title={memorySublabel()}>
+                                <StackedMemoryBar
+                                  used={resource.memory?.used ?? 0}
+                                  total={resource.memory?.total ?? 0}
+                                  percentOnly={(!resource.memory?.total && resource.memory?.current != null) ? resource.memory.current : undefined}
+                                  swapUsed={resource.agent?.memory?.swapUsed ?? 0}
+                                  swapTotal={resource.agent?.memory?.swapTotal ?? 0}
+                                />
+                              </div>
+                            </Show>
+                          </TableCell>
+
+                          <TableCell>
+                            <Show when={diskPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-slate-400">—</span></div>}>
+                              <div class="w-full" title={diskSublabel()}>
+                                <StackedDiskBar
+                                  disks={normalizeDiskArray(resource.agent?.disks)}
+                                  aggregateDisk={resource.disk ? { total: resource.disk.total ?? 0, used: resource.disk.used ?? 0, free: resource.disk.free ?? 0, usage: resource.disk.current ?? 0 } as Disk : undefined}
+                                />
+                              </div>
+                            </Show>
+                          </TableCell>
+
+                          <TableCell classList={{ hidden: isMobile() || !isVisible('secondary') }}>
+                            <Show when={resource.network} fallback={<div class="text-center"><span class="text-xs text-slate-400">—</span></div>}>
+                              <div class="grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums">
+                                <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
+                                <span
+                                  class={`min-w-0 whitespace-nowrap ${networkEmphasis().className}`}
+                                  title={networkEmphasis().showOutlierHint ? `${formatSpeed(resource.network!.rxBytes)} (Top outlier)` : formatSpeed(resource.network!.rxBytes)}
+                                >
+                                  {formatSpeed(resource.network!.rxBytes)}
+                                </span>
+                                <span class="inline-flex w-3 justify-center text-orange-400">↑</span>
+                                <span
+                                  class={`min-w-0 whitespace-nowrap ${networkEmphasis().className}`}
+                                  title={networkEmphasis().showOutlierHint ? `${formatSpeed(resource.network!.txBytes)} (Top outlier)` : formatSpeed(resource.network!.txBytes)}
+                                >
+                                  {formatSpeed(resource.network!.txBytes)}
+                                </span>
+                              </div>
+                            </Show>
+                          </TableCell>
+
+                          <TableCell classList={{ hidden: isMobile() || !isVisible('supplementary') }}>
+                            <Show when={resource.diskIO} fallback={<div class="text-center"><span class="text-xs text-slate-400">—</span></div>}>
+                              <div class="grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums">
+                                <span class="inline-flex w-3 justify-center font-mono text-blue-500">R</span>
+                                <span
+                                  class={`min-w-0 whitespace-nowrap ${diskIOEmphasis().className}`}
+                                  title={diskIOEmphasis().showOutlierHint ? `${formatSpeed(resource.diskIO!.readRate)} (Top outlier)` : formatSpeed(resource.diskIO!.readRate)}
+                                >
+                                  {formatSpeed(resource.diskIO!.readRate)}
+                                </span>
+                                <span class="inline-flex w-3 justify-center font-mono text-amber-500">W</span>
+                                <span
+                                  class={`min-w-0 whitespace-nowrap ${diskIOEmphasis().className}`}
+                                  title={diskIOEmphasis().showOutlierHint ? `${formatSpeed(resource.diskIO!.writeRate)} (Top outlier)` : formatSpeed(resource.diskIO!.writeRate)}
+                                >
+                                  {formatSpeed(resource.diskIO!.writeRate)}
+                                </span>
+                              </div>
+                            </Show>
+                          </TableCell>
+
+                          <TableCell classList={{ hidden: isMobile() || !isVisible('secondary') }}>
                             <div class="flex items-center justify-center gap-1">
                               <Show
                                 when={hasUnifiedSources()}
@@ -944,7 +718,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             </div>
                           </TableCell>
 
-                          <TableCell classList={{ hidden: !isVisible('supplementary') && !isMobile() }}>
+                          <TableCell classList={{ hidden: isMobile() || !isVisible('supplementary') }}>
                             <div class="flex justify-center">
                               <Show when={resource.uptime} fallback={<span class="text-xs text-slate-400">—</span>}>
                                 <span class="text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap">
@@ -954,262 +728,19 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             </div>
                           </TableCell>
 
-                          <TableCell>
+                          <TableCell classList={{ hidden: isMobile() || !isVisible('supplementary') }}>
                             <div class="flex justify-center">
-                              <Show when={serviceLink()} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                {(link) => (
-                                  <a
-                                    href={link().href}
-                                    class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800"
-                                    title={link().label}
-                                    aria-label={link().ariaLabel}
-                                    onClick={(event) => event.stopPropagation()}
-                                  >
-                                    {link().compactLabel}
-                                  </a>
-                                )}
-                              </Show>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                        <Show when={isExpanded()}>
-                          <TableRow>
-                            <TableCell colspan={7} class="bg-slate-50 dark:bg-slate-800 px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
-                              <ResourceDetailDrawer resource={resource} onClose={() => setExpandedResourceId(null)} />
-                            </TableCell>
-                          </TableRow>
-                        </Show>
-                      </>
-                    );
-                  }}
-                </For>
-              </TableBody>
-            </Table>
-          </Show>
-
-          <Show when={sortedPMGResources().length > 0}>
-            <div class="border-b border-slate-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-300">
-              PMG Services
-            </div>
-            <Table class="whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : '500px' }}>
-              <TableHeader>
-                <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
-                  <TableHead class="text-left pl-2 sm:pl-3" style={resourceColumnStyle()}>
-                    Resource
-                  </TableHead>
-                  <TableHead classList={{ hidden: !isVisible('primary') && !isMobile() }} style={serviceQueueColumnStyle()}>
-                    Queue
-                  </TableHead>
-                  <TableHead classList={{ hidden: !isVisible('secondary') && !isMobile() }} style={serviceQueueColumnStyle()}>
-                    Deferred
-                  </TableHead>
-                  <TableHead classList={{ hidden: !isVisible('supplementary') && !isMobile() }} style={serviceQueueColumnStyle()}>
-                    Hold
-                  </TableHead>
-                  <TableHead classList={{ hidden: !isVisible('secondary') && !isMobile() }} style={serviceCountColumnStyle()}>
-                    Nodes
-                  </TableHead>
-                  <TableHead style={serviceHealthColumnStyle()}>
-                    Health
-                  </TableHead>
-                  <TableHead classList={{ hidden: !isVisible('secondary') && !isMobile() }} style={sourceColumnStyle()}>
-                    Source
-                  </TableHead>
-                  <TableHead classList={{ hidden: !isVisible('supplementary') && !isMobile() }} style={uptimeColumnStyle()}>
-                    Uptime
-                  </TableHead>
-                  <TableHead style={serviceActionColumnStyle()}>
-                    Action
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <For each={sortedPMGResources()}>
-                  {(resource) => {
-                    const isExpanded = createMemo(() => props.expandedResourceId === resource.id);
-                    const isHighlighted = createMemo(() => props.highlightedResourceId === resource.id);
-                    const displayName = createMemo(() => getDisplayName(resource));
-                    const serviceLink = createMemo(() => buildServiceDetailLinks(resource)[0] ?? null);
-                    const statusIndicator = createMemo(() => getHostStatusIndicator({ status: resource.status }));
-                    const pmgRow = createMemo(() => getPMGTableRow(resource));
-                    const platformBadge = createMemo(() => getPlatformBadge(resource.platformType));
-                    const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
-                    const unifiedSourceBadges = createMemo(() =>
-                      getUnifiedSourceBadges(getUnifiedSources(resource)),
-                    );
-                    const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
-                    const healthClass = createMemo(() => {
-                      const tone = pmgRow()?.tone ?? 'muted';
-                      if (tone === 'ok') return 'text-emerald-600 dark:text-emerald-400';
-                      if (tone === 'warning') return 'text-amber-600 dark:text-amber-400';
-                      return 'text-slate-500 dark:text-slate-400';
-                    });
-                    const queueClass = createMemo(() =>
-                      (pmgRow()?.deferred || 0) + (pmgRow()?.hold || 0) > 0
-                        ? 'text-amber-600 dark:text-amber-400'
-                        : 'text-slate-700 dark:text-slate-300',
-                    );
-
-                    const rowClass = createMemo(() => {
-                      const baseBorder = 'border-b border-slate-100 dark:border-slate-800';
-                      const baseHover = `cursor-pointer transition-all duration-200 relative hover:shadow-sm group ${baseBorder}`;
-
-                      if (isExpanded()) {
-                        return `cursor-pointer transition-all duration-200 relative hover:shadow-sm z-10 group bg-blue-50 dark:bg-blue-900 ${baseBorder}`;
-                      }
-
-                      let className = baseHover;
-                      if (isHighlighted()) {
-                        className += ' bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300 dark:ring-blue-600';
-                      }
-                      if (props.hoveredResourceId === resource.id) {
-                        className += ' bg-blue-100 dark:bg-blue-800';
-                      }
-                      if (!isResourceOnline(resource)) {
-                        className += ' opacity-60';
-                      }
-
-                      return className;
-                    });
-
-                    return (
-                      <>
-                        <TableRow
-                          ref={(el) => {
-                            if (el) {
-                              rowRefs.set(resource.id, el);
-                            } else {
-                              rowRefs.delete(resource.id);
-                            }
-                          }}
-                          class={rowClass()}
-                          style={{ 'min-height': '32px' }}
-                          onClick={() => toggleExpand(resource.id)}
-                          onMouseEnter={() => props.onHoverChange?.(resource.id)}
-                          onMouseLeave={() => props.onHoverChange?.(null)}
-                        >
-                          <TableCell class="pr-1.5 sm:pr-2 py-0.5 align-middle overflow-hidden pl-2 sm:pl-3">
-                            <div class="flex items-center gap-1.5 min-w-0">
-                              <div class={`shrink-0 transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}>
-                                <svg class="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                                </svg>
-                              </div>
-                              <StatusDot
-                                variant={statusIndicator().variant}
-                                title={statusIndicator().label}
-                                ariaLabel={statusIndicator().label}
-                                size="xs"
-                              />
-                              <span class="block min-w-0 flex-1 truncate font-medium text-[11px] text-slate-900 dark:text-slate-100 select-text" title={displayName()}>
-                                {displayName()}
-                              </span>
-                              <Show when={hasAlternateName(resource)}>
-                                <span class="hidden min-w-0 max-w-[35%] shrink truncate text-[9px] text-slate-500 dark:text-slate-400 lg:inline">
-                                  ({resource.name})
+                              <Show when={resource.temperature != null} fallback={<span class="text-xs text-slate-400">—</span>}>
+                                <span
+                                  class={`text-xs whitespace-nowrap font-medium ${(resource.temperature ?? 0) >= 80
+                                    ? 'text-red-600 dark:text-red-400'
+                                    : (resource.temperature ?? 0) >= 65
+                                      ? 'text-amber-600 dark:text-amber-400'
+                                      : 'text-emerald-600 dark:text-emerald-400'
+                                    }`}
+                                >
+                                  {formatTemperature(resource.temperature)}
                                 </span>
-                              </Show>
-                            </div>
-                          </TableCell>
-
-                          <TableCell classList={{ hidden: !isVisible('primary') && !isMobile() }}>
-                            <div class="flex justify-center">
-                              <Show when={pmgRow()?.queue != null} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                <span class={`text-xs font-medium ${queueClass()}`}>{pmgRow()!.queue}</span>
-                              </Show>
-                            </div>
-                          </TableCell>
-
-                          <TableCell classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
-                            <div class="flex justify-center">
-                              <Show when={pmgRow()?.deferred != null} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                <span class="text-xs text-slate-700 dark:text-slate-300">{pmgRow()!.deferred}</span>
-                              </Show>
-                            </div>
-                          </TableCell>
-
-                          <TableCell classList={{ hidden: !isVisible('supplementary') && !isMobile() }}>
-                            <div class="flex justify-center">
-                              <Show when={pmgRow()?.hold != null} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                <span class="text-xs text-slate-700 dark:text-slate-300">{pmgRow()!.hold}</span>
-                              </Show>
-                            </div>
-                          </TableCell>
-
-                          <TableCell classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
-                            <div class="flex justify-center">
-                              <Show when={pmgRow()?.nodes != null} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                <span class="text-xs text-slate-700 dark:text-slate-300">{pmgRow()!.nodes}</span>
-                              </Show>
-                            </div>
-                          </TableCell>
-
-                          <TableCell>
-                            <div class="flex justify-center">
-                              <Show when={pmgRow()?.health} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                <span class={`text-xs font-medium ${healthClass()}`}>{pmgRow()!.health}</span>
-                              </Show>
-                            </div>
-                          </TableCell>
-
-                          <TableCell classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
-                            <div class="flex items-center justify-center gap-1">
-                              <Show
-                                when={hasUnifiedSources()}
-                                fallback={
-                                  <>
-                                    <Show when={platformBadge()}>
-                                      {(badge) => (
-                                        <span class={badge().classes} title={badge().title}>
-                                          {badge().label}
-                                        </span>
-                                      )}
-                                    </Show>
-                                    <Show when={sourceBadge()}>
-                                      {(badge) => (
-                                        <span class={badge().classes} title={badge().title}>
-                                          {badge().label}
-                                        </span>
-                                      )}
-                                    </Show>
-                                  </>
-                                }
-                              >
-                                <For each={unifiedSourceBadges()}>
-                                  {(badge) => (
-                                    <span class={badge.classes} title={badge.title}>
-                                      {badge.label}
-                                    </span>
-                                  )}
-                                </For>
-                              </Show>
-                            </div>
-                          </TableCell>
-
-                          <TableCell classList={{ hidden: !isVisible('supplementary') && !isMobile() }}>
-                            <div class="flex justify-center">
-                              <Show when={resource.uptime} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                <span class="text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                                  {formatUptime(resource.uptime ?? 0)}
-                                </span>
-                              </Show>
-                            </div>
-                          </TableCell>
-
-                          <TableCell>
-                            <div class="flex justify-center">
-                              <Show when={serviceLink()} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                {(link) => (
-                                  <a
-                                    href={link().href}
-                                    class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800"
-                                    title={link().label}
-                                    aria-label={link().ariaLabel}
-                                    onClick={(event) => event.stopPropagation()}
-                                  >
-                                    {link().compactLabel}
-                                  </a>
-                                )}
                               </Show>
                             </div>
                           </TableCell>
@@ -1225,8 +756,483 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                     );
                   }}
                 </For>
+
+                <Show when={hostWindowing.isWindowed() && hostBottomSpacerHeight() > 0}>
+                  <TableRow aria-hidden="true">
+                    <TableCell colspan={9} style={{ height: `${hostBottomSpacerHeight()}px`, padding: '0', border: '0' }} />
+                  </TableRow>
+                </Show>
               </TableBody>
             </Table>
+          </div>
+        </Card>
+      </Show>
+
+      <Show when={sortedPBSResources().length > 0 || sortedPMGResources().length > 0}>
+        <Card padding="none" tone="card" class="mb-0 overflow-hidden">
+          <div class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            Service Infrastructure
+          </div>
+
+          <Show when={sortedPBSResources().length > 0}>
+            <div class="border-b border-slate-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-300">
+              PBS Services
+            </div>
+            <div class="overflow-x-auto">
+              <Table class="whitespace-nowrap min-w-[max-content]" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : 'max-content' }}>
+                <TableHeader>
+                  <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                    <TableHead class="text-left pl-2 sm:pl-3" style={resourceColumnStyle()}>
+                      Resource
+                    </TableHead>
+                    <TableHead classList={{ hidden: !isVisible('primary') && !isMobile() }} style={serviceCountColumnStyle()}>
+                      Datastores
+                    </TableHead>
+                    <TableHead classList={{ hidden: !isVisible('secondary') && !isMobile() }} style={serviceCountColumnStyle()}>
+                      Jobs
+                    </TableHead>
+                    <TableHead style={serviceHealthColumnStyle()}>
+                      Health
+                    </TableHead>
+                    <TableHead classList={{ hidden: !isVisible('secondary') && !isMobile() }} style={sourceColumnStyle()}>
+                      Source
+                    </TableHead>
+                    <TableHead classList={{ hidden: !isVisible('supplementary') && !isMobile() }} style={uptimeColumnStyle()}>
+                      Uptime
+                    </TableHead>
+                    <TableHead style={serviceActionColumnStyle()}>
+                      Action
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <For each={sortedPBSResources()}>
+                    {(resource) => {
+                      const isExpanded = createMemo(() => props.expandedResourceId === resource.id);
+                      const isHighlighted = createMemo(() => props.highlightedResourceId === resource.id);
+                      const displayName = createMemo(() => getDisplayName(resource));
+                      const serviceLink = createMemo(() => buildServiceDetailLinks(resource)[0] ?? null);
+                      const statusIndicator = createMemo(() => getHostStatusIndicator({ status: resource.status }));
+                      const pbsRow = createMemo(() => getPBSTableRow(resource));
+                      const platformBadge = createMemo(() => getPlatformBadge(resource.platformType));
+                      const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
+                      const unifiedSourceBadges = createMemo(() =>
+                        getUnifiedSourceBadges(getUnifiedSources(resource)),
+                      );
+                      const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
+                      const healthClass = createMemo(() => {
+                        const tone = pbsRow()?.tone ?? 'muted';
+                        if (tone === 'ok') return 'text-emerald-600 dark:text-emerald-400';
+                        if (tone === 'warning') return 'text-amber-600 dark:text-amber-400';
+                        return 'text-slate-500 dark:text-slate-400';
+                      });
+
+                      const rowClass = createMemo(() => {
+                        const baseBorder = 'border-b border-slate-100 dark:border-slate-800';
+                        const baseHover = `cursor-pointer transition-all duration-200 relative hover:shadow-sm group ${baseBorder}`;
+
+                        if (isExpanded()) {
+                          return `cursor-pointer transition-all duration-200 relative hover:shadow-sm z-10 group bg-blue-50 dark:bg-blue-900 ${baseBorder}`;
+                        }
+
+                        let className = baseHover;
+                        if (isHighlighted()) {
+                          className += ' bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300 dark:ring-blue-600';
+                        }
+                        if (props.hoveredResourceId === resource.id) {
+                          className += ' bg-blue-100 dark:bg-blue-800';
+                        }
+                        if (!isResourceOnline(resource)) {
+                          className += ' opacity-60';
+                        }
+
+                        return className;
+                      });
+
+                      return (
+                        <>
+                          <TableRow
+                            ref={(el) => {
+                              if (el) {
+                                rowRefs.set(resource.id, el);
+                              } else {
+                                rowRefs.delete(resource.id);
+                              }
+                            }}
+                            class={rowClass()}
+                            style={{ 'min-height': '32px' }}
+                            onClick={() => toggleExpand(resource.id)}
+                            onMouseEnter={() => props.onHoverChange?.(resource.id)}
+                            onMouseLeave={() => props.onHoverChange?.(null)}
+                          >
+                            <TableCell class="pr-1.5 sm:pr-2 py-0.5 align-middle overflow-hidden pl-2 sm:pl-3">
+                              <div class="flex items-center gap-1.5 min-w-0">
+                                <div class={`shrink-0 transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}>
+                                  <svg class="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                  </svg>
+                                </div>
+                                <StatusDot
+                                  variant={statusIndicator().variant}
+                                  title={statusIndicator().label}
+                                  ariaLabel={statusIndicator().label}
+                                  size="xs"
+                                />
+                                <span class="block min-w-0 flex-1 truncate font-medium text-[11px] text-slate-900 dark:text-slate-100 select-text" title={displayName()}>
+                                  {displayName()}
+                                </span>
+                                <Show when={hasAlternateName(resource)}>
+                                  <span class="hidden min-w-0 max-w-[35%] shrink truncate text-[9px] text-slate-500 dark:text-slate-400 lg:inline">
+                                    ({resource.name})
+                                  </span>
+                                </Show>
+                              </div>
+                            </TableCell>
+
+                            <TableCell classList={{ hidden: !isVisible('primary') && !isMobile() }}>
+                              <div class="flex justify-center">
+                                <Show when={pbsRow()?.datastores != null} fallback={<span class="text-xs text-slate-400">—</span>}>
+                                  <span class="text-xs text-slate-700 dark:text-slate-300">{pbsRow()!.datastores}</span>
+                                </Show>
+                              </div>
+                            </TableCell>
+
+                            <TableCell classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
+                              <div class="flex justify-center">
+                                <Show when={pbsRow()?.jobs != null} fallback={<span class="text-xs text-slate-400">—</span>}>
+                                  <span class="text-xs text-slate-700 dark:text-slate-300">{pbsRow()!.jobs}</span>
+                                </Show>
+                              </div>
+                            </TableCell>
+
+                            <TableCell>
+                              <div class="flex justify-center">
+                                <Show when={pbsRow()?.health} fallback={<span class="text-xs text-slate-400">—</span>}>
+                                  <span class={`text-xs font-medium ${healthClass()}`}>{pbsRow()!.health}</span>
+                                </Show>
+                              </div>
+                            </TableCell>
+
+                            <TableCell classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
+                              <div class="flex items-center justify-center gap-1">
+                                <Show
+                                  when={hasUnifiedSources()}
+                                  fallback={
+                                    <>
+                                      <Show when={platformBadge()}>
+                                        {(badge) => (
+                                          <span class={badge().classes} title={badge().title}>
+                                            {badge().label}
+                                          </span>
+                                        )}
+                                      </Show>
+                                      <Show when={sourceBadge()}>
+                                        {(badge) => (
+                                          <span class={badge().classes} title={badge().title}>
+                                            {badge().label}
+                                          </span>
+                                        )}
+                                      </Show>
+                                    </>
+                                  }
+                                >
+                                  <For each={unifiedSourceBadges()}>
+                                    {(badge) => (
+                                      <span class={badge.classes} title={badge.title}>
+                                        {badge.label}
+                                      </span>
+                                    )}
+                                  </For>
+                                </Show>
+                              </div>
+                            </TableCell>
+
+                            <TableCell classList={{ hidden: !isVisible('supplementary') && !isMobile() }}>
+                              <div class="flex justify-center">
+                                <Show when={resource.uptime} fallback={<span class="text-xs text-slate-400">—</span>}>
+                                  <span class="text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                                    {formatUptime(resource.uptime ?? 0)}
+                                  </span>
+                                </Show>
+                              </div>
+                            </TableCell>
+
+                            <TableCell>
+                              <div class="flex justify-center">
+                                <Show when={serviceLink()} fallback={<span class="text-xs text-slate-400">—</span>}>
+                                  {(link) => (
+                                    <a
+                                      href={link().href}
+                                      class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800"
+                                      title={link().label}
+                                      aria-label={link().ariaLabel}
+                                      onClick={(event) => event.stopPropagation()}
+                                    >
+                                      {link().compactLabel}
+                                    </a>
+                                  )}
+                                </Show>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                          <Show when={isExpanded()}>
+                            <TableRow>
+                              <TableCell colspan={7} class="bg-slate-50 dark:bg-slate-800 px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
+                                <ResourceDetailDrawer resource={resource} onClose={() => setExpandedResourceId(null)} />
+                              </TableCell>
+                            </TableRow>
+                          </Show>
+                        </>
+                      );
+                    }}
+                  </For>
+                </TableBody>
+              </Table>
+            </div>
+          </Show>
+
+          <Show when={sortedPMGResources().length > 0}>
+            <div class="border-b border-slate-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-300">
+              PMG Services
+            </div>
+            <div class="overflow-x-auto">
+              <Table class="whitespace-nowrap min-w-[max-content]" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : 'max-content' }}>
+                <TableHeader>
+                  <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                    <TableHead class="text-left pl-2 sm:pl-3" style={resourceColumnStyle()}>
+                      Resource
+                    </TableHead>
+                    <TableHead classList={{ hidden: !isVisible('primary') && !isMobile() }} style={serviceQueueColumnStyle()}>
+                      Queue
+                    </TableHead>
+                    <TableHead classList={{ hidden: !isVisible('secondary') && !isMobile() }} style={serviceQueueColumnStyle()}>
+                      Deferred
+                    </TableHead>
+                    <TableHead classList={{ hidden: !isVisible('supplementary') && !isMobile() }} style={serviceQueueColumnStyle()}>
+                      Hold
+                    </TableHead>
+                    <TableHead classList={{ hidden: !isVisible('secondary') && !isMobile() }} style={serviceCountColumnStyle()}>
+                      Nodes
+                    </TableHead>
+                    <TableHead style={serviceHealthColumnStyle()}>
+                      Health
+                    </TableHead>
+                    <TableHead classList={{ hidden: !isVisible('secondary') && !isMobile() }} style={sourceColumnStyle()}>
+                      Source
+                    </TableHead>
+                    <TableHead classList={{ hidden: !isVisible('supplementary') && !isMobile() }} style={uptimeColumnStyle()}>
+                      Uptime
+                    </TableHead>
+                    <TableHead style={serviceActionColumnStyle()}>
+                      Action
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <For each={sortedPMGResources()}>
+                    {(resource) => {
+                      const isExpanded = createMemo(() => props.expandedResourceId === resource.id);
+                      const isHighlighted = createMemo(() => props.highlightedResourceId === resource.id);
+                      const displayName = createMemo(() => getDisplayName(resource));
+                      const serviceLink = createMemo(() => buildServiceDetailLinks(resource)[0] ?? null);
+                      const statusIndicator = createMemo(() => getHostStatusIndicator({ status: resource.status }));
+                      const pmgRow = createMemo(() => getPMGTableRow(resource));
+                      const platformBadge = createMemo(() => getPlatformBadge(resource.platformType));
+                      const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
+                      const unifiedSourceBadges = createMemo(() =>
+                        getUnifiedSourceBadges(getUnifiedSources(resource)),
+                      );
+                      const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
+                      const healthClass = createMemo(() => {
+                        const tone = pmgRow()?.tone ?? 'muted';
+                        if (tone === 'ok') return 'text-emerald-600 dark:text-emerald-400';
+                        if (tone === 'warning') return 'text-amber-600 dark:text-amber-400';
+                        return 'text-slate-500 dark:text-slate-400';
+                      });
+                      const queueClass = createMemo(() =>
+                        (pmgRow()?.deferred || 0) + (pmgRow()?.hold || 0) > 0
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-slate-700 dark:text-slate-300',
+                      );
+
+                      const rowClass = createMemo(() => {
+                        const baseBorder = 'border-b border-slate-100 dark:border-slate-800';
+                        const baseHover = `cursor-pointer transition-all duration-200 relative hover:shadow-sm group ${baseBorder}`;
+
+                        if (isExpanded()) {
+                          return `cursor-pointer transition-all duration-200 relative hover:shadow-sm z-10 group bg-blue-50 dark:bg-blue-900 ${baseBorder}`;
+                        }
+
+                        let className = baseHover;
+                        if (isHighlighted()) {
+                          className += ' bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300 dark:ring-blue-600';
+                        }
+                        if (props.hoveredResourceId === resource.id) {
+                          className += ' bg-blue-100 dark:bg-blue-800';
+                        }
+                        if (!isResourceOnline(resource)) {
+                          className += ' opacity-60';
+                        }
+
+                        return className;
+                      });
+
+                      return (
+                        <>
+                          <TableRow
+                            ref={(el) => {
+                              if (el) {
+                                rowRefs.set(resource.id, el);
+                              } else {
+                                rowRefs.delete(resource.id);
+                              }
+                            }}
+                            class={rowClass()}
+                            style={{ 'min-height': '32px' }}
+                            onClick={() => toggleExpand(resource.id)}
+                            onMouseEnter={() => props.onHoverChange?.(resource.id)}
+                            onMouseLeave={() => props.onHoverChange?.(null)}
+                          >
+                            <TableCell class="pr-1.5 sm:pr-2 py-0.5 align-middle overflow-hidden pl-2 sm:pl-3">
+                              <div class="flex items-center gap-1.5 min-w-0">
+                                <div class={`shrink-0 transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}>
+                                  <svg class="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                  </svg>
+                                </div>
+                                <StatusDot
+                                  variant={statusIndicator().variant}
+                                  title={statusIndicator().label}
+                                  ariaLabel={statusIndicator().label}
+                                  size="xs"
+                                />
+                                <span class="block min-w-0 flex-1 truncate font-medium text-[11px] text-slate-900 dark:text-slate-100 select-text" title={displayName()}>
+                                  {displayName()}
+                                </span>
+                                <Show when={hasAlternateName(resource)}>
+                                  <span class="hidden min-w-0 max-w-[35%] shrink truncate text-[9px] text-slate-500 dark:text-slate-400 lg:inline">
+                                    ({resource.name})
+                                  </span>
+                                </Show>
+                              </div>
+                            </TableCell>
+
+                            <TableCell classList={{ hidden: !isVisible('primary') && !isMobile() }}>
+                              <div class="flex justify-center">
+                                <Show when={pmgRow()?.queue != null} fallback={<span class="text-xs text-slate-400">—</span>}>
+                                  <span class={`text-xs font-medium ${queueClass()}`}>{pmgRow()!.queue}</span>
+                                </Show>
+                              </div>
+                            </TableCell>
+
+                            <TableCell classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
+                              <div class="flex justify-center">
+                                <Show when={pmgRow()?.deferred != null} fallback={<span class="text-xs text-slate-400">—</span>}>
+                                  <span class="text-xs text-slate-700 dark:text-slate-300">{pmgRow()!.deferred}</span>
+                                </Show>
+                              </div>
+                            </TableCell>
+
+                            <TableCell classList={{ hidden: !isVisible('supplementary') && !isMobile() }}>
+                              <div class="flex justify-center">
+                                <Show when={pmgRow()?.hold != null} fallback={<span class="text-xs text-slate-400">—</span>}>
+                                  <span class="text-xs text-slate-700 dark:text-slate-300">{pmgRow()!.hold}</span>
+                                </Show>
+                              </div>
+                            </TableCell>
+
+                            <TableCell classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
+                              <div class="flex justify-center">
+                                <Show when={pmgRow()?.nodes != null} fallback={<span class="text-xs text-slate-400">—</span>}>
+                                  <span class="text-xs text-slate-700 dark:text-slate-300">{pmgRow()!.nodes}</span>
+                                </Show>
+                              </div>
+                            </TableCell>
+
+                            <TableCell>
+                              <div class="flex justify-center">
+                                <Show when={pmgRow()?.health} fallback={<span class="text-xs text-slate-400">—</span>}>
+                                  <span class={`text-xs font-medium ${healthClass()}`}>{pmgRow()!.health}</span>
+                                </Show>
+                              </div>
+                            </TableCell>
+
+                            <TableCell classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
+                              <div class="flex items-center justify-center gap-1">
+                                <Show
+                                  when={hasUnifiedSources()}
+                                  fallback={
+                                    <>
+                                      <Show when={platformBadge()}>
+                                        {(badge) => (
+                                          <span class={badge().classes} title={badge().title}>
+                                            {badge().label}
+                                          </span>
+                                        )}
+                                      </Show>
+                                      <Show when={sourceBadge()}>
+                                        {(badge) => (
+                                          <span class={badge().classes} title={badge().title}>
+                                            {badge().label}
+                                          </span>
+                                        )}
+                                      </Show>
+                                    </>
+                                  }
+                                >
+                                  <For each={unifiedSourceBadges()}>
+                                    {(badge) => (
+                                      <span class={badge.classes} title={badge.title}>
+                                        {badge.label}
+                                      </span>
+                                    )}
+                                  </For>
+                                </Show>
+                              </div>
+                            </TableCell>
+
+                            <TableCell classList={{ hidden: !isVisible('supplementary') && !isMobile() }}>
+                              <div class="flex justify-center">
+                                <Show when={resource.uptime} fallback={<span class="text-xs text-slate-400">—</span>}>
+                                  <span class="text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                                    {formatUptime(resource.uptime ?? 0)}
+                                  </span>
+                                </Show>
+                              </div>
+                            </TableCell>
+
+                            <TableCell>
+                              <div class="flex justify-center">
+                                <Show when={serviceLink()} fallback={<span class="text-xs text-slate-400">—</span>}>
+                                  {(link) => (
+                                    <a
+                                      href={link().href}
+                                      class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800"
+                                      title={link().label}
+                                      aria-label={link().ariaLabel}
+                                      onClick={(event) => event.stopPropagation()}
+                                    >
+                                      {link().compactLabel}
+                                    </a>
+                                  )}
+                                </Show>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                          <Show when={isExpanded()}>
+                            <TableRow>
+                              <TableCell colspan={9} class="bg-slate-50 dark:bg-slate-800 px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
+                                <ResourceDetailDrawer resource={resource} onClose={() => setExpandedResourceId(null)} />
+                              </TableCell>
+                            </TableRow>
+                          </Show>
+                        </>
+                      );
+                    }}
+                  </For>
+                </TableBody>
+              </Table>
+            </div>
           </Show>
         </Card>
       </Show>

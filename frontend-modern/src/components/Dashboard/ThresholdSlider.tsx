@@ -7,6 +7,7 @@ interface ThresholdSliderProps {
   type: 'cpu' | 'memory' | 'disk' | 'temperature';
   min?: number;
   max?: number;
+  disabled?: boolean;
 }
 
 export function ThresholdSlider(props: ThresholdSliderProps) {
@@ -69,8 +70,8 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
 
   return (
     <div
-      class="relative w-full h-3.5 overflow-visible"
-      onWheel={(e) => isDragging() && e.preventDefault()}
+      class={`relative w-full h-3.5 overflow-visible transition-opacity ${props.disabled ? 'opacity-30 grayscale pointer-events-none' : ''}`}
+      onWheel={(e) => !props.disabled && isDragging() && e.preventDefault()}
       style={{ 'touch-action': isDragging() ? 'none' : 'auto' }}
     >
       {/* Track background */}
@@ -79,12 +80,12 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
       {/* Colored fill */}
       <div
         class={`absolute left-0 h-3.5 rounded ${props.type === 'cpu'
-            ? 'bg-blue-500'
-            : props.type === 'memory'
-              ? 'bg-green-500'
-              : props.type === 'disk'
-                ? 'bg-amber-500'
-                : 'bg-rose-500'
+          ? 'bg-blue-500'
+          : props.type === 'memory'
+            ? 'bg-green-500'
+            : props.type === 'disk'
+              ? 'bg-amber-500'
+              : 'bg-rose-500'
           }`}
         style={{ width: `${calculateVisualPosition(props.value)}%` }}
       ></div>
@@ -97,9 +98,10 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
         max={props.max || 100}
         value={props.value}
         onInput={(e) => props.onChange(parseInt(e.currentTarget.value))}
-        onMouseDown={handleMouseDown}
-        onWheel={(e) => e.preventDefault()}
-        class="absolute inset-0 w-full h-3.5 opacity-0 cursor-pointer z-20"
+        onMouseDown={!props.disabled ? handleMouseDown : undefined}
+        onWheel={(e) => !props.disabled && e.preventDefault()}
+        class={`absolute inset-0 w-full h-3.5 opacity-0 ${props.disabled ? 'cursor-not-allowed' : 'cursor-pointer'} z-20`}
+        disabled={props.disabled}
         style={{ 'touch-action': 'none' }}
         title={
           props.type === 'temperature'
@@ -115,10 +117,10 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
         style={{
           left: `${thumbPosition()}%`,
           transform: `translateY(-50%) translateX(${thumbPosition() <= 1
-              ? '0%' // At 0-1%, keep at left edge
-              : thumbPosition() >= 99
-                ? '-100%' // At 99-100%, keep at right edge
-                : '-50%' // Otherwise center
+            ? '0%' // At 0-1%, keep at left edge
+            : thumbPosition() >= 99
+              ? '-100%' // At 99-100%, keep at right edge
+              : '-50%' // Otherwise center
             })`,
         }}
       >

@@ -113,7 +113,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
         class="overflow-auto max-h-[600px] w-full"
         style={{ "contain": "strict" }}
       >
-        <Table class="min-w-[900px] w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+        <Table class="min-w-[max-content] w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
           <TableHeader class="bg-slate-50 dark:bg-slate-800">
             <TableRow>
               <TableHead class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -406,153 +406,155 @@ const resolvePbsStatusMeta = (
 
 export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
   return (
-    <Card padding="none" tone="card" class="overflow-x-auto rounded-md">
-      <Table class="min-w-[900px] divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-        <TableHeader class="bg-slate-50 dark:bg-slate-800">
-          <TableRow>
-            <TableHead class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Node
-            </TableHead>
-            <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Credentials
-            </TableHead>
-            <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Capabilities
-            </TableHead>
-            <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Status
-            </TableHead>
-            <TableHead class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Actions
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody class="divide-y divide-slate-200 dark:divide-slate-700 bg-white dark:bg-slate-800">
-          <For each={props.nodes}>
-            {(node) => {
-              const statusMeta = createMemo(() => resolvePbsStatusMeta(node, props.statePbs));
-              return (
-                <TableRow class="even:bg-slate-50 dark:even:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
-                  <TableCell class="align-top py-3 pl-4 pr-3">
-                    <div class="min-w-0 space-y-1">
-                      <div class="flex items-start gap-3">
-                        <div class={`mt-1.5 h-3 w-3 rounded-full ${statusMeta().dotClass}`}></div>
-                        <div class="min-w-0 flex-1">
-                          <p class="font-medium text-slate-900 dark:text-slate-100 truncate">
-                            {node.name}
-                          </p>
-                          <p class="text-xs text-slate-600 dark:text-slate-400 truncate">
-                            {node.host}
-                          </p>
+    <Card padding="none" tone="card" class="rounded-md">
+      <div class="overflow-x-auto">
+        <Table class="min-w-[max-content] divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+          <TableHeader class="bg-slate-50 dark:bg-slate-800">
+            <TableRow>
+              <TableHead class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Node
+              </TableHead>
+              <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Credentials
+              </TableHead>
+              <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Capabilities
+              </TableHead>
+              <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Status
+              </TableHead>
+              <TableHead class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Actions
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody class="divide-y divide-slate-200 dark:divide-slate-700 bg-white dark:bg-slate-800">
+            <For each={props.nodes}>
+              {(node) => {
+                const statusMeta = createMemo(() => resolvePbsStatusMeta(node, props.statePbs));
+                return (
+                  <TableRow class="even:bg-slate-50 dark:even:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
+                    <TableCell class="align-top py-3 pl-4 pr-3">
+                      <div class="min-w-0 space-y-1">
+                        <div class="flex items-start gap-3">
+                          <div class={`mt-1.5 h-3 w-3 rounded-full ${statusMeta().dotClass}`}></div>
+                          <div class="min-w-0 flex-1">
+                            <p class="font-medium text-slate-900 dark:text-slate-100 truncate">
+                              {node.name}
+                            </p>
+                            <p class="text-xs text-slate-600 dark:text-slate-400 truncate">
+                              {node.host}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell class="align-top px-3 py-3">
-                    <div class="flex flex-col gap-1">
-                      <span class="text-xs text-slate-600 dark:text-slate-400">
-                        {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
+                    </TableCell>
+                    <TableCell class="align-top px-3 py-3">
+                      <div class="flex flex-col gap-1">
+                        <span class="text-xs text-slate-600 dark:text-slate-400">
+                          {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
+                        </span>
+                        <Show when={node.source === 'agent'}>
+                          <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded w-fit">
+                            <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
+                            Agent
+                          </span>
+                        </Show>
+                        <Show when={node.source === 'script' || (!node.source && node.tokenName)}>
+                          <span class="text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded w-fit">
+                            API only
+                          </span>
+                        </Show>
+                      </div>
+                    </TableCell>
+                    <TableCell class="align-top px-3 py-3">
+                      <div class="flex flex-wrap gap-1">
+                        {node.type === 'pbs' && 'monitorDatastores' in node && node.monitorDatastores && (
+                          <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                            Datastores
+                          </span>
+                        )}
+                        {node.type === 'pbs' && 'monitorSyncJobs' in node && node.monitorSyncJobs && (
+                          <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                            Sync Jobs
+                          </span>
+                        )}
+                        {node.type === 'pbs' &&
+                          'monitorVerifyJobs' in node &&
+                          node.monitorVerifyJobs && (
+                            <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                              Verify Jobs
+                            </span>
+                          )}
+                        {node.type === 'pbs' && 'monitorPruneJobs' in node && node.monitorPruneJobs && (
+                          <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                            Prune Jobs
+                          </span>
+                        )}
+                        {node.type === 'pbs' &&
+                          'monitorGarbageJobs' in node &&
+                          (node as NodeConfig & { monitorGarbageJobs?: boolean }).monitorGarbageJobs && (
+                            <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                              Garbage Collection
+                            </span>
+                          )}
+                        {node.type === 'pbs' &&
+                          isTemperatureMonitoringEnabled(node, props.globalTemperatureMonitoringEnabled ?? true) && (
+                            <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
+                              Temperature
+                            </span>
+                          )}
+                      </div>
+                    </TableCell>
+                    <TableCell class="align-top px-3 py-3 whitespace-nowrap">
+                      <span class={`inline-flex items-center gap-2 text-xs font-medium ${statusMeta().labelClass}`}>
+                        <span class={`h-2.5 w-2.5 rounded-full ${statusMeta().dotClass}`}></span>
+                        {statusMeta().label}
                       </span>
-                      <Show when={node.source === 'agent'}>
-                        <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded w-fit">
-                          <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
-                          Agent
-                        </span>
-                      </Show>
-                      <Show when={node.source === 'script' || (!node.source && node.tokenName)}>
-                        <span class="text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded w-fit">
-                          API only
-                        </span>
-                      </Show>
-                    </div>
-                  </TableCell>
-                  <TableCell class="align-top px-3 py-3">
-                    <div class="flex flex-wrap gap-1">
-                      {node.type === 'pbs' && 'monitorDatastores' in node && node.monitorDatastores && (
-                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                          Datastores
-                        </span>
-                      )}
-                      {node.type === 'pbs' && 'monitorSyncJobs' in node && node.monitorSyncJobs && (
-                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                          Sync Jobs
-                        </span>
-                      )}
-                      {node.type === 'pbs' &&
-                        'monitorVerifyJobs' in node &&
-                        node.monitorVerifyJobs && (
-                          <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                            Verify Jobs
-                          </span>
-                        )}
-                      {node.type === 'pbs' && 'monitorPruneJobs' in node && node.monitorPruneJobs && (
-                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                          Prune Jobs
-                        </span>
-                      )}
-                      {node.type === 'pbs' &&
-                        'monitorGarbageJobs' in node &&
-                        (node as NodeConfig & { monitorGarbageJobs?: boolean }).monitorGarbageJobs && (
-                          <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                            Garbage Collection
-                          </span>
-                        )}
-                      {node.type === 'pbs' &&
-                        isTemperatureMonitoringEnabled(node, props.globalTemperatureMonitoringEnabled ?? true) && (
-                          <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                            Temperature
-                          </span>
-                        )}
-                    </div>
-                  </TableCell>
-                  <TableCell class="align-top px-3 py-3 whitespace-nowrap">
-                    <span class={`inline-flex items-center gap-2 text-xs font-medium ${statusMeta().labelClass}`}>
-                      <span class={`h-2.5 w-2.5 rounded-full ${statusMeta().dotClass}`}></span>
-                      {statusMeta().label}
-                    </span>
-                  </TableCell>
-                  <TableCell class="align-top px-3 py-3">
-                    <div class="flex items-center justify-end gap-1 sm:gap-2">
-                      <button
-                        type="button"
-                        onClick={() => props.onTestConnection(node.id)}
-                        class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-                        title="Test connection"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => props.onEdit(node)}
-                        class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-                        title="Edit node"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
-                          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => props.onDelete(node)}
-                        class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                        title="Delete node"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <polyline points="3 6 5 6 21 6"></polyline>
-                          <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
-                        </svg>
-                      </button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            }}
-          </For>
-        </TableBody>
-      </Table>
+                    </TableCell>
+                    <TableCell class="align-top px-3 py-3">
+                      <div class="flex items-center justify-end gap-1 sm:gap-2">
+                        <button
+                          type="button"
+                          onClick={() => props.onTestConnection(node.id)}
+                          class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                          title="Test connection"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => props.onEdit(node)}
+                          class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                          title="Edit node"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => props.onDelete(node)}
+                          class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                          title="Delete node"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
+                          </svg>
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              }}
+            </For>
+          </TableBody>
+        </Table>
+      </div>
     </Card>
   );
 };
@@ -602,142 +604,144 @@ const resolvePmgStatusMeta = (
 
 export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
   return (
-    <Card padding="none" tone="card" class="overflow-x-auto rounded-md">
-      <Table class="min-w-[900px] divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-        <TableHeader class="bg-slate-50 dark:bg-slate-800">
-          <TableRow>
-            <TableHead class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Node
-            </TableHead>
-            <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Credentials
-            </TableHead>
-            <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Capabilities
-            </TableHead>
-            <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Status
-            </TableHead>
-            <TableHead class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Actions
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody class="divide-y divide-slate-200 dark:divide-slate-700 bg-white dark:bg-slate-800">
-          <For each={props.nodes}>
-            {(node) => {
-              const statusMeta = createMemo(() => resolvePmgStatusMeta(node, props.statePmg));
-              return (
-                <TableRow class="even:bg-slate-50 dark:even:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
-                  <TableCell class="align-top py-3 pl-4 pr-3">
-                    <div class="min-w-0 space-y-1">
-                      <div class="flex items-start gap-3">
-                        <div class={`mt-1.5 h-3 w-3 rounded-full ${statusMeta().dotClass}`}></div>
-                        <div class="min-w-0 flex-1">
-                          <p class="font-medium text-slate-900 dark:text-slate-100 truncate">
-                            {node.name}
-                          </p>
-                          <p class="text-xs text-slate-600 dark:text-slate-400 truncate">
-                            {node.host}
-                          </p>
+    <Card padding="none" tone="card" class="rounded-md">
+      <div class="overflow-x-auto">
+        <Table class="min-w-[max-content] divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+          <TableHeader class="bg-slate-50 dark:bg-slate-800">
+            <TableRow>
+              <TableHead class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Node
+              </TableHead>
+              <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Credentials
+              </TableHead>
+              <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Capabilities
+              </TableHead>
+              <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Status
+              </TableHead>
+              <TableHead class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Actions
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody class="divide-y divide-slate-200 dark:divide-slate-700 bg-white dark:bg-slate-800">
+            <For each={props.nodes}>
+              {(node) => {
+                const statusMeta = createMemo(() => resolvePmgStatusMeta(node, props.statePmg));
+                return (
+                  <TableRow class="even:bg-slate-50 dark:even:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
+                    <TableCell class="align-top py-3 pl-4 pr-3">
+                      <div class="min-w-0 space-y-1">
+                        <div class="flex items-start gap-3">
+                          <div class={`mt-1.5 h-3 w-3 rounded-full ${statusMeta().dotClass}`}></div>
+                          <div class="min-w-0 flex-1">
+                            <p class="font-medium text-slate-900 dark:text-slate-100 truncate">
+                              {node.name}
+                            </p>
+                            <p class="text-xs text-slate-600 dark:text-slate-400 truncate">
+                              {node.host}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell class="align-top px-3 py-3">
-                    <div class="flex flex-col gap-1">
-                      <span class="text-xs text-slate-600 dark:text-slate-400">
-                        {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
+                    </TableCell>
+                    <TableCell class="align-top px-3 py-3">
+                      <div class="flex flex-col gap-1">
+                        <span class="text-xs text-slate-600 dark:text-slate-400">
+                          {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
+                        </span>
+                        <Show when={node.source === 'agent'}>
+                          <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded w-fit">
+                            <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
+                            Agent
+                          </span>
+                        </Show>
+                        <Show when={node.source === 'script' || (!node.source && node.tokenName)}>
+                          <span class="text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded w-fit">
+                            API only
+                          </span>
+                        </Show>
+                      </div>
+                    </TableCell>
+                    <TableCell class="align-top px-3 py-3">
+                      <div class="flex flex-wrap gap-1">
+                        {node.type === 'pmg' &&
+                          (node as NodeConfig & { monitorMailStats?: boolean }).monitorMailStats && (
+                            <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                              Mail stats
+                            </span>
+                          )}
+                        {node.type === 'pmg' &&
+                          (node as NodeConfig & { monitorQueues?: boolean }).monitorQueues && (
+                            <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                              Queues
+                            </span>
+                          )}
+                        {node.type === 'pmg' &&
+                          (node as NodeConfig & { monitorQuarantine?: boolean }).monitorQuarantine && (
+                            <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                              Quarantine
+                            </span>
+                          )}
+                        {node.type === 'pmg' &&
+                          (node as NodeConfig & { monitorDomainStats?: boolean }).monitorDomainStats && (
+                            <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                              Domain stats
+                            </span>
+                          )}
+                      </div>
+                    </TableCell>
+                    <TableCell class="align-top px-3 py-3 whitespace-nowrap">
+                      <span class={`inline-flex items-center gap-2 text-xs font-medium ${statusMeta().labelClass}`}>
+                        <span class={`h-2.5 w-2.5 rounded-full ${statusMeta().dotClass}`}></span>
+                        {statusMeta().label}
                       </span>
-                      <Show when={node.source === 'agent'}>
-                        <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded w-fit">
-                          <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
-                          Agent
-                        </span>
-                      </Show>
-                      <Show when={node.source === 'script' || (!node.source && node.tokenName)}>
-                        <span class="text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded w-fit">
-                          API only
-                        </span>
-                      </Show>
-                    </div>
-                  </TableCell>
-                  <TableCell class="align-top px-3 py-3">
-                    <div class="flex flex-wrap gap-1">
-                      {node.type === 'pmg' &&
-                        (node as NodeConfig & { monitorMailStats?: boolean }).monitorMailStats && (
-                          <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                            Mail stats
-                          </span>
-                        )}
-                      {node.type === 'pmg' &&
-                        (node as NodeConfig & { monitorQueues?: boolean }).monitorQueues && (
-                          <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                            Queues
-                          </span>
-                        )}
-                      {node.type === 'pmg' &&
-                        (node as NodeConfig & { monitorQuarantine?: boolean }).monitorQuarantine && (
-                          <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                            Quarantine
-                          </span>
-                        )}
-                      {node.type === 'pmg' &&
-                        (node as NodeConfig & { monitorDomainStats?: boolean }).monitorDomainStats && (
-                          <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                            Domain stats
-                          </span>
-                        )}
-                    </div>
-                  </TableCell>
-                  <TableCell class="align-top px-3 py-3 whitespace-nowrap">
-                    <span class={`inline-flex items-center gap-2 text-xs font-medium ${statusMeta().labelClass}`}>
-                      <span class={`h-2.5 w-2.5 rounded-full ${statusMeta().dotClass}`}></span>
-                      {statusMeta().label}
-                    </span>
-                  </TableCell>
-                  <TableCell class="align-top px-3 py-3">
-                    <div class="flex items-center justify-end gap-1 sm:gap-2">
-                      <button
-                        type="button"
-                        onClick={() => props.onTestConnection(node.id)}
-                        class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-                        title="Test connection"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => props.onEdit(node)}
-                        class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-                        title="Edit node"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
-                          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => props.onDelete(node)}
-                        class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                        title="Delete node"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <polyline points="3 6 5 6 21 6"></polyline>
-                          <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
-                        </svg>
-                      </button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            }}
-          </For>
-        </TableBody>
-      </Table>
+                    </TableCell>
+                    <TableCell class="align-top px-3 py-3">
+                      <div class="flex items-center justify-end gap-1 sm:gap-2">
+                        <button
+                          type="button"
+                          onClick={() => props.onTestConnection(node.id)}
+                          class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                          title="Test connection"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => props.onEdit(node)}
+                          class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                          title="Edit node"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => props.onDelete(node)}
+                          class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                          title="Delete node"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
+                          </svg>
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              }}
+            </For>
+          </TableBody>
+        </Table>
+      </div>
     </Card>
   );
 };

@@ -4,6 +4,7 @@ import Toggle from '@/components/shared/Toggle';
 import { Card } from '@/components/shared/Card';
 import { CollapsibleSection } from './Thresholds/sections/CollapsibleSection';
 import { useCollapsedSections } from './Thresholds/hooks/useCollapsedSections';
+import { TagInput } from '@/components/shared/TagInput';
 import Server from 'lucide-solid/icons/server';
 import Monitor from 'lucide-solid/icons/monitor';
 import HardDrive from 'lucide-solid/icons/hard-drive';
@@ -27,6 +28,7 @@ import type {
   BackupAlertConfig,
 } from '@/types/alerts';
 import { ResourceTable } from './ResourceTable';
+import { BulkEditDialog } from './BulkEditDialog';
 import type { GroupHeaderMeta, Resource as TableResource } from './ResourceTable';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { logger } from '@/utils/logger';
@@ -81,6 +83,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     Record<string, number | undefined>
   >({});
   const [editingNote, setEditingNote] = createSignal('');
+
+  const [bulkEditIds, setBulkEditIds] = createSignal<string[]>([]);
+  const [bulkEditColumns, setBulkEditColumns] = createSignal<string[]>([]);
+  const [isBulkEditDialogOpen, setIsBulkEditDialogOpen] = createSignal(false);
+
   const [activeTab, setActiveTab] = createSignal<'proxmox' | 'pmg' | 'hosts' | 'docker'>('proxmox');
   let searchInputRef: HTMLInputElement | undefined;
   const [dockerIgnoredInput, setDockerIgnoredInput] = createSignal(
@@ -173,88 +180,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     props.setHasUnsavedChanges(true);
   };
 
-  const [ignoredGuestInput, setIgnoredGuestInput] = createSignal(
-    props.ignoredGuestPrefixes().join('\n'),
-  );
-  const [guestTagWhitelistInput, setGuestTagWhitelistInput] = createSignal(
-    props.guestTagWhitelist().join('\n'),
-  );
-  const [guestTagBlacklistInput, setGuestTagBlacklistInput] = createSignal(
-    props.guestTagBlacklist().join('\n'),
-  );
-  const [backupIgnoreInput, setBackupIgnoreInput] = createSignal(
-    (props.backupDefaults().ignoreVMIDs ?? []).join('\n'),
-  );
 
-  createEffect(() => {
-    const remote = props.ignoredGuestPrefixes();
-    const local = ignoredGuestInput();
-    const normalizedLocal = normalizeDockerIgnoredInput(local);
-    const isSynced =
-      remote.length === normalizedLocal.length &&
-      remote.every((val, i) => val === normalizedLocal[i]);
-    if (!isSynced) setIgnoredGuestInput(remote.join('\n'));
-  });
-
-  createEffect(() => {
-    const remote = props.guestTagWhitelist();
-    const local = guestTagWhitelistInput();
-    const normalizedLocal = normalizeDockerIgnoredInput(local);
-    const isSynced =
-      remote.length === normalizedLocal.length &&
-      remote.every((val, i) => val === normalizedLocal[i]);
-    if (!isSynced) setGuestTagWhitelistInput(remote.join('\n'));
-  });
-
-  createEffect(() => {
-    const remote = props.guestTagBlacklist();
-    const local = guestTagBlacklistInput();
-    const normalizedLocal = normalizeDockerIgnoredInput(local);
-    const isSynced =
-      remote.length === normalizedLocal.length &&
-      remote.every((val, i) => val === normalizedLocal[i]);
-    if (!isSynced) setGuestTagBlacklistInput(remote.join('\n'));
-  });
-
-  createEffect(() => {
-    const remote = props.backupDefaults().ignoreVMIDs ?? [];
-    const local = backupIgnoreInput();
-    const normalizedLocal = normalizeDockerIgnoredInput(local);
-    const isSynced =
-      remote.length === normalizedLocal.length &&
-      remote.every((val, i) => val === normalizedLocal[i]);
-    if (!isSynced) setBackupIgnoreInput(remote.join('\n'));
-  });
-
-  const handleIgnoredGuestChange = (value: string) => {
-    setIgnoredGuestInput(value);
-    const normalized = normalizeDockerIgnoredInput(value);
-    props.setIgnoredGuestPrefixes(normalized);
-    props.setHasUnsavedChanges(true);
-  };
-
-  const handleGuestTagWhitelistChange = (value: string) => {
-    setGuestTagWhitelistInput(value);
-    const normalized = normalizeDockerIgnoredInput(value);
-    props.setGuestTagWhitelist(normalized);
-    props.setHasUnsavedChanges(true);
-  };
-
-  const handleGuestTagBlacklistChange = (value: string) => {
-    setGuestTagBlacklistInput(value);
-    const normalized = normalizeDockerIgnoredInput(value);
-    props.setGuestTagBlacklist(normalized);
-    props.setHasUnsavedChanges(true);
-  };
-
-  const handleBackupIgnoreChange = (value: string) => {
-    setBackupIgnoreInput(value);
-    const normalized = normalizeDockerIgnoredInput(value);
-    updateBackupDefaults((prev) => ({
-      ...prev,
-      ignoreVMIDs: normalized,
-    }));
-  };
 
   // Set up keyboard shortcuts
   onMount(() => {
@@ -1813,6 +1739,128 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     setEditingNote('');
   };
 
+  const handleBulkEdit = (ids: string[], columns: string[]) => {
+    setBulkEditIds(ids);
+    setBulkEditColumns(columns);
+    setIsBulkEditDialogOpen(true);
+  };
+
+  const handleSaveBulkEdit = (thresholds: Record<string, number | undefined>) => {
+    setIsBulkEditDialogOpen(false);
+
+    const newOverrides = [...props.overrides()];
+    const newRawConfig = { ...props.rawOverridesConfig() };
+    const allResources = [
+      ...nodesWithOverrides(),
+      ...hostAgentsWithOverrides(),
+      ...hostDisksWithOverrides(),
+      ...dockerHostsWithOverrides(),
+      ...pbsServersWithOverrides(),
+      ...pmgServersWithOverrides(),
+      ...storageWithOverrides(),
+    ];
+
+    for (const id of bulkEditIds()) {
+      const resource = allResources.find(r => r.id === id);
+      if (!resource) continue;
+
+      const defaultThresholds = (resource.defaults ?? {}) as Record<string, number | undefined>;
+      const existingOverrideCheck = newOverrides.find((o) => o.id === id);
+      const previousRaw = newRawConfig[id];
+
+      // Merge current thresholds explicitly checking what differs from defaults
+      const currentOverrides = existingOverrideCheck?.thresholds ?? {};
+      const newThresholds: Record<string, number | undefined> = { ...currentOverrides };
+
+      // Update with new bulk thresholds
+      Object.keys(thresholds).forEach(key => {
+        if (thresholds[key] !== undefined) {
+          const val = thresholds[key];
+          if (val === defaultThresholds[key as keyof typeof defaultThresholds]) {
+            delete newThresholds[key];
+          } else {
+            newThresholds[key] = val as number;
+          }
+        }
+      });
+
+      const hasStateOnlyOverride = Boolean(
+        resource.disabled ||
+        resource.disableConnectivity ||
+        resource.poweredOffSeverity !== undefined ||
+        existingOverrideCheck?.note !== undefined ||
+        existingOverrideCheck?.backup ||
+        existingOverrideCheck?.snapshot,
+      );
+
+      // If no override fields remain, remove entirely
+      if (Object.keys(newThresholds).length === 0 && !hasStateOnlyOverride) {
+        if (resource.hasOverride) {
+          const idx = newOverrides.findIndex(o => o.id === id);
+          if (idx !== -1) newOverrides.splice(idx, 1);
+          delete newRawConfig[id];
+        }
+        continue;
+      }
+
+      // Create new override
+      const override: Override = {
+        id: id,
+        name: resource.name,
+        type: resource.type as OverrideType,
+        resourceType: resource.resourceType,
+        vmid: 'vmid' in resource ? resource.vmid : undefined,
+        node: 'node' in resource ? resource.node : undefined,
+        instance: 'instance' in resource ? resource.instance : undefined,
+        disabled: resource.disabled,
+        disableConnectivity: resource.disableConnectivity,
+        poweredOffSeverity: resource.poweredOffSeverity,
+        note: existingOverrideCheck?.note,
+        backup: existingOverrideCheck?.backup,
+        snapshot: existingOverrideCheck?.snapshot,
+        thresholds: newThresholds,
+      };
+
+      // Update overrides
+      const existingIndex = newOverrides.findIndex((o) => o.id === id);
+      if (existingIndex >= 0) {
+        newOverrides[existingIndex] = override;
+      } else {
+        newOverrides.push(override);
+      }
+
+      // Update raw config
+      const hysteresisThresholds: RawOverrideConfig = {};
+      if (previousRaw) {
+        if (previousRaw.disabled !== undefined) hysteresisThresholds.disabled = previousRaw.disabled;
+        if (previousRaw.disableConnectivity !== undefined) hysteresisThresholds.disableConnectivity = previousRaw.disableConnectivity;
+        if (previousRaw.poweredOffSeverity !== undefined) hysteresisThresholds.poweredOffSeverity = previousRaw.poweredOffSeverity;
+        if (previousRaw.note !== undefined) hysteresisThresholds.note = previousRaw.note;
+        if (previousRaw.backup !== undefined) hysteresisThresholds.backup = previousRaw.backup;
+        if (previousRaw.snapshot !== undefined) hysteresisThresholds.snapshot = previousRaw.snapshot;
+      }
+
+      Object.entries(newThresholds).forEach(([metric, value]) => {
+        if (value !== undefined && value !== null) {
+          hysteresisThresholds[metric] = {
+            trigger: value,
+            clear: Math.max(0, value - 5),
+          };
+        }
+      });
+
+      newRawConfig[id] = hysteresisThresholds;
+    }
+
+    props.setOverrides(newOverrides);
+    props.setRawOverridesConfig(newRawConfig);
+    props.setHasUnsavedChanges(true);
+
+    // Clear bulk edit state
+    setBulkEditIds([]);
+    setBulkEditColumns([]);
+  };
+
   const cancelEdit = () => {
     setEditingId(null);
     setEditingThresholds({});
@@ -2538,6 +2586,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingThresholds={setEditingThresholds}
                   editingNote={editingNote}
                   setEditingNote={setEditingNote}
+                  onBulkEdit={(ids) => handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %', 'Temp °C'])}
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
                   globalDefaults={props.nodeDefaults}
@@ -2590,6 +2639,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingThresholds={setEditingThresholds}
                   editingNote={editingNote}
                   setEditingNote={setEditingNote}
+                  onBulkEdit={(ids) => handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk R MB/s', 'Disk W MB/s', 'Net In MB/s', 'Net Out MB/s'])}
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
                   globalDefaults={props.pbsDefaults ?? { cpu: 80, memory: 85 }}
@@ -2655,6 +2705,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingThresholds={setEditingThresholds}
                   editingNote={editingNote}
                   setEditingNote={setEditingNote}
+                  onBulkEdit={(ids) => handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %', 'Disk R MB/s', 'Disk W MB/s', 'Net In MB/s', 'Net Out MB/s'])}
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
                   globalDefaults={props.guestDefaults}
@@ -2703,11 +2754,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Ignored Prefixes</h3>
                     <p class="text-xs text-slate-600 dark:text-slate-400">Skip metrics for guests starting with:</p>
                   </div>
-                  <textarea
-                    value={ignoredGuestInput()}
-                    onInput={(e) => handleIgnoredGuestChange(e.currentTarget.value)}
-                    rows={6}
-                    class="w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  <TagInput
+                    tags={props.ignoredGuestPrefixes()}
+                    onChange={(tags) => {
+                      props.setIgnoredGuestPrefixes(tags);
+                      props.setHasUnsavedChanges(true);
+                    }}
                     placeholder="dev-"
                   />
                 </Card>
@@ -2716,11 +2768,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Tag Whitelist</h3>
                     <p class="text-xs text-slate-600 dark:text-slate-400">Only monitor guests with at least one of these tags (leave empty to disable whitelist):</p>
                   </div>
-                  <textarea
-                    value={guestTagWhitelistInput()}
-                    onInput={(e) => handleGuestTagWhitelistChange(e.currentTarget.value)}
-                    rows={6}
-                    class="w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  <TagInput
+                    tags={props.guestTagWhitelist()}
+                    onChange={(tags) => {
+                      props.setGuestTagWhitelist(tags);
+                      props.setHasUnsavedChanges(true);
+                    }}
                     placeholder="production"
                   />
                 </Card>
@@ -2729,11 +2782,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Tag Blacklist</h3>
                     <p class="text-xs text-slate-600 dark:text-slate-400">Ignore guests with any of these tags:</p>
                   </div>
-                  <textarea
-                    value={guestTagBlacklistInput()}
-                    onInput={(e) => handleGuestTagBlacklistChange(e.currentTarget.value)}
-                    rows={6}
-                    class="w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  <TagInput
+                    tags={props.guestTagBlacklist()}
+                    onChange={(tags) => {
+                      props.setGuestTagBlacklist(tags);
+                      props.setHasUnsavedChanges(true);
+                    }}
                     placeholder="maintenance"
                   />
                 </Card>
@@ -2784,6 +2838,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingThresholds={setEditingThresholds}
                   editingNote={editingNote}
                   setEditingNote={setEditingNote}
+                  onBulkEdit={(ids) => handleBulkEdit(ids, ['Usage %'])}
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
                   globalDefaults={backupDefaultsRecord()}
@@ -2870,17 +2925,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
                       One per line. Use a trailing * to match a prefix (example: 10*).
                     </p>
-                    <textarea
-                      value={backupIgnoreInput()}
-                      onInput={(event) => handleBackupIgnoreChange(event.currentTarget.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.stopPropagation();
-                        }
+                    <TagInput
+                      tags={props.backupDefaults().ignoreVMIDs ?? []}
+                      onChange={(tags) => {
+                        updateBackupDefaults((prev) => ({ ...prev, ignoreVMIDs: tags }));
+                        props.setHasUnsavedChanges(true);
                       }}
-                      rows={5}
-                      class="mt-3 w-full rounded-md border border-slate-300 bg-white p-3 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600"
-                      placeholder="100\n200\n10*"
+                      placeholder="100, 200, 10*"
                     />
                   </div>
                 </Card>
@@ -2924,6 +2975,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingThresholds={setEditingThresholds}
                   editingNote={editingNote}
                   setEditingNote={setEditingNote}
+                  onBulkEdit={(ids) => handleBulkEdit(ids, ['Usage %', 'Temperature °C'])}
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
                   globalDefaults={snapshotDefaultsRecord()}
@@ -3012,6 +3064,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingThresholds={setEditingThresholds}
                   editingNote={editingNote}
                   setEditingNote={setEditingNote}
+                  onBulkEdit={(ids) => handleBulkEdit(ids, ['Usage %'])}
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
                   globalDefaults={{ usage: props.storageDefault() }}
@@ -3088,6 +3141,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 setEditingThresholds={setEditingThresholds}
                 editingNote={editingNote}
                 setEditingNote={setEditingNote}
+                onBulkEdit={(ids) => handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %'])}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDefaults={pmgGlobalDefaults()}
@@ -3125,6 +3179,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 setEditingThresholds={setEditingThresholds}
                 editingNote={editingNote}
                 setEditingNote={setEditingNote}
+                onBulkEdit={(ids) => handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %', 'Temp °C'])}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDefaults={props.hostDefaults}
@@ -3176,6 +3231,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingThresholds={setEditingThresholds}
                   editingNote={editingNote}
                   setEditingNote={setEditingNote}
+                  onBulkEdit={(ids) => handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk R MB/s', 'Disk W MB/s', 'Net In MB/s', 'Net Out MB/s'])}
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
                   globalDefaults={{ disk: props.hostDefaults.disk }}
@@ -3337,6 +3393,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 setEditingThresholds={setEditingThresholds}
                 editingNote={editingNote}
                 setEditingNote={setEditingNote}
+                onBulkEdit={(ids) => handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %', 'Disk R MB/s', 'Disk W MB/s', 'Net In MB/s', 'Net Out MB/s', 'Restart Count', 'Restart Window (s)'])}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDisableFlag={props.disableAllDockerHosts}
@@ -3379,6 +3436,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 setEditingThresholds={setEditingThresholds}
                 editingNote={editingNote}
                 setEditingNote={setEditingNote}
+                onBulkEdit={(ids) => handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %', 'Temp °C'])}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDefaults={{
@@ -3445,6 +3503,14 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           </Show>
         </Show>
       </div>
+
+      <BulkEditDialog
+        isOpen={isBulkEditDialogOpen()}
+        onClose={() => setIsBulkEditDialogOpen(false)}
+        selectedIds={bulkEditIds()}
+        columns={bulkEditColumns()}
+        onSave={handleSaveBulkEdit}
+      />
     </div>
   );
 }
