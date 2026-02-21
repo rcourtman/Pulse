@@ -4,6 +4,7 @@ import {
   InteractiveSparkline,
   type InteractiveSparklineSeries,
 } from '@/components/shared/InteractiveSparkline';
+import { DensityMap } from '@/components/shared/DensityMap';
 import {
   ChartsAPI,
   type ChartData,
@@ -692,8 +693,8 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
                   type="button"
                   onClick={() => props.onTimeRangeChange?.(range)}
                   class={`rounded px-2 py-1 ${selectedRange() === range
-                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                    : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
                     }`}
                 >
                   {SUMMARY_TIME_RANGE_LABEL[range]}
@@ -826,17 +827,11 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
               }
             >
               <div class="flex-1 min-h-0">
-                <InteractiveSparkline
+                <DensityMap
                   series={networkSeries()}
                   rangeLabel={selectedRange()}
                   timeRange={selectedRange()}
-                  yMode="auto"
                   formatValue={formatRate}
-                  formatTopLabel={formatRate}
-                  sortTooltipByValue
-                  maxTooltipRows={8}
-                  highlightNearestSeriesOnHover
-                  highlightSeriesId={props.hoveredWorkloadId}
                 />
               </div>
             </Show>

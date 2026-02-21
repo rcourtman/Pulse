@@ -168,6 +168,7 @@
   .sticky-shield {
     box-shadow: 0 -0.75rem 0 0 white;
   }
+
   .dark .sticky-shield {
     box-shadow: 0 -0.75rem 0 0 #1f2937;
   }
@@ -497,11 +498,11 @@ body,
 
 /* Glassmorphism Utilities */
 .card {
-  @apply bg-white dark:bg-slate-800  border border-white dark:border-slate-700 shadow-sm;
+  @apply bg-white dark:bg-slate-800 border border-white dark:border-slate-700 shadow-sm;
 }
 
 .card {
-  @apply bg-white dark:bg-slate-800  border border-slate-200 dark:border-slate-700;
+  @apply bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700;
 }
 
 .card-hover {
@@ -523,21 +524,4 @@ body,
 
 .animate-enter {
   animation: enter 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-}
-
-/* Glow effects for status dots */
-.glow-success {
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
-}
-
-.glow-warning {
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
-}
-
-.glow-danger {
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
-}
-
-.glow-info {
-  box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
 }

@@ -19,11 +19,7 @@ import type { Resource } from '@/types/resource';
 // Workaround for eslint false-positive when `For` is used only in JSX
 const __ensureForUsage = For;
 void __ensureForUsage;
-import type {
-  Alert,
-  PBSInstance,
-  PMGInstance,
-} from '@/types/api';
+
 import type {
   RawOverrideConfig,
   PMGThresholdDefaults,
@@ -34,295 +30,26 @@ import { ResourceTable } from './ResourceTable';
 import type { GroupHeaderMeta, Resource as TableResource } from './ResourceTable';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { logger } from '@/utils/logger';
-import { formatTemperature } from '@/utils/temperature';
-type OverrideType =
-  | 'guest'
-  | 'node'
-  | 'hostAgent'
-  | 'hostDisk'
-  | 'storage'
-  | 'pbs'
-  | 'pmg'
-  | 'dockerHost'
-  | 'dockerContainer';
-
-type OfflineState = 'off' | 'warning' | 'critical';
-
-interface Override {
-  id: string;
-  name: string;
-  type: OverrideType;
-  resourceType?: string;
-  vmid?: number;
-  node?: string;
-  instance?: string;
-  disabled?: boolean;
-  disableConnectivity?: boolean; // For nodes only - disable offline alerts
-  poweredOffSeverity?: 'warning' | 'critical';
-  note?: string;
-  backup?: BackupAlertConfig;
-  snapshot?: SnapshotAlertConfig;
-  thresholds: {
-    cpu?: number;
-    memory?: number;
-    disk?: number;
-    diskRead?: number;
-    diskWrite?: number;
-    networkIn?: number;
-    networkOut?: number;
-    usage?: number; // For storage devices
-    temperature?: number; // For nodes only - CPU temperature in °C
-  };
-}
-
-const normalizeThresholdLabel = (label: string): string =>
-  label
-    .trim()
-    .toLowerCase()
-    .replace(' %', '')
-    .replace(' °c', '')
-    .replace(' mb/s', '')
-    .replace('disk r', 'diskRead')
-    .replace('disk w', 'diskWrite')
-    .replace('net in', 'networkIn')
-    .replace('net out', 'networkOut')
-    .replace('disk temp', 'diskTemperature');
-
-const pmgColumn = (key: keyof PMGThresholdDefaults, label: string) => ({
-  key,
-  label,
-  normalized: normalizeThresholdLabel(label),
-});
-
-const PMG_THRESHOLD_COLUMNS = [
-  pmgColumn('queueTotalWarning', 'Queue Warn'),
-  pmgColumn('queueTotalCritical', 'Queue Crit'),
-  pmgColumn('deferredQueueWarn', 'Deferred Warn'),
-  pmgColumn('deferredQueueCritical', 'Deferred Crit'),
-  pmgColumn('holdQueueWarn', 'Hold Warn'),
-  pmgColumn('holdQueueCritical', 'Hold Crit'),
-  pmgColumn('oldestMessageWarnMins', 'Oldest Warn (min)'),
-  pmgColumn('oldestMessageCritMins', 'Oldest Crit (min)'),
-  pmgColumn('quarantineSpamWarn', 'Spam Warn'),
-  pmgColumn('quarantineSpamCritical', 'Spam Crit'),
-  pmgColumn('quarantineVirusWarn', 'Virus Warn'),
-  pmgColumn('quarantineVirusCritical', 'Virus Crit'),
-  pmgColumn('quarantineGrowthWarnPct', 'Growth Warn %'),
-  pmgColumn('quarantineGrowthWarnMin', 'Growth Warn Min'),
-  pmgColumn('quarantineGrowthCritPct', 'Growth Crit %'),
-  pmgColumn('quarantineGrowthCritMin', 'Growth Crit Min'),
-] as const;
-
-const PMG_NORMALIZED_TO_KEY = new Map(
-  PMG_THRESHOLD_COLUMNS.map((column) => [column.normalized, column.key]),
-);
-
-const PMG_KEY_TO_NORMALIZED = new Map(
-  PMG_THRESHOLD_COLUMNS.map((column) => [column.key, column.normalized]),
-);
-
-export const normalizeDockerIgnoredInput = (value: string): string[] =>
-  value
-    .split('\n')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
-
-const DEFAULT_SNAPSHOT_WARNING = 30;
-const DEFAULT_SNAPSHOT_CRITICAL = 45;
-const DEFAULT_SNAPSHOT_WARNING_SIZE = 0;
-const DEFAULT_SNAPSHOT_CRITICAL_SIZE = 0;
-const DEFAULT_BACKUP_WARNING = 7;
-const DEFAULT_BACKUP_CRITICAL = 14;
-const DEFAULT_BACKUP_FRESH_HOURS = 24;
-const DEFAULT_BACKUP_STALE_HOURS = 72;
-
-// Simple threshold object for the UI
-interface SimpleThresholds {
-  cpu?: number;
-  memory?: number;
-  disk?: number;
-  diskRead?: number;
-  diskWrite?: number;
-  networkIn?: number;
-  networkOut?: number;
-  temperature?: number; // For nodes only
-  diskTemperature?: number; // For host agents
-  [key: string]: number | undefined; // Add index signature for compatibility
-}
-
-interface ThresholdsTableProps {
-  overrides: () => Override[];
-  setOverrides: (overrides: Override[]) => void;
-  rawOverridesConfig: () => Record<string, RawOverrideConfig>;
-  setRawOverridesConfig: (config: Record<string, RawOverrideConfig>) => void;
-  allGuests: () => Resource[];
-  nodes: Resource[];
-  hosts: Resource[];
-  storage: Resource[];
-  dockerHosts: Resource[];
-  allResources: Resource[];
-  pbsInstances?: PBSInstance[]; // PBS instances from state
-  pmgInstances?: PMGInstance[]; // PMG instances from state
-  pmgThresholds: () => PMGThresholdDefaults;
-  setPMGThresholds: (
-    value: PMGThresholdDefaults | ((prev: PMGThresholdDefaults) => PMGThresholdDefaults),
-  ) => void;
-  guestDefaults: SimpleThresholds;
-  setGuestDefaults: (
-    value:
-      | Record<string, number | undefined>
-      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
-  ) => void;
-  guestDisableConnectivity: () => boolean;
-  setGuestDisableConnectivity: (value: boolean) => void;
-  guestPoweredOffSeverity: () => 'warning' | 'critical';
-  setGuestPoweredOffSeverity: (value: 'warning' | 'critical') => void;
-  nodeDefaults: SimpleThresholds;
-  pbsDefaults?: SimpleThresholds;
-  hostDefaults: SimpleThresholds;
-  setNodeDefaults: (
-    value:
-      | Record<string, number | undefined>
-      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
-  ) => void;
-  setPBSDefaults?: (
-    value:
-      | Record<string, number | undefined>
-      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
-  ) => void;
-  setHostDefaults: (
-    value:
-      | Record<string, number | undefined>
-      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
-  ) => void;
-  dockerDefaults: {
-    cpu: number;
-    memory: number;
-    disk: number;
-    restartCount: number;
-    restartWindow: number;
-    memoryWarnPct: number;
-    memoryCriticalPct: number;
-    serviceWarnGapPercent: number;
-    serviceCriticalGapPercent: number;
-  };
-  dockerDisableConnectivity: () => boolean;
-  setDockerDisableConnectivity: (value: boolean) => void;
-  dockerPoweredOffSeverity: () => 'warning' | 'critical';
-  setDockerPoweredOffSeverity: (value: 'warning' | 'critical') => void;
-  setDockerDefaults: (
-    value:
-      | {
-        cpu: number;
-        memory: number;
-        disk: number;
-        restartCount: number;
-        restartWindow: number;
-        memoryWarnPct: number;
-        memoryCriticalPct: number;
-        serviceWarnGapPercent: number;
-        serviceCriticalGapPercent: number;
-      }
-      | ((prev: {
-        cpu: number;
-        memory: number;
-        disk: number;
-        restartCount: number;
-        restartWindow: number;
-        memoryWarnPct: number;
-        memoryCriticalPct: number;
-        serviceWarnGapPercent: number;
-        serviceCriticalGapPercent: number;
-      }) => {
-        cpu: number;
-        memory: number;
-        disk: number;
-        restartCount: number;
-        restartWindow: number;
-        memoryWarnPct: number;
-        memoryCriticalPct: number;
-        serviceWarnGapPercent: number;
-        serviceCriticalGapPercent: number;
-      }),
-  ) => void;
-  dockerIgnoredPrefixes: () => string[];
-  setDockerIgnoredPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
-  ignoredGuestPrefixes: () => string[];
-  setIgnoredGuestPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
-  guestTagWhitelist: () => string[];
-  setGuestTagWhitelist: (value: string[] | ((prev: string[]) => string[])) => void;
-  guestTagBlacklist: () => string[];
-  setGuestTagBlacklist: (value: string[] | ((prev: string[]) => string[])) => void;
-  storageDefault: () => number;
-  setStorageDefault: (value: number) => void;
-  resetGuestDefaults?: () => void;
-  resetNodeDefaults?: () => void;
-  resetPBSDefaults?: () => void;
-  resetHostDefaults?: () => void;
-  resetDockerDefaults?: () => void;
-  resetDockerIgnoredPrefixes?: () => void;
-  resetStorageDefault?: () => void;
-  factoryGuestDefaults?: Record<string, number | undefined>;
-  factoryNodeDefaults?: Record<string, number | undefined>;
-  factoryPBSDefaults?: Record<string, number | undefined>;
-  factoryHostDefaults?: Record<string, number | undefined>;
-  factoryDockerDefaults?: Record<string, number | undefined>;
-  factoryStorageDefault?: number;
-  timeThresholds: () => { guest: number; node: number; storage: number; pbs: number; host: number };
-  metricTimeThresholds: () => Record<string, Record<string, number>>;
-  setMetricTimeThresholds: (
-    value:
-      | Record<string, Record<string, number>>
-      | ((prev: Record<string, Record<string, number>>) => Record<string, Record<string, number>>),
-  ) => void;
-  snapshotDefaults: () => SnapshotAlertConfig;
-  setSnapshotDefaults: (
-    value: SnapshotAlertConfig | ((prev: SnapshotAlertConfig) => SnapshotAlertConfig),
-  ) => void;
-  snapshotFactoryDefaults?: SnapshotAlertConfig;
-  resetSnapshotDefaults?: () => void;
-  backupDefaults: () => BackupAlertConfig;
-  setBackupDefaults: (
-    value: BackupAlertConfig | ((prev: BackupAlertConfig) => BackupAlertConfig),
-  ) => void;
-  backupFactoryDefaults?: BackupAlertConfig;
-  resetBackupDefaults?: () => void;
-  setHasUnsavedChanges: (value: boolean) => void;
-  activeAlerts?: Record<string, Alert>;
-  removeAlerts?: (predicate: (alert: Alert) => boolean) => void;
-  // Global disable flags
-  disableAllNodes: () => boolean;
-  setDisableAllNodes: (value: boolean) => void;
-  disableAllGuests: () => boolean;
-  setDisableAllGuests: (value: boolean) => void;
-  disableAllHosts: () => boolean;
-  setDisableAllHosts: (value: boolean) => void;
-  disableAllStorage: () => boolean;
-  setDisableAllStorage: (value: boolean) => void;
-  disableAllPBS: () => boolean;
-  setDisableAllPBS: (value: boolean) => void;
-  disableAllPMG: () => boolean;
-  setDisableAllPMG: (value: boolean) => void;
-  disableAllDockerHosts: () => boolean;
-  setDisableAllDockerHosts: (value: boolean) => void;
-  disableAllDockerServices: () => boolean;
-  setDisableAllDockerServices: (value: boolean) => void;
-  disableAllDockerContainers: () => boolean;
-  setDisableAllDockerContainers: (value: boolean) => void;
-  // Global disable offline alerts flags
-  disableAllNodesOffline: () => boolean;
-  setDisableAllNodesOffline: (value: boolean) => void;
-  disableAllGuestsOffline: () => boolean;
-  setDisableAllGuestsOffline: (value: boolean) => void;
-  disableAllHostsOffline: () => boolean;
-  setDisableAllHostsOffline: (value: boolean) => void;
-  disableAllPBSOffline: () => boolean;
-  setDisableAllPBSOffline: (value: boolean) => void;
-  disableAllPMGOffline: () => boolean;
-  setDisableAllPMGOffline: (value: boolean) => void;
-  disableAllDockerHostsOffline: () => boolean;
-  setDisableAllDockerHostsOffline: (value: boolean) => void;
-}
+import type {
+  OverrideType,
+  OfflineState,
+  Override,
+  ThresholdsTableProps,
+} from "@/features/alerts/thresholds/types";
+import {
+  PMG_THRESHOLD_COLUMNS,
+  PMG_NORMALIZED_TO_KEY,
+  PMG_KEY_TO_NORMALIZED,
+  DEFAULT_SNAPSHOT_WARNING,
+  DEFAULT_SNAPSHOT_CRITICAL,
+  DEFAULT_SNAPSHOT_WARNING_SIZE,
+  DEFAULT_SNAPSHOT_CRITICAL_SIZE,
+  DEFAULT_BACKUP_WARNING,
+  DEFAULT_BACKUP_CRITICAL,
+  DEFAULT_BACKUP_FRESH_HOURS,
+  DEFAULT_BACKUP_STALE_HOURS,
+} from "@/features/alerts/thresholds/constants";
+import { normalizeDockerIgnoredInput, formatMetricValue } from "@/features/alerts/thresholds/helpers";
 
 export function ThresholdsTable(props: ThresholdsTableProps) {
   const navigate = useNavigate();
@@ -585,55 +312,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     });
   });
 
-  // Helper function to format values with units
-  const formatMetricValue = (metric: string, value: number | undefined): string => {
-    if (value === undefined || value === null) return '0';
 
-    // Show "Off" for disabled thresholds (0 or negative values)
-    if (value <= 0) return 'Off';
-
-    // Percentage-based metrics
-    if (
-      metric === 'cpu' ||
-      metric === 'memory' ||
-      metric === 'disk' ||
-      metric === 'usage' ||
-      metric === 'memoryWarnPct' ||
-      metric === 'memoryCriticalPct'
-    ) {
-      return `${value}%`;
-    }
-
-    // Temperature
-    if (metric === 'temperature' || metric === 'diskTemperature') {
-      return formatTemperature(value);
-    }
-
-    if (metric === 'restartWindow') {
-      return `${value}s`;
-    }
-
-    if (metric === 'restartCount') {
-      return String(value);
-    }
-
-    if (metric === 'warningSizeGiB' || metric === 'criticalSizeGiB') {
-      const rounded = Math.round(value * 10) / 10;
-      return `${rounded} GiB`;
-    }
-
-    // MB/s metrics
-    if (
-      metric === 'diskRead' ||
-      metric === 'diskWrite' ||
-      metric === 'networkIn' ||
-      metric === 'networkOut'
-    ) {
-      return `${value} MB/s`;
-    }
-
-    return String(value);
-  };
 
   // Check if there's an active alert for a resource/metric
   const hasActiveAlert = (resourceId: string, metric: string): boolean => {

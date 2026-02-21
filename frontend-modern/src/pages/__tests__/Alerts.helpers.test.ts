@@ -2,22 +2,24 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ALERT_TAB_SEGMENTS,
+  pathForTab,
+  tabFromPath,
   clampCooldownMinutes,
+  fallbackCooldownMinutes
+} from '@/features/alerts/types';
+import {
   clampMaxAlertsPerHour,
   createDefaultCooldown,
   createDefaultEscalation,
   createDefaultGrouping,
   createDefaultQuietHours,
-  fallbackCooldownMinutes,
   fallbackMaxAlertsPerHour,
   extractTriggerValues,
   getTriggerValue,
   normalizeEmailConfigFromAPI,
   normalizeMetricDelayMap,
-  pathForTab,
-  tabFromPath,
   unifiedTypeToAlertDisplayType,
-} from '../Alerts';
+} from '@/features/alerts/helpers';
 import type { RawOverrideConfig } from '@/types/alerts';
 import type { ResourceType } from '@/types/resource';
 

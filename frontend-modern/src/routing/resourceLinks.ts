@@ -14,8 +14,6 @@ export const ALERTS_OVERVIEW_PATH = '/alerts/overview';
 export const AI_PATROL_PATH = '/ai';
 // Canonical "Recovery" surface (was historically called Backups).
 export const RECOVERY_PATH = '/recovery';
-// Compatibility alias for old bookmarks and the v5/v6 "Backups" naming.
-export const BACKUPS_LEGACY_PATH = '/backups';
 
 export const INFRASTRUCTURE_QUERY_PARAMS = {
   source: 'source',
@@ -52,10 +50,6 @@ export const RECOVERY_QUERY_PARAMS = {
   node: 'node',
   query: 'q',
 } as const;
-
-// Backwards-compat for the historic naming.
-// TODO: remove once callers have migrated to RECOVERY_QUERY_PARAMS.
-export const BACKUPS_QUERY_PARAMS = RECOVERY_QUERY_PARAMS;
 
 const normalizeQueryValue = (value: string | null | undefined): string => (value || '').trim();
 
@@ -99,10 +93,6 @@ type RecoveryLinkOptions = {
   node?: string | null;
   query?: string | null;
 };
-
-// Backwards-compat for the historic naming.
-// TODO: remove once callers have migrated to RecoveryLinkOptions.
-type BackupsLinkOptions = RecoveryLinkOptions;
 
 export const parseWorkloadsLinkSearch = (search: string) => {
   const params = new URLSearchParams(search);
@@ -220,10 +210,6 @@ export const parseRecoveryLinkSearch = (search: string) => {
   };
 };
 
-// Backwards-compat for the historic naming.
-// TODO: remove once callers have migrated to parseRecoveryLinkSearch.
-export const parseBackupsLinkSearch = parseRecoveryLinkSearch;
-
 export const buildRecoveryPath = (options: RecoveryLinkOptions = {}): string => {
   const params = new URLSearchParams();
   const view = normalizeQueryValue(options.view);
@@ -253,7 +239,3 @@ export const buildRecoveryPath = (options: RecoveryLinkOptions = {}): string => 
   const serialized = params.toString();
   return serialized ? `${RECOVERY_PATH}?${serialized}` : RECOVERY_PATH;
 };
-
-// Backwards-compat for the historic naming.
-// TODO: remove once callers have migrated to buildRecoveryPath.
-export const buildBackupsPath = (options: BackupsLinkOptions = {}): string => buildRecoveryPath(options);

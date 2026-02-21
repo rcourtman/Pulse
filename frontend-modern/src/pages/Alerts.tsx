@@ -2,584 +2,94 @@ import { createSignal, Show, For, createMemo, createEffect, onMount, onCleanup }
 import { useBeforeLeave } from '@solidjs/router';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import type { JSX } from 'solid-js';
-import { EmailProviderSelect } from '@/components/Alerts/EmailProviderSelect';
-import { WebhookConfig } from '@/components/Alerts/WebhookConfig';
-import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
-import { InvestigateAlertButton } from '@/components/Alerts/InvestigateAlertButton';
-import type { RawOverrideConfig, PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
+
+import type { Alert } from '@/types/api';
+import type { Resource } from '@/types/resource';
+import type { RawOverrideConfig, BackupAlertConfig, SnapshotAlertConfig } from '@/types/alerts';
+import { AlertsAPI } from '@/api/alerts';
+import { NotificationsAPI, Webhook } from '@/api/notifications';
+import { hasFeature, licenseLoaded, licenseLoading as entitlementsLoading, loadLicenseStatus } from '@/stores/license';
+import { useLocation, useNavigate } from '@solidjs/router';
+import { logger } from '@/utils/logger';
 import { Card } from '@/components/shared/Card';
-
 import { SectionHeader } from '@/components/shared/SectionHeader';
-import { SettingsPanel } from '@/components/shared/SettingsPanel';
-import { Toggle } from '@/components/shared/Toggle';
-import { formField, formControl, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
 
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
-import { useWebSocket } from '@/App';
-import { useResources } from '@/hooks/useResources';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { notificationStore } from '@/stores/notifications';
 import { eventBus } from '@/stores/events';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
-import { AlertsAPI } from '@/api/alerts';
-import { NotificationsAPI, Webhook } from '@/api/notifications';
-import { hasFeature, licenseLoaded, licenseLoading as entitlementsLoading, loadLicenseStatus } from '@/stores/license';
-import { aiChatStore } from '@/stores/aiChat';
-import { trackPaywallViewed } from '@/utils/upgradeMetrics';
-import type { EmailConfig, AppriseConfig } from '@/api/notifications';
-import type { HysteresisThreshold } from '@/types/alerts';
-import type { Alert, Incident, IncidentEvent, State } from '@/types/api';
-import type { Resource, ResourceType } from '@/types/resource';
-import { unwrap } from 'solid-js/store';
-import { useNavigate, useLocation } from '@solidjs/router';
-import { useAlertsActivation } from '@/stores/alertsActivation';
-import { logger } from '@/utils/logger';
-import LayoutDashboard from 'lucide-solid/icons/layout-dashboard';
-import History from 'lucide-solid/icons/history';
-import Gauge from 'lucide-solid/icons/gauge';
-import Send from 'lucide-solid/icons/send';
 import Calendar from 'lucide-solid/icons/calendar';
 import ListFilterIcon from 'lucide-solid/icons/list-filter';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 
-type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history';
+import { EmailProviderSelect } from '@/components/Alerts/EmailProviderSelect';
+import { WebhookConfig } from '@/components/Alerts/WebhookConfig';
+import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
+import { InvestigateAlertButton } from '@/components/Alerts/InvestigateAlertButton';
+import type { PMGThresholdDefaults } from '@/types/alerts';
+import { SettingsPanel } from '@/components/shared/SettingsPanel';
+import { Toggle } from '@/components/shared/Toggle';
+import { formField, formControl, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
+import { useWebSocket } from '@/App';
+import { useResources } from '@/hooks/useResources';
+import { aiChatStore } from '@/stores/aiChat';
+import { trackPaywallViewed } from '@/utils/upgradeMetrics';
+import type { Incident, State } from '@/types/api';
+import type { EmailConfig, AppriseConfig } from '@/api/notifications';
 
-const ALERT_HEADER_META: Record<AlertTab, { title: string; description: string }> = {
-  overview: {
-    title: 'Alerts Overview',
-    description: 'Monitor active alerts, acknowledgements, and recent status changes across platforms.',
-  },
-  thresholds: {
-    title: 'Alert Thresholds',
-    description: 'Tune resource thresholds and override rules for nodes, guests, and containers.',
-  },
-  destinations: {
-    title: 'Notification Destinations',
-    description: 'Configure email, webhooks, and escalation paths for alert delivery.',
-  },
-  schedule: {
-    title: 'Maintenance Schedule',
-    description: 'Set quiet hours and maintenance windows to suppress alerts when expected changes occur.',
-  },
-  history: {
-    title: 'Alert History',
-    description: 'Review previously triggered alerts and their resolution timeline.',
-  },
-};
+import { useAlertsActivation } from '@/stores/alertsActivation';
+import { filterIncidentEvents } from '@/features/alerts/types';
+import LayoutDashboard from 'lucide-solid/icons/layout-dashboard';
+import History from 'lucide-solid/icons/history';
+import Gauge from 'lucide-solid/icons/gauge';
+import Send from 'lucide-solid/icons/send';
+import { OverviewTab } from '@/features/alerts/OverviewTab';
+import {
 
-export const ALERT_TAB_SEGMENTS: Record<AlertTab, string> = {
-  overview: 'overview',
-  thresholds: 'thresholds',
-  destinations: 'destinations',
-  schedule: 'schedule',
-  history: 'history',
-};
+  pathForTab,
+  tabFromPath,
+  type AlertTab,
+  type DestinationsRef,
+  type Override,
 
-export const pathForTab = (
-  tab: AlertTab,
-  segments: Record<AlertTab, string> = ALERT_TAB_SEGMENTS,
-): string => {
-  const segment = segments[tab];
-  return segment ? `/alerts/${segment}` : '/alerts';
-};
-
-export const tabFromPath = (
-  pathname: string,
-  segments: Record<AlertTab, string> = ALERT_TAB_SEGMENTS,
-): AlertTab => {
-  const normalizedPath = pathname.replace(/\/+$/, '') || '/alerts';
-  const parts = normalizedPath.split('/').filter(Boolean);
-
-  if (parts[0] !== 'alerts') {
-    return 'overview';
-  }
-
-  const segment = parts[1] ?? '';
-  if (!segment) {
-    return 'overview';
-  }
-
-  const entry = (Object.entries(segments) as [AlertTab, string][])
-    .find(([, value]) => value === segment);
-
-  if (entry) {
-    return entry[0];
-  }
-
-  if (segment === 'custom-rules') {
-    return 'thresholds';
-  }
-
-  return 'overview';
-};
-
-const INCIDENT_EVENT_TYPES = [
-  'alert_fired',
-  'alert_acknowledged',
-  'alert_unacknowledged',
-  'alert_resolved',
-  'ai_analysis',
-  'command',
-  'runbook',
-  'note',
-] as const;
-
-const INCIDENT_EVENT_LABELS: Record<(typeof INCIDENT_EVENT_TYPES)[number], string> = {
-  alert_fired: 'Fired',
-  alert_acknowledged: 'Ack',
-  alert_unacknowledged: 'Unack',
-  alert_resolved: 'Resolved',
-  ai_analysis: 'Patrol',
-  command: 'Cmd',
-  runbook: 'Runbook',
-  note: 'Note',
-};
-
-const filterIncidentEvents = (
-  events: IncidentEvent[] | undefined,
-  filters: Set<string>,
-): IncidentEvent[] => {
-  if (!events || events.length === 0) {
-    return [];
-  }
-  if (filters.size === 0 || filters.size === INCIDENT_EVENT_TYPES.length) {
-    return events;
-  }
-  return events.filter((event) => filters.has(event.type));
-};
-
-function IncidentEventFilters(props: {
-  filters: () => Set<string>;
-  setFilters: (next: Set<string>) => void;
-}) {
-  const toggleFilter = (type: (typeof INCIDENT_EVENT_TYPES)[number]) => {
-    const next = new Set(props.filters());
-    if (next.has(type)) {
-      next.delete(type);
-    } else {
-      next.add(type);
-    }
-    props.setFilters(next);
-  };
-
-  return (
-    <div class="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
-      <span class="uppercase tracking-wide text-[9px] text-slate-400 dark:text-slate-500">Filters</span>
-      <button
-        type="button"
-        class="px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
-        onClick={() => props.setFilters(new Set(INCIDENT_EVENT_TYPES))}
-      >
-        All
-      </button>
-      <button
-        type="button"
-        class="px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
-        onClick={() => props.setFilters(new Set())}
-      >
-        None
-      </button>
-      <For each={INCIDENT_EVENT_TYPES}>
-        {(type) => {
-          const selected = () => props.filters().has(type);
-          return (
-            <button
-              type="button"
-              class={`px-2 py-0.5 rounded border text-[10px] ${selected()
-                ? 'border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300'
-                : 'border-slate-300 text-slate-500 dark:border-slate-600 dark:text-slate-300'
-                }`}
-              onClick={() => toggleFilter(type)}
-            >
-              {INCIDENT_EVENT_LABELS[type]}
-            </button>
-          );
-        }}
-      </For>
-    </div>
-  );
-}
-
-// Store reference interfaces
-interface DestinationsRef {
-  emailConfig?: () => EmailConfig;
-  appriseConfig?: () => AppriseConfig;
-}
-
-// Override interface for both guests and nodes
-type OverrideType =
-  | 'guest'
-  | 'node'
-  | 'hostAgent'
-  | 'hostDisk'
-  | 'storage'
-  | 'pbs'
-  | 'pmg'
-  | 'dockerHost'
-  | 'dockerContainer';
-
-interface Override {
-  id: string; // Full ID (e.g. "Main-node1-105" for guest, "node-node1" for node, "pbs-name" for PBS)
-  name: string; // Display name
-  type: OverrideType;
-  resourceType?: string; // VM, CT, Node, Storage, or PBS
-  vmid?: number; // Only for guests
-  node?: string; // Node name (for guests and storage), undefined for nodes themselves
-  instance?: string;
-  disabled?: boolean; // Completely disable alerts for this guest/storage
-  disableConnectivity?: boolean; // For nodes/hosts - disable offline/connectivity alerts
-  poweredOffSeverity?: 'warning' | 'critical';
-  backup?: BackupAlertConfig;
-  snapshot?: SnapshotAlertConfig;
-  thresholds: {
-    cpu?: number;
-    memory?: number;
-    disk?: number;
-    diskRead?: number;
-    diskWrite?: number;
-    networkIn?: number;
-    networkOut?: number;
-    usage?: number; // For storage devices
-    temperature?: number;
-  };
-}
-
-// Local email config with UI-specific fields
-interface UIEmailConfig {
-  enabled: boolean;
-  provider: string;
-  server: string; // Fixed: use 'server' not 'smtpHost'
-  port: number; // Fixed: use 'port' not 'smtpPort'
-  username: string;
-  password: string;
-  from: string;
-  to: string[];
-  tls: boolean;
-  startTLS: boolean;
-  replyTo: string;
-  maxRetries: number;
-  retryDelay: number;
-  rateLimit: number;
-}
-
-interface UIAppriseConfig {
-  enabled: boolean;
-  mode: 'cli' | 'http';
-  targetsText: string;
-  cliPath: string;
-  timeoutSeconds: number;
-  serverUrl: string;
-  configKey: string;
-  apiKey: string;
-  apiKeyHeader: string;
-  skipTlsVerify: boolean;
-}
-
-interface QuietHoursConfig {
-  enabled: boolean;
-  start: string;
-  end: string;
-  timezone: string;
-  days: Record<string, boolean>;
-  suppress: {
-    performance: boolean;
-    storage: boolean;
-    offline: boolean;
-  };
-}
-
-interface CooldownConfig {
-  enabled: boolean;
-  minutes: number;
-  maxAlerts: number;
-}
-
-interface GroupingConfig {
-  enabled: boolean;
-  window: number;
-  maxGroupSize?: number;
-  byNode?: boolean;
-  byGuest?: boolean;
-}
-
-type EscalationNotifyTarget = 'email' | 'webhook' | 'all';
-
-interface EscalationLevel {
-  after: number;
-  notify: EscalationNotifyTarget;
-}
-
-interface EscalationConfig {
-  enabled: boolean;
-  levels: EscalationLevel[];
-}
-
-const COOLDOWN_MIN_MINUTES = 5;
-const COOLDOWN_MAX_MINUTES = 120;
-const COOLDOWN_DEFAULT_MINUTES = 30;
-const MAX_ALERTS_MIN = 1;
-const MAX_ALERTS_MAX = 10;
-const MAX_ALERTS_DEFAULT = 3;
-const GROUPING_WINDOW_DEFAULT_SECONDS = 30; // Keep in sync with backend default in internal/alerts/alerts.go
-const GROUPING_WINDOW_DEFAULT_MINUTES = Math.max(
-  0,
-  Math.round(GROUPING_WINDOW_DEFAULT_SECONDS / 60),
-);
-
-export const clampCooldownMinutes = (value?: number): number => {
-  const numericValue = typeof value === 'number' ? value : Number.NaN;
-  if (!Number.isFinite(numericValue)) {
-    return COOLDOWN_MIN_MINUTES;
-  }
-  return Math.min(COOLDOWN_MAX_MINUTES, Math.max(COOLDOWN_MIN_MINUTES, numericValue));
-};
-
-export const fallbackCooldownMinutes = (value?: number): number => {
-  const numericValue = typeof value === 'number' ? value : Number.NaN;
-  if (!Number.isFinite(numericValue) || numericValue <= 0) {
-    return COOLDOWN_DEFAULT_MINUTES;
-  }
-  return clampCooldownMinutes(numericValue);
-};
-
-export const clampMaxAlertsPerHour = (value?: number): number => {
-  const numericValue = typeof value === 'number' ? value : Number.NaN;
-  if (!Number.isFinite(numericValue)) {
-    return MAX_ALERTS_MIN;
-  }
-  return Math.min(MAX_ALERTS_MAX, Math.max(MAX_ALERTS_MIN, numericValue));
-};
-
-export const fallbackMaxAlertsPerHour = (value?: number): number => {
-  const numericValue = typeof value === 'number' ? value : Number.NaN;
-  if (!Number.isFinite(numericValue) || numericValue <= 0) {
-    return MAX_ALERTS_DEFAULT;
-  }
-  return clampMaxAlertsPerHour(numericValue);
-};
-
-const getLocalTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-
-export const createDefaultQuietHours = (): QuietHoursConfig => ({
-  enabled: false,
-  start: '22:00',
-  end: '08:00',
-  timezone: getLocalTimezone(),
-  days: {
-    monday: true,
-    tuesday: true,
-    wednesday: true,
-    thursday: true,
-    friday: true,
-    saturday: false,
-    sunday: false,
-  },
-  suppress: {
-    performance: false,
-    storage: false,
-    offline: false,
-  },
-});
-
-export const createDefaultCooldown = (): CooldownConfig => ({
-  enabled: true,
-  minutes: COOLDOWN_DEFAULT_MINUTES,
-  maxAlerts: MAX_ALERTS_DEFAULT,
-});
-
-export const createDefaultGrouping = (): GroupingConfig => ({
-  enabled: true,
-  window: GROUPING_WINDOW_DEFAULT_MINUTES,
-  byNode: true,
-  byGuest: false,
-});
-
-export const createDefaultResolveNotifications = (): boolean => true;
-
-const createDefaultAppriseConfig = (): UIAppriseConfig => ({
-  enabled: false,
-  mode: 'cli',
-  targetsText: '',
-  cliPath: 'apprise',
-  timeoutSeconds: 15,
-  serverUrl: '',
-  configKey: '',
-  apiKey: '',
-  apiKeyHeader: 'X-API-KEY',
-  skipTlsVerify: false,
-});
-
-const createDefaultEmailConfig = (): UIEmailConfig => ({
-  enabled: false,
-  provider: '',
-  server: '',
-  port: 587,
-  username: '',
-  password: '',
-  from: '',
-  to: [],
-  tls: true,
-  startTLS: false,
-  replyTo: '',
-  maxRetries: 3,
-  retryDelay: 5,
-  rateLimit: 60,
-});
-
-const readStringValue = (value: unknown, fallback = ''): string =>
-  typeof value === 'string' ? value : fallback;
-
-const readBooleanValue = (value: unknown, fallback = false): boolean =>
-  typeof value === 'boolean' ? value : fallback;
-
-const readNumberValue = (value: unknown, fallback: number): number =>
-  typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-
-const readStringArrayValue = (value: unknown): string[] =>
-  Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
-
-export const normalizeEmailConfigFromAPI = (
-  value: Partial<EmailConfig> | null | undefined,
-): UIEmailConfig => {
-  const defaults = createDefaultEmailConfig();
-
-  return {
-    ...defaults,
-    enabled: readBooleanValue(value?.enabled, defaults.enabled),
-    provider: readStringValue(value?.provider, defaults.provider),
-    server: readStringValue(value?.server, defaults.server),
-    port: readNumberValue(value?.port, defaults.port),
-    username: readStringValue(value?.username, defaults.username),
-    password: readStringValue(value?.password, defaults.password),
-    from: readStringValue(value?.from, defaults.from),
-    to: readStringArrayValue(value?.to),
-    tls: readBooleanValue(value?.tls, defaults.tls),
-    startTLS: readBooleanValue(value?.startTLS, defaults.startTLS),
-    rateLimit: readNumberValue(value?.rateLimit, defaults.rateLimit),
-  };
-};
-
-const parseAppriseTargets = (value: string): string[] =>
-  value
-    .split(/\r?\n|,/)
-    .map((entry) => entry.trim())
-    .filter((entry, index, arr) => entry.length > 0 && arr.indexOf(entry) === index);
-
-const formatAppriseTargets = (targets: string[] | undefined | null): string =>
-  targets && targets.length > 0 ? targets.join('\n') : '';
-
-export const normalizeMetricDelayMap = (
-  input: Record<string, Record<string, number>> | undefined | null,
-): Record<string, Record<string, number>> => {
-  if (!input) return {};
-  const normalized: Record<string, Record<string, number>> = {};
-
-  Object.entries(input).forEach(([rawType, metrics]) => {
-    if (!metrics) return;
-    const typeKey = rawType.trim().toLowerCase();
-    if (!typeKey) return;
-
-    const entries: Record<string, number> = {};
-    Object.entries(metrics).forEach(([rawMetric, value]) => {
-      if (typeof value !== 'number' || Number.isNaN(value) || value < 0) return;
-      const metricKey = rawMetric.trim().toLowerCase();
-      if (!metricKey) return;
-      entries[metricKey] = Math.round(value);
-    });
-
-    if (Object.keys(entries).length > 0) {
-      normalized[typeKey] = entries;
-    }
-  });
-
-  return normalized;
-};
-
-export const createDefaultEscalation = (): EscalationConfig => ({
-  enabled: false,
-  levels: [],
-});
-
-export const getTriggerValue = (
-  threshold: number | boolean | HysteresisThreshold | undefined,
-): number => {
-  if (typeof threshold === 'number') {
-    return threshold; // Legacy format
-  }
-  if (typeof threshold === 'boolean') {
-    return 0;
-  }
-  if (threshold && typeof threshold === 'object' && 'trigger' in threshold) {
-    return threshold.trigger; // New hysteresis format
-  }
-  return 0; // Default fallback
-};
-
-export const extractTriggerValues = (
-  thresholds: RawOverrideConfig,
-): Record<string, number> => {
-  const result: Record<string, number> = {};
-  Object.entries(thresholds).forEach(([key, value]) => {
-    // Skip non-threshold fields
-    if (
-      key === 'disabled' ||
-      key === 'disableConnectivity' ||
-      key === 'poweredOffSeverity' ||
-      key === 'note' ||
-      key === 'backup' ||
-      key === 'snapshot'
-    )
-      return;
-    if (typeof value === 'string') return;
-    result[key] = getTriggerValue(value as any);
-  });
-  return result;
-};
-
-const DEFAULT_DELAY_SECONDS = 5;
-
-/**
- * Maps a unified resource type to the display string used in alerts.
- * Exported for testing.
- */
-export function unifiedTypeToAlertDisplayType(type: ResourceType): string {
-  switch (type) {
-    case 'vm':
-      return 'VM';
-    case 'container':
-    case 'oci-container':
-      return 'CT';
-    case 'docker-container':
-      return 'Container';
-    case 'node':
-      return 'Node';
-    case 'host':
-      return 'Host';
-    case 'docker-host':
-      return 'Container Host';
-    case 'storage':
-    case 'datastore':
-      return 'Storage';
-    case 'pbs':
-      return 'PBS';
-    case 'pmg':
-      return 'PMG';
-    case 'k8s-cluster':
-      return 'K8s';
-    default:
-      return type;
-  }
-}
-
-// Temporary legacy adapters for guest resources used by ThresholdsTable.
-const platformData = (r: Resource): Record<string, unknown> | undefined =>
-  r.platformData ? (unwrap(r.platformData) as Record<string, unknown>) : undefined;
-
-const guessNumericId = (value: string): number => {
-  const match = value.match(/(\d+)\s*$/);
-  return match ? parseInt(match[1], 10) : 0;
-};
+  type UIEmailConfig,
+  type UIAppriseConfig,
+  type QuietHoursConfig,
+  type CooldownConfig,
+  type GroupingConfig,
+  type EscalationConfig,
+  type EscalationLevel,
+  type EscalationNotifyTarget,
+  ALERT_HEADER_META,
+  INCIDENT_EVENT_TYPES,
+  GROUPING_WINDOW_DEFAULT_SECONDS,
+  INCIDENT_EVENT_LABELS,
+  fallbackCooldownMinutes,
+  clampCooldownMinutes
+} from '@/features/alerts/types';
+import {
+  clampMaxAlertsPerHour,
+  fallbackMaxAlertsPerHour,
+  createDefaultQuietHours,
+  createDefaultCooldown,
+  createDefaultGrouping,
+  createDefaultResolveNotifications,
+  createDefaultAppriseConfig,
+  createDefaultEmailConfig,
+  normalizeEmailConfigFromAPI,
+  parseAppriseTargets,
+  formatAppriseTargets,
+  normalizeMetricDelayMap,
+  createDefaultEscalation,
+  getTriggerValue,
+  extractTriggerValues,
+  unifiedTypeToAlertDisplayType,
+  platformData,
+  guessNumericId,
+  DEFAULT_DELAY_SECONDS
+} from '@/features/alerts/helpers';
 
 export function Alerts() {
   const { state, activeAlerts, updateAlert, removeAlerts } = useWebSocket();
@@ -2382,633 +1892,6 @@ export function Alerts() {
 }
 
 // Overview Tab - Shows current alert status
-function OverviewTab(props: {
-  overrides: Override[];
-  activeAlerts: Record<string, Alert>;
-  updateAlert: (alertId: string, updates: Partial<Alert>) => void;
-  showQuickTip: () => boolean;
-  dismissQuickTip: () => void;
-  showAcknowledged: () => boolean;
-  setShowAcknowledged: (value: boolean) => void;
-  alertsDisabled: () => boolean;
-  hasAIAlertsFeature: () => boolean;
-  licenseLoading: () => boolean;
-}) {
-  const location = useLocation();
-  let hashScrollRafId: number | undefined;
-  const pendingProcessingResetTimeouts = new Set<number>();
-  // Loading states for buttons
-  const [processingAlerts, setProcessingAlerts] = createSignal<Set<string>>(new Set());
-  const [incidentTimelines, setIncidentTimelines] = createSignal<Record<string, Incident | null>>({});
-  const [incidentLoading, setIncidentLoading] = createSignal<Record<string, boolean>>({});
-  const [expandedIncidents, setExpandedIncidents] = createSignal<Set<string>>(new Set());
-  const [incidentNoteDrafts, setIncidentNoteDrafts] = createSignal<Record<string, string>>({});
-  const [incidentNoteSaving, setIncidentNoteSaving] = createSignal<Set<string>>(new Set());
-  const [incidentEventFilters, setIncidentEventFilters] = createSignal<Set<string>>(
-    new Set(INCIDENT_EVENT_TYPES),
-  );
-  const [lastHashScrolled, setLastHashScrolled] = createSignal<string | null>(null);
-  const processingReleaseTimers = new Map<string, ReturnType<typeof setTimeout>>();
-
-  const clearProcessingReleaseTimer = (alertId: string) => {
-    const timer = processingReleaseTimers.get(alertId);
-    if (timer === undefined) {
-      return;
-    }
-    clearTimeout(timer);
-    processingReleaseTimers.delete(alertId);
-  };
-
-  onCleanup(() => {
-    processingReleaseTimers.forEach((timer) => clearTimeout(timer));
-    processingReleaseTimers.clear();
-  });
-
-  const loadIncidentTimeline = async (alertId: string, startedAt?: string) => {
-    setIncidentLoading((prev) => ({ ...prev, [alertId]: true }));
-    try {
-      const timeline = await AlertsAPI.getIncidentTimeline(alertId, startedAt);
-      setIncidentTimelines((prev) => ({ ...prev, [alertId]: timeline }));
-    } catch (error) {
-      logger.error('Failed to load incident timeline', error);
-      notificationStore.error('Failed to load incident timeline');
-    } finally {
-      setIncidentLoading((prev) => ({ ...prev, [alertId]: false }));
-    }
-  };
-
-  const toggleIncidentTimeline = async (alertId: string, startedAt?: string) => {
-    const expanded = expandedIncidents();
-    const next = new Set(expanded);
-    if (next.has(alertId)) {
-      next.delete(alertId);
-      setExpandedIncidents(next);
-      return;
-    }
-    next.add(alertId);
-    setExpandedIncidents(next);
-    if (!(alertId in incidentTimelines())) {
-      await loadIncidentTimeline(alertId, startedAt);
-    }
-  };
-
-  const saveIncidentNote = async (alertId: string, startedAt?: string) => {
-    const note = (incidentNoteDrafts()[alertId] || '').trim();
-    if (!note) {
-      return;
-    }
-    setIncidentNoteSaving((prev) => new Set(prev).add(alertId));
-    try {
-      const incidentId = incidentTimelines()[alertId]?.id;
-      await AlertsAPI.addIncidentNote({ alertId, incidentId, note });
-      setIncidentNoteDrafts((prev) => ({ ...prev, [alertId]: '' }));
-      await loadIncidentTimeline(alertId, startedAt);
-      notificationStore.success('Incident note saved');
-    } catch (error) {
-      logger.error('Failed to save incident note', error);
-      notificationStore.error('Failed to save incident note');
-    } finally {
-      setIncidentNoteSaving((prev) => {
-        const next = new Set(prev);
-        next.delete(alertId);
-        return next;
-      });
-    }
-  };
-
-  // Get alert stats from actual active alerts
-  const alertStats = createMemo(() => {
-    // Access the store properly for reactivity
-    const alertIds = Object.keys(props.activeAlerts);
-    const alerts = alertIds.map((id) => props.activeAlerts[id]);
-    return {
-      active: alerts.filter((a) => !a.acknowledged).length,
-      acknowledged: alerts.filter((a) => a.acknowledged).length,
-      total24h: alerts.length, // In real app, would filter by time
-      overrides: props.overrides.length,
-    };
-  });
-
-
-  const filteredAlerts = createMemo(() => {
-    const alerts = Object.values(props.activeAlerts);
-    // Sort: unacknowledged first, then by start time (newest first)
-    return alerts
-      .filter((alert) => props.showAcknowledged() || !alert.acknowledged)
-      .sort((a, b) => {
-        // Acknowledged status comparison first
-        if (a.acknowledged !== b.acknowledged) {
-          return a.acknowledged ? 1 : -1; // Unacknowledged first
-        }
-        // Then by time
-        return new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
-      });
-  });
-
-  const unacknowledgedAlerts = createMemo(() =>
-    Object.values(props.activeAlerts).filter((alert) => !alert.acknowledged),
-  );
-
-  const [bulkAckProcessing, setBulkAckProcessing] = createSignal(false);
-
-  const scrollToAlertHash = () => {
-    const hash = location.hash;
-    if (!hash || !hash.startsWith('#alert-')) {
-      setLastHashScrolled(null);
-      return;
-    }
-    if (hash === lastHashScrolled()) {
-      return;
-    }
-    const target = document.getElementById(hash.slice(1));
-    if (!target) {
-      return;
-    }
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setLastHashScrolled(hash);
-  };
-
-  createEffect(() => {
-    location.hash;
-    filteredAlerts().length;
-    props.showAcknowledged();
-    if (hashScrollRafId !== undefined) {
-      cancelAnimationFrame(hashScrollRafId);
-    }
-    hashScrollRafId = requestAnimationFrame(() => {
-      hashScrollRafId = undefined;
-      scrollToAlertHash();
-    });
-  });
-
-  onCleanup(() => {
-    if (hashScrollRafId !== undefined) {
-      cancelAnimationFrame(hashScrollRafId);
-      hashScrollRafId = undefined;
-    }
-    pendingProcessingResetTimeouts.forEach((timeoutId) => {
-      window.clearTimeout(timeoutId);
-    });
-    pendingProcessingResetTimeouts.clear();
-  });
-
-  return (
-    <div class="space-y-4 sm:space-y-6">
-      {/* Stats Cards - only show cards not duplicated in sub-tabs */}
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
-
-        <Card padding="sm" class="sm:p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-[10px] sm:text-sm text-slate-600 dark:text-slate-400 uppercase tracking-wider sm:normal-case">Acknowledged</p>
-              <p class="text-lg sm:text-2xl font-semibold text-yellow-600 dark:text-yellow-400">
-                {alertStats().acknowledged}
-              </p>
-            </div>
-            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-yellow-100 dark:bg-yellow-900 rounded-full flex items-center justify-center">
-              <svg
-                width="16"
-                height="16"
-                class="sm:w-5 sm:h-5 text-yellow-600 dark:text-yellow-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path d="M9 11L12 14L22 4"></path>
-                <path d="M21 12V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V5C3 3.89543 3.89543 3 5 3H16"></path>
-              </svg>
-            </div>
-          </div>
-        </Card>
-
-        <Card padding="sm" class="sm:p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-[10px] sm:text-sm text-slate-600 dark:text-slate-400 uppercase tracking-wider sm:normal-case">Last 24 Hours</p>
-              <p class="text-lg sm:text-2xl font-semibold text-slate-700 dark:text-slate-300">
-                {alertStats().total24h}
-              </p>
-            </div>
-            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-slate-200 dark:bg-slate-600 rounded-full flex items-center justify-center">
-              <svg
-                width="16"
-                height="16"
-                class="sm:w-5 sm:h-5 text-slate-600 dark:text-slate-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <circle cx="12" cy="12" r="10"></circle>
-                <polyline points="12 6 12 12 16 14"></polyline>
-              </svg>
-            </div>
-          </div>
-        </Card>
-
-        <Card padding="sm" class="sm:p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-[10px] sm:text-sm text-slate-600 dark:text-slate-400 uppercase tracking-wider sm:normal-case">Guest Overrides</p>
-              <p class="text-lg sm:text-2xl font-semibold text-blue-600 dark:text-blue-400">
-                {alertStats().overrides}
-              </p>
-            </div>
-            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
-              <svg
-                width="16"
-                height="16"
-                class="sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Active Alerts */}
-      <div>
-        <SectionHeader title="Active Alerts" size="md" class="mb-3" />
-        <Show
-          when={Object.keys(props.activeAlerts).length > 0}
-          fallback={
-            <div class="text-center py-8 text-slate-500 dark:text-slate-400">
-              <div class="flex justify-center mb-3">
-                <svg class="w-12 h-12 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />
-                </svg>
-              </div>
-              <p class="text-sm">No active alerts</p>
-              <p class="text-xs mt-1">Alerts will appear here when thresholds are exceeded</p>
-            </div>
-          }
-        >
-          <Show when={alertStats().acknowledged > 0 || alertStats().active > 0}>
-            <div class="flex flex-wrap items-center justify-between gap-1.5 p-1.5 bg-slate-50 dark:bg-slate-800 rounded-t-lg border border-slate-200 dark:border-slate-700">
-              <Show when={alertStats().acknowledged > 0}>
-                <button
-                  onClick={() => props.setShowAcknowledged(!props.showAcknowledged())}
-                  class="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
-                >
-                  {props.showAcknowledged() ? 'Hide' : 'Show'} acknowledged
-                </button>
-              </Show>
-              <Show when={alertStats().active > 0}>
-                <button
-                  type="button"
-                  class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-200 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900 disabled:opacity-60 disabled:cursor-not-allowed"
-                  disabled={bulkAckProcessing()}
-                  onClick={async () => {
-                    if (bulkAckProcessing()) return;
-                    const pending = unacknowledgedAlerts();
-                    if (pending.length === 0) {
-                      return;
-                    }
-                    setBulkAckProcessing(true);
-                    try {
-                      const result = await AlertsAPI.bulkAcknowledge(pending.map((alert) => alert.id));
-                      const successes = result.results.filter((r) => r.success);
-                      const failures = result.results.filter((r) => !r.success);
-
-                      successes.forEach((res) => {
-                        props.updateAlert(res.alertId, {
-                          acknowledged: true,
-                          ackTime: new Date().toISOString(),
-                        });
-                      });
-
-                      if (successes.length > 0) {
-                        notificationStore.success(
-                          `Acknowledged ${successes.length} ${successes.length === 1 ? 'alert' : 'alerts'}.`,
-                        );
-                      }
-
-                      if (failures.length > 0) {
-                        notificationStore.error(
-                          `Failed to acknowledge ${failures.length} ${failures.length === 1 ? 'alert' : 'alerts'}.`,
-                        );
-                      }
-                    } catch (error) {
-                      logger.error('Bulk acknowledge failed', error);
-                      notificationStore.error('Failed to acknowledge alerts');
-                    } finally {
-                      setBulkAckProcessing(false);
-                    }
-                  }}
-                >
-                  {bulkAckProcessing()
-                    ? 'Acknowledging…'
-                    : `Acknowledge all (${alertStats().active})`}
-                </button>
-              </Show>
-            </div>
-          </Show>
-          <div class="space-y-2">
-            <Show when={filteredAlerts().length === 0}>
-              <div class="text-center py-8 text-slate-500 dark:text-slate-400">
-                {props.showAcknowledged() ? 'No active alerts' : 'No unacknowledged alerts'}
-              </div>
-            </Show>
-            <For each={filteredAlerts()}>
-              {(alert) => (
-                <div
-                  id={`alert-${alert.id}`}
-                  class={`border rounded-md p-3 sm:p-4 transition-all ${processingAlerts().has(alert.id) ? 'opacity-50' : ''
-                    } ${alert.acknowledged
-                      ? 'opacity-60 border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800'
-                      : alert.level === 'critical'
-                        ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900'
-                        : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900'
-                    }`}
-                >
-                  <div class="flex flex-col sm:flex-row sm:items-start">
-                    <div class="flex items-start flex-1">
-                      {/* Status icon */}
-                      <div
-                        class={`mr-3 mt-0.5 transition-all ${alert.acknowledged
-                          ? 'text-green-600 dark:text-green-400'
-                          : alert.level === 'critical'
-                            ? 'text-red-600 dark:text-red-400'
-                            : 'text-yellow-600 dark:text-yellow-400'
-                          }`}
-                      >
-                        {alert.acknowledged ? (
-                          // Checkmark for acknowledged
-                          <svg
-                            class="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                            />
-                          </svg>
-                        ) : (
-                          // Warning/Alert icon
-                          <svg
-                            class="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                            />
-                          </svg>
-                        )}
-                      </div>
-                      <div class="flex-1 min-w-0">
-                        <div class="flex flex-wrap items-center gap-2">
-                          <span
-                            class={`text-sm font-medium truncate ${alert.level === 'critical'
-                              ? 'text-red-700 dark:text-red-400'
-                              : 'text-yellow-700 dark:text-yellow-400'
-                              }`}
-                          >
-                            {alert.resourceName}
-                          </span>
-                          <span class="text-xs text-slate-600 dark:text-slate-400">
-                            ({alert.type})
-                          </span>
-                          <Show when={alert.node}>
-                            <span class="text-xs text-slate-500 dark:text-slate-500">
-                              on {alert.nodeDisplayName || alert.node}
-                            </span>
-                          </Show>
-                          <Show when={alert.acknowledged}>
-                            <span class="px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded">
-                              Acknowledged
-                            </span>
-                          </Show>
-                        </div>
-                        <p class="text-sm text-slate-700 dark:text-slate-300 mt-1 break-words">
-                          {alert.message}
-                        </p>
-                        <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                          Started: {new Date(alert.startTime).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start justify-end">
-                      <button
-                        class={`px-3 py-1.5 text-xs font-medium border rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed ${alert.acknowledged
-                          ? 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'
-                          : 'bg-white dark:bg-slate-700 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900'
-                          }`}
-                        disabled={processingAlerts().has(alert.id)}
-                        onClick={async (e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-
-                          // Prevent double-clicks
-                          if (processingAlerts().has(alert.id)) return;
-
-                          setProcessingAlerts((prev) => new Set(prev).add(alert.id));
-
-                          // Store current state to avoid race conditions
-                          const wasAcknowledged = alert.acknowledged;
-
-                          try {
-                            if (wasAcknowledged) {
-                              // Call API first, only update local state if successful
-                              await AlertsAPI.unacknowledge(alert.id);
-                              // Only update local state after successful API call
-                              props.updateAlert(alert.id, {
-                                acknowledged: false,
-                                ackTime: undefined,
-                                ackUser: undefined,
-                              });
-                              notificationStore.success('Alert restored');
-                            } else {
-                              // Call API first, only update local state if successful
-                              await AlertsAPI.acknowledge(alert.id);
-                              // Only update local state after successful API call
-                              props.updateAlert(alert.id, {
-                                acknowledged: true,
-                                ackTime: new Date().toISOString(),
-                              });
-                              notificationStore.success('Alert acknowledged');
-                            }
-                          } catch (err) {
-                            logger.error(
-                              `Failed to ${wasAcknowledged ? 'unacknowledge' : 'acknowledge'} alert:`,
-                              err,
-                            );
-                            notificationStore.error(
-                              `Failed to ${wasAcknowledged ? 'restore' : 'acknowledge'} alert`,
-                            );
-                            // Don't update local state on error - let WebSocket keep the correct state
-                          } finally {
-                            // Keep button disabled for longer to prevent race conditions with WebSocket updates
-                            clearProcessingReleaseTimer(alert.id);
-                            const timer = setTimeout(() => {
-                              processingReleaseTimers.delete(alert.id);
-                              setProcessingAlerts((prev) => {
-                                const next = new Set(prev);
-                                next.delete(alert.id);
-                                return next;
-                              });
-                            }, 1500); // 1.5 seconds to allow server to process and WebSocket to sync
-                            processingReleaseTimers.set(alert.id, timer);
-                          }
-                        }}
-                      >
-                        {processingAlerts().has(alert.id)
-                          ? 'Processing...'
-                          : alert.acknowledged
-                            ? 'Unacknowledge'
-                            : 'Acknowledge'}
-                      </button>
-                      <button
-                        class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600"
-                        onClick={() => {
-                          void toggleIncidentTimeline(alert.id, alert.startTime);
-                        }}
-                      >
-                        {expandedIncidents().has(alert.id) ? 'Hide Timeline' : 'Timeline'}
-                      </button>
-                      <InvestigateAlertButton
-                        alert={alert}
-                        variant="text"
-                        size="sm"
-                        licenseLocked={!props.hasAIAlertsFeature() && !props.licenseLoading()}
-                      />
-                    </div>
-                  </div>
-                  <Show when={expandedIncidents().has(alert.id)}>
-                    <div class="mt-3 border-t border-slate-200 dark:border-slate-700 pt-3">
-                      <Show when={incidentLoading()[alert.id]}>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">Loading timeline...</p>
-                      </Show>
-                      <Show when={!incidentLoading()[alert.id]}>
-                        <Show when={incidentTimelines()[alert.id]}>
-                          {(timeline) => (
-                            <div class="space-y-3">
-                              <div class="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-                                <span class="font-medium text-slate-700 dark:text-slate-200">Incident</span>
-                                <span>{timeline().status}</span>
-                                <Show when={timeline().acknowledged}>
-                                  <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
-                                    acknowledged
-                                  </span>
-                                </Show>
-                                <Show when={timeline().openedAt}>
-                                  <span>opened {new Date(timeline().openedAt).toLocaleString()}</span>
-                                </Show>
-                                <Show when={timeline().closedAt}>
-                                  <span>closed {new Date(timeline().closedAt as string).toLocaleString()}</span>
-                                </Show>
-                              </div>
-                              {(() => {
-                                const events = timeline().events || [];
-                                const filteredEvents = filterIncidentEvents(events, incidentEventFilters());
-                                return (
-                                  <>
-                                    <Show when={events.length > 0}>
-                                      <IncidentEventFilters
-                                        filters={incidentEventFilters}
-                                        setFilters={setIncidentEventFilters}
-                                      />
-                                    </Show>
-                                    <Show when={filteredEvents.length > 0}>
-                                      <div class="space-y-2">
-                                        <For each={filteredEvents}>
-                                          {(event) => (
-                                            <div class="rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2">
-                                              <div class="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-                                                <span class="font-medium text-slate-800 dark:text-slate-200">
-                                                  {event.summary}
-                                                </span>
-                                                <span>{new Date(event.timestamp).toLocaleString()}</span>
-                                              </div>
-                                              <Show when={event.details && (event.details as { note?: string }).note}>
-                                                <p class="text-xs text-slate-700 dark:text-slate-300 mt-1">
-                                                  {(event.details as { note?: string }).note}
-                                                </p>
-                                              </Show>
-                                              <Show when={event.details && (event.details as { command?: string }).command}>
-                                                <p class="text-xs text-slate-700 dark:text-slate-300 mt-1 font-mono">
-                                                  {(event.details as { command?: string }).command}
-                                                </p>
-                                              </Show>
-                                              <Show when={event.details && (event.details as { output_excerpt?: string }).output_excerpt}>
-                                                <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                                                  {(event.details as { output_excerpt?: string }).output_excerpt}
-                                                </p>
-                                              </Show>
-                                            </div>
-                                          )}
-                                        </For>
-                                      </div>
-                                    </Show>
-                                    <Show when={events.length > 0 && filteredEvents.length === 0}>
-                                      <p class="text-xs text-slate-500 dark:text-slate-400">
-                                        No timeline events match the selected filters.
-                                      </p>
-                                    </Show>
-                                    <Show when={events.length === 0}>
-                                      <p class="text-xs text-slate-500 dark:text-slate-400">No timeline events yet.</p>
-                                    </Show>
-                                  </>
-                                );
-                              })()}
-                              <div class="flex flex-col gap-2">
-                                <textarea
-                                  class="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 p-2 text-xs text-slate-800 dark:text-slate-200"
-                                  rows={2}
-                                  placeholder="Add a note for this incident..."
-                                  value={incidentNoteDrafts()[alert.id] || ''}
-                                  onInput={(e) => {
-                                    const value = e.currentTarget.value;
-                                    setIncidentNoteDrafts((prev) => ({ ...prev, [alert.id]: value }));
-                                  }}
-                                />
-                                <div class="flex justify-end">
-                                  <button
-                                    class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    disabled={incidentNoteSaving().has(alert.id) || !(incidentNoteDrafts()[alert.id] || '').trim()}
-                                    onClick={() => {
-                                      void saveIncidentNote(alert.id, alert.startTime);
-                                    }}
-                                  >
-                                    {incidentNoteSaving().has(alert.id) ? 'Saving...' : 'Save Note'}
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </Show>
-                        <Show when={!incidentTimelines()[alert.id]}>
-                          <p class="text-xs text-slate-500 dark:text-slate-400">No incident timeline available.</p>
-                        </Show>
-                      </Show>
-                    </div>
-                  </Show>
-                </div>
-              )}
-            </For>
-          </div>
-        </Show>
-      </div>
-    </div>
-  );
-}
-
 // Thresholds Tab - Improved design
 interface ThresholdsTabProps {
   allGuests: () => Resource[];
@@ -4395,7 +3278,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     <button
                       type="button"
                       onClick={() => {
-                        const newLevels = escalation().levels.filter((_, i) => i !== index());
+                        const newLevels = escalation().levels.filter((_: EscalationLevel, i: number) => i !== index());
                         setEscalation({ ...escalation(), levels: newLevels });
                         props.setHasUnsavedChanges(true);
                       }}
@@ -4519,6 +3402,59 @@ function ScheduleTab(props: ScheduleTabProps) {
     </div>
   );
 }
+
+export function IncidentEventFilters(props: {
+  filters: () => Set<string>;
+  setFilters: (next: Set<string>) => void;
+}) {
+  const toggleFilter = (type: (typeof INCIDENT_EVENT_TYPES)[number]) => {
+    const next = new Set(props.filters());
+    if (next.has(type)) {
+      next.delete(type);
+    } else {
+      next.add(type);
+    }
+    props.setFilters(next);
+  };
+
+  return (
+    <div class="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+      <span class="uppercase tracking-wide text-[9px] text-slate-400 dark:text-slate-500">Filters</span>
+      <button
+        type="button"
+        class="px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+        onClick={() => props.setFilters(new Set(INCIDENT_EVENT_TYPES))}
+      >
+        All
+      </button>
+      <button
+        type="button"
+        class="px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+        onClick={() => props.setFilters(new Set())}
+      >
+        None
+      </button>
+      <For each={INCIDENT_EVENT_TYPES}>
+        {(type) => {
+          const selected = () => props.filters().has(type);
+          return (
+            <button
+              type="button"
+              class={`px-2 py-0.5 rounded border text-[10px] ${selected()
+                ? 'border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300'
+                : 'border-slate-300 text-slate-500 dark:border-slate-600 dark:text-slate-300'
+                }`}
+              onClick={() => toggleFilter(type)}
+            >
+              {INCIDENT_EVENT_LABELS[type]}
+            </button>
+          );
+        }}
+      </For>
+    </div>
+  );
+}
+
 // History Tab - Comprehensive alert table
 function HistoryTab(props: {
   hasAIAlertsFeature: () => boolean;

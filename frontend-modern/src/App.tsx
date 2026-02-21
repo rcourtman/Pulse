@@ -84,7 +84,6 @@ import { LEGACY_REDIRECTS } from './routing/legacyRedirects';
 import {
   buildRecoveryPath,
   DASHBOARD_PATH,
-  BACKUPS_LEGACY_PATH,
   buildInfrastructurePath,
   buildStoragePath,
   buildWorkloadsPath,
@@ -1209,20 +1208,6 @@ function App() {
                 title: 'Replication moved',
                 message: 'Replication is now shown in Recovery (Remote events). Update your bookmark to /recovery.',
                 onceKey: 'pulse_toast_replication_moved_to_recovery',
-              }}
-            />
-          )}
-        />
-        <Route
-          path={BACKUPS_LEGACY_PATH}
-          component={() => (
-            <LegacyRedirect
-              to={RECOVERY_ROUTE_PATH}
-              toast={{
-                type: 'info',
-                title: 'Backups moved',
-                message: 'Backups is now Recovery. Update your bookmark to /recovery.',
-                onceKey: 'pulse_toast_backups_moved_to_recovery',
               }}
             />
           )}

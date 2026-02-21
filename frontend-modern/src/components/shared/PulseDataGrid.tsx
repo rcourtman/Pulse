@@ -144,7 +144,7 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                                         <>
                                             <TableRow
                                                 class={`
-                                                    group transition-colors duration-150
+                                                    group transition-colors duration-150 animate-enter
                                                     ${local.onRowClick
                                                         ? 'cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900'
                                                         : 'hover:bg-slate-50 dark:hover:bg-slate-800'

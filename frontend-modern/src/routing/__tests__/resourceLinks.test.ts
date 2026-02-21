@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BACKUPS_QUERY_PARAMS,
   PMG_THRESHOLDS_PATH,
   RECOVERY_QUERY_PARAMS,
   buildRecoveryPath,
@@ -168,8 +167,6 @@ describe('resource link routing contract', () => {
     expect(RECOVERY_QUERY_PARAMS.verification).toBe('verification');
     expect(RECOVERY_QUERY_PARAMS.query).toBe('q');
 
-    // Backwards-compat: historic exports are aliases for the canonical recovery contract.
-    expect(BACKUPS_QUERY_PARAMS).toBe(RECOVERY_QUERY_PARAMS);
     expect(PMG_THRESHOLDS_PATH).toBe('/alerts/thresholds/mail-gateway');
   });
 

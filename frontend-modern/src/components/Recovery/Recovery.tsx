@@ -1114,7 +1114,7 @@ const Recovery: Component = () => {
                       const neverSucceeded = (!Number.isFinite(successMs) || successMs <= 0) && Number.isFinite(attemptMs) && attemptMs > 0;
                       return (
                         <TableRow
-                          class="cursor-pointer border-b border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/35"
+                          class="cursor-pointer border-b border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
                           onClick={() => {
                             setView('events');
                             setRollupId(r.rollupId);
@@ -1841,7 +1841,7 @@ const Recovery: Component = () => {
                         <button
                           type="button"
                           onClick={resetAllArtifactFilters}
-                          class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                          class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
                         >
                           Clear filters
                         </button>
@@ -1897,7 +1897,7 @@ const Recovery: Component = () => {
                               return (
                                 <>
                                   <TableRow
-                                    class={`cursor-pointer border-b ${selectedPoint()?.id === p.id ? 'bg-blue-50 border-blue-200 dark:bg-blue-900 dark:border-blue-800' : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/35'}`}
+                                    class={`cursor-pointer border-b ${selectedPoint()?.id === p.id ? 'bg-blue-50 border-blue-200 dark:bg-blue-900 dark:border-blue-800' : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'}`}
                                     onClick={() => setSelectedPoint(selectedPoint()?.id === p.id ? null : p)}
                                   >
                                     <For each={mobileVisibleArtifactColumns()}>
@@ -2018,7 +2018,7 @@ const Recovery: Component = () => {
                                   </TableRow>
                                   <Show when={selectedPoint()?.id === p.id}>
                                     <TableRow>
-                                      <TableCell colSpan={tableColumnCount()} class="bg-slate-50 dark:bg-slate-800 px-0 sm:px-4 py-4 border-b border-slate-200 dark:border-slate-700 shadow-inner relative">
+                                      <TableCell colSpan={tableColumnCount()} class="bg-slate-50 dark:bg-slate-800 px-0 sm:px-4 py-4 border-b border-slate-200 dark:border-slate-700 relative">
                                         <div class="flex items-center justify-between px-4 pb-2 mb-2 border-b border-slate-200 dark:border-slate-700">
                                           <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Recovery Point Details</h2>
                                           <button

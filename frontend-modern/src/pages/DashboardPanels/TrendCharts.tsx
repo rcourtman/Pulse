@@ -116,6 +116,7 @@ export function TrendCharts(props: TrendChartsProps) {
               highlightNearestSeriesOnHover
               timeRange={selectedRange()}
               rangeLabel={rangeLabel()}
+              size="lg"
             />
           </div>
         </Card>
@@ -129,6 +130,7 @@ export function TrendCharts(props: TrendChartsProps) {
               highlightNearestSeriesOnHover
               timeRange={selectedRange()}
               rangeLabel={rangeLabel()}
+              size="lg"
             />
           </div>
         </Card>

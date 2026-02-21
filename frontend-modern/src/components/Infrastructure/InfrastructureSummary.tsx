@@ -2,6 +2,8 @@ import { Component, For, Show, createMemo, createEffect, createSignal, onCleanup
 import { unwrap } from 'solid-js/store';
 import { Card } from '@/components/shared/Card';
 import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
+import { DensityMap } from '@/components/shared/DensityMap';
+import { SparklineSkeleton } from '@/components/shared/SparklineSkeleton';
 import type { Resource } from '@/types/resource';
 import { getDisplayName } from '@/types/resource';
 import type { MetricPoint, ChartData, TimeRange } from '@/api/charts';
@@ -471,11 +473,10 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                                         <button
                                             type="button"
                                             onClick={() => props.onTimeRangeChange?.(range)}
-                                            class={`rounded px-2 py-1 ${
-                                                selectedRange() === range
-                                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                                                    : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
-                                            }`}
+                                            class={`rounded px-2 py-1 ${selectedRange() === range
+                                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                                                : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+                                                }`}
                                         >
                                             {SUMMARY_TIME_RANGE_LABEL[range]}
                                         </button>
@@ -497,9 +498,13 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                                 <Show
                                     when={hasData('cpu')}
                                     fallback={
-                                        <div class="text-sm text-slate-400 dark:text-slate-500 py-2">
-                                            {isCurrentRangeLoaded() ? 'No history yet' : 'Loading history...'}
-                                        </div>
+                                        isCurrentRangeLoaded() ? (
+                                            <div class="text-sm text-slate-400 dark:text-slate-500 py-2">
+                                                No history yet
+                                            </div>
+                                        ) : (
+                                            <SparklineSkeleton />
+                                        )
                                     }
                                 >
                                     <div class="flex-1 min-h-0">
@@ -528,9 +533,13 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                                 <Show
                                     when={hasData('memory')}
                                     fallback={
-                                        <div class="text-sm text-slate-400 dark:text-slate-500 py-2">
-                                            {isCurrentRangeLoaded() ? 'No history yet' : 'Loading history...'}
-                                        </div>
+                                        isCurrentRangeLoaded() ? (
+                                            <div class="text-sm text-slate-400 dark:text-slate-500 py-2">
+                                                No history yet
+                                            </div>
+                                        ) : (
+                                            <SparklineSkeleton />
+                                        )
                                     }
                                 >
                                     <div class="flex-1 min-h-0">
@@ -559,9 +568,13 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                                 <Show
                                     when={hasData('disk')}
                                     fallback={
-                                        <div class="text-sm text-slate-400 dark:text-slate-500 py-2">
-                                            {isCurrentRangeLoaded() ? 'No history yet' : 'Loading history...'}
-                                        </div>
+                                        isCurrentRangeLoaded() ? (
+                                            <div class="text-sm text-slate-400 dark:text-slate-500 py-2">
+                                                No history yet
+                                            </div>
+                                        ) : (
+                                            <SparklineSkeleton />
+                                        )
                                     }
                                 >
                                     <div class="flex-1 min-h-0">
@@ -629,22 +642,21 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                                     <Show
                                         when={hasNetData()}
                                         fallback={
-                                            <div class="text-sm text-slate-400 dark:text-slate-500 py-2">
-                                                {isCurrentRangeLoaded() ? 'No history yet' : 'Loading history...'}
-                                            </div>
+                                            isCurrentRangeLoaded() ? (
+                                                <div class="text-sm text-slate-400 dark:text-slate-500 py-2">
+                                                    No history yet
+                                                </div>
+                                            ) : (
+                                                <SparklineSkeleton />
+                                            )
                                         }
                                     >
                                         <div class="flex-1 min-h-0">
-                                            <InteractiveSparkline
+                                            <DensityMap
                                                 series={networkSeries()}
                                                 rangeLabel={rangeLabel()}
                                                 timeRange={props.timeRange}
-                                                yMode="auto"
                                                 formatValue={formatRate}
-                                                formatTopLabel={formatRate}
-                                                sortTooltipByValue
-                                                highlightNearestSeriesOnHover
-                                                highlightSeriesId={props.hoveredHostId}
                                             />
                                         </div>
                                     </Show>

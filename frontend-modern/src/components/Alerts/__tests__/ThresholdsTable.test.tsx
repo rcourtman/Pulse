@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, fireEvent, screen, cleanup, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 
-import { ThresholdsTable, normalizeDockerIgnoredInput } from '../ThresholdsTable';
+import { ThresholdsTable } from '../ThresholdsTable';
+import { normalizeDockerIgnoredInput } from '@/features/alerts/thresholds/helpers';
 import type { PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
 import type { Host } from '@/types/api';
 

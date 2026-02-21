@@ -382,10 +382,10 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
     hostResources().length > 0 || serviceResources().length === 0
   );
   const serviceCountColumnStyle = createMemo(() =>
-      isMobile()
-        ? { width: '80px', 'min-width': '80px', 'max-width': '90px' }
-        : { width: '110px', 'min-width': '110px', 'max-width': '130px' }
-    );
+    isMobile()
+      ? { width: '80px', 'min-width': '80px', 'max-width': '90px' }
+      : { width: '110px', 'min-width': '110px', 'max-width': '130px' }
+  );
   const serviceQueueColumnStyle = createMemo(() =>
     isMobile()
       ? { width: '88px', 'min-width': '88px', 'max-width': '104px' }
@@ -513,10 +513,10 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                   );
 
                   const rowClass = createMemo(() => {
-                    const baseHover = `cursor-pointer transition-all duration-200 relative hover:shadow-sm group hover:bg-slate-50 dark:hover:bg-slate-700`;
+                    const baseHover = `cursor-pointer transition-all duration-200 relative group hover:bg-slate-50 dark:hover:bg-slate-700`;
 
                     if (isExpanded()) {
-                      return `cursor-pointer transition-all duration-200 relative hover:shadow-sm z-10 group bg-blue-50 dark:bg-blue-900`;
+                      return `cursor-pointer transition-all duration-200 relative z-10 group bg-blue-50 dark:bg-blue-900`;
                     }
 
                     let className = baseHover;

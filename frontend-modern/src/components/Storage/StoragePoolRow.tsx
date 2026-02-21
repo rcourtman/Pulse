@@ -1,5 +1,5 @@
 import { Component, createMemo, Show } from 'solid-js';
-import { Sparkline } from '@/components/shared/Sparkline';
+import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
 import { StoragePoolDetail } from './StoragePoolDetail';
 import { ZFSHealthMap } from './ZFSHealthMap';
@@ -8,6 +8,7 @@ import { getRecordNodeLabel, getRecordType, getRecordZfsPool } from './useStorag
 import type { NormalizedHealth, StorageRecord } from '@/features/storageBackups/models';
 import type { Resource } from '@/types/resource';
 import type { StorageGroupKey } from './useStorageModel';
+import { getMetricColorHex } from '@/utils/metricThresholds';
 
 interface StoragePoolRowProps {
   record: StorageRecord;
@@ -69,6 +70,12 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
     () => props.groupExpanded,
   );
 
+  const sparklineColor = createMemo(() => {
+    const data = sparklineData();
+    const latestValue = data.length > 0 ? data[data.length - 1].value : 0;
+    return getMetricColorHex(latestValue, 'disk');
+  });
+
   return (
     <>
       <tr
@@ -91,8 +98,8 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
             <Show when={zfsPool() && zfsPool()!.state !== 'ONLINE'}>
               <span
                 class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${zfsPool()?.state === 'DEGRADED'
-                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
-                    : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+                  : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
                   }`}
               >
                 {zfsPool()?.state}
@@ -145,7 +152,13 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         {/* Sparkline: 7-day usage trend */}
         <td class="px-1.5 sm:px-2 py-0.5 w-[120px] hidden md:table-cell">
           <Show when={sparklineData().length > 0} fallback={<div class="h-4 w-full" />}>
-            <Sparkline data={sparklineData()} metric="disk" width={100} height={20} />
+            <div style={{ width: '100px', height: '20px' }}>
+              <InteractiveSparkline
+                series={[{ data: sparklineData(), color: sparklineColor() }]}
+                yMode="percent"
+                size="sm"
+              />
+            </div>
           </Show>
         </td>
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
-import { toDiscoveryConfig } from '@/components/Infrastructure/ResourceDetailDrawer';
+import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailMappers';
 import { buildWorkloadsHref } from '@/components/Infrastructure/workloadsLink';
 
 const baseResource = (): Resource => ({

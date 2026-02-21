@@ -145,7 +145,7 @@ export const SystemLogsPanel: Component = () => {
                             <div class="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-2"></div>
                             <button
                                 onClick={handleDownload}
-                                class="min-h-10 sm:min-h-9 flex items-center space-x-2 px-3 py-2.5 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium transition-colors shadow-sm"
+                                class="min-h-10 sm:min-h-9 flex items-center space-x-2 px-3 py-2.5 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium transition-colors"
                             >
                                 <Download size={16} />
                                 <span>Support Bundle</span>
@@ -158,10 +158,10 @@ export const SystemLogsPanel: Component = () => {
                 <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                     <div
                         ref={logContainer}
-                        class="bg-slate-950 text-slate-300 font-mono text-xs p-4 rounded-md h-[500px] overflow-y-auto whitespace-pre-wrap leading-relaxed shadow-inner border border-slate-800 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
+                        class="bg-slate-950 text-slate-300 font-mono text-xs p-4 rounded-md h-[500px] overflow-y-auto whitespace-pre-wrap leading-relaxed border border-slate-800 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
                     >
                         <For each={logs()}>{(log) =>
-                            <div class="border-b border-slate-900 last:border-0 pb-0.5 mb-0.5 hover:bg-slate-900 px-1 -mx-1 rounded">
+                            <div class="animate-enter border-b border-slate-900 last:border-0 pb-0.5 mb-0.5 hover:bg-slate-900 px-1 -mx-1 rounded">
                                 {/* Basic highlighting for log levels */}
                                 {log.includes('"level":"error"') || log.includes('ERR') || log.includes('[ERROR]') ? (
                                     <span class="text-red-400">{log}</span>

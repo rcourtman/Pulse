@@ -1,18 +1,16 @@
 import { Show, Suspense, createMemo, For, createSignal, createEffect } from 'solid-js';
 import type { Component } from 'solid-js';
-import type { Disk, Host, HostNetworkInterface, HostRAIDArray, HostSensorSummary, Memory, Node } from '@/types/api';
-import type { Resource, ResourceMetric } from '@/types/resource';
+import type { Resource } from '@/types/resource';
 import { getDisplayName } from '@/types/resource';
 import { formatUptime, formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
-	import { formatTemperature } from '@/utils/temperature';
-	import { StatusDot } from '@/components/shared/StatusDot';
-	import { TagBadges } from '@/components/Dashboard/TagBadges';
-	import { getHostStatusIndicator } from '@/utils/status';
-	import { getPlatformBadge, getSourceBadge, getTypeBadge, getUnifiedSourceBadges } from './resourceBadges';
-	import { buildWorkloadsHref } from './workloadsLink';
-	import { buildServiceDetailLinks } from './serviceDetailLinks';
-	import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
-	import { HardwareCard } from '@/components/shared/cards/HardwareCard';
+import { StatusDot } from '@/components/shared/StatusDot';
+import { TagBadges } from '@/components/Dashboard/TagBadges';
+import { getHostStatusIndicator } from '@/utils/status';
+import { getPlatformBadge, getSourceBadge, getTypeBadge, getUnifiedSourceBadges } from './resourceBadges';
+import { buildWorkloadsHref } from './workloadsLink';
+import { buildServiceDetailLinks } from './serviceDetailLinks';
+import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
+import { HardwareCard } from '@/components/shared/cards/HardwareCard';
 import { RootDiskCard } from '@/components/shared/cards/RootDiskCard';
 import { NetworkInterfacesCard } from '@/components/shared/cards/NetworkInterfacesCard';
 import { DisksCard } from '@/components/shared/cards/DisksCard';
@@ -21,7 +19,6 @@ import { RaidCard } from '@/components/shared/cards/RaidCard';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
 import { ReportMergeModal } from './ReportMergeModal';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
-import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
 import { PMGInstanceDrawer } from '@/components/PMG/PMGInstanceDrawer';
 import { K8sDeploymentsDrawer } from '@/components/Kubernetes/K8sDeploymentsDrawer';
 import { K8sNamespacesDrawer } from '@/components/Kubernetes/K8sNamespacesDrawer';
@@ -35,481 +32,21 @@ interface ResourceDetailDrawerProps {
   onClose?: () => void;
 }
 
-type ProxmoxPlatformData = {
-  nodeName?: string;
-  clusterName?: string;
-  pveVersion?: string;
-  kernelVersion?: string;
-  uptime?: number;
-  cpuInfo?: { model?: string; cores?: number; sockets?: number };
-};
-
-type AgentDiskInfo = {
-  device?: string;
-  mountpoint?: string;
-  filesystem?: string;
-  type?: string;
-  total?: number;
-  used?: number;
-  free?: number;
-};
-
-type AgentPlatformData = {
-  agentId?: string;
-  agentVersion?: string;
-  hostname?: string;
-  platform?: string;
-  osName?: string;
-  osVersion?: string;
-  kernelVersion?: string;
-  architecture?: string;
-  uptimeSeconds?: number;
-  networkInterfaces?: HostNetworkInterface[];
-  disks?: AgentDiskInfo[];
-  sensors?: HostSensorSummary;
-  raid?: HostRAIDArray[];
-  cpuCount?: number;
-  memory?: Partial<Memory>;
-};
-
-type PBSPlatformData = {
-  instanceId?: string;
-  hostname?: string;
-  version?: string;
-  uptimeSeconds?: number;
-  datastoreCount?: number;
-  backupJobCount?: number;
-  syncJobCount?: number;
-  verifyJobCount?: number;
-  pruneJobCount?: number;
-  garbageJobCount?: number;
-  connectionHealth?: string;
-};
-
-type PMGPlatformData = {
-  instanceId?: string;
-  hostname?: string;
-  version?: string;
-  nodeCount?: number;
-  uptimeSeconds?: number;
-  queueActive?: number;
-  queueDeferred?: number;
-  queueHold?: number;
-  queueIncoming?: number;
-  queueTotal?: number;
-  mailCountTotal?: number;
-  spamIn?: number;
-  virusIn?: number;
-  connectionHealth?: string;
-  lastUpdated?: string;
-};
-
-type KubernetesMetricCapabilities = {
-  nodeCpuMemory?: boolean;
-  nodeTelemetry?: boolean;
-  podCpuMemory?: boolean;
-  podNetwork?: boolean;
-  podEphemeralDisk?: boolean;
-  podDiskIo?: boolean;
-};
-
-type KubernetesPlatformData = {
-  clusterId?: string;
-  clusterName?: string;
-  context?: string;
-  metricCapabilities?: KubernetesMetricCapabilities;
-};
-
-type PlatformData = {
-  sources?: string[];
-  proxmox?: ProxmoxPlatformData;
-  agent?: AgentPlatformData;
-  sourceStatus?: Record<string, { status?: string; lastSeen?: string | number; error?: string }>;
-  docker?: Record<string, unknown>;
-  pbs?: PBSPlatformData;
-  pmg?: PMGPlatformData;
-  kubernetes?: KubernetesPlatformData;
-  metrics?: Record<string, unknown>;
-  identityMatch?: unknown;
-  matchResults?: unknown;
-  matchCandidates?: unknown;
-  matches?: unknown;
-};
-
-type DockerHostCommand = {
-  id?: string;
-  type?: string;
-  status?: string;
-  message?: string;
-  failureReason?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  acknowledgedAt?: string;
-  completedAt?: string;
-  failedAt?: string;
-};
-
-type DockerPlatformData = {
-  hostSourceId?: string;
-  hostname?: string;
-  runtime?: string;
-  runtimeVersion?: string;
-  dockerVersion?: string;
-  os?: string;
-  kernelVersion?: string;
-  architecture?: string;
-  agentVersion?: string;
-  uptimeSeconds?: number;
-  swarm?: {
-    nodeId?: string;
-    nodeRole?: string;
-    localState?: string;
-    controlAvailable?: boolean;
-    clusterId?: string;
-    clusterName?: string;
-    scope?: string;
-    error?: string;
-  };
-  containerCount?: number;
-  updatesAvailableCount?: number;
-  updatesLastCheckedAt?: string;
-  command?: DockerHostCommand;
-};
-
-export type DiscoveryConfig = {
-  resourceType: DiscoveryResourceType;
-  hostId: string;
-  resourceId: string;
-  hostname: string;
-  metadataKind: 'guest' | 'host';
-  metadataId: string;
-  targetLabel: string;
-};
-
-export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null => {
-  const explicitDiscoveryTarget = resource.discoveryTarget;
-  if (
-    explicitDiscoveryTarget &&
-    explicitDiscoveryTarget.resourceType &&
-    explicitDiscoveryTarget.hostId &&
-    explicitDiscoveryTarget.resourceId
-  ) {
-    const resourceType = (() => {
-      switch (explicitDiscoveryTarget.resourceType) {
-        case 'host':
-        case 'vm':
-        case 'lxc':
-        case 'docker':
-        case 'k8s':
-          return explicitDiscoveryTarget.resourceType;
-        default:
-          return null;
-      }
-    })();
-
-    if (resourceType) {
-      const hostname =
-        explicitDiscoveryTarget.hostname ||
-        resource.identity?.hostname ||
-        resource.displayName ||
-        resource.name ||
-        explicitDiscoveryTarget.resourceId;
-      const isHostDiscovery = resourceType === 'host';
-      const targetLabel = isHostDiscovery
-        ? 'host'
-        : resourceType === 'docker'
-          ? 'container'
-          : resourceType === 'k8s'
-            ? 'workload'
-            : 'guest';
-      return {
-        resourceType,
-        hostId: explicitDiscoveryTarget.hostId,
-        resourceId: explicitDiscoveryTarget.resourceId,
-        hostname,
-        metadataKind: isHostDiscovery ? 'host' : 'guest',
-        metadataId: explicitDiscoveryTarget.resourceId,
-        targetLabel,
-      };
-    }
-  }
-
-  const platformData = resource.platformData as PlatformData | undefined;
-  const hostLookupId =
-    platformData?.agent?.agentId ||
-    platformData?.proxmox?.nodeName ||
-    platformData?.agent?.hostname ||
-    ((platformData?.docker as { hostname?: string } | undefined)?.hostname) ||
-    resource.identity?.hostname ||
-    resource.name ||
-    resource.platformId ||
-    resource.id;
-  const hostLikeId = hostLookupId;
-  const workloadHostId = resource.platformId || resource.parentId || resource.id;
-  const hostname = resource.identity?.hostname || resource.displayName || resource.name || resource.id;
-
-  switch (resource.type) {
-    case 'host':
-    case 'node':
-    case 'docker-host':
-    case 'pbs':
-    case 'pmg':
-    case 'k8s-cluster':
-    case 'k8s-node':
-    case 'truenas':
-      return {
-        resourceType: 'host',
-        hostId: hostLikeId,
-        resourceId: hostLikeId,
-        hostname,
-        metadataKind: 'host',
-        metadataId: hostLikeId,
-        targetLabel: 'host',
-      };
-    case 'vm':
-      return {
-        resourceType: 'vm',
-        hostId: workloadHostId,
-        resourceId: resource.id,
-        hostname,
-        metadataKind: 'guest',
-        metadataId: resource.id,
-        targetLabel: 'guest',
-      };
-    case 'container':
-    case 'oci-container':
-      return {
-        resourceType: 'lxc',
-        hostId: workloadHostId,
-        resourceId: resource.id,
-        hostname,
-        metadataKind: 'guest',
-        metadataId: resource.id,
-        targetLabel: 'guest',
-      };
-    case 'docker-container':
-      return {
-        resourceType: 'docker',
-        hostId: workloadHostId,
-        resourceId: resource.id,
-        hostname,
-        metadataKind: 'guest',
-        metadataId: resource.id,
-        targetLabel: 'container',
-      };
-    case 'pod':
-    case 'k8s-deployment':
-    case 'k8s-service':
-      return {
-        resourceType: 'k8s',
-        hostId: workloadHostId,
-        resourceId: resource.id,
-        hostname,
-        metadataKind: 'guest',
-        metadataId: resource.id,
-        targetLabel: 'workload',
-      };
-    default:
-      return null;
-  }
-};
-
-
-
-const buildMemory = (metric?: ResourceMetric, fallback?: Partial<Memory>): Memory => {
-  const total = metric?.total ?? fallback?.total ?? 0;
-  const used = metric?.used ?? fallback?.used ?? 0;
-  const free = metric?.free ?? fallback?.free ?? Math.max(total - used, 0);
-  const usage = total > 0 ? used / total : fallback?.usage ?? 0;
-  return {
-    total,
-    used,
-    free,
-    usage,
-  };
-};
-
-const buildDisk = (metric?: ResourceMetric, fallback?: Partial<Disk>): Disk => {
-  const total = metric?.total ?? fallback?.total ?? 0;
-  const used = metric?.used ?? fallback?.used ?? 0;
-  const free = metric?.free ?? fallback?.free ?? Math.max(total - used, 0);
-  const usage = total > 0 ? used / total : fallback?.usage ?? 0;
-  return {
-    total,
-    used,
-    free,
-    usage,
-    mountpoint: fallback?.mountpoint,
-    type: fallback?.type,
-    device: fallback?.device,
-  };
-};
-
-const toHostDisks = (disks?: AgentDiskInfo[]): Disk[] | undefined => {
-  if (!disks || disks.length === 0) return undefined;
-  return disks.map((disk) => {
-    const total = disk.total ?? 0;
-    const used = disk.used ?? 0;
-    const free = disk.free ?? Math.max(total - used, 0);
-    const usage = total > 0 ? used / total : 0;
-    return {
-      total,
-      used,
-      free,
-      usage,
-      mountpoint: disk.mountpoint ?? disk.device,
-      type: disk.filesystem ?? disk.type,
-      device: disk.device,
-    };
-  });
-};
-
-const toNodeFromProxmox = (resource: Resource): Node | null => {
-  const platformData = resource.platformData as PlatformData | undefined;
-  const proxmox = platformData?.proxmox;
-  if (!proxmox) return null;
-
-  const memory = buildMemory(resource.memory);
-  const disk = buildDisk(resource.disk);
-  const lastSeen = Number.isFinite(resource.lastSeen) ? new Date(resource.lastSeen).toISOString() : new Date().toISOString();
-
-  return {
-    id: resource.id,
-    name: proxmox.nodeName ?? resource.name ?? resource.platformId ?? resource.id,
-    displayName: resource.displayName ?? resource.name,
-    instance: resource.platformId ?? resource.id,
-    host: proxmox.nodeName ?? resource.platformId ?? resource.id,
-    status: resource.status,
-    type: resource.type,
-    cpu: resource.cpu?.current ?? 0,
-    memory,
-    disk,
-    uptime: resource.uptime ?? proxmox.uptime ?? 0,
-    loadAverage: [],
-    kernelVersion: proxmox.kernelVersion ?? 'Unknown',
-    pveVersion: proxmox.pveVersion ?? 'Unknown',
-    cpuInfo: {
-      model: proxmox.cpuInfo?.model ?? 'Unknown',
-      cores: proxmox.cpuInfo?.cores ?? 0,
-      sockets: proxmox.cpuInfo?.sockets ?? 0,
-      mhz: '0',
-    },
-    lastSeen,
-    connectionHealth: resource.status ?? 'unknown',
-  } as Node;
-};
-
-const toHostFromAgent = (resource: Resource, explicitAgent?: AgentPlatformData): Host | null => {
-  const platformData = resource.platformData as PlatformData | undefined;
-  const agent = explicitAgent ?? platformData?.agent;
-  if (!agent) return null;
-
-  const proxmoxCores = platformData?.proxmox?.cpuInfo?.cores;
-  const cpuCount = [agent.cpuCount, (agent as { cpuCores?: number }).cpuCores, (agent as { cores?: number }).cores, proxmoxCores]
-    .find((value) => typeof value === 'number' && value > 0);
-
-  const hostname = agent.hostname ?? resource.platformId ?? resource.name ?? resource.id;
-
-  return {
-    id: resource.id,
-    hostname,
-    displayName: resource.displayName ?? hostname,
-    platform: agent.platform,
-    osName: agent.osName ?? 'Unknown',
-    osVersion: agent.osVersion ?? '',
-    kernelVersion: agent.kernelVersion ?? 'Unknown',
-    architecture: agent.architecture ?? 'Unknown',
-    cpuCount,
-    memory: buildMemory(resource.memory, agent.memory),
-    disks: toHostDisks(agent.disks),
-    networkInterfaces: agent.networkInterfaces,
-    sensors: agent.sensors,
-    raid: agent.raid,
-    status: resource.status,
-    uptimeSeconds: agent.uptimeSeconds ?? resource.uptime ?? 0,
-    lastSeen: resource.lastSeen,
-    agentVersion: agent.agentVersion,
-    tags: resource.tags,
-  } as Host;
-};
-
-const formatSensorName = (name: string) => {
-  let clean = name.replace(/^[a-z]+\d*_/i, '');
-  clean = clean.replace(/_/g, ' ');
-  return clean.replace(/\b\w/g, (char) => char.toUpperCase());
-};
-
-const buildTemperatureRows = (sensors?: HostSensorSummary) => {
-  const rows: { label: string; value: string; valueTitle?: string }[] = [];
-  const temps = sensors?.temperatureCelsius;
-  if (temps) {
-    const entries = Object.entries(temps).sort(([a], [b]) => a.localeCompare(b));
-    entries.forEach(([name, temp]) => {
-      rows.push({
-        label: formatSensorName(name),
-        value: formatTemperature(temp),
-        valueTitle: `${temp.toFixed(1)}°C`,
-      });
-    });
-  }
-
-  const smart = sensors?.smart;
-  if (smart) {
-    smart
-      .filter((disk) => !disk.standby && Number.isFinite(disk.temperature))
-      .sort((a, b) => a.device.localeCompare(b.device))
-      .forEach((disk) => {
-        rows.push({
-          label: `Disk ${disk.device}`,
-          value: formatTemperature(disk.temperature),
-          valueTitle: `${disk.temperature.toFixed(1)}°C`,
-        });
-      });
-  }
-
-  return rows;
-};
-
-const normalizeHealthLabel = (value?: string): string => {
-  const raw = (value || '').trim();
-  if (!raw) return 'Unknown';
-  if (raw.length <= 3) return raw.toUpperCase();
-  return raw.charAt(0).toUpperCase() + raw.slice(1);
-};
-
-const healthToneClass = (value?: string): string => {
-  const normalized = (value || '').trim().toLowerCase();
-  if (['online', 'running', 'healthy', 'connected', 'ok'].includes(normalized)) {
-    return 'text-emerald-600 dark:text-emerald-400';
-  }
-  if (['degraded', 'warning', 'stale'].includes(normalized)) {
-    return 'text-amber-600 dark:text-amber-400';
-  }
-  if (['offline', 'down', 'disconnected', 'error', 'failed'].includes(normalized)) {
-    return 'text-red-600 dark:text-red-400';
-  }
-  return 'text-slate-700 dark:text-slate-200';
-};
-
-const formatInteger = (value?: number): string => {
-  if (value === undefined || value === null || Number.isNaN(value)) return '—';
-  return new Intl.NumberFormat().format(Math.round(value));
-};
-
-const ALIAS_COLLAPSE_THRESHOLD = 4;
-
-const formatSourceType = (value: Resource['sourceType']): string => {
-  switch (value) {
-    case 'hybrid':
-      return 'Hybrid';
-    case 'agent':
-      return 'Agent';
-    case 'api':
-      return 'API';
-    default:
-      return value;
-  }
-};
+import {
+  type AgentPlatformData,
+  type KubernetesPlatformData,
+  type PlatformData,
+  type DockerPlatformData,
+  toDiscoveryConfig,
+  toNodeFromProxmox,
+  toHostFromAgent,
+  buildTemperatureRows,
+  normalizeHealthLabel,
+  healthToneClass,
+  formatInteger,
+  ALIAS_COLLAPSE_THRESHOLD,
+  formatSourceType
+} from './resourceDetailMappers';
 
 const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   type DrawerTab = 'overview' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'discovery' | 'debug';
@@ -590,9 +127,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     return badges;
   });
 
-	const proxmoxNode = createMemo(() => toNodeFromProxmox(props.resource));
-	const agentHost = createMemo(() => toHostFromAgent(props.resource, agentMeta()));
-	const temperatureRows = createMemo(() => buildTemperatureRows(agentHost()?.sensors));
+  const proxmoxNode = createMemo(() => toNodeFromProxmox(props.resource));
+  const agentHost = createMemo(() => toHostFromAgent(props.resource, agentMeta()));
+  const temperatureRows = createMemo(() => buildTemperatureRows(agentHost()?.sensors));
 
   const dockerHostData = createMemo(() => platformData()?.docker as DockerPlatformData | undefined);
   const dockerHostSourceId = createMemo(() => (dockerHostData()?.hostSourceId || '').trim() || null);
@@ -625,10 +162,10 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
   const [k8sDeploymentsPrefillNamespace, setK8sDeploymentsPrefillNamespace] = createSignal('');
 
-	const pbsData = createMemo(() => platformData()?.pbs);
-	const pmgData = createMemo(() => platformData()?.pmg);
-	const pbsJobTotal = createMemo(() => {
-		const pbs = pbsData();
+  const pbsData = createMemo(() => platformData()?.pbs);
+  const pmgData = createMemo(() => platformData()?.pmg);
+  const pbsJobTotal = createMemo(() => {
+    const pbs = pbsData();
     if (!pbs) return 0;
     return (
       (pbs.backupJobCount || 0) +
@@ -1029,7 +566,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               </a>
             )}
           </For>
-          </div>
+        </div>
       </Show>
 
       <div class="flex items-center gap-6 border-b border-slate-200 dark:border-slate-700 px-1 mb-1">
@@ -1064,23 +601,23 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 </>
               )}
             </Show>
-	            <Show when={agentHost()}>
-	              {(host) => (
-	                <>
-	                  <SystemInfoCard variant="host" host={host()} />
-	                  <HardwareCard variant="host" host={host()} />
-	                  <NetworkInterfacesCard interfaces={host().networkInterfaces} />
-	                  <DisksCard disks={host().disks} />
-	                  <RaidCard arrays={agentMeta()?.raid} />
-	                  <TemperaturesCard rows={temperatureRows()} />
-	                </>
-	              )}
-	            </Show>
-	          </div>
-	        </Show>
+            <Show when={agentHost()}>
+              {(host) => (
+                <>
+                  <SystemInfoCard variant="host" host={host()} />
+                  <HardwareCard variant="host" host={host()} />
+                  <NetworkInterfacesCard interfaces={host().networkInterfaces} />
+                  <DisksCard disks={host().disks} />
+                  <RaidCard arrays={agentMeta()?.raid} />
+                  <TemperaturesCard rows={temperatureRows()} />
+                </>
+              )}
+            </Show>
+          </div>
+        </Show>
 
         <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3 mt-3">
-          <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+          <div class="rounded border border-slate-200 bg-white p-3 dark:border-slate-600 dark:bg-slate-800">
             <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Runtime</div>
             <div class="space-y-1.5 text-[11px]">
               <div class="flex items-center justify-between gap-2">
@@ -1135,9 +672,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             </div>
           </div>
 
-	          <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-	            <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Identity</div>
-	            <div class="space-y-1.5 text-[11px]">
+          <div class="rounded border border-slate-200 bg-white p-3 dark:border-slate-600 dark:bg-slate-800">
+            <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Identity</div>
+            <div class="space-y-1.5 text-[11px]">
               <For each={primaryIdentityRows()}>
                 {(row) => (
                   <div class="flex items-center justify-between gap-2">
@@ -1205,160 +742,160 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     </div>
                   </details>
                 </Show>
-		              </Show>
-		              <Show when={!identityCardHasRichData()}>
-		                <div class="rounded border border-dashed border-slate-300 bg-slate-50 px-2 py-1.5 text-[10px] text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400">
-		                  No enriched identity metadata yet.
-		                </div>
-		              </Show>
-		            </div>
-		          </div>
-
-              <Show when={props.resource.type === 'docker-host'}>
-                <div class="rounded border border-sky-200 bg-sky-50 p-3 shadow-sm dark:border-sky-700 dark:bg-sky-900">
-                  <div class="mb-2 flex items-center justify-between gap-2">
-                    <div class="text-[11px] font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300">Container Updates</div>
-                    <Show when={dockerHostData()?.runtime}>
-                      <span class="max-w-[55%] truncate text-[10px] text-sky-700 dark:text-sky-300" title={dockerHostData()?.runtime}>
-                        {dockerHostData()?.runtime}
-                      </span>
-                    </Show>
-                  </div>
-
-                  <div class="space-y-1.5 text-[11px]">
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="text-slate-500 dark:text-slate-400">Containers</span>
-                      <span class="font-medium text-slate-700 dark:text-slate-200">{formatInteger(dockerContainerCount())}</span>
-                    </div>
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="text-slate-500 dark:text-slate-400">Updates Available</span>
-                      <span class={`font-medium ${dockerUpdatesAvailable() > 0 ? 'text-sky-700 dark:text-sky-300' : 'text-slate-700 dark:text-slate-200'}`}>
-                        {formatInteger(dockerUpdatesAvailable())}
-                      </span>
-                    </div>
-                    <Show when={dockerUpdatesCheckedRelative()}>
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="text-slate-500 dark:text-slate-400">Last Check</span>
-                        <span class="font-medium text-slate-700 dark:text-slate-200">{dockerUpdatesCheckedRelative()}</span>
-                      </div>
-                    </Show>
-
-                    <Show when={dockerHostCommand()?.type || dockerHostCommand()?.status}>
-                      <div class="rounded border border-sky-200 bg-white px-2 py-1.5 text-[10px] dark:border-sky-700 dark:bg-slate-800">
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-slate-500 dark:text-slate-400">Command</span>
-                          <span class="font-medium text-slate-700 dark:text-slate-200">
-                            {(dockerHostCommand()?.type || 'command').replace(/_/g, ' ')}
-                          </span>
-                        </div>
-                        <div class="mt-1 flex items-center justify-between gap-2">
-                          <span class="text-slate-500 dark:text-slate-400">Status</span>
-                          <span class={`font-medium ${dockerHostCommandActive() ? 'text-sky-700 dark:text-sky-300' : 'text-slate-700 dark:text-slate-200'}`}>
-                            {(dockerHostCommand()?.status || 'unknown').replace(/_/g, ' ')}
-                          </span>
-                        </div>
-                        <Show when={dockerHostCommand()?.message}>
-                          <div class="mt-1 text-slate-600 dark:text-slate-300 truncate" title={dockerHostCommand()?.message}>
-                            {dockerHostCommand()?.message}
-                          </div>
-                        </Show>
-                        <Show when={dockerHostCommand()?.failureReason}>
-                          <div class="mt-1 text-red-700 dark:text-red-300 truncate" title={dockerHostCommand()?.failureReason}>
-                            {dockerHostCommand()?.failureReason}
-                          </div>
-                        </Show>
-                      </div>
-                    </Show>
-
-                    <Show when={dockerActionError()}>
-                      <div class="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900 dark:text-red-200">
-                        {dockerActionError()}
-                      </div>
-                    </Show>
-                    <Show when={dockerActionNote()}>
-                      <div class="rounded border border-sky-200 bg-white px-2 py-1.5 text-[10px] text-slate-700 dark:border-sky-700 dark:bg-slate-800 dark:text-slate-200">
-                        {dockerActionNote()}
-                      </div>
-                    </Show>
-
-                    <div class="flex flex-wrap items-center gap-2 pt-1">
-                      <button
-                        type="button"
-                        disabled={
-                          dockerActionBusy() ||
-                          dockerUpdateActionsLoading() ||
-                          dockerHostCommandActive() ||
-                          dockerHostSourceId() === null
-                        }
-                        onClick={async () => {
-                          setDockerActionError('');
-                          setDockerActionNote('');
-                          setConfirmUpdateAll(false);
-                          const hostId = dockerHostSourceId();
-                          if (!hostId) return;
-                          try {
-                            setDockerActionBusy(true);
-                            await MonitoringAPI.checkDockerUpdates(hostId);
-                            setDockerActionNote('Update check queued. Results will refresh on the next agent report.');
-                          } catch (err) {
-                            setDockerActionError((err as Error)?.message || 'Failed to queue update check');
-                          } finally {
-                            setDockerActionBusy(false);
-                          }
-                        }}
-                        class="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60 disabled:hover:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800 dark:disabled:hover:bg-slate-900"
-                        title={dockerUpdateActionsLoading() ? 'Loading server settings...' : undefined}
-                      >
-                        Check Updates
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={
-                          dockerActionBusy() ||
-                          dockerUpdateActionsLoading() ||
-                          dockerUpdateActionsDisabled() ||
-                          dockerHostCommandActive() ||
-                          dockerHostSourceId() === null ||
-                          dockerUpdatesAvailable() <= 0
-                        }
-                        onClick={async () => {
-                          setDockerActionError('');
-                          setDockerActionNote('');
-                          const hostId = dockerHostSourceId();
-                          if (!hostId) return;
-
-                          if (!confirmUpdateAll()) {
-                            setConfirmUpdateAll(true);
-                            setDockerActionNote(`Click again to confirm updating ${dockerUpdatesAvailable()} container(s).`);
-                            return;
-                          }
-
-                          try {
-                            setDockerActionBusy(true);
-                            await MonitoringAPI.updateAllDockerContainers(hostId);
-                            setDockerActionNote('Batch update queued. Progress will appear as the agent reports back.');
-                          } catch (err) {
-                            setDockerActionError((err as Error)?.message || 'Failed to queue batch update');
-                          } finally {
-                            setDockerActionBusy(false);
-                            setConfirmUpdateAll(false);
-                          }
-                        }}
-                        class="rounded-md border border-sky-200 bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm hover:bg-sky-700 disabled:opacity-60 disabled:hover:bg-sky-600 dark:border-sky-700 dark:bg-sky-600 dark:hover:bg-sky-500 dark:disabled:hover:bg-sky-600"
-                        title={dockerUpdateActionsDisabled() ? 'Docker updates are disabled by server configuration.' : undefined}
-                      >
-                        {confirmUpdateAll() ? 'Confirm Update All' : `Update All${dockerUpdatesAvailable() > 0 ? ` (${dockerUpdatesAvailable()})` : ''}`}
-                      </button>
-                    </div>
-                  </div>
+              </Show>
+              <Show when={!identityCardHasRichData()}>
+                <div class="rounded border border-dashed border-slate-300 bg-slate-50 px-2 py-1.5 text-[10px] text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                  No enriched identity metadata yet.
                 </div>
               </Show>
+            </div>
+          </div>
 
-		          <Show when={pbsData()}>
-		            {(pbs) => (
-		              <div class="rounded border border-indigo-200 bg-indigo-50 p-3 shadow-sm dark:border-indigo-700 dark:bg-indigo-900">
-		                <div class="mb-2 flex items-center justify-between gap-2">
+          <Show when={props.resource.type === 'docker-host'}>
+            <div class="rounded border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-sky-900">
+              <div class="mb-2 flex items-center justify-between gap-2">
+                <div class="text-[11px] font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300">Container Updates</div>
+                <Show when={dockerHostData()?.runtime}>
+                  <span class="max-w-[55%] truncate text-[10px] text-sky-700 dark:text-sky-300" title={dockerHostData()?.runtime}>
+                    {dockerHostData()?.runtime}
+                  </span>
+                </Show>
+              </div>
+
+              <div class="space-y-1.5 text-[11px]">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-slate-500 dark:text-slate-400">Containers</span>
+                  <span class="font-medium text-slate-700 dark:text-slate-200">{formatInteger(dockerContainerCount())}</span>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-slate-500 dark:text-slate-400">Updates Available</span>
+                  <span class={`font-medium ${dockerUpdatesAvailable() > 0 ? 'text-sky-700 dark:text-sky-300' : 'text-slate-700 dark:text-slate-200'}`}>
+                    {formatInteger(dockerUpdatesAvailable())}
+                  </span>
+                </div>
+                <Show when={dockerUpdatesCheckedRelative()}>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-slate-500 dark:text-slate-400">Last Check</span>
+                    <span class="font-medium text-slate-700 dark:text-slate-200">{dockerUpdatesCheckedRelative()}</span>
+                  </div>
+                </Show>
+
+                <Show when={dockerHostCommand()?.type || dockerHostCommand()?.status}>
+                  <div class="rounded border border-sky-200 bg-white px-2 py-1.5 text-[10px] dark:border-sky-700 dark:bg-slate-800">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-slate-500 dark:text-slate-400">Command</span>
+                      <span class="font-medium text-slate-700 dark:text-slate-200">
+                        {(dockerHostCommand()?.type || 'command').replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <div class="mt-1 flex items-center justify-between gap-2">
+                      <span class="text-slate-500 dark:text-slate-400">Status</span>
+                      <span class={`font-medium ${dockerHostCommandActive() ? 'text-sky-700 dark:text-sky-300' : 'text-slate-700 dark:text-slate-200'}`}>
+                        {(dockerHostCommand()?.status || 'unknown').replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <Show when={dockerHostCommand()?.message}>
+                      <div class="mt-1 text-slate-600 dark:text-slate-300 truncate" title={dockerHostCommand()?.message}>
+                        {dockerHostCommand()?.message}
+                      </div>
+                    </Show>
+                    <Show when={dockerHostCommand()?.failureReason}>
+                      <div class="mt-1 text-red-700 dark:text-red-300 truncate" title={dockerHostCommand()?.failureReason}>
+                        {dockerHostCommand()?.failureReason}
+                      </div>
+                    </Show>
+                  </div>
+                </Show>
+
+                <Show when={dockerActionError()}>
+                  <div class="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900 dark:text-red-200">
+                    {dockerActionError()}
+                  </div>
+                </Show>
+                <Show when={dockerActionNote()}>
+                  <div class="rounded border border-sky-200 bg-white px-2 py-1.5 text-[10px] text-slate-700 dark:border-sky-700 dark:bg-slate-800 dark:text-slate-200">
+                    {dockerActionNote()}
+                  </div>
+                </Show>
+
+                <div class="flex flex-wrap items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={
+                      dockerActionBusy() ||
+                      dockerUpdateActionsLoading() ||
+                      dockerHostCommandActive() ||
+                      dockerHostSourceId() === null
+                    }
+                    onClick={async () => {
+                      setDockerActionError('');
+                      setDockerActionNote('');
+                      setConfirmUpdateAll(false);
+                      const hostId = dockerHostSourceId();
+                      if (!hostId) return;
+                      try {
+                        setDockerActionBusy(true);
+                        await MonitoringAPI.checkDockerUpdates(hostId);
+                        setDockerActionNote('Update check queued. Results will refresh on the next agent report.');
+                      } catch (err) {
+                        setDockerActionError((err as Error)?.message || 'Failed to queue update check');
+                      } finally {
+                        setDockerActionBusy(false);
+                      }
+                    }}
+                    class="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:hover:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800 dark:disabled:hover:bg-slate-900"
+                    title={dockerUpdateActionsLoading() ? 'Loading server settings...' : undefined}
+                  >
+                    Check Updates
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={
+                      dockerActionBusy() ||
+                      dockerUpdateActionsLoading() ||
+                      dockerUpdateActionsDisabled() ||
+                      dockerHostCommandActive() ||
+                      dockerHostSourceId() === null ||
+                      dockerUpdatesAvailable() <= 0
+                    }
+                    onClick={async () => {
+                      setDockerActionError('');
+                      setDockerActionNote('');
+                      const hostId = dockerHostSourceId();
+                      if (!hostId) return;
+
+                      if (!confirmUpdateAll()) {
+                        setConfirmUpdateAll(true);
+                        setDockerActionNote(`Click again to confirm updating ${dockerUpdatesAvailable()} container(s).`);
+                        return;
+                      }
+
+                      try {
+                        setDockerActionBusy(true);
+                        await MonitoringAPI.updateAllDockerContainers(hostId);
+                        setDockerActionNote('Batch update queued. Progress will appear as the agent reports back.');
+                      } catch (err) {
+                        setDockerActionError((err as Error)?.message || 'Failed to queue batch update');
+                      } finally {
+                        setDockerActionBusy(false);
+                        setConfirmUpdateAll(false);
+                      }
+                    }}
+                    class="rounded-md border border-sky-200 bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-sky-700 disabled:opacity-60 disabled:hover:bg-sky-600 dark:border-sky-700 dark:bg-sky-600 dark:hover:bg-sky-500 dark:disabled:hover:bg-sky-600"
+                    title={dockerUpdateActionsDisabled() ? 'Docker updates are disabled by server configuration.' : undefined}
+                  >
+                    {confirmUpdateAll() ? 'Confirm Update All' : `Update All${dockerUpdatesAvailable() > 0 ? ` (${dockerUpdatesAvailable()})` : ''}`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </Show>
+
+          <Show when={pbsData()}>
+            {(pbs) => (
+              <div class="rounded border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-700 dark:bg-indigo-900">
+                <div class="mb-2 flex items-center justify-between gap-2">
                   <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700 dark:text-indigo-300">PBS Service</div>
                   <Show when={pbs().hostname}>
                     <span class="max-w-[55%] truncate text-[10px] text-indigo-700 dark:text-indigo-300" title={pbs().hostname}>
@@ -1420,7 +957,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
           <Show when={pmgData()}>
             {(pmg) => (
-              <div class="rounded border border-rose-200 bg-rose-50 p-3 shadow-sm dark:border-rose-700 dark:bg-rose-900">
+              <div class="rounded border border-rose-200 bg-rose-50 p-3 dark:border-rose-700 dark:bg-rose-900">
                 <div class="mb-2 flex items-center justify-between gap-2">
                   <div class="text-[11px] font-medium uppercase tracking-wide text-rose-700 dark:text-rose-300">Mail Gateway</div>
                   <Show when={pmg().hostname}>
@@ -1647,7 +1184,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             <button
               type="button"
               onClick={handleCopyJson}
-              class="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800"
+              class="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               {copied() ? 'Copied' : 'Copy JSON'}
             </button>
