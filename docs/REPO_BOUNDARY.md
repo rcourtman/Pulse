@@ -52,6 +52,12 @@ Enforce non-API runtime import boundary (non-zero exit if non-test runtime files
 ./scripts/audit-private-boundary.sh --enforce-nonapi-imports
 ```
 
+Enforce API `pkg/licensing` bridge boundary (non-zero exit if non-test `internal/api/*.go` imports `pkg/licensing` outside `internal/api/licensing_bridge.go`):
+
+```bash
+./scripts/audit-private-boundary.sh --enforce-api-pkg-licensing-imports
+```
+
 The script currently reports paid-domain files in:
 
 - `internal/license/...`
