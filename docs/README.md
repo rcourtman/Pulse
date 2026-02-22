@@ -32,19 +32,22 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 
 - **[Security Policy](../SECURITY.md)** – The core security model (Encryption, Auth, API Scopes).
 - **[Privacy](PRIVACY.md)** – What leaves your network (and what doesn’t).
+- **[OIDC / SSO](OIDC.md)** – OIDC Single Sign-On configuration (Authentik, Keycloak, Azure AD, etc.).
 - **[Proxy Auth](PROXY_AUTH.md)** – Authentik/Authelia/Cloudflare proxy authentication configuration.
+- **[Agent Security](AGENT_SECURITY.md)** – Agent self-update verification and API security.
 
 ## ✨ New in 6.0
 
-- **[Unified Navigation](MIGRATION_UNIFIED_NAV.md)** – Task-based navigation replacing platform-specific tabs.
-- **[TrueNAS Integration](CONFIGURATION.md#truenas)** – First-class TrueNAS monitoring (pools, datasets, disks, ZFS snapshots, replication).
-- **[Relay / Mobile Remote Access](CONFIGURATION.md#relay)** – End-to-end encrypted relay protocol for mobile app connectivity (Pro).
-- **[Recovery Central](CONFIGURATION.md#recovery)** – Unified backup, snapshot, and replication timeline.
+- **[Unified Resource Model](UNIFIED_RESOURCES.md)** – How all platforms merge into one model with task-based navigation.
+- **[Unified Navigation Migration](MIGRATION_UNIFIED_NAV.md)** – Upgrading from platform-specific tabs to v6 navigation.
+- **[TrueNAS Integration](TRUENAS.md)** – First-class TrueNAS SCALE/CORE monitoring (pools, datasets, disks, snapshots, replication).
+- **[Relay / Mobile Remote Access](RELAY.md)** – End-to-end encrypted relay for mobile app connectivity (Pro).
+- **[Recovery Central](RECOVERY.md)** – Unified backup, snapshot, and replication view across all providers.
+- **[Pulse Cloud (Hosted)](CLOUD.md)** – Fully managed hosting with automatic updates and backups.
 - **[Pulse AI](AI.md)** – Chat assistant, patrol findings, alert analysis, intelligence, and forecasts.
 - **[Metrics History](METRICS_HISTORY.md)** – Persistent metrics storage with configurable retention.
 - **[Mail Gateway](MAIL_GATEWAY.md)** – Proxmox Mail Gateway (PMG) monitoring.
 - **[Auto Updates](AUTO_UPDATE.md)** – One-click updates for supported deployments.
-- **[Kubernetes](KUBERNETES.md)** – Helm deployment (ingress, persistence, HA patterns).
 - **[Multi-Tenant Organizations](MULTI_TENANT.md)** – Isolate infrastructure by organization (Enterprise, opt-in).
 - **[Entitlements Overhaul](PULSE_PRO.md)** – Capability-key-based feature gating across Community/Pro/Cloud.
 
@@ -66,6 +69,8 @@ Pulse is available in three plans:
 - **[Unified Agent](UNIFIED_AGENT.md)** – Single binary for host, Docker, and Kubernetes monitoring.
 - **[Centralized Agent Management (Pro/Cloud)](CENTRALIZED_MANAGEMENT.md)** – Agent profiles and remote config.
 - **[Proxmox Backup Server](PBS.md)** – PBS integration, direct API vs PVE passthrough, token setup.
+- **[TrueNAS](TRUENAS.md)** – TrueNAS SCALE/CORE integration.
+- **[ZFS Monitoring](ZFS_MONITORING.md)** – Proxmox-native ZFS pool monitoring.
 - **[VM Disk Monitoring](VM_DISK_MONITORING.md)** – Enabling QEMU Guest Agent for disk stats.
 - **[Temperature Monitoring](TEMPERATURE_MONITORING.md)** – Agent-based temperature monitoring (`pulse-agent --enable-proxmox`). Sensor proxy has been removed.
 - **[Webhooks](WEBHOOKS.md)** – Custom notification payloads.
