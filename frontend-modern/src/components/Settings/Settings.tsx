@@ -2278,7 +2278,7 @@ const Settings: Component<SettingsProps> = (props) => {
  {group.label}
  </p>
  </Show>
- <div class=" lg:bg-transparent dark:bg-gray-900 lg:dark:bg-transparent border-y lg:border-none divide-y lg:divide-y-0 divide-gray-100 dark:divide-gray-800 flex flex-col lg:space-y-1.5">
+ <div class="lg:bg-transparent dark:bg-gray-900 lg:dark:bg-transparent border-y lg:border-none divide-y lg:divide-y-0 divide-gray-100 dark:divide-gray-800 flex flex-col lg:space-y-1.5">
  <For each={group.items}>
  {(item) => {
  const isActive = () => activeTab() === item.id;
@@ -2667,7 +2667,7 @@ const Settings: Component<SettingsProps> = (props) => {
  height="20"
  viewBox="0 0 24 24"
  fill="none"
- class=" mt-1"
+ class="mt-1"
  >
  <path
  d="M12 5v14m-7-7h14"
@@ -2955,7 +2955,7 @@ const Settings: Component<SettingsProps> = (props) => {
  height="20"
  viewBox="0 0 24 24"
  fill="none"
- class=" mt-1"
+ class="mt-1"
  >
  <path
  d="M12 5v14m-7-7h14"
@@ -3248,7 +3248,7 @@ const Settings: Component<SettingsProps> = (props) => {
  height="20"
  viewBox="0 0 24 24"
  fill="none"
- class=" mt-1"
+ class="mt-1"
  >
  <path
  d="M12 5v14m-7-7h14"
@@ -3287,7 +3287,7 @@ const Settings: Component<SettingsProps> = (props) => {
                     </div>
 
                     {/* Hide Docker Update Buttons Toggle */}
-                    <div class="flex items-start justify-between gap-4 p-4 rounded-md border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800">
+                    <div class="flex items-start justify-between gap-4 p-4 rounded-md border border-border bg-surface-hover dark:bg-gray-800">
                       <div class="flex-1 space-y-1">
                         <div class="flex items-center gap-2">
                           <span class="text-sm font-medium text-base-content">
@@ -3581,7 +3581,7 @@ const Settings: Component<SettingsProps> = (props) => {
               <button
                 type="button"
                 onClick={cancelDeleteNode}
-                class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-base-content transition-colors hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-700"
                 disabled={deleteNodeLoading()}
               >
                 Keep node

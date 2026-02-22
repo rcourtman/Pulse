@@ -577,7 +577,7 @@ export function OverviewTab(props: {
                             : 'Acknowledge'}
                       </button>
                       <button
-                        class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-white dark:bg-slate-700 text-base-content border-border hover:bg-slate-50 dark:hover:bg-slate-600"
+                        class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-slate-50 dark:hover:bg-slate-600"
                         onClick={() => {
                           void toggleIncidentTimeline(alert.id, alert.startTime);
                         }}
@@ -682,7 +682,7 @@ export function OverviewTab(props: {
                                 />
                                 <div class="flex justify-end">
                                   <button
-                                    class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-white dark:bg-slate-700 text-base-content border-border hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
                                     disabled={incidentNoteSaving().has(alert.id) || !(incidentNoteDrafts()[alert.id] || '').trim()}
                                     onClick={() => {
                                       void saveIncidentNote(alert.id, alert.startTime);

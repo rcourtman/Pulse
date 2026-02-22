@@ -166,7 +166,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
  id="storage-source-filter"
  value={props.sourceFilter!()}
  onChange={(e) => props.setSourceFilter!(e.currentTarget.value)}
- class="min-w-[8rem] rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 "
+ class="min-w-[8rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
  >
  {sourceOptions().map((option) => (
  <option value={option.key}>{option.label}</option>
@@ -183,7 +183,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
  id="storage-status-filter"
  value={props.statusFilter?.() ??'all'}
  onChange={(e) => props.setStatusFilter?.(e.currentTarget.value as StorageStatusFilter)}
- class="min-w-[8rem] rounded-md border px-2 py-1 text-xs font-medium shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 "
+ class="min-w-[8rem] rounded-md border px-2 py-1 text-xs font-medium shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
  >
  <option value="all">All</option>
  <option value="available">Healthy</option>

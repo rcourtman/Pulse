@@ -343,7 +343,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
  <Show when={props.webhooks.length > 0}>
  <div class="space-y-3 w-full">
  {/* Quick Actions Bar */}
- <div class="flex flex-col gap-2 rounded border border-slate-200 px-3 py-3 text-xs dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
+ <div class="flex flex-col gap-2 rounded border border-border px-3 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
  <div class="text-muted sm:text-sm">
  {props.webhooks.filter((w) => w.enabled).length} of {props.webhooks.length} webhooks
  enabled
@@ -352,7 +352,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
  <button
  onClick={() => toggleAllWebhooks(false)}
  disabled={!someEnabled()}
- class="w-full rounded border border-slate-300 px-3 py-1 text-xs transition-colors hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-700 sm:w-auto"
+ class="w-full rounded border px-3 py-1 text-xs transition-colors hover:bg-slate-100 dark:hover:bg-slate-700 sm:w-auto"
  >
  Disable All
  </button>
@@ -367,7 +367,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
  </div>
  <For each={props.webhooks}>
  {(webhook) => (
- <div class="w-full px-3 py-3 border border-slate-200 text-xs dark:border-slate-700 sm:text-sm">
+ <div class="w-full px-3 py-3 border border-border text-xs sm:text-sm">
  <div class="flex flex-wrap items-center justify-between gap-2">
  <span class="font-medium text-base-content">{webhook.name}</span>
  <button
@@ -381,24 +381,24 @@ export function WebhookConfig(props: WebhookConfigProps) {
  </button>
  </div>
  <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-muted sm:text-xs">
- <span class="rounded bg-slate-200 px-2 py-0.5 text-slate-700 dark:bg-slate-600 ">
+ <span class="rounded bg-surface-alt px-2 py-0.5 text-base-content">
  {serviceName(webhook.service ||'generic')}
                   </span>
-                  <span class="rounded bg-slate-200 px-2 py-0.5 text-slate-700 dark:bg-slate-600 dark:text-slate-200">
+                  <span class="rounded bg-surface-alt px-2 py-0.5 text-base-content">
                     {webhook.method}
                   </span>
-                  <span class="rounded bg-slate-200 px-2 py-0.5 text-slate-700 dark:bg-slate-600 dark:text-slate-200">
+                  <span class="rounded bg-surface-alt px-2 py-0.5 text-base-content">
                     ID: {webhook.id || '—'}
  </span>
  </div>
  <p class="mt-2 break-all text-[11px] font-mono text-muted sm:text-xs">
  {webhook.url}
  </p>
- <div class="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-2 dark:border-slate-700 sm:justify-end w-full">
+ <div class="mt-3 flex flex-wrap gap-2 border-t border-border-subtle pt-2 sm:justify-end w-full">
  <button
  onClick={() => webhook.id && props.onTest(webhook.id)}
  disabled={props.testing === webhook.id || !webhook.enabled}
- class="rounded border border-slate-300 px-3 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-700 disabled:opacity-50"
+ class="rounded border px-3 py-1 text-xs text-base-content transition-colors hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50"
  >
  {props.testing === webhook.id ?'Testing…' : 'Test'}
                   </button>
@@ -806,7 +806,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
  <div class="flex justify-end gap-2 text-xs">
  <button
  onClick={cancelForm}
- class="px-3 py-1.5 border border-slate-300 rounded text-xs hover:bg-slate-100 dark:border-slate-600 "
+ class="px-3 py-1.5 border border-slate-300 rounded text-xs hover:bg-slate-100 dark:border-slate-600"
  >
  Cancel
  </button>

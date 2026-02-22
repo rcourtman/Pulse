@@ -15,7 +15,7 @@ export const TemperaturesCard: Component<TemperaturesCardProps> = (props) => {
   if (!props.rows || props.rows.length === 0) return null;
 
   return (
-    <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+    <div class="rounded border border-border bg-surface p-3 shadow-sm">
       <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">{props.title || 'Temperatures'}</div>
       <div class="space-y-1.5 text-[11px]">
         <For each={props.rows}>

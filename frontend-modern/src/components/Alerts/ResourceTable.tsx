@@ -1079,7 +1079,7 @@ export function ResourceTable(props: ResourceTableProps) {
  return overrideDelay !== undefined ? overrideDelay :'';
                             })()}
                             placeholder={String(typeDefaultDelay)}
-                            class="w-16 rounded border border-border bg-white dark:bg-slate-700 px-2 py-0.5 text-sm text-center text-base-content focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            class="w-16 rounded border border-border bg-surface px-2 py-0.5 text-sm text-center text-base-content focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                             onInput={(e) => {
                               const raw = e.currentTarget.value;
                               if (raw === '') {
@@ -1314,7 +1314,7 @@ export function ResourceTable(props: ResourceTableProps) {
  </label>
  <textarea
  id={`note-${resource.id}`}
- class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800"
+ class="w-full rounded border border-slate-300 bg-surface px-2 py-1 text-xs text-base-content focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600"
  rows={2}
  placeholder="Add a note about this override (optional)"
  value={props.editingNote()}
@@ -2134,7 +2134,7 @@ export function ResourceTable(props: ResourceTableProps) {
     </Show>
 
     <Show when={selectedIds().size > 0 && props.onBulkEdit}>
-      <div class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 shadow-2xl rounded-full px-5 py-3 flex items-center gap-6 z-[100] animate-in slide-in-from-bottom-5">
+      <div class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-base border border-border shadow-2xl rounded-full px-5 py-3 flex items-center gap-6 z-[100] animate-in slide-in-from-bottom-5">
         <span class="text-sm font-medium text-white">{selectedIds().size} <span class="text-slate-400">selected</span></span>
         <div class="flex items-center gap-2">
           <button
@@ -2151,7 +2151,7 @@ export function ResourceTable(props: ResourceTableProps) {
           </button>
           <button
             type="button"
-            class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full p-1.5 transition-colors focus:outline-none"
+            class="text-slate-400 hover:text-white bg-surface hover:bg-slate-700 rounded-full p-1.5 transition-colors focus:outline-none"
             onClick={() => setSelectedIds(new Set<string>())}
             aria-label="Clear selection"
             title="Clear selection"

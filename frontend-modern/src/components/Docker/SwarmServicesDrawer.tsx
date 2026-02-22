@@ -179,7 +179,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
  value={search()}
  onInput={(e) => setSearch(e.currentTarget.value)}
  placeholder="Search services..."
- class="w-[12rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 "
+ class="w-[12rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
  />
  </div>
  </div>
@@ -193,17 +193,17 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
  <Show when={normalize(swarm()?.nodeRole) || normalize(swarm()?.localState) || typeof swarm()?.controlAvailable ==='boolean'}>
           <div class="mt-2 flex flex-wrap gap-2 text-[11px]">
             <Show when={normalize(swarm()?.nodeRole)}>
-              <span class="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+              <span class="inline-flex items-center rounded bg-surface-alt px-2 py-0.5 text-base-content">
                 Role: {normalize(swarm()?.nodeRole)}
               </span>
             </Show>
             <Show when={normalize(swarm()?.localState)}>
-              <span class="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+              <span class="inline-flex items-center rounded bg-surface-alt px-2 py-0.5 text-base-content">
                 State: {normalize(swarm()?.localState)}
               </span>
             </Show>
             <Show when={typeof swarm()?.controlAvailable === 'boolean'}>
-              <span class="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+              <span class="inline-flex items-center rounded bg-surface-alt px-2 py-0.5 text-base-content">
                 Control: {swarm()?.controlAvailable ? 'available' : 'unavailable'}
               </span>
             </Show>

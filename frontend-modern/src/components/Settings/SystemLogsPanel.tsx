@@ -158,7 +158,7 @@ export const SystemLogsPanel: Component = () => {
                 <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
                     <div
                         ref={logContainer}
-                        class="bg-slate-950 text-slate-300 font-mono text-xs p-4 rounded-md h-[500px] overflow-y-auto whitespace-pre-wrap leading-relaxed border border-slate-800 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
+                        class="bg-slate-950 text-slate-300 font-mono text-xs p-4 rounded-md h-[500px] overflow-y-auto whitespace-pre-wrap leading-relaxed border border-border-subtle scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
                     >
                         <For each={logs()}>{(log) =>
                             <div class="animate-enter border-b border-slate-900 last:border-0 pb-0.5 mb-0.5 hover:bg-slate-900 px-1 -mx-1 rounded">

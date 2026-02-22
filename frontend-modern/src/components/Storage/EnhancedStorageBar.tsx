@@ -75,21 +75,21 @@ export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
  {/* Tooltip */}
  <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
  <div class="min-w-[160px]">
- <div class="font-medium mb-1 text-slate-300 border-b border-slate-700 pb-1">
+ <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
  Storage Details
  </div>
 
  <div class="flex justify-between gap-3 py-0.5">
  <span class="text-slate-400">Used</span>
- <span class="text-slate-200">{formatBytes(props.used)}</span>
+ <span class="text-base-content">{formatBytes(props.used)}</span>
  </div>
  <div class="flex justify-between gap-3 py-0.5">
  <span class="text-slate-400">Free</span>
- <span class="text-slate-200">{formatBytes(props.free)}</span>
+ <span class="text-base-content">{formatBytes(props.free)}</span>
  </div>
- <div class="flex justify-between gap-3 py-0.5 border-t border-slate-700 mt-0.5 pt-0.5">
+ <div class="flex justify-between gap-3 py-0.5 border-t border-border mt-0.5 pt-0.5">
  <span class="text-slate-400">Total</span>
- <span class="text-slate-200">{formatBytes(props.total)}</span>
+ <span class="text-base-content">{formatBytes(props.total)}</span>
  </div>
 
  <Show when={props.zfsPool}>

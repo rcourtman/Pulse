@@ -277,7 +277,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                             onInput={(e) => setPrompt(e.currentTarget.value)}
                             placeholder="Describe the agents and use case for this profile..."
                             rows={3}
-                            class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800 resize-none"
+                            class="w-full rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:focus:border-blue-400 dark:focus:ring-blue-800 resize-none"
                             disabled={loading()}
                         />
                         <Show when={suggestion()}>
@@ -513,7 +513,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                             </div>
                                             <div class="space-y-3">
                                                 <h5 class="text-sm font-medium text-base-content">Raw JSON</h5>
-                                                <div class="bg-slate-900 dark:bg-slate-950 rounded-md p-3 overflow-x-auto">
+                                                <div class="bg-base rounded-md p-3 overflow-x-auto">
                                                     <pre class="text-xs text-slate-300 font-mono">
                                                         {JSON.stringify(sugg().config, null, 2)}
                                                     </pre>
@@ -584,7 +584,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                     <button
                         type="button"
                         onClick={props.onClose}
-                        class="rounded-md px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                        class="rounded-md px-4 py-2 text-sm font-medium text-base-content hover:bg-slate-100 dark:hover:bg-slate-800"
                     >
                         Cancel
                     </button>
@@ -606,7 +606,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                             type="button"
                             onClick={handleSubmit}
                             disabled={loading() || !prompt().trim()}
-                            class="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-surface-alt dark:text-slate-200 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            class="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-alt dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                             title="Regenerate using the current prompt"
                         >
                             <Lightbulb class="w-4 h-4" />

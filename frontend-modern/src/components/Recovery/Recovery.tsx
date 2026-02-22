@@ -980,7 +980,7 @@ const Recovery: Component = () => {
  id="recovery-provider-filter"
  value={providerFilter()}
  onChange={(event) => setProviderFilter(event.currentTarget.value)}
- class="min-w-[10rem] max-w-[14rem] rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-800 outline-none focus:border-blue-500 dark:border-slate-600 "
+ class="min-w-[10rem] max-w-[14rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
  >
  <For each={providerOptions()}>
  {(p) => <option value={p}>{p ==='all' ? 'All Providers' : sourceLabel(p)}</option>}
@@ -1003,7 +1003,7 @@ const Recovery: Component = () => {
                         setOutcomeFilter(value);
                         if (value !== 'all') setVerificationFilter('all');
                       }}
-                      class="min-w-[7rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-800 outline-none focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                      class="min-w-[7rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
                     >
                       <For each={availableOutcomes}>
                         {(outcome) => (
@@ -1045,7 +1045,7 @@ const Recovery: Component = () => {
         </Show>
 
         <Card padding="none" tone="card" class="mb-4 overflow-hidden">
-          <div class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+          <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
             Protected Items
           </div>
           <Show when={recoveryRollups.rollups.loading && (filteredRollups()?.length ?? 0) === 0}>
@@ -1114,7 +1114,7 @@ const Recovery: Component = () => {
                       const neverSucceeded = (!Number.isFinite(successMs) || successMs <= 0) && Number.isFinite(attemptMs) && attemptMs > 0;
                       return (
                         <TableRow
-                          class="cursor-pointer border-b border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                          class="cursor-pointer border-b border-border hover:bg-slate-50 dark:hover:bg-slate-800"
                           onClick={() => {
                             setView('events');
                             setRollupId(r.rollupId);
@@ -1304,7 +1304,7 @@ const Recovery: Component = () => {
                     Remote
                   </span>
                 </div>
-                <div class="inline-flex rounded border border-slate-300 bg-white p-0.5 text-xs dark:border-slate-700 dark:bg-slate-900">
+                <div class="inline-flex rounded border border-slate-300 bg-surface p-0.5 text-xs dark:border-slate-700">
                   <For each={[7, 30, 90, 365] as const}>
                     {(range) => (
                       <button
@@ -1602,7 +1602,7 @@ const Recovery: Component = () => {
  setProviderFilter(normalizeProviderFromQuery(event.currentTarget.value));
  setCurrentPage(1);
  }}
- class="min-w-[10rem] max-w-[14rem] rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-800 outline-none focus:border-blue-500 dark:border-slate-600 "
+ class="min-w-[10rem] max-w-[14rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
  >
  <For each={providerOptions()}>
  {(p) => <option value={p}>{p ==='all' ? 'All Providers' : sourceLabel(p)}</option>}
@@ -1626,7 +1626,7 @@ const Recovery: Component = () => {
                           if (value !== 'all') setVerificationFilter('all');
                           setCurrentPage(1);
                         }}
-                        class="min-w-[7rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-800 outline-none focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                        class="min-w-[7rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
                       >
                         <For each={availableOutcomes}>
                           {(outcome) => (
@@ -1667,11 +1667,11 @@ const Recovery: Component = () => {
                       aria-expanded={moreFiltersOpen()}
                       aria-controls="recovery-more-filters"
                       onClick={() => setMoreFiltersOpen((v) => !v)}
-                      class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                      class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-base-content hover:bg-slate-50 dark:hover:bg-slate-700"
                     >
                       <span>{moreFiltersOpen() ? 'Less filters' : 'More filters'}</span>
                       <Show when={activeAdvancedFilterCount() > 0}>
-                        <span class="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-mono text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                        <span class="rounded-full bg-surface-alt px-1.5 py-0.5 text-[10px] font-mono text-base-content">
                           {activeAdvancedFilterCount()}
                         </span>
                       </Show>
@@ -1734,7 +1734,7 @@ const Recovery: Component = () => {
                               if (event.currentTarget.value !== 'all') setOutcomeFilter('all');
  setCurrentPage(1);
  }}
- class="min-w-[6.5rem] rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-800 outline-none focus:border-blue-500 dark:border-slate-600 "
+ class="min-w-[6.5rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
  >
  <option value="all">Any</option>
  <option value="verified">Verified</option>
@@ -1759,7 +1759,7 @@ const Recovery: Component = () => {
  setClusterFilter(event.currentTarget.value);
  setCurrentPage(1);
  }}
- class="min-w-[8rem] rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-800 outline-none focus:border-blue-500 dark:border-slate-600 "
+ class="min-w-[8rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
  >
  <option value="all">All</option>
  <For each={clusterOptions().filter((value) => value !=='all')}>
@@ -1784,7 +1784,7 @@ const Recovery: Component = () => {
  setNodeFilter(event.currentTarget.value);
  setCurrentPage(1);
  }}
- class="min-w-[7.5rem] rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-800 outline-none focus:border-blue-500 dark:border-slate-600 "
+ class="min-w-[7.5rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
  >
  <option value="all">All</option>
  <For each={nodeOptions().filter((value) => value !=='all')}>
@@ -1809,50 +1809,50 @@ const Recovery: Component = () => {
  setNamespaceFilter(event.currentTarget.value);
  setCurrentPage(1);
  }}
- class="min-w-[8rem] rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-800 outline-none focus:border-blue-500 dark:border-slate-600 "
+ class="min-w-[8rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
  >
  <option value="all">All</option>
  <For each={namespaceOptions().filter((value) => value !=='all')}>
-                              {(namespace) => <option value={namespace}>{namespace}</option>}
-                            </For>
-                          </select>
-                        </div>
-                      </Show>
-                    </div>
-                  </Show>
-                </Show>
-              </div>
-            </Card>
-          </Show>
+ {(namespace) => <option value={namespace}>{namespace}</option>}
+ </For>
+ </select>
+ </div>
+ </Show>
+ </div>
+ </Show>
+ </Show>
+ </div>
+ </Card>
+ </Show>
 
-          <Card padding="none" tone="card" class="mb-4 overflow-hidden">
-            <div class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-              Recovery Events
-            </div>
-            <Show
-              when={groupedByDay().length > 0}
-              fallback={
-                <div class="p-6">
-                  <EmptyState
-                    title="No recovery events match your filters"
-                    description="Adjust your search, provider, method, status, or verification filters."
-                    actions={
-                      <Show when={hasActiveArtifactFilters()}>
-                        <button
-                          type="button"
-                          onClick={resetAllArtifactFilters}
-                          class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
-                        >
-                          Clear filters
-                        </button>
-                      </Show>
-                    }
-                  />
-                </div>
-              }
-            >
-              <div class="overflow-x-auto">
-                <Table class="w-full border-collapse text-xs whitespace-nowrap" style={{ 'min-width': tableMinWidth() }}>
+ <Card padding="none" tone="card" class="mb-4 overflow-hidden">
+ <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 ">
+ Recovery Events
+ </div>
+ <Show
+ when={groupedByDay().length > 0}
+ fallback={
+ <div class="p-6">
+ <EmptyState
+ title="No recovery events match your filters"
+ description="Adjust your search, provider, method, status, or verification filters."
+ actions={
+ <Show when={hasActiveArtifactFilters()}>
+ <button
+ type="button"
+ onClick={resetAllArtifactFilters}
+ class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content hover:"
+ >
+ Clear filters
+ </button>
+ </Show>
+ }
+ />
+ </div>
+ }
+ >
+ <div class="overflow-x-auto">
+ <Table class="w-full border-collapse text-xs whitespace-nowrap" style={{'min-width': tableMinWidth() }}>
                   <TableHeader>
                     <TableRow class="bg-surface-alt text-muted border-b border-border">
                       <For each={mobileVisibleArtifactColumns()}>{(col) => <TableHead class="py-0.5 px-3 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap">{col.label}</TableHead>}</For>
@@ -2077,7 +2077,7 @@ const Recovery: Component = () => {
                     type="button"
                     disabled={currentPage() <= 1}
                     onClick={() => setCurrentPage(Math.max(1, currentPage() - 1))}
-                    class="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                    class="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content disabled:opacity-50"
                   >
                     Prev
                   </button>
@@ -2086,7 +2086,7 @@ const Recovery: Component = () => {
                     type="button"
                     disabled={currentPage() >= totalPages()}
                     onClick={() => setCurrentPage(Math.min(totalPages(), currentPage() + 1))}
-                    class="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                    class="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content disabled:opacity-50"
                   >
                     Next
                   </button>

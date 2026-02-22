@@ -158,7 +158,7 @@ const QueueIndicator: Component<{ queue?: { total: number; active?: number; defe
         </Show>
       </div>
       <TooltipPortal when={tip.show() && !!props.queue} x={tip.pos().x} y={tip.pos().y}>
-        <div class="bg-slate-900 text-white text-xs rounded-md px-3 py-2 shadow-sm border border-slate-700">
+        <div class="bg-base text-white text-xs rounded-md px-3 py-2 shadow-sm border border-border">
           <div class="space-y-1">
             <div class="flex justify-between">
               <span class="text-slate-400">Active</span>
@@ -177,7 +177,7 @@ const QueueIndicator: Component<{ queue?: { total: number; active?: number; defe
               <span>{props.queue?.incoming || 0}</span>
             </div>
             <Show when={(props.queue?.oldestAge || 0) > 0}>
-              <div class="flex justify-between border-t border-slate-700 pt-1 mt-1">
+              <div class="flex justify-between border-t border-border pt-1 mt-1">
                 <span class="text-slate-400">Oldest</span>
                 <span class={(props.queue?.oldestAge || 0) > 1800 ? 'text-yellow-400' : ''}>
                   {Math.floor((props.queue?.oldestAge || 0) / 60)}m

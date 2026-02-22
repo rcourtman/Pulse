@@ -116,7 +116,7 @@ export const Dialog: Component<DialogProps> = (props) => {
       <Portal mount={document.body}>
         <div class="fixed inset-0 z-[1000]">
           <div
-            class="absolute inset-0 bg-slate-900 transition-opacity duration-300"
+            class="absolute inset-0 bg-base transition-opacity duration-300"
             data-dialog-backdrop
             onClick={handleBackdropClick}
           />

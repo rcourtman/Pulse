@@ -3099,7 +3099,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show
             when={pmgServersWithOverrides().length > 0}
             fallback={
-              <div class="rounded-md border border-slate-200 bg-white p-6 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+              <div class="rounded-md border border-border bg-surface p-6 text-sm text-slate-600 dark:text-slate-300">
                 No mail gateways configured yet. Add a PMG instance in Settings to manage
                 thresholds.
               </div>
@@ -3284,7 +3284,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               }}
               placeholder="runner-"
               rows={4}
-              class="mt-4 w-full rounded-md border border-slate-300 bg-white p-3 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600"
+              class="mt-4 w-full rounded-md border border-slate-300 bg-surface p-3 text-sm text-base-content focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:focus:border-sky-400 dark:focus:ring-sky-600"
             />
           </Card>
 
@@ -3331,7 +3331,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     }));
                     props.setHasUnsavedChanges(true);
                   }}
-                  class="mt-1 w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600"
+                  class="mt-1 w-full rounded-md border border-slate-300 bg-surface p-2 text-sm text-base-content focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:focus:border-sky-400 dark:focus:ring-sky-600"
                 />
                 <p class="mt-1 text-xs text-muted">
                   Convert to warning when at least this percentage of replicas are missing.
@@ -3359,7 +3359,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     }));
                     props.setHasUnsavedChanges(true);
                   }}
-                  class="mt-1 w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600"
+                  class="mt-1 w-full rounded-md border border-slate-300 bg-surface p-2 text-sm text-base-content focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:focus:border-sky-400 dark:focus:ring-sky-600"
                 />
                 <p class="mt-1 text-xs text-muted">
                   Raise a critical alert when the missing replica gap meets or exceeds this value.

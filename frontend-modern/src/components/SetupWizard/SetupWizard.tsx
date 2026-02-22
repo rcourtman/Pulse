@@ -107,7 +107,7 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
 
     return (
         <div
-            class="min-h-screen bg-slate-900 flex flex-col"
+            class="min-h-screen bg-base flex flex-col"
             role="main"
             aria-label="Pulse Setup Wizard"
         >

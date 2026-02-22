@@ -78,7 +78,7 @@ const Tooltip: Component<TooltipProps> = (props) => {
       <Portal mount={document.body}>
         <div
           ref={tooltipRef}
-          class="fixed z-[9999] px-3 py-2 text-xs whitespace-pre-line rounded-md border shadow-sm pointer-events-none bg-white text-slate-900 border-slate-200 leading-tight dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700"
+          class="fixed z-[9999] px-3 py-2 text-xs whitespace-pre-line rounded-md border shadow-sm pointer-events-none bg-surface text-base-content border-border leading-tight"
           style={{
             left: `${position().left}px`,
             top: `${position().top}px`,

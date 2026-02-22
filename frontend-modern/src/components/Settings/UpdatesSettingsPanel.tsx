@@ -77,7 +77,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                           </span>
                         </Show>
                         <Show when={props.versionInfo()?.isSourceBuild}>
-                          <span class="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300">
+                          <span class="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-surface-alt text-base-content">
                             Source
                           </span>
                         </Show>
@@ -192,13 +192,13 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                 </p>
                 <div class="space-y-2">
                   <div class="relative group">
-                    <code class="block p-2.5 bg-slate-900 dark:bg-slate-950 rounded-md text-xs font-mono text-blue-400 border border-slate-700">
+                    <code class="block p-2.5 bg-base rounded-md text-xs font-mono text-blue-400 border border-border">
                       docker pull rcourtman/pulse:latest && docker restart pulse
                     </code>
                     <button
                       type="button"
                       onClick={() => navigator.clipboard.writeText('docker pull rcourtman/pulse:latest && docker restart pulse')}
-                      class="absolute top-1.5 right-1.5 p-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 opacity-60 hover:opacity-100 transition-opacity"
+                      class="absolute top-1.5 right-1.5 p-1 rounded bg-surface-hover hover:bg-slate-600 text-slate-300 opacity-60 hover:opacity-100 transition-opacity"
                       title="Copy to clipboard"
                     >
                       <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -306,13 +306,13 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         Run the update command:
                       </div>
                       <div class="ml-0 sm:ml-8 relative group">
-                        <code class="block p-3 bg-slate-900 dark:bg-slate-950 rounded-md text-sm font-mono text-green-400 border border-slate-700">
+                        <code class="block p-3 bg-base rounded-md text-sm font-mono text-green-400 border border-border">
                           update
                         </code>
                         <button
                           type="button"
                           onClick={() => navigator.clipboard.writeText('update')}
-                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-slate-700 p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
+                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-surface-hover p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
                           title="Copy to clipboard"
                         >
                           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -334,13 +334,13 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         Pull the latest image
                       </div>
                       <div class="ml-0 sm:ml-8 relative group">
-                        <code class="block p-3 bg-slate-900 dark:bg-slate-950 rounded-md text-sm font-mono text-green-400 border border-slate-700">
+                        <code class="block p-3 bg-base rounded-md text-sm font-mono text-green-400 border border-border">
                           docker pull rcourtman/pulse:{dockerImageTag()}
                         </code>
                         <button
                           type="button"
                           onClick={() => navigator.clipboard.writeText(`docker pull rcourtman/pulse:${dockerImageTag()}`)}
-                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-slate-700 p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
+                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-surface-hover p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
                           title="Copy to clipboard"
                         >
                           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -354,13 +354,13 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         Restart the container
                       </div>
                       <div class="ml-0 sm:ml-8 relative group">
-                        <code class="block p-3 bg-slate-900 dark:bg-slate-950 rounded-md text-sm font-mono text-green-400 border border-slate-700">
+                        <code class="block p-3 bg-base rounded-md text-sm font-mono text-green-400 border border-border">
                           docker restart pulse
                         </code>
                         <button
                           type="button"
                           onClick={() => navigator.clipboard.writeText('docker restart pulse')}
-                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-slate-700 p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
+                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-surface-hover p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
                           title="Copy to clipboard"
                         >
                           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -382,13 +382,13 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         Stop the service
                       </div>
                       <div class="ml-0 sm:ml-8 relative group">
-                        <code class="block p-3 bg-slate-900 dark:bg-slate-950 rounded-md text-sm font-mono text-green-400 border border-slate-700">
+                        <code class="block p-3 bg-base rounded-md text-sm font-mono text-green-400 border border-border">
                           sudo systemctl stop pulse
                         </code>
                         <button
                           type="button"
                           onClick={() => navigator.clipboard.writeText('sudo systemctl stop pulse')}
-                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-slate-700 p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
+                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-surface-hover p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
                           title="Copy to clipboard"
                         >
                           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -402,13 +402,13 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         Download and extract the new version
                       </div>
                       <div class="ml-0 sm:ml-8 relative group">
-                        <code class="block p-3 bg-slate-900 dark:bg-slate-950 rounded-md text-sm font-mono text-green-400 border border-slate-700 whitespace-pre-wrap break-all">
+                        <code class="block p-3 bg-base rounded-md text-sm font-mono text-green-400 border border-border whitespace-pre-wrap break-all">
                           {systemdDownloadCommand()}
                         </code>
                         <button
                           type="button"
                           onClick={() => navigator.clipboard.writeText(systemdDownloadCommand())}
-                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-slate-700 p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
+                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-surface-hover p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
                           title="Copy to clipboard"
                         >
                           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -422,13 +422,13 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         Start the service
                       </div>
                       <div class="ml-0 sm:ml-8 relative group">
-                        <code class="block p-3 bg-slate-900 dark:bg-slate-950 rounded-md text-sm font-mono text-green-400 border border-slate-700">
+                        <code class="block p-3 bg-base rounded-md text-sm font-mono text-green-400 border border-border">
                           sudo systemctl start pulse
                         </code>
                         <button
                           type="button"
                           onClick={() => navigator.clipboard.writeText('sudo systemctl start pulse')}
-                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-slate-700 p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
+                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-surface-hover p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
                           title="Copy to clipboard"
                         >
                           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -447,13 +447,13 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         Pull the latest changes
                       </div>
                       <div class="ml-0 sm:ml-8 relative group">
-                        <code class="block p-3 bg-slate-900 dark:bg-slate-950 rounded-md text-sm font-mono text-green-400 border border-slate-700">
+                        <code class="block p-3 bg-base rounded-md text-sm font-mono text-green-400 border border-border">
                           git pull origin main
                         </code>
                         <button
                           type="button"
                           onClick={() => navigator.clipboard.writeText('git pull origin main')}
-                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-slate-700 p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
+                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-surface-hover p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
                           title="Copy to clipboard"
                         >
                           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -467,13 +467,13 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         Rebuild and restart
                       </div>
                       <div class="ml-0 sm:ml-8 relative group">
-                        <code class="block p-3 bg-slate-900 dark:bg-slate-950 rounded-md text-sm font-mono text-green-400 border border-slate-700">
+                        <code class="block p-3 bg-base rounded-md text-sm font-mono text-green-400 border border-border">
                           make build && make run
                         </code>
                         <button
                           type="button"
                           onClick={() => navigator.clipboard.writeText('make build && make run')}
-                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-slate-700 p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
+                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-surface-hover p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
                           title="Copy to clipboard"
                         >
                           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -622,7 +622,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                     disabled={props.versionInfo()?.isSourceBuild}
                     class="sr-only peer"
                   />
-                  <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
+                  <div class="w-11 h-6 bg-surface-alt peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after: after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
                 </label>
               </div>
 

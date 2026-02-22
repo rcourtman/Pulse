@@ -127,11 +127,11 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
           id={popoverId}
           role="dialog"
           aria-label={props.title ?? 'Search tips'}
-          class={`absolute ${popoverPositionClass} z-50 mt-2 w-72 overflow-hidden rounded-md border border-slate-200 bg-white text-left shadow-sm dark:border-slate-600 dark:bg-slate-800`}
-        >
-          <div class="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-700">
-            <span class="text-sm font-semibold text-base-content">
-              {props.title ?? 'Search tips'}
+ class={`absolute ${popoverPositionClass} z-50 mt-2 w-72 overflow-hidden rounded-md border bg-white text-left shadow-sm dark:bg-slate-800`}
+ >
+ <div class="flex items-center justify-between border-b border-border-subtle px-3 py-2">
+ <span class="text-sm font-semibold text-base-content">
+ {props.title ??'Search tips'}
             </span>
             <button
               type="button"
@@ -154,7 +154,7 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
               <For each={props.tips}>
                 {(tip) => (
                   <div class="flex items-start gap-2">
-                    <code class="rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-700 dark:bg-slate-700 dark:text-slate-100">
+                    <code class="rounded bg-surface-alt px-2 py-0.5 font-mono text-[11px] text-base-content">
                       {tip.code}
                     </code>
                     <span class="text-[12px] leading-snug text-muted">

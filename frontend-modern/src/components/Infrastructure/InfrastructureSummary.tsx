@@ -453,8 +453,8 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
  return (
  <Show when={props.hosts.length > 0}>
  <div data-testid="infrastructure-summary" class="space-y-2">
- <div class="rounded-md border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-3">
- <div class="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-1 pb-2 text-[11px] text-slate-500 dark:border-slate-700 ">
+ <div class="rounded-md border border-border bg-surface p-2 shadow-sm sm:p-3">
+ <div class="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle px-1 pb-2 text-[11px] text-slate-500">
  <div class="flex items-center gap-3">
  <span class="font-medium text-base-content">
  {hostCounts().total} {hostCounts().total === 1 ?'resource' : 'resources'}
@@ -467,7 +467,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                             </Show>
                         </div>
                         <Show when={props.onTimeRangeChange}>
-                            <div class="inline-flex shrink-0 rounded border border-slate-300 bg-white p-0.5 text-xs dark:border-slate-700 dark:bg-slate-900">
+                            <div class="inline-flex shrink-0 rounded border border-slate-300 bg-surface p-0.5 text-xs dark:border-slate-700">
                                 <For each={SUMMARY_TIME_RANGES}>
                                     {(range) => (
                                         <button

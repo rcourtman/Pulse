@@ -20,7 +20,7 @@ export const RootDiskCard: Component<RootDiskCardProps> = (props) => {
   };
 
   return (
-    <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+    <div class="rounded border border-border bg-surface p-3 shadow-sm">
       <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Root Disk</div>
       <div class="mb-3">
         <div class="flex justify-between text-[10px] mb-1">

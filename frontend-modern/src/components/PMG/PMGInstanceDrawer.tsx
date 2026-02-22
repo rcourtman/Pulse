@@ -252,25 +252,25 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                 </div>
 
                 <div class="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
-                  <div class="rounded border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+                  <div class="rounded border border-border bg-surface px-3 py-2">
                     <div class="text-[10px] uppercase tracking-wide text-muted">Queue Total</div>
                     <div class="mt-1 text-sm font-semibold text-base-content">
                       {formatCompact(pmgData().queueTotal ?? 0)}
                     </div>
                   </div>
-                  <div class="rounded border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+                  <div class="rounded border border-border bg-surface px-3 py-2">
                     <div class="text-[10px] uppercase tracking-wide text-muted">Deferred</div>
                     <div class="mt-1 text-sm font-semibold text-base-content">
                       {formatCompact(pmgData().queueDeferred ?? 0)}
                     </div>
                   </div>
-                  <div class="rounded border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+                  <div class="rounded border border-border bg-surface px-3 py-2">
                     <div class="text-[10px] uppercase tracking-wide text-muted">Mail</div>
                     <div class="mt-1 text-sm font-semibold text-base-content">
                       {formatCompact(pmgData().mailCountTotal ?? 0)}
                     </div>
                   </div>
-                  <div class="rounded border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+                  <div class="rounded border border-border bg-surface px-3 py-2">
                     <div class="text-[10px] uppercase tracking-wide text-muted">Spam/Virus</div>
                     <div class="mt-1 text-sm font-semibold text-base-content">
                       {formatCompact(pmgData().spamIn ?? 0)} / {formatCompact(pmgData().virusIn ?? 0)}
@@ -319,7 +319,7 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
  value={searchRelay()}
  onInput={(e) => setSearchRelay(e.currentTarget.value)}
  placeholder="Search domains..."
- class="w-56 rounded border border-slate-200 bg-white px-2 py-1 text-xs placeholder: dark:border-slate-700 dark:bg-slate-800 "
+ class="w-56 rounded border border-border bg-surface px-2 py-1 text-xs placeholder:"
  />
  </div>
  <div class="mt-2 overflow-x-auto">
@@ -360,7 +360,7 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
  value={searchDomain()}
  onInput={(e) => setSearchDomain(e.currentTarget.value)}
  placeholder="Search domains..."
- class="w-56 rounded border border-slate-200 bg-white px-2 py-1 text-xs placeholder: dark:border-slate-700 dark:bg-slate-800 "
+ class="w-56 rounded border border-border bg-surface px-2 py-1 text-xs placeholder:"
  />
  </div>
  <div class="mt-2 overflow-x-auto">

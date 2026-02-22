@@ -425,7 +425,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
  <div class="space-y-5">
  <Card
  padding="none"
- class="border border-slate-200 shadow-sm dark:border-slate-700 "
+ class="border border-border shadow-sm"
  >
  <div class="flex flex-col gap-6 p-4 sm:p-6 lg:p-8 hover:bg-surface-hover transition-colors">
  <div class="flex flex-wrap items-center justify-between gap-4">
@@ -454,7 +454,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
  </div>
 
  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
- <div class="rounded-md border border-slate-200 p-4 text-sm shadow-sm dark:border-slate-700 ">
+ <div class="rounded-md border border-border p-4 text-sm shadow-sm">
  <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-muted">
  Total tokens
  </div>
@@ -465,7 +465,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
  Stored credentials across all agents
  </p>
  </div>
- <div class="rounded-md border border-slate-200 p-4 text-sm shadow-sm dark:border-slate-700 ">
+ <div class="rounded-md border border-border p-4 text-sm shadow-sm">
  <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-muted">
  Scoped tokens
  </div>
@@ -560,7 +560,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 Use this link to open Pulse directly in Kiosk mode without logging in. Perfect for wall displays and digital signage.
               </p>
               <div class="flex items-center gap-2">
-                <code class="flex-1 rounded border border-blue-200 bg-white px-3 py-2 font-mono text-xs text-blue-800 dark:border-blue-800 dark:bg-black dark:text-blue-200 break-all">
+                <code class="flex-1 rounded border border-blue-200 bg-surface px-3 py-2 font-mono text-xs text-blue-800 dark:border-blue-800 dark:bg-black dark:text-blue-200 break-all">
                   {getPulseBaseUrl()}/?token={newTokenValue()}&kiosk=1
                 </code>
                 <button
@@ -597,7 +597,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         }
       >
         <Card padding="none" tone="card" class="overflow-hidden">
-          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-700 dark:bg-slate-800">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface-hover px-5 py-4">
             <div>
               <h4 class="text-sm font-semibold text-base-content">Token inventory</h4>
               <p class="text-xs text-muted">
@@ -784,7 +784,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
  value={nameInput()}
  onInput={(e) => setNameInput(e.currentTarget.value)}
  placeholder="e.g. Container pipeline"
- class="w-full min-h-10 sm:min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:focus:border-blue-400 dark:focus:ring-blue-500"
+ class="w-full min-h-10 sm:min-h-10 rounded-md border border-slate-300 bg-surface px-3 py-2.5 text-sm text-base-content shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:focus:border-blue-400 dark:focus:ring-blue-500"
  />
  </div>
 
@@ -834,8 +834,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               </div>
             </div>
 
-            <details class="group rounded-md border border-slate-200 bg-slate-50 p-4 text-sm transition dark:border-slate-700 dark:bg-slate-800">
-              <summary class="min-h-10 sm:min-h-10 cursor-pointer text-sm font-semibold text-slate-700 transition hover:text-blue-600 dark:text-slate-200 dark:hover:text-blue-300">
+            <details class="group rounded-md border border-border bg-surface-hover p-4 text-sm transition">
+              <summary class="min-h-10 sm:min-h-10 cursor-pointer text-sm font-semibold text-base-content transition hover:text-blue-600 dark:hover:text-blue-300">
                 Custom scopes
               </summary>
               <div class="mt-3 space-y-4">

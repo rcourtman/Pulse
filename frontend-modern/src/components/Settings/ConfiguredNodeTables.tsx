@@ -237,7 +237,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                                 <button
                                   type="button"
                                   onClick={() => props.onRefreshCluster?.(node.id)}
-                                  class="flex min-h-10 sm:min-h-9 items-center gap-1 px-2.5 py-1.5 text-xs font-medium hover:text-muted dark:hover:text-slate-200 bg-white dark:bg-slate-700 border border-border rounded hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+                                  class="flex min-h-10 sm:min-h-9 items-center gap-1 px-2.5 py-1.5 text-xs font-medium hover:text-muted dark:hover:text-slate-200 bg-surface border border-border rounded hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
                                   title="Re-detect cluster membership (use if nodes were added to the Proxmox cluster)"
                                 >
                                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

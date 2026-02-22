@@ -470,12 +470,12 @@ Keep these credentials secure!
 
  <Show when={showCredentials()}>
  <div class="p-4 pt-0 space-y-3 border-t border-border-subtle mt-2">
- <div class="bg-slate-50 dark:bg-black border rounded-md p-3">
+ <div class="bg-surface-hover dark:bg-black border rounded-md p-3">
  <div class="text-[11px] font-medium text-muted mb-1 uppercase tracking-wider">Username</div>
  <div class="text-base-content font-mono text-sm">{props.state.username}</div>
  </div>
 
- <div class="bg-slate-50 dark:bg-black border rounded-md p-3">
+ <div class="bg-surface-hover dark:bg-black border rounded-md p-3">
  <div class="text-[11px] font-medium text-muted mb-1 uppercase tracking-wider">Password</div>
  <div class="flex items-center justify-between">
  <code class="text-base-content font-mono text-sm break-all">{props.state.password}</code>
@@ -496,7 +496,7 @@ Keep these credentials secure!
                             </div>
                         </div>
 
-                        <div class="bg-slate-50 dark:bg-black border border-border rounded-md p-3">
+                        <div class="bg-surface-hover dark:bg-black border border-border rounded-md p-3">
                             <div class="text-[11px] font-medium text-muted mb-1 uppercase tracking-wider">API Token (for web login)</div>
                             <div class="flex items-center justify-between">
                                 <code class="text-base-content font-mono text-xs break-all pr-4">{props.state.apiToken}</code>

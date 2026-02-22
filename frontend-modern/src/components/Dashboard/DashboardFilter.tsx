@@ -111,7 +111,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                     id={hostFilter().id ?? 'dashboard-host-filter'}
  value={hostFilter().value}
  onChange={(e) => hostFilter().onChange(e.currentTarget.value)}
- class="min-w-[8rem] rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:text-slate-100"
+ class="min-w-[8rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
  >
  <For each={hostFilter().options}>
  {(option) => (
@@ -136,7 +136,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                     id={namespaceFilter().id ?? 'dashboard-namespace-filter'}
                     value={namespaceFilter().value}
                     onChange={(e) => namespaceFilter().onChange(e.currentTarget.value)}
-                    class="min-w-[8rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                    class="min-w-[8rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <For each={namespaceFilter().options}>
                       {(option) => (
@@ -161,7 +161,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                     id={runtimeFilter().id ?? 'dashboard-runtime-filter'}
  value={runtimeFilter().value}
  onChange={(e) => runtimeFilter().onChange(e.currentTarget.value)}
- class="min-w-[7rem] rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 "
+ class="min-w-[7rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
  >
  <For each={runtimeFilter().options}>
  {(option) => (
@@ -184,7 +184,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
  id="dashboard-type-filter"
  value={props.viewMode()}
  onChange={(event) => props.setViewMode(event.currentTarget.value as'all' | 'vm' | 'lxc' | 'docker' | 'k8s')}
- class="min-w-[7rem] rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 "
+ class="min-w-[7rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
  >
  <option value="all">All</option>
  <option value="vm">VMs</option>
@@ -205,7 +205,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
  id="dashboard-status-filter"
  value={props.statusMode()}
  onChange={(event) => props.setStatusMode(event.currentTarget.value as'all' | 'running' | 'degraded' | 'stopped')}
- class="min-w-[8rem] rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:text-slate-100"
+ class="min-w-[8rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
  >
  <option value="all">All</option>
  <option value="running">Running</option>

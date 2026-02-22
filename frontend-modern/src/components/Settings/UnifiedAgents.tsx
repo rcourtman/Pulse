@@ -977,7 +977,7 @@ export const UnifiedAgents: Component = () => {
                                         }
                                     }}
                                     placeholder="Token name (optional)"
-                                    class="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-900"
+                                    class="flex-1 rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:focus:border-blue-400 dark:focus:ring-blue-900"
                                 />
                                 <button
                                     type="button"
@@ -1034,7 +1034,7 @@ export const UnifiedAgents: Component = () => {
                                     <p class="text-xs text-muted mt-0.5 ml-6">Generate a token above to unlock installation commands.</p>
                                 </div>
                             </div>
-                            <div class="rounded-md border border-slate-200 bg-slate-50 px-4 py-6 dark:border-slate-700 dark:bg-slate-800 text-center">
+                            <div class="rounded-md border border-border bg-surface-hover px-4 py-6 text-center">
                                 <svg class="w-8 h-8 mx-auto text-muted mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
                                 </svg>
@@ -1058,7 +1058,7 @@ export const UnifiedAgents: Component = () => {
  </div>
  </div>
 
- <div class="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+ <div class="rounded-md border border-border bg-surface-hover px-4 py-3">
  <label class="block text-xs font-medium text-base-content mb-1.5">
  Connection URL (Agent → Pulse)
  </label>
@@ -1068,7 +1068,7 @@ export const UnifiedAgents: Component = () => {
  value={customAgentUrl()}
  onInput={(e) => setCustomAgentUrl(e.currentTarget.value)}
  placeholder={agentUrl()}
- class="flex-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+ class="flex-1 rounded-md border bg-surface px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
  />
  </div>
  <p class="mt-1.5 text-xs text-muted">
@@ -1088,7 +1088,7 @@ export const UnifiedAgents: Component = () => {
  type="checkbox"
  checked={insecureMode()}
  onChange={(e) => setInsecureMode(e.currentTarget.checked)}
- class="rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700"
+ class="rounded text-blue-600 focus:ring-blue-500 "
  />
  Skip TLS certificate verification (self-signed certs; not recommended)
  </label>
@@ -1097,7 +1097,7 @@ export const UnifiedAgents: Component = () => {
  type="checkbox"
  checked={enableCommands()}
  onChange={(e) => setEnableCommands(e.currentTarget.checked)}
- class="rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700"
+ class="rounded text-blue-600 focus:ring-blue-500 "
  />
  Enable Pulse command execution (for Patrol auto-fix)
  </label>
@@ -1109,7 +1109,7 @@ export const UnifiedAgents: Component = () => {
  <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-100">
  <span class="font-medium">Config signing (optional)</span> — Require signed remote config payloads with <code>PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>. Provide keys via <code>PULSE_AGENT_CONFIG_SIGNING_KEY</code> (Pulse) and <code>PULSE_AGENT_CONFIG_PUBLIC_KEYS</code> (agents).
  </div>
- <div class="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+ <div class="rounded-md border border-border bg-surface-hover px-4 py-3">
  <label for="install-profile-select" class="block text-xs font-medium text-base-content mb-1.5">
  Target profile (optional)
  </label>
@@ -1117,7 +1117,7 @@ export const UnifiedAgents: Component = () => {
  id="install-profile-select"
  value={installProfile()}
  onChange={(event) => handleInstallProfileChange(event.currentTarget.value as InstallProfile)}
- class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+ class="w-full rounded-md border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
  >
  <For each={INSTALL_PROFILE_OPTIONS}>
  {(option) => (
@@ -1195,7 +1195,7 @@ export const UnifiedAgents: Component = () => {
                                                                                 notificationStore.error('Failed to copy');
  }
  }}
- class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-slate-700 p-2 transition-colors hover:text-slate-200"
+ class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-surface-hover p-2 transition-colors hover:text-slate-200"
  title="Copy command"
  >
  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1203,7 +1203,7 @@ export const UnifiedAgents: Component = () => {
  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
  </svg>
  </button>
- <pre class="overflow-x-auto rounded-md bg-slate-900 p-3 pr-12 text-xs text-slate-100">
+ <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
  <code>{copyCommand()}</code>
  </pre>
  </div>
@@ -1251,7 +1251,7 @@ export const UnifiedAgents: Component = () => {
                                             }
                                         }}
                                         placeholder="Hostname or host ID"
-                                        class="flex-1 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm text-blue-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100 dark:focus:border-blue-300 dark:focus:ring-blue-800"
+                                        class="flex-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-sm text-blue-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100 dark:focus:border-blue-300 dark:focus:ring-blue-800"
                                     />
                                 </div>
                                 <Show when={lookupError()}>
@@ -1265,7 +1265,7 @@ export const UnifiedAgents: Component = () => {
                                                 ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
                                                 : 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
                                         return (
-                                            <div class="space-y-1 rounded-md border border-blue-200 bg-white px-3 py-2 text-xs text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100">
+                                            <div class="space-y-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-xs text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100">
                                                 <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                                                     <div class="text-sm font-semibold">
                                                         {host().displayName || host().hostname}
@@ -1292,7 +1292,7 @@ export const UnifiedAgents: Component = () => {
  }}
  </Show>
  </div>
- <details class="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-800">
+ <details class="rounded-md border border-border bg-surface-hover px-4 py-3 text-sm">
  <summary class="cursor-pointer text-sm font-medium text-base-content">
  Troubleshooting
  </summary>
@@ -1336,7 +1336,7 @@ export const UnifiedAgents: Component = () => {
                                                 notificationStore.error('Failed to copy');
                                             }
                                         }}
-                                        class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-slate-700 p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
+                                        class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-surface-hover p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
                                         title="Copy command"
                                     >
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1363,7 +1363,7 @@ export const UnifiedAgents: Component = () => {
                                                 notificationStore.error('Failed to copy');
                                             }
                                         }}
-                                        class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-slate-700 p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
+                                        class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-surface-hover p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
                                         title="Copy command"
                                     >
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1424,7 +1424,7 @@ export const UnifiedAgents: Component = () => {
                             id="agent-filter-type"
                             value={filterType()}
                             onChange={(event) => setFilterType(event.currentTarget.value as 'all'| UnifiedAgentType)}
- class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-2 sm:py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+ class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:focus:border-blue-400 dark:focus:ring-blue-800"
  >
  <option value="all">All types</option>
  <option value="host">Host</option>
@@ -1438,7 +1438,7 @@ export const UnifiedAgents: Component = () => {
  id="agent-filter-status"
  value={filterStatus()}
  onChange={(event) => setFilterStatus(event.currentTarget.value as'all'| UnifiedAgentStatus)}
- class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-2 sm:py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+ class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:focus:border-blue-400 dark:focus:ring-blue-800"
  >
  <option value="all">All statuses</option>
  <option value="active">Active</option>
@@ -1451,7 +1451,7 @@ export const UnifiedAgents: Component = () => {
  id="agent-filter-scope"
  value={filterScope()}
  onChange={(event) => setFilterScope(event.currentTarget.value as'all' | Exclude<ScopeCategory, 'na'>)}
- class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-2 sm:py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+ class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:focus:border-blue-400 dark:focus:ring-blue-800"
  >
  <option value="all">All scopes</option>
  <option value="default">Default</option>
@@ -1467,7 +1467,7 @@ export const UnifiedAgents: Component = () => {
  value={filterSearch()}
  onInput={(event) => setFilterSearch(event.currentTarget.value)}
  placeholder="Search name, hostname, or ID"
- class="w-full min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-2 sm:py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+ class="w-full min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:focus:border-blue-400 dark:focus:ring-blue-800"
  />
  </div>
  <button
@@ -1614,7 +1614,7 @@ export const UnifiedAgents: Component = () => {
  void updateScopeAssignment(resolvedAgentId, nextValue || null, agentName);
  }}
  disabled={isScopeUpdating()}
- class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+ class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:focus:border-blue-400 dark:focus:ring-blue-800"
  >
  <option value="">Default (Auto-detect)</option>
  <For each={profiles()}>

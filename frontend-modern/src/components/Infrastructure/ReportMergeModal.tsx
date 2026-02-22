@@ -91,7 +91,7 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
  ariaLabelledBy={dialogTitleId()}
  ariaDescribedBy={dialogDescriptionId()}
  >
- <div class="flex items-start justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+ <div class="flex items-start justify-between border-b border-border px-5 py-4">
  <div>
  <h3
  id={dialogTitleId()}
@@ -109,7 +109,7 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
  <button
  type="button"
  onClick={props.onClose}
- class="rounded-md p-1.5 transition-colors hover:bg-slate-100 hover: dark:hover:bg-slate-700 dark:hover:text-slate-300"
+ class="rounded-md p-1.5 transition-colors hover: hover: dark:hover:bg-slate-700 dark:hover:text-slate-300"
  aria-label="Close"
  >
  <XIcon class="h-5 w-5" />
@@ -148,7 +148,7 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
  value={notes()}
  onInput={(event) => setNotes(event.currentTarget.value)}
  rows={3}
- class="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 "
+ class="mt-2 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
  placeholder="Example: Agent running on a different host with same hostname."
  />
  </div>
@@ -160,7 +160,7 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
  </Show>
  </div>
 
- <div class="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3 dark:border-slate-700 dark:bg-slate-800">
+ <div class="flex items-center justify-end gap-2 border-t border-border bg-surface-hover px-5 py-3">
  <button
  type="button"
  onClick={props.onClose}

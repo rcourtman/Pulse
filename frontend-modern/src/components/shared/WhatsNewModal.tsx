@@ -33,8 +33,8 @@ export function WhatsNewModal() {
   return (
     <Show when={isOpen()}>
       <div class="fixed inset-0 z-50 flex items-center justify-center bg-black p-4">
-        <div class="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden rounded-md bg-white shadow-sm dark:bg-slate-800">
-          <div class="flex-shrink-0 flex items-start justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+        <div class="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden rounded-md bg-surface shadow-sm">
+          <div class="flex-shrink-0 flex items-start justify-between border-b border-border px-6 py-4">
             <div>
               <h2 class="text-xl sm:text-2xl font-semibold text-base-content">
                 Welcome to the New Navigation!
@@ -95,7 +95,7 @@ export function WhatsNewModal() {
               </div>
             </div>
 
-            <div class="rounded-md border border-slate-200 bg-slate-50 p-3 sm:p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            <div class="rounded-md border border-border bg-surface-hover p-3 sm:p-4 text-sm text-base-content">
               <div class="font-medium text-base-content">
                 Quick summary
               </div>
@@ -115,7 +115,7 @@ export function WhatsNewModal() {
               </ul>
             </div>
 
-            <div class="rounded-md border border-slate-200 bg-white p-3 sm:p-4 dark:border-slate-700 dark:bg-slate-800">
+            <div class="rounded-md border border-border bg-surface p-3 sm:p-4">
               <div class="text-sm font-medium text-base-content">
                 Why switch to a unified resource model?
               </div>
@@ -135,7 +135,7 @@ export function WhatsNewModal() {
               </ul>
             </div>
 
-            <div class="rounded-md border border-slate-200 bg-white p-3 sm:p-4 dark:border-slate-700 dark:bg-slate-800">
+            <div class="rounded-md border border-border bg-surface p-3 sm:p-4">
               <div class="text-sm font-medium text-base-content">
                 Finding things fast
               </div>
@@ -180,7 +180,7 @@ export function WhatsNewModal() {
             </div>
           </div>
 
-          <div class="flex-shrink-0 flex items-center justify-end border-t border-slate-200 bg-slate-50 px-4 sm:px-6 py-3 sm:py-4 dark:border-slate-700 dark:bg-slate-800">
+          <div class="flex-shrink-0 flex items-center justify-end border-t border-border bg-surface-hover px-4 sm:px-6 py-3 sm:py-4">
             <button
               onClick={handleClose}
               class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"

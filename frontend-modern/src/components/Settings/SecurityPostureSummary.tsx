@@ -184,11 +184,11 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
           <For each={items()}>
             {(item) => (
               <div class={`rounded-md border p-4 transition-all ${item.enabled
-                  ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950'
-                  : item.critical
-                    ? 'border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950'
-                    : 'border-border bg-surface-alt'
-                }`}>
+ ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950'
+ : item.critical
+ ? 'border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950'
+ : 'border-border bg-surface-alt'
+ }`}>
                 <div class="flex items-center justify-between mb-2">
                   <span class="text-sm font-semibold text-base-content">
                     {item.label}
@@ -217,7 +217,7 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
         {/* Client IP Badge */}
         <Show when={props.status.clientIP}>
           <div class="mt-4 pt-4 border-t border-border flex items-center justify-end">
-            <span class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            <span class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-full bg-surface-alt text-slate-600 dark:text-slate-300">
               Your IP: {props.status.clientIP}
             </span>
           </div>

@@ -136,14 +136,14 @@ const QueueIndicator: Component<{ queue?: { total: number; active?: number; defe
 
       <TooltipPortal when={tip.show() && !!props.queue} x={tip.pos().x} y={tip.pos().y}>
         <div class="min-w-[140px]">
-          <div class="font-medium mb-1.5 text-slate-300 border-b border-slate-700 pb-1">Queue Breakdown</div>
+          <div class="font-medium mb-1.5 text-slate-300 border-b border-border pb-1">Queue Breakdown</div>
           <div class="space-y-0.5 text-[11px]">
             <div class="flex justify-between"><span class="text-slate-400">Active</span><span>{props.queue?.active || 0}</span></div>
             <div class="flex justify-between"><span class="text-slate-400">Deferred</span><span>{props.queue?.deferred || 0}</span></div>
             <div class="flex justify-between"><span class="text-slate-400">Hold</span><span>{props.queue?.hold || 0}</span></div>
             <div class="flex justify-between"><span class="text-slate-400">Incoming</span><span>{props.queue?.incoming || 0}</span></div>
             <Show when={(props.queue?.oldestAge || 0) > 0}>
-              <div class="flex justify-between pt-1 mt-1 border-t border-slate-700">
+              <div class="flex justify-between pt-1 mt-1 border-t border-border">
                 <span class="text-slate-400">Oldest</span>
                 <span class={(props.queue?.oldestAge || 0) > 1800 ? 'text-yellow-400' : ''}>
                   {Math.floor((props.queue?.oldestAge || 0) / 60)}m

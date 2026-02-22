@@ -251,7 +251,7 @@ export const DensityMap: Component<DensityMapProps> = (props) => {
                 <Show when={hoveredState()}>
                     {(hover) => (
                         <div
-                            class="fixed pointer-events-none bg-base text-white text-xs rounded px-2 py-1.5 shadow-sm border border-slate-700"
+                            class="fixed pointer-events-none bg-base text-white text-xs rounded px-2 py-1.5 shadow-sm border border-border"
                             style={{
                                 left: `${hover().tooltipX}px`,
                                 top: `${hover().tooltipY - 6}px`,

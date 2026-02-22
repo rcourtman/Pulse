@@ -667,7 +667,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
  <span class="font-medium text-base-content truncate">
  {provider.name}
  </span>
- <span class="px-1.5 py-0.5 text-xs font-medium rounded bg-surface-hover ">
+ <span class="px-1.5 py-0.5 text-xs font-medium rounded bg-surface-hover">
  {provider.type.toUpperCase()}
  </span>
  </div>
@@ -1058,7 +1058,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
               <div class="pt-2">
                 <button
                   type="button"
-                  class="text-xs font-semibold text-slate-700 hover:underline dark:text-slate-300"
+                  class="text-xs font-semibold text-base-content hover:underline"
                   onClick={() => setAdvancedOpen(!advancedOpen())}
                 >
                   {advancedOpen() ? 'Hide' : 'Show'} access restrictions & role mapping
@@ -1252,7 +1252,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                   Copy
                 </button>
               </div>
-              <pre class="text-xs bg-slate-900 text-slate-100 p-4 rounded-md overflow-x-auto whitespace-pre-wrap break-all font-mono">
+              <pre class="text-xs bg-base text-base-content p-4 rounded-md overflow-x-auto whitespace-pre-wrap break-all font-mono">
                 {metadataPreview()?.xml}
               </pre>
             </div>

@@ -10,7 +10,7 @@ export const SystemInfoCard: Component<SystemInfoCardProps> = (props) => {
   if (props.variant === 'node') {
     const node = props.node;
     return (
-      <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+      <div class="rounded border border-border bg-surface p-3 shadow-sm">
         <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">System</div>
         <div class="space-y-1.5 text-[11px]">
           <div class="flex items-center justify-between gap-2 min-w-0">
@@ -38,7 +38,7 @@ export const SystemInfoCard: Component<SystemInfoCardProps> = (props) => {
 
   const host = props.host;
   return (
-    <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+    <div class="rounded border border-border bg-surface p-3 shadow-sm">
       <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">System</div>
       <div class="space-y-1.5 text-[11px]">
         <div class="flex items-center justify-between gap-2 min-w-0">

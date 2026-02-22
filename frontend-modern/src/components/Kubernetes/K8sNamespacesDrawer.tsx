@@ -103,12 +103,12 @@ export const K8sNamespacesDrawer: Component<{
  value={search()}
  onInput={(e) => setSearch(e.currentTarget.value)}
  placeholder="Search namespaces..."
- class="w-[12rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 "
+ class="w-[12rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
  />
  <button
  type="button"
  onClick={() => openPods(null)}
- class="rounded-md border border-slate-200 bg-white px-3 py-1 text-xs font-semibold shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800"
+ class="rounded-md border border-border bg-surface px-3 py-1 text-xs font-semibold shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800"
  >
  Open All Pods
  </button>
@@ -189,7 +189,7 @@ export const K8sNamespacesDrawer: Component<{
                               <button
                                 type="button"
                                 onClick={() => openPods(row.namespace)}
-                                class="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800"
+                                class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800"
                               >
                                 Open Pods
                               </button>
@@ -197,7 +197,7 @@ export const K8sNamespacesDrawer: Component<{
                                 <button
                                   type="button"
                                   onClick={() => props.onOpenDeployments?.(row.namespace)}
-                                  class="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800"
+                                  class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800"
                                 >
                                   View Deployments
                                 </button>

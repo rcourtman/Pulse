@@ -467,7 +467,7 @@ export default function AuditLogPanel() {
                     <button
                         onClick={() => fetchAuditEvents()}
                         disabled={loading()}
-                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                     >
                         <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
                         Refresh
@@ -483,14 +483,14 @@ export default function AuditLogPanel() {
                     <button
                         onClick={() => setCancelVerifyAll(true)}
                         disabled={!verifyingAll()}
-                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-muted bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-muted bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={() => verifyAllEvents({ showToast: true, resume: true })}
                         disabled={verifyingAll() || !hasResumeEvents()}
-                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-muted bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-muted bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                         onMouseEnter={(e) => {
                             if (!hasResumeEvents()) return;
                             const rect = e.currentTarget.getBoundingClientRect();
@@ -547,7 +547,7 @@ export default function AuditLogPanel() {
                     <select
                         value={eventFilter()}
                         onChange={(e) => setEventFilter(e.currentTarget.value)}
-                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-white dark:bg-slate-700 text-base-content"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content"
                     >
                         <option value="">All Events</option>
                         <option value="login">Login</option>
@@ -560,12 +560,12 @@ export default function AuditLogPanel() {
                         placeholder="Filter by user..."
                         value={userFilter()}
                         onInput={(e) => setUserFilter(e.currentTarget.value)}
-                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-white dark:bg-slate-700 text-base-content placeholder-gray-400"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content placeholder-gray-400"
                     />
                     <select
                         value={successFilter()}
                         onChange={(e) => setSuccessFilter(e.currentTarget.value)}
-                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-white dark:bg-slate-700 text-base-content"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content"
                     >
                         <option value="all">All</option>
                         <option value="success">Success Only</option>
@@ -574,7 +574,7 @@ export default function AuditLogPanel() {
                     <select
                         value={verificationFilter()}
                         onChange={(e) => setVerificationFilter(e.currentTarget.value)}
-                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-white dark:bg-slate-700 text-base-content"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content"
                     >
                         <option value="all">All Verification</option>
                         <option value="needs">Needs Verification</option>
@@ -584,7 +584,7 @@ export default function AuditLogPanel() {
                     <select
                         value={String(pageSize())}
                         onChange={(e) => setPageSize(Number(e.currentTarget.value))}
-                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-white dark:bg-slate-700 text-base-content"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content"
                     >
                         <option value="25">25 / page</option>
                         <option value="50">50 / page</option>
@@ -613,7 +613,7 @@ export default function AuditLogPanel() {
                                 showSuccess('Audit filters cleared');
                             }
                         }}
-                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600"
                     >
                         Clear{activeFilterCount() > 0 ? ` (${activeFilterCount()})` : ''}
                     </button>
@@ -632,7 +632,7 @@ export default function AuditLogPanel() {
                                         setPageOffset(0);
                                         void fetchAuditEvents({ offset: 0 });
                                     }}
-                                    class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600"
+                                    class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-surface-alt text-base-content hover:bg-slate-300 dark:hover:bg-slate-600"
                                     title="Click to clear filter"
                                     aria-label={`Clear ${chip.label}`}
                                     onMouseEnter={(e) => {
@@ -821,7 +821,7 @@ export default function AuditLogPanel() {
                                 label: 'Verification',
  render: (event) => {
  if (!event.signature) {
- return <span class="text-xs ">Unsigned</span>;
+ return <span class="text-xs">Unsigned</span>;
  }
  const state = verification()[event.id];
  const isVerifying = verifying()[event.id];
@@ -924,7 +924,7 @@ export default function AuditLogPanel() {
                                 setPageOffset(nextOffset);
                                 void fetchAuditEvents({ offset: nextOffset });
                             }}
-                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600"
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600"
                         >
                             Go
                         </button>
@@ -936,7 +936,7 @@ export default function AuditLogPanel() {
                                 void fetchAuditEvents({ offset: 0 });
                             }}
                             disabled={pageOffset() === 0}
-                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                         >
                             First
                         </button>
@@ -947,7 +947,7 @@ export default function AuditLogPanel() {
                                 void fetchAuditEvents({ offset: nextOffset });
                             }}
                             disabled={pageOffset() === 0}
-                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                         >
                             Previous
                         </button>
@@ -958,7 +958,7 @@ export default function AuditLogPanel() {
                                 void fetchAuditEvents({ offset: nextOffset });
                             }}
                             disabled={!hasNextPage()}
-                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                         >
                             Next
                         </button>
@@ -969,7 +969,7 @@ export default function AuditLogPanel() {
                                 void fetchAuditEvents({ offset: lastOffset });
                             }}
                             disabled={!hasNextPage()}
-                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                         >
                             Last
                         </button>

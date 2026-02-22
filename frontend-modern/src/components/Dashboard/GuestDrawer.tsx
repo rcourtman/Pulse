@@ -145,7 +145,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                 <button
                     type="button"
                     onClick={() => navigate(infrastructureHref())}
-                    class="inline-flex items-center rounded border border-slate-300 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                    class="inline-flex items-center rounded border border-slate-300 bg-surface-alt px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-slate-200 dark:border-slate-600 dark:hover:bg-slate-700"
                 >
                     Open related infrastructure
                 </button>
@@ -157,7 +157,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                 {/* Flex layout - items grow to fill space, max ~4 per row */}
                 <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
                     {/* System Info - always show */}
-                    <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                    <div class="rounded border border-border bg-surface p-3 shadow-sm">
                         <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">System</div>
                         <div class="space-y-1.5 text-[11px]">
                             <Show when={props.guest.cpus}>
@@ -191,7 +191,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
                     {/* Guest Info - OS and IPs */}
                     <Show when={hasOsInfo() || ipAddresses().length > 0}>
-                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                        <div class="rounded border border-border bg-surface p-3 shadow-sm">
                             <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Guest Info</div>
                             <div class="space-y-2">
                                 <Show when={hasOsInfo()}>
@@ -224,7 +224,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
                     {/* Memory Details */}
                     <Show when={memoryExtraLines() && memoryExtraLines()!.length > 0}>
-                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                        <div class="rounded border border-border bg-surface p-3 shadow-sm">
                             <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Memory</div>
                             <div class="space-y-1 text-[11px] text-muted">
                                 <For each={memoryExtraLines()!}>{(line) => <div>{line}</div>}</For>
@@ -234,7 +234,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
                     {/* Backup Info */}
                     <Show when={props.guest.lastBackup}>
-                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                        <div class="rounded border border-border bg-surface p-3 shadow-sm">
                             <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Backup</div>
                             <div class="space-y-1 text-[11px]">
                                 {(() => {
@@ -263,12 +263,12 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
                     {/* Tags */}
                     <Show when={props.guest.tags && (Array.isArray(props.guest.tags) ? props.guest.tags.length > 0 : props.guest.tags.length > 0)}>
-                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                        <div class="rounded border border-border bg-surface p-3 shadow-sm">
                             <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Tags</div>
                             <div class="flex flex-wrap gap-1">
                                 <For each={Array.isArray(props.guest.tags) ? props.guest.tags : (props.guest.tags?.split(',') || [])}>
  {(tag) => (
- <span class="inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] dark:bg-slate-700">
+ <span class="inline-block rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
  {tag.trim()}
  </span>
  )}
@@ -279,7 +279,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
  {/* Filesystems */}
  <Show when={hasFilesystemDetails() && props.guest.disks && props.guest.disks.length > 0}>
- <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+ <div class="rounded border border-border bg-surface p-3 shadow-sm">
  <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Filesystems</div>
  <div class="text-[11px] text-muted">
  <DiskList
@@ -292,7 +292,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
  {/* Network Interfaces */}
  <Show when={hasNetworkInterfaces()}>
- <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+ <div class="rounded border border-border bg-surface p-3 shadow-sm">
  <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Network</div>
  <div class="space-y-2">
  <For each={networkInterfaces().slice(0, 4)}>
@@ -300,7 +300,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
  const addresses = iface.addresses ?? [];
  const hasTraffic = (iface.rxBytes ?? 0) > 0 || (iface.txBytes ?? 0) > 0;
  return (
- <div class="rounded border border-dashed border-slate-200 p-2 dark:border-slate-700 overflow-hidden">
+ <div class="rounded border border-dashed border-border p-2 overflow-hidden">
  <div class="flex items-center gap-2 text-[11px] font-medium text-base-content min-w-0">
  <span class="truncate min-w-0">{iface.name ||'interface'}</span>
                                                     <Show when={iface.mac}>

@@ -174,7 +174,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
  </Show>
 
  {/* Label overlay */}
- <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700 leading-none pointer-events-none min-w-0 overflow-hidden">
+ <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none pointer-events-none min-w-0 overflow-hidden">
  <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
  <span>{displayLabel()}</span>
  <Show when={showSublabel()}>
@@ -198,7 +198,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
             {/* Tooltip */}
             <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
                 <div class="min-w-[140px]">
-                    <div class="font-medium mb-1 text-slate-300 border-b border-slate-700 pb-1">
+                    <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
                         Memory Composition
                     </div>
 
@@ -212,7 +212,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                     </Show>
 
                     <Show when={props.total > 0 && (props.balloon || 0) > 0 && (props.balloon || 0) < props.total}>
-                        <div class="flex justify-between gap-3 py-0.5 border-t border-slate-700">
+                        <div class="flex justify-between gap-3 py-0.5 border-t border-border">
                             <span class="text-blue-400">Balloon Limit</span>
                             <span class="whitespace-nowrap text-slate-300">
                                 {formatBytes(props.balloon || 0)}
@@ -223,13 +223,13 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                     <Show
                         when={props.total > 0}
                         fallback={
-                            <div class="flex justify-between gap-3 py-0.5 border-t border-slate-700">
+                            <div class="flex justify-between gap-3 py-0.5 border-t border-border">
                                 <span class="text-blue-300">Utilization</span>
                                 <span class="whitespace-nowrap text-slate-300">{displayLabel()}</span>
                             </div>
                         }
                     >
-                        <div class="flex justify-between gap-3 py-0.5 border-t border-slate-700">
+                        <div class="flex justify-between gap-3 py-0.5 border-t border-border">
                             <span class="text-slate-400">Free</span>
                             <span class="whitespace-nowrap text-slate-300">
                                 {formatBytes(props.total - props.used)}

@@ -58,7 +58,7 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
       </button>
 
       <Show when={open()}>
-        <div class="absolute right-0 mt-1 w-64 rounded-md border border-slate-200 bg-white shadow-sm z-50 dark:border-slate-700 dark:bg-slate-800">
+        <div class="absolute right-0 mt-1 w-64 rounded-md border border-border bg-surface shadow-sm z-50">
           <div class="px-3 py-2 border-b border-border-subtle">
             <div class="flex items-center justify-between">
               <span class="text-xs font-medium text-base-content">Dashboard Widgets</span>

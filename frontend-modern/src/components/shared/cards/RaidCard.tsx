@@ -38,7 +38,7 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
   if (!props.arrays || props.arrays.length === 0) return null;
 
   return (
-    <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+    <div class="rounded border border-border bg-surface p-3 shadow-sm">
       <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
         {props.title || 'RAID'}
       </div>
@@ -53,7 +53,7 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
             const rebuilding = () => Number.isFinite(array.rebuildPercent) && array.rebuildPercent > 0 && array.rebuildPercent < 100;
 
             return (
-              <div class="rounded border border-dashed border-slate-200 p-2 dark:border-slate-700 overflow-hidden">
+              <div class="rounded border border-dashed border-border p-2 overflow-hidden">
                 <div class="flex items-start justify-between gap-2 min-w-0">
                   <div class="min-w-0">
                     <div class="text-[11px] font-semibold text-base-content truncate" title={label()}>

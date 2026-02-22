@@ -62,7 +62,7 @@ export function MetricBar(props: MetricBarProps) {
       <div class={`relative w-full h-full overflow-hidden bg-surface-hover rounded ${props.class || ''}`}>
  <div class={`absolute top-0 left-0 h-full ${progressColorClass()}`} style={{ width: `${width()}%` }} />
  <Show when={showLabel()}>
- <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700 leading-none min-w-0 overflow-hidden">
+ <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none min-w-0 overflow-hidden">
  <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
  <span>{props.label}</span>
  <Show when={showSublabel()}>

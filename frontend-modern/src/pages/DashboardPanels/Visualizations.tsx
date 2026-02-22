@@ -87,7 +87,7 @@ export const MiniGauge: Component<MiniGaugeProps> = (props) => {
                     stroke-width={strokeWidth}
                     stroke-dasharray={`${arcLength} ${circumference}`}
                     stroke-linecap="round"
-                    class="text-slate-100 dark:text-slate-800"
+                    class="text-base-content"
                 />
                 {/* Value */}
                 <circle

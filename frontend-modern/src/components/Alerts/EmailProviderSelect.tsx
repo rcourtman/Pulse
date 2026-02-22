@@ -241,7 +241,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
         />
       </div>
 
-      <div class="border-t border-slate-200 pt-3 dark:border-slate-700">
+      <div class="border-t border-border pt-3">
         <button
           type="button"
           onClick={() => setShowAdvanced(!showAdvanced())}

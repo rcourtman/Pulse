@@ -55,7 +55,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
  <td colSpan={99} class="bg-surface-alt px-4 py-4">
  <div class="grid gap-4 md:grid-cols-2">
  {/* Left: Capacity trend chart */}
- <div class="rounded-md border p-3 shadow-sm ">
+ <div class="rounded-md border p-3 shadow-sm">
  <div class="flex items-center justify-between mb-2">
  <h4 class="text-xs font-semibold text-base-content">Capacity Trend</h4>
  <select
@@ -90,7 +90,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
           {/* Right: Configuration & details */}
           <div class="space-y-3">
             {/* Config card */}
-            <div class="rounded-md border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+            <div class="rounded-md border border-border bg-surface p-3 shadow-sm">
               <h4 class="text-xs font-semibold text-base-content mb-2">Configuration</h4>
               <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
                 <ConfigRow label="Node" value={getRecordNodeLabel(props.record)} />
@@ -109,7 +109,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
 
             {/* ZFS details */}
             <Show when={zfsPool()}>
-              <div class="rounded-md border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+              <div class="rounded-md border border-border bg-surface p-3 shadow-sm">
                 <h4 class="text-xs font-semibold text-base-content mb-2">ZFS Pool</h4>
                 <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
                   <ConfigRow label="State" value={zfsPool()!.state} />
@@ -130,7 +130,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
 
             {/* Physical disks linked to this pool */}
             <Show when={poolDisks().length > 0}>
-              <div class="rounded-md border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+              <div class="rounded-md border border-border bg-surface p-3 shadow-sm">
                 <h4 class="text-xs font-semibold text-base-content mb-2">
                   Physical Disks ({poolDisks().length})
                 </h4>

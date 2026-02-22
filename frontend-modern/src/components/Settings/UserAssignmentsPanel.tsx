@@ -203,7 +203,7 @@ export const UserAssignmentsPanel: Component = () => {
                                             </Show>
                                             <For each={assignment.roleIds}>
                                                 {(roleId) => (
-                                                    <span class="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-border">
+                                                    <span class="inline-flex items-center gap-1 rounded-md bg-surface-alt px-2 py-0.5 text-xs font-medium text-base-content border border-border">
                                                         <Shield class="w-3 h-3" />
                                                         {getRoleName(roleId)}
                                                     </span>
@@ -231,7 +231,7 @@ export const UserAssignmentsPanel: Component = () => {
  keyExtractor={(assignment) => assignment.username}
  emptyState="No users yet"
  desktopMinWidth="620px"
- class="border-x-0 sm:border-x "
+ class="border-x-0 sm:border-x"
  />
  </div>
  </Show>
@@ -251,7 +251,7 @@ export const UserAssignmentsPanel: Component = () => {
  <button
  type="button"
  onClick={() => setShowModal(false)}
- class="p-1.5 rounded-md hover: hover: dark:hover:text-slate-300 "
+ class="p-1.5 rounded-md hover: hover: dark:hover:text-slate-300"
  >
  <X class="w-5 h-5" />
  </button>
@@ -307,7 +307,7 @@ export const UserAssignmentsPanel: Component = () => {
                                         <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
                                     </Show>
                                 </div>
-                                <div class="bg-slate-50 dark:bg-slate-950 rounded-md p-4 border border-border-subtle">
+                                <div class="bg-surface-hover rounded-md p-4 border border-border-subtle">
                                     <Show when={!loadingPermissions() && userPermissions().length === 0}>
                                         <p class="text-xs text-muted italic text-center py-2">
                                             No effective permissions. This user will have no access.
@@ -316,7 +316,7 @@ export const UserAssignmentsPanel: Component = () => {
                                     <div class="flex flex-wrap gap-2">
                                         <For each={userPermissions()}>
                                             {(perm) => (
-                                                <span class="inline-flex items-center rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-900 dark:text-slate-300 border border-border shadow-sm">
+                                                <span class="inline-flex items-center rounded-md bg-surface px-2.5 py-1 text-xs font-semibold text-base-content border border-border shadow-sm">
                                                     <span class="text-blue-600 dark:text-blue-400">{perm.action}</span>
                                                     <span class="mx-1 text-slate-400">:</span>
                                                     <span class="text-blue-600 dark:text-blue-400">{perm.resource}</span>
@@ -335,7 +335,7 @@ export const UserAssignmentsPanel: Component = () => {
                             <button
                                 type="button"
                                 onClick={() => setShowModal(false)}
-                                class="w-full sm:w-auto rounded-md px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors"
+                                class="w-full sm:w-auto rounded-md px-4 py-2 text-sm font-medium text-base-content hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                             >
                                 Cancel
                             </button>

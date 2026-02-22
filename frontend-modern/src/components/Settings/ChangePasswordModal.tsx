@@ -181,7 +181,7 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
                   type="button"
                   onClick={handleClose}
                   disabled={loading()}
-                  class="px-4 py-2 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                  class="px-4 py-2 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                 >
                   Cancel
                 </button>

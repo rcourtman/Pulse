@@ -406,7 +406,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
     <div class="space-y-4">
       <Show when={showHostTable()}>
         <Card padding="none" tone="card" class="mb-0 overflow-hidden">
-          <div class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+          <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
             Host Infrastructure
           </div>
           <div class="overflow-x-auto">
@@ -457,7 +457,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
  <TableRow class="bg-surface-alt">
  <TableCell
  colspan={9}
- class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700"
+ class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-base-content"
  >
  <div class="flex items-center gap-2">
  <Show
@@ -770,12 +770,12 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 
       <Show when={sortedPBSResources().length > 0 || sortedPMGResources().length > 0}>
         <Card padding="none" tone="card" class="mb-0 overflow-hidden">
-          <div class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+          <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
             Service Infrastructure
           </div>
 
           <Show when={sortedPBSResources().length > 0}>
-            <div class="border-b border-slate-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-300">
+            <div class="border-b border-border-subtle px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
               PBS Services
             </div>
             <div class="overflow-x-auto">
@@ -992,7 +992,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
  </Show>
 
  <Show when={sortedPMGResources().length > 0}>
- <div class="border-b px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 ">
+ <div class="border-b px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
  PMG Services
  </div>
  <div class="overflow-x-auto">

@@ -141,7 +141,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
 
           {/* Discovery Options (shown when enabled) */}
           <Show when={props.discoveryEnabled()}>
-            <div class="space-y-4 rounded-md border border-slate-200 bg-white p-3 dark:border-slate-600 dark:bg-slate-800">
+            <div class="space-y-4 rounded-md border border-border bg-surface p-3">
               <fieldset class="space-y-2">
                 <legend class="text-xs font-medium text-base-content">
                   Scan scope

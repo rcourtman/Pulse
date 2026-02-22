@@ -146,7 +146,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
  {diskData().node}
  </span>
  <Show when={diskData().serial}>
- <span class=" font-mono">
+ <span class="font-mono">
  S/N: {diskData().serial}
  </span>
  </Show>
@@ -270,21 +270,21 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
             <span class="text-[10px] font-normal text-slate-400 bg-surface-alt px-1.5 py-0.5 rounded">Real-time</span>
           </h4>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+            <div class="rounded border border-border bg-surface p-3 shadow-sm">
               <HistoryChart
                 resourceType="host" resourceId="dummy" metric="disk"
                 label="Read" unit="B/s"
                 data={readData()} hideSelector hideLock height={120} compact={true}
               />
             </div>
-            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+            <div class="rounded border border-border bg-surface p-3 shadow-sm">
               <HistoryChart
                 resourceType="host" resourceId="dummy" metric="disk"
                 label="Write" unit="B/s"
                 data={writeData()} hideSelector hideLock height={120} compact={true}
               />
             </div>
-            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+            <div class="rounded border border-border bg-surface p-3 shadow-sm">
               <HistoryChart
                 resourceType="host" resourceId="dummy" metric="disk"
                 label="Busy" unit="%"
@@ -299,7 +299,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
       <Show
         when={resId()}
         fallback={
-          <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800 text-center text-[11px] text-muted">
+          <div class="rounded border border-border bg-surface p-3 shadow-sm text-center text-[11px] text-muted">
             Install the Pulse host agent for detailed SMART monitoring and historical charts.
           </div>
         }
@@ -311,7 +311,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
           <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(33.333%-0.5rem)] [&>*]:min-w-[250px]">
             {/* Temperature chart (all disk types) */}
             <Show when={diskData().temperature > 0}>
-              <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+              <div class="rounded border border-border bg-surface p-3 shadow-sm">
                 <HistoryChart
                   resourceType="disk"
                   resourceId={resId()!}
@@ -330,7 +330,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
 
             {/* SATA charts */}
             <Show when={!isNvme() && attrs()?.reallocatedSectors != null}>
-              <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+              <div class="rounded border border-border bg-surface p-3 shadow-sm">
                 <HistoryChart
                   resourceType="disk"
                   resourceId={resId()!}
@@ -349,7 +349,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
 
             {/* NVMe charts */}
             <Show when={isNvme() && attrs()?.percentageUsed != null}>
-              <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+              <div class="rounded border border-border bg-surface p-3 shadow-sm">
                 <HistoryChart
                   resourceType="disk"
                   resourceId={resId()!}
@@ -366,7 +366,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
               </div>
             </Show>
             <Show when={isNvme() && attrs()?.availableSpare != null}>
-              <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+              <div class="rounded border border-border bg-surface p-3 shadow-sm">
                 <HistoryChart
                   resourceType="disk"
                   resourceId={resId()!}
@@ -392,7 +392,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
 /** Small attribute summary card matching the NodeDrawer card pattern. */
 const AttrCard: Component<{ label: string; value: string; ok: boolean }> = (props) => {
   return (
-    <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+    <div class="rounded border border-border bg-surface p-3 shadow-sm">
       <div class="text-[10px] font-medium text-muted uppercase tracking-wide mb-0.5">
         {props.label}
       </div>

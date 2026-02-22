@@ -522,7 +522,7 @@ export const DiagnosticsPanel: Component = () => {
                                 type="button"
                                 onClick={() => exportDiagnostics(false)}
                                 disabled={exportLoading()}
-                                class="flex min-h-10 sm:min-h-9 items-center gap-1.5 px-3 py-2 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+                                class="flex min-h-10 sm:min-h-9 items-center gap-1.5 px-3 py-2 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
                             >
                                 <Download class="w-3.5 h-3.5" />
                                 Full
@@ -776,7 +776,7 @@ export const DiagnosticsPanel: Component = () => {
  <MetricRow label="Outdated Version" value={diagnosticsData()?.dockerAgents?.hostsOutdatedVersion ?? 0} />
  </div>
  <Show when={diagnosticsData()?.dockerAgents?.recommendedAgentVersion}>
- <div class="mt-3 pt-2 border-t border-slate-100 text-xs text-muted">
+ <div class="mt-3 pt-2 border-t border-border-subtle text-xs text-muted">
  Recommended version: {diagnosticsData()?.dockerAgents?.recommendedAgentVersion}
  </div>
  </Show>
@@ -816,7 +816,7 @@ export const DiagnosticsPanel: Component = () => {
  </span>
  </div>
  <Show when={(diagnosticsData()?.alerts?.notes?.length || 0) > 0}>
- <ul class="mt-3 pt-2 border-t border-slate-100 space-y-1 text-xs text-muted list-disc pl-4">
+ <ul class="mt-3 pt-2 border-t border-border-subtle space-y-1 text-xs text-muted list-disc pl-4">
  <For each={diagnosticsData()?.alerts?.notes || []}>
  {(note) => <li>{note}</li>}
  </For>

@@ -57,7 +57,7 @@ export function DiskList(props: DiskListProps) {
             const hasCapacity = disk.total && disk.total > 0;
 
             return (
-              <div class="rounded border border-slate-200 bg-slate-50 px-1.5 py-1 text-[10px] leading-tight shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <div class="rounded border border-border bg-surface-hover px-1.5 py-1 text-[10px] leading-tight shadow-sm">
                 <div
                   class="truncate text-base-content"
                   title={label !== 'Unknown' ? label : undefined}

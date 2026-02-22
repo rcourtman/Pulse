@@ -1588,7 +1588,7 @@ export function Alerts() {
                 Save Changes
               </button>
               <button
-                class="flex-1 px-4 py-2 text-sm transition-colors border border-slate-300 rounded-md text-slate-700 dark:border-slate-600 dark:text-slate-300 hover:bg-surface-hover sm:flex-initial disabled:opacity-60 disabled:cursor-not-allowed"
+                class="flex-1 px-4 py-2 text-sm transition-colors border border-slate-300 rounded-md text-base-content dark:border-slate-600 hover:bg-surface-hover sm:flex-initial disabled:opacity-60 disabled:cursor-not-allowed"
                 disabled={isReloadingConfig()}
                 onClick={async () => {
                   await loadAlertConfiguration({ notify: true });
@@ -2361,7 +2361,7 @@ function DestinationsTab(props: DestinationsTabProps) {
               }
             />
             <button
-              class="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+              class="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-base-content transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:hover:bg-slate-700"
               disabled={!appriseState().enabled || testingApprise()}
               onClick={testApprise}
             >
@@ -2737,7 +2737,7 @@ function ScheduleTab(props: ScheduleTabProps) {
  <button
  type="button"
  onClick={resetToDefaults}
- class="inline-flex items-center gap-2 self-start rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700"
+ class="inline-flex items-center gap-2 self-start rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700"
  title="Restore quiet hours, cooldown, grouping, and escalation settings to their defaults"
  >
  <svg
@@ -2881,7 +2881,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                 </p>
               </div>
 
-              <div class="space-y-3 border-t border-slate-200 pt-4 dark:border-slate-700">
+              <div class="space-y-3 border-t border-border pt-4">
                 <span class={`${labelClass('text-xs uppercase tracking-[0.08em]')} block`}>
                   Suppress categories
                 </span>
@@ -3080,7 +3080,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     }}
                     class="flex-1"
                   />
-                  <div class="w-16 rounded-md bg-slate-100 px-2 py-1 text-center text-sm text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                  <div class="w-16 rounded-md bg-surface-alt px-2 py-1 text-center text-sm text-base-content">
                     {grouping().window} min
                   </div>
                 </div>
@@ -3227,7 +3227,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               <p class={formHelpText}>Define escalation levels for unresolved alerts:</p>
               <For each={escalation().levels}>
                 {(level, index) => (
-                  <div class="flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-600 dark:bg-slate-800">
+                  <div class="flex items-center gap-3 rounded-md border border-border bg-surface-hover p-3">
                     <div class="flex flex-1 flex-col gap-3 sm:grid sm:grid-cols-2 sm:items-center sm:gap-2">
                       <div class="flex items-center gap-2">
                         <span class="text-xs font-medium text-muted">
@@ -4391,7 +4391,7 @@ function HistoryTab(props: {
         {(() => {
           const trends = alertTrends();
           return (
-            <div class="rounded bg-slate-100 p-1 dark:bg-slate-800">
+            <div class="rounded bg-surface-alt p-1">
               <div class="flex h-12 items-end gap-1">
                 {trends.buckets.map((val, i) => {
                   const scaledHeight =
@@ -4467,7 +4467,7 @@ function HistoryTab(props: {
  class="pointer-events-none absolute top-0 flex h-full flex-col items-center"
  style={{ left: `${tick.position * 100}%` }}
  >
- <div class="h-3 w-px bg-slate-300 "></div>
+ <div class="h-3 w-px bg-slate-300"></div>
  <div
  class="mt-1 whitespace-nowrap text-[10px] text-muted transform"
  classList={{'-translate-x-1/2': tick.align === 'center',
@@ -4519,7 +4519,7 @@ function HistoryTab(props: {
                   id="alert-time-filter"
                   value={timeFilter()}
                   onChange={(e) => setTimeFilter(e.currentTarget.value as '24h' | '7d' | '30d' | 'all')}
- class="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 "
+ class="rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
  >
  <option value="24h">Last 24h</option>
  <option value="7d">Last 7d</option>
@@ -4533,7 +4533,7 @@ function HistoryTab(props: {
  id="alert-severity-filter"
  value={severityFilter()}
  onChange={(e) => setSeverityFilter(e.currentTarget.value as'warning' | 'critical' | 'all')}
- class="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 "
+ class="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
  >
  <option value="all">All</option>
  <option value="critical">Critical</option>
@@ -4788,7 +4788,7 @@ function HistoryTab(props: {
  <TableRow class="bg-surface-alt">
  <TableCell
  colspan={10}
- class="py-1.5 pr-3 pl-4 text-[12px] sm:text-sm font-semibold "
+ class="py-1.5 pr-3 pl-4 text-[12px] sm:text-sm font-semibold"
  >
  <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
  <span class="truncate" title={group.fullLabel}>
@@ -5048,7 +5048,7 @@ function HistoryTab(props: {
                                                   />
                                                   <div class="flex justify-end">
                                                     <button
-                                                      class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-white dark:bg-slate-700 text-base-content border-border hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                      class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
                                                       disabled={incidentNoteSaving().has(rowKey) || !(incidentNoteDrafts()[rowKey] || '').trim()}
                                                       onClick={() => {
                                                         void saveIncidentNote(rowKey, alert.id, alert.startTime);

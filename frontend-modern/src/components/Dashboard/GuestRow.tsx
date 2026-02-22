@@ -176,7 +176,7 @@ function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: Gues
 
       <TooltipPortal when={tip.show() && (hasInterfaces() || props.ipAddresses.length > 0)} x={tip.pos().x} y={tip.pos().y}>
         <div class="min-w-[180px] max-w-[280px]">
-          <div class="font-medium mb-1 text-slate-300 border-b border-slate-700 pb-1">
+          <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
             Network Interfaces
           </div>
 
@@ -295,16 +295,16 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
 
       <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
         <div class="min-w-[120px] max-w-[220px]">
-          <div class="font-medium mb-1 text-slate-300 border-b border-slate-700 pb-1">
+          <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
             Operating System
           </div>
           <div class="py-0.5">
-            <div class="text-slate-200 font-medium">{props.osName}</div>
+            <div class="text-base-content font-medium">{props.osName}</div>
             <Show when={props.osVersion}>
               <div class="text-slate-400">Version: {props.osVersion}</div>
             </Show>
             <Show when={props.agentVersion}>
-              <div class="text-slate-500 text-[9px] mt-1 pt-1 border-t border-slate-700">
+              <div class="text-slate-500 text-[9px] mt-1 pt-1 border-t border-border">
                 Agent: {props.agentVersion}
               </div>
             </Show>
@@ -350,13 +350,13 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
 
       <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
         <div class="min-w-[140px]">
-          <div class="font-medium mb-1 text-slate-300 border-b border-slate-700 pb-1">
+          <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
             Backup Status
           </div>
           <Show when={info().status !== 'never'}>
             <div class="py-0.5">
               <div class="text-slate-400">Last backup</div>
-              <div class="text-slate-200 font-medium">
+              <div class="text-base-content font-medium">
                 {new Date(props.lastBackup!).toLocaleDateString(undefined, {
                   weekday: 'short',
                   year: 'numeric',
@@ -368,7 +368,7 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
                 {new Date(props.lastBackup!).toLocaleTimeString()}
               </div>
             </div>
-            <div class="pt-1 mt-1 border-t border-slate-700">
+            <div class="pt-1 mt-1 border-t border-border">
               <span class={config().color}>{info().ageFormatted} ago</span>
             </div>
           </Show>
@@ -405,10 +405,10 @@ function InfoTooltipCell(props: { value: string; tooltip: string; type: string }
 
       <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
         <div class="max-w-[280px]">
-          <div class="font-medium mb-1 text-slate-300 border-b border-slate-700 pb-1">
+          <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
             {label()}
           </div>
-          <div class="py-0.5 text-slate-200 break-all">
+          <div class="py-0.5 text-base-content break-all">
             {props.tooltip}
           </div>
         </div>

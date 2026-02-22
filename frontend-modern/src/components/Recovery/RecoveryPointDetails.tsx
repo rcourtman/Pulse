@@ -197,7 +197,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
         <button
           type="button"
           onClick={() => void copyJSON()}
-          class="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          class="rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-base-content hover:bg-slate-50 dark:hover:bg-slate-700"
         >
           <Show when={copied()} fallback="Copy JSON">
             Copied
@@ -208,7 +208,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
       <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
         <For each={summaryPairs()}>
           {(pair) => (
-            <div class="rounded border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800">
+            <div class="rounded border border-border bg-surface px-3 py-2 text-xs">
               <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">{pair.k}</div>
               <div class="mt-0.5 font-mono text-[11px] text-base-content break-all">{pair.v}</div>
             </div>
@@ -217,13 +217,13 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-muted">
-        <div class="rounded border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+        <div class="rounded border border-border bg-surface px-3 py-2">
           <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Started</div>
           <div class="mt-0.5 font-mono text-[11px] text-base-content">
             {startedMs() > 0 ? formatAbsoluteTime(startedMs()) : 'n/a'}
           </div>
         </div>
-        <div class="rounded border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+        <div class="rounded border border-border bg-surface px-3 py-2">
           <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Completed</div>
           <div class="mt-0.5 font-mono text-[11px] text-base-content">
             {completedMs() > 0 ? formatAbsoluteTime(completedMs()) : 'n/a'}
@@ -232,7 +232,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
       </div>
 
       <Show when={hasPbsDetails()}>
-        <div class="rounded border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
+        <div class="rounded border border-border bg-surface p-3">
           <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">PBS Details</div>
           <div class="mt-2 space-y-2">
             <Show when={pbsComment()}>
@@ -242,7 +242,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
             </Show>
 
             <Show when={pbsOwner()}>
-              <div class="rounded border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800">
+              <div class="rounded border border-border bg-surface px-3 py-2 text-xs">
                 <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Owner</div>
                 <div class="mt-0.5 font-mono text-[11px] text-base-content break-all">{pbsOwner()}</div>
               </div>
@@ -260,7 +260,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
             </Show>
 
             <Show when={isPbsProvider() && point().verified != null}>
-              <div class="rounded border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800">
+              <div class="rounded border border-border bg-surface px-3 py-2 text-xs">
                 <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Verification</div>
                 <div class="mt-0.5 flex items-center gap-2">
                   {point().verified ? (
@@ -299,7 +299,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
                 const status = String(datastore.status || '').trim();
  const dedupFactor = datastore.deduplicationFactor;
  return (
- <div class="rounded border border-slate-200 px-3 py-2 text-xs dark:border-slate-700">
+ <div class="rounded border border-border px-3 py-2 text-xs">
  <div class="flex items-center justify-between gap-2">
  <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
  Repository Health
@@ -352,7 +352,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
  </Show>
 
  <Show when={pbsFiles().length > 0}>
- <div class="rounded border border-border ">
+ <div class="rounded border border-border">
  <button
  type="button"
  onClick={() => setShowPbsFiles((v) => !v)}
@@ -372,7 +372,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
                   </svg>
                 </button>
                 <Show when={showPbsFiles()}>
-                  <div class="border-t border-slate-200 px-3 py-2 dark:border-slate-700">
+                  <div class="border-t border-border px-3 py-2">
                     <ul class="space-y-1">
                       <For each={pbsFiles()}>
                         {(file) => (
@@ -390,7 +390,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
         </div>
       </Show>
 
-      <div class="rounded border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
+      <div class="rounded border border-border bg-surface p-3">
         <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Raw</div>
         <pre class="mt-2 overflow-auto text-[11px] leading-relaxed text-base-content font-mono">
 {prettyJSON()}

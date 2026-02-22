@@ -721,7 +721,7 @@ export function AIIntelligence() {
             <button
               onClick={() => loadAllData()}
               disabled={isRefreshing()}
-              class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 transition-colors"
+              class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 transition-colors"
             >
               <RefreshCwIcon class={`w-4 h-4 ${isRefreshing() ? 'animate-spin' : ''}`} />
               Refresh
@@ -763,7 +763,7 @@ export function AIIntelligence() {
 
  <Show when={showAdvancedSettings()}>
  <div class="absolute right-0 top-10 z-50 w-[340px] p-5 bg-surface rounded-md shadow-sm border border-border animate-slide-up transform origin-top-right">
- <div class="flex items-center justify-between mb-5 pb-3 border-b border-slate-100">
+ <div class="flex items-center justify-between mb-5 pb-3 border-b border-border-subtle">
  <h4 class="text-base font-semibold tracking-tight text-base-content">Patrol Configuration</h4>
  <button
  onClick={() => setShowAdvancedSettings(false)}
@@ -827,7 +827,7 @@ export function AIIntelligence() {
  Operational Mode
  <div class="relative group">
  <CircleHelpIcon class="w-3.5 h-3.5 cursor-help" />
- <div class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-64 p-3 bg-slate-800 text-white rounded-md shadow-md text-xs z-50 pointer-events-none before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-slate-800">
+ <div class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-64 p-3 bg-surface text-white rounded-md shadow-md text-xs z-50 pointer-events-none before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-slate-800">
  <strong>Monitor:</strong> Detect only.<br />
  <strong>Investigate:</strong> Detect & propose fixes.<br />
  <strong>Auto-fix:</strong> Execute safe fixes automatically.
@@ -919,7 +919,7 @@ export function AIIntelligence() {
                     <button
                       onClick={saveAdvancedSettings}
                       disabled={isSavingAdvanced()}
-                      class="w-full py-2.5 text-sm font-medium text-white bg-slate-900 dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 rounded-md shadow-sm transition-all focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 disabled:opacity-70 flex items-center justify-center gap-2"
+                      class="w-full py-2.5 text-sm font-medium text-white bg-base dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover: rounded-md shadow-sm transition-all focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 disabled:opacity-70 flex items-center justify-center gap-2"
                     >
                       <Show when={isSavingAdvanced()}>
                         <div class="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full"></div>
@@ -1160,7 +1160,7 @@ export function AIIntelligence() {
             >
               Run History
               <Show when={displayRunHistory().length > 0}>
-                <span class="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                <span class="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-surface-alt text-slate-600 dark:text-slate-300">
                   {displayRunHistory().length}
                 </span>
               </Show>

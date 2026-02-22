@@ -183,12 +183,12 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
  value={inviteUserID()}
  onInput={(event) => setInviteUserID(event.currentTarget.value)}
  placeholder="username"
- class="w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 "
+ class="w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
  />
  <select
  value={inviteRole()}
  onChange={(event) => setInviteRole(event.currentTarget.value as Exclude<OrganizationRole,'member'>)}
-                          class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                          class="rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600"
                         >
                           <For each={roleOptions.filter((option) => option.value !== 'owner' || currentOrg().ownerUserId === props.currentUser)}>
                             {(option) => <option value={option.value}>{option.label}</option>}
@@ -242,7 +242,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                                     void updateRole(member, event.currentTarget.value as Exclude<OrganizationRole, 'member'>);
                                   }}
                                   disabled={saving() || (isOwner() && props.currentUser !== currentOrg().ownerUserId)}
-                                  class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                                  class="rounded-md border border-slate-300 bg-surface px-2 py-1 text-xs text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600"
                                 >
                                   <For
                                     each={roleOptions.filter(

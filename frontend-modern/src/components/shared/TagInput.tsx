@@ -45,34 +45,34 @@ export function TagInput(props: TagInputProps) {
             onClick={(e) => {
                 // Focus the input when clicking anywhere in the container
                 const input = e.currentTarget.querySelector('input');
-                if (input) input.focus();
-            }}
-        >
-            <For each={props.tags}>
-                {(tag, index) => (
-                    <span class="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-300">
-                        {tag}
-                        <button
-                            type="button"
-                            class="rounded-full p-0.5 text-slate-400 hover:bg-slate-300 hover:text-slate-700 dark:hover:bg-slate-600 dark:hover:text-slate-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                removeTag(index());
-                            }}
-                            title={`Remove ${tag}`}
-                        >
-                            <X class="w-3 h-3" />
-                        </button>
-                    </span>
-                )}
-            </For>
-            <input
-                type="text"
-                value={inputValue()}
-                onInput={(e) => setInputValue(e.currentTarget.value)}
-                onKeyDown={handleKeyDown}
-                onBlur={handleBlur}
-                placeholder={props.tags.length === 0 ? props.placeholder : ''}
+ if (input) input.focus();
+ }}
+ >
+ <For each={props.tags}>
+ {(tag, index) => (
+ <span class="inline-flex items-center gap-1 rounded bg-surface-alt px-2 py-1 text-xs font-medium text-base-content">
+ {tag}
+ <button
+ type="button"
+ class="rounded-full p-0.5 text-slate-400 hover:bg-slate-300 hover: dark:hover:bg-slate-600 dark:hover:text-slate-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500"
+ onClick={(e) => {
+ e.stopPropagation();
+ removeTag(index());
+ }}
+ title={`Remove ${tag}`}
+ >
+ <X class="w-3 h-3" />
+ </button>
+ </span>
+ )}
+ </For>
+ <input
+ type="text"
+ value={inputValue()}
+ onInput={(e) => setInputValue(e.currentTarget.value)}
+ onKeyDown={handleKeyDown}
+ onBlur={handleBlur}
+ placeholder={props.tags.length === 0 ? props.placeholder :''}
                 class="flex-1 bg-transparent min-w-[120px] focus:outline-none"
             />
         </div>

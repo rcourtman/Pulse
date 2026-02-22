@@ -58,7 +58,7 @@ function TierCtaButton(props: { children: string; disabled?: boolean; onClick?: 
 
 function TierCtaLabel(props: { children: string }) {
   return (
-    <div class="w-full inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+    <div class="w-full inline-flex items-center justify-center rounded-md border border-border bg-surface px-4 py-2 text-sm font-semibold text-base-content">
       {props.children}
     </div>
   );
@@ -251,7 +251,7 @@ export default function Pricing() {
  </ul>
  <div class="mt-6">
  <a
- class="w-full inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
+ class="w-full inline-flex items-center justify-center rounded-md border border-border bg-surface px-4 py-2 text-sm font-semibold transition-colors hover:bg-slate-50 dark:hover:bg-slate-700"
  href={getUpgradeActionUrlOrFallback('cloud')}
               target="_blank"
               rel="noopener noreferrer"

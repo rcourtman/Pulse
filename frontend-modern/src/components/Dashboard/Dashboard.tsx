@@ -1594,7 +1594,7 @@ export function Dashboard(props: DashboardProps) {
       <Show when={connected() && initialDataReceived() && filteredGuests().length > 0}>
         <ComponentErrorBoundary name="Guest Table">
           <Card padding="none" tone="card" class="mb-4 rounded-md">
-            <div class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
               Workloads
             </div>
             <div class="overflow-x-auto">
@@ -1615,8 +1615,8 @@ export function Dashboard(props: DashboardProps) {
                         return (
                           <TableHead
                             class={`py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
-                                  ${isFirst() ? 'pl-2 sm:pl-3 pr-1.5 sm:pr-2 text-left' : 'px-1.5 sm:px-2 text-center'}
-                                  ${isSortable ? 'cursor-pointer hover:bg-surface-hover' : ''}`}
+ ${isFirst() ? 'pl-2 sm:pl-3 pr-1.5 sm:pr-2 text-left' : 'px-1.5 sm:px-2 text-center'}
+ ${isSortable ? 'cursor-pointer hover:bg-surface-hover' : ''}`}
                             style={{
                               ...((['cpu', 'memory', 'disk'].includes(col.id))
                                 ? { "width": isMobile() ? "70px" : "140px" }

@@ -65,27 +65,23 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
 
     return (
         <div
-            class={`
-        rounded-md border transition-all duration-200
-        ${props.isGloballyDisabled
-                    ? 'border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 opacity-60'
-                    : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800'
-                }
-        ${props.hasChanges ? 'ring-2 ring-blue-400 ring-opacity-50' : ''}
-      `}
+            class={`rounded-md border transition-all duration-200
+ ${props.isGloballyDisabled
+ ? 'border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 opacity-60'
+ : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800'
+ }
+ ${props.hasChanges ? 'ring-2 ring-blue-400 ring-opacity-50' : ''}`}
             data-testid={props.testId || `section-${props.id}`}
         >
             {/* Section Header */}
             <button
                 type="button"
                 onClick={handleToggle}
-                class={`
-          w-full flex items-center justify-between gap-3 px-4 py-3
-          text-left cursor-pointer select-none
-          hover:bg-surface-hover
-          transition-colors duration-150
-          ${isCollapsed() ? 'rounded-md' : 'rounded-t-lg border-b border-border'}
-        `}
+                class={`w-full flex items-center justify-between gap-3 px-4 py-3
+ text-left cursor-pointer select-none
+ hover:bg-surface-hover
+ transition-colors duration-150
+ ${isCollapsed() ? 'rounded-md' : 'rounded-t-lg border-b border-border'}`}
                 aria-expanded={!isCollapsed()}
                 aria-controls={`section-content-${props.id}`}
             >
@@ -112,7 +108,7 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
                                 {props.title}
                             </h3>
                             <Show when={props.resourceCount !== undefined}>
-                                <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                                <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface-alt text-slate-600 dark:text-slate-300">
                                     {props.resourceCount}
                                 </span>
                             </Show>
@@ -145,10 +141,8 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
             {/* Section Content */}
             <div
                 id={`section-content-${props.id}`}
-                class={`
-          overflow-hidden transition-all duration-200 ease-in-out
-          ${isCollapsed() ? 'max-h-0 opacity-0' : 'max-h-[5000px] opacity-100'}
-        `}
+                class={`overflow-hidden transition-all duration-200 ease-in-out
+ ${isCollapsed() ? 'max-h-0 opacity-0' : 'max-h-[5000px] opacity-100'}`}
             >
                 <div class="p-4">
                     <Show when={showEmpty()}>
@@ -193,12 +187,10 @@ export const SectionActionButton: Component<SectionActionButtonProps> = (props) 
             }}
             disabled={props.disabled}
             title={props.title}
-            class={`
-        inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium
-        transition-colors duration-150
-        ${variantClasses[props.variant || 'default']}
-        ${props.disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-      `}
+            class={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium
+ transition-colors duration-150
+ ${variantClasses[props.variant || 'default']}
+ ${props.disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
         >
             <Show when={props.icon}>
                 {props.icon}
@@ -231,11 +223,9 @@ export const NestedGroupHeader: Component<NestedGroupHeaderProps> = (props) => {
 
     return (
         <div
-            class={`
-        flex items-center justify-between gap-3 px-3 py-2 -mx-3 rounded-md
-        ${props.onToggle ? 'cursor-pointer hover:bg-surface-hover' : ''}
-        transition-colors duration-150
-      `}
+            class={`flex items-center justify-between gap-3 px-3 py-2 -mx-3 rounded-md
+ ${props.onToggle ? 'cursor-pointer hover:bg-surface-hover' : ''}
+ transition-colors duration-150`}
             onClick={props.onToggle}
         >
             <div class="flex items-center gap-2 min-w-0">

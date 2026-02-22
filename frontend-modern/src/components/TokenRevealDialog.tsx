@@ -72,7 +72,7 @@ export const TokenRevealDialog: Component = () => {
  return (
  <div class="fixed inset-0 z-[60] flex items-center justify-center px-4 py-6">
  <div
- class="absolute inset-0 bg-slate-900"
+ class="absolute inset-0 bg-base"
  role="presentation"
  onClick={handleDismiss}
  />

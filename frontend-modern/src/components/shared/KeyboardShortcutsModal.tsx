@@ -58,7 +58,7 @@ export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
       panelClass="max-w-xl"
       ariaLabel="Keyboard shortcuts"
     >
-      <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+      <div class="flex items-center justify-between border-b border-border px-5 py-4">
         <h2 class="text-lg font-semibold text-base-content">
           Keyboard Shortcuts
         </h2>
@@ -86,7 +86,7 @@ export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
                   {(item) => (
                     <div class="flex items-center justify-between text-sm text-base-content">
                       <span>{item.description}</span>
-                      <span class="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                      <span class="rounded bg-surface-alt px-2 py-1 text-xs font-medium text-base-content">
                         {item.keys}
                       </span>
                     </div>
@@ -98,7 +98,7 @@ export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
         </For>
       </div>
 
-      <div class="border-t border-slate-200 px-5 py-3 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+      <div class="border-t border-border px-5 py-3 text-xs text-slate-500 dark:text-slate-400">
         Press <span class="font-medium">?</span> again or <span class="font-medium">Esc</span> to close.
       </div>
     </Dialog>

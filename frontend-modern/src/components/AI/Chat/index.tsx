@@ -899,7 +899,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
             <div class="flex items-center gap-2">
               <button
                 onClick={() => updateControlLevel('controlled')}
-                class="px-2 py-1 rounded-md border border-red-200 dark:border-red-800 bg-white dark:bg-red-900 text-[10px] font-medium text-red-700 dark:text-red-200 hover:bg-white dark:hover:bg-red-900"
+                class="px-2 py-1 rounded-md border border-red-200 dark:border-red-800 bg-surface dark:bg-red-900 text-[10px] font-medium text-red-700 dark:text-red-200 hover: dark:hover:bg-red-900"
               >
                 Switch to Approval
               </button>

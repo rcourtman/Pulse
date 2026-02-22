@@ -413,7 +413,7 @@ export const OIDCPanel: Component<Props> = (props) => {
           <div class="space-y-4">
             <button
               type="button"
-              class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md border border-border px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+              class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md border border-border px-3 py-2.5 text-sm font-semibold text-base-content hover:bg-slate-50 dark:hover:bg-slate-800"
               onClick={() => setAdvancedOpen(!advancedOpen())}
             >
               {advancedOpen() ? 'Hide advanced OIDC options' : 'Show advanced OIDC options'}

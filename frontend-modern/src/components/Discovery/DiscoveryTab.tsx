@@ -394,7 +394,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
             {/* Commands Preview - Expandable before first scan */}
             <Show when={!discovery() && !isScanning() && !discovery.loading && !discoveryInfo.loading && discoveryInfo()?.commands && discoveryInfo()!.commands!.length > 0}>
-                <details class="rounded border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800" open={showCommandsPreview()}>
+                <details class="rounded border border-border bg-surface shadow-sm" open={showCommandsPreview()}>
                     <summary
                         class="p-2.5 text-xs font-medium text-base-content cursor-pointer hover:bg-surface-hover flex items-center gap-2"
                         onClick={(e) => { e.preventDefault(); setShowCommandsPreview(!showCommandsPreview()); }}
@@ -645,7 +645,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 {(d) => (
                     <div class="space-y-4">
                         {/* Service Header */}
-                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                        <div class="rounded border border-border bg-surface p-3 shadow-sm">
                             <div class="flex items-start justify-between">
                                 <div>
                                     <h3 class="text-sm font-semibold text-base-content">
@@ -707,7 +707,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
  {/* CLI Access */}
  <Show when={d().cli_access}>
- <div class="rounded border border-slate-200 p-3 shadow-sm dark:border-slate-600 ">
+ <div class="rounded border border-border p-3 shadow-sm">
  <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
  CLI Access
  </div>
@@ -719,7 +719,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
  {/* Configuration, Data & Log Paths */}
  <Show when={d().config_paths?.length > 0 || d().data_paths?.length > 0 || d().log_paths?.length > 0}>
- <div class="rounded border border-slate-200 p-3 shadow-sm dark:border-slate-600 ">
+ <div class="rounded border border-border p-3 shadow-sm">
  <Show when={d().config_paths?.length > 0}>
  <div class="mb-3">
  <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-1">
@@ -773,14 +773,14 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
  {/* Ports */}
  <Show when={d().ports?.length > 0}>
- <div class="rounded border border-slate-200 p-3 shadow-sm dark:border-slate-600 ">
+ <div class="rounded border border-border p-3 shadow-sm">
  <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
  Listening Ports
  </div>
  <div class="flex flex-wrap gap-1">
  <For each={d().ports}>
  {(port) => (
- <span class="inline-block rounded px-1.5 py-0.5 text-[10px] ">
+ <span class="inline-block rounded px-1.5 py-0.5 text-[10px]">
  {port.port}/{port.protocol}
  <Show when={port.process}>
  <span class="text-muted ml-1">({port.process})</span>
@@ -794,7 +794,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
  {/* Key Facts */}
  <Show when={d().facts?.length > 0}>
- <div class="rounded border border-slate-200 p-3 shadow-sm dark:border-slate-600 ">
+ <div class="rounded border border-border p-3 shadow-sm">
  <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
  Discovered Facts
  </div>
@@ -814,7 +814,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
  </Show>
 
  {/* User Notes */}
- <div class="rounded border border-slate-200 p-3 shadow-sm dark:border-slate-600 ">
+ <div class="rounded border border-border p-3 shadow-sm">
  <div class="flex items-center justify-between mb-2">
  <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
  Your Notes
@@ -876,7 +876,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
  {/* AI Reasoning (collapsible) */}
  <Show when={d().ai_reasoning}>
- <details class="rounded border shadow-sm ">
+ <details class="rounded border shadow-sm">
  <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-base-content cursor-pointer hover:bg-surface-hover">
  AI Reasoning
  </summary>
@@ -890,7 +890,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
  {/* Scan Details / Raw Command Outputs (collapsible) */}
  <Show when={d().raw_command_output && Object.keys(d().raw_command_output!).length > 0}>
- <details class="rounded border shadow-sm ">
+ <details class="rounded border shadow-sm">
  <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-base-content cursor-pointer hover:bg-surface-hover">
  Scan Details ({Object.keys(d().raw_command_output!).length} commands)
  </summary>
@@ -913,7 +913,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
                         {/* Commands Run (for non-admin users who can't see full output) */}
                         <Show when={!d().raw_command_output && d().scan_duration && d().scan_duration > 0}>
-                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                            <div class="rounded border border-border bg-surface p-3 shadow-sm">
                                 <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-1">
                                     Scan Info
                                 </div>

@@ -174,7 +174,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
  <div class="flex items-center gap-1 flex-wrap">
  <For each={inv().tools_used}>
  {(tool) => (
- <span class="px-1.5 py-0.5 rounded text-slate-700 text-[10px] font-medium">
+ <span class="px-1.5 py-0.5 rounded text-base-content text-[10px] font-medium">
  {tool}
  </span>
  )}

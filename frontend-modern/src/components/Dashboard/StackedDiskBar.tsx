@@ -273,7 +273,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
  </Show>
 
  {/* Label overlay */}
- <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700 leading-none min-w-0 overflow-hidden">
+ <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none min-w-0 overflow-hidden">
  <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
  <span>{displayLabel()}</span>
  <Show when={showMaxLabel()}>
@@ -340,7 +340,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
       {/* Tooltip for disk breakdown */}
       <TooltipPortal when={tip.show() && tooltipContent().length > 0} x={tip.pos().x} y={tip.pos().y}>
         <div class="min-w-[140px]">
-          <div class="font-medium mb-1 text-slate-300 border-b border-slate-700 pb-1">
+          <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
             {hasMultipleDisks() ? 'Disk Breakdown' : 'Disk Usage'}
           </div>
           <For each={tooltipContent()}>
@@ -357,7 +357,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                     {item.percent} ({item.used}/{item.total})
                   </span>
                 </div>
-                <div class="h-1.5 w-full rounded bg-slate-700 overflow-hidden">
+                <div class="h-1.5 w-full rounded bg-surface-hover overflow-hidden">
                   <div
                     class="h-full"
                     style={{

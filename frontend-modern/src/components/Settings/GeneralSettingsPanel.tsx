@@ -119,7 +119,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
  <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
  <div class="flex items-center gap-3 min-w-0">
  <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
- <Thermometer class="w-5 h-5 " strokeWidth={2} />
+ <Thermometer class="w-5 h-5" strokeWidth={2} />
  </div>
  <div class="text-sm text-muted min-w-0">
  <p class="font-medium text-base-content truncate">
@@ -326,7 +326,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
 
               {/* Custom interval input */}
               <Show when={props.pvePollingSelection() === 'custom'}>
-                <div class="mt-4 flex flex-col sm:flex-row sm:items-center gap-4 rounded-md border border-dashed border-slate-300 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800 transition-all animate-in fade-in slide-in-from-top-1">
+                <div class="mt-4 flex flex-col sm:flex-row sm:items-center gap-4 rounded-md border border-dashed border-slate-300 bg-surface-hover p-4 dark:border-slate-700 transition-all animate-in fade-in slide-in-from-top-1">
                   <div class="flex-1 min-w-0">
                     <label class="block text-sm font-medium text-base-content truncate">
                       Custom polling interval

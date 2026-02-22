@@ -749,7 +749,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   <p class="text-blue-800 dark:text-blue-200 font-medium">
                                     Run this command on your Proxmox VE node:
                                   </p>
-                                  <div class="relative bg-slate-900 rounded-md p-3 font-mono text-xs overflow-x-auto">
+                                  <div class="relative bg-base rounded-md p-3 font-mono text-xs overflow-x-auto">
                                     <button
                                       type="button"
                                       disabled={loadingAgentCommand()}
@@ -779,7 +779,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
  setLoadingAgentCommand(false);
  }
  }}
- class="absolute top-2 right-2 p-1.5 hover:text-slate-200 bg-slate-700 rounded-md transition-colors disabled:opacity-50"
+ class="absolute top-2 right-2 p-1.5 hover:text-slate-200 bg-surface-hover rounded-md transition-colors disabled:opacity-50"
  title="Copy command"
  >
  <Show when={loadingAgentCommand()} fallback={
@@ -827,7 +827,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
                                 {/* One-line command */}
                                 <div class="space-y-3">
-                                  <div class="relative bg-slate-900 rounded-md p-3 font-mono text-xs overflow-x-auto">
+                                  <div class="relative bg-base rounded-md p-3 font-mono text-xs overflow-x-auto">
                                     <button
                                       type="button"
                                       onClick={async () => {
@@ -893,7 +893,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           notificationStore.error('Failed to copy command');
                                         }
                                       }}
-                                      class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-200 bg-slate-700 rounded-md transition-colors"
+                                      class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-200 bg-surface-hover rounded-md transition-colors"
                                       title="Copy command"
                                     >
                                       <svg
@@ -1351,7 +1351,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   <p class="text-blue-800 dark:text-blue-200 text-xs mt-3">
                                     Run this command on your PBS node:
                                   </p>
-                                  <div class="relative bg-slate-900 rounded-md p-3 font-mono text-xs overflow-x-auto">
+                                  <div class="relative bg-base rounded-md p-3 font-mono text-xs overflow-x-auto">
                                     <button
                                       type="button"
                                       onClick={async () => {
@@ -1383,7 +1383,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           setLoadingAgentCommand(false);
                                         }
                                       }}
-                                      class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-white rounded bg-slate-800 hover:bg-slate-700 transition-colors"
+                                      class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-white rounded bg-surface hover:bg-slate-700 transition-colors"
                                       title="Copy to clipboard"
                                       disabled={loadingAgentCommand()}
                                     >
@@ -1419,7 +1419,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
                                 {/* One-line command */}
                                 <div class="space-y-3">
-                                  <div class="relative bg-slate-900 rounded-md p-3 font-mono text-xs overflow-x-auto">
+                                  <div class="relative bg-base rounded-md p-3 font-mono text-xs overflow-x-auto">
                                     <Show when={formData().host && formData().host.trim() !== ''}>
                                       <button
                                         type="button"
@@ -1464,7 +1464,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             notificationStore.error('Failed to copy command');
                                           }
                                         }}
-                                        class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-200 bg-slate-700 rounded-md transition-colors"
+                                        class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-200 bg-surface-hover rounded-md transition-colors"
                                         title="Copy command"
                                       >
                                         <svg
@@ -1991,7 +1991,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
  class="mb-3"
  titleClass="text-base-content"
  />
- <div class="rounded-md border border-slate-200 bg-white p-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800">
+ <div class="rounded-md border border-border bg-surface p-3 text-sm shadow-sm">
  <div class="flex items-start justify-between gap-3">
  <div>
  <p class="font-medium text-base-content">Monitor physical disk health (SMART)</p>
@@ -2009,10 +2009,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
  />
  </div>
  <Show when={formData().monitorPhysicalDisks}>
- <div class="mt-3 flex items-center gap-2 border-t border-slate-200 pt-3 dark:border-slate-700">
+ <div class="mt-3 flex items-center gap-2 border-t border-border pt-3">
  <label class="text-xs text-muted">Poll every</label>
  <select
- class="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-700"
+ class="rounded border bg-surface px-2 py-1 text-xs text-base-content "
  value={formData().physicalDiskPollingMinutes}
  onChange={(e) => updateField('physicalDiskPollingMinutes', parseInt(e.currentTarget.value, 10))}
  >
@@ -2026,7 +2026,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
  </div>
 
  <Show when={showTemperatureMonitoringSection()}>
- <div class="rounded-md border border-slate-200 bg-white p-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800">
+ <div class="rounded-md border border-border bg-surface p-3 text-sm shadow-sm">
  <div class="flex items-start justify-between gap-3">
  <div>
  <p class="font-medium text-base-content">Temperature monitoring</p>

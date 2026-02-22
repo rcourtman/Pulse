@@ -129,7 +129,7 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
  type="checkbox"
  checked={acknowledged()}
  onChange={(e) => setAcknowledged(e.currentTarget.checked)}
- class="mt-1 w-4 h-4 text-blue-600 bg-slate-100 rounded focus:ring-blue-500 focus:ring-2"
+ class="mt-1 w-4 h-4 text-blue-600 bg-surface-alt rounded focus:ring-blue-500 focus:ring-2"
  disabled={props.isApplying}
  />
  <span class="text-sm text-base-content">

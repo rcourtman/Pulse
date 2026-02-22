@@ -36,7 +36,7 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
  />
 
  {/* Label with optional anomaly indicator */}
- <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700 leading-none pointer-events-none">
+ <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none pointer-events-none">
  {formatPercent(props.usage)}
  <Show when={props.cores}>
  <span class="hidden sm:inline font-normal text-muted ml-1">({props.cores})</span>
@@ -56,7 +56,7 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
             {/* Tooltip */}
             <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
                 <div class="min-w-[160px]">
-                    <div class="font-medium mb-1 text-slate-300 border-b border-slate-700 pb-1">
+                    <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
                         CPU Details
                     </div>
 
@@ -76,7 +76,7 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
                     <Show when={props.loadAverage !== undefined}>
                         <div class="flex justify-between gap-3 py-0.5">
                             <span class="text-slate-400">Load (1m)</span>
-                            <span class="font-medium text-slate-200">
+                            <span class="font-medium text-base-content">
                                 {props.loadAverage?.toFixed(2)}
                             </span>
                         </div>

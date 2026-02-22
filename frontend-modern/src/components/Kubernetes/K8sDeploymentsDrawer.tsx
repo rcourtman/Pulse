@@ -169,7 +169,7 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
  value={search()}
  onInput={(e) => setSearch(e.currentTarget.value)}
  placeholder="Search deployments..."
- class="w-[12rem] rounded-md border border-slate-200 px-2 py-1 text-xs font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 "
+ class="w-[12rem] rounded-md border border-border px-2 py-1 text-xs font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
  />
 
  <Show when={namespaceOptions().length > 0}>
@@ -184,7 +184,7 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
  id="k8s-deployments-namespace"
  value={namespace()}
  onChange={(e) => setNamespace(e.currentTarget.value)}
- class="min-w-[10rem] rounded-md border border-slate-200 px-2 py-1 text-xs font-medium shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 "
+ class="min-w-[10rem] rounded-md border border-border px-2 py-1 text-xs font-medium shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
  >
  <option value="">All namespaces</option>
  <For each={namespaceOptions()}>
@@ -197,7 +197,7 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
  <button
  type="button"
  onClick={() => openPods(namespace() || undefined)}
- class="rounded-md border border-slate-200 px-3 py-1 text-xs font-semibold shadow-sm hover: dark:border-slate-700 dark:hover:bg-slate-800"
+ class="rounded-md border border-border px-3 py-1 text-xs font-semibold shadow-sm hover: dark:hover:bg-slate-800"
  >
  Open Pods
  </button>
@@ -266,7 +266,7 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
                               <button
                                 type="button"
                                 onClick={() => openPods(dep.kubernetes?.namespace)}
-                                class="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800"
+                                class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800"
                               >
                                 View Pods
                               </button>

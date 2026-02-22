@@ -410,7 +410,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
  <select
  value={accessRole()}
  onChange={(event) => setAccessRole(event.currentTarget.value as ShareAccessRole)}
- class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 "
+ class="w-full rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600"
  >
  <For each={accessRoleOptions}>
  {(option) => <option value={option.value}>{option.label}</option>}
@@ -428,7 +428,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
  <select
  value={selectedQuickPick()}
  onChange={(event) => applyResourceQuickPick(event.currentTarget.value)}
- class="w-full rounded-md border border-blue-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-700 dark:bg-slate-800 "
+ class="w-full rounded-md border border-blue-300 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-700"
  >
  <option value="">Select resource</option>
  <For each={unifiedResourceOptions()}>
@@ -507,7 +507,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
  value={resourceName()}
  onInput={(event) => updateResourceName(event.currentTarget.value)}
  placeholder="optional display name"
- class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 "
+ class="w-full rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600"
  />
  </label>
  </div>

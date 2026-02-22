@@ -1696,7 +1696,7 @@ export const AISettings: Component = () => {
                         <div class="flex items-center gap-3">
                           <label class="text-xs font-medium text-muted w-32 flex-shrink-0">Scan Interval</label>
                           <select
-                            class="flex-1 px-2 py-1 text-sm border border-border rounded bg-white dark:bg-slate-700"
+                            class="flex-1 px-2 py-1 text-sm border border-border rounded bg-surface"
                             value={form.discoveryIntervalHours}
                             onChange={(e) => setForm('discoveryIntervalHours', parseInt(e.currentTarget.value, 10))}
                             disabled={saving()}
@@ -1744,7 +1744,7 @@ export const AISettings: Component = () => {
  />
  </div>
  <Show when={parseFloat(form.costBudgetUSD30d) > 0}>
- <span class="text-xs ">≈ ${(parseFloat(form.costBudgetUSD30d) / 30).toFixed(2)}/day</span>
+ <span class="text-xs">≈ ${(parseFloat(form.costBudgetUSD30d) / 30).toFixed(2)}/day</span>
  </Show>
  <Show when={!form.costBudgetUSD30d || parseFloat(form.costBudgetUSD30d) === 0}>
  <span class="text-[10px] text-muted">Set a budget to receive usage alerts</span>
@@ -1770,7 +1770,7 @@ export const AISettings: Component = () => {
  step={30}
  disabled={saving()}
  />
- <span class="text-xs ">seconds</span>
+ <span class="text-xs">seconds</span>
  <Show when={form.requestTimeoutSeconds !== 300}>
  <span class="text-[10px] text-blue-600 dark:text-blue-400">Custom</span>
  </Show>
@@ -1807,7 +1807,7 @@ export const AISettings: Component = () => {
                   <select
                     value={form.controlLevel}
                     onChange={(e) => setForm('controlLevel', e.currentTarget.value as ControlLevel)}
-                    class="flex-1 min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded bg-white dark:bg-slate-700"
+                    class="flex-1 min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded bg-surface"
                     disabled={saving()}
                   >
                     <option value="read_only">Read Only - Pulse Assistant can only observe</option>
@@ -1850,7 +1850,7 @@ export const AISettings: Component = () => {
                         value={form.protectedGuests}
                         onInput={(e) => setForm('protectedGuests', e.currentTarget.value)}
  placeholder="e.g., 100, 101, prod-db"
- class="w-full min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded "
+ class="w-full min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded"
  disabled={saving()}
  />
  <p class="text-[10px] text-muted mt-1">
@@ -1875,7 +1875,7 @@ export const AISettings: Component = () => {
  }}
  >
  <div class="flex items-center gap-2">
- <svg class="w-4 h-4 " fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
  </svg>
  <span class="text-sm font-medium text-base-content">Chat Session Maintenance</span>
@@ -1920,7 +1920,7 @@ export const AISettings: Component = () => {
  <select
  value={selectedSessionId()}
  onChange={(e) => setSelectedSessionId(e.currentTarget.value)}
- class="w-full min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded "
+ class="w-full min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded"
  disabled={saving()}
  >
  <For each={chatSessions()}>
@@ -2192,7 +2192,7 @@ export const AISettings: Component = () => {
                     value={setupApiKey()}
                     onInput={(e) => setSetupApiKey(e.currentTarget.value)}
                     placeholder={setupProvider() === 'anthropic' ? 'sk-ant-...' : setupProvider() === 'gemini' ? 'AIza...' : setupProvider() === 'openrouter' ? 'sk-or-...' : 'sk-...'}
-                    class="w-full px-3 py-2 border border-border rounded-md bg-white dark:bg-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    class="w-full px-3 py-2 border border-border rounded-md bg-surface focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                   <p class="text-xs text-slate-500 mt-1.5">
                     <a

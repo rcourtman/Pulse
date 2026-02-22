@@ -310,7 +310,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
             </div>
 
             {/* Resource list */}
-            <div class="border border-slate-700 rounded-md overflow-hidden">
+            <div class="border border-border rounded-md overflow-hidden">
                 <Show
                     when={reportableResources().length > 0}
                     fallback={
@@ -368,7 +368,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                                                     <Show when={resource.tags && resource.tags.length > 0}>
                                                         <For each={resource.tags?.slice(0, 2)}>
                                                             {(tag) => (
-                                                                <span class="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">
+                                                                <span class="text-xs px-1.5 py-0.5 rounded bg-surface-hover text-slate-300">
                                                                     {tag}
                                                                 </span>
                                                             )}
@@ -390,7 +390,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                                                 <div class="hidden sm:flex gap-1 flex-shrink-0">
                                                     <For each={resource.tags?.slice(0, 2)}>
                                                         {(tag) => (
-                                                            <span class="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">
+                                                            <span class="text-xs px-1.5 py-0.5 rounded bg-surface-hover text-slate-300">
                                                                 {tag}
                                                             </span>
                                                         )}
@@ -413,7 +413,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div class="flex flex-col sm:flex-row gap-2">
                     <button
-                        class="w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-300 transition-colors"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-md border border-border text-slate-400 hover:border-slate-500 hover:text-slate-300 transition-colors"
                         onClick={selectAllVisible}
                     >
                         <CheckSquare size={14} />
@@ -421,7 +421,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                     </button>
                     <Show when={props.selected().length > 0}>
                         <button
-                            class="w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-md border border-slate-700 text-slate-400 hover:border-red-500 hover:text-red-400 transition-colors"
+                            class="w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-md border border-border text-slate-400 hover:border-red-500 hover:text-red-400 transition-colors"
                             onClick={clearAll}
                         >
                             <XSquare size={14} />

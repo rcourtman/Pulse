@@ -342,7 +342,7 @@ export function Infrastructure() {
  <div class="hidden lg:block h-[124px] w-full bg-surface-alt rounded-md border border-border"></div>
  <Card padding="sm" class="h-[52px] bg-surface-alt"></Card>
  <Card padding="none" tone="card" class="h-[600px] overflow-hidden">
- <div class="h-8 border-b "></div>
+ <div class="h-8 border-b"></div>
  <div class="space-y-4 p-4">
  <div class="h-4 w-1/4 rounded bg-surface-hover"></div>
  <div class="h-4 w-1/2 rounded bg-surface-hover"></div>
@@ -363,7 +363,7 @@ export function Infrastructure() {
  <button
  type="button"
  onClick={() => refetch()}
- class="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover: dark:text-slate-200"
+ class="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:"
  >
  <RefreshCwIcon class="h-3.5 w-3.5" />
  Retry
@@ -446,7 +446,7 @@ export function Infrastructure() {
  id="infra-source-filter"
  value={selectedSource()}
  onChange={(e) => setSelectedSource(e.currentTarget.value)}
- class="min-w-[8rem] rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 "
+ class="min-w-[8rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
  >
  <option value="">All</option>
  <For each={sourceOptions.filter((s) => availableSources().has(s.key))}>
@@ -461,7 +461,7 @@ export function Infrastructure() {
  id="infra-status-filter"
  value={selectedStatus()}
  onChange={(e) => setSelectedStatus(e.currentTarget.value)}
- class="min-w-[7rem] rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 "
+ class="min-w-[7rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
  >
  <option value="">All</option>
  <For each={statusOptions()}>
@@ -542,7 +542,7 @@ export function Infrastructure() {
                           <button
                             type="button"
                             onClick={clearFilters}
-                            class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                            class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:bg-slate-50"
                           >
                             Clear filters
                           </button>

@@ -117,14 +117,14 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
  </p>
 
  <div class="mb-8">
- <div class="bg-slate-900 rounded-md p-4 font-mono text-sm text-emerald-400 border border-slate-800 flex items-center justify-between">
+ <div class="bg-base rounded-md p-4 font-mono text-sm text-emerald-400 border border-border-subtle flex items-center justify-between">
  <div class="flex items-center space-x-3 overflow-x-auto scrollbar-hide">
  <Terminal class="w-4 h-4 flex-shrink-0" />
  <code class="whitespace-nowrap select-all">{getTokenCommand()}</code>
  </div>
  <button
  onClick={copyCommand}
- class="ml-4 flex-shrink-0 p-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors focus:outline-none focus:ring-0"
+ class="ml-4 flex-shrink-0 p-2 rounded-md bg-surface hover:bg-slate-700 text-slate-300 hover:text-white transition-colors focus:outline-none focus:ring-0"
  title="Copy command"
  >
  <Show when={copied()} fallback={<Copy class="w-4 h-4" />}>

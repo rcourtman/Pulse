@@ -44,10 +44,10 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
         type="button"
         onClick={() => setIsOpen(!isOpen())}
         class={`inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-xs font-medium rounded-md transition-all
-          ${isOpen()
-            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-            : 'bg-surface-hover text-muted hover:bg-surface-hover'
-          }`}
+ ${isOpen()
+ ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+ : 'bg-surface-hover text-muted hover:bg-surface-hover'
+ }`}
         title="Choose which columns to display"
       >
         {/* Columns icon */}
@@ -56,7 +56,7 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
         </svg>
         <span>Columns</span>
         <Show when={hiddenCount() > 0}>
-          <span class="ml-0.5 inline-flex items-center whitespace-nowrap rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 dark:bg-slate-600 dark:text-slate-200">
+          <span class="ml-0.5 inline-flex items-center whitespace-nowrap rounded-full bg-surface-alt px-1.5 py-0.5 text-[10px] font-semibold text-base-content">
             {hiddenCount()} hidden
           </span>
         </Show>
@@ -64,7 +64,7 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
 
       <Show when={isOpen()}>
         <div
-          class="absolute right-0 mt-1 w-56 rounded-md border border-slate-200 bg-white shadow-sm z-50 dark:border-slate-700 dark:bg-slate-800"
+          class="absolute right-0 mt-1 w-56 rounded-md border border-border bg-surface shadow-sm z-50"
         >
           <div class="px-3 py-2 border-b border-border-subtle">
             <div class="flex items-center justify-between">
