@@ -131,6 +131,16 @@ export default tseslint.config(
                     selector: "TemplateElement[value.raw=/(?:^|\\s)(?:bg|text|border|ring)-(?:slate|gray|zinc|neutral)-(?:50|100|200|700|800)(?:$|\\s)/]",
                     message: "Use semantic design system classes (e.g. bg-surface, text-base-content, border-border) instead of hardcoded tailwind grays. See DESIGN_SYSTEM.md for the token reference.",
                 },
+                // Catch orphaned CSS prefixes (e.g. "hover: " with no utility after it).
+                // These produce no CSS output and are always a bug from bad find-replace.
+                {
+                    selector: "Literal[value=/(?:^|\\s)(?:hover|focus|active|dark|lg|md|sm|xl|2xl):\\s/]",
+                    message: "Orphaned CSS prefix detected (e.g. 'hover: ' with nothing after it). This is a broken class string — the utility class is missing.",
+                },
+                {
+                    selector: "TemplateElement[value.raw=/(?:^|\\s)(?:hover|focus|active|dark|lg|md|sm|xl|2xl):\\s/]",
+                    message: "Orphaned CSS prefix detected (e.g. 'hover: ' with nothing after it). This is a broken class string — the utility class is missing.",
+                },
             ],
         },
     },
