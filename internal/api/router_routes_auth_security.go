@@ -658,8 +658,13 @@ func newSSOAdminRuntime(router *Router) extensions.SSOAdminRuntime {
 		if router == nil {
 			return nil
 		}
+		previous := router.ssoConfig
 		router.ssoConfig = toCoreSSOConfig(snapshot)
-		return router.saveSSOConfig()
+		if err := router.saveSSOConfig(); err != nil {
+			router.ssoConfig = previous
+			return err
+		}
+		return nil
 	}
 	runtime.GetPublicURL = func() string {
 		if router == nil || router.config == nil {
