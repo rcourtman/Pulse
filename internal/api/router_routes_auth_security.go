@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -34,7 +35,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 	r.mux.HandleFunc("/api/security/oidc", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleOIDCConfig)))
 	r.mux.HandleFunc("/api/oidc/login", r.handleOIDCLogin)
 	r.mux.HandleFunc(config.DefaultOIDCCallbackPath, r.handleOIDCCallback)
-	ssoAdminEndpoints := resolveSSOAdminEndpoints(ssoAdminEndpointAdapter{router: r}, extensions.SSOAdminRuntime{})
+	ssoAdminEndpoints := resolveSSOAdminEndpoints(ssoAdminEndpointAdapter{router: r}, newSSOAdminRuntime(r))
 	// Per-provider SSO OIDC routes: /api/oidc/{providerID}/login and /api/oidc/{providerID}/callback
 	// Use a prefix handler since Go 1.x ServeMux doesn't support path params.
 	// Requests matching /api/oidc/{something}/ are dispatched here; the legacy
@@ -623,6 +624,95 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 
 type ssoAdminEndpointAdapter struct {
 	router *Router
+}
+
+func newSSOAdminRuntime(router *Router) extensions.SSOAdminRuntime {
+	runtime := extensions.SSOAdminRuntime{
+		GetClientIP: GetClientIP,
+		AllowAuthRequest: func(clientIP string) bool {
+			return authLimiter.Allow(clientIP)
+		},
+		LogAuditEvent: func(ctx context.Context, event, path string, success bool, message, clientIP string) {
+			LogAuditEventForTenant(GetOrgID(ctx), event, "", clientIP, path, success, message)
+		},
+		WriteError: writeErrorResponse,
+	}
+
+	if router == nil {
+		return runtime
+	}
+
+	runtime.TestSAMLConnection = func(ctx context.Context, cfg *extensions.SAMLTestConfig) extensions.SSOTestResponse {
+		return toExtensionSSOTestResponse(router.testSAMLConnection(ctx, toAPISAMLTestConfig(cfg)))
+	}
+	runtime.TestOIDCConnection = func(ctx context.Context, cfg *extensions.OIDCTestConfig) extensions.SSOTestResponse {
+		return toExtensionSSOTestResponse(router.testOIDCConnection(ctx, toAPIOIDCTestConfig(cfg)))
+	}
+
+	return runtime
+}
+
+func toAPISAMLTestConfig(cfg *extensions.SAMLTestConfig) *SAMLTestConfig {
+	if cfg == nil {
+		return nil
+	}
+	return &SAMLTestConfig{
+		IDPMetadataURL: cfg.IDPMetadataURL,
+		IDPMetadataXML: cfg.IDPMetadataXML,
+		IDPSSOURL:      cfg.IDPSSOURL,
+		IDPCertificate: cfg.IDPCertificate,
+	}
+}
+
+func toAPIOIDCTestConfig(cfg *extensions.OIDCTestConfig) *OIDCTestConfig {
+	if cfg == nil {
+		return nil
+	}
+	return &OIDCTestConfig{
+		IssuerURL: cfg.IssuerURL,
+		ClientID:  cfg.ClientID,
+	}
+}
+
+func toExtensionSSOTestResponse(resp SSOTestResponse) extensions.SSOTestResponse {
+	return extensions.SSOTestResponse{
+		Success: resp.Success,
+		Message: resp.Message,
+		Error:   resp.Error,
+		Details: toExtensionSSOTestDetails(resp.Details),
+	}
+}
+
+func toExtensionSSOTestDetails(details *SSOTestDetails) *extensions.SSOTestDetails {
+	if details == nil {
+		return nil
+	}
+
+	converted := &extensions.SSOTestDetails{
+		Type:             details.Type,
+		EntityID:         details.EntityID,
+		SSOURL:           details.SSOURL,
+		SLOURL:           details.SLOURL,
+		TokenEndpoint:    details.TokenEndpoint,
+		UserinfoEndpoint: details.UserinfoEndpoint,
+		JWKSURI:          details.JWKSURI,
+		SupportedScopes:  details.SupportedScopes,
+	}
+
+	if len(details.Certificates) > 0 {
+		converted.Certificates = make([]extensions.CertificateInfo, 0, len(details.Certificates))
+		for _, cert := range details.Certificates {
+			converted.Certificates = append(converted.Certificates, extensions.CertificateInfo{
+				Subject:   cert.Subject,
+				Issuer:    cert.Issuer,
+				NotBefore: cert.NotBefore,
+				NotAfter:  cert.NotAfter,
+				IsExpired: cert.IsExpired,
+			})
+		}
+	}
+
+	return converted
 }
 
 var _ extensions.SSOAdminEndpoints = ssoAdminEndpointAdapter{}
