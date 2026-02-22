@@ -1,6 +1,8 @@
 # Relay / Mobile Remote Access (Pro)
 
-Pulse Relay provides **end-to-end encrypted remote access** to your Pulse instance from the official mobile app. It allows you to monitor your infrastructure from anywhere without exposing your Pulse server to the public internet.
+Pulse Relay provides **end-to-end encrypted remote access** foundations for Pulse instances. It allows secure remote connectivity without exposing your Pulse server to the public internet.
+
+> Mobile app status: public rollout is coming soon. Relay remains available now for early-access/beta onboarding.
 
 ## How It Works
 
@@ -12,7 +14,7 @@ Pulse Relay provides **end-to-end encrypted remote access** to your Pulse instan
 ```
 
 1. Your Pulse server maintains a persistent WebSocket connection to the relay server.
-2. The mobile app connects to the relay server and authenticates.
+2. A mobile client connects to the relay server and authenticates.
 3. An ECDH key exchange creates a per-channel encryption key.
 4. All monitoring data is encrypted end-to-end — the relay server **never sees plaintext data**.
 
@@ -20,8 +22,8 @@ Pulse Relay provides **end-to-end encrypted remote access** to your Pulse instan
 
 1. Go to **Settings → Relay**.
 2. Toggle relay **On**.
-3. Scan the **QR Code** with the Pulse mobile app (or use the **Deep Link**).
-4. Your mobile app connects instantly.
+3. Use the **QR Code** or **Deep Link** when mobile beta access is enabled.
+4. Your paired mobile client connects through relay.
 
 ## Requirements
 
@@ -47,7 +49,7 @@ Relay was designed with a zero-trust model:
 
 ### UI
 
-**Settings → Relay** — toggle on/off, view QR code, manage mobile sessions.
+**Settings → Relay** — toggle on/off, view QR code, and manage relay pairing sessions.
 
 ### Environment Variables
 
@@ -73,7 +75,7 @@ Relay configuration is stored encrypted in `relay.enc` in the Pulse data directo
 
 ### iOS / Android
 
-1. Install the **Pulse** app from the App Store or Google Play.
+1. Join mobile early access when available.
 2. Open the app and tap **Connect to Server**.
 3. Scan the QR code from **Settings → Relay** in your Pulse web UI.
 4. The app connects via the relay and begins showing live data.
@@ -101,8 +103,9 @@ The mobile app supports connecting to multiple Pulse instances. Each connection 
 ### Mobile app can't connect
 
 1. Verify relay is enabled in **Settings → Relay**.
-2. Re-scan the QR code — sessions can expire.
-3. Ensure your mobile device has internet access.
+2. Confirm your mobile account has beta access.
+3. Re-scan the QR code — sessions can expire.
+4. Ensure your mobile device has internet access.
 
 ### Data not updating on mobile
 

@@ -177,7 +177,7 @@ export const RelaySettingsPanel: Component = () => {
  return (
  <SettingsPanel
  title="Remote Access"
- description="Configure Pulse relay connectivity for secure remote access."
+ description="Configure Pulse relay connectivity for secure remote access (mobile rollout coming soon)."
  icon={<RadioTower size={20} strokeWidth={2} />}
  >
  <Show when={!loading()} fallback={<div class="text-sm ">Loading...</div>}>
@@ -189,7 +189,7 @@ export const RelaySettingsPanel: Component = () => {
  Pro Required
  </p>
  <p class="text-sm text-muted mt-1">
- Remote access via Pulse Relay requires a Pro license. Upgrade to access your infrastructure from anywhere.
+ Remote access via Pulse Relay requires a Pro license. Mobile app public rollout is coming soon.
  </p>
  </div>
  </div>
@@ -202,10 +202,17 @@ export const RelaySettingsPanel: Component = () => {
  return (
  <SettingsPanel
  title="Remote Access"
- description="Configure Pulse relay connectivity for secure remote access."
+ description="Configure Pulse relay connectivity for secure remote access (mobile rollout coming soon)."
  icon={<RadioTower size={20} strokeWidth={2} />}
  >
  <Show when={!loading()} fallback={<div class="text-sm ">Loading configuration...</div>}>
+ <Card tone="info" padding="md">
+ <p class="text-sm text-base-content font-medium">Pulse Mobile rollout is coming soon</p>
+ <p class="text-xs text-muted mt-1">
+ Relay infrastructure is available now. Pairing and remote sessions are currently intended for staged beta access.
+ </p>
+ </Card>
+
  {/* Connection Status */}
  <Card padding="md">
  <div class="flex items-center gap-3">
@@ -243,7 +250,7 @@ export const RelaySettingsPanel: Component = () => {
             <div>
               <label class={labelClass()}>Enable Remote Access</label>
               <p class={formHelpText}>
-                Connect this Pulse instance to the relay server for mobile app access.
+                Connect this Pulse instance to the relay server for secure remote access and mobile beta readiness.
               </p>
             </div>
             <Toggle
@@ -290,7 +297,7 @@ export const RelaySettingsPanel: Component = () => {
               {config()!.identity_fingerprint}
             </code>
             <p class={formHelpText}>
-              This fingerprint uniquely identifies your Pulse instance. The mobile app will verify this fingerprint to prevent man-in-the-middle attacks.
+              This fingerprint uniquely identifies your Pulse instance. Mobile clients verify this fingerprint to prevent man-in-the-middle attacks.
             </p>
           </div>
         </Show>
@@ -324,7 +331,7 @@ export const RelaySettingsPanel: Component = () => {
  </div>
 
  <p class={formHelpText}>
- Generate a QR code and scan it from the Pulse mobile app to pair a new device.
+ Generate a QR code for pairing during staged mobile beta rollout.
  </p>
 
  <Show when={showPairing()}>

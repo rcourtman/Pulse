@@ -37,7 +37,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   },
   'system-relay': {
     title: 'Remote Access',
-    description: 'Configure Pulse relay connectivity for secure remote access.',
+    description: 'Configure Pulse relay connectivity for secure remote access (mobile rollout coming soon).',
   },
   'system-pro': {
     title: 'Pro',

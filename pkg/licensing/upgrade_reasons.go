@@ -26,7 +26,7 @@ var UpgradeReasonMatrix = []ReasonEntry{
 	},
 	{
 		Feature:   FeatureRelay,
-		Reason:    "Upgrade to Pro to access your infrastructure remotely via the Pulse mobile app with end-to-end encryption.",
+		Reason:    "Upgrade to Pro to enable secure relay-based remote access. Pulse mobile app rollout is staged and coming soon.",
 		ActionURL: UpgradeURLForFeature(FeatureRelay),
 		Priority:  3,
 	},

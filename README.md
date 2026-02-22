@@ -62,7 +62,7 @@ Power-user shortcuts:
 - **Secure by Design**: Credentials encrypted at rest, strict API scoping, agent commands disabled by default
 - **One-Click Updates**: Easy upgrades for supported deployments
 - **OIDC/SSO/SAML**: Single sign-on with multi-provider support
-- **Mobile Remote Access**: Relay protocol with end-to-end encryption for mobile app connectivity (Pro)
+- **Mobile Remote Access (Coming Soon)**: Relay protocol with end-to-end encryption is available now; public mobile app launch is in staged rollout (Pro)
 - **Privacy Focused**: No outbound telemetry by default. Monitoring data stays on your server.
 
 ## ⚡ Quick Start
@@ -131,7 +131,7 @@ The table below is derived from the canonical entitlement source of truth: `docs
 | Enterprise Audit Logging | — | ✅ | ✅ |
 | Advanced Infrastructure Reporting (PDF/CSV) | — | ✅ | ✅ |
 | 90-Day Metric History | — | ✅ | ✅ |
-| Remote Access (Mobile Relay) | — | ✅ | ✅ |
+| Remote Access (Mobile Relay, App Coming Soon) | — | ✅ | ✅ |
 
 Pulse Patrol runs on your schedule (every 10 minutes to every 7 days, default 6 hours) and finds:
 - ZFS pools approaching capacity

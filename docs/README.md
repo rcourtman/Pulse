@@ -43,7 +43,7 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 - **[Unified Resource Model](UNIFIED_RESOURCES.md)** – How all platforms merge into one model with task-based navigation.
 - **[Unified Navigation Migration](MIGRATION_UNIFIED_NAV.md)** – Upgrading from platform-specific tabs to v6 navigation.
 - **[TrueNAS Integration](TRUENAS.md)** – First-class TrueNAS SCALE/CORE monitoring (pools, datasets, disks, snapshots, replication).
-- **[Relay / Mobile Remote Access](RELAY.md)** – End-to-end encrypted relay for mobile app connectivity (Pro).
+- **[Relay / Mobile Remote Access](RELAY.md)** – End-to-end encrypted relay (mobile app public rollout is coming soon; Pro).
 - **[Recovery Central](RECOVERY.md)** – Unified backup, snapshot, and replication view across all providers.
 - **[Pulse Cloud (Hosted)](CLOUD.md)** – Fully managed hosting with automatic updates and backups.
 - **[Pulse AI](AI.md)** – Chat assistant, patrol findings, alert analysis, intelligence, and forecasts.

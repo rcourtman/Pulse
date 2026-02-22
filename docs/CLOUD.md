@@ -6,7 +6,7 @@ Pulse Cloud is the hosted version of Pulse — a fully managed monitoring instan
 
 1. **Sign up** at the Pulse Cloud portal.
 2. **Connect your agents** — install the Pulse agent on your infrastructure pointing to your cloud URL.
-3. **Monitor** — access your dashboard from any browser or the Pulse mobile app.
+3. **Monitor** — access your dashboard from any browser; mobile app rollout is coming soon.
 
 Each Cloud account gets a dedicated, isolated Pulse instance with its own subdomain (e.g., `yourname.cloud.pulserelay.pro`).
 
@@ -21,7 +21,7 @@ Pulse Cloud includes everything in the **Pro** plan, plus:
 | **Automatic backups** | Daily encrypted backups with 7-day retention |
 | **Dedicated instance** | Your data runs in an isolated container — not shared with other tenants |
 | **Wildcard TLS** | HTTPS with auto-renewing certificates |
-| **Mobile ready** | Relay is pre-configured for mobile app access |
+| **Mobile ready** | Relay is pre-configured now; mobile app rollout is coming soon |
 
 ### Cloud Enterprise (Add-On)
 
@@ -59,7 +59,7 @@ Add your Proxmox VE, PBS, PMG, or TrueNAS systems via **Settings → Infrastruct
 
 ### 4. Set Up Mobile Access
 
-Relay is enabled by default on Cloud instances. Open **Settings → Relay** to scan the QR code with the Pulse mobile app.
+Relay is enabled by default on Cloud instances. Open **Settings → Relay** to prepare pairing and connect once mobile beta/public access is enabled.
 
 ## Data & Privacy
 
@@ -117,5 +117,5 @@ Yes. Use the export/import workflow described above. Your monitoring configurati
 
 - [Plans & Entitlements](PULSE_PRO.md) — feature comparison across Community, Pro, and Cloud
 - [Installation (Self-Hosted)](INSTALL.md) — self-hosted installation guide
-- [Relay / Mobile Access](RELAY.md) — mobile app setup (pre-configured on Cloud)
+- [Relay / Mobile Access](RELAY.md) — relay setup and mobile rollout status (pre-configured on Cloud)
 - [Multi-Tenant](MULTI_TENANT.md) — multi-tenant mode (Cloud Enterprise)

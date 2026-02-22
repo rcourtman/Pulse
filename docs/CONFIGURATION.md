@@ -501,13 +501,15 @@ TrueNAS connections are stored encrypted in `truenas.enc`.
 
 ## Relay / Mobile Remote Access (Pro) {#relay}
 
-The relay protocol provides end-to-end encrypted remote access for the Pulse mobile app.
+The relay protocol provides end-to-end encrypted remote access foundations for Pulse mobile connectivity.
+
+> Mobile app availability: staged rollout (coming soon). Relay configuration is available now for early-access/beta onboarding and future readiness.
 
 ### Configuration
 
 1. Go to **Settings → Relay**.
 2. Toggle relay **On**.
-3. Use the **QR Code** or **Deep Link** to connect the mobile app.
+3. Use the **QR Code** or **Deep Link** when your mobile beta access is enabled.
 
 ### Environment Overrides
 
@@ -524,4 +526,3 @@ The relay protocol provides end-to-end encrypted remote access for the Pulse mob
 - Requires a valid Pro or Cloud license (gated by the `relay` feature key).
 
 Relay config is stored encrypted in `relay.enc`.
-

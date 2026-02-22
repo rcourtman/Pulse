@@ -64,7 +64,7 @@ First-class TrueNAS storage system monitoring, enabled via `PULSE_ENABLE_TRUENAS
 
 ### Relay + Mobile Remote Access
 
-A full relay protocol enabling mobile app connectivity to Pulse instances without requiring direct network access.
+Relay infrastructure and protocol support for mobile connectivity to Pulse instances without requiring direct network access. Public mobile app rollout is staged separately.
 
 - **Binary frame protocol** (v1) with 13 frame types: Register, Connect, ChannelOpen/Close, Data, Ping/Pong, Error, Drain, KeyExchange, PushNotification.
 - **End-to-end encryption** using X25519 key exchange, HKDF key derivation, AES-256-GCM with per-direction nonce counters and replay protection.

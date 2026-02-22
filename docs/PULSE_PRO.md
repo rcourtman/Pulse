@@ -42,7 +42,7 @@ This matrix is derived from the canonical table in `docs/architecture/ENTITLEMEN
 | `FeatureAdvancedSSO` | `advanced_sso` | Advanced SSO (SAML/Multi-Provider) | N | Y | Y | Used to gate advanced SSO capabilities such as SAML and multi-provider flows. Frontend currently uses `advanced_sso` to show Advanced SSO UI (see `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`). |
 | `FeatureAdvancedReporting` | `advanced_reporting` | Advanced Infrastructure Reporting (PDF/CSV) | N | Y | Y | API route gating via `RequireLicenseFeature(..., advanced_reporting, ...)` for report generation endpoints (see `internal/api/router_routes_org_license.go`). |
 | `FeatureLongTermMetrics` | `long_term_metrics` | 90-Day Metric History | N | Y | Y | Used to gate long-range history queries; for example, history durations beyond 7 days are blocked without `long_term_metrics` (see `internal/api/router.go` around the history handler). |
-| `FeatureRelay` | `relay` | Remote Access (Mobile Relay) | N | Y | Y | API route gating via `RequireLicenseFeature(..., relay, ...)` for relay settings endpoints (see `internal/api/router_routes_ai_relay.go`). |
+| `FeatureRelay` | `relay` | Remote Access (Mobile Relay, App Coming Soon) | N | Y | Y | API route gating via `RequireLicenseFeature(..., relay, ...)` for relay settings endpoints (see `internal/api/router_routes_ai_relay.go`). |
 | `FeatureMultiUser` | `multi_user` | Multi-User Mode | N | N | Y* | Capability key exists for Cloud Enterprise multi-user mode; current API surface may additionally rely on `rbac` for day-to-day role/user operations. |
 | `FeatureWhiteLabel` | `white_label` | White-Label Branding | N | N | Y* | Capability key exists; marked as not implemented in `internal/license/features.go`. |
 | `FeatureMultiTenant` | `multi_tenant` | Multi-Tenant Mode | N | N | Y* | Requires both a feature flag (`PULSE_MULTI_TENANT_ENABLED=true`) and the `multi_tenant` capability for non-default orgs (see `internal/api/middleware_license.go`). |
@@ -77,7 +77,7 @@ Patrol and the Assistant support tiered autonomy:
 - Audit logging (`audit_logging`)
 - Advanced reporting (`advanced_reporting`)
 - Long-term metrics history (`long_term_metrics`)
-- Remote access via relay (`relay`)
+- Remote access via relay (`relay`) with staged mobile app rollout
 
 ### Cloud
 - Everything in Pro, plus:

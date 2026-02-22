@@ -31,7 +31,7 @@ const FEATURE_ROWS: FeatureRow[] = [
  { key: 'advanced_sso', name: 'Advanced SSO (SAML/Multi-Provider)', community: false, pro: true, cloud: true },
  { key: 'advanced_reporting', name: 'Advanced Infrastructure Reporting (PDF/CSV)', community: false, pro: true, cloud: true },
  { key: 'long_term_metrics', name: '90-Day Metric History', community: false, pro: true, cloud: true },
- { key: 'relay', name: 'Remote Access (Mobile Relay)', community: false, pro: true, cloud: true },
+ { key: 'relay', name: 'Remote Access (Mobile Relay, App Coming Soon)', community: false, pro: true, cloud: true },
  { key: 'multi_user', name: 'Multi-User Mode', community: false, pro: false, cloud: false },
  { key: 'white_label', name: 'White-Label Branding', community: false, pro: false, cloud: false },
  { key: 'multi_tenant', name: 'Multi-Tenant Mode', community: false, pro: false, cloud: false },
@@ -219,7 +219,7 @@ export default function Pricing() {
  <ul class="mt-4 space-y-2 text-sm text-base-content">
  <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Everything in Community</span></li>
  <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>AI Auto-Fix &amp; Investigation</span></li>
- <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Pulse Relay (mobile)</span></li>
+ <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Pulse Relay (mobile app rollout coming soon)</span></li>
  <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>90-day metric history</span></li>
  <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>RBAC &amp; guest access</span></li>
  <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Audit logging</span></li>

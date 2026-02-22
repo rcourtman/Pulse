@@ -1087,7 +1087,9 @@ TrueNAS resources (pools, datasets, disks, ZFS snapshots, replication tasks, ale
 
 ## 📱 Relay / Mobile Remote Access (Pro)
 
-End-to-end encrypted relay protocol for mobile app connectivity.
+End-to-end encrypted relay protocol for mobile connectivity.
+
+> Mobile app status: public rollout is coming soon; current pairing endpoints are primarily used for staged beta onboarding.
 
 ### Relay Configuration (Admin, Pro)
 - `GET /api/settings/relay` (admin, `settings:read`, Pro) — Get current relay configuration.
