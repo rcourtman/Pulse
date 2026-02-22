@@ -216,6 +216,57 @@ describe('mentionResources', () => {
     expect(ctOrHost[0].name).toBe('my-ct');
   });
 
+  it('deduplicates VM + DockerHost + Host agent 3-way chain into a single entry (#1252)', () => {
+    // Production scenario: a VM runs a host agent with Docker.
+    // Three entities share overlapping aliases forming a chain:
+    //   VM (vm-backend-id:pve01-100) <-- Host agent (linkedVmId + id) --> DockerHost (agentId)
+    // Before the union-merge fix, only the first alias match was merged,
+    // leaving the other as a duplicate entry.
+    const state = {
+      nodes: [],
+      vms: [
+        {
+          id: 'pve01-100',
+          vmid: 100,
+          name: 'docker-vm',
+          node: 'pve01',
+          instance: 'pve-instance-1',
+          status: 'running',
+        },
+      ],
+      containers: [],
+      dockerHosts: [
+        {
+          id: 'docker-host-abc',
+          agentId: 'agent-in-vm',
+          hostname: 'docker-vm',
+          displayName: 'docker-vm',
+          status: 'online',
+          lastSeen: Date.now(),
+          containers: [],
+        },
+      ],
+      hosts: [
+        {
+          id: 'agent-in-vm',
+          hostname: 'docker-vm',
+          displayName: 'docker-vm',
+          status: 'online',
+          lastSeen: Date.now(),
+          linkedVmId: 'pve01-100',
+          memory: { total: 8, used: 4, free: 4, usage: 50 },
+        },
+      ],
+    } as unknown as State;
+
+    const resources = buildMentionResources(state);
+    const relevant = resources.filter(
+      (r) => r.type === 'vm' || r.type === 'host',
+    );
+    expect(relevant).toHaveLength(1);
+    expect(relevant[0].name).toBe('docker-vm');
+  });
+
   it('deduplicates cluster node mentions from multiple instances and keeps the healthiest status', () => {
     const state = {
       nodes: [

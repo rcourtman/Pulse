@@ -73,37 +73,64 @@ function upsertMentionResource(
   aliases: string[] = [],
 ): void {
   const normalizedPrimary = normalizeKeyPart(resource.id);
-  let key = normalizedPrimary ? `id:${normalizedPrimary}` : '';
+  const primaryAlias = normalizedPrimary ? `id:${normalizedPrimary}` : '';
 
-  for (const rawAlias of aliases) {
+  // Collect ALL existing keys that any alias points to (union-find style).
+  // This fixes the 3-way chain bug where a host agent bridges a VM and a
+  // DockerHost but only the first match was merged (#1252).
+  const matchedKeys: string[] = [];
+  let firstUnmatchedAlias = '';
+
+  const allAliases = [primaryAlias, ...aliases];
+  for (const rawAlias of allAliases) {
     const alias = normalizeKeyPart(rawAlias);
     if (!alias) continue;
     const existingKey = aliasToKey.get(alias);
     if (existingKey) {
-      key = existingKey;
-      break;
-    }
-    if (!key) {
-      key = alias;
+      if (!matchedKeys.includes(existingKey)) {
+        matchedKeys.push(existingKey);
+      }
+    } else if (!firstUnmatchedAlias) {
+      firstUnmatchedAlias = alias;
     }
   }
 
-  if (!key) {
-    key = `fallback:${normalizeKeyPart(resource.type)}:${normalizeKeyPart(resource.name)}`;
+  // Pick the canonical key: first matched key, or first unmatched alias, or fallback.
+  const canonicalKey =
+    matchedKeys[0] ||
+    firstUnmatchedAlias ||
+    `fallback:${normalizeKeyPart(resource.type)}:${normalizeKeyPart(resource.name)}`;
+
+  // Merge all other matched keys' resources into the canonical winner.
+  for (let i = 1; i < matchedKeys.length; i++) {
+    const loserKey = matchedKeys[i];
+    const loserResource = byKey.get(loserKey);
+    if (loserResource) {
+      const current = byKey.get(canonicalKey);
+      byKey.set(canonicalKey, current ? preferMentionResource(current, loserResource) : loserResource);
+      byKey.delete(loserKey);
+    }
+    // Re-point all aliases that referenced the loser to the winner.
+    for (const [alias, key] of aliasToKey) {
+      if (key === loserKey) {
+        aliasToKey.set(alias, canonicalKey);
+      }
+    }
   }
 
-  const existing = byKey.get(key);
+  // Merge the incoming resource.
+  const existing = byKey.get(canonicalKey);
   if (existing) {
-    byKey.set(key, preferMentionResource(existing, resource));
+    byKey.set(canonicalKey, preferMentionResource(existing, resource));
   } else {
-    byKey.set(key, resource);
+    byKey.set(canonicalKey, resource);
   }
 
-  const allAliases = [normalizedPrimary ? `id:${normalizedPrimary}` : '', ...aliases];
+  // Register all aliases to point at the canonical key.
   for (const rawAlias of allAliases) {
     const alias = normalizeKeyPart(rawAlias);
     if (!alias) continue;
-    aliasToKey.set(alias, key);
+    aliasToKey.set(alias, canonicalKey);
   }
 }
 
