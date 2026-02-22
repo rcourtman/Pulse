@@ -1,11 +1,14 @@
 package api
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
 
 func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHandlers *RBACHandlers, auditHandlers *AuditHandlers) {
@@ -145,7 +148,7 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 	)
 	reportingAdminEndpoints := resolveReportingAdminEndpoints(
 		reportingAdminEndpointAdapter{handlers: r.reportingHandlers},
-		extensions.ReportingAdminRuntime{},
+		newReportingAdminRuntime(r.reportingHandlers),
 	)
 	// RBAC admin operations (Enterprise feature)
 	r.mux.HandleFunc("GET /api/admin/rbac/integrity", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
@@ -325,4 +328,30 @@ func newAuditAdminRuntime() extensions.AuditAdminRuntime {
 		ValidateWebhookURL: validateWebhookURL,
 		WriteError:         writeErrorResponse,
 	}
+}
+
+func newReportingAdminRuntime(handlers *ReportingHandlers) extensions.ReportingAdminRuntime {
+	runtime := extensions.ReportingAdminRuntime{
+		GetEngine:        reporting.GetEngine,
+		GetRequestOrgID:  GetOrgID,
+		SanitizeFilename: sanitizeFilename,
+		WriteError:       writeErrorResponse,
+	}
+
+	if handlers == nil {
+		return runtime
+	}
+
+	runtime.EnrichReportRequest = func(ctx context.Context, orgID string, req *reporting.MetricReportRequest, start, end time.Time) {
+		if req == nil || handlers.mtMonitor == nil {
+			return
+		}
+		monitor, err := handlers.mtMonitor.GetMonitor(orgID)
+		if err != nil || monitor == nil {
+			return
+		}
+		handlers.enrichReportRequest(ctx, orgID, req, monitor.GetState(), start, end)
+	}
+
+	return runtime
 }

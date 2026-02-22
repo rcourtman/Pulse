@@ -1,6 +1,12 @@
 package extensions
 
-import "net/http"
+import (
+	"context"
+	"net/http"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
+)
 
 // ReportingAdminEndpoints defines the enterprise reporting admin endpoint surface.
 type ReportingAdminEndpoints interface {
@@ -8,9 +14,17 @@ type ReportingAdminEndpoints interface {
 	HandleGenerateMultiReport(http.ResponseWriter, *http.Request)
 }
 
+// WriteReportingErrorFunc writes a structured reporting error response.
+type WriteReportingErrorFunc func(http.ResponseWriter, int, string, string, map[string]string)
+
 // ReportingAdminRuntime exposes runtime capabilities needed by reporting admin endpoints.
-// Reserved for private implementations that need additional host services.
-type ReportingAdminRuntime struct{}
+type ReportingAdminRuntime struct {
+	GetEngine           func() reporting.Engine
+	GetRequestOrgID     func(context.Context) string
+	EnrichReportRequest func(context.Context, string, *reporting.MetricReportRequest, time.Time, time.Time)
+	SanitizeFilename    func(string) string
+	WriteError          WriteReportingErrorFunc
+}
 
 // BindReportingAdminEndpointsFunc allows enterprise modules to bind replacement
 // reporting admin endpoints while retaining access to default handlers.
