@@ -142,11 +142,8 @@ type ReportingAdminRuntime struct {
 	GetRequestOrgID        func(context.Context) string
 	GetStateSnapshot       func(context.Context, string) (ReportingStateSnapshot, bool)
 	ListBackupsForResource func(context.Context, string, string, time.Time, time.Time) []reporting.BackupInfo
-	// EnrichReportRequest is kept as a compatibility fallback while runtime
-	// enrichment ownership transitions to enterprise modules.
-	EnrichReportRequest func(context.Context, string, *reporting.MetricReportRequest, time.Time, time.Time)
-	SanitizeFilename    func(string) string
-	WriteError          WriteReportingErrorFunc
+	SanitizeFilename       func(string) string
+	WriteError             WriteReportingErrorFunc
 }
 
 // BindReportingAdminEndpointsFunc allows enterprise modules to bind replacement

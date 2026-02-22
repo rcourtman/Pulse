@@ -1,9 +1,7 @@
 package api
 
 import (
-	"context"
 	"net/http"
-	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -344,17 +342,6 @@ func newReportingAdminRuntime(handlers *ReportingHandlers) extensions.ReportingA
 
 	runtime.GetStateSnapshot = handlers.getRuntimeStateSnapshot
 	runtime.ListBackupsForResource = handlers.listBackupsForReport
-
-	runtime.EnrichReportRequest = func(ctx context.Context, orgID string, req *reporting.MetricReportRequest, start, end time.Time) {
-		if req == nil || handlers.mtMonitor == nil {
-			return
-		}
-		monitor, err := handlers.mtMonitor.GetMonitor(orgID)
-		if err != nil || monitor == nil {
-			return
-		}
-		handlers.enrichReportRequest(ctx, orgID, req, monitor.GetState(), start, end)
-	}
 
 	return runtime
 }
