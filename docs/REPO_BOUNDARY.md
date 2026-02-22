@@ -19,7 +19,7 @@ Current promoted contract surface:
 - `pkg/licensing` (feature/tier constants, entitlement state enums, upgrade URL resolver, upgrade reason matrix, feature-gate interfaces, shared request/response types)
 - `pkg/licensing` evaluator + entitlement source contracts (for capability/limit checks outside `internal/...`)
 - `pkg/licensing` core license model types (`Claims`, `License`, `LicenseState`, `LicenseStatus`) for cross-repo contract stability
-- `pkg/extensions` RBAC admin endpoint binding contract (`RBACAdminEndpoints`) for private enterprise handler ownership
+- `pkg/extensions` RBAC admin endpoint binding/runtime contract (`RBACAdminEndpoints`, `RBACAdminRuntime`) for private enterprise handler ownership
 
 ## Current boundary audit
 

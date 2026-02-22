@@ -19,7 +19,7 @@ func SetRBACAdminEndpointsBinder(binder extensions.BindRBACAdminEndpointsFunc) {
 	rbacAdminEndpointsBinder = binder
 }
 
-func resolveRBACAdminEndpoints(defaults extensions.RBACAdminEndpoints) extensions.RBACAdminEndpoints {
+func resolveRBACAdminEndpoints(defaults extensions.RBACAdminEndpoints, runtime extensions.RBACAdminRuntime) extensions.RBACAdminEndpoints {
 	rbacAdminBindMu.RLock()
 	binder := rbacAdminEndpointsBinder
 	rbacAdminBindMu.RUnlock()
@@ -28,7 +28,7 @@ func resolveRBACAdminEndpoints(defaults extensions.RBACAdminEndpoints) extension
 		return defaults
 	}
 
-	resolved := binder(defaults)
+	resolved := binder(defaults, runtime)
 	if resolved == nil {
 		return defaults
 	}

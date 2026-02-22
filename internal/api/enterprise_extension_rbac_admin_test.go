@@ -28,7 +28,7 @@ func TestResolveRBACAdminEndpoints_DefaultWhenBinderNil(t *testing.T) {
 	})
 
 	defaults := &testRBACAdminEndpoints{}
-	resolved := resolveRBACAdminEndpoints(defaults)
+	resolved := resolveRBACAdminEndpoints(defaults, extensions.RBACAdminRuntime{})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/rbac/integrity", nil)
 	rec := httptest.NewRecorder()
@@ -47,11 +47,11 @@ func TestResolveRBACAdminEndpoints_UsesBinderOverride(t *testing.T) {
 	defaults := &testRBACAdminEndpoints{}
 	override := &testRBACAdminEndpoints{}
 
-	SetRBACAdminEndpointsBinder(func(_ extensions.RBACAdminEndpoints) extensions.RBACAdminEndpoints {
+	SetRBACAdminEndpointsBinder(func(_ extensions.RBACAdminEndpoints, _ extensions.RBACAdminRuntime) extensions.RBACAdminEndpoints {
 		return override
 	})
 
-	resolved := resolveRBACAdminEndpoints(defaults)
+	resolved := resolveRBACAdminEndpoints(defaults, extensions.RBACAdminRuntime{})
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/rbac/reset-admin", nil)
 	rec := httptest.NewRecorder()
 	resolved.HandleAdminReset(rec, req)

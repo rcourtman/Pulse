@@ -9,19 +9,11 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 )
 
 // RBACIntegrityResult contains the result of an RBAC data integrity check.
-type RBACIntegrityResult struct {
-	OrgID            string `json:"org_id"`
-	DBAccessible     bool   `json:"db_accessible"`
-	TablesPresent    bool   `json:"tables_present"`
-	BuiltInRoleCount int    `json:"built_in_role_count"`
-	TotalRoles       int    `json:"total_roles"`
-	TotalAssignments int    `json:"total_assignments"`
-	Healthy          bool   `json:"healthy"`
-	Error            string `json:"error,omitempty"`
-}
+type RBACIntegrityResult = extensions.RBACIntegrityResult
 
 // VerifyRBACIntegrity checks the RBAC data integrity for a given org.
 // Returns a structured result indicating db health, schema presence, and role counts.

@@ -134,7 +134,10 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 		}
 		RequireLicenseFeature(r.licenseHandlers, featureRBACValue, rbacHandlers.HandleUserRoleActions)(w, req)
 	}))
-	rbacAdminEndpoints := resolveRBACAdminEndpoints(rbacAdminEndpointAdapter{handlers: rbacHandlers})
+	rbacAdminEndpoints := resolveRBACAdminEndpoints(
+		rbacAdminEndpointAdapter{handlers: rbacHandlers},
+		newRBACAdminRuntime(rbacHandlers),
+	)
 	// RBAC admin operations (Enterprise feature)
 	r.mux.HandleFunc("GET /api/admin/rbac/integrity", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
@@ -198,4 +201,33 @@ func (a rbacAdminEndpointAdapter) HandleAdminReset(w http.ResponseWriter, req *h
 		return
 	}
 	a.handlers.HandleRBACAdminReset(w, req)
+}
+
+func newRBACAdminRuntime(handlers *RBACHandlers) extensions.RBACAdminRuntime {
+	return extensions.RBACAdminRuntime{
+		GetRequestOrgID:       GetOrgID,
+		IsValidOrganizationID: isValidOrganizationID,
+		GetClientIP:           GetClientIP,
+		ValidateRecoveryToken: func(token, clientIP string) bool {
+			store := GetRecoveryTokenStore()
+			if store == nil {
+				return false
+			}
+			return store.ValidateRecoveryTokenConstantTime(token, clientIP)
+		},
+		VerifyIntegrity: func(orgID string) (extensions.RBACIntegrityResult, error) {
+			if handlers == nil || handlers.rbacProvider == nil {
+				return extensions.RBACIntegrityResult{}, extensions.ErrRBACUnavailable
+			}
+			result := VerifyRBACIntegrity(handlers.rbacProvider, orgID)
+			return extensions.RBACIntegrityResult(result), nil
+		},
+		ResetAdminRole: func(orgID, username string) error {
+			if handlers == nil || handlers.rbacProvider == nil {
+				return extensions.ErrRBACUnavailable
+			}
+			return ResetAdminRole(handlers.rbacProvider, orgID, username)
+		},
+		WriteError: writeErrorResponse,
+	}
 }
