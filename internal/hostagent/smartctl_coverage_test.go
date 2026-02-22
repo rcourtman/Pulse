@@ -79,10 +79,21 @@ func TestListBlockDevicesFreeBSDWithExcludes(t *testing.T) {
 
 func TestListBlockDevicesError(t *testing.T) {
 	origRun := smartRunCommandOutput
-	t.Cleanup(func() { smartRunCommandOutput = origRun })
+	origReadDir := readDir
+	origGOOS := runtimeGOOS
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		readDir = origReadDir
+		runtimeGOOS = origGOOS
+	})
+
+	runtimeGOOS = "linux"
 
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, errors.New("boom")
+	}
+	readDir = func(path string) ([]os.DirEntry, error) {
+		return nil, errors.New("sysfs unavailable")
 	}
 
 	if _, err := listBlockDevices(context.Background(), nil); err == nil {
@@ -218,10 +229,21 @@ func TestCollectLocalNoDevices(t *testing.T) {
 
 func TestCollectSMARTLocalListDevicesError(t *testing.T) {
 	origRun := smartRunCommandOutput
-	t.Cleanup(func() { smartRunCommandOutput = origRun })
+	origReadDir := readDir
+	origGOOS := runtimeGOOS
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		readDir = origReadDir
+		runtimeGOOS = origGOOS
+	})
+
+	runtimeGOOS = "linux"
 
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, errors.New("lsblk failed")
+	}
+	readDir = func(path string) ([]os.DirEntry, error) {
+		return nil, errors.New("sysfs unavailable")
 	}
 
 	if _, err := CollectSMARTLocal(context.Background(), nil); err == nil {
