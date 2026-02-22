@@ -62,6 +62,35 @@ The `pulse-sensor-proxy` from v4 is no longer needed — temperature monitoring 
 
 Skipping this step will leave a selfheal timer running on the host that generates recurring `TASK ERROR` entries in the Proxmox task log.
 
+#### LXC mount entry cleanup
+
+If your Pulse LXC container fails to start after a host reboot with:
+
+```
+Failed to mount "/run/pulse-sensor-proxy" onto ".../mnt/pulse-proxy"
+TASK ERROR: startup for container '<ctid>' failed
+```
+
+This means the v4 installer added a mount entry for `/run/pulse-sensor-proxy` to the container config. After reboot, `/run` (tmpfs) is cleared and the mount source no longer exists.
+
+**Automatic fix:** Re-run the Pulse installer on the Proxmox host. It detects and removes stale sensor-proxy mount entries from all LXC container configs before proceeding.
+
+**Manual fix:**
+
+```bash
+# Check which containers have stale entries
+grep -n 'pulse-sensor-proxy' /etc/pve/lxc/*.conf
+
+# Remove mp<N> entries via pct (container must be stopped)
+# Replace mp0 with the actual key shown in the grep output (mp0, mp1, etc.)
+pct set <ctid> -delete mp0
+
+# Or remove lxc.mount.entry lines directly
+sed -i '/lxc\.mount\.entry:.*pulse-sensor-proxy/d' /etc/pve/lxc/<ctid>.conf
+```
+
+After removing the stale entry, start the container with `pct start <ctid>`.
+
 ### Temperature monitoring in containers
 
 If Pulse runs in a container and you are relying on SSH-based temperature collection, move to the agent or run Pulse on the host. SSH-based collection from containers is intended for dev/test only (use `PULSE_DEV_ALLOW_CONTAINER_SSH=true` if you must).

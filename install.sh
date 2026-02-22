@@ -398,6 +398,106 @@ check_proxmox_host() {
     return 1
 }
 
+cleanup_stale_sensor_proxy_mounts() {
+    # Remove stale pulse-sensor-proxy mount entries from LXC container configs.
+    # In v4, the installer added mount entries for /run/pulse-sensor-proxy to the
+    # container config. In v5, the sensor proxy was removed, and after a host reboot
+    # /run (tmpfs) is wiped so the mount source no longer exists, preventing the
+    # container from starting with: Failed to mount "/run/pulse-sensor-proxy"
+
+    if ! command -v pct >/dev/null 2>&1; then
+        return 0
+    fi
+
+    local ctids
+    ctids=$(pct list 2>/dev/null | tail -n +2 | awk '{print $1}') || return 0
+    [[ -z "$ctids" ]] && return 0
+
+    local cleaned=0
+
+    while IFS= read -r ctid; do
+        [[ -z "$ctid" ]] && continue
+        local conf="/etc/pve/lxc/${ctid}.conf"
+        [[ -f "$conf" ]] || continue
+
+        # Skip containers without sensor-proxy references
+        if ! grep -q 'pulse-sensor-proxy' "$conf" 2>/dev/null; then
+            continue
+        fi
+
+        print_info "Found stale sensor-proxy mount in container $ctid, cleaning up..."
+
+        local status
+        status=$(pct status "$ctid" 2>/dev/null | awk '{print $2}') || true
+        local was_running=false
+        [[ "$status" == "running" ]] && was_running=true
+
+        # Stop running containers before modifying mount config
+        if [[ "$was_running" == "true" ]]; then
+            print_info "Stopping container $ctid to remove stale mount..."
+            timeout 30 pct stop "$ctid" 2>/dev/null || true
+            sleep 2
+        fi
+
+        # Determine the main-section boundary (before any [snapshot] sections)
+        local snapshot_line
+        snapshot_line=$(grep -n '^\[' "$conf" 2>/dev/null | head -1 | cut -d: -f1) || true
+
+        # Remove mp<N> entries (e.g., mp0: /run/pulse-sensor-proxy,mp=/mnt/pulse-proxy)
+        # Only match entries in the main section, not inside snapshot blocks
+        local mp_keys
+        if [[ -n "$snapshot_line" ]] && [[ "$snapshot_line" -gt 1 ]]; then
+            mp_keys=$(head -n "$((snapshot_line - 1))" "$conf" 2>/dev/null | grep -E '^mp[0-9]+:.*pulse-sensor-proxy' | sed 's/:.*//') || true
+        else
+            mp_keys=$(grep -E '^mp[0-9]+:.*pulse-sensor-proxy' "$conf" 2>/dev/null | sed 's/:.*//') || true
+        fi
+        if [[ -n "$mp_keys" ]]; then
+            while IFS= read -r mp_key; do
+                [[ -z "$mp_key" ]] && continue
+                if timeout 15 pct set "$ctid" -delete "$mp_key" 2>/dev/null; then
+                    print_success "Removed $mp_key from container $ctid"
+                else
+                    # Fallback: direct config edit (main section only)
+                    if [[ -n "$snapshot_line" ]] && [[ "$snapshot_line" -gt 1 ]]; then
+                        timeout 10 sed -i "1,$((snapshot_line - 1)){/^${mp_key}:.*pulse-sensor-proxy/d}" "$conf" 2>/dev/null || true
+                    else
+                        timeout 10 sed -i "/^${mp_key}:.*pulse-sensor-proxy/d" "$conf" 2>/dev/null || true
+                    fi
+                    print_success "Removed $mp_key from container $ctid (direct edit)"
+                fi
+                cleaned=$((cleaned + 1))
+            done <<< "$mp_keys"
+        fi
+
+        # Remove lxc.mount.entry lines referencing pulse-sensor-proxy
+        # Only modify lines in the main section (before any [snapshot] sections)
+        if grep -q 'lxc\.mount\.entry:.*pulse-sensor-proxy' "$conf" 2>/dev/null; then
+            if [[ -n "$snapshot_line" ]] && [[ "$snapshot_line" -gt 1 ]]; then
+                # Only delete matching lines before the first snapshot section
+                timeout 10 sed -i "1,$((snapshot_line - 1)){/lxc\.mount\.entry:.*pulse-sensor-proxy/d}" "$conf" 2>/dev/null || true
+            else
+                # No snapshot sections, safe to delete all matching lines
+                timeout 10 sed -i '/lxc\.mount\.entry:.*pulse-sensor-proxy/d' "$conf" 2>/dev/null || true
+            fi
+            cleaned=$((cleaned + 1))
+            print_success "Removed lxc.mount.entry for sensor-proxy from container $ctid"
+        fi
+
+        # Restart container if it was running before cleanup
+        if [[ "$was_running" == "true" ]]; then
+            print_info "Restarting container $ctid..."
+            timeout 30 pct start "$ctid" 2>/dev/null || {
+                print_warn "Could not restart container $ctid — start it manually: pct start $ctid"
+            }
+        fi
+
+    done <<< "$ctids"
+
+    if [[ "$cleaned" -gt 0 ]]; then
+        print_success "Cleaned up stale sensor-proxy mount entries from container config(s)"
+    fi
+}
+
 check_docker_environment() {
     # Detect if we're running inside Docker (multiple detection methods)
     if [[ -f /.dockerenv ]] || \
@@ -497,7 +597,11 @@ create_lxc_container() {
     print_header
     echo "Proxmox VE detected. Installing Pulse in a container."
     echo
-    
+
+    # Clean up stale sensor-proxy mount entries from v4 that prevent containers
+    # from starting after a host reboot (see GitHub Discussion #1280)
+    cleanup_stale_sensor_proxy_mounts
+
     # Check if we can interact with the user
     # Try to read from /dev/tty to test if we have terminal access
     if test -e /dev/tty && (echo -n "" > /dev/tty) 2>/dev/null; then
