@@ -301,6 +301,46 @@ func TestTriageDeduplication(t *testing.T) {
 	}
 }
 
+func TestTriageDeduplicationDistinctMetrics(t *testing.T) {
+	p := &PatrolService{
+		findings:   NewFindingsStore(),
+		thresholds: DefaultPatrolThresholds(),
+	}
+
+	// Node with both CPU and memory above thresholds — should produce TWO performance flags.
+	state := models.StateSnapshot{
+		Nodes: []models.Node{
+			{
+				ID:     "node/pve1",
+				Name:   "pve1",
+				CPU:    0.92,                       // CPU is 0-1 scale (92%)
+				Memory: models.Memory{Usage: 92.0}, // already percent
+			},
+		},
+	}
+
+	triage := p.RunDeterministicTriage(context.Background(), state, nil, nil)
+	if triage == nil {
+		t.Fatalf("expected triage result, got nil")
+	}
+
+	perfFlags := triageFilterFlags(triage.Flags, func(f TriageFlag) bool {
+		return f.ResourceID == "node/pve1" && f.Category == "performance"
+	})
+	if len(perfFlags) != 2 {
+		t.Fatalf("expected 2 distinct performance flags (cpu + memory), got %d", len(perfFlags))
+	}
+
+	cpuFlag := triageFindFlag(perfFlags, func(f TriageFlag) bool { return f.Metric == "cpu" })
+	memFlag := triageFindFlag(perfFlags, func(f TriageFlag) bool { return f.Metric == "memory" })
+	if cpuFlag == nil {
+		t.Fatal("expected CPU performance flag")
+	}
+	if memFlag == nil {
+		t.Fatal("expected memory performance flag")
+	}
+}
+
 func TestFormatTriageBriefing(t *testing.T) {
 	triage := &TriageResult{
 		Flags: []TriageFlag{

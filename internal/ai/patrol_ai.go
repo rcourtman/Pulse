@@ -3277,6 +3277,38 @@ func (p *PatrolService) seedFindingsAndContext(scope *PatrolScope, state models.
 			knownResources[s.ID] = true
 			knownResources[s.Name] = true
 		}
+		for _, dh := range state.DockerHosts {
+			knownResources[dh.ID] = true
+			if dh.DisplayName != "" {
+				knownResources[dh.DisplayName] = true
+			}
+			if dh.Hostname != "" {
+				knownResources[dh.Hostname] = true
+			}
+		}
+		for _, h := range state.Hosts {
+			knownResources[h.ID] = true
+			if h.DisplayName != "" {
+				knownResources[h.DisplayName] = true
+			}
+			if h.Hostname != "" {
+				knownResources[h.Hostname] = true
+			}
+		}
+		for _, pbs := range state.PBSInstances {
+			knownResources[pbs.ID] = true
+			knownResources[pbs.Name] = true
+		}
+		for _, pmg := range state.PMGInstances {
+			knownResources[pmg.ID] = true
+			knownResources[pmg.Name] = true
+		}
+		for _, k := range state.KubernetesClusters {
+			knownResources[k.ID] = true
+			if k.Name != "" {
+				knownResources[k.Name] = true
+			}
+		}
 	}
 	stateHasResources := len(knownResources) > 0
 

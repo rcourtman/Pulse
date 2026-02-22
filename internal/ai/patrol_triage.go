@@ -750,7 +750,7 @@ func triageDedupKey(flag TriageFlag) string {
 	if id == "" {
 		id = flag.ResourceName
 	}
-	return id + "|" + flag.Category
+	return id + "|" + flag.Category + "|" + flag.Metric
 }
 
 func triageSeverityRank(severity string) int {
