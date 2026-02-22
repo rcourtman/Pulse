@@ -19,6 +19,7 @@ Use standard Tailwind prefixes with these dynamic keys:
 | `base` | `bg-base` | Application background | The absolute bottom layer of the page, or inactive tracker backgrounds. |
 | `surface` | `bg-surface` | Elevated structural elements | Cards, panels, dialog boxes, standard button backgrounds, table headers. |
 | `surface-hover` | `hover:bg-surface-hover` | Interactive state | When a table row, button, or list item is hovered or active. |
+| `surface-alt` | `bg-surface-alt` | Slightly elevated surface | Selected states, inline badges, secondary panels, form group backgrounds. |
 | `border-subtle` | `border-border-subtle` | Faint divider | Very subtle dividers that don't need sharp contrast. |
 | `border` | `border-border` | Standard structure borders | Outline for panels, buttons, dialog boxes, and inputs. |
 | `base-content` | `text-base-content` | Primary readable text | The main text color instead of absolute black/white. |
@@ -34,6 +35,30 @@ Use standard Tailwind prefixes with these dynamic keys:
 ```tsx
 // ✅ GOOD
 <div class="bg-surface border-border text-base-content border" />
+```
+
+---
+
+## 🧩 CSS Component Classes
+
+Reusable component classes defined in `index.css` using `@layer base`. Use these instead of repeating the same token combinations:
+
+| Class | What it provides | Use for |
+|:---|:---|:---|
+| `.card` | `bg-surface border border-border shadow-sm rounded-md` | Content panels, dialog boxes |
+| `.card-hover` | `hover:bg-surface-hover transition-colors` | Hoverable list items, clickable rows |
+| `.form-input` | Full input styling (border, bg, text, focus ring, disabled state) | Text inputs, textareas |
+| `.form-select` | Same as `.form-input` + dropdown arrow padding | Select dropdowns |
+| `.btn-secondary` | Bordered ghost button with hover | Cancel buttons, secondary actions |
+| `.table-header` | `text-muted uppercase tracking-wider` | Table column headers |
+| `.table-row` | `border-b border-border hover:bg-surface-hover` | Table body rows |
+
+```tsx
+// ❌ BAD — repeating tokens manually
+<input class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500" />
+
+// ✅ GOOD — use the component class
+<input class="form-input" />
 ```
 
 ---
@@ -102,3 +127,15 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
   </TableBody>
 </Table>
 ```
+
+### 6. Form utilities (`/src/components/shared/Form.ts`)
+Pre-composed class strings for form elements. Import individual exports instead of composing tokens manually.
+```tsx
+import { formControl, formSelect, formLabel, formField, formCheckbox } from '@/components/shared/Form';
+
+<div class={formField}>
+  <label class={formLabel}>API Key</label>
+  <input class={formControl} type="text" />
+</div>
+```
+

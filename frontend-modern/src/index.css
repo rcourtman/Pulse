@@ -199,16 +199,30 @@
 
   /* Card styles */
   .card {
-    @apply bg-surface border-border shadow-sm rounded-md;
+    @apply bg-surface border border-border shadow-sm rounded-md;
   }
 
   /* Table styles */
   .table-header {
-    @apply text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider;
+    @apply text-xs font-medium text-muted uppercase tracking-wider;
   }
 
   .table-row {
-    @apply border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750;
+    @apply border-b border-border hover:bg-surface-hover;
+  }
+
+  /* Form input — reusable base for text inputs, textareas, selects */
+  .form-input {
+    @apply w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .form-select {
+    @apply form-input pr-8 appearance-none;
+  }
+
+  /* Secondary button — bordered, ghost-style */
+  .btn-secondary {
+    @apply px-4 py-2 text-sm font-medium border border-border text-base-content rounded-md bg-surface hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   /* Status indicators */
@@ -520,14 +534,9 @@ body,
   animation-delay: 300ms;
 }
 
-/* Glassmorphism Utilities */
-/* Card styles using semantic tokens */
-.card {
-  @apply bg-surface border border-border shadow-sm;
-}
-
+/* Card hover utility */
 .card-hover {
-  @apply hover:bg-white dark:hover:bg-slate-800 transition-colors duration-200;
+  @apply hover:bg-surface-hover transition-colors duration-200;
 }
 
 /* Staggered Entry Animation */
