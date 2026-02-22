@@ -54,7 +54,7 @@ describe('usePersistentSignal', () => {
   });
 
   it('removes item from storage when value is null', () => {
-    const [value, setValue] = usePersistentSignal('test-key', 'default');
+    const [, setValue] = usePersistentSignal('test-key', 'default');
 
     setValue(null as any);
 
@@ -62,7 +62,7 @@ describe('usePersistentSignal', () => {
   });
 
   it('removes item from storage when value is undefined', () => {
-    const [value, setValue] = usePersistentSignal('test-key', 'default');
+    const [, setValue] = usePersistentSignal('test-key', 'default');
 
     setValue(undefined as any);
 
@@ -71,12 +71,12 @@ describe('usePersistentSignal', () => {
 
   it('uses custom serialize function', () => {
     const serialize = vi.fn((val: object) => JSON.stringify(val));
-    const [value, setValue] = usePersistentSignal('test-key', { a: 1 }, { serialize });
+    const [, setValue] = usePersistentSignal('test-key', { a: 1 }, { serialize });
 
-    setValue({ b: 2 });
+    setValue({ a: 2 });
 
-    expect(serialize).toHaveBeenCalledWith({ b: 2 });
-    expect(localStorageMock.setItem).toHaveBeenCalledWith('test-key', '{"b":2}');
+    expect(serialize).toHaveBeenCalledWith({ a: 2 });
+    expect(localStorageMock.setItem).toHaveBeenCalledWith('test-key', '{"a":2}');
   });
 
   it('uses custom deserialize function', () => {
@@ -91,7 +91,7 @@ describe('usePersistentSignal', () => {
 
   it('uses equals option for comparison', () => {
     const equals = vi.fn((prev: number, next: number) => prev === next);
-    const [value, setValue] = usePersistentSignal('test-key', 0, { equals });
+    const [, setValue] = usePersistentSignal('test-key', 0, { equals });
 
     setValue(0);
 
@@ -151,9 +151,9 @@ describe('usePersistentSignal', () => {
   it('handles object values', () => {
     const [value, setValue] = usePersistentSignal('test-key', { a: 1 });
 
-    setValue({ b: 2 });
+    setValue({ a: 2 });
 
     expect(localStorageMock.setItem).toHaveBeenCalledWith('test-key', '[object Object]');
-    expect(value()).toEqual({ b: 2 });
+    expect(value()).toEqual({ a: 2 });
   });
 });

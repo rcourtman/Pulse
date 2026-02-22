@@ -78,14 +78,14 @@ describe('useDebouncedValue', () => {
   });
 
   it('handles objects', () => {
-    const [value, setValue] = createSignal({ a: 1 });
+    const [value, setValue] = createSignal<{ a: number; b?: number }>({ a: 1 });
     const debounced = useDebouncedValue(value, 100);
 
     expect(debounced()).toEqual({ a: 1 });
 
-    setValue({ b: 2 });
+    setValue({ a: 2, b: 2 });
     vi.advanceTimersByTime(100);
 
-    expect(debounced()).toEqual({ b: 2 });
+    expect(debounced()).toEqual({ a: 2, b: 2 });
   });
 });

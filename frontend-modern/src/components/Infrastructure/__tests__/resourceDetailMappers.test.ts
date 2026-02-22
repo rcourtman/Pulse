@@ -101,7 +101,7 @@ describe('resourceDetailMappers', () => {
     });
 
     it('returns dash for null', () => {
-      expect(formatInteger(null)).toBe('—');
+      expect(formatInteger(undefined)).toBe('—');
     });
 
     it('returns dash for NaN', () => {
@@ -141,7 +141,7 @@ describe('resourceDetailMappers', () => {
     });
 
     it('returns unknown source type as-is', () => {
-      expect(formatSourceType('unknown-source')).toBe('unknown-source');
+      expect(formatSourceType('unknown-source' as any)).toBe('unknown-source');
     });
   });
 });

@@ -70,7 +70,7 @@ describe('AgentProfilesAPI', () => {
       const mockResponse = { ok: true, json: () => Promise.resolve({ id: 'p1' }) } as unknown as Response;
       vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
 
-      const result = await AgentProfilesAPI.createProfile('New Profile', { key: 'value' }, 'Description');
+      await AgentProfilesAPI.createProfile('New Profile', { key: 'value' }, 'Description');
 
       expect(apiFetch).toHaveBeenCalledWith(
         '/api/admin/profiles/',
@@ -154,7 +154,7 @@ describe('AgentProfilesAPI', () => {
       const mockResponse = { ok: true, json: () => Promise.resolve({ name: 'Suggested', description: '', config: {}, rationale: [] }) } as unknown as Response;
       vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
 
-      const result = await AgentProfilesAPI.suggestProfile({ prompt: 'Create a profile' });
+      await AgentProfilesAPI.suggestProfile({ prompt: 'Create a profile' });
 
       expect(apiFetch).toHaveBeenCalledWith(
         '/api/admin/profiles/suggestions',

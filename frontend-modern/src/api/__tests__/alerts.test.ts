@@ -67,7 +67,14 @@ describe('AlertsAPI', () => {
     it('updates alert config', async () => {
       vi.mocked(apiFetchJSON).mockResolvedValueOnce({ success: true });
 
-      const config = { activationState: 'active', nodeDefaults: {} };
+      const config = {
+        enabled: true,
+        activationState: 'active' as const,
+        guestDefaults: {},
+        nodeDefaults: {},
+        storageDefault: { trigger: 90, clear: 80 },
+        overrides: {},
+      };
       const result = await AlertsAPI.updateConfig(config);
 
       expect(apiFetchJSON).toHaveBeenCalledWith(

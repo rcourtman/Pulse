@@ -1,6 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { tokenRevealStore, useTokenRevealState, showTokenReveal, dismissTokenReveal } from '../tokenReveal';
-import type { APITokenRecord } from '@/api/security';
 
 describe('tokenRevealStore', () => {
   beforeEach(() => {
@@ -13,7 +12,7 @@ describe('tokenRevealStore', () => {
     });
 
     it('returns null after dismiss', () => {
-      showTokenReveal({ token: 'abc', record: { id: '1', name: 'test', token: 'x', createdAt: '' } });
+      showTokenReveal({ token: 'abc', record: { id: '1', name: 'test', prefix: 'pmp_', suffix: 'x', createdAt: '' } });
       expect(tokenRevealStore.state()).not.toBeNull();
 
       tokenRevealStore.dismiss();
@@ -25,7 +24,7 @@ describe('tokenRevealStore', () => {
     it('sets state with payload', () => {
       const payload = {
         token: 'secret-token',
-        record: { id: 'token-1', name: 'My Token', token: 'x', createdAt: '2024-01-01' },
+        record: { id: 'token-1', name: 'My Token', prefix: 'pmp_', suffix: 'x', createdAt: '2024-01-01' },
         source: 'settings',
         note: 'Test note',
       };
@@ -43,7 +42,7 @@ describe('tokenRevealStore', () => {
 
     it('sets issuedAt to current timestamp', () => {
       const before = Date.now();
-      showTokenReveal({ token: 'abc', record: { id: '1', name: 'test', token: 'x', createdAt: '' } });
+      showTokenReveal({ token: 'abc', record: { id: '1', name: 'test', prefix: 'pmp_', suffix: 'x', createdAt: '' } });
       const after = Date.now();
 
       const state = tokenRevealStore.state();
@@ -54,7 +53,7 @@ describe('tokenRevealStore', () => {
 
   describe('dismiss', () => {
     it('clears state to null', () => {
-      showTokenReveal({ token: 'abc', record: { id: '1', name: 'test', token: 'x', createdAt: '' } });
+      showTokenReveal({ token: 'abc', record: { id: '1', name: 'test', prefix: 'pmp_', suffix: 'x', createdAt: '' } });
       dismissTokenReveal();
 
       expect(tokenRevealStore.state()).toBeNull();
@@ -65,7 +64,7 @@ describe('tokenRevealStore', () => {
     it('returns current state', () => {
       expect(useTokenRevealState()()).toBeNull();
 
-      showTokenReveal({ token: 'abc', record: { id: '1', name: 'test', token: 'x', createdAt: '' } });
+      showTokenReveal({ token: 'abc', record: { id: '1', name: 'test', prefix: 'pmp_', suffix: 'x', createdAt: '' } });
       expect(useTokenRevealState()()).not.toBeNull();
     });
   });

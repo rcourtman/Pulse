@@ -76,7 +76,7 @@ describe('alerts thresholds helpers', () => {
     });
 
     it('returns 0 for null', () => {
-      expect(formatMetricValue('cpu', null)).toBe('0');
+      expect(formatMetricValue('cpu', null as unknown as number)).toBe('0');
     });
 
     it('returns Off for zero or negative values', () => {

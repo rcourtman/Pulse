@@ -29,7 +29,10 @@ describe('SettingsAPI', () => {
 
   describe('getSystemSettings', () => {
     it('fetches system settings', async () => {
-      const mockSettings: SystemSettingsResponse = { fullWidthMode: true };
+      const mockSettings: SystemSettingsResponse = {
+        autoUpdateEnabled: true,
+        fullWidthMode: true,
+      };
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockSettings);
 
       const result = await SettingsAPI.getSystemSettings();

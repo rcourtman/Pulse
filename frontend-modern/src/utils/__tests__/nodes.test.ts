@@ -66,11 +66,7 @@ describe('getNodeDisplayName', () => {
   });
 
   it('returns empty string when all fields are undefined', () => {
-    const node = { name: undefined, host: undefined, instance: undefined } as {
-      name?: string;
-      host?: string;
-      instance?: string;
-    };
+    const node = { name: undefined, host: undefined, instance: undefined } as any;
     expect(getNodeDisplayName(node)).toBe('');
   });
 });

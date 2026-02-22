@@ -14,7 +14,16 @@ describe('SecurityAPI', () => {
 
   describe('getStatus', () => {
     it('fetches security status', async () => {
-      const mockStatus: SecurityStatus = { hasLocalAuth: true };
+      const mockStatus: SecurityStatus = {
+        hasAuthentication: true,
+        apiTokenConfigured: true,
+        apiTokenHint: 'pmp_***',
+        requiresAuth: true,
+        credentialsEncrypted: true,
+        exportProtected: true,
+        hasAuditLogging: true,
+        configuredButPendingRestart: false,
+      };
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockStatus);
 
       const result = await SecurityAPI.getStatus();

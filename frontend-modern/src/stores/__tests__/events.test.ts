@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-import { eventBus, type EventType } from '@/stores/events';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { eventBus } from '@/stores/events';
 
 describe('eventBus', () => {
   beforeEach(() => {

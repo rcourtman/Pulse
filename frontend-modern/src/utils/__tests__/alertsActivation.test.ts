@@ -1,10 +1,9 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import {
   setGlobalActivationState,
   isAlertsActivationEnabled,
   ALERTS_ACTIVATION_EVENT,
 } from '@/utils/alertsActivation';
-import type { ActivationState } from '@/types/alerts';
 
 describe('alertsActivation', () => {
   beforeEach(() => {
@@ -26,8 +25,8 @@ describe('alertsActivation', () => {
       expect(result).toBe(true);
     });
 
-    it('returns false when state is inactive', () => {
-      setGlobalActivationState('inactive');
+    it('returns false when state is not active', () => {
+      setGlobalActivationState('snoozed');
       const result = isAlertsActivationEnabled();
       expect(result).toBe(false);
     });
@@ -41,8 +40,8 @@ describe('alertsActivation', () => {
 
   describe('setGlobalActivationState', () => {
     it('sets the global activation state', () => {
-      setGlobalActivationState('inactive');
-      expect(window.__pulseAlertsActivationState).toBe('inactive');
+      setGlobalActivationState('pending_review');
+      expect(window.__pulseAlertsActivationState).toBe('pending_review');
     });
 
     it('dispatches custom event when state changes', () => {

@@ -2,13 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { copyToClipboard } from '../clipboard';
 
 describe('clipboard', () => {
-  let originalNavigator: Navigator;
-  let originalDocument: Document;
-
   beforeEach(() => {
-    originalNavigator = globalThis.navigator;
-    originalDocument = globalThis.document;
-
     vi.stubGlobal('navigator', {
       clipboard: {
         writeText: vi.fn(),

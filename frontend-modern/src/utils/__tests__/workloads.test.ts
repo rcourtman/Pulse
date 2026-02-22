@@ -85,64 +85,64 @@ describe('resolveWorkloadType', () => {
 
 describe('getWorkloadMetricsKind', () => {
   it('returns vm for vm workload', () => {
-    const guest = { workloadType: 'vm' as const };
+    const guest = { workloadType: 'vm' as const, type: 'qemu' };
     expect(getWorkloadMetricsKind(guest)).toBe('vm');
   });
 
   it('returns container for lxc workload', () => {
-    const guest = { workloadType: 'lxc' as const };
+    const guest = { workloadType: 'lxc' as const, type: 'lxc' };
     expect(getWorkloadMetricsKind(guest)).toBe('container');
   });
 
   it('returns dockerContainer for docker workload', () => {
-    const guest = { workloadType: 'docker' as const };
+    const guest = { workloadType: 'docker' as const, type: 'docker' };
     expect(getWorkloadMetricsKind(guest)).toBe('dockerContainer');
   });
 
   it('returns k8s for k8s workload', () => {
-    const guest = { workloadType: 'k8s' as const };
+    const guest = { workloadType: 'k8s' as const, type: 'kubernetes' };
     expect(getWorkloadMetricsKind(guest)).toBe('k8s');
   });
 
   it('defaults to container for unknown workload type', () => {
-    const guest = { workloadType: 'unknown' as unknown as 'vm' };
+    const guest = { workloadType: 'unknown' as unknown as 'vm', type: 'unknown' };
     expect(getWorkloadMetricsKind(guest)).toBe('container');
   });
 });
 
 describe('getCanonicalWorkloadId', () => {
   it('returns composite id for vm with instance, node, vmid', () => {
-    const guest = { id: 'orig', instance: 'qemu', node: 'node1', vmid: 100 };
+    const guest = { id: 'orig', type: 'qemu', instance: 'qemu', node: 'node1', vmid: 100 };
     expect(getCanonicalWorkloadId(guest)).toBe('qemu:node1:100');
   });
 
   it('returns composite id for lxc with instance, node, vmid', () => {
-    const guest = { id: 'orig', instance: 'lxc', node: 'node2', vmid: 200 };
+    const guest = { id: 'orig', type: 'lxc', instance: 'lxc', node: 'node2', vmid: 200 };
     expect(getCanonicalWorkloadId(guest)).toBe('lxc:node2:200');
   });
 
   it('returns id for docker (no instance/node/vmid)', () => {
-    const guest = { id: 'docker-123', workloadType: 'docker' as const, instance: '', node: '', vmid: 0 };
+    const guest = { id: 'docker-123', type: 'docker', workloadType: 'docker' as const, instance: '', node: '', vmid: 0 };
     expect(getCanonicalWorkloadId(guest)).toBe('docker-123');
   });
 
   it('returns id for k8s (no instance/node/vmid)', () => {
-    const guest = { id: 'pod-456', workloadType: 'k8s' as const, instance: '', node: '', vmid: 0 };
+    const guest = { id: 'pod-456', type: 'pod', workloadType: 'k8s' as const, instance: '', node: '', vmid: 0 };
     expect(getCanonicalWorkloadId(guest)).toBe('pod-456');
   });
 
   it('returns id when vmid is 0', () => {
-    const guest = { id: 'test', instance: 'qemu', node: 'node1', vmid: 0 };
+    const guest = { id: 'test', type: 'qemu', instance: 'qemu', node: 'node1', vmid: 0 };
     expect(getCanonicalWorkloadId(guest)).toBe('test');
   });
 
   it('returns id when instance is missing', () => {
-    const guest = { id: 'test', instance: '', node: 'node1', vmid: 100 };
+    const guest = { id: 'test', type: 'qemu', instance: '', node: 'node1', vmid: 100 };
     expect(getCanonicalWorkloadId(guest)).toBe('test');
   });
 
   it('returns id when node is missing', () => {
-    const guest = { id: 'test', instance: 'qemu', node: '', vmid: 100 };
+    const guest = { id: 'test', type: 'qemu', instance: 'qemu', node: '', vmid: 100 };
     expect(getCanonicalWorkloadId(guest)).toBe('test');
   });
 });

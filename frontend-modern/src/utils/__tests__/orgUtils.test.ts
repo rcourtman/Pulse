@@ -32,11 +32,10 @@ describe('normalizeRole', () => {
 describe('canManageOrg', () => {
   const createOrg = (overrides: Partial<Organization> = {}): Organization => ({
     id: 'org-1',
-    name: 'Test Org',
+    displayName: 'Test Org',
     ownerUserId: 'owner-1',
     members: [],
     createdAt: '2024-01-01',
-    updatedAt: '2024-01-01',
     ...overrides,
   });
 
@@ -60,42 +59,42 @@ describe('canManageOrg', () => {
 
   it('returns true when user has admin role', () => {
     const org = createOrg({
-      members: [{ userId: 'user-1', role: 'admin' }],
+      members: [{ userId: 'user-1', role: 'admin', addedAt: '2024-01-01T00:00:00Z' }],
     });
     expect(canManageOrg(org, 'user-1')).toBe(true);
   });
 
   it('returns true when user has owner role via member', () => {
     const org = createOrg({
-      members: [{ userId: 'user-1', role: 'owner' }],
+      members: [{ userId: 'user-1', role: 'owner', addedAt: '2024-01-01T00:00:00Z' }],
     });
     expect(canManageOrg(org, 'user-1')).toBe(true);
   });
 
   it('returns false when user has viewer role', () => {
     const org = createOrg({
-      members: [{ userId: 'user-1', role: 'viewer' }],
+      members: [{ userId: 'user-1', role: 'viewer', addedAt: '2024-01-01T00:00:00Z' }],
     });
     expect(canManageOrg(org, 'user-1')).toBe(false);
   });
 
   it('returns false when user has editor role', () => {
     const org = createOrg({
-      members: [{ userId: 'user-1', role: 'editor' }],
+      members: [{ userId: 'user-1', role: 'editor', addedAt: '2024-01-01T00:00:00Z' }],
     });
     expect(canManageOrg(org, 'user-1')).toBe(false);
   });
 
   it('treats member role as viewer', () => {
     const org = createOrg({
-      members: [{ userId: 'user-1', role: 'member' }],
+      members: [{ userId: 'user-1', role: 'member', addedAt: '2024-01-01T00:00:00Z' }],
     });
     expect(canManageOrg(org, 'user-1')).toBe(false);
   });
 
   it('returns false when user is not in members list', () => {
     const org = createOrg({
-      members: [{ userId: 'other-user', role: 'admin' }],
+      members: [{ userId: 'other-user', role: 'admin', addedAt: '2024-01-01T00:00:00Z' }],
     });
     expect(canManageOrg(org, 'user-1')).toBe(false);
   });

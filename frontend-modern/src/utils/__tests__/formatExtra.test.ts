@@ -118,7 +118,7 @@ describe('getShortImageName', () => {
 describe('normalizeDiskArray', () => {
   it('returns undefined for null/undefined input', () => {
     expect(normalizeDiskArray(undefined)).toBeUndefined();
-    expect(normalizeDiskArray(null)).toBeUndefined();
+    expect(normalizeDiskArray(null as any)).toBeUndefined();
   });
 
   it('returns undefined for empty array', () => {

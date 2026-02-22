@@ -4,7 +4,7 @@ import {
   parseFilterStack,
   evaluateFilterStack,
 } from '@/utils/searchQuery';
-import type { VM, Container } from '@/types/api';
+import type { VM } from '@/types/api';
 
 describe('parseFilter', () => {
   it('parses metric conditions with > operator', () => {
@@ -205,8 +205,8 @@ describe('evaluateFilterStack', () => {
     type: 'qemu',
     cpu: 0.5,
     cpus: 2,
-    memory: { usage: 1024, total: 2048 },
-    disk: { usage: 50, total: 100 },
+    memory: { usage: 1024, total: 2048, used: 1024, free: 1024 },
+    disk: { usage: 50, total: 100, used: 50, free: 50 },
     networkIn: 100,
     networkOut: 200,
     diskRead: 300,
@@ -215,31 +215,6 @@ describe('evaluateFilterStack', () => {
     template: false,
     lastBackup: 0,
     tags: ['production', 'web'],
-    lock: '',
-    lastSeen: '',
-    ...overrides,
-  });
-
-  const createContainer = (overrides: Partial<Container> = {}): Container => ({
-    id: 'ct-1',
-    vmid: 200,
-    name: 'test-container',
-    node: 'node1',
-    instance: 'lxc',
-    status: 'running',
-    type: 'lxc',
-    cpu: 0.3,
-    cpus: 1,
-    memory: { usage: 512, total: 1024 },
-    disk: { usage: 30, total: 50 },
-    networkIn: 50,
-    networkOut: 100,
-    diskRead: 150,
-    diskWrite: 200,
-    uptime: 7200,
-    template: false,
-    lastBackup: 0,
-    tags: ['development', 'api'],
     lock: '',
     lastSeen: '',
     ...overrides,
@@ -267,14 +242,14 @@ describe('evaluateFilterStack', () => {
     });
 
     it('evaluates memory usage threshold (absolute value)', () => {
-      const vm = createVM({ memory: { usage: 1800, total: 2000 } });
+      const vm = createVM({ memory: { usage: 1800, total: 2000, used: 1800, free: 200 } });
       const stack = parseFilterStack('memory<2000');
       const result = evaluateFilterStack(vm, stack);
       expect(result).toBe(true); // 1800 < 2000
     });
 
     it('evaluates disk usage threshold', () => {
-      const vm = createVM({ disk: { usage: 80, total: 100 } });
+      const vm = createVM({ disk: { usage: 80, total: 100, used: 80, free: 20 } });
       const stack = parseFilterStack('disk<70');
       const result = evaluateFilterStack(vm, stack);
       expect(result).toBe(false); // 80% > 70%

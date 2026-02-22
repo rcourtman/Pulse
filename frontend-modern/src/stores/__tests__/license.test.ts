@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { LicenseAPI } from '@/api/license';
+import { LicenseAPI, type LicenseEntitlements } from '@/api/license';
 import {
     loadLicenseStatus,
     startProTrial,
@@ -23,24 +23,24 @@ vi.mock('@/stores/events', () => ({
 }));
 
 describe('license store', () => {
-    const mockProEntitlements = {
+    const mockProEntitlements: LicenseEntitlements = {
         tier: 'pro' as const,
         subscription_state: 'active',
         capabilities: ['feature1', 'feature2', 'multi_tenant'],
-        limits: [{ key: 'limit1', value: 100 }],
+        limits: [{ key: 'limit1', limit: 100, current: 25, state: 'ok' }],
         upgrade_reasons: [
-            { key: 'reason1', title: 'Reason 1', action_url: '/upgrade/reason1' },
-            { key: 'reason2', title: 'Reason 2', action_url: '/upgrade/reason2' },
+            { key: 'reason1', reason: 'Reason 1', action_url: '/upgrade/reason1' },
+            { key: 'reason2', reason: 'Reason 2', action_url: '/upgrade/reason2' },
         ],
         hosted_mode: false,
     };
 
-    const mockFreeEntitlements = {
+    const mockFreeEntitlements: LicenseEntitlements = {
         tier: 'free' as const,
         subscription_state: 'expired',
         capabilities: [] as string[],
-        limits: [] as { key: string; value: number }[],
-        upgrade_reasons: [] as { key: string; title: string; action_url: string }[],
+        limits: [],
+        upgrade_reasons: [],
         hosted_mode: false,
     };
 
@@ -187,7 +187,7 @@ describe('license store', () => {
         it('returns limit by key', async () => {
             vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockProEntitlements);
             await loadLicenseStatus(true);
-            expect(getLimit('limit1')?.value).toBe(100);
+            expect(getLimit('limit1')?.limit).toBe(100);
         });
     });
 
