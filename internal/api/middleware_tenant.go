@@ -155,6 +155,19 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 		// Check if the authenticated user/token is allowed to access this organization.
 		// Note: This runs AFTER AuthContextMiddleware, so auth context is available.
 		if m.authChecker != nil {
+			// Dev-only emergency bypass should skip tenant membership checks too.
+			// Use request context marker to avoid leaking global bypass state across tests.
+			if isAdminBypassRequest(r.Context()) {
+				ctx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
+				org := loadedOrg
+				if org == nil {
+					org = &models.Organization{ID: orgID, DisplayName: orgID}
+				}
+				ctx = context.WithValue(ctx, OrgContextKey, org)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
 			// Get API token from context (set by AuthContextMiddleware)
 			var token *config.APITokenRecord
 			if tokenVal := auth.GetAPIToken(r.Context()); tokenVal != nil {

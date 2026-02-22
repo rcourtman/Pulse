@@ -32,6 +32,12 @@ var (
 	}
 )
 
+type authContextKey string
+
+const (
+	adminBypassContextKey authContextKey = "admin_bypass"
+)
+
 // InitSessionStore initializes the persistent session store
 func InitSessionStore(dataPath string) {
 	sessionOnce.Do(func() {
@@ -840,6 +846,16 @@ func attachUserContext(r *http.Request, username string) *http.Request {
 	return r.WithContext(ctx)
 }
 
+func attachAdminBypassContext(r *http.Request) *http.Request {
+	ctx := context.WithValue(r.Context(), adminBypassContextKey, true)
+	return r.WithContext(ctx)
+}
+
+func isAdminBypassRequest(ctx context.Context) bool {
+	bypass, ok := ctx.Value(adminBypassContextKey).(bool)
+	return ok && bypass
+}
+
 // AuthContextMiddleware creates a middleware that extracts auth info and stores it in context.
 // This should run early in the middleware chain so subsequent middleware can access auth context.
 // Note: This middleware does NOT enforce authentication - it only populates context.
@@ -866,7 +882,7 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 
 	// Dev mode bypass
 	if adminBypassEnabled() {
-		return attachUserContext(r, "admin")
+		return attachAdminBypassContext(attachUserContext(r, "admin"))
 	}
 
 	// Check proxy auth
