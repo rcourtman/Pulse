@@ -1,394 +1,191 @@
-# Multi-Tenant Feature Documentation
+# Multi-Tenant Organizations (Cloud Enterprise)
 
-## Status: Disabled by Default
+Pulse supports isolated, multi-tenant organizations for MSPs, homelabs with multiple environments, and multi-datacenter deployments. Each organization gets its own infrastructure, resources, alerts, and audit log — fully isolated from other organizations on the same Pulse instance.
 
-This feature is gated behind a feature flag and license check. It will not affect existing users unless explicitly enabled.
+## Requirements
 
----
+| Requirement | Detail |
+|---|---|
+| **Feature flag** | `PULSE_MULTI_TENANT_ENABLED=true` |
+| **License** | Enterprise license with `multi_tenant` capability |
 
-## How to Enable
+Without these, all API calls return `501 Not Implemented` (flag off) or `402 Payment Required` (no license). The **default** organization always works regardless.
 
-### Requirements
+## Quick Start
 
-1. **Feature flag**: Set environment variable
-   ```bash
-   PULSE_MULTI_TENANT_ENABLED=true
-   ```
+1. Set `PULSE_MULTI_TENANT_ENABLED=true` in your environment and restart Pulse.
+2. Activate your Enterprise license in **Settings → License**.
+3. Go to **Settings → Organization** and click **Create Organization**.
+4. Name your organization and assign infrastructure to it.
+5. Use the **Org Switcher** in the header bar to switch between organizations.
 
-2. **License**: Enterprise license with `multi_tenant` feature enabled
+## Concepts
 
-### Behavior Without Enablement
+### Organizations
 
-| Condition | HTTP Response | WebSocket Response |
-|-----------|---------------|-------------------|
-| Feature flag disabled | 501 Not Implemented | 501 Not Implemented |
-| Flag enabled, no license | 402 Payment Required | 402 Payment Required |
-| Flag enabled + licensed | Normal operation | Normal operation |
+An organization is a fully isolated monitoring environment:
 
-The "default" organization always works regardless of feature flag or license status.
+- Its own set of monitored nodes and resources.
+- Its own alerts, thresholds, and notifications.
+- Its own audit log.
+- Its own configuration directory on disk.
 
----
+The **default** organization always exists and is used when multi-tenant is disabled. It cannot be deleted or renamed.
 
-## What's Implemented
+### Roles
 
-### Isolation, Gating, and Authorization
+Each member has a role within an organization:
 
-| Component | Status | Details |
-|-----------|--------|---------|
-| State/Monitor isolation | Implemented | Each org gets its own `Monitor` instance via `MultiTenantMonitor` |
-| WebSocket isolation | Implemented | Clients bound to tenant, broadcasts filtered by org |
-| Audit log isolation | Implemented | `LogAuditEventForTenant()` writes to per-org audit DB |
-| Resource isolation | Implemented | Per-tenant resource stores with `PopulateFromSnapshotForTenant()` |
-| Persistence isolation | Implemented | `MultiTenantPersistence` provides per-org config directories |
-| Feature flag gate | Implemented | `PULSE_MULTI_TENANT_ENABLED` env var (default: false) |
-| License gate | Implemented | Requires `multi_tenant` feature in Enterprise license |
-| HTTP middleware gate | Implemented | `TenantMiddleware` extracts org ID and validates access |
-| WebSocket gate | Implemented | `MultiTenantChecker` validates before upgrade |
-| Token authorization | Implemented | `AuthorizationChecker.TokenCanAccessOrg()` |
-| User authorization | Implemented | `AuthorizationChecker.UserCanAccessOrg()` via org membership |
+| Role | Permissions |
+|---|---|
+| **Owner** | Full control. Can transfer ownership, delete the org. |
+| **Admin** | Manage members, shares, and org settings. Cannot transfer ownership. |
+| **Editor** | Read/write access to org resources. Cannot manage members or shares. |
+| **Viewer** | Read-only access to all org data. |
 
-### Organization Management and Sharing
+### Resource Sharing
 
-| Component | Status | Details |
-|-----------|--------|---------|
-| Organization CRUD | Implemented | Create/read/update/delete orgs via API and UI |
-| Member management | Implemented | Invite/remove members, role changes, ownership transfer |
-| Member roles | Implemented | `owner`, `admin`, `editor`, `viewer` (`member` alias normalizes to `viewer`) |
-| Cross-org sharing | Implemented | Share resources between orgs with role-based access (`viewer`/`editor`/`admin`) |
+Organizations can share specific resources with other organizations:
 
-### Frontend UX and State Isolation
+- Share a VM, container, host, or storage resource with another org.
+- Assign an access role (`viewer`, `editor`, or `admin`) to the share.
+- The receiving org sees shared resources alongside their own, with a share badge.
 
-| Component | Status | Details |
-|-----------|--------|---------|
-| OrgSwitcher | Implemented | Header dropdown for active organization selection |
-| Settings panels | Implemented | Organization panels: Overview, Access, Sharing, Billing & Plan |
-| Org switch state reset | Implemented | Settings panels re-fetch, org caches invalidated, AI chat session/context reset |
+## Managing Organizations
 
-### Tenant-Aware Endpoints
+### Creating an Organization
 
-All user-facing data endpoints use tenant context (`X-Pulse-Org-ID`, cookie, or default fallback):
+**UI:** Settings → Organization → Create Organization
 
-- `/api/state`
-- `/api/charts`
-- `/api/storage/{id}`
-- `/api/recovery/points`
-- `/api/recovery/rollups`
-- `/api/resources/*`
-- `/api/metrics/*`
-- `/api/orgs`
-- `/api/orgs/{id}`
-- `/api/orgs/{id}/members`
-- `/api/orgs/{id}/members/{userId}`
-- `/api/orgs/{id}/shares`
-- `/api/orgs/{id}/shares/incoming`
-- `/api/orgs/{id}/shares/{shareId}`
-
----
-
-## Organizations & Members
-
-- Each organization is an isolated environment with its own monitor instance, resource state, config storage, and audit scope.
-- The `default` organization always exists and is used when multi-tenant is disabled.
-- `default` is intentionally immutable for org admin operations:
-  - It cannot be deleted.
-  - It cannot be renamed through org update APIs.
-  - Member management on `default` is blocked.
-- Roles:
-  - `owner`: full control, can transfer ownership
-  - `admin`: can manage members and shares, and update/delete org (non-default)
-  - `editor`: read/write org resources, cannot manage members/shares
-  - `viewer`: read-only access
-- Org lifecycle:
-  - Create org: API `POST /api/orgs` or UI
-  - Read/update/delete org: API `/api/orgs/{id}` or UI
-  - Add/update/remove members: API `/api/orgs/{id}/members*` or UI
-  - Transfer ownership: set a member role to `owner` (current owner only)
-
----
-
-## Resource Sharing
-
-- Sharing allows one source org to grant a target org access to selected resources.
-- A share record includes:
-  - Source org
-  - Target org
-  - Resource type
-  - Resource ID
-  - Access role
-- Valid resource types:
-  - `vm`, `container`, `host`, `storage`, `pbs`, `pmg`
-- Share access roles:
-  - `viewer`, `editor`, `admin`
-- Sharing endpoints:
-  - Outgoing shares: `GET /api/orgs/{id}/shares`
-  - Incoming shares: `GET /api/orgs/{id}/shares/incoming`
-  - Create/update share: `POST /api/orgs/{id}/shares`
-  - Delete share: `DELETE /api/orgs/{id}/shares/{shareId}`
-
----
-
-## Frontend Behavior
-
-- Header:
-  - `OrgSwitcher` is shown when multi-tenant is enabled.
-- Org switch behavior:
-  - Emits `org_switched` event for cross-component reactivity.
-  - Organization settings panels re-fetch data on switch.
-  - AI chat state is reset on switch (messages/session/context cleared).
-  - Org-scoped caches are invalidated on switch (including metadata and infrastructure summary caches).
-- Settings path:
-  - `Settings -> Organization`
-  - Panels: `Overview`, `Access`, `Sharing`, `Billing & Plan`
-- Error handling:
-  - `402` maps to "Multi-tenant requires an Enterprise license"
-  - `501` maps to "Multi-tenant is not enabled on this server"
-
----
-
-## Storage Layout and Migration
-
-- The **default** org uses the root data dir for backward compatibility.
-- Non-default orgs store data in `/orgs/<org-id>/`.
-- When multi-tenant is enabled, legacy single-tenant data is migrated into `/orgs/default/` and symlinks are created in the root data dir for compatibility.
-- Organization metadata is stored in `org.json` inside each org directory.
-
----
-
-## Intentionally Global (Admin-Level)
-
-These endpoints show system-wide data regardless of tenant context:
-
-| Endpoint | Rationale |
-|----------|-----------|
-| `/api/health` | System uptime, not tenant-specific |
-| `/api/scheduler/health` | Process-level scheduler status |
-| `/api/diagnostics/*` | Admin diagnostics for full system |
-
-Also global:
-- `security_setup_fix.go` - Clears unauthenticated agents on default monitor
-
----
-
-## Architecture
-
-### Key Files
-
-| File | Purpose |
-|------|---------|
-| `internal/api/middleware_tenant.go` | Extracts org ID, validates access, injects context |
-| `internal/api/middleware_license.go` | Feature flag, license check, 501/402 responses |
-| `internal/api/authorization.go` | `AuthorizationChecker` interface, token/user access checks |
-| `internal/api/org_handlers.go` | Organization CRUD, member management, and sharing APIs |
-| `internal/monitoring/multi_tenant_monitor.go` | Per-org monitor instances |
-| `internal/config/multi_tenant.go` | Per-org persistence (config directories) |
-| `internal/websocket/hub.go` | Tenant-aware client tracking, `MultiTenantChecker` |
-| `pkg/server/server.go` | Wires up org loader and multi-tenant checker |
-| `frontend-modern/src/components/OrgSwitcher.tsx` | Organization switcher dropdown in app header |
-| `frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx` | Organization Overview settings panel |
-| `frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx` | Organization Access settings panel |
-| `frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx` | Organization Sharing settings panel |
-| `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx` | Organization Billing & Plan settings panel |
-| `frontend-modern/src/stores/events.ts` | `org_switched` event bus contract for org-change reactivity |
-
-### Request Flow
-
-```
-Request
-  │
-  ├─► TenantMiddleware
-  │     ├─► Extract org ID (header/cookie/default)
-  │     ├─► Feature flag check (501 if disabled)
-  │     ├─► License check (402 if unlicensed)
-  │     ├─► Authorization check (403 if denied)
-  │     └─► Inject org ID into context
-  │
-  ├─► Handler
-  │     └─► getTenantMonitor(ctx) → org-specific Monitor
-  │
-  └─► Response (org-scoped data)
+**API:**
+```bash
+curl -X POST http://localhost:7655/api/orgs \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Production Datacenter", "description": "EU production infrastructure"}'
 ```
 
-### Org ID Sources (Priority Order)
+### Switching Organizations
 
-1. `X-Pulse-Org-ID` header (API clients/agents)
-2. `pulse_org_id` cookie (browser sessions)
-3. Fallback: `"default"`
+Use the **Org Switcher** dropdown in the header. When you switch:
 
----
+- All pages reload with the new organization's data.
+- AI chat history is reset (each org has its own context).
+- Caches are invalidated and re-fetched.
 
-## Data Model
+### Managing Members
 
-```go
-type Organization struct {
-    ID              string
-    DisplayName     string
-    OwnerUserID     string               // Creator/owner
-    Members         []OrganizationMember // User membership
-    SharedResources []OrganizationShare  // Outgoing shares from this org
-}
+**UI:** Settings → Organization → Access
 
-type OrganizationMember struct {
-    UserID  string    // Member user ID
-    Role    string    // "owner", "admin", "editor", "viewer"
-    AddedAt time.Time
-    AddedBy string
-}
+**API:**
+```bash
+# List members
+curl http://localhost:7655/api/orgs/{orgId}/members \
+  -H "Authorization: Bearer $TOKEN"
 
-type OrganizationShare struct {
-    ID           string
-    SourceOrgID  string
-    TargetOrgID  string
-    ResourceType string // "vm", "container", "host", "storage", "pbs", "pmg"
-    ResourceID   string
-    ResourceName string
-    AccessRole   string // "viewer", "editor", "admin"
-    CreatedAt    time.Time
-    CreatedBy    string
-}
+# Add a member
+curl -X POST http://localhost:7655/api/orgs/{orgId}/members \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"userId": "user-id", "role": "editor"}'
+
+# Update role
+curl -X PATCH http://localhost:7655/api/orgs/{orgId}/members/{userId} \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"role": "admin"}'
 ```
 
-### API Token Binding
+### Sharing Resources
 
-```go
-type APITokenRecord struct {
-    // ... existing fields ...
-    OrgID  string   // Single org binding
-    OrgIDs []string // Multi-org access (MSP tokens)
-}
+**UI:** Settings → Organization → Sharing
+
+**API:**
+```bash
+# Create a share
+curl -X POST http://localhost:7655/api/orgs/{orgId}/shares \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "targetOrgId": "other-org-id",
+    "resourceType": "host",
+    "resourceId": "resource-id",
+    "role": "viewer"
+  }'
+
+# View incoming shares
+curl http://localhost:7655/api/orgs/{orgId}/shares/incoming \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-Legacy tokens (empty `OrgID`) have wildcard access during migration period.
+## Settings Panels
 
----
+When multi-tenant is enabled, **Settings → Organization** shows:
+
+| Panel | Description |
+|---|---|
+| **Overview** | Organization name, description, creation date |
+| **Access** | Member list, invite/remove members, change roles |
+| **Sharing** | Outgoing and incoming resource shares |
+| **Billing & Plan** | Organization-level plan and license info |
 
 ## API Reference
 
-For full request/response examples, see the Organizations section in `docs/API.md`.
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/orgs` | List organizations the current user can access |
+| `POST` | `/api/orgs` | Create a new organization |
+| `GET` | `/api/orgs/{id}` | Get organization details |
+| `PATCH` | `/api/orgs/{id}` | Update organization |
+| `DELETE` | `/api/orgs/{id}` | Delete organization |
+| `GET` | `/api/orgs/{id}/members` | List members |
+| `POST` | `/api/orgs/{id}/members` | Add a member |
+| `PATCH` | `/api/orgs/{id}/members/{userId}` | Update member role |
+| `DELETE` | `/api/orgs/{id}/members/{userId}` | Remove a member |
+| `GET` | `/api/orgs/{id}/shares` | List outgoing shares |
+| `GET` | `/api/orgs/{id}/shares/incoming` | List incoming shares |
+| `POST` | `/api/orgs/{id}/shares` | Create a share |
+| `DELETE` | `/api/orgs/{id}/shares/{shareId}` | Remove a share |
 
----
+### Tenant Context
 
-## Response Codes Reference
+All data-fetching endpoints respect the active organization context. The active org is determined by:
 
-| Code | Meaning | When |
-|------|---------|------|
-| 200 | Success | Valid org access |
-| 400 | Bad Request | Invalid org ID format |
-| 402 | Payment Required | Feature enabled but not licensed |
-| 403 | Forbidden | Token/user not authorized for org |
-| 501 | Not Implemented | Feature flag disabled |
+1. `X-Pulse-Org-ID` header (API clients)
+2. Session cookie (browser)
+3. Falls back to the `default` organization
 
----
+## Storage
 
-## Testing Checklist
+- The **default** org uses the root data directory (backward compatible).
+- Non-default orgs store data in `{data-dir}/orgs/{org-id}/`.
+- Organization metadata is stored in `org.json` inside each org directory.
+- When multi-tenant is first enabled, legacy single-tenant data is migrated into `orgs/default/` with symlinks for compatibility.
 
-### Unit Tests
+## Troubleshooting
 
-```bash
-# Tenant middleware tests
-go test ./internal/api -run TestTenantMiddleware
+### "Multi-tenant is not enabled on this server" (501)
 
-# WebSocket multi-tenant tests
-go test ./internal/websocket -run TestHandleWebSocket_MultiTenant
-```
+Set `PULSE_MULTI_TENANT_ENABLED=true` in your environment and restart Pulse.
 
-### Frontend (Vitest)
+### "Multi-tenant requires an Enterprise license" (402)
 
-- Run org-related frontend tests with the Vitest suite (OrgSwitcher, org header propagation, AI chat reset behavior, and org-scoped cache behavior).
+Activate an Enterprise license with the `multi_tenant` capability in **Settings → License**.
 
-### Manual Testing
+### Organization data not loading after switch
 
-1. **Default behavior (flag disabled)**
-   - Start Pulse without `PULSE_MULTI_TENANT_ENABLED`
-   - Verify normal operation
-   - Attempt `X-Pulse-Org-ID: test-org` header -> expect 501
+1. Hard-refresh the browser (`Ctrl+Shift+R`).
+2. Check the Org Switcher dropdown — ensure the correct org is selected.
+3. Check Pulse logs for tenant middleware errors.
 
-2. **Flag enabled, no license**
-   - Set `PULSE_MULTI_TENANT_ENABLED=true`
-   - No Enterprise license
-   - Attempt non-default org -> expect 402
+### Shared resources not appearing
 
-3. **Full multi-tenant**
-   - Enable flag + Enterprise license
-   - Create org "test-a" with PVE node A
-   - Create org "test-b" with PVE node B
-   - Open browser tabs for each org
-   - Verify each sees only their nodes
-   - Verify WebSocket updates are isolated
-   - Verify org switch resets org-scoped UI state
-   - Attempt header spoofing with wrong token -> expect 403
+1. Verify the share exists: **Settings → Organization → Sharing → Incoming**.
+2. Confirm the share role grants sufficient access.
+3. Check that the source org's resources are online.
 
-### Integration Test Script
+## See Also
 
-```bash
-# 1. Verify default org works without flag
-curl -u admin:admin http://localhost:7655/api/state
-# -> 200 OK
-
-# 2. Verify non-default org blocked without flag
-curl -u admin:admin -H "X-Pulse-Org-ID: test-org" http://localhost:7655/api/state
-# -> 501 Not Implemented
-
-# 3. With flag enabled but no license
-export PULSE_MULTI_TENANT_ENABLED=true
-curl -u admin:admin -H "X-Pulse-Org-ID: test-org" http://localhost:7655/api/state
-# -> 402 Payment Required
-```
-
----
-
-## Rollout
-
-### Verification Status
-
-| Component | Status | Method | Notes |
-|-----------|--------|--------|-------|
-| **Feature Flag** | Verified | Unit Test | Flag disables/enables multi-tenant access correctly |
-| **Licensing** | Verified | Unit Test | Unlicensed access blocked with 402 Payment Required |
-| **Migration** | Verified | Unit Test | Legacy data moves to default org; symlinks created |
-| **Isolation** | Verified | Unit Test | API State, WebSockets, and Resources respect tenant context |
-| **Security** | Verified | Code Audit | API Tokens and Audit Logs enforce tenant binding |
-
-### Readiness Checklist
-
-- [ ] Enterprise license loaded for the orgs that will access multi-tenant features
-- [ ] `PULSE_MULTI_TENANT_ENABLED=true` configured in the runtime environment
-- [ ] Config migration has run on startup (verify tenant layout exists in data dir)
-- [ ] Org membership loader is available for session users
-- [ ] API tokens for non-default orgs are bound to the org(s)
-- [ ] Per-tenant audit logging is enabled (tenant audit DBs present and writable)
-- [ ] Tenant config loading uses per-org nodes and credentials (no shared secrets)
-
-### Rollout Steps
-
-1. Enable the feature flag in staging
-2. Confirm enterprise license activation for a test org
-3. Create a non-default org and bind a test API token to it
-4. Validate:
-   - `501`/`402` behavior for disabled/unlicensed org access
-   - Success for licensed access (HTTP + WebSocket)
-   - Data isolation across orgs
-5. Roll out to production with monitoring for 4xx/5xx spikes
-
-### Rollback
-
-Disable `PULSE_MULTI_TENANT_ENABLED` to revert non-default org access (default org unaffected).
-
----
-
-## Changelog
-
-- **2024-01**: Initial implementation
-  - Feature flag gating
-  - License enforcement
-  - Per-tenant state isolation
-  - WebSocket tenant binding
-  - Audit log isolation
-  - Authorization framework
-- **2026-02**: Multi-tenant productization
-  - Organization CRUD via `/api/orgs/*` (API + UI)
-  - Member management with `owner`/`admin`/`editor`/`viewer`
-  - Cross-org resource sharing
-  - Organization settings panels (Overview, Access, Sharing, Billing & Plan)
-  - Frontend org-switch state isolation (panel refresh, cache invalidation, AI chat reset)
-  - Frontend org-aware cache scoping and invalidation on switch
-  - License features endpoint consumption in org/billing UI flow
+- [Plans & Entitlements](PULSE_PRO.md) — multi-tenant availability by plan
+- [Pulse Cloud](CLOUD.md) — hosted multi-tenant environment
+- [Security](../SECURITY.md) — authentication and authorization model
