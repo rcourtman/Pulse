@@ -215,25 +215,37 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 	guestIntel := p.gatherGuestIntelligence(intelCtx, state)
 	intelCancel()
 
-	// Build minimal seed context (resource inventory + thresholds + findings + notes)
-	seedContext, seededFindingIDs := p.buildSeedContext(state, scope, guestIntel)
+	// Phase 1: Deterministic triage
+	triageResult := p.RunDeterministicTriage(ctx, state, scope, guestIntel)
+	log.Info().
+		Int("flags", len(triageResult.Flags)).
+		Bool("quiet", triageResult.IsQuiet).
+		Int("flagged_resources", len(triageResult.FlaggedIDs)).
+		Msg("AI Patrol: Triage complete")
+
+	// Quiet infrastructure: skip LLM entirely
+	if triageResult.IsQuiet {
+		log.Info().Msg("AI Patrol: Infrastructure quiet, skipping LLM analysis")
+		return &AIAnalysisResult{
+			Response: "Infrastructure healthy — deterministic triage found no issues.",
+		}, nil
+	}
+
+	// Phase 2: Build focused seed context from triage results
+	seedContext, seededFindingIDs := p.buildTriageSeedContext(triageResult, state, scope, guestIntel)
 	if strings.TrimSpace(seedContext) == "" {
 		return nil, nil
 	}
 	log.Info().
 		Int("seed_context_chars", len(seedContext)).
 		Int("seed_context_estimated_tokens", chat.EstimateTokens(seedContext)).
-		Msg("AI Patrol: Seed context built")
+		Msg("AI Patrol: Triage seed context built")
 
 	log.Debug().Msg("AI Patrol: Starting agentic patrol analysis")
 
-	p.mu.RLock()
-	cfg := p.config
-	p.mu.RUnlock()
-	resourceCount := patrolResourceCount(state, cfg)
-	maxTurns := computePatrolMaxTurns(resourceCount, scope)
+	maxTurns := computeTriageMaxTurns(len(triageResult.Flags), scope)
 	log.Debug().
-		Int("resource_count", resourceCount).
+		Int("triage_flags", len(triageResult.Flags)).
 		Int("max_turns", maxTurns).
 		Msg("AI Patrol: Calculated agentic max turns")
 
@@ -293,7 +305,7 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 
 	chatResp, chatErr := cs.ExecutePatrolStream(ctx, PatrolExecuteRequest{
 		Prompt:       seedContext,
-		SystemPrompt: p.getPatrolSystemPrompt(),
+		SystemPrompt: p.getPatrolSystemPromptForTriage(),
 		SessionID:    "patrol-main",
 		UseCase:      "patrol",
 		MaxTurns:     maxTurns,
@@ -598,6 +610,30 @@ func computePatrolMaxTurns(resourceCount int, scope *PatrolScope) int {
 	if turns > maxTurns {
 		return maxTurns
 	}
+	return turns
+}
+
+func computeTriageMaxTurns(flagCount int, scope *PatrolScope) int {
+	const (
+		triageBaseTurns    = 5
+		triageTurnsPerFlag = 3
+		triageMinTurns     = 8
+		triageMaxTurns     = 40
+	)
+
+	turns := triageBaseTurns + flagCount*triageTurnsPerFlag
+	if turns < triageMinTurns {
+		turns = triageMinTurns
+	}
+	if turns > triageMaxTurns {
+		turns = triageMaxTurns
+	}
+	if scope != nil && scope.Depth == PatrolDepthQuick {
+		if turns > 20 {
+			turns = 20
+		}
+	}
+
 	return turns
 }
 
@@ -1086,6 +1122,32 @@ Always:
 You are in observation mode. Use read-only tools to gather diagnostic information but DO NOT modify anything. Report findings with clear recommendations for the user to review and action manually.`
 }
 
+const triageSystemPreamble = `You are Pulse Patrol, an autonomous infrastructure analysis agent.
+
+Deterministic triage has already scanned all resources against thresholds, baselines, backup schedules, disk health, and connectivity. The flagged items are listed in your seed context under "Deterministic Triage Results".
+
+Your job is to investigate each flagged item deeper using tools:
+- Use pulse_metrics with historical windows to check if an elevated metric is trending up or stable
+- Use pulse_read to check logs on flagged resources
+- Use pulse_storage to verify backup/replication/RAID details
+- Use pulse_query to check resource configuration
+
+After investigation, report confirmed issues via patrol_report_finding and resolve any active findings that are no longer problems.
+
+Do NOT re-scan healthy resources. Triage already verified they are within normal parameters. Focus your turns exclusively on the flagged items.`
+
+func (p *PatrolService) getPatrolSystemPromptForTriage() string {
+	fullPrompt := p.getPatrolSystemPrompt()
+
+	const toolsMarker = "## Investigation Tools"
+	toolsIdx := strings.Index(fullPrompt, toolsMarker)
+	if toolsIdx < 0 {
+		return triageSystemPreamble + "\n\n" + fullPrompt
+	}
+
+	return triageSystemPreamble + "\n\n" + fullPrompt[toolsIdx:]
+}
+
 // seedIntelligence holds pre-computed intelligence data used by multiple seed context sections.
 type seedIntelligence struct {
 	anomalies        []baseline.AnomalyReport
@@ -1109,6 +1171,51 @@ type seedForecast struct {
 	name, resourceID, metric, severity string
 	daysToFull                         int
 	dailyChange, current               float64
+}
+
+// buildTriageSeedContext builds a focused seed context from deterministic triage output.
+// Unlike buildSeedContext, this includes only flagged resource details plus required context.
+func (p *PatrolService) buildTriageSeedContext(
+	triage *TriageResult,
+	state models.StateSnapshot,
+	scope *PatrolScope,
+	guestIntel map[string]*GuestIntelligence,
+) (string, []string) {
+	p.mu.RLock()
+	cfg := p.config
+	p.mu.RUnlock()
+
+	if triage == nil {
+		triage = &TriageResult{}
+	}
+	flaggedSet := triage.FlaggedIDs
+	if flaggedSet == nil {
+		flaggedSet = map[string]bool{}
+	}
+
+	findingsCtx, seededFindingIDs := p.seedFindingsAndContext(scope, state)
+	now := time.Now()
+
+	sections := []seedSection{
+		// P0 — always include.
+		{priority: 0, name: "triage_briefing", content: FormatTriageBriefing(triage)},
+		{priority: 0, name: "findings", content: findingsCtx},
+		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlerts(state, flaggedSet, cfg, now)},
+		{priority: 0, name: "scope", content: buildScopeSection(scope)},
+
+		// P1 — flagged resource details only.
+		{
+			priority: 1,
+			name:     "flagged_inventory",
+			content:  p.seedResourceInventory(state, flaggedSet, cfg, now, false, guestIntel),
+			summary:  p.seedResourceInventorySummary(state, flaggedSet, cfg, now, guestIntel),
+		},
+	}
+
+	budget := p.calculateSeedBudget()
+	result := p.assembleSeedWithinBudget(sections, budget)
+
+	return result, seededFindingIDs
 }
 
 // buildSeedContext produces the infrastructure state context for the agentic patrol loop.
