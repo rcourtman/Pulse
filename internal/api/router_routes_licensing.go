@@ -143,6 +143,10 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 		rbacAdminEndpointAdapter{handlers: rbacHandlers},
 		newRBACAdminRuntime(rbacHandlers),
 	)
+	reportingAdminEndpoints := resolveReportingAdminEndpoints(
+		reportingAdminEndpointAdapter{handlers: r.reportingHandlers},
+		extensions.ReportingAdminRuntime{},
+	)
 	// RBAC admin operations (Enterprise feature)
 	r.mux.HandleFunc("GET /api/admin/rbac/integrity", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
@@ -162,13 +166,13 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, r.reportingHandlers.HandleGenerateReport))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, reportingAdminEndpoints.HandleGenerateReport))(w, req)
 	}))
 	r.mux.HandleFunc("/api/admin/reports/generate-multi", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, r.reportingHandlers.HandleGenerateMultiReport))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, reportingAdminEndpoints.HandleGenerateMultiReport))(w, req)
 	}))
 
 	// Audit Webhook routes
@@ -260,6 +264,28 @@ func (a rbacAdminEndpointAdapter) HandleAdminReset(w http.ResponseWriter, req *h
 		return
 	}
 	a.handlers.HandleRBACAdminReset(w, req)
+}
+
+type reportingAdminEndpointAdapter struct {
+	handlers *ReportingHandlers
+}
+
+var _ extensions.ReportingAdminEndpoints = reportingAdminEndpointAdapter{}
+
+func (a reportingAdminEndpointAdapter) HandleGenerateReport(w http.ResponseWriter, req *http.Request) {
+	if a.handlers == nil {
+		writeErrorResponse(w, http.StatusNotImplemented, "reporting_unavailable", "Reporting is not available", nil)
+		return
+	}
+	a.handlers.HandleGenerateReport(w, req)
+}
+
+func (a reportingAdminEndpointAdapter) HandleGenerateMultiReport(w http.ResponseWriter, req *http.Request) {
+	if a.handlers == nil {
+		writeErrorResponse(w, http.StatusNotImplemented, "reporting_unavailable", "Reporting is not available", nil)
+		return
+	}
+	a.handlers.HandleGenerateMultiReport(w, req)
 }
 
 func newRBACAdminRuntime(handlers *RBACHandlers) extensions.RBACAdminRuntime {
