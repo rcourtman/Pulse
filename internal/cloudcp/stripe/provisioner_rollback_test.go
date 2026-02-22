@@ -55,7 +55,7 @@ func TestProvisionWorkspaceRollbackOnContainerFailure(t *testing.T) {
 		t.Fatalf("CreateAccount: %v", err)
 	}
 
-	p := NewProvisioner(reg, tenantsDir, dockerMgr, nil, "https://cloud.example.com", nil, "")
+	p := NewProvisioner(reg, tenantsDir, dockerMgr, nil, "https://cloud.example.com", nil, "", false)
 	if _, err := p.ProvisionWorkspace(context.Background(), accountID, "Tenant One"); err == nil {
 		t.Fatal("expected container startup error")
 	}
@@ -81,7 +81,7 @@ func TestHandleCheckoutRollbackAllowsRetry(t *testing.T) {
 	reg := newStripeTestRegistry(t)
 	tenantsDir := t.TempDir()
 
-	failProvisioner := NewProvisioner(reg, tenantsDir, newFailingDockerManager(t), nil, "https://cloud.example.com", nil, "")
+	failProvisioner := NewProvisioner(reg, tenantsDir, newFailingDockerManager(t), nil, "https://cloud.example.com", nil, "", false)
 	session := CheckoutSession{
 		Customer:      "cus_retry_123",
 		Subscription:  "sub_retry_123",
@@ -108,8 +108,7 @@ func TestHandleCheckoutRollbackAllowsRetry(t *testing.T) {
 		t.Fatalf("expected no tenant dirs after rollback, got %d", len(entries))
 	}
 
-	retryProvisioner := NewProvisioner(reg, tenantsDir, nil, nil, "https://cloud.example.com", nil, "")
-	t.Setenv("CP_ALLOW_DOCKERLESS_PROVISIONING", "true")
+	retryProvisioner := NewProvisioner(reg, tenantsDir, nil, nil, "https://cloud.example.com", nil, "", true)
 	if err := retryProvisioner.HandleCheckout(context.Background(), session); err != nil {
 		t.Fatalf("retry HandleCheckout: %v", err)
 	}

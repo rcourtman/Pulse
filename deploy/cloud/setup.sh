@@ -174,11 +174,17 @@ EOF
   if [[ -f "${src_dir}/backup.sh" ]]; then
     install -m 0755 "${src_dir}/backup.sh" "${PULSE_CLOUD_INSTALL_DIR}/backup.sh"
   fi
+  if [[ -f "${src_dir}/restore-drill.sh" ]]; then
+    install -m 0755 "${src_dir}/restore-drill.sh" "${PULSE_CLOUD_INSTALL_DIR}/restore-drill.sh"
+  fi
   if [[ -f "${src_dir}/rollout.sh" ]]; then
     install -m 0755 "${src_dir}/rollout.sh" "${PULSE_CLOUD_INSTALL_DIR}/rollout.sh"
   fi
   if [[ -f "${src_dir}/RUNBOOK.md" ]]; then
     install -m 0644 "${src_dir}/RUNBOOK.md" "${PULSE_CLOUD_INSTALL_DIR}/RUNBOOK.md"
+  fi
+  if [[ -f "${src_dir}/prometheus-alerts.yml" ]]; then
+    install -m 0644 "${src_dir}/prometheus-alerts.yml" "${PULSE_CLOUD_INSTALL_DIR}/prometheus-alerts.yml"
   fi
 }
 
@@ -205,10 +211,15 @@ Edit it now and set required values:
   - DOMAIN
   - ACME_EMAIL
   - CF_DNS_API_TOKEN
+  - CP_ENV (production for live deployments)
   - TRAEFIK_IMAGE (digest pinned)
   - CONTROL_PLANE_IMAGE (digest pinned)
   - CP_ADMIN_KEY
   - CP_PULSE_IMAGE (digest pinned)
+  - CP_ALLOW_DOCKERLESS_PROVISIONING=false
+  - CP_REQUIRE_EMAIL_PROVIDER=true
+  - RESEND_API_KEY
+  - PULSE_EMAIL_FROM
   - STRIPE_WEBHOOK_SECRET
   - STRIPE_API_KEY
 
@@ -227,7 +238,7 @@ validate_env_file() {
 
   local missing=()
   local k v
-  for k in DOMAIN ACME_EMAIL CF_DNS_API_TOKEN TRAEFIK_IMAGE CONTROL_PLANE_IMAGE CP_ADMIN_KEY CP_PULSE_IMAGE STRIPE_WEBHOOK_SECRET STRIPE_API_KEY; do
+  for k in DOMAIN ACME_EMAIL CF_DNS_API_TOKEN CP_ENV TRAEFIK_IMAGE CONTROL_PLANE_IMAGE CP_ADMIN_KEY CP_PULSE_IMAGE CP_ALLOW_DOCKERLESS_PROVISIONING CP_REQUIRE_EMAIL_PROVIDER RESEND_API_KEY PULSE_EMAIL_FROM STRIPE_WEBHOOK_SECRET STRIPE_API_KEY; do
     v="$(grep -E "^${k}=" "${env_path}" | tail -n 1 | cut -d= -f2- || true)"
     # Trim surrounding quotes and whitespace.
     v="${v%\"}"; v="${v#\"}"
@@ -252,6 +263,33 @@ validate_env_file() {
       die "${k} must be digest-pinned (expected ...@sha256:...)"
     fi
   done
+
+  local cp_env
+  cp_env="$(grep -E '^CP_ENV=' "${env_path}" | tail -n 1 | cut -d= -f2- || true)"
+  cp_env="${cp_env%\"}"; cp_env="${cp_env#\"}"
+  cp_env="${cp_env%\'}"; cp_env="${cp_env#\'}"
+  cp_env="$(echo "${cp_env}" | tr '[:upper:]' '[:lower:]' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  if [[ "${cp_env}" != "production" ]]; then
+    die "CP_ENV must be set to production for deploy/cloud setup"
+  fi
+
+  local dockerless
+  dockerless="$(grep -E '^CP_ALLOW_DOCKERLESS_PROVISIONING=' "${env_path}" | tail -n 1 | cut -d= -f2- || true)"
+  dockerless="${dockerless%\"}"; dockerless="${dockerless#\"}"
+  dockerless="${dockerless%\'}"; dockerless="${dockerless#\'}"
+  dockerless="$(echo "${dockerless}" | tr '[:upper:]' '[:lower:]' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  if [[ "${dockerless}" != "false" && "${dockerless}" != "0" && "${dockerless}" != "no" && "${dockerless}" != "off" ]]; then
+    die "CP_ALLOW_DOCKERLESS_PROVISIONING must be disabled for production deploys"
+  fi
+
+  local require_email
+  require_email="$(grep -E '^CP_REQUIRE_EMAIL_PROVIDER=' "${env_path}" | tail -n 1 | cut -d= -f2- || true)"
+  require_email="${require_email%\"}"; require_email="${require_email#\"}"
+  require_email="${require_email%\'}"; require_email="${require_email#\'}"
+  require_email="$(echo "${require_email}" | tr '[:upper:]' '[:lower:]' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  if [[ "${require_email}" != "true" && "${require_email}" != "1" && "${require_email}" != "yes" && "${require_email}" != "on" ]]; then
+    die "CP_REQUIRE_EMAIL_PROVIDER must be enabled for production deploys"
+  fi
 }
 
 compose_up() {

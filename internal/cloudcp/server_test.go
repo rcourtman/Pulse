@@ -54,6 +54,8 @@ func TestRun_CreateTenantsDirError(t *testing.T) {
 	t.Setenv("CP_ADMIN_KEY", "test-admin-key")
 	t.Setenv("CP_BASE_URL", "https://cloud.example.com")
 	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")
+	t.Setenv("CP_ENV", "development")
+	t.Setenv("CP_REQUIRE_EMAIL_PROVIDER", "false")
 
 	err := Run(context.Background(), "test-version")
 	if err == nil {
@@ -75,6 +77,8 @@ func TestRun_CreateControlPlaneDirError(t *testing.T) {
 	t.Setenv("CP_ADMIN_KEY", "test-admin-key")
 	t.Setenv("CP_BASE_URL", "https://cloud.example.com")
 	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")
+	t.Setenv("CP_ENV", "development")
+	t.Setenv("CP_REQUIRE_EMAIL_PROVIDER", "false")
 
 	err := Run(context.Background(), "test-version")
 	if err == nil {

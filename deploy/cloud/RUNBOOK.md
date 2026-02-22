@@ -27,8 +27,8 @@ You need both the control-plane hostname and a wildcard for tenant hostnames:
 
 You can configure this in:
 
-- DigitalOcean control panel -> Networking -> Domains
-- Or via API tooling (optional)
+- Cloudflare DNS dashboard (recommended)
+- Or Cloudflare API tooling (optional)
 
 ### First-Time Setup Script
 
@@ -66,12 +66,26 @@ Required values:
 - `DOMAIN` (example: `cloud.pulserelay.pro`)
 - `ACME_EMAIL` (Let’s Encrypt contact email)
 - `CF_DNS_API_TOKEN` (Cloudflare token for DNS-01 challenges)
+- `CP_ENV=production`
 - `TRAEFIK_IMAGE` (digest-pinned Traefik image ref)
 - `CONTROL_PLANE_IMAGE` (digest-pinned control-plane image ref)
 - `CP_ADMIN_KEY` (control plane admin API key)
 - `CP_PULSE_IMAGE` (digest-pinned tenant image ref)
+- `CP_ALLOW_DOCKERLESS_PROVISIONING=false`
+- `CP_REQUIRE_EMAIL_PROVIDER=true`
+- `RESEND_API_KEY` (required in production)
+- `PULSE_EMAIL_FROM` (e.g. `noreply@pulserelay.pro`)
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_API_KEY`
+
+Recommended rate-limit overrides (all are requests/minute per source IP):
+
+- `CP_RL_WEBHOOK_PER_MINUTE` (default `120`)
+- `CP_RL_MAGIC_VERIFY_PER_MINUTE` (default `30`)
+- `CP_RL_SESSION_PER_MINUTE` (default `60`)
+- `CP_RL_ADMIN_PER_MINUTE` (default `120`)
+- `CP_RL_ACCOUNT_PER_MINUTE` (default `300`)
+- `CP_RL_PORTAL_PER_MINUTE` (default `300`)
 
 Lock down permissions:
 
@@ -132,6 +146,10 @@ ADMIN_KEY="$(grep '^CP_ADMIN_KEY=' /opt/pulse-cloud/.env | cut -d= -f2-)"
 curl -fsS "https://${DOMAIN}/admin/tenants" -H "X-Admin-Key: ${ADMIN_KEY}" | jq
 ```
 
+### Session Logout (Control Plane)
+
+`POST /auth/logout` revokes all active sessions for the authenticated user and clears `pulse_cp_session`.
+
 ### Prometheus Metrics (Admin-Key Protected by Default)
 
 ```bash
@@ -178,6 +196,8 @@ The daily backup script:
   - `/data/control-plane/*`
 - Writes logs to: `/var/log/pulse-cloud-backup.log`
 - Retains: 7 local daily backups by default
+- Runs SQLite integrity checks (`PRAGMA quick_check`) on copied `.db` files
+- Publishes backup health metric file: `/var/lib/node_exporter/textfile_collector/pulse_cloud_backup.prom`
 
 Remote sync to DigitalOcean Spaces is supported via either `rclone` or `s3cmd`:
 
@@ -254,6 +274,31 @@ docker stop -t 30 "pulse-${TENANT}"
 rsync -a --delete "/data/backups/daily/${DAY}/tenants/${TENANT}/" "/data/tenants/${TENANT}/"
 docker start "pulse-${TENANT}"
 ```
+
+### Monthly Restore Drill (Required)
+
+Run a non-destructive restore drill from the latest backup:
+
+```bash
+DAY="$(date -u +%F)"
+TENANT="t-ABCDEFGHJK"
+sudo /opt/pulse-cloud/restore-drill.sh --day "${DAY}" --tenant "${TENANT}" --keep-output
+```
+
+If the day does not exist yet (before backup cron runs), use the latest snapshot day under `/data/backups/daily/`.
+
+## Alerting
+
+Import alert rules from:
+
+- `/opt/pulse-cloud/prometheus-alerts.yml`
+
+Rules cover:
+
+- Stripe webhook 5xx failures
+- Provisioning errors
+- Elevated unhealthy tenant checks
+- Backup failure/staleness
 
 ## Rollout New Version
 

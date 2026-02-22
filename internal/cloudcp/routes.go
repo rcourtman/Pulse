@@ -30,12 +30,12 @@ type Deps struct {
 
 // RegisterRoutes wires all HTTP handlers onto the given ServeMux.
 func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
-	webhookLimiter := NewCPRateLimiter(120, time.Minute)
-	magicLinkVerifyLimiter := NewCPRateLimiter(30, time.Minute)
-	sessionAuthLimiter := NewCPRateLimiter(60, time.Minute)
-	adminLimiter := NewCPRateLimiter(120, time.Minute)
-	accountAPILimiter := NewCPRateLimiter(300, time.Minute)
-	portalAPILimiter := NewCPRateLimiter(300, time.Minute)
+	webhookLimiter := NewCPRateLimiter(deps.Config.WebhookRateLimitPerMinute, time.Minute)
+	magicLinkVerifyLimiter := NewCPRateLimiter(deps.Config.MagicLinkVerifyRateLimitPerMinute, time.Minute)
+	sessionAuthLimiter := NewCPRateLimiter(deps.Config.SessionAuthRateLimitPerMinute, time.Minute)
+	adminLimiter := NewCPRateLimiter(deps.Config.AdminRateLimitPerMinute, time.Minute)
+	accountAPILimiter := NewCPRateLimiter(deps.Config.AccountAPIRateLimitPerMinute, time.Minute)
+	portalAPILimiter := NewCPRateLimiter(deps.Config.PortalAPIRateLimitPerMinute, time.Minute)
 
 	adminAuth := func(next http.Handler) http.Handler {
 		return admin.AdminKeyMiddleware(deps.Config.AdminKey, next)

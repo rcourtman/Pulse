@@ -11,6 +11,7 @@ TENANTS_DIR="${PULSE_TENANTS_DIR:-${DATA_DIR}/tenants}"
 CONTROL_PLANE_DIR="${PULSE_CONTROL_PLANE_DIR:-${DATA_DIR}/control-plane}"
 BACKUP_ROOT="${PULSE_BACKUP_ROOT:-${DATA_DIR}/backups/daily}"
 RETENTION_DAYS="${PULSE_BACKUP_RETENTION_DAYS:-7}"
+BACKUP_METRICS_FILE="${PULSE_BACKUP_METRICS_FILE:-/var/lib/node_exporter/textfile_collector/pulse_cloud_backup.prom}"
 
 # Remote sync (optional):
 # - rclone: set PULSE_RCLONE_REMOTE (e.g. "do-spaces:pulse-cloud-backups")
@@ -28,6 +29,45 @@ die() {
 }
 
 have() { command -v "$1" >/dev/null 2>&1; }
+
+write_backup_metrics() {
+  local success="$1"
+  local now
+  now="$(date -u +%s)"
+
+  local metrics_dir
+  metrics_dir="$(dirname "${BACKUP_METRICS_FILE}")"
+  if ! mkdir -p "${metrics_dir}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local tmp="${BACKUP_METRICS_FILE}.tmp"
+  cat >"${tmp}" <<EOF
+# HELP pulse_cloud_backup_success Whether the most recent backup run succeeded (1) or failed (0).
+# TYPE pulse_cloud_backup_success gauge
+pulse_cloud_backup_success ${success}
+# HELP pulse_cloud_backup_last_run_timestamp_seconds Unix timestamp of the most recent backup run completion.
+# TYPE pulse_cloud_backup_last_run_timestamp_seconds gauge
+pulse_cloud_backup_last_run_timestamp_seconds ${now}
+EOF
+  mv "${tmp}" "${BACKUP_METRICS_FILE}" || true
+}
+
+verify_sqlite_file() {
+  local db_file="$1"
+  local result
+  result="$(sqlite3 "${db_file}" 'PRAGMA quick_check;' 2>/dev/null || true)"
+  if [[ "${result}" != "ok" ]]; then
+    die "sqlite integrity check failed for ${db_file}: ${result:-<empty>}"
+  fi
+}
+
+verify_sqlite_tree() {
+  local root="$1"
+  while IFS= read -r -d '' db_file; do
+    verify_sqlite_file "${db_file}"
+  done < <(find "${root}" -type f -name '*.db' -print0 2>/dev/null || true)
+}
 
 rotate_local() {
   # Keep the newest N day directories (YYYY-MM-DD).
@@ -119,9 +159,10 @@ main() {
   exec >>"${LOG_FILE}" 2>&1
 
   log "backup started"
+  trap 'rc=$?; if [[ $rc -eq 0 ]]; then write_backup_metrics 1; else write_backup_metrics 0; fi' EXIT
 
   have rsync || die "missing rsync"
-  have sqlite3 || log "note: sqlite3 not found (backup is rsync-based; sqlite3 not required)"
+  have sqlite3 || die "missing sqlite3 (required for backup integrity checks)"
 
   local day
   day="$(date -u +%F)"
@@ -163,6 +204,7 @@ main() {
       fi
       die "rsync failed for tenant ${tenant_id}"
     fi
+    verify_sqlite_tree "${dest}/tenants/${tenant_id}"
     if [[ "${paused}" == "1" ]]; then
       if docker unpause "${container_name}" >/dev/null 2>&1; then
         log "tenant resumed after snapshot: ${tenant_id}"
@@ -176,6 +218,7 @@ main() {
     log "rsync control-plane dir"
     mkdir -p "${dest}/control-plane"
     rsync -a --delete --numeric-ids "${CONTROL_PLANE_DIR}/" "${dest}/control-plane/"
+    verify_sqlite_tree "${dest}/control-plane"
   else
     log "note: control-plane dir not found (${CONTROL_PLANE_DIR}); skipping"
   fi

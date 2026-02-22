@@ -1,0 +1,52 @@
+groups:
+  - name: pulse-cloud-control-plane
+    rules:
+      - alert: PulseCloudWebhookFailures
+        expr: increase(pulse_cp_webhook_requests_total{status=~"5.."}[10m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: pulse-cloud-control-plane
+        annotations:
+          summary: "Stripe webhook failures detected"
+          description: "Control plane returned 5xx to Stripe webhook deliveries in the last 10 minutes."
+
+      - alert: PulseCloudProvisioningErrors
+        expr: increase(pulse_cp_provisioning_total{outcome="error"}[15m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: pulse-cloud-control-plane
+        annotations:
+          summary: "Workspace provisioning failures detected"
+          description: "One or more tenant provisioning attempts failed in the last 15 minutes."
+
+      - alert: PulseCloudUnhealthyTenantChecks
+        expr: increase(pulse_cp_health_check_results_total{result="unhealthy"}[15m]) > 10
+        for: 10m
+        labels:
+          severity: warning
+          service: pulse-cloud-control-plane
+        annotations:
+          summary: "Elevated tenant health-check failures"
+          description: "Tenant health checks reported >10 unhealthy results in the last 15 minutes."
+
+      - alert: PulseCloudBackupFailed
+        expr: pulse_cloud_backup_success == 0
+        for: 15m
+        labels:
+          severity: critical
+          service: pulse-cloud-backup
+        annotations:
+          summary: "Latest backup run failed"
+          description: "The most recent /opt/pulse-cloud/backup.sh run exited non-zero."
+
+      - alert: PulseCloudBackupStale
+        expr: (time() - pulse_cloud_backup_last_run_timestamp_seconds) > 93600
+        for: 30m
+        labels:
+          severity: critical
+          service: pulse-cloud-backup
+        annotations:
+          summary: "Backups are stale"
+          description: "No backup completion metric has been recorded for over 26 hours."

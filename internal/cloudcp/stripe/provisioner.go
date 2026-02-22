@@ -24,13 +24,14 @@ import (
 // Provisioner orchestrates tenant creation, billing state updates, and
 // container lifecycle in response to Stripe events.
 type Provisioner struct {
-	registry    *registry.TenantRegistry
-	tenantsDir  string
-	docker      *docker.Manager // nil if Docker is unavailable
-	magicLinks  *cpauth.Service // nil if magic links disabled
-	baseURL     string          // e.g. "https://cloud.pulserelay.pro"
-	emailSender cpemail.Sender
-	emailFrom   string
+	registry        *registry.TenantRegistry
+	tenantsDir      string
+	docker          *docker.Manager // nil if Docker is unavailable
+	magicLinks      *cpauth.Service // nil if magic links disabled
+	baseURL         string          // e.g. "https://cloud.pulserelay.pro"
+	allowDockerless bool
+	emailSender     cpemail.Sender
+	emailFrom       string
 }
 
 type provisioningCleanupState struct {
@@ -41,15 +42,16 @@ type provisioningCleanupState struct {
 }
 
 // NewProvisioner creates a Provisioner.
-func NewProvisioner(reg *registry.TenantRegistry, tenantsDir string, dockerMgr *docker.Manager, magicLinks *cpauth.Service, baseURL string, emailSender cpemail.Sender, emailFrom string) *Provisioner {
+func NewProvisioner(reg *registry.TenantRegistry, tenantsDir string, dockerMgr *docker.Manager, magicLinks *cpauth.Service, baseURL string, emailSender cpemail.Sender, emailFrom string, allowDockerless bool) *Provisioner {
 	return &Provisioner{
-		registry:    reg,
-		tenantsDir:  tenantsDir,
-		docker:      dockerMgr,
-		magicLinks:  magicLinks,
-		baseURL:     baseURL,
-		emailSender: emailSender,
-		emailFrom:   strings.TrimSpace(emailFrom),
+		registry:        reg,
+		tenantsDir:      tenantsDir,
+		docker:          dockerMgr,
+		magicLinks:      magicLinks,
+		baseURL:         baseURL,
+		allowDockerless: allowDockerless,
+		emailSender:     emailSender,
+		emailFrom:       strings.TrimSpace(emailFrom),
 	}
 }
 
@@ -186,14 +188,9 @@ func (p *Provisioner) writeBillingState(tenantDataDir string, state *entitlement
 	return nil
 }
 
-func allowDockerlessProvisioning() bool {
-	v := strings.ToLower(strings.TrimSpace(os.Getenv("CP_ALLOW_DOCKERLESS_PROVISIONING")))
-	return v == "1" || v == "true" || v == "yes" || v == "on"
-}
-
 func (p *Provisioner) maybeStartContainer(ctx context.Context, tenantID, tenantDataDir string) (containerID string, err error) {
 	if p.docker == nil {
-		if allowDockerlessProvisioning() {
+		if p.allowDockerless {
 			log.Warn().
 				Str("tenant_id", tenantID).
 				Msg("Docker unavailable; CP_ALLOW_DOCKERLESS_PROVISIONING enabled")
@@ -498,7 +495,7 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 
 	// Poll health check before declaring the tenant active.
 	if containerID == "" {
-		if allowDockerlessProvisioning() {
+		if p.allowDockerless {
 			tenant.State = registry.TenantStateActive
 			if err := p.registry.Update(tenant); err != nil {
 				return fmt.Errorf("update tenant record: %w", err)
@@ -631,7 +628,7 @@ func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, display
 		return nil, fmt.Errorf("start container: %w", err)
 	}
 	if containerID == "" {
-		if allowDockerlessProvisioning() {
+		if p.allowDockerless {
 			tenant.State = registry.TenantStateActive
 			if err := p.registry.Update(tenant); err != nil {
 				return nil, fmt.Errorf("update tenant record: %w", err)

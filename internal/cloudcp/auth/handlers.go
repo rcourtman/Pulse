@@ -119,7 +119,14 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 				Str("tenant_id", tenant.ID).
 				Str("email", token.Email).
 				Msg("Failed to establish control-plane session identity")
-		} else if sessionToken, err := svc.GenerateSessionToken(userID, token.Email, SessionTTL); err != nil {
+		} else if sessionVersion, err := reg.GetUserSessionVersion(userID); err != nil {
+			log.Warn().
+				Err(err).
+				Str("tenant_id", tenant.ID).
+				Str("email", token.Email).
+				Str("user_id", userID).
+				Msg("Failed to read user session version")
+		} else if sessionToken, err := svc.GenerateSessionTokenWithVersion(userID, token.Email, sessionVersion, SessionTTL); err != nil {
 			log.Warn().
 				Err(err).
 				Str("tenant_id", tenant.ID).
@@ -144,6 +151,51 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 			Msg("Magic link verified, redirecting to tenant handoff")
 
 		http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+	}
+}
+
+// HandleLogout revokes all existing sessions for the authenticated user and clears
+// the session cookie.
+func HandleLogout(reg *registry.TenantRegistry) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
+			return
+		}
+		if reg == nil {
+			writeError(w, http.StatusServiceUnavailable, "registry_unavailable", "Logout unavailable")
+			return
+		}
+
+		userID := strings.TrimSpace(r.Header.Get("X-User-ID"))
+		if userID == "" {
+			writeError(w, http.StatusUnauthorized, "missing_user_identity", "Missing authenticated user")
+			return
+		}
+
+		newVersion, err := reg.RevokeUserSessions(userID)
+		if err != nil {
+			auditEvent(r, "cp_session_logout", "failure").
+				Err(err).
+				Str("user_id", userID).
+				Msg("Session logout failed")
+			writeError(w, http.StatusInternalServerError, "logout_failed", "Failed to revoke session")
+			return
+		}
+
+		clearSessionCookie(w)
+
+		auditEvent(r, "cp_session_logout", "success").
+			Str("user_id", userID).
+			Int64("new_session_version", newVersion).
+			Msg("Session revoked via logout")
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"ok": true,
+		}); err != nil {
+			log.Error().Err(err).Msg("cloudcp.auth: encode logout response")
+		}
 	}
 }
 
@@ -262,6 +314,19 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	}); err != nil {
 		log.Error().Err(err).Msg("cloudcp.auth: encode error response")
 	}
+}
+
+func clearSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     SessionCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0).UTC(),
+	})
 }
 
 func ensureAccountUserAndMembership(reg *registry.TenantRegistry, tenant *registry.Tenant, email string) (string, error) {

@@ -34,6 +34,7 @@ services:
       - .env
     environment:
       - CP_DATA_DIR=/data
+      - CP_ENV=${CP_ENV}
       - CP_BIND_ADDRESS=0.0.0.0
       - CP_PORT=8443
       - CP_ADMIN_KEY=${CP_ADMIN_KEY}
@@ -41,8 +42,12 @@ services:
       - CP_PULSE_IMAGE=${CP_PULSE_IMAGE}
       - CP_DOCKER_NETWORK=pulse-cloud
       - CP_TENANT_MEMORY_LIMIT=${CP_TENANT_MEMORY_LIMIT:-536870912}
+      - CP_ALLOW_DOCKERLESS_PROVISIONING=${CP_ALLOW_DOCKERLESS_PROVISIONING:-false}
+      - CP_REQUIRE_EMAIL_PROVIDER=${CP_REQUIRE_EMAIL_PROVIDER:-true}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - STRIPE_API_KEY=${STRIPE_API_KEY}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - PULSE_EMAIL_FROM=${PULSE_EMAIL_FROM}
     networks:
       - pulse-cloud
     depends_on:

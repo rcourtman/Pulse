@@ -25,10 +25,11 @@ type Account struct {
 
 // User represents a user record in the control plane registry.
 type User struct {
-	ID          string     `json:"id"`
-	Email       string     `json:"email"`
-	CreatedAt   time.Time  `json:"created_at"`
-	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
+	ID             string     `json:"id"`
+	Email          string     `json:"email"`
+	CreatedAt      time.Time  `json:"created_at"`
+	LastLoginAt    *time.Time `json:"last_login_at,omitempty"`
+	SessionVersion int64      `json:"session_version"`
 }
 
 type MemberRole string

@@ -77,6 +77,8 @@ func Run(ctx context.Context, version string) error {
 	if cfg.ResendAPIKey != "" {
 		emailSender = email.NewResendSender(cfg.ResendAPIKey)
 		log.Info().Msg("Email sender configured (Resend)")
+	} else if cfg.RequireEmailProvider {
+		return fmt.Errorf("email provider required but RESEND_API_KEY is not configured")
 	} else {
 		emailSender = email.NewLogSender(func(to, subject, body string) {
 			const maxBody = 4096
@@ -95,7 +97,7 @@ func Run(ctx context.Context, version string) error {
 
 	// Build HTTP routes
 	mux := http.NewServeMux()
-	provisioner := cpstripe.NewProvisioner(reg, cfg.TenantsDir(), dockerMgr, magicLinkSvc, cfg.BaseURL, emailSender, cfg.EmailFrom)
+	provisioner := cpstripe.NewProvisioner(reg, cfg.TenantsDir(), dockerMgr, magicLinkSvc, cfg.BaseURL, emailSender, cfg.EmailFrom, cfg.AllowDockerlessProvisioning)
 	deps := &Deps{
 		Config:      cfg,
 		Registry:    reg,

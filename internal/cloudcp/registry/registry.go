@@ -18,6 +18,8 @@ type TenantRegistry struct {
 	db *sql.DB
 }
 
+const stripeEventProcessingLeaseSeconds int64 = 120
+
 // NewTenantRegistry opens (or creates) the tenant registry database in dir.
 func NewTenantRegistry(dir string) (*TenantRegistry, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -101,6 +103,7 @@ func (r *TenantRegistry) initSchema() error {
 		stripe_event_id TEXT PRIMARY KEY,
 		event_type TEXT NOT NULL,
 		received_at INTEGER NOT NULL,
+		processing_started_at INTEGER,
 		processed_at INTEGER,
 		processing_error TEXT
 	);
@@ -109,7 +112,8 @@ func (r *TenantRegistry) initSchema() error {
 		id TEXT PRIMARY KEY,
 		email TEXT NOT NULL UNIQUE,
 		created_at INTEGER NOT NULL,
-		last_login_at INTEGER
+		last_login_at INTEGER,
+		session_version INTEGER NOT NULL DEFAULT 1
 	);
 
 	CREATE TABLE IF NOT EXISTS account_memberships (
@@ -144,13 +148,43 @@ func (r *TenantRegistry) initSchema() error {
 	if _, err := r.db.Exec(`CREATE INDEX IF NOT EXISTS idx_tenants_account_id ON tenants(account_id)`); err != nil {
 		return fmt.Errorf("init tenant registry schema: create idx_tenants_account_id: %w", err)
 	}
+
+	// Migration: add session_version to users if missing.
+	hasSessionVersion, err := r.tableHasColumn("users", "session_version")
+	if err != nil {
+		return fmt.Errorf("check users schema for session_version: %w", err)
+	}
+	if !hasSessionVersion {
+		if _, err := r.db.Exec(`ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 1`); err != nil {
+			return fmt.Errorf("migrate users: add session_version: %w", err)
+		}
+	}
+	if _, err := r.db.Exec(`UPDATE users SET session_version = 1 WHERE session_version IS NULL OR session_version < 1`); err != nil {
+		return fmt.Errorf("migrate users: backfill session_version: %w", err)
+	}
+
+	// Migration: add processing_started_at to stripe_events if missing.
+	hasStripeProcessingStarted, err := r.tableHasColumn("stripe_events", "processing_started_at")
+	if err != nil {
+		return fmt.Errorf("check stripe_events schema for processing_started_at: %w", err)
+	}
+	if !hasStripeProcessingStarted {
+		if _, err := r.db.Exec(`ALTER TABLE stripe_events ADD COLUMN processing_started_at INTEGER`); err != nil {
+			return fmt.Errorf("migrate stripe_events: add processing_started_at: %w", err)
+		}
+	}
+
 	return nil
 }
 
 func (r *TenantRegistry) tenantsHasColumn(name string) (bool, error) {
-	rows, err := r.db.Query(`PRAGMA table_info(tenants)`)
+	return r.tableHasColumn("tenants", name)
+}
+
+func (r *TenantRegistry) tableHasColumn(tableName, name string) (bool, error) {
+	rows, err := r.db.Query(`PRAGMA table_info(` + tableName + `)`)
 	if err != nil {
-		return false, fmt.Errorf("pragma table_info(tenants): %w", err)
+		return false, fmt.Errorf("pragma table_info(%s): %w", tableName, err)
 	}
 	defer rows.Close()
 
@@ -164,14 +198,14 @@ func (r *TenantRegistry) tenantsHasColumn(name string) (bool, error) {
 			pk      int
 		)
 		if err := rows.Scan(&cid, &colName, &colType, &notNull, &dflt, &pk); err != nil {
-			return false, fmt.Errorf("scan table_info(tenants): %w", err)
+			return false, fmt.Errorf("scan table_info(%s): %w", tableName, err)
 		}
 		if colName == name {
 			return true, nil
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return false, fmt.Errorf("iterate table_info(tenants): %w", err)
+		return false, fmt.Errorf("iterate table_info(%s): %w", tableName, err)
 	}
 	return false, nil
 }
@@ -522,12 +556,15 @@ func (r *TenantRegistry) CreateUser(u *User) error {
 	if u.CreatedAt.IsZero() {
 		u.CreatedAt = now
 	}
+	if u.SessionVersion < 1 {
+		u.SessionVersion = 1
+	}
 
 	_, err := r.db.Exec(`
 		INSERT INTO users (
-			id, email, created_at, last_login_at
-		) VALUES (?, ?, ?, ?)`,
-		u.ID, u.Email, u.CreatedAt.Unix(), nullableTimeUnix(u.LastLoginAt),
+			id, email, created_at, last_login_at, session_version
+		) VALUES (?, ?, ?, ?, ?)`,
+		u.ID, u.Email, u.CreatedAt.Unix(), nullableTimeUnix(u.LastLoginAt), u.SessionVersion,
 	)
 	if err != nil {
 		return fmt.Errorf("create user: %w", err)
@@ -538,7 +575,7 @@ func (r *TenantRegistry) CreateUser(u *User) error {
 // GetUser retrieves a user by ID.
 func (r *TenantRegistry) GetUser(userID string) (*User, error) {
 	row := r.db.QueryRow(`SELECT
-		id, email, created_at, last_login_at
+		id, email, created_at, last_login_at, session_version
 		FROM users WHERE id = ?`, userID)
 	return scanUser(row)
 }
@@ -546,7 +583,7 @@ func (r *TenantRegistry) GetUser(userID string) (*User, error) {
 // GetUserByEmail retrieves a user by email.
 func (r *TenantRegistry) GetUserByEmail(email string) (*User, error) {
 	row := r.db.QueryRow(`SELECT
-		id, email, created_at, last_login_at
+		id, email, created_at, last_login_at, session_version
 		FROM users WHERE email = ?`, email)
 	return scanUser(row)
 }
@@ -566,6 +603,72 @@ func (r *TenantRegistry) UpdateUserLastLogin(userID string) error {
 		return fmt.Errorf("user %q not found", userID)
 	}
 	return nil
+}
+
+// GetUserSessionVersion returns the current session version for the user.
+func (r *TenantRegistry) GetUserSessionVersion(userID string) (int64, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return 0, fmt.Errorf("missing user id")
+	}
+
+	var version int64
+	row := r.db.QueryRow(`SELECT session_version FROM users WHERE id = ?`, userID)
+	if err := row.Scan(&version); err != nil {
+		if err == sql.ErrNoRows {
+			return 0, fmt.Errorf("user %q not found", userID)
+		}
+		return 0, fmt.Errorf("get user session version: %w", err)
+	}
+	if version < 1 {
+		version = 1
+	}
+	return version, nil
+}
+
+// RevokeUserSessions increments the user's session version, invalidating all
+// previously issued sessions, and returns the new version.
+func (r *TenantRegistry) RevokeUserSessions(userID string) (int64, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return 0, fmt.Errorf("missing user id")
+	}
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("begin revoke sessions tx: %w", err)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	res, err := tx.Exec(`UPDATE users SET session_version = session_version + 1 WHERE id = ?`, userID)
+	if err != nil {
+		return 0, fmt.Errorf("increment session version: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("get rows affected: %w", err)
+	}
+	if affected == 0 {
+		return 0, fmt.Errorf("user %q not found", userID)
+	}
+
+	var newVersion int64
+	if err := tx.QueryRow(`SELECT session_version FROM users WHERE id = ?`, userID).Scan(&newVersion); err != nil {
+		return 0, fmt.Errorf("read incremented session version: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit revoke sessions tx: %w", err)
+	}
+	tx = nil
+
+	if newVersion < 1 {
+		newVersion = 1
+	}
+	return newVersion, nil
 }
 
 // CreateMembership inserts a new membership record.
@@ -825,12 +928,24 @@ func (r *TenantRegistry) RecordStripeEvent(eventID, eventType string) (alreadyPr
 		return false, fmt.Errorf("missing stripe event type")
 	}
 
+	tx, err := r.db.Begin()
+	if err != nil {
+		return false, fmt.Errorf("begin record stripe event tx: %w", err)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	now := time.Now().UTC().Unix()
+
 	// INSERT OR IGNORE avoids driver-specific error parsing for duplicates.
-	res, err := r.db.Exec(`
+	res, err := tx.Exec(`
 		INSERT OR IGNORE INTO stripe_events (
-			stripe_event_id, event_type, received_at, processed_at, processing_error
-		) VALUES (?, ?, ?, NULL, NULL)`,
-		eventID, eventType, time.Now().UTC().Unix(),
+			stripe_event_id, event_type, received_at, processing_started_at, processed_at, processing_error
+		) VALUES (?, ?, ?, ?, NULL, NULL)`,
+		eventID, eventType, now, now,
 	)
 	if err != nil {
 		return false, fmt.Errorf("record stripe event: %w", err)
@@ -839,9 +954,68 @@ func (r *TenantRegistry) RecordStripeEvent(eventID, eventType string) (alreadyPr
 	if err != nil {
 		return false, fmt.Errorf("get rows affected: %w", err)
 	}
-	if affected == 0 {
+	if affected == 1 {
+		if err := tx.Commit(); err != nil {
+			return false, fmt.Errorf("commit record stripe event tx: %w", err)
+		}
+		tx = nil
+		return false, nil
+	}
+
+	var processedAt sql.NullInt64
+	var processingStartedAt sql.NullInt64
+	var processingError sql.NullString
+	if err := tx.QueryRow(`
+		SELECT processed_at, processing_started_at, processing_error
+		FROM stripe_events WHERE stripe_event_id = ?`,
+		eventID,
+	).Scan(&processedAt, &processingStartedAt, &processingError); err != nil {
+		if err == sql.ErrNoRows {
+			return false, fmt.Errorf("stripe event %q not found after insert-or-ignore", eventID)
+		}
+		return false, fmt.Errorf("query stripe event status: %w", err)
+	}
+
+	// Exact duplicates that were already processed successfully are skipped.
+	if processedAt.Valid && strings.TrimSpace(processingError.String) == "" {
+		if err := tx.Commit(); err != nil {
+			return false, fmt.Errorf("commit record stripe event tx: %w", err)
+		}
+		tx = nil
 		return true, nil
 	}
+
+	// If another request is currently processing this event and that processing
+	// window is still fresh, skip duplicate execution.
+	if processingStartedAt.Valid && !processedAt.Valid && strings.TrimSpace(processingError.String) == "" {
+		if now-processingStartedAt.Int64 <= stripeEventProcessingLeaseSeconds {
+			if err := tx.Commit(); err != nil {
+				return false, fmt.Errorf("commit record stripe event tx: %w", err)
+			}
+			tx = nil
+			return true, nil
+		}
+	}
+
+	// Reclaim failed/stale event deliveries for retry processing.
+	_, err = tx.Exec(`
+		UPDATE stripe_events SET
+			event_type = ?,
+			received_at = ?,
+			processing_started_at = ?,
+			processed_at = NULL,
+			processing_error = NULL
+		WHERE stripe_event_id = ?`,
+		eventType, now, now, eventID,
+	)
+	if err != nil {
+		return false, fmt.Errorf("reclaim stripe event for retry: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("commit record stripe event tx: %w", err)
+	}
+	tx = nil
 	return false, nil
 }
 
@@ -856,6 +1030,7 @@ func (r *TenantRegistry) MarkStripeEventProcessed(eventID string, processingErro
 
 	res, err := r.db.Exec(`
 		UPDATE stripe_events SET
+			processing_started_at = NULL,
 			processed_at = ?, processing_error = ?
 		WHERE stripe_event_id = ?`,
 		time.Now().UTC().Unix(),
@@ -907,7 +1082,7 @@ func scanUser(s scanner) (*User, error) {
 	var u User
 	var createdAt int64
 	var lastLogin sql.NullInt64
-	if err := s.Scan(&u.ID, &u.Email, &createdAt, &lastLogin); err != nil {
+	if err := s.Scan(&u.ID, &u.Email, &createdAt, &lastLogin, &u.SessionVersion); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -917,6 +1092,9 @@ func scanUser(s scanner) (*User, error) {
 	if lastLogin.Valid {
 		ts := time.Unix(lastLogin.Int64, 0).UTC()
 		u.LastLoginAt = &ts
+	}
+	if u.SessionVersion < 1 {
+		u.SessionVersion = 1
 	}
 	return &u, nil
 }

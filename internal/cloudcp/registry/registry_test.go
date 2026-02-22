@@ -279,6 +279,9 @@ func TestUserCRUD(t *testing.T) {
 	if got.LastLoginAt != nil {
 		t.Errorf("LastLoginAt = %v, want nil", got.LastLoginAt)
 	}
+	if got.SessionVersion != 1 {
+		t.Errorf("SessionVersion = %d, want 1", got.SessionVersion)
+	}
 
 	// Get by email
 	got2, err := reg.GetUserByEmail("user@example.com")
@@ -306,6 +309,45 @@ func TestUserCRUD(t *testing.T) {
 	ll := *got3.LastLoginAt
 	if ll.Before(before.Add(-2*time.Second)) || ll.After(after.Add(2*time.Second)) {
 		t.Fatalf("LastLoginAt=%s out of expected range [%s, %s]", ll, before, after)
+	}
+}
+
+func TestUserSessionVersionRevocation(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	userID, err := GenerateUserID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateUser(&User{
+		ID:    userID,
+		Email: "revoke@example.com",
+	}); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	v1, err := reg.GetUserSessionVersion(userID)
+	if err != nil {
+		t.Fatalf("GetUserSessionVersion: %v", err)
+	}
+	if v1 != 1 {
+		t.Fatalf("initial session version = %d, want 1", v1)
+	}
+
+	v2, err := reg.RevokeUserSessions(userID)
+	if err != nil {
+		t.Fatalf("RevokeUserSessions: %v", err)
+	}
+	if v2 != 2 {
+		t.Fatalf("revoked session version = %d, want 2", v2)
+	}
+
+	v3, err := reg.GetUserSessionVersion(userID)
+	if err != nil {
+		t.Fatalf("GetUserSessionVersion after revoke: %v", err)
+	}
+	if v3 != 2 {
+		t.Fatalf("session version after revoke = %d, want 2", v3)
 	}
 }
 
@@ -721,5 +763,80 @@ func TestStripeEventIdempotency(t *testing.T) {
 	}
 	if !already2 {
 		t.Fatalf("expected alreadyProcessed=true on duplicate insert")
+	}
+}
+
+func TestStripeEventRetryAfterFailure(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	const eventID = "evt_retry_123"
+	const eventType = "customer.subscription.updated"
+
+	already, err := reg.RecordStripeEvent(eventID, eventType)
+	if err != nil {
+		t.Fatalf("RecordStripeEvent first: %v", err)
+	}
+	if already {
+		t.Fatalf("expected first delivery to be processable")
+	}
+
+	if err := reg.MarkStripeEventProcessed(eventID, "temporary failure"); err != nil {
+		t.Fatalf("MarkStripeEventProcessed failure: %v", err)
+	}
+
+	already, err = reg.RecordStripeEvent(eventID, eventType)
+	if err != nil {
+		t.Fatalf("RecordStripeEvent retry: %v", err)
+	}
+	if already {
+		t.Fatalf("expected retry after failure to be processable")
+	}
+
+	already, err = reg.RecordStripeEvent(eventID, eventType)
+	if err != nil {
+		t.Fatalf("RecordStripeEvent duplicate while in-flight: %v", err)
+	}
+	if !already {
+		t.Fatalf("expected duplicate during in-flight processing to be skipped")
+	}
+
+	if err := reg.MarkStripeEventProcessed(eventID, ""); err != nil {
+		t.Fatalf("MarkStripeEventProcessed success: %v", err)
+	}
+
+	already, err = reg.RecordStripeEvent(eventID, eventType)
+	if err != nil {
+		t.Fatalf("RecordStripeEvent duplicate after success: %v", err)
+	}
+	if !already {
+		t.Fatalf("expected duplicate after success to be skipped")
+	}
+}
+
+func TestStripeEventReclaimsStaleInFlight(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	const eventID = "evt_stale_123"
+	const eventType = "invoice.payment_failed"
+
+	already, err := reg.RecordStripeEvent(eventID, eventType)
+	if err != nil {
+		t.Fatalf("RecordStripeEvent first: %v", err)
+	}
+	if already {
+		t.Fatalf("expected first delivery to be processable")
+	}
+
+	staleStartedAt := time.Now().UTC().Add(-(time.Duration(stripeEventProcessingLeaseSeconds) + 30) * time.Second).Unix()
+	if _, err := reg.db.Exec(`UPDATE stripe_events SET processing_started_at = ?, processed_at = NULL, processing_error = NULL WHERE stripe_event_id = ?`, staleStartedAt, eventID); err != nil {
+		t.Fatalf("make event stale: %v", err)
+	}
+
+	already, err = reg.RecordStripeEvent(eventID, eventType)
+	if err != nil {
+		t.Fatalf("RecordStripeEvent stale reclaim: %v", err)
+	}
+	if already {
+		t.Fatalf("expected stale in-flight event to be reclaimed for processing")
 	}
 }

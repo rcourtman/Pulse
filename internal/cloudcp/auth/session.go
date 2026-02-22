@@ -25,21 +25,29 @@ var (
 
 // SessionClaims are the authenticated claims for a control-plane session.
 type SessionClaims struct {
-	UserID    string
-	Email     string
-	IssuedAt  time.Time
-	ExpiresAt time.Time
+	UserID         string
+	Email          string
+	SessionVersion int64
+	IssuedAt       time.Time
+	ExpiresAt      time.Time
 }
 
 type sessionPayload struct {
 	UserID   string `json:"u"`
 	Email    string `json:"e"`
+	Version  int64  `json:"v"`
 	IssuedAt int64  `json:"i"`
 	Expiry   int64  `json:"x"`
 }
 
 // GenerateSessionToken creates an HMAC-signed control-plane session token.
 func (s *Service) GenerateSessionToken(userID, email string, ttl time.Duration) (string, error) {
+	return s.GenerateSessionTokenWithVersion(userID, email, 1, ttl)
+}
+
+// GenerateSessionTokenWithVersion creates an HMAC-signed control-plane session token
+// bound to a user session-version counter.
+func (s *Service) GenerateSessionTokenWithVersion(userID, email string, sessionVersion int64, ttl time.Duration) (string, error) {
 	if s == nil || len(s.hmacKey) == 0 {
 		return "", ErrSessionInvalid
 	}
@@ -49,6 +57,9 @@ func (s *Service) GenerateSessionToken(userID, email string, ttl time.Duration) 
 	if userID == "" || email == "" {
 		return "", fmt.Errorf("userID and email are required")
 	}
+	if sessionVersion < 1 {
+		sessionVersion = 1
+	}
 	if ttl <= 0 {
 		ttl = SessionTTL
 	}
@@ -57,6 +68,7 @@ func (s *Service) GenerateSessionToken(userID, email string, ttl time.Duration) 
 	payload := sessionPayload{
 		UserID:   userID,
 		Email:    email,
+		Version:  sessionVersion,
 		IssuedAt: now.Unix(),
 		Expiry:   now.Add(ttl).Unix(),
 	}
@@ -112,6 +124,9 @@ func (s *Service) ValidateSessionToken(token string) (*SessionClaims, error) {
 	if strings.TrimSpace(payload.UserID) == "" || strings.TrimSpace(payload.Email) == "" {
 		return nil, ErrSessionInvalid
 	}
+	if payload.Version < 1 {
+		payload.Version = 1
+	}
 
 	now := s.now().UTC().Unix()
 	if now > payload.Expiry {
@@ -119,9 +134,10 @@ func (s *Service) ValidateSessionToken(token string) (*SessionClaims, error) {
 	}
 
 	return &SessionClaims{
-		UserID:    strings.TrimSpace(payload.UserID),
-		Email:     strings.ToLower(strings.TrimSpace(payload.Email)),
-		IssuedAt:  time.Unix(payload.IssuedAt, 0).UTC(),
-		ExpiresAt: time.Unix(payload.Expiry, 0).UTC(),
+		UserID:         strings.TrimSpace(payload.UserID),
+		Email:          strings.ToLower(strings.TrimSpace(payload.Email)),
+		SessionVersion: payload.Version,
+		IssuedAt:       time.Unix(payload.IssuedAt, 0).UTC(),
+		ExpiresAt:      time.Unix(payload.Expiry, 0).UTC(),
 	}, nil
 }

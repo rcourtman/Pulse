@@ -10,6 +10,8 @@ func setRequiredCPEnv(t *testing.T) {
 	t.Setenv("CP_ADMIN_KEY", "test-key")
 	t.Setenv("CP_BASE_URL", "https://cloud.example.com")
 	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")
+	t.Setenv("CP_ENV", "development")
+	t.Setenv("CP_REQUIRE_EMAIL_PROVIDER", "false")
 }
 
 func TestLoadConfig_MissingRequired(t *testing.T) {
@@ -66,6 +68,8 @@ func TestLoadConfig_CustomValues(t *testing.T) {
 	t.Setenv("CP_ADMIN_KEY", "key")
 	t.Setenv("CP_BASE_URL", "https://test.example.com")
 	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_x")
+	t.Setenv("CP_ENV", "development")
+	t.Setenv("CP_REQUIRE_EMAIL_PROVIDER", "false")
 	t.Setenv("CP_PORT", "9000")
 	t.Setenv("CP_DATA_DIR", "/custom/data")
 	t.Setenv("CP_BIND_ADDRESS", "127.0.0.1")
@@ -139,6 +143,19 @@ func TestLoadConfig_InvalidTenantLimits(t *testing.T) {
 	})
 }
 
+func TestLoadConfig_InvalidRateLimits(t *testing.T) {
+	setRequiredCPEnv(t)
+	t.Setenv("CP_RL_ADMIN_PER_MINUTE", "0")
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected error for invalid CP_RL_ADMIN_PER_MINUTE")
+	}
+	if !strings.Contains(err.Error(), "CP_RL_ADMIN_PER_MINUTE must be greater than 0") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestLoadConfig_InvalidBaseURL(t *testing.T) {
 	setRequiredCPEnv(t)
 	t.Setenv("CP_BASE_URL", "cloud.example.com")
@@ -148,6 +165,36 @@ func TestLoadConfig_InvalidBaseURL(t *testing.T) {
 		t.Fatal("expected error for invalid CP_BASE_URL")
 	}
 	if !strings.Contains(err.Error(), "CP_BASE_URL must use http or https scheme") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfig_EmailProviderRequired(t *testing.T) {
+	setRequiredCPEnv(t)
+	t.Setenv("CP_REQUIRE_EMAIL_PROVIDER", "true")
+	t.Setenv("RESEND_API_KEY", "")
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected error when email provider is required but RESEND_API_KEY is missing")
+	}
+	if !strings.Contains(err.Error(), "RESEND_API_KEY is required") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfig_RejectsDockerlessProvisioningInProduction(t *testing.T) {
+	setRequiredCPEnv(t)
+	t.Setenv("CP_ENV", "production")
+	t.Setenv("CP_ALLOW_DOCKERLESS_PROVISIONING", "true")
+	t.Setenv("CP_REQUIRE_EMAIL_PROVIDER", "true")
+	t.Setenv("RESEND_API_KEY", "re_test_key")
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected error when dockerless provisioning is enabled in production")
+	}
+	if !strings.Contains(err.Error(), "CP_ALLOW_DOCKERLESS_PROVISIONING must be false in production") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

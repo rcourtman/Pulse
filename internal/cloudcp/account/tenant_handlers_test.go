@@ -17,10 +17,9 @@ import (
 
 func newTestTenantMux(t *testing.T, reg *registry.TenantRegistry, tenantsDir string) (*http.ServeMux, *cpstripe.Provisioner) {
 	t.Helper()
-	t.Setenv("CP_ALLOW_DOCKERLESS_PROVISIONING", "true")
 
 	mux := http.NewServeMux()
-	provisioner := cpstripe.NewProvisioner(reg, tenantsDir, nil, nil, "https://cloud.example.com", nil, "")
+	provisioner := cpstripe.NewProvisioner(reg, tenantsDir, nil, nil, "https://cloud.example.com", nil, "", true)
 
 	listTenants := HandleListTenants(reg)
 	createTenant := HandleCreateTenant(reg, provisioner)

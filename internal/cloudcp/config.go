@@ -13,21 +13,30 @@ import (
 
 // CPConfig holds all configuration for the control plane.
 type CPConfig struct {
-	DataDir             string
-	BindAddress         string
-	Port                int
-	AdminKey            string
-	BaseURL             string
-	PublicStatus        bool
-	PublicMetrics       bool
-	PulseImage          string
-	DockerNetwork       string
-	TenantMemoryLimit   int64 // bytes
-	TenantCPUShares     int64
-	StripeWebhookSecret string
-	StripeAPIKey        string
-	ResendAPIKey        string // Resend API key (optional — if empty, emails are logged)
-	EmailFrom           string // Sender email address (e.g. "noreply@pulserelay.pro")
+	DataDir                           string
+	Environment                       string
+	BindAddress                       string
+	Port                              int
+	AdminKey                          string
+	BaseURL                           string
+	PublicStatus                      bool
+	PublicMetrics                     bool
+	WebhookRateLimitPerMinute         int
+	MagicLinkVerifyRateLimitPerMinute int
+	SessionAuthRateLimitPerMinute     int
+	AdminRateLimitPerMinute           int
+	AccountAPIRateLimitPerMinute      int
+	PortalAPIRateLimitPerMinute       int
+	PulseImage                        string
+	DockerNetwork                     string
+	TenantMemoryLimit                 int64 // bytes
+	TenantCPUShares                   int64
+	AllowDockerlessProvisioning       bool
+	StripeWebhookSecret               string
+	StripeAPIKey                      string
+	RequireEmailProvider              bool
+	ResendAPIKey                      string // Resend API key (optional — if empty, emails are logged)
+	EmailFrom                         string // Sender email address (e.g. "noreply@pulserelay.pro")
 }
 
 // TenantsDir returns the directory where per-tenant data is stored.
@@ -58,23 +67,56 @@ func LoadConfig() (*CPConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	webhookRPS, err := envOrDefaultInt("CP_RL_WEBHOOK_PER_MINUTE", 120)
+	if err != nil {
+		return nil, err
+	}
+	magicVerifyRPS, err := envOrDefaultInt("CP_RL_MAGIC_VERIFY_PER_MINUTE", 30)
+	if err != nil {
+		return nil, err
+	}
+	sessionAuthRPS, err := envOrDefaultInt("CP_RL_SESSION_PER_MINUTE", 60)
+	if err != nil {
+		return nil, err
+	}
+	adminRPS, err := envOrDefaultInt("CP_RL_ADMIN_PER_MINUTE", 120)
+	if err != nil {
+		return nil, err
+	}
+	accountRPS, err := envOrDefaultInt("CP_RL_ACCOUNT_PER_MINUTE", 300)
+	if err != nil {
+		return nil, err
+	}
+	portalRPS, err := envOrDefaultInt("CP_RL_PORTAL_PER_MINUTE", 300)
+	if err != nil {
+		return nil, err
+	}
 
 	cfg := &CPConfig{
-		DataDir:             envOrDefault("CP_DATA_DIR", "/data"),
-		BindAddress:         envOrDefault("CP_BIND_ADDRESS", "0.0.0.0"),
-		Port:                port,
-		AdminKey:            strings.TrimSpace(os.Getenv("CP_ADMIN_KEY")),
-		BaseURL:             strings.TrimSpace(os.Getenv("CP_BASE_URL")),
-		PublicStatus:        envOrDefaultBool("CP_PUBLIC_STATUS", false),
-		PublicMetrics:       envOrDefaultBool("CP_PUBLIC_METRICS", false),
-		PulseImage:          envOrDefault("CP_PULSE_IMAGE", "ghcr.io/rcourtman/pulse:latest"),
-		DockerNetwork:       envOrDefault("CP_DOCKER_NETWORK", "pulse-cloud"),
-		TenantMemoryLimit:   tenantMemoryLimit,
-		TenantCPUShares:     tenantCPUShares,
-		StripeWebhookSecret: strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
-		StripeAPIKey:        strings.TrimSpace(os.Getenv("STRIPE_API_KEY")),
-		ResendAPIKey:        strings.TrimSpace(os.Getenv("RESEND_API_KEY")),
-		EmailFrom:           envOrDefault("PULSE_EMAIL_FROM", "noreply@pulserelay.pro"),
+		DataDir:                           envOrDefault("CP_DATA_DIR", "/data"),
+		Environment:                       normalizeCPEnvironment(envOrDefault("CP_ENV", "production")),
+		BindAddress:                       envOrDefault("CP_BIND_ADDRESS", "0.0.0.0"),
+		Port:                              port,
+		AdminKey:                          strings.TrimSpace(os.Getenv("CP_ADMIN_KEY")),
+		BaseURL:                           strings.TrimSpace(os.Getenv("CP_BASE_URL")),
+		PublicStatus:                      envOrDefaultBool("CP_PUBLIC_STATUS", false),
+		PublicMetrics:                     envOrDefaultBool("CP_PUBLIC_METRICS", false),
+		WebhookRateLimitPerMinute:         webhookRPS,
+		MagicLinkVerifyRateLimitPerMinute: magicVerifyRPS,
+		SessionAuthRateLimitPerMinute:     sessionAuthRPS,
+		AdminRateLimitPerMinute:           adminRPS,
+		AccountAPIRateLimitPerMinute:      accountRPS,
+		PortalAPIRateLimitPerMinute:       portalRPS,
+		PulseImage:                        envOrDefault("CP_PULSE_IMAGE", "ghcr.io/rcourtman/pulse:latest"),
+		DockerNetwork:                     envOrDefault("CP_DOCKER_NETWORK", "pulse-cloud"),
+		TenantMemoryLimit:                 tenantMemoryLimit,
+		TenantCPUShares:                   tenantCPUShares,
+		AllowDockerlessProvisioning:       envOrDefaultBool("CP_ALLOW_DOCKERLESS_PROVISIONING", false),
+		StripeWebhookSecret:               strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
+		StripeAPIKey:                      strings.TrimSpace(os.Getenv("STRIPE_API_KEY")),
+		RequireEmailProvider:              envOrDefaultBool("CP_REQUIRE_EMAIL_PROVIDER", true),
+		ResendAPIKey:                      strings.TrimSpace(os.Getenv("RESEND_API_KEY")),
+		EmailFrom:                         envOrDefault("PULSE_EMAIL_FROM", "noreply@pulserelay.pro"),
 	}
 
 	if err := cfg.validate(); err != nil {
@@ -107,6 +149,38 @@ func (c *CPConfig) validate() error {
 	if c.TenantCPUShares <= 0 {
 		return fmt.Errorf("CP_TENANT_CPU_SHARES must be greater than 0, got %d", c.TenantCPUShares)
 	}
+	if c.WebhookRateLimitPerMinute <= 0 {
+		return fmt.Errorf("CP_RL_WEBHOOK_PER_MINUTE must be greater than 0")
+	}
+	if c.MagicLinkVerifyRateLimitPerMinute <= 0 {
+		return fmt.Errorf("CP_RL_MAGIC_VERIFY_PER_MINUTE must be greater than 0")
+	}
+	if c.SessionAuthRateLimitPerMinute <= 0 {
+		return fmt.Errorf("CP_RL_SESSION_PER_MINUTE must be greater than 0")
+	}
+	if c.AdminRateLimitPerMinute <= 0 {
+		return fmt.Errorf("CP_RL_ADMIN_PER_MINUTE must be greater than 0")
+	}
+	if c.AccountAPIRateLimitPerMinute <= 0 {
+		return fmt.Errorf("CP_RL_ACCOUNT_PER_MINUTE must be greater than 0")
+	}
+	if c.PortalAPIRateLimitPerMinute <= 0 {
+		return fmt.Errorf("CP_RL_PORTAL_PER_MINUTE must be greater than 0")
+	}
+	if c.Environment != "development" && c.Environment != "staging" && c.Environment != "production" {
+		return fmt.Errorf("CP_ENV must be one of development, staging, production (got %q)", c.Environment)
+	}
+	if c.Environment == "production" && c.AllowDockerlessProvisioning {
+		return fmt.Errorf("CP_ALLOW_DOCKERLESS_PROVISIONING must be false in production")
+	}
+	if c.RequireEmailProvider {
+		if strings.TrimSpace(c.ResendAPIKey) == "" {
+			return fmt.Errorf("RESEND_API_KEY is required when CP_REQUIRE_EMAIL_PROVIDER=true")
+		}
+		if strings.TrimSpace(c.EmailFrom) == "" {
+			return fmt.Errorf("PULSE_EMAIL_FROM is required when CP_REQUIRE_EMAIL_PROVIDER=true")
+		}
+	}
 
 	parsedBaseURL, err := url.Parse(c.BaseURL)
 	if err != nil {
@@ -119,6 +193,17 @@ func (c *CPConfig) validate() error {
 		return fmt.Errorf("CP_BASE_URL must include a host")
 	}
 	return nil
+}
+
+func normalizeCPEnvironment(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "dev":
+		return "development"
+	case "prod":
+		return "production"
+	default:
+		return strings.ToLower(strings.TrimSpace(raw))
+	}
 }
 
 func envOrDefault(key, fallback string) string {
