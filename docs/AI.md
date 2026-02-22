@@ -81,6 +81,7 @@ Every patrol run passes the LLM comprehensive context about your environment:
 | **Storage Pools** | Usage %, capacity predictions, type (ZFS/LVM/Ceph), growth rates |
 | **Docker/Podman** | Container counts, health states, unhealthy container lists |
 | **Kubernetes** | Nodes, pods, deployments, services, DaemonSets, StatefulSets, namespaces |
+| **TrueNAS** | Pools, datasets, disk health, SMART status, replication, alerts |
 | **PBS/PMG** | Datastore status, backup jobs, job failures, verification status |
 | **Ceph** | Cluster health, OSD states, PG status |
 | **Agent Hosts** | Load averages, memory, disk, RAID status, temperatures |
@@ -244,8 +245,8 @@ Pulse Assistant is a **tool-driven** chat interface. It does not "guess" system 
 |------|---------------|---------|
 | `pulse_query`, `pulse_discovery` | Resolve | Resource discovery and query |
 | `pulse_read` | Read | Read-only operations: exec, file, find, tail, logs |
-| `pulse_metrics` | Read | Performance metrics |
-| `pulse_storage` | Read | Storage information |
+| `pulse_metrics` | Read | Performance metrics and baselines |
+| `pulse_storage` | Read | Storage pools, backups, snapshots, Ceph, RAID, disk health |
 | `pulse_kubernetes` | Read | Kubernetes cluster info |
 | `pulse_pmg` | Read | Proxmox Mail Gateway stats |
 | `pulse_alerts` | Read/Write | Alert management (resolve/dismiss are writes) |
@@ -253,7 +254,9 @@ Pulse Assistant is a **tool-driven** chat interface. It does not "guess" system 
 | `pulse_knowledge` | Read/Write | Knowledge persistence (remember/note/save are writes) |
 | `pulse_file_edit` | Read/Write | File operations (write/append are writes) |
 | `pulse_control` | Write | Guest control, service management |
-| `pulse_patrol` | Read | Patrol findings and status |
+| `patrol_report_finding` | Patrol | Report a new finding (patrol runs only) |
+| `patrol_resolve_finding` | Patrol | Resolve an active finding (patrol runs only) |
+| `patrol_get_findings` | Patrol | List active findings (patrol runs only) |
 
 ### Safety Gates
 

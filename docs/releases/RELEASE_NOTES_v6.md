@@ -1,4 +1,4 @@
-# Pulse v6.0.0 Release Notes (Draft)
+# Pulse v6.0.0 Release Notes
 
 Pulse v6 is the largest release in the project's history — 1,200+ commits touching 1,490 files across the Go backend and SolidJS frontend. It introduces a unified resource model, a completely redesigned navigation and dashboard, mobile remote access via Pulse Relay, TrueNAS integration, a full entitlement and licensing framework, and opt-in multi-tenant and hosted-mode building blocks.
 
