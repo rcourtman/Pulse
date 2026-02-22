@@ -600,13 +600,27 @@ func FormatTriageBriefing(triage *TriageResult) string {
 		healthyStorage = 0
 	}
 
-	sb.WriteString(fmt.Sprintf("## Healthy Resources (%d)\n", healthyNodes+healthyGuests+healthyStorage))
+	healthyDocker := triage.Summary.TotalDocker - triageUniqueFlaggedByType(triage.Flags, "docker_host")
+	if healthyDocker < 0 {
+		healthyDocker = 0
+	}
+	healthyPBS := triage.Summary.TotalPBS - triageUniqueFlaggedByType(triage.Flags, "pbs")
+	if healthyPBS < 0 {
+		healthyPBS = 0
+	}
+	healthyPMG := triage.Summary.TotalPMG - triageUniqueFlaggedByType(triage.Flags, "pmg")
+	if healthyPMG < 0 {
+		healthyPMG = 0
+	}
+
+	totalHealthy := healthyNodes + healthyGuests + healthyStorage + healthyDocker + healthyPBS + healthyPMG
+	sb.WriteString(fmt.Sprintf("## Healthy Resources (%d)\n", totalHealthy))
 	sb.WriteString(fmt.Sprintf("Nodes: %d healthy\n", healthyNodes))
 	sb.WriteString(fmt.Sprintf("Guests: %d running, %d stopped\n", triage.Summary.RunningGuests, triage.Summary.StoppedGuests))
-	sb.WriteString(fmt.Sprintf("Storage: %d pools monitored\n", triage.Summary.TotalStorage))
-	sb.WriteString(fmt.Sprintf("Docker: %d hosts\n", triage.Summary.TotalDocker))
-	sb.WriteString(fmt.Sprintf("PBS: %d instances\n", triage.Summary.TotalPBS))
-	sb.WriteString(fmt.Sprintf("PMG: %d instances\n", triage.Summary.TotalPMG))
+	sb.WriteString(fmt.Sprintf("Storage: %d pools monitored\n", healthyStorage))
+	sb.WriteString(fmt.Sprintf("Docker: %d hosts\n", healthyDocker))
+	sb.WriteString(fmt.Sprintf("PBS: %d instances\n", healthyPBS))
+	sb.WriteString(fmt.Sprintf("PMG: %d instances\n", healthyPMG))
 
 	return sb.String()
 }

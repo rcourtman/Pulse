@@ -141,7 +141,7 @@ func samplePatrolState() models.StateSnapshot {
 				ID:     "node-1",
 				Name:   "node-1",
 				Status: "online",
-				CPU:    0.15,
+				CPU:    0.92, // 92% — triggers triage flag so state is non-quiet
 				Memory: models.Memory{Usage: 20.0},
 				Disk:   models.Disk{Usage: 10.0},
 			},
