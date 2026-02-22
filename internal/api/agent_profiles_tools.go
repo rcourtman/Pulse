@@ -10,7 +10,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -19,11 +18,11 @@ const aiProfileDescription = "Managed by Pulse Patrol"
 // MCPAgentProfileManager manages agent profiles for MCP tools.
 type MCPAgentProfileManager struct {
 	persistence    *config.ConfigPersistence
-	licenseService pkglicensing.FeatureChecker
+	licenseService licenseFeatureChecker
 	validator      *models.ProfileValidator
 }
 
-func NewMCPAgentProfileManager(persistence *config.ConfigPersistence, licenseService pkglicensing.FeatureChecker) *MCPAgentProfileManager {
+func NewMCPAgentProfileManager(persistence *config.ConfigPersistence, licenseService licenseFeatureChecker) *MCPAgentProfileManager {
 	return &MCPAgentProfileManager{
 		persistence:    persistence,
 		licenseService: licenseService,
@@ -300,7 +299,7 @@ func (m *MCPAgentProfileManager) requireLicense() error {
 	if m.licenseService == nil {
 		return nil
 	}
-	return m.licenseService.RequireFeature(pkglicensing.FeatureAgentProfiles)
+	return m.licenseService.RequireFeature(featureAgentProfilesValue)
 }
 
 func buildScopeProfileName(agentLabel, agentID string) string {

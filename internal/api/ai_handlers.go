@@ -36,7 +36,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -3260,7 +3259,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 			Healthy:         true,
 			LicenseRequired: true,
 			LicenseStatus:   "none",
-			UpgradeURL:      pkglicensing.UpgradeURLForFeature(pkglicensing.FeatureAIAutoFix),
+			UpgradeURL:      upgradeURLForFeatureFromLicensing(featureAIAutoFixValue),
 		}
 		if err := utils.WriteJSONResponse(w, response); err != nil {
 			log.Error().Err(err).Msg("Failed to write patrol status response (no AI service)")
@@ -3272,7 +3271,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 	if patrol == nil {
 		// Patrol not initialized
 		licenseStatus, _ := aiService.GetLicenseState()
-		hasAutoFixFeature := aiService.HasLicenseFeature(pkglicensing.FeatureAIAutoFix)
+		hasAutoFixFeature := aiService.HasLicenseFeature(featureAIAutoFixValue)
 		response := PatrolStatusResponse{
 			Running:         false,
 			Enabled:         false,
@@ -3281,7 +3280,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 			LicenseStatus:   licenseStatus,
 		}
 		if !hasAutoFixFeature {
-			response.UpgradeURL = pkglicensing.UpgradeURLForFeature(pkglicensing.FeatureAIAutoFix)
+			response.UpgradeURL = upgradeURLForFeatureFromLicensing(featureAIAutoFixValue)
 		}
 		if err := utils.WriteJSONResponse(w, response); err != nil {
 			log.Error().Err(err).Msg("Failed to write patrol status response")
@@ -3296,7 +3295,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 	// GetLicenseState returns accurate state: none, active, expired, grace_period
 	licenseStatus, _ := aiService.GetLicenseState()
 	// Check for auto-fix feature - patrol itself is free, auto-fix requires Pro
-	hasAutoFixFeature := aiService.HasLicenseFeature(pkglicensing.FeatureAIAutoFix)
+	hasAutoFixFeature := aiService.HasLicenseFeature(featureAIAutoFixValue)
 
 	// Get fixed count from investigation orchestrator
 	fixedCount := 0
@@ -3322,7 +3321,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 		LicenseStatus:    licenseStatus,
 	}
 	if !hasAutoFixFeature {
-		response.UpgradeURL = pkglicensing.UpgradeURLForFeature(pkglicensing.FeatureAIAutoFix)
+		response.UpgradeURL = upgradeURLForFeatureFromLicensing(featureAIAutoFixValue)
 	}
 	response.Summary.Critical = summary.Critical
 	response.Summary.Warning = summary.Warning
@@ -3564,7 +3563,7 @@ func (h *AISettingsHandler) HandleForcePatrol(w http.ResponseWriter, r *http.Req
 
 	// Cadence cap: Community tier is limited to 1 patrol run per hour.
 	// Patrol itself is free (ai_patrol), but higher cadence is gated behind Pro/Cloud.
-	if !aiService.HasLicenseFeature(pkglicensing.FeatureAIAutoFix) {
+	if !aiService.HasLicenseFeature(featureAIAutoFixValue) {
 		if last := patrol.GetStatus().LastPatrolAt; last != nil {
 			if since := time.Since(*last); since < 1*time.Hour {
 				remaining := (1*time.Hour - since).Round(time.Minute)
@@ -4945,8 +4944,8 @@ func (h *AISettingsHandler) HandleListApprovals(w http.ResponseWriter, r *http.R
 	}
 
 	// Check license
-	if !h.GetAIService(r.Context()).HasLicenseFeature(pkglicensing.FeatureAIAutoFix) {
-		WriteLicenseRequired(w, pkglicensing.FeatureAIAutoFix, "Pulse Patrol Auto-Fix feature requires Pro license")
+	if !h.GetAIService(r.Context()).HasLicenseFeature(featureAIAutoFixValue) {
+		WriteLicenseRequired(w, featureAIAutoFixValue, "Pulse Patrol Auto-Fix feature requires Pro license")
 		return
 	}
 
@@ -5012,8 +5011,8 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 	}
 
 	// Check license
-	if !h.GetAIService(r.Context()).HasLicenseFeature(pkglicensing.FeatureAIAutoFix) {
-		WriteLicenseRequired(w, pkglicensing.FeatureAIAutoFix, "Pulse Patrol Auto-Fix feature requires Pro license")
+	if !h.GetAIService(r.Context()).HasLicenseFeature(featureAIAutoFixValue) {
+		WriteLicenseRequired(w, featureAIAutoFixValue, "Pulse Patrol Auto-Fix feature requires Pro license")
 		return
 	}
 
@@ -5602,7 +5601,7 @@ func (h *AISettingsHandler) HandleGetPatrolAutonomy(w http.ResponseWriter, r *ht
 	// Community tier lock: without ai_autofix, patrol autonomy is findings-only ("monitor").
 	// If config contains a higher level from a previous Pro/trial period, clamp the effective
 	// value at read time so the UI reflects runtime enforcement.
-	hasAutoFix := aiService.HasLicenseFeature(pkglicensing.FeatureAIAutoFix)
+	hasAutoFix := aiService.HasLicenseFeature(featureAIAutoFixValue)
 	if !hasAutoFix && autonomyLevel != config.PatrolAutonomyMonitor {
 		autonomyLevel = config.PatrolAutonomyMonitor
 	}
@@ -5645,8 +5644,8 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomy(w http.ResponseWriter, r 
 	}
 
 	// Community tier lock: ANY autonomy above "monitor" implies investigation and requires Pro.
-	if !aiService.HasLicenseFeature(pkglicensing.FeatureAIAutoFix) && req.AutonomyLevel != config.PatrolAutonomyMonitor {
-		WriteLicenseRequired(w, pkglicensing.FeatureAIAutoFix, "Investigation and auto-fix require Pulse Pro. Community tier is limited to Monitor (findings-only) autonomy.")
+	if !aiService.HasLicenseFeature(featureAIAutoFixValue) && req.AutonomyLevel != config.PatrolAutonomyMonitor {
+		WriteLicenseRequired(w, featureAIAutoFixValue, "Investigation and auto-fix require Pulse Pro. Community tier is limited to Monitor (findings-only) autonomy.")
 		return
 	}
 
@@ -5780,8 +5779,8 @@ func (h *AISettingsHandler) HandleReapproveInvestigationFix(w http.ResponseWrite
 	}
 
 	// Check license
-	if !h.GetAIService(r.Context()).HasLicenseFeature(pkglicensing.FeatureAIAutoFix) {
-		WriteLicenseRequired(w, pkglicensing.FeatureAIAutoFix, "Pulse Patrol Auto-Fix feature requires Pro license")
+	if !h.GetAIService(r.Context()).HasLicenseFeature(featureAIAutoFixValue) {
+		WriteLicenseRequired(w, featureAIAutoFixValue, "Pulse Patrol Auto-Fix feature requires Pro license")
 		return
 	}
 
@@ -5940,8 +5939,8 @@ func (h *AISettingsHandler) HandleReinvestigateFinding(w http.ResponseWriter, r 
 
 	// Reinvestigation is investigation and requires Pro (ai_autofix).
 	// This is defense-in-depth in addition to the route-level RequireLicenseFeature gate.
-	if !aiService.HasLicenseFeature(pkglicensing.FeatureAIAutoFix) {
-		WriteLicenseRequired(w, pkglicensing.FeatureAIAutoFix, "Reinvestigation requires Pulse Pro (AI Auto-Fix feature).")
+	if !aiService.HasLicenseFeature(featureAIAutoFixValue) {
+		WriteLicenseRequired(w, featureAIAutoFixValue, "Reinvestigation requires Pulse Pro (AI Auto-Fix feature).")
 		return
 	}
 

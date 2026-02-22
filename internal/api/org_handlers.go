@@ -15,11 +15,13 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
-const orgRequestBodyLimit = 64 * 1024
+const (
+	orgRequestBodyLimit          = 64 * 1024
+	licenseFeatureMultiTenantKey = "multi_tenant"
+)
 
 var organizationIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 
@@ -802,7 +804,7 @@ func (h *OrgHandlers) requireMultiTenantGate(w http.ResponseWriter, r *http.Requ
 		return false
 	}
 	if !hasMultiTenantFeatureForContext(r.Context()) {
-		WriteLicenseRequired(w, pkglicensing.FeatureMultiTenant, "Multi-tenant access requires an Enterprise license")
+		WriteLicenseRequired(w, licenseFeatureMultiTenantKey, "Multi-tenant access requires an Enterprise license")
 		return false
 	}
 	return true

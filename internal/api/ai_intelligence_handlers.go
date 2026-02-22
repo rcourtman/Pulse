@@ -16,7 +16,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -88,7 +87,7 @@ func checkWorkloadAnomalies(
 }
 
 func aiIntelligenceUpgradeURL() string {
-	return pkglicensing.UpgradeURLForFeature(pkglicensing.FeatureAIPatrol)
+	return upgradeURLForFeatureFromLicensing(featureAIPatrolValue)
 }
 
 // HandleGetPatterns returns detected failure patterns (GET /api/ai/intelligence/patterns)
@@ -514,10 +513,10 @@ func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http
 
 	aiService := h.GetAIService(r.Context())
 	// Check for Pulse Pro license (soft-lock)
-	locked := aiService == nil || !aiService.HasLicenseFeature(pkglicensing.FeatureAIAutoFix)
+	locked := aiService == nil || !aiService.HasLicenseFeature(featureAIAutoFixValue)
 	if locked {
 		w.Header().Set("X-License-Required", "true")
-		w.Header().Set("X-License-Feature", pkglicensing.FeatureAIAutoFix)
+		w.Header().Set("X-License-Feature", featureAIAutoFixValue)
 	}
 
 	// AI must be enabled to return intelligence data

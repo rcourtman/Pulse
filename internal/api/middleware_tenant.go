@@ -9,7 +9,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -18,6 +17,9 @@ type OrganizationContextKey string
 const (
 	OrgIDContextKey OrganizationContextKey = "org_id"
 	OrgContextKey   OrganizationContextKey = "org_object"
+	subStateActive  string                 = "active"
+	subStateGrace   string                 = "grace"
+	subStateTrial   string                 = "trial"
 )
 
 // TenantMiddleware extracts the organization ID from the request and
@@ -247,10 +249,17 @@ func GetOrganization(ctx context.Context) *models.Organization {
 // tenant routing is infrastructure rather than a paid feature.
 func isHostedSubscriptionValid(ctx context.Context) bool {
 	svc := getLicenseServiceForContext(ctx)
-	subState := pkglicensing.SubscriptionState(svc.SubscriptionState())
+	subState := strings.ToLower(strings.TrimSpace(svc.SubscriptionState()))
 	eval := svc.Evaluator()
 	hasTrialEnd := eval != nil && eval.TrialEndsAt() != nil
-	return pkglicensing.IsHostedSubscriptionValid(subState, hasTrialEnd)
+	switch subState {
+	case subStateActive, subStateGrace:
+		return true
+	case subStateTrial:
+		return hasTrialEnd
+	default:
+		return false
+	}
 }
 
 // writeHostedSubscriptionRequiredError writes a 402 response for Cloud tenants
