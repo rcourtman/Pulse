@@ -427,7 +427,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
           {/* Service Selection */}
           <div>
             <div class="flex items-center justify-between mb-4">
-              <label class="text-sm font-medium text-slate-700 dark:text-slate-300">
+              <label class="text-sm font-medium text-base-content">
                 Service Type
               </label>
               <button
@@ -462,7 +462,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                       onClick={() => selectService(service)}
                       class={`px-2 py-1.5 text-left border transition-colors text-xs ${formData().service === service
                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
-                        : 'border-slate-300 dark:border-slate-600 hover:bg-surface-hover'
+                        : 'border-border hover:bg-surface-hover'
                         }`}
                     >
                       <div class="font-medium text-xs text-base-content">
@@ -545,15 +545,15 @@ export function WebhookConfig(props: WebhookConfigProps) {
             />
             <p class={formHelpText + ' mt-1'}>
               Supports template variables like{' '}
-              <code class="font-mono text-[11px] text-slate-600 dark:text-slate-300">
+              <code class="font-mono text-[11px] text-muted">
                 {'{{.Message}}'}
               </code>
               . Use{' '}
-              <code class="font-mono text-[11px] text-slate-600 dark:text-slate-300">
+              <code class="font-mono text-[11px] text-muted">
                 {'{{urlpath ...}}'}
               </code>{' '}
               or{' '}
-              <code class="font-mono text-[11px] text-slate-600 dark:text-slate-300">
+              <code class="font-mono text-[11px] text-muted">
                 {'{{urlquery ...}}'}
               </code>{' '}
               to keep dynamic values URL-safe.
@@ -630,7 +630,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                 Custom fields
                 <span class="text-xs text-muted">
                   Available as{' '}
-                  <code class="font-mono text-[11px] text-slate-600 dark:text-slate-300">
+                  <code class="font-mono text-[11px] text-muted">
                     {'{{.CustomFields.<name>}}'}
                   </code>{' '}
                   in templates
@@ -792,7 +792,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
           </div>
 
           <div>
-            <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+            <label class="flex items-center gap-2 text-sm text-base-content">
               <input
                 type="checkbox"
                 checked={formData().enabled}

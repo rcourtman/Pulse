@@ -172,13 +172,13 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
   return (
     <Show when={metadataId()}>
       <div class={`rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800 ${props.class ?? ''}`}>
-        <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">
+        <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
           Web Interface URL
         </div>
         <div class="flex items-center gap-2">
           <input
             type="url"
-            class="flex-1 text-xs px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md bg-surface text-base-content focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            class="flex-1 text-xs px-2.5 py-1.5 border border-border rounded-md bg-surface text-base-content focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors"
             placeholder="https://192.168.1.100:8080"
             value={urlValue()}
             onInput={(e) => setUrlValue(e.currentTarget.value)}

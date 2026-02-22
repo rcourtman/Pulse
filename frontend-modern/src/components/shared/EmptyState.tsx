@@ -12,7 +12,7 @@ type EmptyStateProps = {
 } & JSX.HTMLAttributes<HTMLDivElement>;
 
 const iconBgClass: Record<EmptyStateTone, string> = {
-  default: 'bg-slate-100 dark:bg-slate-800 text-muted',
+  default: 'bg-surface-alt text-muted',
   info: 'bg-blue-50 dark:bg-blue-900 text-blue-500',
   success: 'bg-green-50 dark:bg-green-900 text-green-500',
   warning: 'bg-amber-50 dark:bg-amber-900 text-amber-500',

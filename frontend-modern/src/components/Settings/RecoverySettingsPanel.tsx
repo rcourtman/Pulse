@@ -46,12 +46,12 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
         description="Manage backup/snapshot polling and configuration export/import."
         icon={<Clock class="w-5 h-5" strokeWidth={2} />}
         noPadding
-        bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
+        bodyClass="divide-y divide-border"
       >
         {/* Backup Polling Section */}
-        <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+        <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
           <section class="space-y-3">
-            <h4 class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+            <h4 class="flex items-center gap-2 text-sm font-medium text-base-content">
               <svg
                 width="16"
                 height="16"
@@ -139,7 +139,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                           props.setHasUnsavedChanges(true);
                         }
                       }}
-                      class="w-full sm:w-auto min-h-10 sm:min-h-9 px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-surface disabled:opacity-50"
+                      class="w-full sm:w-auto min-h-10 sm:min-h-9 px-3 py-2.5 text-sm border border-border rounded-md bg-surface disabled:opacity-50"
                     >
                       <For each={BACKUP_INTERVAL_OPTIONS}>
                         {(option) => <option value={String(option.value)}>{option.label}</option>}
@@ -151,7 +151,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                   {/* Custom interval input */}
                   <Show when={props.backupIntervalSelectValue() === 'custom'}>
                     <div class="space-y-2">
-                      <label class="text-xs font-medium text-slate-700 dark:text-slate-300">
+                      <label class="text-xs font-medium text-base-content">
                         Custom interval (minutes)
                       </label>
                       <div class="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -176,7 +176,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                               props.setHasUnsavedChanges(true);
                             }
                           }}
-                          class="w-full sm:w-24 min-h-10 sm:min-h-9 px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-surface disabled:opacity-50"
+                          class="w-full sm:w-24 min-h-10 sm:min-h-9 px-3 py-2.5 text-sm border border-border rounded-md bg-surface disabled:opacity-50"
                         />
                         <span class="text-xs text-muted">
                           1 - {BACKUP_INTERVAL_MAX_MINUTES} minutes (~7 days max)
@@ -218,7 +218,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
         </div>
 
         {/* Backup & Restore Section */}
-        <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+        <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
           <SectionHeader
             title="Backup & restore"
             description="Backup your node configurations and credentials or restore from a previous backup."
@@ -300,7 +300,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
             </div>
 
             {/* Import Section */}
-            <div class="group border border-border rounded-md p-5 bg-slate-50 dark:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600 transition-all duration-200">
+            <div class="group border border-border rounded-md p-5 bg-surface-alt hover:border-slate-400 dark:hover:border-slate-600 transition-all duration-200">
               <div class="flex items-start gap-4">
                 <div class="flex-shrink-0 w-12 h-12 bg-slate-500 rounded-md flex items-center justify-center shadow-sm shadow-gray-500">
                   {/* Upload/Restore Icon */}

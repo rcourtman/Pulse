@@ -37,7 +37,7 @@ const allSections: Array<{
 export const SettingsSectionNav: Component<SettingsSectionNavProps> = (props) => {
   return (
     <div
-      class={`flex p-1 space-x-1 bg-gray-100 dark:bg-gray-800 rounded-md overflow-x-auto scrollbar-hide ${props.class ?? ''}`}
+      class={`flex p-1 space-x-1 bg-surface-alt rounded-md overflow-x-auto scrollbar-hide ${props.class ?? ''}`}
       style="-webkit-overflow-scrolling: touch;"
       aria-label="Settings sections"
     >

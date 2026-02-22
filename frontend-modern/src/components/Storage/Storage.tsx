@@ -381,7 +381,7 @@ const Storage: Component = () => {
               <div class="text-xs font-semibold uppercase tracking-wide text-muted">
                 Ceph Summary
               </div>
-              <div class="text-sm text-slate-600 dark:text-slate-300">
+              <div class="text-sm text-muted">
                 {cephSummaryStats().clusters.length} cluster
                 {cephSummaryStats().clusters.length !== 1 ? 's' : ''} detected
               </div>
@@ -454,7 +454,7 @@ const Storage: Component = () => {
           sourceOptions={sourceFilterOptions()}
           leadingFilters={
             <>
-              <div class="inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5" role="group" aria-label="View">
+              <div class="inline-flex rounded-md bg-surface-hover p-0.5" role="group" aria-label="View">
                 <button
                   type="button"
                   onClick={() => setView('pools')}
@@ -472,17 +472,17 @@ const Storage: Component = () => {
                   Physical Disks
                 </button>
               </div>
-              <div class="h-5 w-px bg-slate-200 dark:bg-slate-600 hidden sm:block"></div>
+              <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
               <select
                 value={selectedNodeId()}
                 onChange={(event) => setSelectedNodeId(event.currentTarget.value)}
-                class="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-surface text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                class="px-2 py-1 text-xs border border-border rounded-md bg-surface text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 aria-label="Node"
               >
                 <option value="all">All Nodes</option>
                 <For each={nodeOptions()}>{(node) => <option value={node.id}>{node.label}</option>}</For>
               </select>
-              <div class="h-5 w-px bg-slate-200 dark:bg-slate-600 hidden sm:block"></div>
+              <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
             </>
           }
         />
@@ -557,7 +557,7 @@ const Storage: Component = () => {
               <Show
                 when={groupedRecords().length > 0}
                 fallback={
-                  <div class="p-6 text-sm text-slate-600 dark:text-slate-300">
+                  <div class="p-6 text-sm text-muted">
                     No storage records match the current filters.
                   </div>
                 }
@@ -565,7 +565,7 @@ const Storage: Component = () => {
                 <div class="overflow-x-auto">
                   <Table class="w-full text-xs">
                     <TableHeader>
-                      <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
+                      <TableRow class="bg-surface-alt text-muted border-b border-border">
                         <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Name</TableHead>
                         <Show when={groupBy() !== 'node'}>
                           <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Node</TableHead>
@@ -616,7 +616,7 @@ const Storage: Component = () => {
                                     const rowClass = createMemo(() => {
                                       const classes = [
                                         'transition-all duration-200',
-                                        'hover:bg-slate-50 dark:hover:bg-slate-800',
+                                        'hover:bg-surface-hover',
                                       ];
 
                                       if (showAlertHighlight()) {
@@ -628,11 +628,11 @@ const Storage: Component = () => {
                                       } else if (isResourceHighlighted()) {
                                         classes.push('bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300 dark:ring-blue-600');
                                       } else if (hasAcknowledgedOnlyAlert()) {
-                                        classes.push('bg-slate-50 dark:bg-slate-800');
+                                        classes.push('bg-surface-alt');
                                       }
 
                                       if (isExpanded()) {
-                                        classes.push('bg-slate-50 dark:bg-slate-800');
+                                        classes.push('bg-surface-alt');
                                       }
 
                                       return classes.join(' ');
@@ -692,7 +692,7 @@ const Storage: Component = () => {
               </Show>
             }
           >
-            <div class="p-6 text-sm text-slate-600 dark:text-slate-300">Loading storage resources...</div>
+            <div class="p-6 text-sm text-muted">Loading storage resources...</div>
           </Show>
         </Show>
       </Card>

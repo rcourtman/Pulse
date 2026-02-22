@@ -186,7 +186,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                 </div>
                 <div class="space-y-2 text-sm">
                   <div class="text-muted">{approval.context}</div>
-                  <div class="bg-slate-50 dark:bg-slate-800 rounded p-2 font-mono text-xs text-slate-700 dark:text-slate-300 break-all">
+                  <div class="bg-surface-alt rounded p-2 font-mono text-xs text-base-content break-all">
                     {approval.command}
                   </div>
                 </div>
@@ -212,7 +212,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                       type="button"
                       onClick={(e) => handleDeny(approval, e)}
                       disabled={actionLoading() === approval.id}
-                      class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 disabled:opacity-50 text-muted text-xs font-medium rounded"
+                      class="px-3 py-1.5 bg-slate-100 hover:bg-surface-hover dark:hover:bg-slate-600 disabled:opacity-50 text-muted text-xs font-medium rounded"
                     >
                       Deny
                     </button>
@@ -256,7 +256,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                 <div class="space-y-2 text-sm">
                   <div class="text-muted">{fix.description}</div>
                   <Show when={fix.commands && fix.commands.length > 0}>
-                    <div class="bg-slate-50 dark:bg-slate-800 rounded p-2 font-mono text-xs text-slate-700 dark:text-slate-300 break-all">
+                    <div class="bg-surface-alt rounded p-2 font-mono text-xs text-base-content break-all">
                       {fix.commands![0]}
                     </div>
                   </Show>
@@ -325,7 +325,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
               <div class="mt-2 space-y-1 text-sm">
                 <div class="text-muted">{fix().description}</div>
                 <Show when={fix().commands && fix().commands!.length > 0}>
-                  <div class="bg-slate-50 dark:bg-slate-800 rounded p-2 font-mono text-xs text-slate-700 dark:text-slate-300 break-all">
+                  <div class="bg-surface-alt rounded p-2 font-mono text-xs text-base-content break-all">
                     {fix().commands![0]}
                   </div>
                 </Show>
@@ -353,7 +353,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
               <div class="mt-2 space-y-1 text-sm">
                 <div class="text-muted">{fix().description}</div>
                 <Show when={fix().commands && fix().commands!.length > 0}>
-                  <div class="bg-slate-50 dark:bg-slate-800 rounded p-2 font-mono text-xs text-slate-700 dark:text-slate-300 break-all">
+                  <div class="bg-surface-alt rounded p-2 font-mono text-xs text-base-content break-all">
                     {fix().commands![0]}
                   </div>
                 </Show>

@@ -343,7 +343,7 @@ export const getOutlierEmphasis = (value: number, stats: IODistributionStats): O
   if (stats.count < 4) {
     const ratio = value / stats.max;
     if (ratio >= 0.995) {
-      return { fontWeight: '500', color: 'text-slate-800 dark:text-slate-100', showOutlierHint: true };
+      return { fontWeight: '500', color: 'text-base-content', showOutlierHint: true };
     }
     return { fontWeight: 'normal', color: 'text-muted', showOutlierHint: false };
   }
@@ -354,13 +354,13 @@ export const getOutlierEmphasis = (value: number, stats: IODistributionStats): O
       return { fontWeight: '600', color: 'text-slate-900 dark:text-slate-50', showOutlierHint: true };
     }
     if (modifiedZ >= 5.5 && value >= stats.p97) {
-      return { fontWeight: '500', color: 'text-slate-800 dark:text-slate-100', showOutlierHint: true };
+      return { fontWeight: '500', color: 'text-base-content', showOutlierHint: true };
     }
     return { fontWeight: 'normal', color: 'text-muted', showOutlierHint: false };
   }
 
   if (value >= stats.p99) return { fontWeight: '600', color: 'text-slate-900 dark:text-slate-50', showOutlierHint: true };
-  if (value >= stats.p97) return { fontWeight: '500', color: 'text-slate-800 dark:text-slate-100', showOutlierHint: true };
+  if (value >= stats.p97) return { fontWeight: '500', color: 'text-base-content', showOutlierHint: true };
   if (value > 0) return { fontWeight: 'normal', color: 'text-muted', showOutlierHint: false };
   return { fontWeight: 'normal', color: 'text-muted', showOutlierHint: false };
 };

@@ -86,7 +86,7 @@ const getHealthInfo = (health: string) => {
         };
     }
     return {
-        bgClass: 'bg-slate-100 dark:bg-slate-800',
+        bgClass: 'bg-surface-alt',
         textClass: 'text-muted',
         borderClass: 'border-border',
         dotClass: 'bg-slate-400',
@@ -230,7 +230,7 @@ const UsageBar: Component<{ percent: number; size?: 'sm' | 'md' }> = (props) => 
     };
 
     return (
-        <div class={`w-full bg-slate-200 dark:bg-slate-700 rounded-full ${barHeight()} overflow-hidden`}>
+        <div class={`w-full bg-surface-hover rounded-full ${barHeight()} overflow-hidden`}>
             <div
                 class={`${barHeight()} rounded-full transition-all duration-500 ${barColor()}`}
                 style={{ width: `${Math.min(props.percent || 0, 100)}%` }}
@@ -532,7 +532,7 @@ const Ceph: Component = () => {
                     {/* Cluster Details Table */}
                     <Show when={clusters().length > 0}>
                         <Card padding="none" tone="card" class="overflow-hidden">
-                            <div class="px-4 py-3 border-b border-border bg-slate-50 dark:bg-slate-800">
+                            <div class="px-4 py-3 border-b border-border bg-surface-alt">
                                 <h3 class="text-sm font-semibold text-base-content">
                                     Cluster Overview
                                 </h3>
@@ -541,7 +541,7 @@ const Ceph: Component = () => {
                                 <style>{`.overflow-x-auto::-webkit-scrollbar { display: none; }`}</style>
                                 <Table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "700px" }}>
                                     <TableHeader>
-                                        <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
+                                        <TableRow class="bg-surface-alt text-muted border-b border-border">
                                             <TableHead class={`${thClass} pl-4`}>Cluster</TableHead>
                                             <TableHead class={thClass}>Health</TableHead>
                                             <TableHead class={thClass}>Monitors</TableHead>
@@ -592,7 +592,7 @@ const Ceph: Component = () => {
                                                         </span>
                                                     </TableCell>
                                                     <TableCell class="px-2 py-2.5">
-                                                        <span class="text-xs text-slate-700 dark:text-slate-300 font-medium">
+                                                        <span class="text-xs text-base-content font-medium">
                                                             {(cluster.numPGs || 0).toLocaleString()}
                                                         </span>
                                                     </TableCell>
@@ -617,7 +617,7 @@ const Ceph: Component = () => {
                     {/* Pools Table */}
                     <Show when={allPools().length > 0}>
                         <Card padding="none" tone="card" class="overflow-hidden">
-                            <div class="px-4 py-3 border-b border-border bg-slate-50 dark:bg-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                            <div class="px-4 py-3 border-b border-border bg-surface-alt flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                                 <h3 class="text-sm font-semibold text-base-content">
                                     Storage Pools ({filteredPools().length})
                                 </h3>
@@ -631,7 +631,7 @@ const Ceph: Component = () => {
                                             aria-label="Search storage pools"
                                             value={searchTerm()}
                                             onInput={(e) => setSearchTerm(e.currentTarget.value)}
-                                            class="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-base-content placeholder-muted focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
+                                            class="w-full pl-8 pr-3 py-1.5 text-sm border border-border rounded-md bg-surface text-base-content placeholder-muted focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
                                         />
                                         <svg
                                             class="absolute left-2.5 top-2 h-4 w-4 text-muted"
@@ -669,7 +669,7 @@ const Ceph: Component = () => {
                                     <style>{`.overflow-x-auto::-webkit-scrollbar { display: none; }`}</style>
                                     <Table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "650px" }}>
                                         <TableHeader>
-                                            <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
+                                            <TableRow class="bg-surface-alt text-muted border-b border-border">
                                                 <TableHead class={`${thClass} pl-4`}>Pool</TableHead>
                                                 <TableHead class={thClass}>Cluster</TableHead>
                                                 <TableHead class={thClass}>Used</TableHead>
@@ -688,13 +688,13 @@ const Ceph: Component = () => {
                                                         <TableCell class="px-2 py-2.5 text-xs text-muted">
                                                             {pool.clusterName}
                                                         </TableCell>
-                                                        <TableCell class="px-2 py-2.5 text-xs text-slate-700 dark:text-slate-300 font-mono">
+                                                        <TableCell class="px-2 py-2.5 text-xs text-base-content font-mono">
                                                             {formatBytes(pool.storedBytes || 0)}
                                                         </TableCell>
-                                                        <TableCell class="px-2 py-2.5 text-xs text-slate-700 dark:text-slate-300 font-mono">
+                                                        <TableCell class="px-2 py-2.5 text-xs text-base-content font-mono">
                                                             {formatBytes(pool.availableBytes || 0)}
                                                         </TableCell>
-                                                        <TableCell class="px-2 py-2.5 text-xs text-slate-700 dark:text-slate-300 font-mono">
+                                                        <TableCell class="px-2 py-2.5 text-xs text-base-content font-mono">
                                                             {(pool.objects || 0).toLocaleString()}
                                                         </TableCell>
                                                         <TableCell class="px-2 py-2.5">

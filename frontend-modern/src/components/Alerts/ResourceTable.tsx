@@ -555,7 +555,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         value={isOff() ? '' : val()}
                         placeholder={isOff() ? 'Off' : ''}
                         disabled={isOff()}
-                        class={`w-full text-sm p-1 rounded border text-center ${isOff() ? 'bg-slate-100 dark:bg-slate-700' : 'bg-white dark:bg-slate-600 border-slate-200 dark:border-slate-500'}`}
+                        class={`w-full text-sm p-1 rounded border text-center ${isOff() ? 'bg-surface-hover' : 'bg-white dark:bg-slate-600 border-slate-200 dark:border-slate-500'}`}
                         onInput={(e) => {
                           const value = parseFloat(e.currentTarget.value);
                           if (props.setGlobalDefaults) {
@@ -668,7 +668,7 @@ export function ResourceTable(props: ResourceTableProps) {
                           <button
                             type="button"
                             onClick={() => { props.onCancelEdit(); setActiveMetricInput(null); }}
-                            class="p-1.5 bg-slate-100 dark:bg-slate-700 text-slate-600 rounded"
+                            class="p-1.5 bg-surface-hover text-slate-600 rounded"
                             aria-label="Cancel threshold edits"
                           >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -686,7 +686,7 @@ export function ResourceTable(props: ResourceTableProps) {
                           <button
                             type="button"
                             onClick={() => props.onRemoveOverride(resource.id)}
-                            class="p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 rounded transition-colors"
+                            class="p-1.5 bg-surface-alt text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 rounded transition-colors"
                             aria-label={`Revert to defaults for ${resource.displayName || resource.name}`}
                             title="Revert to defaults"
                           >
@@ -699,7 +699,7 @@ export function ResourceTable(props: ResourceTableProps) {
                     {/* Note editor in mobile */}
                     <Show when={isEditing()}>
                       <textarea
-                        class="w-full text-xs p-2 rounded border border-border bg-slate-50 dark:bg-slate-800"
+                        class="w-full text-xs p-2 rounded border border-border bg-surface-alt"
                         rows={2}
                         placeholder="Add a note..."
                         value={props.editingNote()}
@@ -719,7 +719,7 @@ export function ResourceTable(props: ResourceTableProps) {
                           const bounds = metricBounds(metric);
 
                           return (
-                            <div class="flex justify-between items-center p-1.5 bg-slate-50 dark:bg-slate-800 rounded">
+                            <div class="flex justify-between items-center p-1.5 bg-surface-alt rounded">
                               <span class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{column.replace(/mb\/s|%|°c/gi, '').trim()}</span>
 
                               <Show when={isEditing()} fallback={
@@ -744,7 +744,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 <input type="number" min={bounds.min} max={bounds.max}
                                   value={thresholds()?.[metric] ?? ''}
                                   placeholder={isDisabled() ? 'Off' : ''}
-                                  class="w-16 text-right text-xs p-1 rounded border border-border bg-white dark:bg-slate-900"
+                                  class="w-16 text-right text-xs p-1 rounded border border-border bg-surface"
                                   onInput={(e) => {
                                     const val = parseFloat(e.currentTarget.value);
                                     props.setEditingThresholds({ ...props.editingThresholds(), [metric]: Number.isNaN(val) ? undefined : val });
@@ -764,7 +764,7 @@ export function ResourceTable(props: ResourceTableProps) {
         )}
       </For>
       <Show when={!hasRows()}>
-        <div class="text-center p-8 text-slate-500 text-sm italic bg-slate-50 dark:bg-slate-800 rounded-md">
+        <div class="text-center p-8 text-slate-500 text-sm italic bg-surface-alt rounded-md">
           {props.emptyMessage || 'No resources available.'}
         </div>
       </Show>
@@ -836,7 +836,7 @@ export function ResourceTable(props: ResourceTableProps) {
               when={props.globalDefaults && props.setGlobalDefaults && props.setHasUnsavedChanges}
             >
               <TableRow
-                class={`bg-slate-50 dark:bg-slate-800 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
+                class={`bg-surface-alt ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
               >
                 <Show when={props.onBulkEdit}>
                   <TableCell class="p-1 px-2 border-r border-border" />
@@ -863,7 +863,7 @@ export function ResourceTable(props: ResourceTableProps) {
                 </TableCell>
                 <TableCell class="p-1 px-2">
                   <div class="flex items-center gap-2">
-                    <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    <span class="text-sm font-semibold text-base-content">
                       Global Defaults
                     </span>
                     <Show when={hasCustomGlobalDefaults()}>
@@ -904,8 +904,8 @@ export function ResourceTable(props: ResourceTableProps) {
                               }
                             }}
                             class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${isOff()
-                              ? 'border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-muted italic placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:opacity-60 pointer-events-none'
-                              : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-base-content focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+                              ? 'border-border bg-surface-alt text-muted italic placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:opacity-60 pointer-events-none'
+                              : 'border-border bg-white dark:bg-slate-700 text-base-content focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                               }`}
                             title={
                               isOff()
@@ -1049,7 +1049,7 @@ export function ResourceTable(props: ResourceTableProps) {
               }
             >
               <TableRow
-                class={`bg-slate-50 dark:bg-slate-800 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
+                class={`bg-surface-alt ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
               >
                 <Show when={props.onBulkEdit}>
                   <TableCell class="p-1 px-2 border-r border-border" />
@@ -1058,7 +1058,7 @@ export function ResourceTable(props: ResourceTableProps) {
                   <span class="text-sm text-slate-400">-</span>
                 </TableCell>
                 <TableCell class="p-1 px-2 align-middle">
-                  <span class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 inline-flex items-center gap-1">
+                  <span class="text-xs font-semibold uppercase tracking-wide text-muted inline-flex items-center gap-1">
                     Alert Delay (s)
                     <HelpIcon contentId="alerts.thresholds.delay" size="xs" />
                   </span>
@@ -1079,7 +1079,7 @@ export function ResourceTable(props: ResourceTableProps) {
                               return overrideDelay !== undefined ? overrideDelay : '';
                             })()}
                             placeholder={String(typeDefaultDelay)}
-                            class="w-16 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-0.5 text-sm text-center text-base-content focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            class="w-16 rounded border border-border bg-white dark:bg-slate-700 px-2 py-0.5 text-sm text-center text-base-content focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                             onInput={(e) => {
                               const raw = e.currentTarget.value;
                               if (raw === '') {
@@ -1128,7 +1128,7 @@ export function ResourceTable(props: ResourceTableProps) {
                   return (
                     <>
                       {/* Node group header */}
-                      <TableRow class="bg-slate-50 dark:bg-slate-800">
+                      <TableRow class="bg-surface-alt">
                         <TableCell
                           colspan={totalColumnCount()}
                           class="p-1 px-2 text-xs font-medium text-muted"
@@ -1189,7 +1189,7 @@ export function ResourceTable(props: ResourceTableProps) {
 
                           return (
                             <TableRow
-                              class={`transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''} ${resource.hasOverride ? 'bg-sky-50/50 hover:bg-sky-50/80 dark:bg-sky-900/20 dark:hover:bg-sky-900/30 border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                              class={`transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''} ${resource.hasOverride ? 'bg-sky-50/50 hover:bg-sky-50/80 dark:bg-sky-900/20 dark:hover:bg-sky-900/30 border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : 'hover:bg-surface-hover'}`}
                             >
                               {/* Bulk Edit Checkbox column */}
                               <Show when={props.onBulkEdit}>
@@ -1389,7 +1389,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                               onClick={(event) => {
                                                 openMetricEditor(event);
                                               }}
-                                              class="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded px-1 py-0.5 transition-colors"
+                                              class="cursor-pointer hover:bg-surface-hover rounded px-1 py-0.5 transition-colors"
                                               title="Click to edit this metric"
                                             >
                                               <MetricValueWithHeat
@@ -1509,8 +1509,8 @@ export function ResourceTable(props: ResourceTableProps) {
                                                   setActiveMetricInput(null);
                                                 }}
                                                 class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${isDisabled()
-                                                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 border-slate-300 dark:border-slate-600'
-                                                  : 'bg-white dark:bg-slate-700 text-base-content border-slate-300 dark:border-slate-600'
+                                                  ? 'bg-surface-alt text-slate-400 dark:text-slate-600 border-border'
+                                                  : 'bg-white dark:bg-slate-700 text-base-content border-border'
                                                   }`}
                                               />
                                             </div>
@@ -1731,7 +1731,7 @@ export function ResourceTable(props: ResourceTableProps) {
 
                       return (
                         <TableRow
-                          class={`transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''} ${resource.hasOverride ? 'bg-sky-50/50 hover:bg-sky-50/80 dark:bg-sky-900/20 dark:hover:bg-sky-900/30 border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                          class={`transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''} ${resource.hasOverride ? 'bg-sky-50/50 hover:bg-sky-50/80 dark:bg-sky-900/20 dark:hover:bg-sky-900/30 border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : 'hover:bg-surface-hover'}`}
                         >
                           {/* Bulk Edit Checkbox column */}
                           <Show when={props.onBulkEdit}>
@@ -1901,7 +1901,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       fallback={
                                         <div
                                           onClick={openMetricEditor}
-                                          class="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded px-1 py-0.5 transition-colors"
+                                          class="cursor-pointer hover:bg-surface-hover rounded px-1 py-0.5 transition-colors"
                                           title="Click to edit this metric"
                                         >
                                           <MetricValueWithHeat
@@ -1965,8 +1965,8 @@ export function ResourceTable(props: ResourceTableProps) {
                                             setActiveMetricInput(null);
                                           }}
                                           class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${isDisabled()
-                                            ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 border-slate-300 dark:border-slate-600'
-                                            : 'bg-white dark:bg-slate-700 text-base-content border-slate-300 dark:border-slate-600'
+                                            ? 'bg-surface-alt text-slate-400 dark:text-slate-600 border-border'
+                                            : 'bg-white dark:bg-slate-700 text-base-content border-border'
                                             }`}
                                         />
                                       </div>

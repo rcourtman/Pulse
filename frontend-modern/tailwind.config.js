@@ -21,6 +21,7 @@ export default {
         base: 'var(--color-bg-base)',
         surface: 'var(--color-bg-surface)',
         'surface-hover': 'var(--color-bg-surface-hover)',
+        'surface-alt': 'var(--color-bg-surface-alt)',
         border: 'var(--color-border-base)',
         'border-subtle': 'var(--color-border-subtle)',
         'base-content': 'var(--color-text-base)',

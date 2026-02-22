@@ -238,7 +238,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
 
     return (
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
-            <div class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-md shadow-sm border border-border mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="w-full max-w-2xl bg-surface rounded-md shadow-sm border border-border mx-4 max-h-[90vh] overflow-hidden flex flex-col">
                 {/* Header */}
                 <div class="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
                     <div class="flex items-center gap-3">
@@ -269,7 +269,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                 <div class="px-6 py-4 space-y-4 overflow-y-auto flex-1">
                     {/* Prompt Input */}
                     <div class="space-y-2">
-                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                        <label class="block text-sm font-medium text-base-content">
                             What kind of profile do you need?
                         </label>
                         <textarea
@@ -297,7 +297,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                         <button
                                             type="button"
                                             onClick={() => handleUseExample(example)}
-                                            class="text-xs px-2 py-1 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 transition-colors"
+                                            class="text-xs px-2 py-1 rounded-md bg-slate-100 text-slate-600 hover:bg-surface-alt dark:text-slate-400 dark:hover:bg-slate-700 transition-colors"
                                             disabled={loading()}
                                         >
                                             {example}
@@ -337,16 +337,16 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                 </div>
 
                                 <Show when={validationError()}>
-                                    <div class="flex items-start gap-2 p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-border">
+                                    <div class="flex items-start gap-2 p-3 rounded-md bg-surface-alt border border-border">
                                         <AlertCircle class="w-4 h-4 text-muted mt-0.5 shrink-0" />
-                                        <p class="text-xs text-slate-600 dark:text-slate-300">{validationError()}</p>
+                                        <p class="text-xs text-muted">{validationError()}</p>
                                     </div>
                                 </Show>
 
                                 <Show when={schemaError()}>
-                                    <div class="flex items-start gap-2 p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-border">
+                                    <div class="flex items-start gap-2 p-3 rounded-md bg-surface-alt border border-border">
                                         <AlertCircle class="w-4 h-4 text-muted mt-0.5 shrink-0" />
-                                        <p class="text-xs text-slate-600 dark:text-slate-300">{schemaError()}</p>
+                                        <p class="text-xs text-muted">{schemaError()}</p>
                                     </div>
                                 </Show>
 
@@ -411,14 +411,14 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                 {/* Profile Preview */}
                                 <div class="rounded-md border border-border overflow-hidden">
                                     {/* Name & Description */}
-                                    <div class="p-4 bg-slate-50 dark:bg-slate-800 border-b border-border space-y-2">
+                                    <div class="p-4 bg-surface-alt border-b border-border space-y-2">
                                         <div>
                                             <h4 class="font-medium text-base-content">{sugg().name}</h4>
                                             <p class="text-sm text-muted mt-1">{sugg().description}</p>
                                         </div>
                                         <Show when={activeHistoryItem()}>
                                             <div class="text-xs text-muted break-words">
-                                                <span class="font-medium text-slate-600 dark:text-slate-300">Prompt:</span>{' '}
+                                                <span class="font-medium text-muted">Prompt:</span>{' '}
                                                 {activeHistoryItem()?.prompt}
                                             </div>
                                         </Show>
@@ -428,7 +428,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                     <div class="p-4 space-y-4">
                                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                             <div class="space-y-3">
-                                                <h5 class="text-sm font-medium text-slate-700 dark:text-slate-300">Settings Preview</h5>
+                                                <h5 class="text-sm font-medium text-base-content">Settings Preview</h5>
                                                 <Show when={settingsPreview().length > 0} fallback={
                                                     <p class="text-xs text-muted">No settings were suggested.</p>
                                                 }>
@@ -477,7 +477,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                                     <div class="rounded-md border border-border p-3">
                                                         <div class="flex items-start justify-between gap-3">
                                                             <div>
-                                                                <h6 class="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                                                                <h6 class="text-xs font-semibold text-base-content uppercase tracking-wide">
                                                                     Defaults unchanged
                                                                 </h6>
                                                                 <p class="text-xs text-muted mt-1">
@@ -512,7 +512,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                                 </Show>
                                             </div>
                                             <div class="space-y-3">
-                                                <h5 class="text-sm font-medium text-slate-700 dark:text-slate-300">Raw JSON</h5>
+                                                <h5 class="text-sm font-medium text-base-content">Raw JSON</h5>
                                                 <div class="bg-slate-900 dark:bg-slate-950 rounded-md p-3 overflow-x-auto">
                                                     <pre class="text-xs text-slate-300 font-mono">
                                                         {JSON.stringify(sugg().config, null, 2)}
@@ -525,7 +525,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                     {/* Rationale */}
                                     <Show when={sugg().rationale && sugg().rationale.length > 0}>
                                         <div class="p-4 border-t border-border space-y-2">
-                                            <h5 class="text-sm font-medium text-slate-700 dark:text-slate-300">Rationale</h5>
+                                            <h5 class="text-sm font-medium text-base-content">Rationale</h5>
                                             <ul class="space-y-1">
                                                 <For each={sugg().rationale}>
                                                     {(reason) => (
@@ -543,7 +543,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                 <Show when={history().length > 1}>
                                     <div class="rounded-md border border-border p-4 space-y-2">
                                         <div class="flex items-center justify-between">
-                                            <h5 class="text-sm font-medium text-slate-700 dark:text-slate-300">Recent drafts</h5>
+                                            <h5 class="text-sm font-medium text-base-content">Recent drafts</h5>
                                             <span class="text-xs text-muted">
                                                 {history().length - 1} older
                                             </span>
@@ -580,7 +580,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                 </div>
 
                 {/* Footer */}
-                <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border bg-slate-50 dark:bg-slate-800 shrink-0">
+                <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border bg-surface-alt shrink-0">
                     <button
                         type="button"
                         onClick={props.onClose}
@@ -606,7 +606,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                             type="button"
                             onClick={handleSubmit}
                             disabled={loading() || !prompt().trim()}
-                            class="inline-flex items-center gap-2 rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            class="inline-flex items-center gap-2 rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-surface-alt dark:text-slate-200 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                             title="Regenerate using the current prompt"
                         >
                             <Lightbulb class="w-4 h-4" />

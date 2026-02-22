@@ -35,7 +35,7 @@ export const StorageHero: Component<StorageHeroProps> = (props) => {
     <Card padding="sm">
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {/* Pools + Health donut */}
-        <div class="flex items-center gap-3 rounded-md border border-border bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
+        <div class="flex items-center gap-3 rounded-md border border-border bg-surface-alt px-3 py-2.5">
           <MiniDonut size={32} strokeWidth={4} data={donutData()} centerText={String(props.summary.count)} />
           <div class="min-w-0">
             <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Pools</div>
@@ -49,7 +49,7 @@ export const StorageHero: Component<StorageHeroProps> = (props) => {
         </div>
 
         {/* Capacity gauge */}
-        <div class="flex items-center gap-3 rounded-md border border-border bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
+        <div class="flex items-center gap-3 rounded-md border border-border bg-surface-alt px-3 py-2.5">
           <MiniGauge percent={props.summary.usagePercent} size={32} strokeWidth={4} color={gaugeColor()} />
           <div class="min-w-0">
             <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Capacity</div>
@@ -66,8 +66,8 @@ export const StorageHero: Component<StorageHeroProps> = (props) => {
         </div>
 
         {/* Disks (replaces redundant Used card) */}
-        <div class="flex items-center gap-3 rounded-md border border-border bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
-          <div class="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex-shrink-0">
+        <div class="flex items-center gap-3 rounded-md border border-border bg-surface-alt px-3 py-2.5">
+          <div class="flex items-center justify-center w-8 h-8 rounded-full bg-surface-alt flex-shrink-0">
             <svg class="w-4 h-4 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="2" y="2" width="20" height="8" rx="2" ry="2" />
               <rect x="2" y="14" width="20" height="8" rx="2" ry="2" />
@@ -88,7 +88,7 @@ export const StorageHero: Component<StorageHeroProps> = (props) => {
         </div>
 
         {/* Used / Free summary (replaces separate Used + Free cards) */}
-        <div class="flex items-center gap-3 rounded-md border border-border bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
+        <div class="flex items-center gap-3 rounded-md border border-border bg-surface-alt px-3 py-2.5">
           <div class="min-w-0">
             <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Allocation</div>
             <div class="text-sm font-bold text-base-content">{formatBytes(props.summary.usedBytes)}</div>

@@ -248,7 +248,7 @@ export const AICostDashboard: Component = () => {
               onClick={() => handleRangeClick(1)}
               class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 1
                 ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-slate-300 dark:border-slate-600 hover:bg-surface-hover'
+                : 'border-border hover:bg-surface-hover'
                 } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               1d
@@ -259,7 +259,7 @@ export const AICostDashboard: Component = () => {
               onClick={() => handleRangeClick(7)}
               class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 7
                 ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-slate-300 dark:border-slate-600 hover:bg-surface-hover'
+                : 'border-border hover:bg-surface-hover'
                 } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               7d
@@ -270,7 +270,7 @@ export const AICostDashboard: Component = () => {
               onClick={() => handleRangeClick(30)}
               class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 30
                 ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-slate-300 dark:border-slate-600 hover:bg-surface-hover'
+                : 'border-border hover:bg-surface-hover'
                 } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               30d
@@ -281,7 +281,7 @@ export const AICostDashboard: Component = () => {
               onClick={() => handleRangeClick(90)}
               class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 90
                 ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-slate-300 dark:border-slate-600 hover:bg-surface-hover'
+                : 'border-border hover:bg-surface-hover'
                 } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               90d
@@ -292,7 +292,7 @@ export const AICostDashboard: Component = () => {
               onClick={() => handleRangeClick(365)}
               class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 365
                 ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-slate-300 dark:border-slate-600 hover:bg-surface-hover'
+                : 'border-border hover:bg-surface-hover'
                 } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               1y
@@ -346,7 +346,7 @@ export const AICostDashboard: Component = () => {
           {(data) => (
             <>
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-border">
+                <div class="p-3 rounded-md bg-surface-alt border border-border">
                   <div class="text-xs text-muted">Estimated spend</div>
                   <div class="text-lg font-semibold text-base-content">
                     <Show
@@ -357,13 +357,13 @@ export const AICostDashboard: Component = () => {
                     </Show>
                   </div>
                 </div>
-                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-border">
+                <div class="p-3 rounded-md bg-surface-alt border border-border">
                   <div class="text-xs text-muted">Total tokens</div>
                   <div class="text-lg font-semibold text-base-content">
                     {formatNumber(data().totals.total_tokens)}
                   </div>
                 </div>
-                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-border">
+                <div class="p-3 rounded-md bg-surface-alt border border-border">
                   <div class="text-xs text-muted">Model/provider pairs</div>
                   <div class="text-lg font-semibold text-base-content">
                     {formatNumber(data().provider_models.length)}
@@ -372,7 +372,7 @@ export const AICostDashboard: Component = () => {
               </div>
 
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-border">
+                <div class="p-3 rounded-md bg-surface-alt border border-border">
                   <div class="text-xs text-muted">Chat</div>
                   <div class="text-sm font-semibold text-base-content">
                     {formatNumber(useCaseMap().get('chat')?.tokens ?? 0)} tokens
@@ -386,7 +386,7 @@ export const AICostDashboard: Component = () => {
                     </Show>
                   </div>
                 </div>
-                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-border">
+                <div class="p-3 rounded-md bg-surface-alt border border-border">
                   <div class="text-xs text-muted">Patrol</div>
                   <div class="text-sm font-semibold text-base-content">
                     {formatNumber(useCaseMap().get('patrol')?.tokens ?? 0)} tokens
@@ -400,7 +400,7 @@ export const AICostDashboard: Component = () => {
                     </Show>
                   </div>
                 </div>
-                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-border">
+                <div class="p-3 rounded-md bg-surface-alt border border-border">
                   <div class="text-xs text-muted">Budget alert (USD per 30d)</div>
                   <div class="text-sm font-semibold text-base-content mt-1">
                     <Show when={parsedBudgetUSD30d() != null} fallback={<span class="text-muted">—</span>}>
@@ -417,7 +417,7 @@ export const AICostDashboard: Component = () => {
               </div>
 
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-border">
+                <div class="p-3 rounded-md bg-surface-alt border border-border">
                   <div class="flex items-center justify-between">
                     <div class="text-xs text-muted">Daily estimated USD</div>
                     <div class="text-xs text-muted">
@@ -435,7 +435,7 @@ export const AICostDashboard: Component = () => {
                     </Show>
                   </div>
                 </div>
-                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-border">
+                <div class="p-3 rounded-md bg-surface-alt border border-border">
                   <div class="flex items-center justify-between">
                     <div class="text-xs text-muted">Daily total tokens</div>
                     <div class="text-xs text-muted">
@@ -487,7 +487,7 @@ export const AICostDashboard: Component = () => {
                     type="button"
                     disabled={loading()}
                     onClick={() => downloadExport('csv')}
-                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded border border-border hover:bg-slate-100 dark:hover:bg-slate-800 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded border border-border hover:bg-surface-hover ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     Export CSV
                   </button>
@@ -495,7 +495,7 @@ export const AICostDashboard: Component = () => {
                     type="button"
                     disabled={loading()}
                     onClick={() => downloadExport('json')}
-                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded border border-border hover:bg-slate-100 dark:hover:bg-slate-800 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded border border-border hover:bg-surface-hover ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     Export JSON
                   </button>
@@ -503,7 +503,7 @@ export const AICostDashboard: Component = () => {
                     type="button"
                     disabled={loading()}
                     onClick={resetHistory}
-                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded border border-border hover:bg-slate-100 dark:hover:bg-slate-800 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded border border-border hover:bg-surface-hover ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     Reset history
                   </button>
@@ -525,7 +525,7 @@ export const AICostDashboard: Component = () => {
                       <For each={data().targets}>
                         {(t) => (
                           <TableRow class="border-b border-border-subtle">
-                            <TableCell class="py-2 pr-4 text-slate-700 dark:text-slate-300 font-mono text-xs">
+                            <TableCell class="py-2 pr-4 text-base-content font-mono text-xs">
                               {t.target_type}:{t.target_id}
                             </TableCell>
                             <TableCell class="py-2 px-2 text-right text-base-content">
@@ -536,7 +536,7 @@ export const AICostDashboard: Component = () => {
                                 {formatUSD(t.estimated_usd ?? 0)}
                               </Show>
                             </TableCell>
-                            <TableCell class="py-2 px-2 text-right text-slate-700 dark:text-slate-300">
+                            <TableCell class="py-2 px-2 text-right text-base-content">
                               {formatNumber(t.calls)}
                             </TableCell>
                             <TableCell class="py-2 px-2 text-right text-base-content">
@@ -569,7 +569,7 @@ export const AICostDashboard: Component = () => {
                           <TableCell class="py-2 pr-4 font-medium text-base-content">
                             {PROVIDER_NAMES[pm.provider as keyof typeof PROVIDER_NAMES] || pm.provider}
                           </TableCell>
-                          <TableCell class="py-2 pr-4 text-slate-700 dark:text-slate-300 font-mono text-xs">
+                          <TableCell class="py-2 pr-4 text-base-content font-mono text-xs">
                             {pm.model}
                           </TableCell>
                           <TableCell class="py-2 px-2 text-right text-base-content">
@@ -580,10 +580,10 @@ export const AICostDashboard: Component = () => {
                               {formatUSD(pm.estimated_usd ?? 0)}
                             </Show>
                           </TableCell>
-                          <TableCell class="py-2 px-2 text-right text-slate-700 dark:text-slate-300">
+                          <TableCell class="py-2 px-2 text-right text-base-content">
                             {formatNumber(pm.input_tokens)}
                           </TableCell>
-                          <TableCell class="py-2 px-2 text-right text-slate-700 dark:text-slate-300">
+                          <TableCell class="py-2 px-2 text-right text-base-content">
                             {formatNumber(pm.output_tokens)}
                           </TableCell>
                           <TableCell class="py-2 px-2 text-right text-base-content">

@@ -46,7 +46,7 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
         <button
           type="button"
           onClick={() => setExpanded(!expanded())}
-          class="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100"
+          class="flex items-center gap-2 text-xs font-medium text-base-content hover:text-base-content"
         >
           <svg
             class={`w-3 h-3 transition-transform ${expanded() ? 'rotate-90' : ''}`}
@@ -75,7 +75,7 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
                     <button
                       type="button"
                       onClick={() => setExpandedCall(expandedCall() === call.id ? null : call.id)}
-                      class="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-800"
+                      class="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-xs hover:bg-surface-hover"
                     >
                       <div class="flex items-center gap-2 min-w-0">
                         <span class="text-muted font-mono w-5 text-right flex-shrink-0">
@@ -104,7 +104,7 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
                         <Show when={call.input}>
                           <div>
                             <div class="text-[10px] font-medium text-muted mb-1">Input</div>
-                            <pre class="text-[11px] font-mono bg-base rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap text-slate-700 dark:text-slate-300">
+                            <pre class="text-[11px] font-mono bg-base rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap text-base-content">
                               {truncate(call.input, 500)}
                             </pre>
                           </div>
@@ -112,7 +112,7 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
                         <Show when={call.output}>
                           <div>
                             <div class="text-[10px] font-medium text-muted mb-1">Output</div>
-                            <pre class="text-[11px] font-mono bg-base rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap text-slate-700 dark:text-slate-300">
+                            <pre class="text-[11px] font-mono bg-base rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap text-base-content">
                               {truncate(call.output, 500)}
                             </pre>
                           </div>

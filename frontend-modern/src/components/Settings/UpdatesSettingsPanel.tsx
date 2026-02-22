@@ -44,16 +44,16 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
         description="Manage version checks and automatic update preferences."
         icon={<RefreshCw class="w-5 h-5" strokeWidth={2} />}
         noPadding
-        bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
+        bodyClass="divide-y divide-border"
       >
-        <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+        <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
           <div class="space-y-4">
             {/* Version Status Section */}
             <div class="rounded-md border border-border overflow-hidden">
               {/* Version Grid */}
               <div class={`grid gap-px ${props.updateInfo()?.available ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
                 {/* Current Version */}
-                <div class="bg-slate-50 dark:bg-slate-800 p-4">
+                <div class="bg-surface-alt p-4">
                   <div class="flex items-start gap-3">
                     <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
                       <Package class="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -103,12 +103,12 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                 {/* Latest Version / Status */}
                 <div class={`p-4 ${props.updateInfo()?.available
                   ? 'bg-green-50 dark:bg-green-900'
-                  : 'bg-slate-50 dark:bg-slate-800'
+                  : 'bg-surface-alt'
                   }`}>
                   <div class="flex items-start gap-3">
                     <div class={`p-2 rounded-md ${props.updateInfo()?.available
                       ? 'bg-green-100 dark:bg-green-800'
-                      : 'bg-slate-100 dark:bg-slate-700'
+                      : 'bg-surface-hover'
                       }`}>
                       <Show when={props.updateInfo()?.available} fallback={
                         <CheckCircle class="w-5 h-5 text-muted" />
@@ -157,7 +157,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                     props.versionInfo()?.isSourceBuild
                   }
                   class={`self-end sm:self-auto min-h-10 sm:min-h-9 px-4 py-2.5 text-sm rounded-md transition-colors flex items-center gap-2 ${props.versionInfo()?.isSourceBuild
-                    ? 'bg-slate-100 dark:bg-slate-700 text-muted cursor-not-allowed'
+                    ? 'bg-surface-hover text-muted cursor-not-allowed'
                     : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                 >
@@ -369,7 +369,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         </button>
                       </div>
                       <p class="ml-0 sm:ml-8 text-xs text-green-600 dark:text-green-400">
-                        Or use Docker Compose: <code class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 rounded text-xs">docker-compose pull && docker-compose up -d</code>
+                        Or use Docker Compose: <code class="px-1.5 py-0.5 bg-surface-hover rounded text-xs">docker-compose pull && docker-compose up -d</code>
                       </p>
                     </div>
                   </Show>
@@ -495,7 +495,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         </svg>
                         View Release Notes
                       </summary>
-                      <pre class="mt-3 p-4 text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap font-mono bg-slate-100 dark:bg-slate-800 rounded-md border border-border max-h-64 overflow-y-auto">
+                      <pre class="mt-3 p-4 text-xs text-base-content whitespace-pre-wrap font-mono bg-surface-alt rounded-md border border-border max-h-64 overflow-y-auto">
                         {props.updateInfo()?.releaseNotes}
                       </pre>
                     </details>
@@ -506,9 +506,9 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
           </div>
         </div>
 
-        <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+        <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
           <div class="space-y-5">
-            <h4 class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+            <h4 class="flex items-center gap-2 text-sm font-medium text-base-content">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -534,7 +534,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                 <div class="flex items-center gap-3">
                   <div class={`p-2 rounded-md ${props.updateChannel() === 'stable'
                     ? 'bg-green-100 dark:bg-green-800'
-                    : 'bg-slate-100 dark:bg-slate-800'
+                    : 'bg-surface-alt'
                     }`}>
                     <svg class={`w-5 h-5 ${props.updateChannel() === 'stable'
                       ? 'text-green-600 dark:text-green-400'
@@ -570,7 +570,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                 <div class="flex items-center gap-3">
                   <div class={`p-2 rounded-md ${props.updateChannel() === 'rc'
                     ? 'bg-blue-100 dark:bg-blue-800'
-                    : 'bg-slate-100 dark:bg-slate-800'
+                    : 'bg-surface-alt'
                     }`}>
                     <svg class={`w-5 h-5 ${props.updateChannel() === 'rc'
                       ? 'text-blue-600 dark:text-blue-400'
@@ -593,7 +593,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
             </div>
 
             {/* Auto Update Toggle */}
-            <div class="p-4 rounded-md border border-border bg-slate-50 dark:bg-slate-800">
+            <div class="p-4 rounded-md border border-border bg-surface-alt">
               <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div class="flex items-center gap-3">
                   <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
@@ -631,7 +631,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                 <div class="mt-4 pt-4 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Check Interval */}
                   <div class="space-y-2">
-                    <label class="text-xs font-medium text-slate-700 dark:text-slate-300">
+                    <label class="text-xs font-medium text-base-content">
                       Check Interval
                     </label>
                     <select
@@ -640,7 +640,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         props.setAutoUpdateCheckInterval(parseInt(e.currentTarget.value));
                         props.setHasUnsavedChanges(true);
                       }}
-                      class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-surface"
+                      class="w-full px-3 py-2 text-sm border border-border rounded-md bg-surface"
                     >
                       <option value="6">Every 6 hours</option>
                       <option value="12">Every 12 hours</option>
@@ -651,7 +651,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
 
                   {/* Check Time */}
                   <div class="space-y-2">
-                    <label class="text-xs font-medium text-slate-700 dark:text-slate-300">
+                    <label class="text-xs font-medium text-base-content">
                       Preferred Time
                     </label>
                     <input
@@ -661,7 +661,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         props.setAutoUpdateTime(e.currentTarget.value);
                         props.setHasUnsavedChanges(true);
                       }}
-                      class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-surface"
+                      class="w-full px-3 py-2 text-sm border border-border rounded-md bg-surface"
                     />
                   </div>
                 </div>

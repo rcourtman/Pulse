@@ -58,7 +58,7 @@ export function RecoveryStatusPanel(props: RecoveryStatusPanelProps) {
               <span class="font-mono font-semibold text-base text-base-content">{props.recovery.totalProtected}</span> total
             </p>
             <p class="text-xs text-muted">
-              Last: <span class="font-mono font-medium text-slate-700 dark:text-slate-200">{formatRelativeTime(props.recovery.latestEventTimestamp ?? undefined, { compact: true }) || '—'}</span>
+              Last: <span class="font-mono font-medium text-base-content">{formatRelativeTime(props.recovery.latestEventTimestamp ?? undefined, { compact: true }) || '—'}</span>
             </p>
           </div>
 

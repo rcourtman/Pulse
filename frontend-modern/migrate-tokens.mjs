@@ -34,6 +34,7 @@ const REPLACEMENTS = [
     ['bg-white dark:bg-gray-800', 'bg-surface', 'surface bg'],
     ['bg-white dark:bg-zinc-800', 'bg-surface', 'surface bg'],
     ['bg-white dark:bg-neutral-800', 'bg-surface', 'surface bg'],
+    ['bg-white dark:bg-slate-900', 'bg-surface', 'surface bg (deep dark)'],
     // Hover surface
     ['bg-slate-50 dark:bg-slate-700', 'bg-surface-hover', 'hover surface'],
     ['bg-gray-50 dark:bg-gray-700', 'bg-surface-hover', 'hover surface'],
@@ -41,22 +42,39 @@ const REPLACEMENTS = [
     ['hover:bg-gray-50 dark:hover:bg-gray-700', 'hover:bg-surface-hover', 'hover surface'],
     ['hover:bg-slate-100 dark:hover:bg-slate-700', 'hover:bg-surface-hover', 'hover surface'],
     ['hover:bg-gray-100 dark:hover:bg-gray-700', 'hover:bg-surface-hover', 'hover surface'],
+    ['hover:bg-slate-50 dark:hover:bg-slate-800', 'hover:bg-surface-hover', 'hover surface (deep)'],
+    ['hover:bg-slate-100 dark:hover:bg-slate-800', 'hover:bg-surface-hover', 'hover surface (deep)'],
     // Base background
     ['bg-slate-100 dark:bg-slate-900', 'bg-base', 'base bg'],
     ['bg-gray-100 dark:bg-gray-900', 'bg-base', 'base bg'],
     ['bg-slate-50 dark:bg-slate-900', 'bg-base', 'base bg'],
     ['bg-gray-50 dark:bg-gray-900', 'bg-base', 'base bg'],
+    // Surface alternatives
+    ['bg-slate-100 dark:bg-slate-800', 'bg-surface-alt', 'surface alt bg'],
+    ['bg-gray-100 dark:bg-gray-800', 'bg-surface-alt', 'surface alt bg'],
+    ['bg-slate-50 dark:bg-slate-800', 'bg-surface-alt', 'surface alt bg'],
+    ['bg-gray-50 dark:bg-gray-800', 'bg-surface-alt', 'surface alt bg'],
+    ['bg-slate-100 dark:bg-slate-700', 'bg-surface-hover', 'surface hover bg'],
+    ['bg-slate-200 dark:bg-slate-700', 'bg-surface-hover', 'surface hover bg (stronger)'],
+    ['bg-slate-200 dark:bg-slate-600', 'bg-surface-hover', 'surface hover bg (strong)'],
+    // Active/selected states
+    ['bg-slate-200 dark:bg-slate-800', 'bg-surface-alt', 'surface alt bg (selected)'],
 
     // ─── Borders ───
     ['border-slate-200 dark:border-slate-700', 'border-border', 'standard border'],
     ['border-gray-200 dark:border-gray-700', 'border-border', 'standard border'],
     ['border-slate-200 dark:border-slate-600', 'border-border', 'standard border'],
     ['border-gray-200 dark:border-gray-600', 'border-border', 'standard border'],
+    ['border-slate-300 dark:border-slate-600', 'border-border', 'input border'],
+    ['border-gray-300 dark:border-gray-600', 'border-border', 'input border'],
+    ['border-slate-300 dark:border-slate-700', 'border-border', 'input border'],
+    ['border-gray-300 dark:border-gray-700', 'border-border', 'input border'],
     ['border-slate-100 dark:border-slate-800', 'border-border-subtle', 'subtle border'],
     ['border-gray-100 dark:border-gray-800', 'border-border-subtle', 'subtle border'],
     // Dividers
     ['divide-slate-200 dark:divide-slate-700', 'divide-border', 'divider'],
     ['divide-gray-200 dark:divide-gray-700', 'divide-border', 'divider'],
+    ['divide-slate-100 dark:divide-slate-800', 'divide-border', 'divider subtle'],
 
     // ─── Text ───
     // Base text (headings, body)
@@ -66,6 +84,12 @@ const REPLACEMENTS = [
     ['text-gray-900 dark:text-white', 'text-base-content', 'base text'],
     ['text-slate-800 dark:text-slate-200', 'text-base-content', 'base text'],
     ['text-gray-800 dark:text-gray-200', 'text-base-content', 'base text'],
+    ['text-slate-800 dark:text-slate-100', 'text-base-content', 'base text'],
+    ['text-slate-800 dark:text-white', 'text-base-content', 'base text'],
+    ['text-slate-700 dark:text-slate-200', 'text-base-content', 'base text'],
+    ['text-slate-700 dark:text-slate-300', 'text-base-content', 'base text'],
+    ['text-gray-700 dark:text-gray-200', 'text-base-content', 'base text'],
+    ['text-gray-700 dark:text-gray-300', 'text-base-content', 'base text'],
     // Muted text (descriptions, secondary)
     ['text-slate-500 dark:text-slate-400', 'text-muted', 'muted text'],
     ['text-gray-500 dark:text-gray-400', 'text-muted', 'muted text'],
@@ -73,6 +97,9 @@ const REPLACEMENTS = [
     ['text-gray-600 dark:text-gray-400', 'text-muted', 'muted text'],
     ['text-slate-400 dark:text-slate-500', 'text-muted', 'muted text'],
     ['text-gray-400 dark:text-gray-500', 'text-muted', 'muted text'],
+    ['text-slate-600 dark:text-slate-300', 'text-muted', 'muted text'],
+    ['text-slate-500 dark:text-slate-300', 'text-muted', 'muted text'],
+    ['text-slate-600 dark:text-slate-200', 'text-muted', 'muted text'],
     // Placeholder text
     ['placeholder-slate-400 dark:placeholder-slate-500', 'placeholder-muted', 'placeholder'],
     ['placeholder-gray-400 dark:placeholder-gray-500', 'placeholder-muted', 'placeholder'],
@@ -82,6 +109,12 @@ const REPLACEMENTS = [
     ['ring-gray-200 dark:ring-gray-700', 'ring-border', 'ring'],
     ['focus:ring-slate-300 dark:focus:ring-slate-600', 'focus:ring-border', 'focus ring'],
     ['focus:ring-gray-300 dark:focus:ring-gray-600', 'focus:ring-border', 'focus ring'],
+
+    // ─── Hover text ───
+    ['hover:text-slate-900 dark:hover:text-slate-100', 'hover:text-base-content', 'hover text'],
+    ['hover:text-slate-900 dark:hover:text-white', 'hover:text-base-content', 'hover text'],
+    ['hover:text-slate-800 dark:hover:text-slate-100', 'hover:text-base-content', 'hover text'],
+    ['hover:text-slate-700 dark:hover:text-slate-200', 'hover:text-base-content', 'hover text'],
 ];
 
 // ── Find all .tsx files ──

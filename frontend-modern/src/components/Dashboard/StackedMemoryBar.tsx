@@ -135,7 +135,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
     return (
         <div ref={containerRef} class="metric-text w-full h-4 flex items-center justify-center">
             <div
-                class="relative w-full h-full overflow-hidden bg-slate-200 dark:bg-slate-600 rounded"
+                class="relative w-full h-full overflow-hidden bg-surface-hover rounded"
                 onMouseEnter={tip.onMouseEnter}
                 onMouseLeave={tip.onMouseLeave}
             >
@@ -178,7 +178,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                     <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
                         <span>{displayLabel()}</span>
                         <Show when={showSublabel()}>
-                            <span class="metric-sublabel font-normal text-slate-500 dark:text-slate-300">
+                            <span class="metric-sublabel font-normal text-muted">
                                 {' '}({displaySublabel()})
                             </span>
                         </Show>

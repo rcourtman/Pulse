@@ -75,7 +75,7 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
       style={{ 'touch-action': isDragging() ? 'none' : 'auto' }}
     >
       {/* Track background */}
-      <div class="absolute inset-0 h-3.5 rounded bg-slate-200 dark:bg-slate-600"></div>
+      <div class="absolute inset-0 h-3.5 rounded bg-surface-hover"></div>
 
       {/* Colored fill */}
       <div

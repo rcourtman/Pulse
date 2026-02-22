@@ -114,8 +114,8 @@ export function GitHubStarBanner() {
             {/* Icon */}
             <div class="flex justify-center mb-4">
               <div class="relative">
-                <div class="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center">
-                  <GithubIcon class="w-8 h-8 text-slate-700 dark:text-slate-300" />
+                <div class="w-16 h-16 bg-surface-hover rounded-full flex items-center justify-center">
+                  <GithubIcon class="w-8 h-8 text-base-content" />
                 </div>
                 <div class="absolute -top-1 -right-1 w-7 h-7 bg-yellow-400 rounded-full flex items-center justify-center shadow-sm">
                   <StarIcon class="w-4 h-4 text-yellow-800" />

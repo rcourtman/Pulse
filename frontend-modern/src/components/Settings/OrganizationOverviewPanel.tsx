@@ -90,39 +90,39 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
           description="Review organization metadata, membership footprint, and edit the display name."
           icon={<Building2 class="w-5 h-5" />}
           noPadding
-          bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
+          bodyClass="divide-y divide-border"
         >
           <Show
             when={!loading()}
             fallback={
-              <div class="space-y-5 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+              <div class="space-y-5 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
                 <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {Array.from({ length: 4 }).map(() => (
                     <div class="rounded-md border border-border p-3 space-y-2">
-                      <div class="h-3 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                      <div class="h-5 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                      <div class="h-3 w-20 animate-pulse rounded bg-surface-hover" />
+                      <div class="h-5 w-28 animate-pulse rounded bg-surface-hover" />
                     </div>
                   ))}
                 </div>
 
                 <div class="space-y-2">
-                  <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div class="h-4 w-24 animate-pulse rounded bg-surface-hover" />
                   <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <div class="h-10 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                    <div class="h-10 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                    <div class="h-10 w-full animate-pulse rounded bg-surface-hover" />
+                    <div class="h-10 w-20 animate-pulse rounded bg-surface-hover" />
                   </div>
                 </div>
 
                 <div class="space-y-2">
-                  <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div class="h-4 w-24 animate-pulse rounded bg-surface-hover" />
                   <div class="overflow-hidden rounded-md border border-border">
-                    <div class="h-10 w-full animate-pulse bg-slate-100 dark:bg-slate-800" />
+                    <div class="h-10 w-full animate-pulse bg-surface-alt" />
                     {Array.from({ length: 3 }).map(() => (
                       <div class="border-t border-border-subtle px-3 py-3">
                         <div class="flex items-center gap-3">
-                          <div class="h-4 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                          <div class="h-4 w-14 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
-                          <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                          <div class="h-4 w-40 animate-pulse rounded bg-surface-hover" />
+                          <div class="h-4 w-14 animate-pulse rounded-full bg-surface-hover" />
+                          <div class="h-4 w-24 animate-pulse rounded bg-surface-hover" />
                         </div>
                       </div>
                     ))}
@@ -134,7 +134,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
             <Show when={org()}>
               {(currentOrg) => (
                 <>
-                  <div class="space-y-6 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                  <div class="space-y-6 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
                     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       <div class="rounded-md border border-border p-3">
                         <p class="text-xs uppercase tracking-wide text-muted">Organization</p>
@@ -155,7 +155,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
                     </div>
 
                     <div class="space-y-2">
-                      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300" for="org-display-name-input">
+                      <label class="block text-sm font-medium text-base-content" for="org-display-name-input">
                         Display Name
                       </label>
                       <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -183,7 +183,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
 
                   </div>
 
-                  <div class="space-y-2 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                  <div class="space-y-2 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
                     <h4 class="text-sm font-semibold text-base-content">Membership</h4>
                     <div class="mt-4 -mx-4 sm:mx-0 overflow-x-auto w-full">
                       <PulseDataGrid

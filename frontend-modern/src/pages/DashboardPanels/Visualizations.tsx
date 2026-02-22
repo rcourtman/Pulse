@@ -51,7 +51,7 @@ export const MiniDonut: Component<MiniDonutProps> = (props) => {
             </svg>
 
             {props.centerText && (
-                <span class="absolute text-[10px] font-bold text-slate-700 dark:text-slate-200">
+                <span class="absolute text-[10px] font-bold text-base-content">
                     {props.centerText}
                 </span>
             )}
@@ -116,7 +116,7 @@ export const StackedBar: Component<StackedBarProps> = (props) => {
     const total = createMemo(() => props.data.reduce((sum, item) => sum + item.value, 0));
 
     return (
-        <div class={`flex w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800 ${props.className || ''}`} style={{ height: `${props.height || 8}px` }}>
+        <div class={`flex w-full overflow-hidden rounded-full bg-surface-alt ${props.className || ''}`} style={{ height: `${props.height || 8}px` }}>
             <For each={props.data}>
                 {(item) => {
                     const percent = createMemo(() => (total() > 0 ? (item.value / total()) * 100 : 0));

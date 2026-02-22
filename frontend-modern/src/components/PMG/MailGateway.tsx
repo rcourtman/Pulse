@@ -67,7 +67,7 @@ const ThreatBar: Component<{
           {formatCompact(props.count)} ({formatPct(props.percent)})
         </span>
       </div>
-      <div class="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+      <div class="h-1.5 bg-surface-hover rounded-full overflow-hidden">
         <div
           class={`h-full ${barColor()} transition-all duration-500 rounded-full`}
           style={{ width: `${Math.min(props.percent * 10, 100)}%` }} // Scale up for visibility (10% threat = full bar)
@@ -90,7 +90,7 @@ const StatusBadge: Component<{ status: string; health?: string }> = (props) => {
     if (status.includes('error') || status === 'offline') {
       return { bg: 'bg-red-100 dark:bg-red-900', text: 'text-red-700 dark:text-red-400', dot: 'bg-red-500', label: 'Offline' };
     }
-    return { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-muted', dot: 'bg-slate-400', label: status || 'Unknown' };
+    return { bg: 'bg-surface-alt', text: 'text-muted', dot: 'bg-slate-400', label: status || 'Unknown' };
   });
 
   return (
@@ -374,7 +374,7 @@ const MailGateway: Component = () => {
                     blocked today
                   </div>
                 </div>
-                <div class={`p-2 rounded-md ${aggregateStats().totalVirus > 0 ? 'bg-red-100 dark:bg-red-900' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                <div class={`p-2 rounded-md ${aggregateStats().totalVirus > 0 ? 'bg-red-100 dark:bg-red-900' : 'bg-surface-alt'}`}>
                   <svg class={`w-5 h-5 ${aggregateStats().totalVirus > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0-10.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.75c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.57-.598-3.75h-.152c-3.196 0-6.1-1.249-8.25-3.286zm0 13.036h.008v.008H12v-.008z" />
                   </svg>
@@ -438,7 +438,7 @@ const MailGateway: Component = () => {
                   placeholder="Search gateways..."
                   value={searchTerm()}
                   onInput={(e) => setSearchTerm(e.currentTarget.value)}
-                  class="w-full pl-9 pr-8 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-base-content placeholder-muted focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
+                  class="w-full pl-9 pr-8 py-1.5 text-sm border border-border rounded-md bg-surface text-base-content placeholder-muted focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
                 />
                 <svg class="absolute left-3 top-2 h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -540,7 +540,7 @@ const MailGateway: Component = () => {
                   return (
                     <Card padding="none" tone="card" class="overflow-hidden">
                       {/* Instance Header */}
-                      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-slate-50 dark:bg-slate-800 border-b border-border">
+                      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-surface-alt border-b border-border">
                         <div class="flex items-center gap-3">
                           <a
                             href={pmg.host || `https://${pmg.name}:8006`}
@@ -552,7 +552,7 @@ const MailGateway: Component = () => {
                           </a>
                           <StatusBadge status={pmg.status || ''} health={pmg.connectionHealth} />
                           <Show when={pmg.version}>
-                            <span class="text-xs text-muted bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">
+                            <span class="text-xs text-muted bg-surface-hover px-1.5 py-0.5 rounded">
                               v{pmg.version}
                             </span>
                           </Show>
@@ -590,17 +590,17 @@ const MailGateway: Component = () => {
                         {/* Stats Grid */}
                         <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
                           {/* Mail Flow */}
-                          <div class="bg-slate-50 dark:bg-slate-800 rounded-md p-3">
+                          <div class="bg-surface-alt rounded-md p-3">
                             <div class="text-xs text-muted mb-1">Total (24h)</div>
                             <div class="text-lg font-bold text-base-content">{formatCompact(stats().total)}</div>
                             <div class="text-[10px] text-slate-400">{formatNum(Math.round(stats().total / 24))}/hr</div>
                           </div>
-                          <div class="bg-slate-50 dark:bg-slate-800 rounded-md p-3">
+                          <div class="bg-surface-alt rounded-md p-3">
                             <div class="text-xs text-muted mb-1">Inbound</div>
                             <div class="text-lg font-bold text-base-content">{formatCompact(stats().inbound)}</div>
                             <div class="text-[10px] text-slate-400">{formatBytes(stats().bytesIn)}</div>
                           </div>
-                          <div class="bg-slate-50 dark:bg-slate-800 rounded-md p-3">
+                          <div class="bg-surface-alt rounded-md p-3">
                             <div class="text-xs text-muted mb-1">Outbound</div>
                             <div class="text-lg font-bold text-base-content">{formatCompact(stats().outbound)}</div>
                             <div class="text-[10px] text-slate-400">{formatBytes(stats().bytesOut)}</div>
@@ -630,24 +630,24 @@ const MailGateway: Component = () => {
                           <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs">
                             <div class="flex items-center gap-2">
                               <span class="text-muted">RBL Rejects:</span>
-                              <span class="font-medium text-slate-700 dark:text-slate-300">{formatNum(stats().rbl)}</span>
+                              <span class="font-medium text-base-content">{formatNum(stats().rbl)}</span>
                             </div>
                             <div class="flex items-center gap-2">
                               <span class="text-muted">Pregreet:</span>
-                              <span class="font-medium text-slate-700 dark:text-slate-300">{formatNum(stats().pregreet)}</span>
+                              <span class="font-medium text-base-content">{formatNum(stats().pregreet)}</span>
                             </div>
                             <div class="flex items-center gap-2">
                               <span class="text-muted">Greylisted:</span>
-                              <span class="font-medium text-slate-700 dark:text-slate-300">{formatNum(stats().greylist)}</span>
+                              <span class="font-medium text-base-content">{formatNum(stats().greylist)}</span>
                             </div>
                             <div class="flex items-center gap-2">
                               <span class="text-muted">Bounces In/Out:</span>
-                              <span class="font-medium text-slate-700 dark:text-slate-300">{formatNum(stats().bouncesIn)}/{formatNum(stats().bouncesOut)}</span>
+                              <span class="font-medium text-base-content">{formatNum(stats().bouncesIn)}/{formatNum(stats().bouncesOut)}</span>
                             </div>
                             <Show when={pmg.mailStats?.averageProcessTimeMs}>
                               <div class="flex items-center gap-2">
                                 <span class="text-muted">Avg Process:</span>
-                                <span class="font-medium text-slate-700 dark:text-slate-300">{formatDec((pmg.mailStats?.averageProcessTimeMs || 0) / 1000, 2)}s</span>
+                                <span class="font-medium text-base-content">{formatDec((pmg.mailStats?.averageProcessTimeMs || 0) / 1000, 2)}s</span>
                               </div>
                             </Show>
                           </div>
@@ -676,7 +676,7 @@ const MailGateway: Component = () => {
                                       const isOnline = (node.status || '').toLowerCase() === 'online';
 
                                       return (
-                                        <TableRow class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                                        <TableRow class="hover:bg-surface-hover">
                                           <TableCell class="py-1.5 font-medium text-base-content">{node.name}</TableCell>
                                           <TableCell class="py-1.5">
                                             <span class={`inline-flex items-center gap-1 ${isOnline ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
@@ -713,7 +713,7 @@ const MailGateway: Component = () => {
                                   const totalScored = pmg.spamDistribution?.reduce((sum, b) => sum + b.count, 0) || 1;
                                   const pct = (bucket.count / totalScored) * 100;
                                   return (
-                                    <div class="flex-shrink-0 text-center bg-slate-50 dark:bg-slate-800 rounded px-2 py-1.5 min-w-[50px]">
+                                    <div class="flex-shrink-0 text-center bg-surface-alt rounded px-2 py-1.5 min-w-[50px]">
                                       <div class="text-[10px] text-muted">{bucket.score}</div>
                                       <div class="text-xs font-semibold text-base-content">{formatCompact(bucket.count)}</div>
                                       <div class="text-[10px] text-slate-400">{formatDec(pct)}%</div>

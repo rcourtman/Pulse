@@ -109,7 +109,7 @@ export const TokenRevealDialog: Component = () => {
                         </span>
                       </Show>
                     </div>
-                    <p class="text-sm text-slate-700 dark:text-slate-300 leading-snug">{hint}</p>
+                    <p class="text-sm text-base-content leading-snug">{hint}</p>
                   </div>
                 </div>
 
@@ -118,7 +118,7 @@ export const TokenRevealDialog: Component = () => {
                     Token value
                   </div>
                   <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-                    <code class="flex-1 rounded-md border border-green-300 dark:border-green-700 bg-white dark:bg-slate-900 px-4 py-3 font-mono text-base font-semibold text-base-content break-all">
+                    <code class="flex-1 rounded-md border border-green-300 dark:border-green-700 bg-surface px-4 py-3 font-mono text-base font-semibold text-base-content break-all">
                       {info.token}
                     </code>
                     <button
@@ -135,7 +135,7 @@ export const TokenRevealDialog: Component = () => {
                       <span>
                         {' '}
                         · Hint:{' '}
-                        <code class="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 font-mono text-[11px] text-muted">
+                        <code class="rounded bg-surface-alt px-1.5 py-0.5 font-mono text-[11px] text-muted">
                           {tokenHint as string}
                         </code>
                       </span>
@@ -147,7 +147,7 @@ export const TokenRevealDialog: Component = () => {
                   <button
                     type="button"
                     onClick={handleDismiss}
-                    class="rounded-md border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-surface-hover transition-colors"
+                    class="rounded-md border border-border px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover transition-colors"
                   >
                     Dismiss
                   </button>

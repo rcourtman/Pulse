@@ -422,7 +422,7 @@ const LoginForm: Component<{
               </div>
               <div class="flex-1">
                 <div class="font-semibold text-sm text-base-content">Demo Mode</div>
-                <div class="text-sm text-slate-600 dark:text-slate-300">
+                <div class="text-sm text-muted">
                   Login with <code class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">demo</code> / <code class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">demo</code>
                 </div>
               </div>
@@ -502,11 +502,11 @@ const LoginForm: Component<{
               </Show>
               <Show when={showLocalLogin}>
                 <div class="flex items-center gap-3 pt-2">
-                  <span class="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+                  <span class="flex-1 h-px bg-surface-hover" />
                   <span class="text-xs uppercase tracking-wide text-muted">
                     or
                   </span>
-                  <span class="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+                  <span class="flex-1 h-px bg-surface-hover" />
                 </div>
                 <p class="text-xs text-center text-muted">
                   Use your admin credentials to sign in below.
@@ -550,11 +550,11 @@ const LoginForm: Component<{
               </Show>
               <Show when={showLocalLogin}>
                 <div class="flex items-center gap-3 pt-2">
-                  <span class="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+                  <span class="flex-1 h-px bg-surface-hover" />
                   <span class="text-xs uppercase tracking-wide text-muted">
                     or
                   </span>
-                  <span class="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+                  <span class="flex-1 h-px bg-surface-hover" />
                 </div>
                 <p class="text-xs text-center text-muted">
                   Use your admin credentials to sign in below.
@@ -637,7 +637,7 @@ const LoginForm: Component<{
                 />
                 <label
                   for="remember-me"
-                  class="ml-2 block text-sm text-slate-700 dark:text-slate-300 cursor-pointer"
+                  class="ml-2 block text-sm text-base-content cursor-pointer"
                 >
                   Remember me
                 </label>

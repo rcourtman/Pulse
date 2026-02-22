@@ -281,7 +281,7 @@ describe('infrastructureSelectors', () => {
     it('returns medium emphasis for moderate outliers', () => {
       expect(getOutlierEmphasis(27, stats)).toEqual({
         fontWeight: '500',
-        color: 'text-slate-800 dark:text-slate-100',
+        color: 'text-base-content',
         showOutlierHint: true,
       });
     });

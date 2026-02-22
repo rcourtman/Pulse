@@ -526,7 +526,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
     <div class="space-y-6">
       <Show when={showSamlUpsell()}>
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
-          <div class="w-full max-w-lg bg-white dark:bg-slate-900 rounded-md shadow-sm border border-border mx-4">
+          <div class="w-full max-w-lg bg-surface rounded-md shadow-sm border border-border mx-4">
             <div class="flex items-center justify-between px-6 py-4 border-b border-border">
               <div>
                 <h3 class="text-lg font-semibold text-base-content">Add SAML Provider</h3>
@@ -542,14 +542,14 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
               </button>
             </div>
             <div class="px-6 py-5 space-y-4">
-              <p class="text-sm text-slate-600 dark:text-slate-300">
+              <p class="text-sm text-muted">
                 SAML 2.0 and multi-provider SSO requires Pro.
               </p>
               <div class="flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowSamlUpsell(false)}
-                  class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600"
+                  class="px-4 py-2 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600"
                 >
                   Not now
                 </button>
@@ -571,7 +571,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
 
       {/* License banner */}
       <Show when={licenseLoaded() && !hasAdvancedSSO() && !loading()}>
-        <div class="p-4 bg-slate-50 dark:bg-slate-800 border border-border rounded-md">
+        <div class="p-4 bg-surface-alt border border-border rounded-md">
           <div class="flex flex-col sm:flex-row items-center gap-4">
             <div class="flex-1">
               <h4 class="text-base font-semibold text-base-content">Advanced SSO</h4>
@@ -612,7 +612,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
               <button
                 type="button"
                 onClick={() => openAddModal('saml')}
-                class="min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-md hover:bg-surface-hover transition-colors flex items-center gap-1.5"
+                class="min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors flex items-center gap-1.5"
               >
                 <Plus class="w-4 h-4" />
                 Add SAML
@@ -622,7 +622,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
               <button
                 type="button"
                 onClick={() => setShowSamlUpsell(true)}
-                class="min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-md hover:bg-surface-hover transition-colors flex items-center gap-1.5"
+                class="min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors flex items-center gap-1.5"
               >
                 <Plus class="w-4 h-4" />
                 Add SAML (Pro)
@@ -634,7 +634,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
       >
         {/* Content */}
         <Show when={loading()}>
-          <div class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+          <div class="flex items-center gap-3 text-sm text-muted">
             <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
             Loading SSO providers...
           </div>
@@ -652,14 +652,14 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
           <div class="space-y-3">
             <For each={providers()}>
               {(provider) => (
-                <div class={`p-4 rounded-md border ${provider.enabled ? 'bg-surface border-border' : 'bg-slate-50 dark:bg-slate-800 border-border opacity-60'}`}>
+                <div class={`p-4 rounded-md border ${provider.enabled ? 'bg-surface border-border' : 'bg-surface-alt border-border opacity-60'}`}>
                   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div class="flex items-center gap-3 min-w-0">
-                      <div class="p-2 rounded-md bg-slate-100 dark:bg-slate-700">
+                      <div class="p-2 rounded-md bg-surface-hover">
                         {provider.type === 'oidc' ? (
-                          <Globe class="w-5 h-5 text-slate-600 dark:text-slate-300" />
+                          <Globe class="w-5 h-5 text-muted" />
                         ) : (
-                          <Key class="w-5 h-5 text-slate-600 dark:text-slate-300" />
+                          <Key class="w-5 h-5 text-muted" />
                         )}
                       </div>
                       <div class="min-w-0">
@@ -799,7 +799,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                           type="button"
                           onClick={testConnection}
                           disabled={testing() || !canTest()}
-                          class="px-3 py-2 text-sm font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                          class="px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                           title="Test connection to IdP"
                         >
                           {testing() ? 'Testing...' : 'Test'}
@@ -844,15 +844,15 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
               {/* SAML-specific fields */}
               <Show when={form.type === 'saml'}>
                 <div class="space-y-4">
-                  <div class="bg-slate-50 dark:bg-slate-800 border border-border rounded-md p-3">
-                    <p class="text-xs text-slate-700 dark:text-slate-300">
+                  <div class="bg-surface-alt border border-border rounded-md p-3">
+                    <p class="text-xs text-base-content">
                       <strong>Setup:</strong> Provide either IdP Metadata URL (preferred) or configure SSO URL + Certificate manually.
                       Use the SP Metadata URL below to configure your Identity Provider.
                     </p>
                     <Show when={publicUrl()}>
                       <div class="mt-2 flex items-center gap-2">
-                        <span class="text-xs text-slate-600 dark:text-slate-300">SP Metadata:</span>
-                        <code class="text-xs bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">
+                        <span class="text-xs text-muted">SP Metadata:</span>
+                        <code class="text-xs bg-surface-hover px-2 py-0.5 rounded">
                           {publicUrl()}/api/saml/{form.id || '{id}'}/metadata
                         </code>
                       </div>
@@ -873,7 +873,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                         type="button"
                         onClick={testConnection}
                         disabled={testing() || !canTest()}
-                        class="px-3 py-2 text-sm font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                        class="px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                         title="Test connection to IdP"
                       >
                         {testing() ? 'Testing...' : 'Test'}
@@ -882,7 +882,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                         type="button"
                         onClick={fetchMetadataPreview}
                         disabled={loadingPreview() || !form.samlIdpMetadataUrl.trim()}
-                        class="px-3 py-2 text-sm font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center gap-1"
+                        class="px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center gap-1"
                         title="Preview IdP metadata XML"
                       >
                         <Eye class="w-4 h-4" />
@@ -969,7 +969,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                         onChange={(e) => setForm('samlAllowIdpInitiated', e.currentTarget.checked)}
                         class="rounded border-slate-300"
                       />
-                      <span class="text-slate-700 dark:text-slate-300">Allow IdP-initiated SSO</span>
+                      <span class="text-base-content">Allow IdP-initiated SSO</span>
                     </label>
                   </div>
                 </div>
@@ -1006,19 +1006,19 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                           <Show when={testResult()?.details?.entityId}>
                             <div class="flex gap-2">
                               <dt class="text-muted">Entity ID:</dt>
-                              <dd class="text-slate-700 dark:text-slate-300 truncate">{testResult()?.details?.entityId}</dd>
+                              <dd class="text-base-content truncate">{testResult()?.details?.entityId}</dd>
                             </div>
                           </Show>
                           <Show when={testResult()?.details?.ssoUrl}>
                             <div class="flex gap-2">
                               <dt class="text-muted">SSO URL:</dt>
-                              <dd class="text-slate-700 dark:text-slate-300 truncate">{testResult()?.details?.ssoUrl}</dd>
+                              <dd class="text-base-content truncate">{testResult()?.details?.ssoUrl}</dd>
                             </div>
                           </Show>
                           <Show when={testResult()?.details?.tokenEndpoint}>
                             <div class="flex gap-2">
                               <dt class="text-muted">Token Endpoint:</dt>
-                              <dd class="text-slate-700 dark:text-slate-300 truncate">{testResult()?.details?.tokenEndpoint}</dd>
+                              <dd class="text-base-content truncate">{testResult()?.details?.tokenEndpoint}</dd>
                             </div>
                           </Show>
                           <Show when={testResult()?.details?.certificates && testResult()!.details!.certificates!.length > 0}>
@@ -1027,7 +1027,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                               <dd class="space-y-1">
                                 <For each={testResult()?.details?.certificates}>
                                   {(cert) => (
-                                    <div class={`text-xs px-2 py-1 rounded ${cert.isExpired ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+                                    <div class={`text-xs px-2 py-1 rounded ${cert.isExpired ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300' : 'bg-surface-hover text-base-content'}`}>
                                       <span class="font-medium">{cert.subject}</span>
                                       <span class="mx-1">•</span>
                                       <span>Expires: {new Date(cert.notAfter).toLocaleDateString()}</span>
@@ -1065,7 +1065,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                 </button>
 
                 <Show when={advancedOpen()}>
-                  <div class="mt-4 space-y-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-md">
+                  <div class="mt-4 space-y-4 p-4 bg-surface-alt rounded-md">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div class={formField}>
                         <label class={labelClass()}>Allowed Groups</label>
@@ -1120,7 +1120,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-surface-hover"
+                  class="px-4 py-2 text-sm font-medium text-base-content border border-border rounded-md hover:bg-surface-hover"
                   disabled={saving()}
                 >
                   Cancel
@@ -1153,7 +1153,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
               <button
                 type="button"
                 onClick={() => setDeleteConfirm(null)}
-                class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-surface-hover"
+                class="px-4 py-2 text-sm font-medium text-base-content border border-border rounded-md hover:bg-surface-hover"
               >
                 Cancel
               </button>
@@ -1189,7 +1189,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
             </div>
 
             {/* Parsed info summary */}
-            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800 border-b border-border flex-shrink-0">
+            <div class="px-6 py-4 bg-surface-alt border-b border-border flex-shrink-0">
               <h4 class="text-sm font-medium text-base-content mb-3">Parsed Information</h4>
               <dl class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 <div>
@@ -1218,7 +1218,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                     <dd class="space-y-1">
                       <For each={metadataPreview()?.parsed.certificates}>
                         {(cert) => (
-                          <div class={`text-xs px-2 py-1 rounded ${cert.isExpired ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+                          <div class={`text-xs px-2 py-1 rounded ${cert.isExpired ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300' : 'bg-surface-hover text-base-content'}`}>
                             <span class="font-medium">{cert.subject}</span>
                             <span class="mx-1">•</span>
                             <span>Expires: {new Date(cert.notAfter).toLocaleDateString()}</span>
@@ -1246,7 +1246,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                       notificationStore.success('XML copied to clipboard');
                     }
                   }}
-                  class="px-2 py-1 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded hover:bg-slate-200 dark:hover:bg-slate-600 flex items-center gap-1"
+                  class="px-2 py-1 text-xs font-medium text-muted bg-surface-hover rounded hover:bg-slate-200 dark:hover:bg-slate-600 flex items-center gap-1"
                 >
                   <Copy class="w-3 h-3" />
                   Copy
@@ -1262,7 +1262,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
               <button
                 type="button"
                 onClick={() => setShowMetadataPreview(false)}
-                class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-surface-hover"
+                class="px-4 py-2 text-sm font-medium text-base-content border border-border rounded-md hover:bg-surface-hover"
               >
                 Close
               </button>

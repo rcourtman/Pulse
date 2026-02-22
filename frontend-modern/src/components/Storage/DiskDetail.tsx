@@ -139,7 +139,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
           <span class="font-semibold text-base-content text-sm">
             {diskData().model || 'Unknown Disk'}
           </span>
-          <span class="text-muted font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-border">
+          <span class="text-muted font-mono bg-surface-alt px-1.5 py-0.5 rounded border border-border">
             {diskData().devPath}
           </span>
           <span class="text-muted">
@@ -159,7 +159,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
             <select
               value={chartRange()}
               onChange={(e) => setChartRange(e.currentTarget.value as HistoryTimeRange)}
-              class="text-[11px] font-medium pl-2 pr-6 py-1 rounded-md border border-border bg-surface text-slate-700 dark:text-slate-200 cursor-pointer focus:ring-1 focus:ring-blue-500 focus:border-blue-500 appearance-none shadow-sm hover:border-slate-300 dark:hover:border-slate-500 transition-colors"
+              class="text-[11px] font-medium pl-2 pr-6 py-1 rounded-md border border-border bg-surface text-base-content cursor-pointer focus:ring-1 focus:ring-blue-500 focus:border-blue-500 appearance-none shadow-sm hover:border-slate-300 dark:hover:border-slate-500 transition-colors"
               style={{ "background-image": "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")", "background-repeat": "no-repeat", "background-position": "right 6px center" }}
             >
               <option value="1h">Last 1 hour</option>
@@ -265,9 +265,9 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
       {/* Live Performance Sparklines */}
       <Show when={metricResourceId()}>
         <div class="space-y-2">
-          <h4 class="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+          <h4 class="text-xs font-semibold text-base-content flex items-center gap-2">
             Live I/O (30m)
-            <span class="text-[10px] font-normal text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">Real-time</span>
+            <span class="text-[10px] font-normal text-slate-400 bg-surface-alt px-1.5 py-0.5 rounded">Real-time</span>
           </h4>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">

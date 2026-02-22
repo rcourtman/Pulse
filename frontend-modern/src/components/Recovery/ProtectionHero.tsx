@@ -46,7 +46,7 @@ export const ProtectionHero: Component<ProtectionHeroProps> = (props) => {
     <Show when={props.summary.total > 0}>
       <Card padding="sm">
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div class="flex items-center gap-3 rounded-md border border-border bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
+          <div class="flex items-center gap-3 rounded-md border border-border bg-surface-alt px-3 py-2.5">
             <MiniDonut size={32} strokeWidth={4} data={donutData()} centerText={String(props.summary.total)} />
             <div class="min-w-0">
               <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Protected</div>
@@ -55,7 +55,7 @@ export const ProtectionHero: Component<ProtectionHeroProps> = (props) => {
             </div>
           </div>
 
-          <div class="flex items-center gap-3 rounded-md border border-border bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
+          <div class="flex items-center gap-3 rounded-md border border-border bg-surface-alt px-3 py-2.5">
             <div class="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center flex-shrink-0">
               <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -74,12 +74,12 @@ export const ProtectionHero: Component<ProtectionHeroProps> = (props) => {
             </div>
           </div>
 
-          <div class="flex items-center gap-3 rounded-md border border-border bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
+          <div class="flex items-center gap-3 rounded-md border border-border bg-surface-alt px-3 py-2.5">
             <div
               class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
               classList={{
                 'bg-amber-100 dark:bg-amber-900': issues() > 0,
-                'bg-slate-100 dark:bg-slate-800': issues() === 0,
+                'bg-surface-alt': issues() === 0,
               }}
             >
               <svg
@@ -117,12 +117,12 @@ export const ProtectionHero: Component<ProtectionHeroProps> = (props) => {
             </div>
           </div>
 
-          <div class="flex items-center gap-3 rounded-md border border-border bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
+          <div class="flex items-center gap-3 rounded-md border border-border bg-surface-alt px-3 py-2.5">
             <div
               class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
               classList={{
                 'bg-orange-100 dark:bg-orange-900': props.summary.stale > 0,
-                'bg-slate-100 dark:bg-slate-800': props.summary.stale === 0,
+                'bg-surface-alt': props.summary.stale === 0,
               }}
             >
               <svg
@@ -167,7 +167,7 @@ export const ProtectionHero: Component<ProtectionHeroProps> = (props) => {
           </div>
         </div>
 
-        <div class="mt-3 h-1.5 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-700">
+        <div class="mt-3 h-1.5 rounded-full overflow-hidden bg-surface-hover">
           <div class="flex h-full">
             {segmentPercentages().map((segment) => (
               <div class={`h-full transition-all duration-500 ${segment.color}`} style={{ width: `${segment.width}%` }} />

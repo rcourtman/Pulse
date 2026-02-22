@@ -239,7 +239,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
         when={miniMode() && hasDisks()}
         fallback={
           <div
-            class="relative w-full h-full overflow-hidden bg-slate-200 dark:bg-slate-600 rounded"
+            class="relative w-full h-full overflow-hidden bg-surface-hover rounded"
             onMouseEnter={handleMouseEnter}
             onMouseLeave={tip.onMouseLeave}
           >
@@ -285,7 +285,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                   </span>
                 </Show>
                 <Show when={showSublabel()}>
-                  <span class="metric-sublabel font-normal text-slate-500 dark:text-slate-300">
+                  <span class="metric-sublabel font-normal text-muted">
                     {' '}({displaySublabel()})
                   </span>
                 </Show>

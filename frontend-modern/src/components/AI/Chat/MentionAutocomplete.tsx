@@ -147,7 +147,7 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
               <button
                 type="button"
                 class={`w-full px-3 py-2 flex items-center gap-3 text-left hover:bg-surface-hover transition-colors ${
-                  index() === selectedIndex() ? 'bg-slate-100 dark:bg-slate-700' : ''
+                  index() === selectedIndex() ? 'bg-surface-hover' : ''
                 }`}
                 onClick={() => props.onSelect(resource)}
                 onMouseEnter={() => setSelectedIndex(index())}
@@ -176,11 +176,11 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
           </For>
         </div>
         <div class="px-3 py-1.5 border-t border-border text-xs text-muted flex items-center gap-2">
-          <span class="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[10px]">↑↓</span>
+          <span class="px-1.5 py-0.5 bg-surface-hover rounded text-[10px]">↑↓</span>
           navigate
-          <span class="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[10px]">↵</span>
+          <span class="px-1.5 py-0.5 bg-surface-hover rounded text-[10px]">↵</span>
           select
-          <span class="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[10px]">esc</span>
+          <span class="px-1.5 py-0.5 bg-surface-hover rounded text-[10px]">esc</span>
           close
         </div>
       </div>

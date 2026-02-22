@@ -54,6 +54,7 @@
     --color-bg-base: theme('colors.slate.100');
     --color-bg-surface: theme('colors.white');
     --color-bg-surface-hover: theme('colors.slate.50');
+    --color-bg-surface-alt: theme('colors.slate.100');
     --color-border-subtle: theme('colors.slate.100');
     --color-border-base: theme('colors.slate.200');
     --color-text-base: theme('colors.slate.900');
@@ -65,6 +66,7 @@
     --color-bg-base: theme('colors.slate.900');
     --color-bg-surface: theme('colors.slate.800');
     --color-bg-surface-hover: theme('colors.slate.750', #2d3748);
+    --color-bg-surface-alt: theme('colors.slate.800');
     /* Fallback */
     --color-border-subtle: theme('colors.slate.800');
     --color-border-base: theme('colors.slate.700');
@@ -519,12 +521,9 @@ body,
 }
 
 /* Glassmorphism Utilities */
+/* Card styles using semantic tokens */
 .card {
-  @apply bg-white dark:bg-slate-800 border border-white dark:border-slate-700 shadow-sm;
-}
-
-.card {
-  @apply bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700;
+  @apply bg-surface border border-border shadow-sm;
 }
 
 .card-hover {

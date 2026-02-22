@@ -38,31 +38,31 @@ export function KPIStrip(props: KPIStripProps) {
   return (
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
       <a href={INFRASTRUCTURE_PATH} class="group block">
-        <Card hoverable border={false} padding="none" class="h-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 group-hover:bg-slate-100 dark:group-hover:bg-slate-700 transition-colors">
+        <Card hoverable border={false} padding="none" class="h-full px-3.5 py-2.5 bg-surface-alt group-hover:bg-slate-100 dark:group-hover:bg-slate-700 transition-colors">
           <p class="text-[11px] font-medium text-muted uppercase tracking-wide">Infrastructure</p>
           <p class="text-2xl font-mono font-semibold text-base-content mt-0.5">
             {props.infrastructure.total}
           </p>
           <p class="text-xs text-muted mt-0.5">
-            <span class="font-mono font-medium text-slate-700 dark:text-slate-300">{props.infrastructure.online}</span> online
+            <span class="font-mono font-medium text-base-content">{props.infrastructure.online}</span> online
           </p>
         </Card>
       </a>
 
       <a href={WORKLOADS_PATH} class="group block">
-        <Card hoverable border={false} padding="none" class="h-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 group-hover:bg-slate-100 dark:group-hover:bg-slate-700 transition-colors">
+        <Card hoverable border={false} padding="none" class="h-full px-3.5 py-2.5 bg-surface-alt group-hover:bg-slate-100 dark:group-hover:bg-slate-700 transition-colors">
           <p class="text-[11px] font-medium text-muted uppercase tracking-wide">Workloads</p>
           <p class="text-2xl font-mono font-semibold text-base-content mt-0.5">
             {props.workloads.total}
           </p>
           <p class="text-xs text-muted mt-0.5">
-            <span class="font-mono font-medium text-slate-700 dark:text-slate-300">{props.workloads.running}</span> running
+            <span class="font-mono font-medium text-base-content">{props.workloads.running}</span> running
           </p>
         </Card>
       </a>
 
       <a href={buildStoragePath()} class="group block">
-        <Card hoverable border={false} padding="none" class="h-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 group-hover:bg-slate-100 dark:group-hover:bg-slate-700 transition-colors">
+        <Card hoverable border={false} padding="none" class="h-full px-3.5 py-2.5 bg-surface-alt group-hover:bg-slate-100 dark:group-hover:bg-slate-700 transition-colors">
           <p class="text-[11px] font-medium text-muted uppercase tracking-wide">Storage</p>
           <p class="text-2xl font-mono font-semibold text-base-content mt-0.5">
             {Math.round(props.storage.capacityPercent)}%

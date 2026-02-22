@@ -480,9 +480,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       id={`finding-${finding.id}`}
       class={`p-3 cursor-pointer transition-colors ${finding.status === 'active'
         ? finding.acknowledgedAt
-          ? 'opacity-60 hover:opacity-80 bg-slate-50 dark:bg-slate-800'
-          : 'hover:bg-slate-50 dark:hover:bg-slate-800'
-        : 'opacity-60 bg-slate-50 dark:bg-slate-800 hover:opacity-80'
+          ? 'opacity-60 hover:opacity-80 bg-surface-alt'
+          : 'hover:bg-surface-hover'
+        : 'opacity-60 bg-surface-alt hover:opacity-80'
         }`}
       onClick={() => {
         if (expandedId() === finding.id) {
@@ -674,7 +674,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         {finding.description}
       </p>
       <Show when={finding.recommendation}>
-        <p class="text-sm text-slate-700 dark:text-slate-300 mt-2">
+        <p class="text-sm text-base-content mt-2">
           <span class="font-medium">Recommendation:</span> {finding.recommendation}
         </p>
       </Show>
@@ -689,14 +689,14 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       </Show>
 
       <Show when={finding.lifecycle && finding.lifecycle.length > 0}>
-        <div class="mt-3 p-2 rounded border border-border bg-slate-50 dark:bg-slate-800">
-          <div class="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">Lifecycle</div>
+        <div class="mt-3 p-2 rounded border border-border bg-surface-alt">
+          <div class="text-xs font-medium text-base-content mb-2">Lifecycle</div>
           <div class="space-y-1">
             <For each={[...(finding.lifecycle || [])].slice(-6).reverse()}>
               {(event) => (
                 <div class="text-xs text-muted flex items-start justify-between gap-2">
                   <span class="truncate">
-                    <span class="font-medium text-slate-700 dark:text-slate-300">{formatLifecycleType(event.type)}</span>
+                    <span class="font-medium text-base-content">{formatLifecycleType(event.type)}</span>
                     <Show when={event.message}>
                       {' '}
                       <span>{event.message}</span>
@@ -718,7 +718,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       <Show when={editingNoteId() === finding.id}>
         <div class="mt-3 p-2 rounded border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900" onClick={(e) => e.stopPropagation()}>
           <textarea
-            class="w-full text-sm rounded border border-slate-300 dark:border-slate-600 bg-surface text-base-content px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+            class="w-full text-sm rounded border border-border bg-surface text-base-content px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-blue-500"
             rows={3}
             value={noteText()}
             onInput={(e) => setNoteText(e.currentTarget.value)}
@@ -736,7 +736,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <button
               type="button"
               onClick={handleCancelNote}
-              class="px-3 py-1 text-xs font-medium rounded border border-slate-300 dark:border-slate-600 hover:bg-surface-hover"
+              class="px-3 py-1 text-xs font-medium rounded border border-border hover:bg-surface-hover"
             >
               Cancel
             </button>
@@ -744,7 +744,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         </div>
       </Show>
       <Show when={editingNoteId() !== finding.id && finding.userNote}>
-        <div class="mt-3 p-2 rounded border border-border bg-slate-50 dark:bg-slate-800 flex items-start gap-2">
+        <div class="mt-3 p-2 rounded border border-border bg-surface-alt flex items-start gap-2">
           <svg class="w-4 h-4 text-muted mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
           </svg>
@@ -768,7 +768,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <button
             type="button"
             onClick={(e) => handleStartEditNote(finding, e)}
-            class="px-2 py-1 rounded border border-border hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1"
+            class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
           >
             <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
@@ -794,7 +794,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <button
               type="button"
               onClick={(e) => handleAcknowledge(finding, e)}
-              class="px-2 py-1 rounded border border-border hover:bg-slate-50 dark:hover:bg-slate-800"
+              class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
               disabled={actionLoading() === finding.id}
             >
               Acknowledge
@@ -803,7 +803,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <button
             type="button"
             onClick={(e) => handleSnooze(finding, 1, e)}
-            class="px-2 py-1 rounded border border-border hover:bg-slate-50 dark:hover:bg-slate-800"
+            class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
             disabled={actionLoading() === finding.id}
           >
             Snooze 1h
@@ -811,7 +811,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <button
             type="button"
             onClick={(e) => handleSnooze(finding, 24, e)}
-            class="px-2 py-1 rounded border border-border hover:bg-slate-50 dark:hover:bg-slate-800"
+            class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
             disabled={actionLoading() === finding.id}
           >
             Snooze 24h
@@ -819,7 +819,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <button
             type="button"
             onClick={(e) => handleSnooze(finding, 168, e)}
-            class="px-2 py-1 rounded border border-border hover:bg-slate-50 dark:hover:bg-slate-800"
+            class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
             disabled={actionLoading() === finding.id}
           >
             Snooze 7d
@@ -835,7 +835,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <button
             type="button"
             onClick={(e) => handleStartDismiss(finding, 'expected_behavior', e)}
-            class="px-2 py-1 rounded border border-border hover:bg-slate-50 dark:hover:bg-slate-800"
+            class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
             disabled={actionLoading() === finding.id}
           >
             Dismiss: Expected
@@ -843,7 +843,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <button
             type="button"
             onClick={(e) => handleStartDismiss(finding, 'will_fix_later', e)}
-            class="px-2 py-1 rounded border border-border hover:bg-slate-50 dark:hover:bg-slate-800"
+            class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
             disabled={actionLoading() === finding.id}
           >
             Dismiss: Later
@@ -859,7 +859,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </span>
           </div>
           <textarea
-            class="w-full text-xs px-2 py-1.5 rounded border border-slate-300 dark:border-slate-600 bg-surface text-base-content resize-none focus:outline-none focus:ring-1 focus:ring-red-400"
+            class="w-full text-xs px-2 py-1.5 rounded border border-border bg-surface text-base-content resize-none focus:outline-none focus:ring-1 focus:ring-red-400"
             rows={2}
             placeholder="Optional note (for learning context)..."
             value={dismissNote()}
@@ -940,13 +940,13 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               <For each={plan().steps}>
                 {(step) => (
                   <div class="flex items-start gap-2 text-sm">
-                    <span class="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-medium text-muted">
+                    <span class="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-surface-hover text-xs font-medium text-muted">
                       {step.order}
                     </span>
                     <div class="flex-1 min-w-0">
-                      <div class="text-slate-700 dark:text-slate-300">{step.action}</div>
+                      <div class="text-base-content">{step.action}</div>
                       <Show when={step.command}>
-                        <div class="mt-1 font-mono text-[11px] whitespace-pre-wrap break-words text-muted bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded">
+                        <div class="mt-1 font-mono text-[11px] whitespace-pre-wrap break-words text-muted bg-surface-alt px-2 py-1 rounded">
                           {step.command}
                         </div>
                       </Show>
@@ -970,7 +970,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               <button
                 type="button"
                 onClick={(e) => handleDismissPlan(plan(), e)}
-                class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-muted text-xs font-medium rounded"
+                class="px-3 py-1.5 bg-slate-100 hover:bg-surface-hover dark:hover:bg-slate-600 text-muted text-xs font-medium rounded"
               >
                 Dismiss
               </button>
@@ -991,8 +991,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               type="button"
               onClick={() => setFilter('active')}
               class={`px-2 py-1 rounded-l border ${filter() === 'active'
-                ? 'bg-slate-50 dark:bg-slate-800 text-base-content border-slate-300 dark:border-slate-600 shadow-sm'
-                : 'border-transparent text-muted hover:text-slate-900 dark:hover:text-white'
+                ? 'bg-surface-alt text-base-content border-border shadow-sm'
+                : 'border-transparent text-muted hover:text-base-content'
                 }`}
             >
               Active
@@ -1001,8 +1001,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               type="button"
               onClick={() => setFilter('all')}
               class={`px-2 py-1 border-y border-x ${filter() === 'all'
-                ? 'bg-slate-50 dark:bg-slate-800 text-base-content border-slate-300 dark:border-slate-600 shadow-sm'
-                : 'border-transparent text-muted hover:text-slate-900 dark:hover:text-white'
+                ? 'bg-surface-alt text-base-content border-border shadow-sm'
+                : 'border-transparent text-muted hover:text-base-content'
                 }`}
             >
               All
@@ -1011,8 +1011,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               type="button"
               onClick={() => setFilter('resolved')}
               class={`px-2 py-1 border-y border-r ${filter() === 'resolved'
-                ? 'bg-slate-50 dark:bg-slate-800 text-base-content border-slate-300 dark:border-slate-600 shadow-sm'
-                : 'border-transparent text-muted hover:text-slate-900 dark:hover:text-white'
+                ? 'bg-surface-alt text-base-content border-border shadow-sm'
+                : 'border-transparent text-muted hover:text-base-content'
                 } ${aiIntelligenceStore.needsAttentionCount > 0 || aiIntelligenceStore.pendingApprovalCount > 0 ? '' : 'rounded-r border-r'}`}
             >
               Resolved
@@ -1023,7 +1023,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 onClick={() => setFilter('attention')}
                 class={`px-2 py-1 border-y border-r ${filter() === 'attention'
                   ? 'bg-amber-50 dark:bg-amber-900 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-sm'
-                  : 'border-transparent text-muted hover:text-slate-900 dark:hover:text-white'
+                  : 'border-transparent text-muted hover:text-base-content'
                   } ${aiIntelligenceStore.pendingApprovalCount > 0 ? '' : 'rounded-r border-r'}`}
               >
                 Needs Attention ({aiIntelligenceStore.needsAttentionCount})
@@ -1035,7 +1035,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 onClick={() => setFilter('approvals')}
                 class={`px-2 py-1 rounded-r border-y border-r ${filter() === 'approvals'
                   ? 'bg-amber-50 dark:bg-amber-900 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-sm'
-                  : 'border-transparent text-muted hover:text-slate-900 dark:hover:text-white'
+                  : 'border-transparent text-muted hover:text-base-content'
                   }`}
               >
                 Approvals ({aiIntelligenceStore.pendingApprovalCount})
@@ -1045,7 +1045,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <select
             value={sortBy()}
             onChange={(e) => setSortBy(e.currentTarget.value as 'severity' | 'time')}
-            class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-surface"
+            class="text-xs px-2 py-1 rounded border border-border bg-surface"
           >
             <option value="severity">By Severity</option>
             <option value="time">By Time</option>
@@ -1097,7 +1097,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <div>
-                      <p class="font-medium text-slate-700 dark:text-slate-300">No active findings</p>
+                      <p class="font-medium text-base-content">No active findings</p>
                       <p class="text-xs mt-1">Your infrastructure looks healthy!</p>
                     </div>
                     <Show when={props.nextPatrolAt || props.lastPatrolAt || props.patrolIntervalMs}>

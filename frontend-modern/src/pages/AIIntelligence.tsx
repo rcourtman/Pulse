@@ -681,7 +681,7 @@ export function AIIntelligence() {
         {/* Top row: Title and refresh */}
         <div class="flex items-center justify-between gap-4 mb-3">
           <div class="flex items-center gap-3">
-            <PulsePatrolLogo class="w-6 h-6 text-slate-700 dark:text-slate-200" />
+            <PulsePatrolLogo class="w-6 h-6 text-base-content" />
             <div title="Pulse Patrol constantly monitors your infrastructure, investigates alerts, and can automatically fix issues based on your autonomy settings.">
               <h1 class="text-lg font-semibold text-base-content">Patrol</h1>
               <p class="text-sm text-muted">
@@ -721,7 +721,7 @@ export function AIIntelligence() {
             <button
               onClick={() => loadAllData()}
               disabled={isRefreshing()}
-              class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 transition-colors"
+              class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 transition-colors"
             >
               <RefreshCwIcon class={`w-4 h-4 ${isRefreshing() ? 'animate-spin' : ''}`} />
               Refresh
@@ -740,7 +740,7 @@ export function AIIntelligence() {
               size="sm"
               ariaLabel="Toggle Patrol"
             />
-            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">
+            <span class="text-sm font-medium text-base-content">
               {patrolEnabledLocal() ? 'Patrol Active' : 'Patrol Disabled'}
             </span>
           </div>
@@ -754,7 +754,7 @@ export function AIIntelligence() {
               disabled={!patrolEnabledLocal()}
               class={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all shadow-sm ${showAdvancedSettings()
                 ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-800'
-                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-750'
+                : 'bg-white text-slate-700 border border-slate-200 hover:bg-surface-alt dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-750'
                 } ${!patrolEnabledLocal() ? 'opacity-50 cursor-not-allowed hidden' : ''}`}
             >
               <SettingsIcon class="w-4 h-4" />
@@ -783,7 +783,7 @@ export function AIIntelligence() {
                         value={patrolModel()}
                         onChange={(e) => handleModelChange(e.currentTarget.value)}
                         disabled={isUpdatingSettings() || !patrolEnabledLocal()}
-                        class="w-full text-sm bg-base border border-border rounded-md py-2 pl-3 pr-8 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                        class="w-full text-sm bg-base border border-border rounded-md py-2 pl-3 pr-8 text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
                       >
                         <option value="">Default ({defaultModel().split(':').pop() || 'not set'})</option>
                         <Show when={patrolModelStale()}>
@@ -809,7 +809,7 @@ export function AIIntelligence() {
                         value={patrolInterval()}
                         onChange={(e) => handleIntervalChange(parseInt(e.currentTarget.value))}
                         disabled={isUpdatingSettings() || !patrolEnabledLocal()}
-                        class="w-full text-sm bg-base border border-border rounded-md py-2 pl-3 pr-8 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                        class="w-full text-sm bg-base border border-border rounded-md py-2 pl-3 pr-8 text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
                       >
                         <For each={scheduleOptions()}>
                           {(preset) => (
@@ -854,7 +854,7 @@ export function AIIntelligence() {
                                 ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-[0_1px_3px_rgba(0,0,0,0.1)]'
                                 : isDisabled()
                                   ? 'text-slate-400 dark:text-slate-600'
-                                  : 'text-muted hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+                                  : 'text-muted hover:text-slate-900 dark:hover:text-slate-200 hover:bg-surface-hover'
                                 } ${isDisabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                               {level === 'monitor' ? 'Monitor' : level === 'approval' ? 'Investigate' : 'Auto-fix'}

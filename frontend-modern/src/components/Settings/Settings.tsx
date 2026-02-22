@@ -2252,11 +2252,11 @@ const Settings: Component<SettingsProps> = (props) => {
                         placeholder="Search settings..."
                         value={searchQuery()}
                         onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                        class="w-full pl-9 pr-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm text-base-content placeholder-gray-400"
+                        class="w-full pl-9 pr-3 py-1.5 bg-surface-alt border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm text-base-content placeholder-gray-400"
                       />
                       <Show when={!searchQuery()}>
                         <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:flex items-center">
-                          <kbd class="px-1.5 py-0.5 text-[10px] font-semibold text-muted bg-gray-100 dark:bg-gray-800 rounded border border-border">Any key</kbd>
+                          <kbd class="px-1.5 py-0.5 text-[10px] font-semibold text-muted bg-surface-alt rounded border border-border">Any key</kbd>
                         </div>
                       </Show>
                     </div>
@@ -2303,7 +2303,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   title={sidebarCollapsed() ? item.label : undefined}
                                 >
                                   <div class="flex items-center gap-3.5 lg:gap-2.5 w-full">
-                                    <div class={`flex items-center justify-center rounded-md lg:rounded-none w-8 h-8 lg:w-auto lg:h-auto ${isActive() ? 'bg-blue-100 dark:bg-blue-900 lg:bg-transparent lg:dark:bg-transparent text-blue-600 dark:text-blue-400' : 'bg-gray-100 dark:bg-gray-800 lg:bg-transparent lg:dark:bg-transparent text-muted lg:text-inherit'}`}>
+                                    <div class={`flex items-center justify-center rounded-md lg:rounded-none w-8 h-8 lg:w-auto lg:h-auto ${isActive() ? 'bg-blue-100 dark:bg-blue-900 lg:bg-transparent lg:dark:bg-transparent text-blue-600 dark:text-blue-400' : 'bg-surface-alt lg:bg-transparent lg:dark:bg-transparent text-muted lg:text-inherit'}`}>
                                       <item.icon class="w-5 h-5 lg:w-4 lg:h-4" {...(item.iconProps || {})} />
                                     </div>
                                     <Show when={!sidebarCollapsed()}>
@@ -2401,7 +2401,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 <div class="space-y-6 mt-6">
                   <div class="space-y-4">
                     <Show when={!initialLoadComplete()}>
-                      <div class="flex items-center justify-center rounded-md border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 py-12 text-sm text-muted">
+                      <div class="flex items-center justify-center rounded-md border border-dashed border-border bg-surface-alt py-12 text-sm text-muted">
                         Loading configuration...
                       </div>
                     </Show>
@@ -2531,7 +2531,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             }
                           >
                             <div class="flex flex-col items-center justify-center py-12 px-4 text-center">
-                              <div class="rounded-full bg-gray-100 dark:bg-gray-800 p-4 mb-4">
+                              <div class="rounded-full bg-surface-alt p-4 mb-4">
                                 <Server class="h-8 w-8 text-muted" />
                               </div>
                               <p class="text-base font-medium text-base-content mb-1">
@@ -2645,7 +2645,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   <div class="flex items-start gap-3">
                                     <div class="flex-shrink-0 w-3 h-3 mt-1.5 rounded-full bg-gray-400 animate-pulse"></div>
                                     <div class="flex-1 min-w-0">
-                                      <h4 class="font-medium text-gray-700 dark:text-gray-300">
+                                      <h4 class="font-medium text-base-content">
                                         {server.hostname || `Proxmox VE at ${server.ip}`}
                                       </h4>
                                       <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
@@ -2691,7 +2691,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 <div class="space-y-6 mt-6">
                   <div class="space-y-4">
                     <Show when={!initialLoadComplete()}>
-                      <div class="flex items-center justify-center rounded-md border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 py-12 text-sm text-muted">
+                      <div class="flex items-center justify-center rounded-md border border-dashed border-border bg-surface-alt py-12 text-sm text-muted">
                         Loading configuration...
                       </div>
                     </Show>
@@ -2819,7 +2819,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             }
                           >
                             <div class="flex flex-col items-center justify-center py-12 px-4 text-center">
-                              <div class="rounded-full bg-gray-100 dark:bg-gray-800 p-4 mb-4">
+                              <div class="rounded-full bg-surface-alt p-4 mb-4">
                                 <HardDrive class="h-8 w-8 text-muted" />
                               </div>
                               <p class="text-base font-medium text-base-content mb-1">
@@ -2933,7 +2933,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   <div class="flex items-start gap-3">
                                     <div class="flex-shrink-0 w-3 h-3 mt-1.5 rounded-full bg-gray-400 animate-pulse"></div>
                                     <div class="flex-1 min-w-0">
-                                      <h4 class="font-medium text-gray-700 dark:text-gray-300">
+                                      <h4 class="font-medium text-base-content">
                                         {server.hostname || `Backup Server at ${server.ip}`}
                                       </h4>
                                       <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
@@ -2978,7 +2978,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 <div class="space-y-6 mt-6">
                   <div class="space-y-4">
                     <Show when={!initialLoadComplete()}>
-                      <div class="flex items-center justify-center rounded-md border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 py-12 text-sm text-muted">
+                      <div class="flex items-center justify-center rounded-md border border-dashed border-border bg-surface-alt py-12 text-sm text-muted">
                         Loading configuration...
                       </div>
                     </Show>
@@ -3103,7 +3103,7 @@ const Settings: Component<SettingsProps> = (props) => {
 
                           <Show when={pmgNodes().length === 0}>
                             <div class="flex flex-col items-center justify-center py-12 px-4 text-center">
-                              <div class="rounded-full bg-gray-100 dark:bg-gray-800 p-4 mb-4">
+                              <div class="rounded-full bg-surface-alt p-4 mb-4">
                                 <Mail class="h-8 w-8 text-muted" />
                               </div>
                               <p class="text-base font-medium text-base-content mb-1">
@@ -3178,7 +3178,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             discoveredNodes().filter((n) => n.type === 'pmg').length === 0
                           }
                         >
-                          <div class="text-center py-6 text-muted bg-gray-50 dark:bg-gray-800 rounded-md border-2 border-dashed border-gray-300 dark:border-gray-600">
+                          <div class="text-center py-6 text-muted bg-surface-alt rounded-md border-2 border-dashed border-border">
                             <svg
                               class="h-8 w-8 mx-auto mb-2 animate-pulse text-purple-500"
                               viewBox="0 0 24 24"
@@ -3308,7 +3308,7 @@ const Settings: Component<SettingsProps> = (props) => {
                           Use this in production environments where you prefer Pulse to be read-only.
                         </p>
                         <p class="text-xs text-muted mt-1">
-                          Can also be set via environment variable: <code class="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true</code>
+                          Can also be set via environment variable: <code class="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-base-content">PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true</code>
                         </p>
                       </div>
                       <div class="flex-shrink-0">
@@ -3842,7 +3842,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         class="mt-1 text-blue-600 focus:ring-blue-500"
                       />
                       <div class="flex-1">
-                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        <div class="text-sm font-medium text-base-content">
                           Use your login password
                         </div>
                         <div class="text-xs text-muted mt-0.5">
@@ -3859,7 +3859,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         class="mt-1 text-blue-600 focus:ring-blue-500"
                       />
                       <div class="flex-1">
-                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        <div class="text-sm font-medium text-base-content">
                           Use a custom passphrase
                         </div>
                         <div class="text-xs text-muted mt-0.5">
@@ -3940,7 +3940,7 @@ const Settings: Component<SettingsProps> = (props) => {
                     setExportPassphrase('');
                     setUseCustomPassphrase(false);
                   }}
-                  class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-surface-hover"
+                  class="px-4 py-2 border border-border text-base-content rounded-md hover:bg-surface-hover"
                 >
                   Cancel
                 </button>
@@ -3996,7 +3996,7 @@ const Settings: Component<SettingsProps> = (props) => {
                   setShowApiTokenModal(false);
                   setApiTokenInput('');
                 }}
-                class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-surface-hover"
+                class="px-4 py-2 border border-border text-base-content rounded-md hover:bg-surface-hover"
               >
                 Cancel
               </button>
@@ -4079,7 +4079,7 @@ const Settings: Component<SettingsProps> = (props) => {
                     setImportPassphrase('');
                     setImportFile(null);
                   }}
-                  class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-surface-hover"
+                  class="px-4 py-2 border border-border text-base-content rounded-md hover:bg-surface-hover"
                 >
                   Cancel
                 </button>

@@ -158,30 +158,30 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                 <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
                     {/* System Info - always show */}
                     <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                        <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">System</div>
+                        <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">System</div>
                         <div class="space-y-1.5 text-[11px]">
                             <Show when={props.guest.cpus}>
                                 <div class="flex items-center justify-between">
                                     <span class="text-muted">CPUs</span>
-                                    <span class="font-medium text-slate-700 dark:text-slate-200">{props.guest.cpus}</span>
+                                    <span class="font-medium text-base-content">{props.guest.cpus}</span>
                                 </div>
                             </Show>
                             <Show when={props.guest.uptime > 0}>
                                 <div class="flex items-center justify-between">
                                     <span class="text-muted">Uptime</span>
-                                    <span class="font-medium text-slate-700 dark:text-slate-200">{formatUptime(props.guest.uptime)}</span>
+                                    <span class="font-medium text-base-content">{formatUptime(props.guest.uptime)}</span>
                                 </div>
                             </Show>
                             <Show when={props.guest.node}>
                                 <div class="flex items-center justify-between">
                                     <span class="text-muted">Node</span>
-                                    <span class="font-medium text-slate-700 dark:text-slate-200">{props.guest.node}</span>
+                                    <span class="font-medium text-base-content">{props.guest.node}</span>
                                 </div>
                             </Show>
                             <Show when={hasAgentInfo()}>
                                 <div class="flex items-center justify-between">
                                     <span class="text-muted">Agent</span>
-                                    <span class="font-medium text-slate-700 dark:text-slate-200 truncate ml-2" title={isVM(props.guest) ? `QEMU guest agent ${agentVersion()}` : agentVersion()}>
+                                    <span class="font-medium text-base-content truncate ml-2" title={isVM(props.guest) ? `QEMU guest agent ${agentVersion()}` : agentVersion()}>
                                         {isVM(props.guest) ? `QEMU ${agentVersion()}` : agentVersion()}
                                     </span>
                                 </div>
@@ -192,10 +192,10 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                     {/* Guest Info - OS and IPs */}
                     <Show when={hasOsInfo() || ipAddresses().length > 0}>
                         <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                            <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Guest Info</div>
+                            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Guest Info</div>
                             <div class="space-y-2">
                                 <Show when={hasOsInfo()}>
-                                    <div class="text-[11px] text-slate-600 dark:text-slate-300 truncate" title={`${osName()} ${osVersion()}`.trim()}>
+                                    <div class="text-[11px] text-muted truncate" title={`${osName()} ${osVersion()}`.trim()}>
                                         <Show when={osName().length > 0}>
                                             <span class="font-medium">{osName()}</span>
                                         </Show>
@@ -225,8 +225,8 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                     {/* Memory Details */}
                     <Show when={memoryExtraLines() && memoryExtraLines()!.length > 0}>
                         <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                            <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Memory</div>
-                            <div class="space-y-1 text-[11px] text-slate-600 dark:text-slate-300">
+                            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Memory</div>
+                            <div class="space-y-1 text-[11px] text-muted">
                                 <For each={memoryExtraLines()!}>{(line) => <div>{line}</div>}</For>
                             </div>
                         </div>
@@ -235,7 +235,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                     {/* Backup Info */}
                     <Show when={props.guest.lastBackup}>
                         <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                            <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Backup</div>
+                            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Backup</div>
                             <div class="space-y-1 text-[11px]">
                                 {(() => {
                                     const backupDate = new Date(props.guest.lastBackup);
@@ -264,7 +264,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                     {/* Tags */}
                     <Show when={props.guest.tags && (Array.isArray(props.guest.tags) ? props.guest.tags.length > 0 : props.guest.tags.length > 0)}>
                         <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                            <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Tags</div>
+                            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Tags</div>
                             <div class="flex flex-wrap gap-1">
                                 <For each={Array.isArray(props.guest.tags) ? props.guest.tags : (props.guest.tags?.split(',') || [])}>
                                     {(tag) => (
@@ -280,8 +280,8 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                     {/* Filesystems */}
                     <Show when={hasFilesystemDetails() && props.guest.disks && props.guest.disks.length > 0}>
                         <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                            <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Filesystems</div>
-                            <div class="text-[11px] text-slate-600 dark:text-slate-300">
+                            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Filesystems</div>
+                            <div class="text-[11px] text-muted">
                                 <DiskList
                                     disks={props.guest.disks || []}
                                     diskStatusReason={isVM(props.guest) ? (props.guest as any).diskStatusReason : undefined}
@@ -293,7 +293,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                     {/* Network Interfaces */}
                     <Show when={hasNetworkInterfaces()}>
                         <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                            <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Network</div>
+                            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Network</div>
                             <div class="space-y-2">
                                 <For each={networkInterfaces().slice(0, 4)}>
                                     {(iface) => {
@@ -301,7 +301,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                                         const hasTraffic = (iface.rxBytes ?? 0) > 0 || (iface.txBytes ?? 0) > 0;
                                         return (
                                             <div class="rounded border border-dashed border-slate-200 p-2 dark:border-slate-700 overflow-hidden">
-                                                <div class="flex items-center gap-2 text-[11px] font-medium text-slate-700 dark:text-slate-200 min-w-0">
+                                                <div class="flex items-center gap-2 text-[11px] font-medium text-base-content min-w-0">
                                                     <span class="truncate min-w-0">{iface.name || 'interface'}</span>
                                                     <Show when={iface.mac}>
                                                         <span class="text-[9px] text-muted font-normal truncate shrink-0 max-w-[100px]" title={iface.mac}>{iface.mac}</span>

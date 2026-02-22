@@ -339,14 +339,14 @@ export function Infrastructure() {
     <div data-testid="infrastructure-page" class="space-y-4">
       <Show when={!loading() || initialLoadComplete()} fallback={
         <div class="space-y-3 animate-pulse pointer-events-none select-none">
-          <div class="hidden lg:block h-[124px] w-full bg-slate-100 dark:bg-slate-800 rounded-md border border-border"></div>
-          <Card padding="sm" class="h-[52px] bg-slate-100 dark:bg-slate-800"></Card>
+          <div class="hidden lg:block h-[124px] w-full bg-surface-alt rounded-md border border-border"></div>
+          <Card padding="sm" class="h-[52px] bg-surface-alt"></Card>
           <Card padding="none" tone="card" class="h-[600px] overflow-hidden">
             <div class="h-8 border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800"></div>
             <div class="space-y-4 p-4">
-              <div class="h-4 w-1/4 rounded bg-slate-200 dark:bg-slate-700"></div>
-              <div class="h-4 w-1/2 rounded bg-slate-200 dark:bg-slate-700"></div>
-              <div class="h-4 w-1/3 rounded bg-slate-200 dark:bg-slate-700"></div>
+              <div class="h-4 w-1/4 rounded bg-surface-hover"></div>
+              <div class="h-4 w-1/2 rounded bg-surface-hover"></div>
+              <div class="h-4 w-1/3 rounded bg-surface-hover"></div>
             </div>
           </Card>
         </div>
@@ -426,7 +426,7 @@ export function Infrastructure() {
                       <button
                         type="button"
                         onClick={() => setFiltersOpen((o) => !o)}
-                        class="flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-muted"
+                        class="flex items-center gap-1.5 rounded-md bg-surface-hover px-2.5 py-1.5 text-xs font-medium text-muted"
                       >
                         <ListFilterIcon class="w-3.5 h-3.5" />
                         Filters
@@ -440,7 +440,7 @@ export function Infrastructure() {
 
                     <Show when={!isMobile() || filtersOpen()}>
                       <div class="flex flex-wrap items-center gap-2 text-xs text-muted lg:flex-nowrap">
-                        <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                        <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
                           <label for="infra-source-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Source</label>
                           <select
                             id="infra-source-filter"
@@ -455,7 +455,7 @@ export function Infrastructure() {
                           </select>
                         </div>
 
-                        <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                        <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
                           <label for="infra-status-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Status</label>
                           <select
                             id="infra-status-filter"
@@ -470,7 +470,7 @@ export function Infrastructure() {
                           </select>
                         </div>
 
-                        <div class="inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                        <div class="inline-flex rounded-md bg-surface-hover p-0.5">
                           <button
                             type="button"
                             onClick={() => setGroupingMode('grouped')}
@@ -500,7 +500,7 @@ export function Infrastructure() {
                           </button>
                         </div>
 
-                        <div class="hidden lg:inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                        <div class="hidden lg:inline-flex rounded-md bg-surface-hover p-0.5">
                           <button
                             type="button"
                             onClick={() => setSummaryCollapsed((c) => !c)}

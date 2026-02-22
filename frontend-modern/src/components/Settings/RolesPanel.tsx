@@ -151,11 +151,11 @@ export const RolesPanel: Component = () => {
                     </button>
                 }
                 noPadding
-                bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
+                bodyClass="divide-y divide-border"
             >
 
                 <Show when={licenseLoaded() && !hasFeature('rbac') && !loading()}>
-                    <div class="bg-slate-50 dark:bg-slate-800 p-4 sm:p-6 transition-colors border-b border-border-subtle">
+                    <div class="bg-surface-alt p-4 sm:p-6 transition-colors border-b border-border-subtle">
                         <div class="flex flex-col sm:flex-row items-center gap-4">
                             <div class="flex-1 text-center sm:text-left">
                                 <h4 class="text-base font-semibold text-base-content">Custom Roles (Pro)</h4>
@@ -260,7 +260,7 @@ export const RolesPanel: Component = () => {
             {/* Role Modal */}
             <Show when={showModal()}>
                 <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
-                    <div class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-md shadow-sm border border-border mx-4 max-h-[92vh] overflow-hidden">
+                    <div class="w-full max-w-2xl bg-surface rounded-md shadow-sm border border-border mx-4 max-h-[92vh] overflow-hidden">
                         <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
                             <h3 class="text-lg font-semibold text-base-content">
                                 {editingRole() ? 'Edit Role' : 'New Role'}
@@ -277,7 +277,7 @@ export const RolesPanel: Component = () => {
                         <div class="px-4 sm:px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div class="space-y-1">
-                                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                                    <label class="block text-sm font-medium text-base-content">
                                         Role ID
                                     </label>
                                     <input
@@ -290,7 +290,7 @@ export const RolesPanel: Component = () => {
                                     />
                                 </div>
                                 <div class="space-y-1">
-                                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                                    <label class="block text-sm font-medium text-base-content">
                                         Role Name
                                     </label>
                                     <input
@@ -303,7 +303,7 @@ export const RolesPanel: Component = () => {
                                 </div>
                             </div>
                             <div class="space-y-1">
-                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                                <label class="block text-sm font-medium text-base-content">
                                     Description
                                 </label>
                                 <input
@@ -317,7 +317,7 @@ export const RolesPanel: Component = () => {
 
                             <div class="space-y-3 pt-2">
                                 <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                                    <label class="block text-sm font-medium text-base-content">
                                         Permissions
                                     </label>
                                     <button

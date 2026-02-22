@@ -84,7 +84,7 @@ export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
               <div class="mt-2 space-y-2">
                 <For each={group.items}>
                   {(item) => (
-                    <div class="flex items-center justify-between text-sm text-slate-700 dark:text-slate-300">
+                    <div class="flex items-center justify-between text-sm text-base-content">
                       <span>{item.description}</span>
                       <span class="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                         {item.keys}

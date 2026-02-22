@@ -83,7 +83,7 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
                 <ul class="space-y-2">
                   <For each={props.plan.prerequisites}>
                     {(prerequisite) => (
-                      <li class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+                      <li class="flex items-start gap-2 text-sm text-base-content">
                         <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>
@@ -132,7 +132,7 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
                   class="mt-1 w-4 h-4 text-blue-600 bg-slate-100 border-slate-300 rounded focus:ring-blue-500 focus:ring-2"
                   disabled={props.isApplying}
                 />
-                <span class="text-sm text-slate-700 dark:text-slate-300">
+                <span class="text-sm text-base-content">
                   I understand that Pulse will be temporarily unavailable during the update process.
                   {props.plan.rollbackSupport && ' A backup will be created automatically.'}
                 </span>
@@ -141,11 +141,11 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
           </div>
 
           {/* Footer */}
-          <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800 border-t border-border flex items-center justify-end gap-3">
+          <div class="px-6 py-4 bg-surface-alt border-t border-border flex items-center justify-end gap-3">
             <button
               onClick={props.onClose}
               disabled={props.isApplying}
-              class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>

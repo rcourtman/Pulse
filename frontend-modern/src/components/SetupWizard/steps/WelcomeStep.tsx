@@ -112,7 +112,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                 <div class="p-8 max-w-lg mx-auto bg-surface border border-border rounded-md text-left animate-slide-up delay-300 relative group">
                     <div class="relative z-10">
                         <h3 class="text-xl font-semibold text-base-content mb-2 tracking-tight">Unlock Setup</h3>
-                        <p class="text-sm text-slate-500 dark:text-slate-300 mb-6">
+                        <p class="text-sm text-muted mb-6">
                             Run the following command on your host to retrieve the secure bootstrap token:
                         </p>
 
@@ -151,7 +151,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                                     }
                                 }}
                                 onKeyPress={(e) => e.key === 'Enter' && handleUnlock()}
-                                class="w-full px-5 py-3.5 bg-white dark:bg-slate-900 border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
+                                class="w-full px-5 py-3.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
                                 placeholder="Paste your bootstrap token"
                                 autofocus
                             />

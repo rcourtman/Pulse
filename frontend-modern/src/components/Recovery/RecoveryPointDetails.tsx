@@ -322,7 +322,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
                       <div class="mt-0.5 font-mono text-[11px] text-base-content">
                         {formatBytes(datastore.used, 2)} / {formatBytes(datastore.total, 2)} ({Math.round(usagePercent)}%)
                       </div>
-                      <div class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                      <div class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-hover">
                         <div
                           class={`h-full rounded-full transition-[width] ${usageBarColorClass(usagePercent)}`}
                           style={{ width: `${usagePercent}%` }}
@@ -376,7 +376,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
                     <ul class="space-y-1">
                       <For each={pbsFiles()}>
                         {(file) => (
-                          <li class="font-mono text-[11px] break-all text-slate-700 dark:text-slate-200">
+                          <li class="font-mono text-[11px] break-all text-base-content">
                             {file}
                           </li>
                         )}

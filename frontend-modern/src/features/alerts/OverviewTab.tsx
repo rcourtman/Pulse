@@ -60,7 +60,7 @@ function IncidentEventFilters(props: {
   };
 
   return (
-    <div class="flex flex-wrap items-center gap-1.5 p-2 bg-slate-50 dark:bg-slate-800/50 rounded border border-border">
+    <div class="flex flex-wrap items-center gap-1.5 p-2 bg-surface-alt/50 rounded border border-border">
       <span class="text-xs font-medium text-muted mr-1">Filter events:</span>
       <For each={INCIDENT_EVENT_TYPES}>
         {(type) => {
@@ -71,7 +71,7 @@ function IncidentEventFilters(props: {
               class={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
                 selected()
                   ? 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-800'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-surface-alt dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'
               } border`}
             >
               {INCIDENT_EVENT_LABELS[type]}
@@ -288,11 +288,11 @@ export function OverviewTab(props: {
           <div class="flex items-center justify-between">
             <div>
               <p class="text-[10px] sm:text-sm text-muted uppercase tracking-wider sm:normal-case">Last 24 Hours</p>
-              <p class="text-lg sm:text-2xl font-semibold text-slate-700 dark:text-slate-300">
+              <p class="text-lg sm:text-2xl font-semibold text-base-content">
                 {alertStats().total24h}
               </p>
             </div>
-            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-slate-200 dark:bg-slate-600 rounded-full flex items-center justify-center">
+            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-surface-hover rounded-full flex items-center justify-center">
               <svg
                 width="16"
                 height="16"
@@ -354,11 +354,11 @@ export function OverviewTab(props: {
           }
         >
           <Show when={alertStats().acknowledged > 0 || alertStats().active > 0}>
-            <div class="flex flex-wrap items-center justify-between gap-1.5 p-1.5 bg-slate-50 dark:bg-slate-800 rounded-t-lg border border-border">
+            <div class="flex flex-wrap items-center justify-between gap-1.5 p-1.5 bg-surface-alt rounded-t-lg border border-border">
               <Show when={alertStats().acknowledged > 0}>
                 <button
                   onClick={() => props.setShowAcknowledged(!props.showAcknowledged())}
-                  class="text-xs text-muted hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                  class="text-xs text-muted hover:text-base-content transition-colors"
                 >
                   {props.showAcknowledged() ? 'Hide' : 'Show'} acknowledged
                 </button>
@@ -425,7 +425,7 @@ export function OverviewTab(props: {
                   id={`alert-${alert.id}`}
                   class={`border rounded-md p-3 sm:p-4 transition-all ${processingAlerts().has(alert.id) ? 'opacity-50' : ''
                     } ${alert.acknowledged
-                      ? 'opacity-60 border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800'
+                      ? 'opacity-60 border-border bg-surface-alt'
                       : alert.level === 'critical'
                         ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900'
                         : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900'
@@ -498,7 +498,7 @@ export function OverviewTab(props: {
                             </span>
                           </Show>
                         </div>
-                        <p class="text-sm text-slate-700 dark:text-slate-300 mt-1 break-words">
+                        <p class="text-sm text-base-content mt-1 break-words">
                           {alert.message}
                         </p>
                         <p class="text-xs text-muted mt-1">
@@ -509,7 +509,7 @@ export function OverviewTab(props: {
                     <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start justify-end">
                       <button
                         class={`px-3 py-1.5 text-xs font-medium border rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed ${alert.acknowledged
-                          ? 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'
+                          ? 'bg-white dark:bg-slate-700 text-base-content border-border hover:bg-slate-50 dark:hover:bg-slate-600'
                           : 'bg-white dark:bg-slate-700 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900'
                           }`}
                         disabled={processingAlerts().has(alert.id)}
@@ -577,7 +577,7 @@ export function OverviewTab(props: {
                             : 'Acknowledge'}
                       </button>
                       <button
-                        class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600"
+                        class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-white dark:bg-slate-700 text-base-content border-border hover:bg-slate-50 dark:hover:bg-slate-600"
                         onClick={() => {
                           void toggleIncidentTimeline(alert.id, alert.startTime);
                         }}
@@ -602,7 +602,7 @@ export function OverviewTab(props: {
                           {(timeline) => (
                             <div class="space-y-3">
                               <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
-                                <span class="font-medium text-slate-700 dark:text-slate-200">Incident</span>
+                                <span class="font-medium text-base-content">Incident</span>
                                 <span>{timeline().status}</span>
                                 <Show when={timeline().acknowledged}>
                                   <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
@@ -631,7 +631,7 @@ export function OverviewTab(props: {
                                       <div class="space-y-2">
                                         <For each={filteredEvents}>
                                           {(event) => (
-                                            <div class="rounded border border-border bg-slate-50 dark:bg-slate-800 p-2">
+                                            <div class="rounded border border-border bg-surface-alt p-2">
                                               <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
                                                 <span class="font-medium text-base-content">
                                                   {event.summary}
@@ -639,12 +639,12 @@ export function OverviewTab(props: {
                                                 <span>{new Date(event.timestamp).toLocaleString()}</span>
                                               </div>
                                               <Show when={event.details && (event.details as { note?: string }).note}>
-                                                <p class="text-xs text-slate-700 dark:text-slate-300 mt-1">
+                                                <p class="text-xs text-base-content mt-1">
                                                   {(event.details as { note?: string }).note}
                                                 </p>
                                               </Show>
                                               <Show when={event.details && (event.details as { command?: string }).command}>
-                                                <p class="text-xs text-slate-700 dark:text-slate-300 mt-1 font-mono">
+                                                <p class="text-xs text-base-content mt-1 font-mono">
                                                   {(event.details as { command?: string }).command}
                                                 </p>
                                               </Show>
@@ -671,7 +671,7 @@ export function OverviewTab(props: {
                               })()}
                               <div class="flex flex-col gap-2">
                                 <textarea
-                                  class="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 p-2 text-xs text-base-content"
+                                  class="w-full rounded border border-border bg-surface p-2 text-xs text-base-content"
                                   rows={2}
                                   placeholder="Add a note for this incident..."
                                   value={incidentNoteDrafts()[alert.id] || ''}
@@ -682,7 +682,7 @@ export function OverviewTab(props: {
                                 />
                                 <div class="flex justify-end">
                                   <button
-                                    class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-white dark:bg-slate-700 text-base-content border-border hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
                                     disabled={incidentNoteSaving().has(alert.id) || !(incidentNoteDrafts()[alert.id] || '').trim()}
                                     onClick={() => {
                                       void saveIncidentNote(alert.id, alert.startTime);

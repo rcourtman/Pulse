@@ -1,5 +1,5 @@
 const baseField = 'flex flex-col gap-1';
-const baseLabel = 'text-sm font-medium text-slate-700 dark:text-slate-300';
+const baseLabel = 'text-sm font-medium text-base-content';
 const baseHelp = 'text-xs text-muted';
 const baseControl = [
   'w-full min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900',

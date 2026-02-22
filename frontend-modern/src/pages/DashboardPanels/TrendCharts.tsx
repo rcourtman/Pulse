@@ -94,7 +94,7 @@ export function TrendCharts(props: TrendChartsProps) {
               const className = () =>
                 active()
                   ? 'px-2 py-0.5 rounded bg-blue-600 text-white text-[11px] font-medium'
-                  : 'px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 text-[11px] font-medium hover:bg-surface-hover transition-colors';
+                  : 'px-2 py-0.5 rounded border border-border text-base-content text-[11px] font-medium hover:bg-surface-hover transition-colors';
 
               return (
                 <button type="button" class={className()} onClick={() => props.setTrendRange(range)}>

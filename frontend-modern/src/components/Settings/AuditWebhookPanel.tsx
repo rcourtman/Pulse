@@ -111,9 +111,9 @@ export function AuditWebhookPanel() {
                 description="Configure real-time delivery of security audit events to external systems."
                 icon={<Globe class="w-5 h-5" strokeWidth={2} />}
                 noPadding
-                bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
+                bodyClass="divide-y divide-border"
             >
-                <div class="space-y-6 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                <div class="space-y-6 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
                     <p class="text-sm text-muted leading-relaxed">
                         Pulse can send a signed event payload whenever security-relevant activity occurs
                         (logins, settings changes, RBAC updates, and similar audit events).
@@ -123,7 +123,7 @@ export function AuditWebhookPanel() {
                         <div class="space-y-3">
                             <For each={webhookUrls()}>
                                 {(url) => (
-                                    <div class="flex items-center justify-between gap-3 rounded-md border border-border bg-slate-50 dark:bg-slate-800 p-3">
+                                    <div class="flex items-center justify-between gap-3 rounded-md border border-border bg-surface-alt p-3">
                                         <div class="flex items-center gap-3 overflow-hidden min-w-0">
                                             <div class="p-2 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 rounded-md shrink-0">
                                                 <ExternalLink size={16} />
@@ -142,7 +142,7 @@ export function AuditWebhookPanel() {
                             </For>
 
                             <Show when={webhookUrls().length === 0}>
-                                <div class="py-10 flex flex-col items-center justify-center text-muted border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-md">
+                                <div class="py-10 flex flex-col items-center justify-center text-muted border-2 border-dashed border-border rounded-md">
                                     <Globe size={36} class="opacity-40 mb-3" />
                                     <p class="text-sm">No audit webhooks configured yet.</p>
                                 </div>

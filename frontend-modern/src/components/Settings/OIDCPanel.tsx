@@ -258,7 +258,7 @@ export const OIDCPanel: Component<Props> = (props) => {
           disabled={isEnvLocked() || loading() || saving()}
           containerClass="items-center gap-2"
           label={
-            <span class="text-xs font-medium text-slate-600 dark:text-slate-300">
+            <span class="text-xs font-medium text-muted">
               {form.enabled ? 'Enabled' : 'Disabled'}
             </span>
           }
@@ -267,7 +267,7 @@ export const OIDCPanel: Component<Props> = (props) => {
       bodyClass="space-y-5"
     >
       <Show when={licenseLoaded() && !hasFeature('sso') && !loading()}>
-        <div class="p-5 bg-slate-50 dark:bg-slate-800 border border-border rounded-md">
+        <div class="p-5 bg-surface-alt border border-border rounded-md">
           <div class="flex flex-col sm:flex-row items-center gap-4">
             <div class="flex-1">
               <h4 class="text-base font-semibold text-base-content">Single Sign-On</h4>
@@ -288,7 +288,7 @@ export const OIDCPanel: Component<Props> = (props) => {
         </div>
       </Show>
       <form class="space-y-5" onSubmit={handleSave}>
-        <div class="bg-slate-50 dark:bg-slate-800 border border-border rounded-md p-3 text-xs text-slate-700 dark:text-slate-300">
+        <div class="bg-surface-alt border border-border rounded-md p-3 text-xs text-base-content">
           <ol class="space-y-1 list-decimal pl-4">
             <li>Set PUBLIC_URL environment variable</li>
             <li>Register client with your IdP using redirect URL below</li>
@@ -297,7 +297,7 @@ export const OIDCPanel: Component<Props> = (props) => {
           </ol>
         </div>
         <Show when={loading()}>
-          <div class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+          <div class="flex items-center gap-3 text-sm text-muted">
             <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
             Loading OIDC settings...
           </div>
@@ -413,7 +413,7 @@ export const OIDCPanel: Component<Props> = (props) => {
           <div class="space-y-4">
             <button
               type="button"
-              class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+              class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md border border-border px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
               onClick={() => setAdvancedOpen(!advancedOpen())}
             >
               {advancedOpen() ? 'Hide advanced OIDC options' : 'Show advanced OIDC options'}
@@ -552,7 +552,7 @@ export const OIDCPanel: Component<Props> = (props) => {
             <div class="flex w-full sm:w-auto gap-3">
               <button
                 type="button"
-                class="flex-1 sm:flex-none min-h-10 sm:min-h-9 px-4 py-2.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-md hover:bg-surface-hover"
+                class="flex-1 sm:flex-none min-h-10 sm:min-h-9 px-4 py-2.5 border border-border text-base-content rounded-md hover:bg-surface-hover"
                 onClick={() => resetForm(config())}
                 disabled={saving() || loading()}
               >

@@ -108,7 +108,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
           <button
             type="button"
             onClick={() => setFiltersOpen((o) => !o)}
-            class="flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-muted"
+            class="flex items-center gap-1.5 rounded-md bg-surface-hover px-2.5 py-1.5 text-xs font-medium text-muted"
           >
             <ListFilterIcon class="w-3.5 h-3.5" />
             Filters
@@ -128,7 +128,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
             {/* Group By Filter */}
             <Show when={props.groupBy && props.setGroupBy}>
               <div class="max-w-full overflow-x-auto scrollbar-hide">
-              <div class="inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5" role="group" aria-label="Group By">
+              <div class="inline-flex rounded-md bg-surface-hover p-0.5" role="group" aria-label="Group By">
                 <button
                   type="button"
                   onClick={() => props.setGroupBy!('node')}
@@ -155,12 +155,12 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
                 </button>
               </div>
               </div>
-              <div class="h-5 w-px bg-slate-200 dark:bg-slate-600 hidden sm:block"></div>
+              <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
             </Show>
 
             {/* Source Filter */}
             <Show when={props.sourceFilter && props.setSourceFilter}>
-              <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+              <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
                 <label for="storage-source-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Source</label>
                 <select
                   id="storage-source-filter"
@@ -173,11 +173,11 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
                   ))}
                 </select>
               </div>
-              <div class="h-5 w-px bg-slate-200 dark:bg-slate-600 hidden sm:block"></div>
+              <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
             </Show>
 
             {/* Status Filter */}
-            <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+            <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
               <label for="storage-status-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Status</label>
               <select
                 id="storage-status-filter"
@@ -194,7 +194,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
               </select>
             </div>
 
-          <div class="h-5 w-px bg-slate-200 dark:bg-slate-600 hidden sm:block"></div>
+          <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
 
           {/* Sort controls */}
           <div class="flex items-center gap-1.5">
@@ -203,7 +203,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
               onChange={(e) => props.setSortKey(e.currentTarget.value)}
               disabled={props.sortDisabled}
               aria-label="Sort By"
-              class="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-surface text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              class="px-2 py-1 text-xs border border-border rounded-md bg-surface text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {sortOptions.map((option) => (
                 <option value={option.value}>{option.label}</option>
@@ -215,7 +215,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
               onClick={() => props.setSortDirection(props.sortDirection() === 'asc' ? 'desc' : 'asc')}
               disabled={props.sortDisabled}
               aria-label="Sort Direction"
-              class="inline-flex items-center justify-center h-7 w-7 rounded-md border border-slate-300 dark:border-slate-600 text-muted hover:bg-surface-hover transition-colors"
+              class="inline-flex items-center justify-center h-7 w-7 rounded-md border border-border text-muted hover:bg-surface-hover transition-colors"
             >
               <svg
                 class={`h-4 w-4 transition-transform ${props.sortDirection() === 'asc' ? 'rotate-180' : ''}`}
@@ -235,7 +235,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
 
           {/* Column Picker */}
           <Show when={props.columnVisibility}>
-            <div class="h-5 w-px bg-slate-200 dark:bg-slate-600 hidden sm:block"></div>
+            <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
             <ColumnPicker
               columns={props.columnVisibility!.availableToggles()}
               isHidden={props.columnVisibility!.isHiddenByUser}
@@ -246,7 +246,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
 
           {/* Reset Button - Only show when filters are active */}
           <Show when={hasActiveFilters()}>
-            <div class="h-5 w-px bg-slate-200 dark:bg-slate-600 hidden sm:block"></div>
+            <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
             <button
               onClick={() => {
                 props.setSearch('');

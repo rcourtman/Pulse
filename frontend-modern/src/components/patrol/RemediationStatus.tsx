@@ -56,7 +56,7 @@ export const RemediationStatus: Component<RemediationStatusProps> = (props) => {
           {showOutput() ? 'Hide output' : 'Show output'}
         </button>
         <Show when={showOutput()}>
-          <div class="bg-white dark:bg-slate-900 rounded p-2 font-mono mt-1 max-h-32 overflow-auto whitespace-pre-wrap text-[11px] text-slate-700 dark:text-slate-300">
+          <div class="bg-surface rounded p-2 font-mono mt-1 max-h-32 overflow-auto whitespace-pre-wrap text-[11px] text-base-content">
             {props.result.output}
           </div>
         </Show>

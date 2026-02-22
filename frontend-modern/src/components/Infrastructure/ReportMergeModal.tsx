@@ -116,7 +116,7 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
         </button>
       </div>
 
-      <div class="flex-1 overflow-y-auto space-y-4 px-5 py-4 text-sm text-slate-700 dark:text-slate-200">
+      <div class="flex-1 overflow-y-auto space-y-4 px-5 py-4 text-sm text-base-content">
         <div>
           <div class="text-xs font-medium uppercase tracking-wide text-muted">
             Resource

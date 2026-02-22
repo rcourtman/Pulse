@@ -59,7 +59,7 @@ const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphas
   if (stats.count < 4) {
     const ratio = value / stats.max;
     if (ratio >= 0.995) {
-      return { className: 'text-slate-800 dark:text-slate-100 font-medium', showOutlierHint: true };
+      return { className: 'text-base-content font-medium', showOutlierHint: true };
     }
     return { className: 'text-muted', showOutlierHint: false };
   }
@@ -70,13 +70,13 @@ const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphas
       return { className: 'text-slate-900 dark:text-slate-50 font-semibold', showOutlierHint: true };
     }
     if (modifiedZ >= 5.5 && value >= stats.p97) {
-      return { className: 'text-slate-800 dark:text-slate-100 font-medium', showOutlierHint: true };
+      return { className: 'text-base-content font-medium', showOutlierHint: true };
     }
     return { className: 'text-muted', showOutlierHint: false };
   }
 
   if (value >= stats.p99) return { className: 'text-slate-900 dark:text-slate-50 font-semibold', showOutlierHint: true };
-  if (value >= stats.p97) return { className: 'text-slate-800 dark:text-slate-100 font-medium', showOutlierHint: true };
+  if (value >= stats.p97) return { className: 'text-base-content font-medium', showOutlierHint: true };
   if (value > 0) return { className: 'text-muted', showOutlierHint: false };
   return { className: 'text-muted', showOutlierHint: false };
 }
@@ -100,7 +100,7 @@ const BACKUP_STATUS_CONFIG: Record<BackupStatus, { color: string; bgColor: strin
   fresh: { color: 'text-green-600 dark:text-green-400', bgColor: 'bg-green-100 dark:bg-green-900', icon: 'check' },
   stale: { color: 'text-yellow-600 dark:text-yellow-400', bgColor: 'bg-yellow-100 dark:bg-yellow-900', icon: 'warning' },
   critical: { color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-100 dark:bg-red-900', icon: 'x' },
-  never: { color: 'text-muted', bgColor: 'bg-slate-100 dark:bg-slate-800', icon: 'x' },
+  never: { color: 'text-muted', bgColor: 'bg-surface-alt', icon: 'x' },
 };
 
 function BackupIndicator(props: { lastBackup: string | number | null | undefined; isTemplate: boolean }) {
@@ -1151,7 +1151,7 @@ export function GuestRow(props: GuestRowProps) {
               fallback={
                 <button
                   type="button"
-                  class="inline-flex justify-center items-center text-muted hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                  class="inline-flex justify-center items-center text-muted hover:text-base-content transition-colors"
                   title="Open related infrastructure"
                   onClick={(event) => {
                     event.stopPropagation();

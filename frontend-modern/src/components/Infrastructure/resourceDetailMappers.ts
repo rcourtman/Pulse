@@ -456,7 +456,7 @@ export const healthToneClass = (value?: string): string => {
   if (['offline', 'down', 'disconnected', 'error', 'failed'].includes(normalized)) {
     return 'text-red-600 dark:text-red-400';
   }
-  return 'text-slate-700 dark:text-slate-200';
+  return 'text-base-content';
 };
 
 export const formatInteger = (value?: number): string => {

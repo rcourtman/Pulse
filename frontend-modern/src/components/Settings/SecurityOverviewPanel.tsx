@@ -38,7 +38,7 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
           class="overflow-hidden border border-border"
           border={false}
         >
-          <div class="bg-slate-100 dark:bg-slate-800 px-6 py-5 animate-pulse">
+          <div class="bg-surface-alt px-6 py-5 animate-pulse">
             <div class="flex items-center gap-4">
               <div class="w-12 h-12 bg-slate-300 dark:bg-slate-600 rounded-md"></div>
               <div class="flex-1 space-y-2">
@@ -55,8 +55,8 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {[1, 2, 3, 4].map(() => (
                 <div class="rounded-md border border-border p-4 animate-pulse">
-                  <div class="h-4 bg-slate-200 dark:bg-slate-700 rounded w-2/3 mb-2"></div>
-                  <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/2"></div>
+                  <div class="h-4 bg-surface-hover rounded w-2/3 mb-2"></div>
+                  <div class="h-3 bg-surface-hover rounded w-1/2"></div>
                 </div>
               ))}
             </div>
@@ -133,15 +133,15 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
       <Show when={!props.securityStatusLoading() && props.securityStatus()}>
         <Card
           padding="md"
-          class="border border-border bg-slate-50 dark:bg-slate-800"
+          class="border border-border bg-surface-alt"
           border={false}
         >
           <div class="flex items-start gap-3">
-            <div class="p-1.5 bg-slate-100 dark:bg-slate-700 rounded-md flex-shrink-0">
+            <div class="p-1.5 bg-surface-hover rounded-md flex-shrink-0">
               <Info class="w-4 h-4 text-muted" />
             </div>
             <div class="text-xs text-muted">
-              <p class="font-medium text-slate-700 dark:text-slate-300 mb-1">Security Best Practices</p>
+              <p class="font-medium text-base-content mb-1">Security Best Practices</p>
               <ul class="space-y-0.5 list-disc list-inside">
                 <li>Enable HTTPS via a reverse proxy for encrypted connections</li>
                 <li>Use strong, unique passwords and rotate credentials regularly</li>

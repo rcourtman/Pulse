@@ -394,7 +394,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
                   <span>Progress</span>
                   <span>{status()!.progress}%</span>
                 </div>
-                <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                <div class="w-full bg-surface-hover rounded-full h-2">
                   <div
                     class="bg-blue-600 h-2 rounded-full transition-all duration-300"
                     style={{ width: `${status()!.progress}%` }}
@@ -458,11 +458,11 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
 
           {/* Footer */}
           <Show when={isComplete()}>
-            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800 border-t border-border flex items-center justify-end gap-3">
+            <div class="px-6 py-4 bg-surface-alt border-t border-border flex items-center justify-end gap-3">
               <Show when={!hasError()}>
                 <button
                   onClick={props.onViewHistory}
-                  class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
+                  class="px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover rounded-md transition-colors"
                 >
                   View History
                 </button>

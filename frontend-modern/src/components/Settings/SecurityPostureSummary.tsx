@@ -187,7 +187,7 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
                   ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950'
                   : item.critical
                     ? 'border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950'
-                    : 'border-border bg-slate-50 dark:bg-slate-800'
+                    : 'border-border bg-surface-alt'
                 }`}>
                 <div class="flex items-center justify-between mb-2">
                   <span class="text-sm font-semibold text-base-content">

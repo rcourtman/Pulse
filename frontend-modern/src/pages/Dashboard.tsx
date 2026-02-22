@@ -170,11 +170,11 @@ export default function Dashboard() {
             <div class="border border-border rounded-md p-4 sm:p-5 bg-surface">
               <div class="space-y-4">
                 <For each={['h-4 w-44', 'h-10 w-40']}>
-                  {(dims) => <div data-testid="dashboard-skeleton-block" class={`animate-pulse bg-slate-200 dark:bg-slate-700 rounded ${dims}`} />}
+                  {(dims) => <div data-testid="dashboard-skeleton-block" class={`animate-pulse bg-surface-hover rounded ${dims}`} />}
                 </For>
                 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                   <For each={Array.from({ length: 5 })}>
-                    {() => <div data-testid="dashboard-skeleton-block" class="animate-pulse bg-slate-200 dark:bg-slate-700 rounded h-8" />}
+                    {() => <div data-testid="dashboard-skeleton-block" class="animate-pulse bg-surface-hover rounded h-8" />}
                   </For>
                 </div>
               </div>
@@ -182,7 +182,7 @@ export default function Dashboard() {
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <For each={Array.from({ length: 2 })}>
                 {() => (
-                  <div data-testid="dashboard-skeleton-block" class="border border-border rounded-md p-4 sm:p-5 bg-surface"><div class="animate-pulse bg-slate-200 dark:bg-slate-700 rounded h-24" /></div>
+                  <div data-testid="dashboard-skeleton-block" class="border border-border rounded-md p-4 sm:p-5 bg-surface"><div class="animate-pulse bg-surface-hover rounded h-24" /></div>
                 )}
               </For>
             </div>

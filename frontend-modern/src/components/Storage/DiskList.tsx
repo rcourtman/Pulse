@@ -183,7 +183,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
     }
     return {
       color: 'text-slate-700 dark:text-slate-400',
-      bgColor: 'bg-slate-100 dark:bg-slate-700',
+      bgColor: 'bg-surface-hover',
       text: 'UNKNOWN',
     };
   };
@@ -198,7 +198,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
       case 'sas':
         return 'bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-300';
       default:
-        return 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-300';
+        return 'bg-surface-hover text-slate-800 dark:text-slate-300';
     }
   };
 
@@ -250,7 +250,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
             <Show
               when={hasPVENodes()}
               fallback={
-                <div class="mt-4 p-4 bg-slate-50 dark:bg-slate-800 border border-border rounded-md text-left">
+                <div class="mt-4 p-4 bg-surface-alt border border-border rounded-md text-left">
                   <p class="text-sm text-muted">
                     No Proxmox nodes configured. Add a Proxmox VE cluster in Settings to monitor physical disks.
                   </p>
@@ -280,7 +280,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
           <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
             <Table class="w-full">
               <TableHeader>
-                <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
+                <TableRow class="bg-surface-alt text-muted border-b border-border">
                   <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     Node
                   </TableHead>
@@ -356,7 +356,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             </span>
                           </TableCell>
                           <TableCell class="px-1.5 sm:px-2 py-0.5 text-xs">
-                            <span class="text-slate-700 dark:text-slate-300">
+                            <span class="text-base-content">
                               {data.model || 'Unknown'}
                             </span>
                           </TableCell>
@@ -394,7 +394,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               when={data.wearout > 0}
                               fallback={<span class="text-slate-400">-</span>}
                             >
-                              <div class="relative w-24 h-3.5 rounded overflow-hidden bg-slate-200 dark:bg-slate-600">
+                              <div class="relative w-24 h-3.5 rounded overflow-hidden bg-surface-hover">
                                 <div
                                   class={`absolute top-0 left-0 h-full ${data.wearout >= 50
                                     ? 'bg-green-500 dark:bg-green-500'
@@ -406,7 +406,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                                     }`}
                                   style={{ width: `${data.wearout}%` }}
                                 />
-                                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-slate-800 dark:text-slate-100 leading-none">
+                                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-base-content leading-none">
                                   <span class="whitespace-nowrap px-0.5">{data.wearout}%</span>
                                 </span>
                               </div>
@@ -417,7 +417,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               when={data.smartAttributes?.powerOnHours != null}
                               fallback={<span class="text-slate-400">-</span>}
                             >
-                              <span class="text-slate-700 dark:text-slate-300">
+                              <span class="text-base-content">
                                 {formatPowerOnHours(data.smartAttributes!.powerOnHours!, true)}
                               </span>
                             </Show>
@@ -461,14 +461,14 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             </Show>
                           </TableCell>
                           <TableCell class="px-1.5 sm:px-2 py-0.5 text-xs whitespace-nowrap">
-                            <span class="text-slate-700 dark:text-slate-300">
+                            <span class="text-base-content">
                               {formatBytes(data.size)}
                             </span>
                           </TableCell>
                         </TableRow>
                         <Show when={isSelected()}>
                           <TableRow>
-                            <TableCell colSpan={13} class="bg-slate-50 dark:bg-slate-800 px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
+                            <TableCell colSpan={13} class="bg-surface-alt px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
                               <DiskDetail disk={disk} nodes={props.nodes} />
                             </TableCell>
                           </TableRow>

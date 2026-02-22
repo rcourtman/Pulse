@@ -1059,7 +1059,7 @@ export const UnifiedAgents: Component = () => {
                                 </div>
 
                                 <div class="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
-                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                                    <label class="block text-xs font-medium text-base-content mb-1.5">
                                         Connection URL (Agent → Pulse)
                                     </label>
                                     <div class="flex gap-2">
@@ -1083,7 +1083,7 @@ export const UnifiedAgents: Component = () => {
                                         <span class="font-medium">TLS verification disabled</span> — skip cert checks for self-signed setups. Not recommended for production.
                                     </div>
                                 </Show>
-                                <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer" title="Skip TLS certificate verification (for self-signed certificates)">
+                                <label class="inline-flex items-center gap-2 text-sm text-base-content cursor-pointer" title="Skip TLS certificate verification (for self-signed certificates)">
                                     <input
                                         type="checkbox"
                                         checked={insecureMode()}
@@ -1092,7 +1092,7 @@ export const UnifiedAgents: Component = () => {
                                     />
                                     Skip TLS certificate verification (self-signed certs; not recommended)
                                 </label>
-                                <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer" title="Allow Pulse Patrol to execute diagnostic and fix commands on this agent (auto-fix requires Pulse Pro)">
+                                <label class="inline-flex items-center gap-2 text-sm text-base-content cursor-pointer" title="Allow Pulse Patrol to execute diagnostic and fix commands on this agent (auto-fix requires Pulse Pro)">
                                     <input
                                         type="checkbox"
                                         checked={enableCommands()}
@@ -1110,7 +1110,7 @@ export const UnifiedAgents: Component = () => {
                                     <span class="font-medium">Config signing (optional)</span> — Require signed remote config payloads with <code>PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>. Provide keys via <code>PULSE_AGENT_CONFIG_SIGNING_KEY</code> (Pulse) and <code>PULSE_AGENT_CONFIG_PUBLIC_KEYS</code> (agents).
                                 </div>
                                 <div class="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
-                                    <label for="install-profile-select" class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                                    <label for="install-profile-select" class="block text-xs font-medium text-base-content mb-1.5">
                                         Target profile (optional)
                                     </label>
                                     <select
@@ -1129,7 +1129,7 @@ export const UnifiedAgents: Component = () => {
                                         {getSelectedInstallProfile().description}
                                     </p>
                                     <Show when={getInstallProfileFlags().length > 0}>
-                                        <p class="mt-1.5 text-xs text-slate-600 dark:text-slate-300">
+                                        <p class="mt-1.5 text-xs text-muted">
                                             Adds flags to shell-based install commands: <code>{getInstallProfileFlags().join(' ')}</code>
                                         </p>
                                     </Show>
@@ -1303,11 +1303,11 @@ export const UnifiedAgents: Component = () => {
                                             If Docker, Kubernetes, or Proxmox isn't detected automatically, add these flags to the install command:
                                         </p>
                                         <ul class="mt-2 text-xs text-muted list-disc list-inside space-y-1">
-                                            <li><code class="bg-slate-200 dark:bg-slate-700 px-1 rounded">--enable-docker</code> — Force enable Docker/Podman monitoring</li>
-                                            <li><code class="bg-slate-200 dark:bg-slate-700 px-1 rounded">--enable-kubernetes</code> — Force enable Kubernetes monitoring</li>
-                                            <li><code class="bg-slate-200 dark:bg-slate-700 px-1 rounded">--enable-proxmox</code> — Force enable Proxmox integration (creates API token)</li>
-                                            <li><code class="bg-slate-200 dark:bg-slate-700 px-1 rounded">--proxmox-type pve|pbs</code> — Set Proxmox node mode explicitly</li>
-                                            <li><code class="bg-slate-200 dark:bg-slate-700 px-1 rounded">--disable-docker</code> — Skip Docker even if detected</li>
+                                            <li><code class="bg-surface-hover px-1 rounded">--enable-docker</code> — Force enable Docker/Podman monitoring</li>
+                                            <li><code class="bg-surface-hover px-1 rounded">--enable-kubernetes</code> — Force enable Kubernetes monitoring</li>
+                                            <li><code class="bg-surface-hover px-1 rounded">--enable-proxmox</code> — Force enable Proxmox integration (creates API token)</li>
+                                            <li><code class="bg-surface-hover px-1 rounded">--proxmox-type pve|pbs</code> — Set Proxmox node mode explicitly</li>
+                                            <li><code class="bg-surface-hover px-1 rounded">--disable-docker</code> — Skip Docker even if detected</li>
                                         </ul>
                                     </div>
                                 </div>
@@ -1475,7 +1475,7 @@ export const UnifiedAgents: Component = () => {
                         onClick={resetFilters}
                         disabled={!hasFilters()}
                         class={`min-h-10 sm:min-h-9 rounded-md px-3 py-2 text-sm font-medium transition-colors ${hasFilters()
-                            ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                            ? 'bg-slate-100 text-slate-700 hover:bg-surface-alt dark:text-slate-200 dark:hover:bg-slate-700'
                             : 'bg-slate-50 text-slate-400 cursor-not-allowed dark:bg-slate-900 dark:text-slate-500'
                             }`}
                     >
@@ -1598,7 +1598,7 @@ export const UnifiedAgents: Component = () => {
                                         <span class="text-xs text-muted">N/A</span>
                                     }>
                                         <Show when={profiles().length > 0} fallback={
-                                            <span class="text-slate-700 dark:text-slate-300" title={row.scope.detail}>
+                                            <span class="text-base-content" title={row.scope.detail}>
                                                 {row.scope.label}
                                             </span>
                                         }>
@@ -1655,7 +1655,7 @@ export const UnifiedAgents: Component = () => {
                                                         class={`relative inline-flex h-8 w-12 sm:h-7 sm:w-12 flex-shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${isPending ? 'opacity-60 cursor-wait' : ''
                                                             } ${effectiveEnabled
                                                                 ? 'bg-blue-600'
-                                                                : 'bg-slate-200 dark:bg-slate-700'
+                                                                : 'bg-surface-hover'
                                                             }`}
                                                         title={isPending
                                                             ? 'Syncing with agent...'
@@ -1765,7 +1765,7 @@ export const UnifiedAgents: Component = () => {
                         };
 
                         return (
-                            <div id={`agent-details-${row.rowKey}`} class="px-4 py-4 text-sm text-slate-600 dark:text-slate-300">
+                            <div id={`agent-details-${row.rowKey}`} class="px-4 py-4 text-sm text-muted">
                                 <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
                                     <div class="space-y-3">
                                         <div class="flex flex-wrap items-center gap-2 text-xs">
@@ -1788,16 +1788,16 @@ export const UnifiedAgents: Component = () => {
                                             </Show>
                                         </div>
                                         <div class="text-xs text-muted">
-                                            ID: <span class="font-mono text-slate-700 dark:text-slate-200">{row.id}</span>
+                                            ID: <span class="font-mono text-base-content">{row.id}</span>
                                         </div>
                                         <Show when={row.agentId && row.agentId !== row.id}>
                                             <div class="text-xs text-muted">
-                                                Agent ID: <span class="font-mono text-slate-700 dark:text-slate-200">{row.agentId}</span>
+                                                Agent ID: <span class="font-mono text-base-content">{row.agentId}</span>
                                             </div>
                                         </Show>
                                         <Show when={row.linkedNodeId}>
                                             <div class="text-xs text-muted">
-                                                Linked node ID: <span class="font-mono text-slate-700 dark:text-slate-200">{row.linkedNodeId}</span>
+                                                Linked node ID: <span class="font-mono text-base-content">{row.linkedNodeId}</span>
                                             </div>
                                         </Show>
                                         <Show when={row.status === 'active' && row.lastSeen}>
@@ -1813,19 +1813,19 @@ export const UnifiedAgents: Component = () => {
                                         <Show when={row.kubernetesInfo && (row.kubernetesInfo.server || row.kubernetesInfo.context || row.kubernetesInfo.tokenName)}>
                                             <div class="space-y-1 text-xs text-muted">
                                                 <Show when={row.kubernetesInfo?.server}>
-                                                    <div>Server: <span class="text-slate-700 dark:text-slate-200">{row.kubernetesInfo?.server}</span></div>
+                                                    <div>Server: <span class="text-base-content">{row.kubernetesInfo?.server}</span></div>
                                                 </Show>
                                                 <Show when={row.kubernetesInfo?.context}>
-                                                    <div>Context: <span class="text-slate-700 dark:text-slate-200">{row.kubernetesInfo?.context}</span></div>
+                                                    <div>Context: <span class="text-base-content">{row.kubernetesInfo?.context}</span></div>
                                                 </Show>
                                                 <Show when={row.kubernetesInfo?.tokenName}>
-                                                    <div>Token: <span class="text-slate-700 dark:text-slate-200">{row.kubernetesInfo?.tokenName}</span></div>
+                                                    <div>Token: <span class="text-base-content">{row.kubernetesInfo?.tokenName}</span></div>
                                                 </Show>
                                             </div>
                                         </Show>
                                         <Show when={row.scope.category !== 'na'}>
                                             <div class="text-xs text-muted">
-                                                Scope profile: <span class="text-slate-700 dark:text-slate-200">{row.scope.label}</span>
+                                                Scope profile: <span class="text-base-content">{row.scope.label}</span>
                                                 <Show when={row.scope.detail}>
                                                     <span class="ml-1 text-muted">{row.scope.detail}</span>
                                                 </Show>

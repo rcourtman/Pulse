@@ -84,7 +84,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
           <button
             type="button"
             onClick={() => setFiltersOpen((o) => !o)}
-            class="flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-muted"
+            class="flex items-center gap-1.5 rounded-md bg-surface-hover px-2.5 py-1.5 text-xs font-medium text-muted"
           >
             <ListFilterIcon class="w-3.5 h-3.5" />
             Filters
@@ -100,7 +100,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
           <div class="flex flex-wrap items-center gap-2 text-xs text-muted lg:flex-nowrap">
             <Show when={props.hostFilter}>
               {(hostFilter) => (
-                <div class="inline-flex items-center rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                <div class="inline-flex items-center rounded-md bg-surface-hover p-0.5">
                   <label
                     for={hostFilter().id ?? 'dashboard-host-filter'}
                     class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
@@ -125,7 +125,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
 
             <Show when={props.namespaceFilter}>
               {(namespaceFilter) => (
-                <div class="inline-flex items-center rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                <div class="inline-flex items-center rounded-md bg-surface-hover p-0.5">
                   <label
                     for={namespaceFilter().id ?? 'dashboard-namespace-filter'}
                     class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
@@ -150,7 +150,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
 
             <Show when={props.viewMode() === 'docker' ? props.containerRuntimeFilter : undefined}>
               {(runtimeFilter) => (
-                <div class="inline-flex items-center rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                <div class="inline-flex items-center rounded-md bg-surface-hover p-0.5">
                   <label
                     for={runtimeFilter().id ?? 'dashboard-runtime-filter'}
                     class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
@@ -173,7 +173,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               )}
             </Show>
 
-            <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+            <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
               <label
                 for="dashboard-type-filter"
                 class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
@@ -194,7 +194,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               </select>
             </div>
 
-            <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+            <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
               <label
                 for="dashboard-status-filter"
                 class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
@@ -214,7 +214,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               </select>
             </div>
 
-            <div class="inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+            <div class="inline-flex rounded-md bg-surface-hover p-0.5">
               <button
                 type="button"
                 onClick={() => props.setGroupingMode('grouped')}
@@ -245,7 +245,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             </div>
 
             <Show when={props.onChartsToggle}>
-              <div class="hidden lg:inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+              <div class="hidden lg:inline-flex rounded-md bg-surface-hover p-0.5">
                 <button
                   type="button"
                   onClick={props.onChartsToggle}

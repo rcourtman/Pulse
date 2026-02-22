@@ -177,7 +177,7 @@ export const BillingAdminPanel: Component = () => {
               void loadOrganizations();
             }}
             disabled={loadingOrgs()}
-            class="w-full sm:w-auto px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+            class="w-full sm:w-auto px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50"
           >
             Refresh
           </button>
@@ -236,7 +236,7 @@ export const BillingAdminPanel: Component = () => {
               {
                 key: 'owner',
                 label: 'Owner',
-                render: (org) => <span class="font-mono text-xs text-slate-700 dark:text-slate-200">{org.owner_user_id || 'N/A'}</span>
+                render: (org) => <span class="font-mono text-xs text-base-content">{org.owner_user_id || 'N/A'}</span>
               },
               {
                 key: 'subscription',
@@ -245,7 +245,7 @@ export const BillingAdminPanel: Component = () => {
                   const orgID = () => (org.org_id || '').trim();
                   const billing = () => billingByOrgID()[orgID()];
                   const currentSubState = () => (billing()?.subscription_state || '').toLowerCase() || 'unknown';
-                  return <span class="font-mono text-xs text-slate-700 dark:text-slate-200">{currentSubState()}</span>;
+                  return <span class="font-mono text-xs text-base-content">{currentSubState()}</span>;
                 }
               },
               {
@@ -254,7 +254,7 @@ export const BillingAdminPanel: Component = () => {
                 render: (org) => {
                   const orgID = () => (org.org_id || '').trim();
                   const billing = () => billingByOrgID()[orgID()];
-                  return <span class="text-xs text-slate-700 dark:text-slate-200">{trialStatus(billing())}</span>;
+                  return <span class="text-xs text-base-content">{trialStatus(billing())}</span>;
                 }
               },
               {
@@ -264,7 +264,7 @@ export const BillingAdminPanel: Component = () => {
                   const orgID = () => (org.org_id || '').trim();
                   const billing = () => billingByOrgID()[orgID()];
                   return (
-                    <span class="font-mono text-xs text-slate-700 dark:text-slate-200" title={stripeCustomerCell(billing())}>
+                    <span class="font-mono text-xs text-base-content" title={stripeCustomerCell(billing())}>
                       {stripeCustomerCell(billing())}
                     </span>
                   );
@@ -292,7 +292,7 @@ export const BillingAdminPanel: Component = () => {
                           billingLoadingByOrgID()[orgID()] ||
                           currentSubState() === 'suspended'
                         }
-                        class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                        class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50"
                       >
                         Suspend Org
                       </button>
@@ -308,7 +308,7 @@ export const BillingAdminPanel: Component = () => {
                           billingLoadingByOrgID()[orgID()] ||
                           currentSubState() === 'active'
                         }
-                        class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                        class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50"
                       >
                         Activate Org
                       </button>
@@ -323,10 +323,10 @@ export const BillingAdminPanel: Component = () => {
               const orgID = () => (org.org_id || '').trim();
               const billing = () => billingByOrgID()[orgID()];
               return (
-                <div class="px-3 pb-3 bg-slate-50 dark:bg-slate-800">
-                  <div class="rounded-md border border-border bg-slate-50 dark:bg-slate-800 p-3">
+                <div class="px-3 pb-3 bg-surface-alt">
+                  <div class="rounded-md border border-border bg-surface-alt p-3">
                     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
-                      <div class="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                      <div class="text-xs font-semibold text-muted">
                         Billing state JSON
                       </div>
                       <button
@@ -337,12 +337,12 @@ export const BillingAdminPanel: Component = () => {
                           setBillingByOrgID((prev) => ({ ...prev, [id]: undefined }));
                           void ensureBillingState(id);
                         }}
-                        class="px-2 py-1 text-xs rounded-md border border-border bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"
+                        class="px-2 py-1 text-xs rounded-md border border-border bg-surface hover:bg-surface-hover"
                       >
                         Reload
                       </button>
                     </div>
-                    <pre class="text-xs overflow-x-auto whitespace-pre-wrap font-mono text-slate-800 dark:text-slate-100">
+                    <pre class="text-xs overflow-x-auto whitespace-pre-wrap font-mono text-base-content">
                       {JSON.stringify(billing() ?? { loading: true }, null, 2)}
                     </pre>
                   </div>

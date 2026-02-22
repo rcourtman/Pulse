@@ -313,7 +313,7 @@ export const AgentProfilesPanel: Component = () => {
                                         type="button"
                                         onClick={handleSuggest}
                                         title="Get AI-powered profile suggestions"
-                                        class="inline-flex min-h-10 sm:min-h-9 min-w-10 items-center gap-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-surface px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 transition-colors hover:bg-surface-hover sm:px-3 sm:py-2 sm:text-sm"
+                                        class="inline-flex min-h-10 sm:min-h-9 min-w-10 items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover sm:px-3 sm:py-2 sm:text-sm"
                                     >
                                         <Lightbulb class="w-3.5 h-3.5" />
                                         <span class="hidden sm:inline">Ideas</span>
@@ -322,7 +322,7 @@ export const AgentProfilesPanel: Component = () => {
                             </div>
                         }
                         noPadding
-                        bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
+                        bodyClass="divide-y divide-border"
                     >
                         <Show when={loading()}>
                             <div class="flex items-center justify-center py-8">
@@ -403,7 +403,7 @@ export const AgentProfilesPanel: Component = () => {
                         description="Assign profiles to connected agents"
                         icon={<Users class="w-5 h-5" strokeWidth={2} />}
                         noPadding
-                        bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
+                        bodyClass="divide-y divide-border"
                     >
                         <Show when={connectedAgents().length === 0}>
                             <div class="text-center py-8 text-muted">
@@ -492,7 +492,7 @@ export const AgentProfilesPanel: Component = () => {
                     {/* Profile Modal */}
                     <Show when={showModal()}>
                         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
-                            <div class="w-full max-w-lg bg-white dark:bg-slate-900 rounded-md shadow-sm border border-border mx-4">
+                            <div class="w-full max-w-lg bg-surface rounded-md shadow-sm border border-border mx-4">
                                 <div class="flex items-center justify-between px-6 py-4 border-b border-border">
                                     <h3 class="text-lg font-semibold text-base-content">
                                         {editingProfile() ? 'Edit Profile' : 'New Profile'}
@@ -511,7 +511,7 @@ export const AgentProfilesPanel: Component = () => {
                                 <div class="px-6 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
                                     {/* Profile Name */}
                                     <div class="space-y-1">
-                                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                                        <label class="block text-sm font-medium text-base-content">
                                             Profile Name
                                         </label>
                                         <input
@@ -525,7 +525,7 @@ export const AgentProfilesPanel: Component = () => {
 
                                     {/* Profile Description */}
                                     <div class="space-y-1">
-                                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                                        <label class="block text-sm font-medium text-base-content">
                                             Description <span class="text-slate-400 font-normal">(optional)</span>
                                         </label>
                                         <textarea
@@ -539,7 +539,7 @@ export const AgentProfilesPanel: Component = () => {
 
                                     {/* Settings */}
                                     <div class="space-y-3">
-                                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                                        <label class="block text-sm font-medium text-base-content">
                                             Settings
                                         </label>
 
@@ -547,7 +547,7 @@ export const AgentProfilesPanel: Component = () => {
                                             {(setting) => (
                                                 <div class="rounded-md border border-border p-3 space-y-1">
                                                     <div class="flex items-center justify-between">
-                                                        <label class="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                                        <label class="text-sm font-medium text-base-content">
                                                             {setting.label}
                                                         </label>
                                                         <Show when={setting.type === 'boolean'}>
@@ -567,7 +567,7 @@ export const AgentProfilesPanel: Component = () => {
                                                                     ? 'bg-blue-600'
                                                                     : formSettings()[setting.key] === false
                                                                         ? 'bg-slate-400'
-                                                                        : 'bg-slate-200 dark:bg-slate-700'
+                                                                        : 'bg-surface-hover'
                                                                     }`}
                                                             >
                                                                 <span
@@ -626,7 +626,7 @@ export const AgentProfilesPanel: Component = () => {
                                                     {(key) => (
                                                         <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 mb-2">
                                                             <div class="flex items-center justify-between">
-                                                                <label class="text-sm font-medium text-slate-700 dark:text-slate-300 font-mono">
+                                                                <label class="text-sm font-medium text-base-content font-mono">
                                                                     {key}
                                                                 </label>
                                                                 <div class="flex items-center gap-2">

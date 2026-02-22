@@ -21,11 +21,11 @@ export const RootDiskCard: Component<RootDiskCardProps> = (props) => {
 
   return (
     <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-      <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Root Disk</div>
+      <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Root Disk</div>
       <div class="mb-3">
         <div class="flex justify-between text-[10px] mb-1">
           <span class="text-muted">Usage</span>
-          <span class="text-slate-700 dark:text-slate-200">
+          <span class="text-base-content">
             {formatBytes(diskStats().used)} / {formatBytes(diskStats().total)}
           </span>
         </div>

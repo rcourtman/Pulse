@@ -145,7 +145,7 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
               </svg>
             </button>
           </div>
-          <div class="px-3 py-3 text-xs text-slate-600 dark:text-slate-300">
+          <div class="px-3 py-3 text-xs text-muted">
             <Show when={props.intro}>
               <p class="mb-3 text-[11px] uppercase tracking-wide text-muted">
                 {props.intro}

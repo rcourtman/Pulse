@@ -1367,7 +1367,7 @@ function ConnectionStatusBadge(props: {
         ? 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300 min-w-6 h-6 group-hover:px-3'
         : props.reconnecting()
           ? 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300 py-1'
-          : 'disconnected bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 min-w-6 h-6 group-hover:px-3'
+          : 'disconnected bg-surface-hover text-base-content min-w-6 h-6 group-hover:px-3'
         } ${props.class ?? ''}`}
     >
       <Show when={props.reconnecting()}>

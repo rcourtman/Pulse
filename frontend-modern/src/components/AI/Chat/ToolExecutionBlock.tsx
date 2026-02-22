@@ -66,8 +66,8 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
     <div class="my-1 font-mono text-[11px]">
       {/* Compact single-line header */}
       <div
-        class={`flex items-center gap-1.5 px-2 py-1 rounded ${hasMoreOutput() ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800' : ''
-          } ${showOutput() ? 'bg-slate-50 dark:bg-slate-800' : ''}`}
+        class={`flex items-center gap-1.5 px-2 py-1 rounded ${hasMoreOutput() ? 'cursor-pointer hover:bg-surface-hover' : ''
+          } ${showOutput() ? 'bg-surface-alt' : ''}`}
         onClick={() => hasMoreOutput() && setShowOutput(!showOutput())}
       >
         {/* Status icon */}
@@ -79,7 +79,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
         </span>
 
         {/* Command/input - truncated */}
-        <code class="text-slate-700 dark:text-slate-300 truncate flex-1">
+        <code class="text-base-content truncate flex-1">
           {(props.tool.input || '').length > 60 ? (props.tool.input || '').substring(0, 60) + '...' : (props.tool.input || '{}')}
         </code>
 
@@ -99,7 +99,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
       {/* Output - always show last few lines, expandable for full output */}
       <Show when={hasOutput()}>
         <div class="ml-4 mt-1 mb-2 pl-2 border-l-2 border-border overflow-hidden">
-          <pre class={`text-[10px] text-muted whitespace-pre-wrap break-all leading-relaxed overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-slate-800 rounded p-2 ${showOutput() ? 'max-h-64' : 'max-h-20'}`}>
+          <pre class={`text-[10px] text-muted whitespace-pre-wrap break-all leading-relaxed overflow-y-auto overflow-x-hidden bg-surface-alt rounded p-2 ${showOutput() ? 'max-h-64' : 'max-h-20'}`}>
             {displayOutput()}
           </pre>
           <Show when={hasMoreOutput()}>
@@ -231,7 +231,7 @@ export const ToolExecutionsList: Component<ToolExecutionsListProps> = (props) =>
       <Show when={shouldCollapse() && !showAll()}>
         <button
           onClick={() => setShowAll(true)}
-          class="w-full mt-0.5 py-1 text-[10px] text-muted hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-center font-medium"
+          class="w-full mt-0.5 py-1 text-[10px] text-muted hover:bg-surface-hover rounded text-center font-medium"
         >
           + {hiddenCount()} more tools ({stats().success} ✓ / {stats().failed} ✗)
         </button>

@@ -58,9 +58,9 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         description="Manage appearance, layout, and default monitoring cadence."
         icon={<Sliders class="w-5 h-5" strokeWidth={2} />}
         noPadding
-        bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
+        bodyClass="divide-y divide-border"
       >
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
           <div class="flex items-center gap-3 min-w-0">
             {/* Animated theme icon */}
             <div class={`shrink-0 relative p-2.5 rounded-md border border-border bg-surface transition-all duration-300`}>
@@ -78,7 +78,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               </p>
             </div>
           </div>
-          <div class="shrink-0 flex self-start sm:self-auto items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-md p-1 ml-12 sm:ml-0">
+          <div class="shrink-0 flex self-start sm:self-auto items-center gap-1 bg-surface-alt rounded-md p-1 ml-12 sm:ml-0">
             <button
               type="button"
               class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${props.themePreference() === 'light'
@@ -116,7 +116,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         </div>
 
         {/* Temperature Unit Selector */}
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
           <div class="flex items-center gap-3 min-w-0">
             <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
               <Thermometer class="w-5 h-5 text-slate-500" strokeWidth={2} />
@@ -130,7 +130,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               </p>
             </div>
           </div>
-          <div class="shrink-0 flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-md p-1">
+          <div class="shrink-0 flex items-center gap-1 bg-surface-alt rounded-md p-1">
             <button
               type="button"
               class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 text-sm rounded-md transition-all ${temperatureStore.unit() === 'celsius'
@@ -155,7 +155,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         </div>
 
         {/* Full-width Mode Toggle */}
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
           <div class="flex items-center gap-3 min-w-0">
             <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
               <Maximize2 class="w-5 h-5 text-slate-500" strokeWidth={2} />
@@ -183,9 +183,9 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         description="Control migration helpers and local-only metrics collection."
         icon={<Sliders class="w-5 h-5" strokeWidth={2} />}
         noPadding
-        bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
+        bodyClass="divide-y divide-border"
       >
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
           <div class="flex-1 min-w-0 space-y-1">
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-base-content truncate">
@@ -201,7 +201,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               </Show>
             </div>
             <p class="text-xs text-muted line-clamp-2">
-              When enabled, Pulse will not redirect old bookmarks like <code class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700">/services</code>.
+              When enabled, Pulse will not redirect old bookmarks like <code class="px-1 py-0.5 rounded bg-surface-hover">/services</code>.
             </p>
           </div>
           <Toggle
@@ -212,7 +212,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           />
         </div>
 
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
           <div class="flex-1 min-w-0 space-y-1">
             <div class="text-sm font-medium text-base-content truncate">
               Reduce Pro prompts
@@ -229,7 +229,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           />
         </div>
 
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
           <div class="flex-1 min-w-0 space-y-1">
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-base-content truncate">
@@ -263,9 +263,9 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         description="Control how frequently Pulse polls Proxmox VE nodes."
         icon={<Activity class="w-5 h-5" strokeWidth={2} />}
         noPadding
-        bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
+        bodyClass="divide-y divide-border"
       >
-        <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+        <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
           <div class="space-y-4">
             <div class="space-y-2">
               <p class="text-[10px] font-bold uppercase tracking-wider text-muted">

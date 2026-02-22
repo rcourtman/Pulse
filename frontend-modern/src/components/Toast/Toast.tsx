@@ -120,9 +120,9 @@ export const Toast: Component<ToastProps> = (props) => {
       >
         <div class={`flex-shrink-0 flex items-center justify-center p-1.5 sm:p-2 rounded-md ${iconColors[props.toast.type]}`}>{icons[props.toast.type]}</div>
         <div class="flex-1">
-          <h3 class="text-sm font-medium text-slate-800 dark:text-slate-100">{props.toast.title}</h3>
+          <h3 class="text-sm font-medium text-base-content">{props.toast.title}</h3>
           <Show when={props.toast.message}>
-            <p class="mt-1 text-xs text-slate-700 dark:text-slate-300 opacity-90">
+            <p class="mt-1 text-xs text-base-content opacity-90">
               {props.toast.message}
             </p>
           </Show>
@@ -130,7 +130,7 @@ export const Toast: Component<ToastProps> = (props) => {
         <button
           type="button"
           onClick={handleClose}
-          class="flex-shrink-0 text-muted hover:text-slate-700 dark:hover:text-slate-200 hover:bg-white rounded-md p-1.5 transition-all duration-200"
+          class="flex-shrink-0 text-muted hover:text-base-content hover:bg-white rounded-md p-1.5 transition-all duration-200"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path

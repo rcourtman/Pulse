@@ -561,7 +561,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         <div class={`flex flex-col h-full ${props.compact ? '' : 'bg-surface rounded-md shadow-sm border border-border p-4'}`}>
             <div class={`flex items-center justify-between ${props.compact ? 'mb-2' : 'mb-4'}`}>
                 <div class="flex items-center gap-2">
-                    <span class="text-sm font-medium text-slate-700 dark:text-slate-200">{props.label || 'History'}</span>
+                    <span class="text-sm font-medium text-base-content">{props.label || 'History'}</span>
                     <Show when={props.unit}>
                         <span class="text-xs text-slate-400">({props.unit})</span>
                     </Show>
@@ -587,13 +587,13 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                     </Show>
                     {/* Time Range Selector */}
                     <Show when={!props.hideSelector}>
-                        <div class="flex bg-slate-100 dark:bg-slate-700 rounded-md p-0.5">
+                        <div class="flex bg-surface-hover rounded-md p-0.5">
                             {ranges.map(r => (
                                 <button
                                     onClick={() => updateRange(r)}
                                     class={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${range() === r
                                         ? 'bg-white dark:bg-slate-600 text-base-content shadow-sm'
-                                        : 'text-muted hover:text-slate-900 dark:hover:text-white'
+                                        : 'text-muted hover:text-base-content'
                                         }`}
                                 >
                                     {r}
@@ -654,7 +654,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                             </svg>
                         </div>
                         <h3 class="text-lg font-bold text-base-content mb-1">{lockDays()}-Day History</h3>
-                        <p class="text-sm text-slate-600 dark:text-slate-300 text-center max-w-[200px] mb-4">
+                        <p class="text-sm text-muted text-center max-w-[200px] mb-4">
                             Upgrade to Pro to unlock {lockDays()} days of historical data retention.
                         </p>
                         <div class="flex flex-col items-center gap-2">

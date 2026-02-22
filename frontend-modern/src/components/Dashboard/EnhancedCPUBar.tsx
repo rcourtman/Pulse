@@ -25,7 +25,7 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
     return (
         <div class="metric-text w-full h-4 flex items-center justify-center">
             <div
-                class="relative w-full h-full overflow-hidden bg-slate-200 dark:bg-slate-600 rounded"
+                class="relative w-full h-full overflow-hidden bg-surface-hover rounded"
                 onMouseEnter={tip.onMouseEnter}
                 onMouseLeave={tip.onMouseLeave}
             >
@@ -39,7 +39,7 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
                 <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700 dark:text-slate-100 leading-none pointer-events-none">
                     {formatPercent(props.usage)}
                     <Show when={props.cores}>
-                        <span class="hidden sm:inline font-normal text-slate-500 dark:text-slate-300 ml-1">({props.cores})</span>
+                        <span class="hidden sm:inline font-normal text-muted ml-1">({props.cores})</span>
                     </Show>
                     {/* Anomaly indicator */}
                     <Show when={props.anomaly && anomalyRatio()}>

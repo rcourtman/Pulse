@@ -336,7 +336,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     <Card padding="none" tone="card" class="mb-4 overflow-hidden">
       <Table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": "800px" }}>
         <TableHeader>
-          <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
+          <TableRow class="bg-surface-alt text-muted border-b border-border">
 
             <TableHead
               class={`${thClassBase} text-left pl-3`}
@@ -722,14 +722,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     <Show when={props.currentTab === 'dashboard'}>
                       <TableCell class={tdClass}>
                         <div class="flex justify-center">
-                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-muted'}>
+                          <span class={online ? 'text-xs text-base-content' : 'text-xs text-muted'}>
                             {online ? getCountValue(item, 'vmCount') ?? '-' : '-'}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell class={tdClass}>
                         <div class="flex justify-center">
-                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-muted'}>
+                          <span class={online ? 'text-xs text-base-content' : 'text-xs text-muted'}>
                             {online ? getCountValue(item, 'containerCount') ?? '-' : '-'}
                           </span>
                         </div>
@@ -740,14 +740,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     <Show when={props.currentTab === 'storage'}>
                       <TableCell class={tdClass}>
                         <div class="flex justify-center">
-                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-muted'}>
+                          <span class={online ? 'text-xs text-base-content' : 'text-xs text-muted'}>
                             {online ? getCountValue(item, 'storageCount') ?? '-' : '-'}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell class={tdClass}>
                         <div class="flex justify-center">
-                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-muted'}>
+                          <span class={online ? 'text-xs text-base-content' : 'text-xs text-muted'}>
                             {online ? getCountValue(item, 'diskCount') ?? '-' : '-'}
                           </span>
                         </div>
@@ -758,7 +758,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     <Show when={props.currentTab === 'recovery'}>
                       <TableCell class={tdClass}>
                         <div class="flex justify-center">
-                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-muted'}>
+                          <span class={online ? 'text-xs text-base-content' : 'text-xs text-muted'}>
                             {online ? getCountValue(item, 'backupCount') ?? '-' : '-'}
                           </span>
                         </div>
@@ -793,7 +793,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                   </TableRow>
                   <Show when={isExpanded() && isPVEItem}>
                     <TableRow>
-                      <TableCell colspan={totalColumnCount()} class="bg-slate-50 dark:bg-slate-800 px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
+                      <TableCell colspan={totalColumnCount()} class="bg-surface-alt px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
                         <Suspense fallback={<div class="flex justify-center p-4">Loading stats...</div>}>
                           <NodeDrawer node={node!} host={linkedHostForDrawer()} />
                         </Suspense>

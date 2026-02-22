@@ -163,7 +163,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
 
             {/* Summary */}
             <Show when={inv().summary}>
-              <div class="text-sm text-muted bg-slate-50 dark:bg-slate-800 rounded p-2">
+              <div class="text-sm text-muted bg-surface-alt rounded p-2">
                 {inv().summary}
               </div>
             </Show>

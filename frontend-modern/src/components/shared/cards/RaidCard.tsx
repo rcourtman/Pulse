@@ -39,7 +39,7 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
 
   return (
     <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-      <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">
+      <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
         {props.title || 'RAID'}
       </div>
 
@@ -56,7 +56,7 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
               <div class="rounded border border-dashed border-slate-200 p-2 dark:border-slate-700 overflow-hidden">
                 <div class="flex items-start justify-between gap-2 min-w-0">
                   <div class="min-w-0">
-                    <div class="text-[11px] font-semibold text-slate-700 dark:text-slate-200 truncate" title={label()}>
+                    <div class="text-[11px] font-semibold text-base-content truncate" title={label()}>
                       {label()}
                     </div>
                     <div class="mt-0.5 text-[10px] text-muted truncate" title={levelText()}>
@@ -74,10 +74,10 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
 
                 <Show when={rebuilding()}>
                   <div class="mt-2 text-[10px] text-muted">
-                    Rebuild: <span class="font-medium text-slate-700 dark:text-slate-200">{Math.round(array.rebuildPercent)}%</span>
+                    Rebuild: <span class="font-medium text-base-content">{Math.round(array.rebuildPercent)}%</span>
                     <Show when={array.rebuildSpeed}>
                       <span class="text-muted"> · </span>
-                      <span class="font-medium text-slate-700 dark:text-slate-200">{array.rebuildSpeed}</span>
+                      <span class="font-medium text-base-content">{array.rebuildSpeed}</span>
                     </Show>
                   </div>
                 </Show>

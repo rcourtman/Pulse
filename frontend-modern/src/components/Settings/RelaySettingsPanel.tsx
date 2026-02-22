@@ -286,7 +286,7 @@ export const RelaySettingsPanel: Component = () => {
         <Show when={config()?.identity_fingerprint}>
           <div class={formField}>
             <label class={labelClass()}>Instance Fingerprint</label>
-            <code class="block text-xs font-mono text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded px-3 py-2 select-all break-all">
+            <code class="block text-xs font-mono text-base-content bg-surface-alt rounded px-3 py-2 select-all break-all">
               {config()!.identity_fingerprint}
             </code>
             <p class={formHelpText}>
@@ -314,7 +314,7 @@ export const RelaySettingsPanel: Component = () => {
                   </button>
                   <Show when={showPairing() && pairingPayload()}>
                     <button
-                      class="min-h-10 sm:min-h-10 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md disabled:opacity-50"
+                      class="min-h-10 sm:min-h-10 px-3 py-2 text-sm font-medium text-base-content bg-surface-hover hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md disabled:opacity-50"
                       onClick={() => void handleCopyPairingPayload()}
                       disabled={pairingLoading()}
                     >
@@ -330,7 +330,7 @@ export const RelaySettingsPanel: Component = () => {
                 <Show when={showPairing()}>
                   <div class="space-y-3">
                     <Show when={pairingLoading()}>
-                      <p class="text-sm text-slate-600 dark:text-slate-300">
+                      <p class="text-sm text-muted">
                         Preparing pairing payload...
                       </p>
                     </Show>
@@ -346,14 +346,14 @@ export const RelaySettingsPanel: Component = () => {
                     </Show>
 
                     <Show when={pairingPayload()?.deep_link}>
-                      <code class="block text-xs font-mono text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded px-3 py-2 select-all break-all">
+                      <code class="block text-xs font-mono text-base-content bg-surface-alt rounded px-3 py-2 select-all break-all">
                         {pairingPayload()!.deep_link}
                       </code>
                     </Show>
 
                     <Show when={(pairingPayload()?.diagnostics?.length ?? 0) > 0}>
                       <div class="space-y-2">
-                        <p class="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                        <p class="text-xs font-semibold text-base-content">
                           Diagnostics
                         </p>
                         {(pairingPayload()?.diagnostics ?? []).map((diagnostic) => (

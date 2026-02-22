@@ -187,8 +187,8 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
             commitSearchToHistory(e.currentTarget.value);
           }
         }}
-        class={`w-full pl-8 sm:pl-9 ${inputPaddingRight()} py-1.5 sm:py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md
-               bg-white dark:bg-slate-900 text-base-content placeholder-muted
+        class={`w-full pl-8 sm:pl-9 ${inputPaddingRight()} py-1.5 sm:py-2 text-sm border border-border rounded-md
+               bg-surface text-base-content placeholder-muted
                focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all`}
         title={props.title}
         data-global-search
@@ -212,7 +212,7 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
         <button
           type="button"
           class={`absolute top-1/2 -translate-y-1/2 transform p-1 rounded-full
-                 bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-300
+                 bg-surface-hover text-muted
                  hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900 dark:hover:text-red-400
                  transition-all duration-150 active:scale-90 ${isSimple() ? 'right-2' : 'right-12 sm:right-14'}`}
           onClick={() => props.onChange('')}

@@ -42,9 +42,9 @@ const normalizeProviderFromQuery = (value: string): string => {
   return v;
 };
 
-const groupHeaderRowClass = () => 'bg-slate-50 dark:bg-slate-800';
+const groupHeaderRowClass = () => 'bg-surface-alt';
 const groupHeaderTextClass = () =>
-  'py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-300';
+  'py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-base-content';
 
 type KnownOutcome = 'success' | 'warning' | 'failed' | 'running' | 'unknown';
 
@@ -911,7 +911,7 @@ const Recovery: Component = () => {
               />
               {/* Mobile-only: toggle + Filters button */}
               <div class="flex items-center justify-between gap-2 sm:hidden">
-                <div class="inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5" role="group" aria-label="View">
+                <div class="inline-flex rounded-md bg-surface-hover p-0.5" role="group" aria-label="View">
                   <button
                     type="button"
                     onClick={() => { setView('protected'); setRollupId(''); }}
@@ -933,7 +933,7 @@ const Recovery: Component = () => {
                   <button
                     type="button"
                     onClick={() => setProtectedFiltersOpen((o) => !o)}
-                    class="flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-muted"
+                    class="flex items-center gap-1.5 rounded-md bg-surface-hover px-2.5 py-1.5 text-xs font-medium text-muted"
                   >
                     <ListFilterIcon class="w-3.5 h-3.5" />
                     Filters
@@ -949,7 +949,7 @@ const Recovery: Component = () => {
               <Show when={!isMobile() || protectedFiltersOpen()}>
                 <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
                   {/* Toggle — desktop only, first in filter row */}
-                  <div class="hidden sm:inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5" role="group" aria-label="View">
+                  <div class="hidden sm:inline-flex rounded-md bg-surface-hover p-0.5" role="group" aria-label="View">
                     <button
                       type="button"
                       onClick={() => { setView('protected'); setRollupId(''); }}
@@ -967,9 +967,9 @@ const Recovery: Component = () => {
                       Events
                     </button>
                   </div>
-                  <div class="h-5 w-px bg-slate-200 dark:bg-slate-600 hidden sm:block" />
+                  <div class="h-5 w-px bg-surface-hover hidden sm:block" />
 
-                  <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                  <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
                     <label
                       for="recovery-provider-filter"
                       class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
@@ -988,7 +988,7 @@ const Recovery: Component = () => {
                     </select>
                   </div>
 
-                  <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                  <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
                     <label
                       for="recovery-protected-status-filter"
                       class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
@@ -1074,10 +1074,10 @@ const Recovery: Component = () => {
             <div class="overflow-x-auto">
               <Table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : '500px' }}>
                 <TableHeader>
-                  <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
+                  <TableRow class="bg-surface-alt text-muted border-b border-border">
                     {([['subject', 'Subject'], ['source', 'Source'], ['lastBackup', 'Last Backup'], ['outcome', 'Outcome']] as const).map(([col, label]) => (
                       <TableHead
-                        class={`py-0.5 px-3 whitespace-nowrap text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200 transition-colors${col === 'source' ? ' hidden md:table-cell w-[110px]' : col === 'lastBackup' ? ' w-[120px]' : col === 'outcome' ? ' w-[70px]' : ''}`}
+                        class={`py-0.5 px-3 whitespace-nowrap text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer select-none hover:text-base-content transition-colors${col === 'source' ? ' hidden md:table-cell w-[110px]' : col === 'lastBackup' ? ' w-[120px]' : col === 'outcome' ? ' w-[70px]' : ''}`}
                         onClick={() => toggleProtectedSort(col)}
                       >
                         <span class="inline-flex items-center gap-1">
@@ -1279,7 +1279,7 @@ const Recovery: Component = () => {
             <Show
               when={timeline().points.length > 0 && timeline().maxValue > 0}
               fallback={
-                <div class="text-sm text-slate-600 dark:text-slate-300">
+                <div class="text-sm text-muted">
                   <Show when={recoverySeries.response.loading}>
                     <span>Loading recovery activity...</span>
                   </Show>
@@ -1289,7 +1289,7 @@ const Recovery: Component = () => {
                 </div>
               }
             >
-              <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-300">
+              <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
                 <div class="flex items-center gap-3">
                   <span class="flex items-center gap-1">
                     <span class={`h-2.5 w-2.5 rounded ${CHART_SEGMENT_CLASS.snapshot}`} />
@@ -1326,7 +1326,7 @@ const Recovery: Component = () => {
                 </div>
               </div>
 
-              <div class="relative h-32 overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
+              <div class="relative h-32 overflow-hidden rounded bg-surface-alt">
                 <div class="absolute bottom-8 left-0 top-2 w-6 text-[10px] text-muted">
                   <div class="flex h-full flex-col justify-between pr-1 text-right">
                     <For each={[...timeline().axisTicks].reverse()}>{(tick) => <span>{tick}</span>}</For>
@@ -1508,7 +1508,7 @@ const Recovery: Component = () => {
                       </div>
                     }
                   >
-                    <div class="inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5" role="group" aria-label="View">
+                    <div class="inline-flex rounded-md bg-surface-hover p-0.5" role="group" aria-label="View">
                       <button
                         type="button"
                         onClick={() => { setView('protected'); setRollupId(''); }}
@@ -1531,7 +1531,7 @@ const Recovery: Component = () => {
                     <button
                       type="button"
                       onClick={() => setEventsFiltersOpen((o) => !o)}
-                      class="flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-muted"
+                      class="flex items-center gap-1.5 rounded-md bg-surface-hover px-2.5 py-1.5 text-xs font-medium text-muted"
                     >
                       <ListFilterIcon class="w-3.5 h-3.5" />
                       Filters
@@ -1567,7 +1567,7 @@ const Recovery: Component = () => {
                         </div>
                       }
                     >
-                      <div class="hidden sm:inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5" role="group" aria-label="View">
+                      <div class="hidden sm:inline-flex rounded-md bg-surface-hover p-0.5" role="group" aria-label="View">
                         <button
                           type="button"
                           onClick={() => { setView('protected'); setRollupId(''); }}
@@ -1586,9 +1586,9 @@ const Recovery: Component = () => {
                         </button>
                       </div>
                     </Show>
-                    <div class="h-5 w-px bg-slate-200 dark:bg-slate-600 hidden sm:block" />
+                    <div class="h-5 w-px bg-surface-hover hidden sm:block" />
 
-                    <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                    <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
                       <label
                         for="recovery-provider-filter-events"
                         class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
@@ -1610,7 +1610,7 @@ const Recovery: Component = () => {
                       </select>
                     </div>
 
-                    <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                    <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
                       <label
                         for="recovery-status-filter"
                         class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
@@ -1638,7 +1638,7 @@ const Recovery: Component = () => {
                       </select>
                     </div>
 
-                    <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                    <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
                       <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Scope</span>
                       <button
                         type="button"
@@ -1699,7 +1699,7 @@ const Recovery: Component = () => {
 
                   <Show when={moreFiltersOpen()}>
                     <div id="recovery-more-filters" class="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
-                      <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                      <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
                         <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Method</span>
                         <For each={(['all', 'snapshot', 'local', 'remote'] as const)}>
                           {(mode) => (
@@ -1719,7 +1719,7 @@ const Recovery: Component = () => {
                       </div>
 
                       <Show when={showVerificationFilter()}>
-                        <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                        <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
                           <label
                             for="recovery-verification-filter"
                             class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
@@ -1745,7 +1745,7 @@ const Recovery: Component = () => {
                       </Show>
 
                       <Show when={showClusterFilter()}>
-                        <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                        <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
                           <label
                             for="recovery-cluster-filter"
                             class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
@@ -1770,7 +1770,7 @@ const Recovery: Component = () => {
                       </Show>
 
                       <Show when={showNodeFilter()}>
-                        <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                        <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
                           <label
                             for="recovery-node-filter"
                             class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
@@ -1795,7 +1795,7 @@ const Recovery: Component = () => {
                       </Show>
 
                       <Show when={showNamespaceFilter()}>
-                        <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                        <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
                           <label
                             for="recovery-namespace-filter"
                             class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
@@ -1854,7 +1854,7 @@ const Recovery: Component = () => {
               <div class="overflow-x-auto">
                 <Table class="w-full border-collapse text-xs whitespace-nowrap" style={{ 'min-width': tableMinWidth() }}>
                   <TableHeader>
-                    <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
+                    <TableRow class="bg-surface-alt text-muted border-b border-border">
                       <For each={mobileVisibleArtifactColumns()}>{(col) => <TableHead class="py-0.5 px-3 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap">{col.label}</TableHead>}</For>
                     </TableRow>
                   </TableHeader>
@@ -2031,7 +2031,7 @@ const Recovery: Component = () => {
                                   </TableRow>
                                   <Show when={selectedPoint()?.id === p.id}>
                                     <TableRow>
-                                      <TableCell colSpan={tableColumnCount()} class="bg-slate-50 dark:bg-slate-800 px-0 sm:px-4 py-4 border-b border-border relative">
+                                      <TableCell colSpan={tableColumnCount()} class="bg-surface-alt px-0 sm:px-4 py-4 border-b border-border relative">
                                         <div class="flex items-center justify-between px-4 pb-2 mb-2 border-b border-border">
                                           <h2 class="text-sm font-semibold text-base-content">Recovery Point Details</h2>
                                           <button

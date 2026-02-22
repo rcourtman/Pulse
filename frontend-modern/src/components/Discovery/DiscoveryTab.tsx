@@ -396,7 +396,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             <Show when={!discovery() && !isScanning() && !discovery.loading && !discoveryInfo.loading && discoveryInfo()?.commands && discoveryInfo()!.commands!.length > 0}>
                 <details class="rounded border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800" open={showCommandsPreview()}>
                     <summary
-                        class="p-2.5 text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
+                        class="p-2.5 text-xs font-medium text-base-content cursor-pointer hover:bg-surface-hover flex items-center gap-2"
                         onClick={(e) => { e.preventDefault(); setShowCommandsPreview(!showCommandsPreview()); }}
                     >
                         <svg class={`w-3.5 h-3.5 transition-transform ${showCommandsPreview() ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -410,7 +410,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                 {(cmd) => (
                                     <div class="text-xs">
                                         <div class="flex items-start gap-2">
-                                            <code class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-mono break-all">
+                                            <code class="text-[10px] px-1.5 py-0.5 rounded bg-surface-hover text-base-content font-mono break-all">
                                                 {cmd.command}
                                             </code>
                                         </div>
@@ -708,10 +708,10 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                         {/* CLI Access */}
                         <Show when={d().cli_access}>
                             <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                                <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">
+                                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
                                     CLI Access
                                 </div>
-                                <code class="block bg-slate-100 dark:bg-slate-800 rounded px-2 py-1.5 text-xs text-base-content font-mono overflow-x-auto">
+                                <code class="block bg-surface-alt rounded px-2 py-1.5 text-xs text-base-content font-mono overflow-x-auto">
                                     {d().cli_access}
                                 </code>
                             </div>
@@ -722,13 +722,13 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                             <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
                                 <Show when={d().config_paths?.length > 0}>
                                     <div class="mb-3">
-                                        <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-1">
+                                        <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-1">
                                             Config Paths
                                         </div>
                                         <div class="space-y-1">
                                             <For each={d().config_paths}>
                                                 {(path) => (
-                                                    <code class="block text-xs text-slate-600 dark:text-slate-300 font-mono">
+                                                    <code class="block text-xs text-muted font-mono">
                                                         {path}
                                                     </code>
                                                 )}
@@ -738,13 +738,13 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                 </Show>
                                 <Show when={d().data_paths?.length > 0}>
                                     <div class="mb-3">
-                                        <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-1">
+                                        <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-1">
                                             Data Paths
                                         </div>
                                         <div class="space-y-1">
                                             <For each={d().data_paths}>
                                                 {(path) => (
-                                                    <code class="block text-xs text-slate-600 dark:text-slate-300 font-mono">
+                                                    <code class="block text-xs text-muted font-mono">
                                                         {path}
                                                     </code>
                                                 )}
@@ -754,13 +754,13 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                 </Show>
                                 <Show when={d().log_paths?.length > 0}>
                                     <div>
-                                        <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-1">
+                                        <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-1">
                                             Log Paths
                                         </div>
                                         <div class="space-y-1">
                                             <For each={d().log_paths}>
                                                 {(path) => (
-                                                    <code class="block text-xs text-slate-600 dark:text-slate-300 font-mono">
+                                                    <code class="block text-xs text-muted font-mono">
                                                         {path}
                                                     </code>
                                                 )}
@@ -774,7 +774,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                         {/* Ports */}
                         <Show when={d().ports?.length > 0}>
                             <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                                <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">
+                                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
                                     Listening Ports
                                 </div>
                                 <div class="flex flex-wrap gap-1">
@@ -795,7 +795,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                         {/* Key Facts */}
                         <Show when={d().facts?.length > 0}>
                             <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                                <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">
+                                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
                                     Discovered Facts
                                 </div>
                                 <div class="space-y-1.5">
@@ -816,7 +816,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                         {/* User Notes */}
                         <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
                             <div class="flex items-center justify-between mb-2">
-                                <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200">
+                                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
                                     Your Notes
                                 </div>
                                 <Show when={!editingNotes()}>
@@ -840,7 +840,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                             </p>
                                         }
                                     >
-                                        <p class="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">
+                                        <p class="text-xs text-muted whitespace-pre-wrap">
                                             {d().user_notes}
                                         </p>
                                     </Show>
@@ -851,7 +851,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                         value={notesText()}
                                         onInput={(e) => setNotesText(e.currentTarget.value)}
                                         placeholder="Add notes about this resource (API tokens, passwords, important info)..."
-                                        class="w-full h-24 px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded bg-surface text-base-content focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        class="w-full h-24 px-2 py-1.5 text-xs border border-border rounded bg-surface text-base-content focus:outline-none focus:ring-1 focus:ring-blue-500"
                                     />
                                     <Show when={saveError()}>
                                         <p class="text-xs text-red-600 dark:text-red-400">{saveError()}</p>
@@ -865,7 +865,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                         </button>
                                         <button
                                             onClick={() => setEditingNotes(false)}
-                                            class="px-3 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs rounded hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                                            class="px-3 py-1 bg-surface-hover text-base-content text-xs rounded hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
                                         >
                                             Cancel
                                         </button>
@@ -877,11 +877,11 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                         {/* AI Reasoning (collapsible) */}
                         <Show when={d().ai_reasoning}>
                             <details class="rounded border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                                <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
+                                <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-base-content cursor-pointer hover:bg-surface-hover">
                                     AI Reasoning
                                 </summary>
                                 <div class="px-3 pb-3">
-                                    <p class="text-xs text-slate-600 dark:text-slate-300">
+                                    <p class="text-xs text-muted">
                                         {d().ai_reasoning}
                                     </p>
                                 </div>
@@ -891,17 +891,17 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                         {/* Scan Details / Raw Command Outputs (collapsible) */}
                         <Show when={d().raw_command_output && Object.keys(d().raw_command_output!).length > 0}>
                             <details class="rounded border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                                <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
+                                <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-base-content cursor-pointer hover:bg-surface-hover">
                                     Scan Details ({Object.keys(d().raw_command_output!).length} commands)
                                 </summary>
                                 <div class="px-3 pb-3 space-y-3">
                                     <For each={Object.entries(d().raw_command_output!)}>
                                         {([cmdName, output]) => (
                                             <div>
-                                                <div class="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                                <div class="text-xs font-medium text-base-content mb-1">
                                                     {cmdName}
                                                 </div>
-                                                <pre class="text-[10px] bg-slate-100 dark:bg-slate-800 rounded p-2 overflow-x-auto text-muted max-h-32 overflow-y-auto">
+                                                <pre class="text-[10px] bg-surface-alt rounded p-2 overflow-x-auto text-muted max-h-32 overflow-y-auto">
                                                     {output || '(no output)'}
                                                 </pre>
                                             </div>
@@ -914,7 +914,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                         {/* Commands Run (for non-admin users who can't see full output) */}
                         <Show when={!d().raw_command_output && d().scan_duration && d().scan_duration > 0}>
                             <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                                <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-1">
+                                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-1">
                                     Scan Info
                                 </div>
                                 <p class="text-xs text-muted">
@@ -932,7 +932,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                             <button
                                 onClick={() => handleTriggerDiscovery(true)}
                                 disabled={isScanning()}
-                                class="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs rounded hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                                class="px-3 py-1.5 bg-surface-hover text-base-content text-xs rounded hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
                             >
                                 <Show
                                     when={isScanning()}

@@ -105,17 +105,17 @@ export const SystemLogsPanel: Component = () => {
                 description="Stream real-time system logs and download support bundles."
                 icon={<Terminal class="w-5 h-5" strokeWidth={2} />}
                 noPadding
-                bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
+                bodyClass="divide-y divide-border"
             >
                 {/* Controls */}
-                <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
                     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div class="flex items-center space-x-3">
-                            <label class="text-sm font-medium text-slate-700 dark:text-slate-300">Log Level:</label>
+                            <label class="text-sm font-medium text-base-content">Log Level:</label>
                             <select
                                 value={level()}
                                 onChange={(e) => handleLevelChange(e.currentTarget.value)}
-                                class="form-select min-h-10 sm:min-h-9 text-sm py-2.5 px-3 rounded-md border-slate-300 dark:border-slate-600 bg-surface text-slate-600 dark:text-slate-300 focus:ring-primary-500 focus:border-primary-500"
+                                class="form-select min-h-10 sm:min-h-9 text-sm py-2.5 px-3 rounded-md border-border bg-surface text-muted focus:ring-primary-500 focus:border-primary-500"
                             >
                                 <option value="debug">Debug</option>
                                 <option value="info">Info</option>
@@ -142,7 +142,7 @@ export const SystemLogsPanel: Component = () => {
                             >
                                 <Trash2 size={18} />
                             </button>
-                            <div class="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-2"></div>
+                            <div class="h-6 w-px bg-surface-hover mx-2"></div>
                             <button
                                 onClick={handleDownload}
                                 class="min-h-10 sm:min-h-9 flex items-center space-x-2 px-3 py-2.5 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium transition-colors"
@@ -155,7 +155,7 @@ export const SystemLogsPanel: Component = () => {
                 </div>
 
                 {/* Terminal View */}
-                <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
                     <div
                         ref={logContainer}
                         class="bg-slate-950 text-slate-300 font-mono text-xs p-4 rounded-md h-[500px] overflow-y-auto whitespace-pre-wrap leading-relaxed border border-slate-800 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"

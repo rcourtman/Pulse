@@ -47,12 +47,12 @@ export function StoragePanel(props: StoragePanelProps) {
               <p class="text-xs text-muted">
                 {formatBytes(props.storage.totalUsed)} / {formatBytes(props.storage.totalCapacity)}
               </p>
-              <span class="text-xs font-mono font-semibold text-slate-700 dark:text-slate-200">
+              <span class="text-xs font-mono font-semibold text-base-content">
                 {formatPercent(capacityPercent())}
               </span>
             </div>
 
-            <div class="h-2 overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
+            <div class="h-2 overflow-hidden rounded bg-surface-alt">
               <div
                 class={`h-full rounded ${getMetricColorClass(capacityPercent(), 'disk')}`}
                 style={{ width: `${capacityPercent()}%` }}

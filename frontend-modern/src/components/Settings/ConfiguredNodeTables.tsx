@@ -114,7 +114,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
         style={{ "contain": "strict" }}
       >
         <Table class="min-w-[max-content] w-full divide-y divide-border text-sm">
-          <TableHeader class="bg-slate-50 dark:bg-slate-800">
+          <TableHeader class="bg-surface-alt">
             <TableRow>
               <TableHead class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                 Node
@@ -171,8 +171,8 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                           </div>
                         </div>
                         <Show when={node.type === 'pve' && 'isCluster' in node && node.isCluster}>
-                          <div class="rounded-md border border-border bg-slate-100 dark:bg-slate-800 px-3 py-2 space-y-2">
-                            <div class="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                          <div class="rounded-md border border-border bg-surface-alt px-3 py-2 space-y-2">
+                            <div class="flex items-center gap-2 text-xs font-semibold text-base-content">
                               <span>{clusterName()} Cluster</span>
                               <span class="ml-auto text-[0.65rem] font-normal text-slate-500 dark:text-slate-500">
                                 {clusterEndpoints().length} nodes
@@ -237,7 +237,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                                 <button
                                   type="button"
                                   onClick={() => props.onRefreshCluster?.(node.id)}
-                                  class="flex min-h-10 sm:min-h-9 items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+                                  class="flex min-h-10 sm:min-h-9 items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 bg-white dark:bg-slate-700 border border-border rounded hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
                                   title="Re-detect cluster membership (use if nodes were added to the Proxmox cluster)"
                                 >
                                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -259,13 +259,13 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                           {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
                         </span>
                         <Show when={node.source === 'agent'}>
-                          <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded w-fit">
+                          <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-surface-hover text-base-content rounded w-fit">
                             <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
                             Agent
                           </span>
                         </Show>
                         <Show when={node.source === 'script' || (!node.source && node.tokenName)}>
-                          <span class="text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-muted rounded w-fit">
+                          <span class="text-[0.65rem] px-1.5 py-0.5 bg-surface-alt text-muted rounded w-fit">
                             API only
                           </span>
                         </Show>
@@ -319,7 +319,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                         <button
                           type="button"
                           onClick={() => props.onTestConnection(node.id)}
-                          class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-muted hover:text-slate-900 dark:hover:text-slate-100"
+                          class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-muted hover:text-base-content"
                           title="Test connection"
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -329,7 +329,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                         <button
                           type="button"
                           onClick={() => props.onEdit(node)}
-                          class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-muted hover:text-slate-900 dark:hover:text-slate-100"
+                          class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-muted hover:text-base-content"
                           title="Edit node"
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -409,7 +409,7 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
     <Card padding="none" tone="card" class="rounded-md">
       <div class="overflow-x-auto">
         <Table class="min-w-[max-content] divide-y divide-border text-sm">
-          <TableHeader class="bg-slate-50 dark:bg-slate-800">
+          <TableHeader class="bg-surface-alt">
             <TableRow>
               <TableHead class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                 Node
@@ -455,13 +455,13 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                           {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
                         </span>
                         <Show when={node.source === 'agent'}>
-                          <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded w-fit">
+                          <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-surface-hover text-base-content rounded w-fit">
                             <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
                             Agent
                           </span>
                         </Show>
                         <Show when={node.source === 'script' || (!node.source && node.tokenName)}>
-                          <span class="text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-muted rounded w-fit">
+                          <span class="text-[0.65rem] px-1.5 py-0.5 bg-surface-alt text-muted rounded w-fit">
                             API only
                           </span>
                         </Show>
@@ -517,7 +517,7 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                         <button
                           type="button"
                           onClick={() => props.onTestConnection(node.id)}
-                          class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-muted hover:text-slate-900 dark:hover:text-slate-100"
+                          class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-muted hover:text-base-content"
                           title="Test connection"
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -527,7 +527,7 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                         <button
                           type="button"
                           onClick={() => props.onEdit(node)}
-                          class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-muted hover:text-slate-900 dark:hover:text-slate-100"
+                          class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-muted hover:text-base-content"
                           title="Edit node"
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -607,7 +607,7 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
     <Card padding="none" tone="card" class="rounded-md">
       <div class="overflow-x-auto">
         <Table class="min-w-[max-content] divide-y divide-border text-sm">
-          <TableHeader class="bg-slate-50 dark:bg-slate-800">
+          <TableHeader class="bg-surface-alt">
             <TableRow>
               <TableHead class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                 Node
@@ -653,13 +653,13 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                           {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
                         </span>
                         <Show when={node.source === 'agent'}>
-                          <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded w-fit">
+                          <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-surface-hover text-base-content rounded w-fit">
                             <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
                             Agent
                           </span>
                         </Show>
                         <Show when={node.source === 'script' || (!node.source && node.tokenName)}>
-                          <span class="text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-muted rounded w-fit">
+                          <span class="text-[0.65rem] px-1.5 py-0.5 bg-surface-alt text-muted rounded w-fit">
                             API only
                           </span>
                         </Show>
@@ -704,7 +704,7 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                         <button
                           type="button"
                           onClick={() => props.onTestConnection(node.id)}
-                          class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-muted hover:text-slate-900 dark:hover:text-slate-100"
+                          class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-muted hover:text-base-content"
                           title="Test connection"
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -714,7 +714,7 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                         <button
                           type="button"
                           onClick={() => props.onEdit(node)}
-                          class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-muted hover:text-slate-900 dark:hover:text-slate-100"
+                          class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-muted hover:text-base-content"
                           title="Edit node"
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

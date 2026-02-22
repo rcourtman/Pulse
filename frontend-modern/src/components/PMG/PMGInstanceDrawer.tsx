@@ -233,7 +233,7 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
 
                   <div class="shrink-0 flex items-center gap-2">
                     <span class={`inline-block h-2.5 w-2.5 rounded-full ${statusTone(resource()?.status)}`} />
-                    <span class="text-xs font-medium text-slate-700 dark:text-slate-200">
+                    <span class="text-xs font-medium text-base-content">
                       {(resource()?.status || 'unknown').toLowerCase()}
                     </span>
                     <Show when={resource()?.customUrl}>
@@ -297,9 +297,9 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                           {(node) => (
                             <TableRow>
                               <TableCell class="py-2 pr-3 font-medium text-base-content">{node.name}</TableCell>
-                              <TableCell class="py-2 pr-3 text-slate-600 dark:text-slate-300">{node.role || '—'}</TableCell>
-                              <TableCell class="py-2 pr-3 text-slate-600 dark:text-slate-300">{node.status || '—'}</TableCell>
-                              <TableCell class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">
+                              <TableCell class="py-2 pr-3 text-muted">{node.role || '—'}</TableCell>
+                              <TableCell class="py-2 pr-3 text-muted">{node.status || '—'}</TableCell>
+                              <TableCell class="py-2 pl-3 text-right text-muted">
                                 {formatCompact(node.queueStatus?.total ?? 0)}
                               </TableCell>
                             </TableRow>
@@ -335,7 +335,7 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                           {(row) => (
                             <TableRow>
                               <TableCell class="py-2 pr-3 font-medium text-base-content">{row.domain}</TableCell>
-                              <TableCell class="py-2 pr-3 text-slate-600 dark:text-slate-300">{row.comment || '—'}</TableCell>
+                              <TableCell class="py-2 pr-3 text-muted">{row.comment || '—'}</TableCell>
                             </TableRow>
                           )}
                         </For>
@@ -379,10 +379,10 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                           {(row) => (
                             <TableRow>
                               <TableCell class="py-2 pr-3 font-medium text-base-content">{row.domain}</TableCell>
-                              <TableCell class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">{formatCompact(row.mailCount)}</TableCell>
-                              <TableCell class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">{formatCompact(row.spamCount)}</TableCell>
-                              <TableCell class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">{formatCompact(row.virusCount)}</TableCell>
-                              <TableCell class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">
+                              <TableCell class="py-2 pl-3 text-right text-muted">{formatCompact(row.mailCount)}</TableCell>
+                              <TableCell class="py-2 pl-3 text-right text-muted">{formatCompact(row.spamCount)}</TableCell>
+                              <TableCell class="py-2 pl-3 text-right text-muted">{formatCompact(row.virusCount)}</TableCell>
+                              <TableCell class="py-2 pl-3 text-right text-muted">
                                 {row.bytes ? formatBytes(row.bytes) : '—'}
                               </TableCell>
                             </TableRow>
@@ -401,10 +401,10 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                     <For each={spamBuckets()}>
                       {(bucket) => (
                         <div class="flex items-center gap-3">
-                          <div class="w-16 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                          <div class="w-16 text-[11px] font-medium text-muted">
                             {bucket.bucket}
                           </div>
-                          <div class="flex-1 h-2 rounded bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                          <div class="flex-1 h-2 rounded bg-surface-alt overflow-hidden">
                             <div
                               class="h-full bg-amber-500"
                               style={{
@@ -412,7 +412,7 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                               }}
                             />
                           </div>
-                          <div class="w-14 text-right text-[11px] text-slate-600 dark:text-slate-300">
+                          <div class="w-14 text-right text-[11px] text-muted">
                             {formatCompact(bucket.count)}
                           </div>
                         </div>

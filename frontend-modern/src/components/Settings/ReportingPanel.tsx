@@ -123,9 +123,9 @@ export function ReportingPanel() {
                 description="Generate reports across infrastructure, workloads, storage, and backup resources."
                 icon={<BarChart class="w-5 h-5" strokeWidth={2} />}
                 noPadding
-                bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
+                bodyClass="divide-y divide-border"
             >
-                <div class="space-y-6 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                <div class="space-y-6 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
                     {/* Resource Picker */}
                     <FormField label="Resources" helpText="Select the resources to include in the report">
                         <ResourcePicker
@@ -166,7 +166,7 @@ export function ReportingPanel() {
                                         <button
                                             class={`w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 rounded-md border transition-all ${range() === r
                                                 ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500'
-                                                : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
+                                                : 'bg-white border-slate-300 text-slate-700 hover:bg-surface-alt dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
                                                 }`}
                                             onClick={() => setRange(r)}
                                         >
@@ -182,7 +182,7 @@ export function ReportingPanel() {
                                 <button
                                     class={`w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border transition-all ${format() === 'pdf'
                                         ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500'
-                                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
+                                        : 'bg-white border-slate-300 text-slate-700 hover:bg-surface-alt dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
                                         }`}
                                     onClick={() => setFormat('pdf')}
                                 >
@@ -192,7 +192,7 @@ export function ReportingPanel() {
                                 <button
                                     class={`w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border transition-all ${format() === 'csv'
                                         ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500'
-                                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
+                                        : 'bg-white border-slate-300 text-slate-700 hover:bg-surface-alt dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
                                         }`}
                                     onClick={() => setFormat('csv')}
                                 >
@@ -205,7 +205,7 @@ export function ReportingPanel() {
 
                 </div>
 
-                <div class="flex justify-end p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                <div class="flex justify-end p-4 sm:p-6 hover:bg-surface-hover transition-colors">
                     <button
                         class={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-md font-semibold transition-all ${generating()
                             ? 'bg-slate-300 text-slate-500 cursor-not-allowed dark:bg-slate-700 dark:text-slate-400'

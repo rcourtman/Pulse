@@ -2400,9 +2400,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           placeholder="Search resources... (Ctrl+F)"
           value={searchTerm()}
           onInput={(e) => setSearchTerm(e.currentTarget.value)}
-          class="w-full pl-10 pr-20 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-surface text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          class="w-full pl-10 pr-20 py-2 text-sm border border-border rounded-md bg-surface text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         />
-        <kbd class="absolute right-10 top-2 hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-muted bg-slate-100 dark:bg-slate-700 rounded border border-border">
+        <kbd class="absolute right-10 top-2 hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-muted bg-surface-hover rounded border border-border">
           ⌘F
         </kbd>
         <svg
@@ -2539,7 +2539,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={expandAll}
-            class="text-xs px-2 py-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+            class="text-xs px-2 py-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 hover:bg-surface-hover rounded transition-colors"
           >
             Expand all
           </button>
@@ -2547,7 +2547,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={collapseAll}
-            class="text-xs px-2 py-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+            class="text-xs px-2 py-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 hover:bg-surface-hover rounded transition-colors"
           >
             Collapse all
           </button>
@@ -3265,7 +3265,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               <Show when={(props.dockerIgnoredPrefixes().length ?? 0) > 0}>
                 <button
                   type="button"
-                  class="inline-flex items-center justify-center rounded-md border border-transparent bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                  class="inline-flex items-center justify-center rounded-md border border-transparent bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 transition hover:bg-surface-alt dark:text-slate-300 dark:hover:bg-slate-700"
                   onClick={handleResetDockerIgnored}
                 >
                   Reset

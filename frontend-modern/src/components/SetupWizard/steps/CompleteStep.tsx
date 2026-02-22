@@ -306,10 +306,10 @@ Keep these credentials secure!
                     <div class="space-y-2">
                         <For each={connectedAgents()}>
                             {(agent) => (
-                                <div class="flex items-center justify-between bg-white dark:bg-slate-900 rounded-md px-3 py-2.5 border border-border-subtle">
+                                <div class="flex items-center justify-between bg-surface rounded-md px-3 py-2.5 border border-border-subtle">
                                     <div class="flex items-center gap-2.5">
                                         <span class="w-2.5 h-2.5 bg-emerald-500 rounded-full"></span>
-                                        <span class="text-slate-800 dark:text-white text-sm font-medium">{agent.name}</span>
+                                        <span class="text-base-content text-sm font-medium">{agent.name}</span>
                                     </div>
                                     <div class="flex items-center gap-2">
                                         <span class="text-[10px] text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full font-medium">{agent.type}</span>
@@ -325,7 +325,7 @@ Keep these credentials secure!
             </Show>
 
             {/* Auto-detection info */}
-            <div class="bg-white dark:bg-slate-900 rounded-md border border-border p-6 text-left mb-6">
+            <div class="bg-surface rounded-md border border-border p-6 text-left mb-6">
                 <h3 class="text-sm font-semibold text-base-content mb-3 flex items-center gap-2">
                     <svg class="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
@@ -338,28 +338,28 @@ Keep these credentials secure!
                 </p>
 
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                    <div class="bg-slate-50 dark:bg-slate-800 border border-border rounded-md p-3 text-center transition-colors">
+                    <div class="bg-surface-alt border border-border rounded-md p-3 text-center transition-colors">
                         <div class="h-6 flex items-center justify-center mb-2">
                             <span class="text-xl">🐳</span>
                         </div>
                         <div class="text-base-content font-semibold text-xs mb-0.5">Docker</div>
                         <p class="text-[9px] text-muted">Container monitoring</p>
                     </div>
-                    <div class="bg-slate-50 dark:bg-slate-800 border border-border rounded-md p-3 text-center transition-colors">
+                    <div class="bg-surface-alt border border-border rounded-md p-3 text-center transition-colors">
                         <div class="h-6 flex items-center justify-center mb-2">
                             <span class="text-xl">☸️</span>
                         </div>
                         <div class="text-base-content font-semibold text-xs mb-0.5">Kubernetes</div>
                         <p class="text-[9px] text-muted">Cluster monitoring</p>
                     </div>
-                    <div class="bg-slate-50 dark:bg-slate-800 border border-border rounded-md p-3 text-center transition-colors">
+                    <div class="bg-surface-alt border border-border rounded-md p-3 text-center transition-colors">
                         <div class="h-6 flex items-center justify-center mb-2">
                             <ProxmoxIcon class="w-5 h-5 text-orange-500" />
                         </div>
                         <div class="text-base-content font-semibold text-xs mb-0.5">Proxmox</div>
                         <p class="text-[9px] text-muted">VM & container API</p>
                     </div>
-                    <div class="bg-slate-50 dark:bg-slate-800 border border-border rounded-md p-3 text-center transition-colors">
+                    <div class="bg-surface-alt border border-border rounded-md p-3 text-center transition-colors">
                         <div class="h-6 flex items-center justify-center mb-2">
                             <span class="text-[13px] text-cyan-600 dark:text-cyan-400 font-bold tracking-tight">NAS</span>
                         </div>
@@ -387,7 +387,7 @@ Keep these credentials secure!
             </div>
 
             {/* Agent installation */}
-            <div class="bg-white dark:bg-slate-900 rounded-md border border-border p-6 text-left mb-6">
+            <div class="bg-surface rounded-md border border-border p-6 text-left mb-6">
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="text-sm font-semibold text-base-content flex items-center gap-2">
                         <svg class="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -400,7 +400,7 @@ Keep these credentials secure!
                             void generateNewToken('manual');
                         }}
                         disabled={generatingToken()}
-                        class="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white px-2.5 py-1.5 rounded-md flex items-center gap-1.5 disabled:opacity-50 transition-colors border border-transparent dark:border-slate-700"
+                        class="text-xs bg-surface-alt text-muted hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-base-content px-2.5 py-1.5 rounded-md flex items-center gap-1.5 disabled:opacity-50 transition-colors border border-transparent dark:border-slate-700"
                         title="Generate a new token for the next host"
                     >
                         {generatingToken() ? (
@@ -445,10 +445,10 @@ Keep these credentials secure!
             </div>
 
             {/* Credentials section (collapsible) */}
-            <div class="bg-white dark:bg-slate-900 rounded-md border border-border mb-8 overflow-hidden">
+            <div class="bg-surface rounded-md border border-border mb-8 overflow-hidden">
                 <button
                     onClick={() => setShowCredentials(!showCredentials())}
-                    class="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group"
+                    class="w-full p-4 flex items-center justify-between text-left hover:bg-surface-hover transition-colors group"
                 >
                     <div class="flex items-center gap-3">
                         <div class="w-8 h-8 rounded-md bg-amber-50 dark:bg-amber-900 flex items-center justify-center border border-amber-100 dark:border-amber-800">

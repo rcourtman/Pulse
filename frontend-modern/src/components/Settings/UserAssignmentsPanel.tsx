@@ -128,16 +128,16 @@ export const UserAssignmentsPanel: Component = () => {
                             placeholder="Search users..."
                             value={searchQuery()}
                             onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                            class="min-h-10 sm:min-h-9 pl-9 pr-3 py-2.5 text-sm rounded-md border border-slate-300 dark:border-slate-600 bg-surface text-base-content focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
+                            class="min-h-10 sm:min-h-9 pl-9 pr-3 py-2.5 text-sm rounded-md border border-border bg-surface text-base-content focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
                         />
                     </div>
                 }
                 noPadding
-                bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
+                bodyClass="divide-y divide-border"
             >
 
                 <Show when={licenseLoaded() && !hasFeature('rbac') && !loading()}>
-                    <div class="bg-slate-50 dark:bg-slate-800 p-4 sm:p-6 transition-colors border-b border-border-subtle">
+                    <div class="bg-surface-alt p-4 sm:p-6 transition-colors border-b border-border-subtle">
                         <div class="flex flex-col sm:flex-row items-center gap-4">
                             <div class="flex-1 text-center sm:text-left">
                                 <h4 class="text-base font-semibold text-base-content">Centralized Access Control (Pro)</h4>
@@ -220,7 +220,7 @@ export const UserAssignmentsPanel: Component = () => {
                                         <button
                                             type="button"
                                             onClick={() => handleEditRoles(assignment)}
-                                            class="inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                            class="inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-base-content hover:bg-surface-hover transition-colors"
                                         >
                                             <Pencil class="w-4 h-4" />
                                             Manage Access
@@ -240,7 +240,7 @@ export const UserAssignmentsPanel: Component = () => {
             {/* Assignments Modal */}
             <Show when={showModal()}>
                 <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
-                    <div class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-md shadow-sm border border-border mx-4 max-h-[92vh] overflow-hidden">
+                    <div class="w-full max-w-2xl bg-surface rounded-md shadow-sm border border-border mx-4 max-h-[92vh] overflow-hidden">
                         <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
                             <div>
                                 <h3 class="text-lg font-semibold text-base-content">
@@ -331,7 +331,7 @@ export const UserAssignmentsPanel: Component = () => {
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 sm:flex sm:items-center sm:justify-end gap-3 px-4 sm:px-6 py-5 border-t border-border bg-slate-50 dark:bg-slate-800 rounded-b-xl">
+                        <div class="grid grid-cols-1 sm:flex sm:items-center sm:justify-end gap-3 px-4 sm:px-6 py-5 border-t border-border bg-surface-alt rounded-b-xl">
                             <button
                                 type="button"
                                 onClick={() => setShowModal(false)}

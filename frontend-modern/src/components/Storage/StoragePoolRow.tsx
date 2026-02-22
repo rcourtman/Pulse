@@ -31,8 +31,8 @@ const HEALTH_BADGE: Record<NormalizedHealth, { bg: string; text: string }> = {
   healthy: { bg: 'bg-green-100 dark:bg-green-900', text: 'text-green-700 dark:text-green-300' },
   warning: { bg: 'bg-yellow-100 dark:bg-yellow-900', text: 'text-yellow-700 dark:text-yellow-300' },
   critical: { bg: 'bg-red-100 dark:bg-red-900', text: 'text-red-700 dark:text-red-300' },
-  offline: { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-600 dark:text-slate-300' },
-  unknown: { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-muted' },
+  offline: { bg: 'bg-surface-alt', text: 'text-muted' },
+  unknown: { bg: 'bg-surface-alt', text: 'text-muted' },
 };
 
 const TYPE_BADGE: Record<string, string> = {
@@ -79,7 +79,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
   return (
     <>
       <tr
-        class={`group cursor-pointer ${props.rowClass} ${props.expanded ? 'bg-slate-50 dark:bg-slate-800' : ''}`}
+        class={`group cursor-pointer ${props.rowClass} ${props.expanded ? 'bg-surface-alt' : ''}`}
         style={{ ...props.rowStyle, 'min-height': '32px' }}
         onClick={props.onToggleExpand}
         {...props.alertDataAttrs}

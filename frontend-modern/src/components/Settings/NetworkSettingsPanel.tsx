@@ -98,10 +98,10 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
         description="Configure discovery, CORS, embedding, and webhook network boundaries."
         icon={<Network class="w-5 h-5" strokeWidth={2} />}
         noPadding
-        bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
+        bodyClass="divide-y divide-border"
       >
         {/* Network Discovery Section */}
-        <section class="p-4 sm:p-6 space-y-5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+        <section class="p-4 sm:p-6 space-y-5 hover:bg-surface-hover transition-colors">
           <SectionHeader
             title="Network discovery"
             description="Control how Pulse scans for Proxmox services on your network."
@@ -143,7 +143,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
           <Show when={props.discoveryEnabled()}>
             <div class="space-y-4 rounded-md border border-slate-200 bg-white p-3 dark:border-slate-600 dark:bg-slate-800">
               <fieldset class="space-y-2">
-                <legend class="text-xs font-medium text-slate-700 dark:text-slate-300">
+                <legend class="text-xs font-medium text-base-content">
                   Scan scope
                 </legend>
                 <div class="space-y-2">
@@ -282,7 +282,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                 <div class="flex items-center justify-between gap-2">
                   <label
                     for="discoverySubnetInput"
-                    class="text-xs font-medium text-slate-700 dark:text-slate-300"
+                    class="text-xs font-medium text-base-content"
                   >
                     Discovery subnet
                   </label>
@@ -404,8 +404,8 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
         </section>
 
         {/* Public URL Setting */}
-        <section class="p-4 sm:p-6 space-y-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-          <h4 class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+        <section class="p-4 sm:p-6 space-y-4 hover:bg-surface-hover transition-colors">
+          <h4 class="flex items-center gap-2 text-sm font-medium text-base-content">
             <svg
               width="16"
               height="16"
@@ -440,7 +440,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                 placeholder="http://192.168.1.100:8080"
                 class={`w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md ${props.envOverrides().publicURL
                   ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900 cursor-not-allowed opacity-75'
-                  : 'border-slate-300 dark:border-slate-600 bg-surface'
+                  : 'border-border bg-surface'
                   }`}
               />
               {props.envOverrides().publicURL && (
@@ -470,8 +470,8 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
         </section>
 
         {/* CORS Settings Section */}
-        <section class="p-4 sm:p-6 space-y-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-          <h4 class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+        <section class="p-4 sm:p-6 space-y-4 hover:bg-surface-hover transition-colors">
+          <h4 class="flex items-center gap-2 text-sm font-medium text-base-content">
             <svg
               width="16"
               height="16"
@@ -506,7 +506,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                 placeholder="* or https://example.com"
                 class={`w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md ${props.envOverrides().allowedOrigins
                   ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900 cursor-not-allowed opacity-75'
-                  : 'border-slate-300 dark:border-slate-600 bg-surface'
+                  : 'border-border bg-surface'
                   }`}
               />
               {props.envOverrides().allowedOrigins && (
@@ -532,8 +532,8 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
         </section>
 
         {/* Embedding Section */}
-        <section class="p-4 sm:p-6 space-y-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-          <h4 class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+        <section class="p-4 sm:p-6 space-y-4 hover:bg-surface-hover transition-colors">
+          <h4 class="flex items-center gap-2 text-sm font-medium text-base-content">
             <svg
               width="16"
               height="16"
@@ -560,16 +560,16 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                   props.setAllowEmbedding(e.currentTarget.checked);
                   props.setHasUnsavedChanges(true);
                 }}
-                class="h-5 w-5 sm:h-4 sm:w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
+                class="h-5 w-5 sm:h-4 sm:w-4 rounded border-border text-blue-600 focus:ring-blue-500"
               />
-              <label for="allowEmbedding" class="text-sm text-slate-700 dark:text-slate-300">
+              <label for="allowEmbedding" class="text-sm text-base-content">
                 Allow iframe embedding
               </label>
             </div>
 
             <Show when={props.allowEmbedding()}>
               <div class="space-y-2">
-                <label class="text-xs font-medium text-slate-700 dark:text-slate-300">
+                <label class="text-xs font-medium text-base-content">
                   Allowed Embed Origins (optional)
                 </label>
                 <p class="text-xs text-muted">
@@ -584,7 +584,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                     props.setHasUnsavedChanges(true);
                   }}
                   placeholder="https://my.domain, https://dashboard.example.com"
-                  class="w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md border-slate-300 dark:border-slate-600 bg-surface"
+                  class="w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md border-border bg-surface"
                 />
                 <p class="text-xs text-muted">
                   Example: If Pulse is at <code>pulse.my.domain</code> and your dashboard is at{' '}
@@ -596,7 +596,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
         </section>
 
         {/* Webhook Security Section */}
-        <section class="p-4 sm:p-6 space-y-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+        <section class="p-4 sm:p-6 space-y-4 hover:bg-surface-hover transition-colors">
           <h3 class="text-sm font-semibold text-base-content flex items-center gap-2">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -616,7 +616,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
           </h3>
           <div class="space-y-3">
             <div>
-              <label class="text-sm font-medium text-slate-700 dark:text-slate-300">
+              <label class="text-sm font-medium text-base-content">
                 Allowed Private IP Ranges for Webhooks
               </label>
               <p class="text-xs text-muted mb-2">
@@ -632,7 +632,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                   props.setHasUnsavedChanges(true);
                 }}
                 placeholder="192.168.1.0/24, 10.0.0.0/8"
-                class="w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md border-slate-300 dark:border-slate-600 bg-surface"
+                class="w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md border-border bg-surface"
               />
               <p class="text-xs text-muted mt-1">
                 Example: <code>192.168.1.0/24,10.0.0.0/8</code> allows webhooks to these private

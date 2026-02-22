@@ -41,7 +41,7 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
         class={`inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-xs font-medium rounded-md transition-all ${
           open()
             ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+            : 'bg-surface-hover text-muted hover:bg-slate-200 dark:hover:bg-slate-600'
         }`}
         title="Customize dashboard widgets"
         onClick={() => setOpen(!open())}
@@ -61,7 +61,7 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
         <div class="absolute right-0 mt-1 w-64 rounded-md border border-slate-200 bg-white shadow-sm z-50 dark:border-slate-700 dark:bg-slate-800">
           <div class="px-3 py-2 border-b border-slate-100 dark:border-slate-700">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-medium text-slate-700 dark:text-slate-200">Dashboard Widgets</span>
+              <span class="text-xs font-medium text-base-content">Dashboard Widgets</span>
               <Show when={!props.isDefault()}>
                 <button
                   type="button"
@@ -92,7 +92,7 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
                       />
                       <span
                         class={`truncate text-sm ${
-                          visible() ? 'text-slate-700 dark:text-slate-200' : 'text-muted'
+                          visible() ? 'text-base-content' : 'text-muted'
                         }`}
                       >
                         {widget.label}

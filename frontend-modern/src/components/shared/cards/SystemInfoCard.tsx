@@ -11,24 +11,24 @@ export const SystemInfoCard: Component<SystemInfoCardProps> = (props) => {
     const node = props.node;
     return (
       <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-        <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">System</div>
+        <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">System</div>
         <div class="space-y-1.5 text-[11px]">
           <div class="flex items-center justify-between gap-2 min-w-0">
             <span class="text-muted shrink-0">Node</span>
-            <span class="font-medium text-slate-700 dark:text-slate-200 select-all truncate" title={node.name}>{node.name}</span>
+            <span class="font-medium text-base-content select-all truncate" title={node.name}>{node.name}</span>
           </div>
           <div class="flex items-center justify-between gap-2 min-w-0">
             <span class="text-muted shrink-0">Version</span>
-            <span class="font-medium text-slate-700 dark:text-slate-200 truncate" title={node.pveVersion}>{node.pveVersion}</span>
+            <span class="font-medium text-base-content truncate" title={node.pveVersion}>{node.pveVersion}</span>
           </div>
           <div class="flex items-center justify-between gap-2 min-w-0">
             <span class="text-muted shrink-0">Kernel</span>
-            <span class="font-medium text-slate-700 dark:text-slate-200 truncate" title={node.kernelVersion}>{node.kernelVersion}</span>
+            <span class="font-medium text-base-content truncate" title={node.kernelVersion}>{node.kernelVersion}</span>
           </div>
           <Show when={node.uptime}>
             <div class="flex items-center justify-between">
               <span class="text-muted">Uptime</span>
-              <span class="font-medium text-slate-700 dark:text-slate-200">{formatUptime(node.uptime!)}</span>
+              <span class="font-medium text-base-content">{formatUptime(node.uptime!)}</span>
             </div>
           </Show>
         </div>
@@ -39,32 +39,32 @@ export const SystemInfoCard: Component<SystemInfoCardProps> = (props) => {
   const host = props.host;
   return (
     <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-      <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">System</div>
+      <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">System</div>
       <div class="space-y-1.5 text-[11px]">
         <div class="flex items-center justify-between gap-2 min-w-0">
           <span class="text-muted shrink-0">Hostname</span>
-          <span class="font-medium text-slate-700 dark:text-slate-200 select-all truncate" title={host.hostname}>{host.hostname}</span>
+          <span class="font-medium text-base-content select-all truncate" title={host.hostname}>{host.hostname}</span>
         </div>
         <div class="flex items-center justify-between">
           <span class="text-muted">Platform</span>
-          <span class="font-medium text-slate-700 dark:text-slate-200 capitalize">{host.platform || 'Unknown'}</span>
+          <span class="font-medium text-base-content capitalize">{host.platform || 'Unknown'}</span>
         </div>
         <div class="flex items-center justify-between gap-2 min-w-0">
           <span class="text-muted shrink-0">OS</span>
-          <span class="font-medium text-slate-700 dark:text-slate-200 truncate" title={`${host.osName} ${host.osVersion}`}>{host.osName} {host.osVersion}</span>
+          <span class="font-medium text-base-content truncate" title={`${host.osName} ${host.osVersion}`}>{host.osName} {host.osVersion}</span>
         </div>
         <div class="flex items-center justify-between gap-2 min-w-0">
           <span class="text-muted shrink-0">Kernel</span>
-          <span class="font-medium text-slate-700 dark:text-slate-200 truncate" title={host.kernelVersion}>{host.kernelVersion}</span>
+          <span class="font-medium text-base-content truncate" title={host.kernelVersion}>{host.kernelVersion}</span>
         </div>
         <div class="flex items-center justify-between">
           <span class="text-muted">Architecture</span>
-          <span class="font-medium text-slate-700 dark:text-slate-200">{host.architecture}</span>
+          <span class="font-medium text-base-content">{host.architecture}</span>
         </div>
         <Show when={host.uptimeSeconds}>
           <div class="flex items-center justify-between">
             <span class="text-muted">Uptime</span>
-            <span class="font-medium text-slate-700 dark:text-slate-200">{formatUptime(host.uptimeSeconds!)}</span>
+            <span class="font-medium text-base-content">{formatUptime(host.uptimeSeconds!)}</span>
           </div>
         </Show>
       </div>

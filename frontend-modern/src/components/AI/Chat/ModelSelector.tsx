@@ -134,7 +134,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
             <button
                 ref={buttonRef}
                 onClick={handleToggle}
-                class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 rounded-md border border-border hover:border-slate-300 dark:hover:border-slate-600 bg-surface transition-colors"
+                class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-muted hover:text-base-content rounded-md border border-border hover:border-slate-300 dark:hover:border-slate-600 bg-surface transition-colors"
                 title="Select model for this chat"
             >
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -165,14 +165,14 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
                             onInput={(e) => setSearchQuery(e.currentTarget.value)}
                             onKeyDown={handleKeyDown}
                             placeholder="Search or enter model ID"
-                            class="flex-1 text-xs px-2 py-1.5 rounded-md border border-border bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                            class="flex-1 text-xs px-2 py-1.5 rounded-md border border-border bg-surface text-base-content focus:outline-none focus:ring-2 focus:ring-purple-400"
                         />
                         <Show when={props.onRefresh}>
                             <button
                                 type="button"
                                 onClick={() => props.onRefresh?.()}
                                 disabled={props.isLoading}
-                                class="p-1.5 rounded-md text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-surface-hover disabled:opacity-50"
+                                class="p-1.5 rounded-md text-slate-500 hover:text-base-content hover:bg-surface-hover disabled:opacity-50"
                                 title="Refresh models"
                             >
                                 <svg class={`w-3.5 h-3.5 ${props.isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -239,7 +239,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
                         <For each={Array.from(groupModelsByProvider(filteredModels()).entries())}>
                             {([provider, providerModels]) => (
                                 <>
-                                    <div class="px-3 py-1.5 text-[11px] font-semibold text-muted bg-slate-50 dark:bg-slate-800 sticky top-0">
+                                    <div class="px-3 py-1.5 text-[11px] font-semibold text-muted bg-surface-alt sticky top-0">
                                         {PROVIDER_DISPLAY_NAMES[provider] || provider}
                                     </div>
                                     <For each={providerModels}>

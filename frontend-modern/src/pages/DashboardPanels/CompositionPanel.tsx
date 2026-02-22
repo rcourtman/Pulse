@@ -36,7 +36,7 @@ function DistributionItem(props: { type: string; count: number; total: number })
     return (
         <div class="space-y-1">
             <div class="flex items-center justify-between text-xs">
-                <div class="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                <div class="flex items-center gap-2 text-base-content">
                     <Dynamic component={Icon()} class="w-3.5 h-3.5 text-muted" />
                     <span class="font-medium">{TYPE_LABELS[props.type] ?? props.type}</span>
                 </div>
@@ -45,7 +45,7 @@ function DistributionItem(props: { type: string; count: number; total: number })
                     <span class="text-slate-400 dark:text-slate-600">({percent()}%)</span>
                 </div>
             </div>
-            <div class="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+            <div class="h-1.5 w-full bg-surface-alt rounded-full overflow-hidden">
                 <div
                     class="h-full bg-blue-500 dark:bg-blue-600 rounded-full"
                     style={{ width: `${percent()}%` }}
@@ -85,7 +85,7 @@ export function CompositionPanel(props: CompositionPanelProps) {
                 </Show>
 
                 <Show when={totalInfra() > 0 && totalWorkloads() > 0}>
-                    <div class="h-px bg-slate-100 dark:bg-slate-800" />
+                    <div class="h-px bg-surface-alt" />
                 </Show>
 
                 <Show when={totalWorkloads() > 0}>

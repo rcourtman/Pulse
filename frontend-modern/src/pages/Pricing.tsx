@@ -186,7 +186,7 @@ export default function Pricing() {
           <div class="mt-2 text-3xl font-semibold tracking-tight text-base-content">
             Free forever
           </div>
-          <ul class="mt-4 space-y-2 text-sm text-slate-700 dark:text-slate-200">
+          <ul class="mt-4 space-y-2 text-sm text-base-content">
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Real-time monitoring</span></li>
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Update alerts</span></li>
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Basic SSO (OIDC)</span></li>
@@ -212,11 +212,11 @@ export default function Pricing() {
           <div class="mt-2 text-3xl font-semibold tracking-tight text-base-content">
             $15/month
           </div>
-          <div class="mt-1 text-sm text-slate-600 dark:text-slate-300">
+          <div class="mt-1 text-sm text-muted">
             or $129/year (save 28%)
           </div>
 
-          <ul class="mt-4 space-y-2 text-sm text-slate-700 dark:text-slate-200">
+          <ul class="mt-4 space-y-2 text-sm text-base-content">
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Everything in Community</span></li>
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>AI Auto-Fix &amp; Investigation</span></li>
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Pulse Relay (mobile)</span></li>
@@ -240,10 +240,10 @@ export default function Pricing() {
           <div class="mt-2 text-3xl font-semibold tracking-tight text-base-content">
             $29/month
           </div>
-          <div class="mt-1 text-sm text-slate-600 dark:text-slate-300">
+          <div class="mt-1 text-sm text-muted">
             Founding price: $19/mo for first 100 signups
           </div>
-          <ul class="mt-4 space-y-2 text-sm text-slate-700 dark:text-slate-200">
+          <ul class="mt-4 space-y-2 text-sm text-base-content">
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Everything in Pro</span></li>
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Managed hosting</span></li>
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Automatic backups</span></li>
@@ -267,17 +267,17 @@ export default function Pricing() {
         <div class="mt-4 overflow-x-auto">
           <Table class="min-w-[720px] w-full border-collapse">
             <TableHeader>
-              <TableRow class="bg-slate-50 dark:bg-slate-800 border-b border-border">
-                <TableHead class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+              <TableRow class="bg-surface-alt border-b border-border">
+                <TableHead class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                   Feature
                 </TableHead>
-                <TableHead class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+                <TableHead class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-muted">
                   Community
                 </TableHead>
-                <TableHead class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+                <TableHead class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-muted">
                   Pro
                 </TableHead>
-                <TableHead class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+                <TableHead class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-muted">
                   Cloud
                 </TableHead>
               </TableRow>

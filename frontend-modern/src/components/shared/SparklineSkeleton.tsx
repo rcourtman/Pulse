@@ -13,10 +13,10 @@ export const SparklineSkeleton: Component<SparklineSkeletonProps> = (props) => {
             <div class="relative flex-1 min-h-0 pl-7 pr-3 max-w-full overflow-hidden">
                 {/* Y-axis placeholders */}
                 <div class="absolute inset-y-0 left-0 w-7 flex flex-col justify-between py-[2%]">
-                    <div class="h-1.5 w-4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
-                    <div class="h-1.5 w-4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
-                    <div class="h-1.5 w-4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
-                    <div class="h-1.5 w-4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+                    <div class="h-1.5 w-4 bg-surface-hover rounded animate-pulse" />
+                    <div class="h-1.5 w-4 bg-surface-hover rounded animate-pulse" />
+                    <div class="h-1.5 w-4 bg-surface-hover rounded animate-pulse" />
+                    <div class="h-1.5 w-4 bg-surface-hover rounded animate-pulse" />
                 </div>
 
                 {/* Center line / chart placeholder */}
@@ -53,9 +53,9 @@ export const SparklineSkeleton: Component<SparklineSkeletonProps> = (props) => {
 
             {/* X-axis placeholders */}
             <div class="h-4 pl-7 pr-3 mt-1 flex justify-between">
-                <div class="h-1.5 w-6 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
-                <div class="h-1.5 w-6 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
-                <div class="h-1.5 w-4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+                <div class="h-1.5 w-6 bg-surface-hover rounded animate-pulse" />
+                <div class="h-1.5 w-6 bg-surface-hover rounded animate-pulse" />
+                <div class="h-1.5 w-4 bg-surface-hover rounded animate-pulse" />
             </div>
         </div>
     );

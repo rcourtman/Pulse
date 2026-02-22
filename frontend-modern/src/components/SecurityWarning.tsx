@@ -155,7 +155,7 @@ export const SecurityWarning: Component = () => {
                   </button>
                 </div>
 
-                <p class="text-sm text-slate-700 dark:text-slate-300 mt-1">
+                <p class="text-sm text-base-content mt-1">
                   {status()!.publicAccess ? (
                     <span class="font-semibold text-red-700 dark:text-red-300">
                       WARNING: PUBLIC NETWORK ACCESS DETECTED - Your Proxmox credentials are exposed to

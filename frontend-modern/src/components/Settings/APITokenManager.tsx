@@ -427,7 +427,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         padding="none"
         class="border border-slate-200 bg-slate-50 shadow-sm dark:border-slate-700 dark:bg-slate-800"
       >
-        <div class="flex flex-col gap-6 p-4 sm:p-6 lg:p-8 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+        <div class="flex flex-col gap-6 p-4 sm:p-6 lg:p-8 hover:bg-surface-hover transition-colors">
           <div class="flex flex-wrap items-center justify-between gap-4">
             <div class="flex flex-wrap items-center gap-3">
               <div class="flex h-10 w-10 items-center justify-center rounded-md bg-blue-600 text-blue-600 dark:bg-blue-500 dark:text-blue-200">
@@ -599,7 +599,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         <Card padding="none" tone="card" class="overflow-hidden">
           <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-700 dark:bg-slate-800">
             <div>
-              <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Token inventory</h4>
+              <h4 class="text-sm font-semibold text-base-content">Token inventory</h4>
               <p class="text-xs text-muted">
                 Active credentials sorted by most recent creation date.
               </p>
@@ -757,7 +757,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
           createSectionRef = el;
         }}
       >
-        <div class="flex flex-col gap-6 p-4 sm:p-6 lg:p-8 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+        <div class="flex flex-col gap-6 p-4 sm:p-6 lg:p-8 hover:bg-surface-hover transition-colors">
           <div class="flex flex-wrap items-start justify-between gap-4">
             <SectionHeader
               size="sm"

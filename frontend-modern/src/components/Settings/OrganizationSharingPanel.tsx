@@ -302,56 +302,56 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
           description="Share views and resources across organizations with explicit role-based access."
           icon={<Share2 class="w-5 h-5" />}
           noPadding
-          bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
+          bodyClass="divide-y divide-border"
         >
           <Show
             when={!loading()}
             fallback={
-              <div class="space-y-5 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+              <div class="space-y-5 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
                 <div class="rounded-md border border-border p-4 space-y-3">
-                  <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div class="h-4 w-24 animate-pulse rounded bg-surface-hover" />
 
                   <div class="grid gap-3 lg:grid-cols-2">
                     <div class="space-y-2">
-                      <div class="h-3 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                      <div class="h-10 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                      <div class="h-3 w-28 animate-pulse rounded bg-surface-hover" />
+                      <div class="h-10 w-full animate-pulse rounded bg-surface-hover" />
                     </div>
                     <div class="space-y-2">
-                      <div class="h-3 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                      <div class="h-10 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                      <div class="h-3 w-20 animate-pulse rounded bg-surface-hover" />
+                      <div class="h-10 w-full animate-pulse rounded bg-surface-hover" />
                     </div>
                   </div>
 
                   <div class="rounded-md border border-border p-3 space-y-2">
-                    <div class="h-3 w-32 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                    <div class="h-10 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                    <div class="h-3 w-32 animate-pulse rounded bg-surface-hover" />
+                    <div class="h-10 w-full animate-pulse rounded bg-surface-hover" />
                   </div>
 
                   <div class="grid gap-3 lg:grid-cols-3">
                     {Array.from({ length: 3 }).map(() => (
                       <div class="space-y-2">
-                        <div class="h-3 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                        <div class="h-10 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                        <div class="h-3 w-24 animate-pulse rounded bg-surface-hover" />
+                        <div class="h-10 w-full animate-pulse rounded bg-surface-hover" />
                       </div>
                     ))}
                   </div>
 
                   <div class="flex justify-end">
-                    <div class="h-10 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                    <div class="h-10 w-28 animate-pulse rounded bg-surface-hover" />
                   </div>
                 </div>
 
                 <div class="space-y-2">
-                  <div class="h-4 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div class="h-4 w-28 animate-pulse rounded bg-surface-hover" />
                   <div class="overflow-hidden rounded-md border border-border">
-                    <div class="h-10 w-full animate-pulse bg-slate-100 dark:bg-slate-800" />
+                    <div class="h-10 w-full animate-pulse bg-surface-alt" />
                     {Array.from({ length: 3 }).map(() => (
                       <div class="border-t border-border-subtle px-3 py-3">
                         <div class="flex items-center gap-3">
-                          <div class="h-4 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                          <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                          <div class="h-4 w-14 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
-                          <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                          <div class="h-4 w-40 animate-pulse rounded bg-surface-hover" />
+                          <div class="h-4 w-24 animate-pulse rounded bg-surface-hover" />
+                          <div class="h-4 w-14 animate-pulse rounded-full bg-surface-hover" />
+                          <div class="h-4 w-24 animate-pulse rounded bg-surface-hover" />
                         </div>
                       </div>
                     ))}
@@ -359,16 +359,16 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                 </div>
 
                 <div class="space-y-2">
-                  <div class="h-4 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div class="h-4 w-28 animate-pulse rounded bg-surface-hover" />
                   <div class="overflow-hidden rounded-md border border-border">
-                    <div class="h-10 w-full animate-pulse bg-slate-100 dark:bg-slate-800" />
+                    <div class="h-10 w-full animate-pulse bg-surface-alt" />
                     {Array.from({ length: 3 }).map(() => (
                       <div class="border-t border-border-subtle px-3 py-3">
                         <div class="flex items-center gap-3">
-                          <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                          <div class="h-4 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                          <div class="h-4 w-14 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
-                          <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                          <div class="h-4 w-24 animate-pulse rounded bg-surface-hover" />
+                          <div class="h-4 w-40 animate-pulse rounded bg-surface-hover" />
+                          <div class="h-4 w-14 animate-pulse rounded-full bg-surface-hover" />
+                          <div class="h-4 w-24 animate-pulse rounded bg-surface-hover" />
                         </div>
                       </div>
                     ))}
@@ -378,7 +378,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
             }
           >
             <Show when={canManageOrg(org(), props.currentUser)}>
-              <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+              <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
                 <div class="rounded-md border border-border p-4 space-y-3">
                   <h4 class="text-sm font-semibold text-base-content">Create Share</h4>
 
@@ -390,7 +390,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                       <select
                         value={targetOrgId()}
                         onChange={(event) => updateTargetOrg(event.currentTarget.value)}
-                        class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${targetOrgError() ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
+                        class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${targetOrgError() ? 'border-red-400 dark:border-red-500' : 'border-border'
                           }`}
                       >
                         <option value="">Select organization</option>
@@ -473,7 +473,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                           value={resourceType()}
                           onInput={(event) => updateResourceType(event.currentTarget.value)}
                           placeholder={VALID_RESOURCE_TYPES.join(' | ')}
-                          class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${resourceTypeError() ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
+                          class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${resourceTypeError() ? 'border-red-400 dark:border-red-500' : 'border-border'
                             }`}
                         />
                         <Show when={resourceTypeError() !== ''}>
@@ -490,7 +490,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                           value={resourceId()}
                           onInput={(event) => updateResourceId(event.currentTarget.value)}
                           placeholder="resource identifier"
-                          class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${resourceIdError() ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
+                          class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${resourceIdError() ? 'border-red-400 dark:border-red-500' : 'border-border'
                             }`}
                         />
                         <Show when={resourceIdError() !== ''}>
@@ -528,14 +528,14 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
             </Show>
 
             <Show when={!canManageOrg(org(), props.currentUser)}>
-              <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+              <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
                 <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300">
                   Admin or owner role required to create or remove organization shares.
                 </div>
               </div>
             </Show>
 
-            <div class="space-y-2 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+            <div class="space-y-2 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
               <h4 class="text-sm font-semibold text-base-content">Outgoing Shares</h4>
               <div class="mt-4 -mx-4 sm:mx-0 overflow-x-auto w-full">
                 <PulseDataGrid
@@ -556,7 +556,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                     {
                       key: 'targetOrgId',
                       label: 'Target Org',
-                      render: (share) => <span class="text-slate-700 dark:text-slate-300">{orgNameById().get(share.targetOrgId) || share.targetOrgId}</span>
+                      render: (share) => <span class="text-base-content">{orgNameById().get(share.targetOrgId) || share.targetOrgId}</span>
                     },
                     {
                       key: 'accessRole',
@@ -604,7 +604,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
               </div>
             </div>
 
-            <div class="space-y-2 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+            <div class="space-y-2 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
               <h4 class="text-sm font-semibold text-base-content">Incoming Shares</h4>
               <div class="mt-4 -mx-4 sm:mx-0 overflow-x-auto w-full">
                 <PulseDataGrid
@@ -613,7 +613,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                     {
                       key: 'sourceOrg',
                       label: 'Source Org',
-                      render: (share) => <span class="text-slate-700 dark:text-slate-300">{share.sourceOrgName || share.sourceOrgId}</span>
+                      render: (share) => <span class="text-base-content">{share.sourceOrgName || share.sourceOrgId}</span>
                     },
                     {
                       key: 'resource',

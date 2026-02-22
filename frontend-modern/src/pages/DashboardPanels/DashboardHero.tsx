@@ -182,7 +182,7 @@ export function DashboardHero(props: DashboardHeroProps) {
                                 </span>
                             </Show>
                         </div>
-                        <span class="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">
+                        <span class="text-sm font-semibold text-base-content truncate">
                             {statusConfig().label}
                         </span>
                     </div>
@@ -271,7 +271,7 @@ export function DashboardHero(props: DashboardHeroProps) {
                                         )}
                                     </For>
                                     <Show when={getInfraComposition().length > 3}>
-                                        <div class="flex items-center gap-1.5"><div class="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700" />+{getInfraComposition().length - 3} more</div>
+                                        <div class="flex items-center gap-1.5"><div class="w-1.5 h-1.5 rounded-full bg-surface-hover" />+{getInfraComposition().length - 3} more</div>
                                     </Show>
                                 </div>
                             </div>
@@ -319,7 +319,7 @@ export function DashboardHero(props: DashboardHeroProps) {
                                         )}
                                     </For>
                                     <Show when={getWorkloadComposition().length > 3}>
-                                        <div class="flex items-center gap-1.5"><div class="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700" />+{getWorkloadComposition().length - 3} more</div>
+                                        <div class="flex items-center gap-1.5"><div class="w-1.5 h-1.5 rounded-full bg-surface-hover" />+{getWorkloadComposition().length - 3} more</div>
                                     </Show>
                                 </div>
                             </div>

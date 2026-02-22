@@ -175,7 +175,7 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
             }}
           >
             {/* Header */}
-            <div class="px-3 py-2 bg-slate-50 dark:bg-slate-800 border-b border-border flex items-center justify-between gap-2">
+            <div class="px-3 py-2 bg-surface-alt border-b border-border flex items-center justify-between gap-2">
               <span id="help-popover-title" class="text-sm font-medium text-base-content">
                 {helpContent.title}
               </span>
@@ -190,7 +190,7 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
             </div>
 
             {/* Content */}
-            <div class="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-300 space-y-2">
+            <div class="px-3 py-2.5 text-xs text-muted space-y-2">
               <p class="whitespace-pre-line leading-relaxed">{helpContent.description}</p>
 
               <Show when={helpContent.examples && helpContent.examples.length > 0}>

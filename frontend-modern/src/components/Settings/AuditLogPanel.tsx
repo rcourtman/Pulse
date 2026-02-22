@@ -467,7 +467,7 @@ export default function AuditLogPanel() {
                     <button
                         onClick={() => fetchAuditEvents()}
                         disabled={loading()}
-                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                     >
                         <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
                         Refresh
@@ -483,14 +483,14 @@ export default function AuditLogPanel() {
                     <button
                         onClick={() => setCancelVerifyAll(true)}
                         disabled={!verifyingAll()}
-                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-muted bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={() => verifyAllEvents({ showToast: true, resume: true })}
                         disabled={verifyingAll() || !hasResumeEvents()}
-                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-muted bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                         onMouseEnter={(e) => {
                             if (!hasResumeEvents()) return;
                             const rect = e.currentTarget.getBoundingClientRect();
@@ -516,7 +516,7 @@ export default function AuditLogPanel() {
 
             {/* Upgrade CTA */}
             <Show when={licenseLoaded() && !hasFeature('audit_logging') && !loading()}>
-                <div class="p-6 bg-slate-50 dark:bg-slate-800 border border-border rounded-md">
+                <div class="p-6 bg-surface-alt border border-border rounded-md">
                     <div class="flex flex-col sm:flex-row items-center gap-4">
                         <div class="flex-1">
                             <h3 class="text-lg font-semibold text-base-content">Audit Logging</h3>
@@ -539,15 +539,15 @@ export default function AuditLogPanel() {
 
             {/* Filters */}
             <Show when={isPersistent()}>
-                <div class="flex flex-wrap gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-md">
+                <div class="flex flex-wrap gap-3 p-4 bg-surface-alt rounded-md">
                     <div class="flex items-center gap-2">
                         <Filter class="w-4 h-4 text-slate-400" />
-                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Filters:</span>
+                        <span class="text-sm font-medium text-base-content">Filters:</span>
                     </div>
                     <select
                         value={eventFilter()}
                         onChange={(e) => setEventFilter(e.currentTarget.value)}
-                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-base-content"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-white dark:bg-slate-700 text-base-content"
                     >
                         <option value="">All Events</option>
                         <option value="login">Login</option>
@@ -560,12 +560,12 @@ export default function AuditLogPanel() {
                         placeholder="Filter by user..."
                         value={userFilter()}
                         onInput={(e) => setUserFilter(e.currentTarget.value)}
-                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-base-content placeholder-gray-400"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-white dark:bg-slate-700 text-base-content placeholder-gray-400"
                     />
                     <select
                         value={successFilter()}
                         onChange={(e) => setSuccessFilter(e.currentTarget.value)}
-                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-base-content"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-white dark:bg-slate-700 text-base-content"
                     >
                         <option value="all">All</option>
                         <option value="success">Success Only</option>
@@ -574,7 +574,7 @@ export default function AuditLogPanel() {
                     <select
                         value={verificationFilter()}
                         onChange={(e) => setVerificationFilter(e.currentTarget.value)}
-                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-base-content"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-white dark:bg-slate-700 text-base-content"
                     >
                         <option value="all">All Verification</option>
                         <option value="needs">Needs Verification</option>
@@ -584,7 +584,7 @@ export default function AuditLogPanel() {
                     <select
                         value={String(pageSize())}
                         onChange={(e) => setPageSize(Number(e.currentTarget.value))}
-                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-base-content"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-white dark:bg-slate-700 text-base-content"
                     >
                         <option value="25">25 / page</option>
                         <option value="50">50 / page</option>
@@ -613,7 +613,7 @@ export default function AuditLogPanel() {
                                 showSuccess('Audit filters cleared');
                             }
                         }}
-                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600"
                     >
                         Clear{activeFilterCount() > 0 ? ` (${activeFilterCount()})` : ''}
                     </button>
@@ -655,7 +655,7 @@ export default function AuditLogPanel() {
                                     }}
                                 >
                                     {chip.label}
-                                    <X class="w-3 h-3 text-slate-500 dark:text-slate-300" />
+                                    <X class="w-3 h-3 text-muted" />
                                 </button>
                             )}
                         </For>
@@ -672,7 +672,7 @@ export default function AuditLogPanel() {
                         checked={autoVerifyEnabled()}
                         onChange={(e) => setAutoVerifyEnabled(e.currentTarget.checked)}
                     />
-                    <div class="flex flex-col gap-2 text-xs text-slate-600 dark:text-slate-300 sm:flex-row sm:flex-wrap sm:items-center">
+                    <div class="flex flex-col gap-2 text-xs text-muted sm:flex-row sm:flex-wrap sm:items-center">
                         <label class="flex items-center gap-2">
                             <span>Auto-verify limit</span>
                             <input
@@ -689,7 +689,7 @@ export default function AuditLogPanel() {
                                     const clamped = Math.max(0, Math.min(500, Math.floor(raw)));
                                     setAutoVerifyLimit(clamped);
                                 }}
-                                class="min-h-10 sm:min-h-10 w-24 rounded-md border border-slate-300 dark:border-slate-600 bg-surface px-2.5 py-2 text-sm text-base-content"
+                                class="min-h-10 sm:min-h-10 w-24 rounded-md border border-border bg-surface px-2.5 py-2 text-sm text-base-content"
                             />
                         </label>
                         <span class="text-muted">0 disables, max 500</span>
@@ -717,7 +717,7 @@ export default function AuditLogPanel() {
                                 setPageInput('');
                                 showSuccess('Audit preferences reset');
                             }}
-                            class="w-full sm:w-auto sm:ml-2 min-h-10 sm:min-h-10 px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800"
+                            class="w-full sm:w-auto sm:ml-2 min-h-10 sm:min-h-10 px-3 py-2 text-sm font-medium text-muted border border-border rounded-md hover:bg-surface-hover"
                         >
                             Reset preferences
                         </button>
@@ -741,7 +741,7 @@ export default function AuditLogPanel() {
 
             {/* Events Table */}
             <Show when={!loading() && isPersistent() && filteredEvents().length > 0}>
-                <div class="flex flex-wrap items-center gap-3 text-xs text-slate-600 dark:text-slate-300">
+                <div class="flex flex-wrap items-center gap-3 text-xs text-muted">
                     <span>Total: {totalEvents()}</span>
                     <span>Signed: {verificationSummary().signed}</span>
                     <span>Verified: {verificationSummary().verified}</span>
@@ -789,7 +789,7 @@ export default function AuditLogPanel() {
                             {
                                 key: 'timestamp',
                                 label: 'Timestamp',
-                                render: (event) => <span class="text-slate-600 dark:text-slate-300">{formatTimestamp(event.timestamp)}</span>
+                                render: (event) => <span class="text-muted">{formatTimestamp(event.timestamp)}</span>
                             },
                             {
                                 key: 'event',
@@ -860,7 +860,7 @@ export default function AuditLogPanel() {
 
             {/* Empty State */}
             <Show when={!loading() && isPersistent() && filteredEvents().length === 0}>
-                <div class="text-center py-12 px-4 bg-slate-50 dark:bg-slate-800 rounded-md border border-dashed border-border">
+                <div class="text-center py-12 px-4 bg-surface-alt rounded-md border border-dashed border-border">
                     <div class="flex flex-col items-center max-w-sm mx-auto">
                         <Show
                             when={activeFilterCount() > 0}
@@ -896,7 +896,7 @@ export default function AuditLogPanel() {
             {/* Pagination */}
             <Show when={!loading() && isPersistent()}>
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-                    <div class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                    <div class="flex items-center gap-2 text-xs text-muted">
                         <label class="flex items-center gap-2">
                             <span>Page</span>
                             <input
@@ -913,7 +913,7 @@ export default function AuditLogPanel() {
                                     setPageOffset(nextOffset);
                                     void fetchAuditEvents({ offset: nextOffset });
                                 }}
-                                class="min-h-10 sm:min-h-10 w-20 rounded-md border border-slate-300 dark:border-slate-600 bg-surface px-2.5 text-sm text-base-content"
+                                class="min-h-10 sm:min-h-10 w-20 rounded-md border border-border bg-surface px-2.5 text-sm text-base-content"
                             />
                         </label>
                         <button
@@ -925,7 +925,7 @@ export default function AuditLogPanel() {
                                 setPageOffset(nextOffset);
                                 void fetchAuditEvents({ offset: nextOffset });
                             }}
-                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600"
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600"
                         >
                             Go
                         </button>
@@ -937,7 +937,7 @@ export default function AuditLogPanel() {
                                 void fetchAuditEvents({ offset: 0 });
                             }}
                             disabled={pageOffset() === 0}
-                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                         >
                             First
                         </button>
@@ -948,7 +948,7 @@ export default function AuditLogPanel() {
                                 void fetchAuditEvents({ offset: nextOffset });
                             }}
                             disabled={pageOffset() === 0}
-                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                         >
                             Previous
                         </button>
@@ -959,7 +959,7 @@ export default function AuditLogPanel() {
                                 void fetchAuditEvents({ offset: nextOffset });
                             }}
                             disabled={!hasNextPage()}
-                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                         >
                             Next
                         </button>
@@ -970,7 +970,7 @@ export default function AuditLogPanel() {
                                 void fetchAuditEvents({ offset: lastOffset });
                             }}
                             disabled={!hasNextPage()}
-                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                         >
                             Last
                         </button>

@@ -675,7 +675,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
     >
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-1 pb-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400">
         <div class="flex items-center gap-3">
-          <span class="font-medium text-slate-700 dark:text-slate-200">
+          <span class="font-medium text-base-content">
             {guestCounts().total} workloads
           </span>
           <Show when={guestCounts().running > 0}>

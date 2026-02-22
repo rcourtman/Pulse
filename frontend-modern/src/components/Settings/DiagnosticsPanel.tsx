@@ -458,14 +458,14 @@ export const DiagnosticsPanel: Component = () => {
             };
         }
         return {
-            headerBg: 'bg-slate-50 dark:bg-slate-800',
+            headerBg: 'bg-surface-alt',
             headerBorder: 'border-b border-border',
-            iconWrap: 'bg-slate-100 dark:bg-slate-700',
-            icon: 'text-slate-700 dark:text-slate-300',
+            iconWrap: 'bg-surface-hover',
+            icon: 'text-base-content',
             subtitle: 'text-muted',
             meta: 'text-muted',
             button:
-                'border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-600',
+                'border border-border bg-surface-hover text-base-content hover:bg-slate-200 dark:hover:bg-slate-600',
         };
     };
 
@@ -512,7 +512,7 @@ export const DiagnosticsPanel: Component = () => {
                 </div>
 
                 {/* Quick Actions */}
-                <div class="px-4 sm:px-6 py-3 sm:py-4 bg-slate-50 dark:bg-slate-800 border-t border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div class="px-4 sm:px-6 py-3 sm:py-4 bg-surface-alt border-t border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <p class="text-xs text-muted">
                         Test all connections and inspect runtime configuration
                     </p>
@@ -522,7 +522,7 @@ export const DiagnosticsPanel: Component = () => {
                                 type="button"
                                 onClick={() => exportDiagnostics(false)}
                                 disabled={exportLoading()}
-                                class="flex min-h-10 sm:min-h-9 items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+                                class="flex min-h-10 sm:min-h-9 items-center gap-1.5 px-3 py-2 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
                             >
                                 <Download class="w-3.5 h-3.5" />
                                 Full

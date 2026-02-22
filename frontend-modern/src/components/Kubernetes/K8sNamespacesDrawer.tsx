@@ -94,7 +94,7 @@ export const K8sNamespacesDrawer: Component<{
       <Card padding="md">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div class="min-w-0">
-            <div class="text-sm font-semibold text-slate-800 dark:text-slate-100">{PAGE_TITLE}</div>
+            <div class="text-sm font-semibold text-base-content">{PAGE_TITLE}</div>
             <div class="text-xs text-muted">Scope Pods and Deployments by namespace</div>
           </div>
 
@@ -150,7 +150,7 @@ export const K8sNamespacesDrawer: Component<{
             <Card padding="none" tone="card" class="overflow-hidden">
               <div class="overflow-x-auto">
                 <Table class="w-full min-w-[720px] border-collapse text-xs">
-                  <TableHeader class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
+                  <TableHeader class="bg-surface-alt text-muted border-b border-border">
                     <TableRow class="text-left text-[10px] uppercase tracking-wide">
                       <TableHead class="px-3 py-2 font-medium">Namespace</TableHead>
                       <TableHead class="px-3 py-2 font-medium">Pods</TableHead>
@@ -161,7 +161,7 @@ export const K8sNamespacesDrawer: Component<{
                   <TableBody class="divide-y divide-gray-100 dark:divide-gray-700">
                     <For each={filteredRows()}>
                       {(row) => (
-                        <TableRow class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                        <TableRow class="hover:bg-surface-hover">
                           <TableCell class="px-3 py-2">
                             <div class="flex items-center gap-2 min-w-0">
                               <span class={`h-2 w-2 rounded-full ${statusTone(row.pods)}`} />
@@ -170,14 +170,14 @@ export const K8sNamespacesDrawer: Component<{
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">
+                          <TableCell class="px-3 py-2 text-base-content">
                             <span class="font-semibold">{formatInteger(row.pods.total)}</span>
                             <span class="ml-2 text-[11px] text-muted">
                               {row.pods.offline > 0 ? `${formatInteger(row.pods.offline)} off` : ''}
                               {row.pods.warning > 0 ? `${row.pods.offline > 0 ? ' · ' : ''}${formatInteger(row.pods.warning)} warn` : ''}
                             </span>
                           </TableCell>
-                          <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">
+                          <TableCell class="px-3 py-2 text-base-content">
                             <span class="font-semibold">{formatInteger(row.deployments.total)}</span>
                             <span class="ml-2 text-[11px] text-muted">
                               {row.deployments.warning > 0 ? `${formatInteger(row.deployments.warning)} warn` : ''}

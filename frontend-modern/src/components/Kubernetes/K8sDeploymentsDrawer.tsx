@@ -160,7 +160,7 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
       <Card padding="md">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div class="min-w-0">
-            <div class="text-sm font-semibold text-slate-800 dark:text-slate-100">Deployments</div>
+            <div class="text-sm font-semibold text-base-content">Deployments</div>
             <div class="text-xs text-muted">Desired state controllers (not Pods)</div>
           </div>
 
@@ -173,7 +173,7 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
             />
 
             <Show when={namespaceOptions().length > 0}>
-              <div class="inline-flex items-center rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+              <div class="inline-flex items-center rounded-md bg-surface-hover p-0.5">
                 <label
                   for="k8s-deployments-namespace"
                   class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
@@ -226,7 +226,7 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
             <Card padding="none" tone="card" class="overflow-hidden">
               <div class="overflow-x-auto">
                 <Table class="w-full min-w-[760px] border-collapse text-xs">
-                  <TableHeader class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
+                  <TableHeader class="bg-surface-alt text-muted border-b border-border">
                     <TableRow class="text-left text-[10px] uppercase tracking-wide">
                       <TableHead class="px-3 py-2 font-medium">Deployment</TableHead>
                       <TableHead class="px-3 py-2 font-medium">Namespace</TableHead>
@@ -248,7 +248,7 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
                         const available = () => dep.kubernetes?.availableReplicas ?? 0;
 
                         return (
-                          <TableRow class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                          <TableRow class="hover:bg-surface-hover">
                             <TableCell class="px-3 py-2">
                               <div class="flex items-center gap-2 min-w-0">
                                 <span class={`h-2 w-2 rounded-full ${statusTone(dep.status)}`} title={dep.status || 'unknown'} />
@@ -257,11 +257,11 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
                                 </span>
                               </div>
                             </TableCell>
-                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{ns()}</TableCell>
-                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{desired()}</TableCell>
-                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{updated()}</TableCell>
-                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{ready()}</TableCell>
-                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{available()}</TableCell>
+                            <TableCell class="px-3 py-2 text-base-content">{ns()}</TableCell>
+                            <TableCell class="px-3 py-2 text-base-content">{desired()}</TableCell>
+                            <TableCell class="px-3 py-2 text-base-content">{updated()}</TableCell>
+                            <TableCell class="px-3 py-2 text-base-content">{ready()}</TableCell>
+                            <TableCell class="px-3 py-2 text-base-content">{available()}</TableCell>
                             <TableCell class="px-3 py-2">
                               <button
                                 type="button"

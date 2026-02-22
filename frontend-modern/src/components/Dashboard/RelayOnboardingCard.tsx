@@ -164,7 +164,7 @@ export const RelayOnboardingCard: Component = () => {
     <Show when={shouldShow()}>
       <Card padding="lg" class="relative overflow-hidden">
         <div class="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-blue-100 dark:bg-blue-900" />
-        <div class="absolute -right-16 -bottom-16 h-40 w-40 rounded-full bg-slate-100 dark:bg-slate-800" />
+        <div class="absolute -right-16 -bottom-16 h-40 w-40 rounded-full bg-surface-alt" />
 
         <button
           type="button"

@@ -71,7 +71,7 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
                   <span class={severityBadgeClass(alert.level)}>
                     {alert.level === 'critical' ? 'CRIT' : 'WARN'}
                   </span>
-                  <p class="min-w-0 text-xs text-slate-700 dark:text-slate-200 truncate">
+                  <p class="min-w-0 text-xs text-base-content truncate">
                     {alert.resourceName}
                   </p>
                   <span class="shrink-0 ml-auto text-[10px] font-mono text-slate-400">

@@ -163,7 +163,7 @@ const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphas
   if (stats.count < 4) {
     const ratio = value / stats.max;
     if (ratio >= 0.995) {
-      return { className: 'text-slate-800 dark:text-slate-100 font-medium', showOutlierHint: true };
+      return { className: 'text-base-content font-medium', showOutlierHint: true };
     }
     return { className: 'text-muted', showOutlierHint: false };
   }
@@ -175,7 +175,7 @@ const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphas
       return { className: 'text-slate-900 dark:text-slate-50 font-semibold', showOutlierHint: true };
     }
     if (modifiedZ >= 5.5 && value >= stats.p97) {
-      return { className: 'text-slate-800 dark:text-slate-100 font-medium', showOutlierHint: true };
+      return { className: 'text-base-content font-medium', showOutlierHint: true };
     }
     return { className: 'text-muted', showOutlierHint: false };
   }
@@ -183,7 +183,7 @@ const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphas
   // Fallback when values are too uniform for MAD to separate:
   // only near-peak values should get emphasis.
   if (value >= stats.p99) return { className: 'text-slate-900 dark:text-slate-50 font-semibold', showOutlierHint: true };
-  if (value >= stats.p97) return { className: 'text-slate-800 dark:text-slate-100 font-medium', showOutlierHint: true };
+  if (value >= stats.p97) return { className: 'text-base-content font-medium', showOutlierHint: true };
   if (value > 0) return { className: 'text-muted', showOutlierHint: false };
   return { className: 'text-muted', showOutlierHint: false };
 };
@@ -412,7 +412,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
           <div class="overflow-x-auto">
             <Table class="whitespace-nowrap min-w-[max-content]" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : 'max-content' }}>
               <TableHeader>
-                <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
+                <TableRow class="bg-surface-alt text-muted border-b border-border">
                   <TableHead class="text-left pl-2 sm:pl-3" style={resourceColumnStyle()} onClick={() => handleSort('name')}>
                     Resource {renderSortIndicator('name')}
                   </TableHead>
@@ -454,7 +454,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                     if (item.type === 'header') {
                       const group = item.group;
                       return (
-                        <TableRow class="bg-slate-50 dark:bg-slate-800">
+                        <TableRow class="bg-surface-alt">
                           <TableCell
                             colspan={9}
                             class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
@@ -721,7 +721,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                           <TableCell classList={{ hidden: isMobile() || !isVisible('supplementary') }}>
                             <div class="flex justify-center">
                               <Show when={resource.uptime} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                <span class="text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                                <span class="text-xs text-base-content whitespace-nowrap">
                                   {formatUptime(resource.uptime ?? 0)}
                                 </span>
                               </Show>
@@ -747,7 +747,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                         </TableRow>
                         <Show when={isExpanded()}>
                           <TableRow>
-                            <TableCell colspan={9} class="bg-slate-50 dark:bg-slate-800 px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
+                            <TableCell colspan={9} class="bg-surface-alt px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
                               <ResourceDetailDrawer resource={resource} onClose={() => setExpandedResourceId(null)} />
                             </TableCell>
                           </TableRow>
@@ -781,7 +781,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
             <div class="overflow-x-auto">
               <Table class="whitespace-nowrap min-w-[max-content]" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : 'max-content' }}>
                 <TableHeader>
-                  <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
+                  <TableRow class="bg-surface-alt text-muted border-b border-border">
                     <TableHead class="text-left pl-2 sm:pl-3" style={resourceColumnStyle()}>
                       Resource
                     </TableHead>
@@ -892,7 +892,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             <TableCell classList={{ hidden: !isVisible('primary') && !isMobile() }}>
                               <div class="flex justify-center">
                                 <Show when={pbsRow()?.datastores != null} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                  <span class="text-xs text-slate-700 dark:text-slate-300">{pbsRow()!.datastores}</span>
+                                  <span class="text-xs text-base-content">{pbsRow()!.datastores}</span>
                                 </Show>
                               </div>
                             </TableCell>
@@ -900,7 +900,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             <TableCell classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
                               <div class="flex justify-center">
                                 <Show when={pbsRow()?.jobs != null} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                  <span class="text-xs text-slate-700 dark:text-slate-300">{pbsRow()!.jobs}</span>
+                                  <span class="text-xs text-base-content">{pbsRow()!.jobs}</span>
                                 </Show>
                               </div>
                             </TableCell>
@@ -950,7 +950,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             <TableCell classList={{ hidden: !isVisible('supplementary') && !isMobile() }}>
                               <div class="flex justify-center">
                                 <Show when={resource.uptime} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                  <span class="text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                                  <span class="text-xs text-base-content whitespace-nowrap">
                                     {formatUptime(resource.uptime ?? 0)}
                                   </span>
                                 </Show>
@@ -977,7 +977,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                           </TableRow>
                           <Show when={isExpanded()}>
                             <TableRow>
-                              <TableCell colspan={7} class="bg-slate-50 dark:bg-slate-800 px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
+                              <TableCell colspan={7} class="bg-surface-alt px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
                                 <ResourceDetailDrawer resource={resource} onClose={() => setExpandedResourceId(null)} />
                               </TableCell>
                             </TableRow>
@@ -998,7 +998,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
             <div class="overflow-x-auto">
               <Table class="whitespace-nowrap min-w-[max-content]" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : 'max-content' }}>
                 <TableHeader>
-                  <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
+                  <TableRow class="bg-surface-alt text-muted border-b border-border">
                     <TableHead class="text-left pl-2 sm:pl-3" style={resourceColumnStyle()}>
                       Resource
                     </TableHead>
@@ -1052,7 +1052,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                       const queueClass = createMemo(() =>
                         (pmgRow()?.deferred || 0) + (pmgRow()?.hold || 0) > 0
                           ? 'text-amber-600 dark:text-amber-400'
-                          : 'text-slate-700 dark:text-slate-300',
+                          : 'text-base-content',
                       );
 
                       const rowClass = createMemo(() => {
@@ -1128,7 +1128,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             <TableCell classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
                               <div class="flex justify-center">
                                 <Show when={pmgRow()?.deferred != null} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                  <span class="text-xs text-slate-700 dark:text-slate-300">{pmgRow()!.deferred}</span>
+                                  <span class="text-xs text-base-content">{pmgRow()!.deferred}</span>
                                 </Show>
                               </div>
                             </TableCell>
@@ -1136,7 +1136,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             <TableCell classList={{ hidden: !isVisible('supplementary') && !isMobile() }}>
                               <div class="flex justify-center">
                                 <Show when={pmgRow()?.hold != null} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                  <span class="text-xs text-slate-700 dark:text-slate-300">{pmgRow()!.hold}</span>
+                                  <span class="text-xs text-base-content">{pmgRow()!.hold}</span>
                                 </Show>
                               </div>
                             </TableCell>
@@ -1144,7 +1144,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             <TableCell classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
                               <div class="flex justify-center">
                                 <Show when={pmgRow()?.nodes != null} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                  <span class="text-xs text-slate-700 dark:text-slate-300">{pmgRow()!.nodes}</span>
+                                  <span class="text-xs text-base-content">{pmgRow()!.nodes}</span>
                                 </Show>
                               </div>
                             </TableCell>
@@ -1194,7 +1194,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             <TableCell classList={{ hidden: !isVisible('supplementary') && !isMobile() }}>
                               <div class="flex justify-center">
                                 <Show when={resource.uptime} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                  <span class="text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                                  <span class="text-xs text-base-content whitespace-nowrap">
                                     {formatUptime(resource.uptime ?? 0)}
                                   </span>
                                 </Show>
@@ -1221,7 +1221,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                           </TableRow>
                           <Show when={isExpanded()}>
                             <TableRow>
-                              <TableCell colspan={9} class="bg-slate-50 dark:bg-slate-800 px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
+                              <TableCell colspan={9} class="bg-surface-alt px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
                                 <ResourceDetailDrawer resource={resource} onClose={() => setExpandedResourceId(null)} />
                               </TableCell>
                             </TableRow>

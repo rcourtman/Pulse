@@ -77,7 +77,7 @@ const ThreatBar: Component<{
           {formatCompact(props.count)} ({formatPct(props.percent)})
         </span>
       </div>
-      <div class="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+      <div class="h-1.5 bg-surface-hover rounded-full overflow-hidden">
         <div
           class={`h-full ${barColor()} transition-all duration-500 rounded-full`}
           style={{ width: `${Math.min(props.percent * 10, 100)}%` }} // Scale up for visibility (10% threat = full bar)
@@ -114,7 +114,7 @@ const StatusBadge: Component<{ status: string; health?: string }> = (props) => {
         label: 'Offline',
       };
     }
-    return { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-muted', dot: 'bg-slate-400', label: status || 'Unknown' };
+    return { bg: 'bg-surface-alt', text: 'text-muted', dot: 'bg-slate-400', label: status || 'Unknown' };
   });
 
   return (
@@ -361,7 +361,7 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
 
   return (
     <Card padding="none" tone="card" class="overflow-hidden">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-slate-50 dark:bg-slate-800 border-b border-border">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-surface-alt border-b border-border">
         <div class="flex items-center gap-3">
           <a
             href={props.pmg.host || `https://${props.pmg.name}:8006`}
@@ -373,7 +373,7 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
           </a>
           <StatusBadge status={props.pmg.status || ''} health={props.pmg.connectionHealth} />
           <Show when={props.pmg.version}>
-            <span class="text-xs text-muted bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">
+            <span class="text-xs text-muted bg-surface-hover px-1.5 py-0.5 rounded">
               v{props.pmg.version}
             </span>
           </Show>
@@ -392,17 +392,17 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
         </div>
 
         <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-          <div class="bg-slate-50 dark:bg-slate-800 rounded-md p-3">
+          <div class="bg-surface-alt rounded-md p-3">
             <div class="text-xs text-muted mb-1">Total (24h)</div>
             <div class="text-lg font-bold text-base-content">{formatCompact(stats().total)}</div>
             <div class="text-[10px] text-slate-400">{formatNum(Math.round(stats().total / 24))}/hr</div>
           </div>
-          <div class="bg-slate-50 dark:bg-slate-800 rounded-md p-3">
+          <div class="bg-surface-alt rounded-md p-3">
             <div class="text-xs text-muted mb-1">Inbound</div>
             <div class="text-lg font-bold text-base-content">{formatCompact(stats().inbound)}</div>
             <div class="text-[10px] text-slate-400">{formatBytes(stats().bytesIn)}</div>
           </div>
-          <div class="bg-slate-50 dark:bg-slate-800 rounded-md p-3">
+          <div class="bg-surface-alt rounded-md p-3">
             <div class="text-xs text-muted mb-1">Outbound</div>
             <div class="text-lg font-bold text-base-content">{formatCompact(stats().outbound)}</div>
             <div class="text-[10px] text-slate-400">{formatBytes(stats().bytesOut)}</div>
@@ -430,24 +430,24 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
           <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs">
             <div class="flex items-center gap-2">
               <span class="text-muted">RBL Rejects:</span>
-              <span class="font-medium text-slate-700 dark:text-slate-300">{formatNum(stats().rbl)}</span>
+              <span class="font-medium text-base-content">{formatNum(stats().rbl)}</span>
             </div>
             <div class="flex items-center gap-2">
               <span class="text-muted">Pregreet:</span>
-              <span class="font-medium text-slate-700 dark:text-slate-300">{formatNum(stats().pregreet)}</span>
+              <span class="font-medium text-base-content">{formatNum(stats().pregreet)}</span>
             </div>
             <div class="flex items-center gap-2">
               <span class="text-muted">Greylisted:</span>
-              <span class="font-medium text-slate-700 dark:text-slate-300">{formatNum(stats().greylist)}</span>
+              <span class="font-medium text-base-content">{formatNum(stats().greylist)}</span>
             </div>
             <div class="flex items-center gap-2">
               <span class="text-muted">Bounces In/Out:</span>
-              <span class="font-medium text-slate-700 dark:text-slate-300">{formatNum(stats().bouncesIn)}/{formatNum(stats().bouncesOut)}</span>
+              <span class="font-medium text-base-content">{formatNum(stats().bouncesIn)}/{formatNum(stats().bouncesOut)}</span>
             </div>
             <Show when={props.pmg.mailStats?.averageProcessTimeMs}>
               <div class="flex items-center gap-2">
                 <span class="text-muted">Avg Process:</span>
-                <span class="font-medium text-slate-700 dark:text-slate-300">{formatDec((props.pmg.mailStats?.averageProcessTimeMs || 0) / 1000, 2)}s</span>
+                <span class="font-medium text-base-content">{formatDec((props.pmg.mailStats?.averageProcessTimeMs || 0) / 1000, 2)}s</span>
               </div>
             </Show>
           </div>
@@ -475,7 +475,7 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
                       const isOnline = (node.status || '').toLowerCase() === 'online';
 
                       return (
-                        <TableRow class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                        <TableRow class="hover:bg-surface-hover">
                           <TableCell class="py-1.5 font-medium text-base-content">{node.name}</TableCell>
                           <TableCell class="py-1.5">
                             <span class={`inline-flex items-center gap-1 ${isOnline ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
@@ -511,7 +511,7 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
                   const totalScored = props.pmg.spamDistribution?.reduce((sum, b) => sum + b.count, 0) || 1;
                   const pct = (bucket.count / totalScored) * 100;
                   return (
-                    <div class="flex-shrink-0 text-center bg-slate-50 dark:bg-slate-800 rounded px-2 py-1.5 min-w-[50px]">
+                    <div class="flex-shrink-0 text-center bg-surface-alt rounded px-2 py-1.5 min-w-[50px]">
                       <div class="text-[10px] text-muted">{bucket.score}</div>
                       <div class="text-xs font-semibold text-base-content">{formatCompact(bucket.count)}</div>
                       <div class="text-[10px] text-slate-400">{formatDec(pct)}%</div>
@@ -539,7 +539,7 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
 
             <div class="overflow-auto max-h-[240px] rounded-md border border-border">
               <Table class="w-full min-w-[780px] text-xs">
-                <TableHeader class="bg-slate-50 dark:bg-slate-800">
+                <TableHeader class="bg-surface-alt">
                   <TableRow class="text-left text-[10px] uppercase tracking-wide text-muted border-b border-border">
                     <TableHead class="px-3 py-2 font-medium">Domain</TableHead>
                     <TableHead class="px-3 py-2 font-medium">Mail</TableHead>
@@ -553,18 +553,18 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
                 <TableBody class="divide-y divide-gray-100 dark:divide-gray-700">
                   <For each={relayDomainsWithStats()}>
                     {(row) => (
-                      <TableRow class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                      <TableRow class="hover:bg-surface-hover">
                         <TableCell class="px-3 py-2 font-medium text-base-content">{row.domain}</TableCell>
-                        <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{row.hasStats ? fmtMaybe(row.mail) : '—'}</TableCell>
+                        <TableCell class="px-3 py-2 text-base-content">{row.hasStats ? fmtMaybe(row.mail) : '—'}</TableCell>
                         <TableCell class="px-3 py-2 text-orange-700 dark:text-orange-300">{row.hasStats ? fmtMaybe(row.spam) : '—'}</TableCell>
                         <TableCell class="px-3 py-2 text-red-700 dark:text-red-300">{row.hasStats ? fmtMaybe(row.virus) : '—'}</TableCell>
-                        <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">
+                        <TableCell class="px-3 py-2 text-base-content">
                           {row.hasStats ? formatPct(row.spamRate) : '—'}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-slate-600 dark:text-slate-300">
+                        <TableCell class="px-3 py-2 text-muted">
                           {row.hasStats && row.bytes > 0 ? formatBytes(row.bytes) : row.hasStats ? '—' : '—'}
                         </TableCell>
-                        <TableCell class="px-3 py-2 text-slate-600 dark:text-slate-300">{row.comment || '—'}</TableCell>
+                        <TableCell class="px-3 py-2 text-muted">{row.comment || '—'}</TableCell>
                       </TableRow>
                     )}
                   </For>
@@ -596,7 +596,7 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
 
               <div class="overflow-auto max-h-[260px] rounded-md border border-border">
                 <Table class="w-full min-w-[720px] text-xs">
-                  <TableHeader class="bg-slate-50 dark:bg-slate-800">
+                  <TableHeader class="bg-surface-alt">
                     <TableRow class="text-left text-[10px] uppercase tracking-wide text-muted border-b border-border">
                       <TableHead class="px-3 py-2 font-medium">Domain</TableHead>
                       <TableHead class="px-3 py-2 font-medium">Mail</TableHead>
@@ -609,13 +609,13 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
                   <TableBody class="divide-y divide-gray-100 dark:divide-gray-700">
                     <For each={otherDomainStatsRows()}>
                       {(row) => (
-                        <TableRow class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                        <TableRow class="hover:bg-surface-hover">
                           <TableCell class="px-3 py-2 font-medium text-base-content">{row.domain}</TableCell>
-                          <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{fmtMaybe(row.mail)}</TableCell>
+                          <TableCell class="px-3 py-2 text-base-content">{fmtMaybe(row.mail)}</TableCell>
                           <TableCell class="px-3 py-2 text-orange-700 dark:text-orange-300">{fmtMaybe(row.spam)}</TableCell>
                           <TableCell class="px-3 py-2 text-red-700 dark:text-red-300">{fmtMaybe(row.virus)}</TableCell>
-                          <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{formatPct(row.spamRate)}</TableCell>
-                          <TableCell class="px-3 py-2 text-slate-600 dark:text-slate-300">{row.bytes > 0 ? formatBytes(row.bytes) : '—'}</TableCell>
+                          <TableCell class="px-3 py-2 text-base-content">{formatPct(row.spamRate)}</TableCell>
+                          <TableCell class="px-3 py-2 text-muted">{row.bytes > 0 ? formatBytes(row.bytes) : '—'}</TableCell>
                         </TableRow>
                       )}
                     </For>
@@ -642,7 +642,7 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
 
             <div class="overflow-auto max-h-[260px] rounded-md border border-border">
               <Table class="w-full min-w-[720px] text-xs">
-                <TableHeader class="bg-slate-50 dark:bg-slate-800">
+                <TableHeader class="bg-surface-alt">
                   <TableRow class="text-left text-[10px] uppercase tracking-wide text-muted border-b border-border">
                     <TableHead class="px-3 py-2 font-medium">Domain</TableHead>
                     <TableHead class="px-3 py-2 font-medium">Mail</TableHead>
@@ -655,13 +655,13 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
                 <TableBody class="divide-y divide-gray-100 dark:divide-gray-700">
                   <For each={domainStatsRows()}>
                     {(row) => (
-                      <TableRow class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                      <TableRow class="hover:bg-surface-hover">
                         <TableCell class="px-3 py-2 font-medium text-base-content">{row.domain}</TableCell>
-                        <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{fmtMaybe(row.mail)}</TableCell>
+                        <TableCell class="px-3 py-2 text-base-content">{fmtMaybe(row.mail)}</TableCell>
                         <TableCell class="px-3 py-2 text-orange-700 dark:text-orange-300">{fmtMaybe(row.spam)}</TableCell>
                         <TableCell class="px-3 py-2 text-red-700 dark:text-red-300">{fmtMaybe(row.virus)}</TableCell>
-                        <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{formatPct(row.spamRate)}</TableCell>
-                        <TableCell class="px-3 py-2 text-slate-600 dark:text-slate-300">{row.bytes > 0 ? formatBytes(row.bytes) : '—'}</TableCell>
+                        <TableCell class="px-3 py-2 text-base-content">{formatPct(row.spamRate)}</TableCell>
+                        <TableCell class="px-3 py-2 text-muted">{row.bytes > 0 ? formatBytes(row.bytes) : '—'}</TableCell>
                       </TableRow>
                     )}
                   </For>

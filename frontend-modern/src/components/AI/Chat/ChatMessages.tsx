@@ -67,13 +67,13 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
   return (
     <div
       ref={containerRef}
-      class="flex-1 overflow-y-auto px-4 py-3 bg-white dark:bg-slate-900"
+      class="flex-1 overflow-y-auto px-4 py-3 bg-surface"
     >
       {/* Empty state */}
       <Show when={props.messages.length === 0 && props.emptyState}>
         <div class="flex flex-col items-center justify-center min-h-full text-center py-8">
           {/* AI Icon */}
-          <div class="w-14 h-14 mb-3 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-sm">
+          <div class="w-14 h-14 mb-3 rounded-md bg-surface-alt flex items-center justify-center shadow-sm">
             <svg
               class="w-7 h-7 text-blue-500 dark:text-blue-400"
               fill="none"
@@ -112,7 +112,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
                     <button
                       type="button"
                       onClick={() => props.emptyState!.onSuggestionClick?.(suggestion)}
-                      class="w-full text-left px-4 py-2.5 rounded-md bg-slate-50 dark:bg-slate-800 text-muted text-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+                      class="w-full text-left px-4 py-2.5 rounded-md bg-surface-alt text-muted text-sm hover:bg-surface-hover transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
                     >
                       <span class="text-blue-500 dark:text-blue-400 mr-2 opacity-50">→</span>
                       {suggestion}

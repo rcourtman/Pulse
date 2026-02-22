@@ -119,7 +119,7 @@ export function WhatsNewModal() {
               <div class="text-sm font-medium text-base-content">
                 Why switch to a unified resource model?
               </div>
-              <ul class="mt-2 space-y-1.5 text-xs sm:text-sm text-slate-700 dark:text-slate-300">
+              <ul class="mt-2 space-y-1.5 text-xs sm:text-sm text-base-content">
                 <li class="flex items-start gap-2">
                   <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400"></span>
                   <span>One inventory and one search across Proxmox, agents, containers, Kubernetes, and more.</span>
@@ -139,7 +139,7 @@ export function WhatsNewModal() {
               <div class="text-sm font-medium text-base-content">
                 Finding things fast
               </div>
-              <ul class="mt-2 space-y-1.5 text-xs sm:text-sm text-slate-700 dark:text-slate-300">
+              <ul class="mt-2 space-y-1.5 text-xs sm:text-sm text-base-content">
                 <li class="flex items-start gap-2">
                   <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400"></span>
                   <span>Use the Command Palette: press <span class="font-mono">Cmd+K</span> (or <span class="font-mono">Ctrl+K</span>) and type what you remember: <span class="font-mono">proxmox</span>, <span class="font-mono">containers</span>, <span class="font-mono">k8s</span>, <span class="font-mono">hosts</span>.</span>

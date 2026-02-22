@@ -78,7 +78,7 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
     return (
         <Dialog isOpen={props.isOpen} onClose={props.onClose} ariaLabel="Bulk Edit Settings">
             <div class="fixed inset-0 min-h-screen z-[100] flex items-center justify-center pointer-events-none">
-                <div class="bg-white dark:bg-slate-900 rounded-xl shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 max-w-lg w-full p-6 max-h-[90vh] flex flex-col pointer-events-auto">
+                <div class="bg-surface rounded-xl shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 max-w-lg w-full p-6 max-h-[90vh] flex flex-col pointer-events-auto">
                     <h2 class="text-xl font-semibold text-base-content mb-2">Bulk Edit Settings</h2>
                     <p class="text-sm text-muted mb-6">
                         Applying changes to {props.selectedIds.length} items. Leave fields empty to keep existing options.
@@ -95,7 +95,7 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
                                 return (
                                     <div class="space-y-2 pb-4 border-b border-border-subtle last:border-0">
                                         <div class="flex items-center justify-between mb-2">
-                                            <label class="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                            <label class="text-sm font-medium text-base-content">
                                                 {column}
                                             </label>
                                             <span class="text-xs text-slate-500 font-mono">

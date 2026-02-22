@@ -1604,7 +1604,7 @@ export function Dashboard(props: DashboardProps) {
                 style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : 'max-content' }}
               >
                 <TableHeader>
-                  <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
+                  <TableRow class="bg-surface-alt text-muted border-b border-border">
                     <For each={mobileVisibleColumns()}>
                       {(col) => {
                         const isFirst = () => col.id === visibleColumns()[0]?.id;
@@ -1662,7 +1662,7 @@ export function Dashboard(props: DashboardProps) {
                             <Show
                               when={node()}
                               fallback={
-                                <TableRow class="bg-slate-50 dark:bg-slate-800">
+                                <TableRow class="bg-surface-alt">
                                   <TableCell
                                     colspan={totalColumns()}
                                     class="py-0.5 pr-1.5 sm:pr-2 pl-2 sm:pl-3 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
@@ -1722,7 +1722,7 @@ export function Dashboard(props: DashboardProps) {
                                   />
                                   <Show when={selectedGuestId() === guestId()}>
                                     <TableRow>
-                                      <TableCell colspan={totalColumns()} class="p-0 border-b border-border bg-slate-50 dark:bg-slate-800">
+                                      <TableCell colspan={totalColumns()} class="p-0 border-b border-border bg-surface-alt">
                                         <div class="px-2 sm:px-4 py-3 sm:py-4" onClick={(e) => e.stopPropagation()}>
                                           <GuestDrawer
                                             guest={guest()}
@@ -1792,7 +1792,7 @@ export function Dashboard(props: DashboardProps) {
       {/* Stats */}
       <Show when={connected() && initialDataReceived()}>
         <div class="mb-4">
-          <div class="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-800 border border-border rounded">
+          <div class="flex items-center gap-2 p-2 bg-surface-alt border border-border rounded">
             <span class="flex items-center gap-1 text-xs text-muted">
               <span class="h-2 w-2 bg-green-500 rounded-full"></span>
               {totalStats().running} running

@@ -230,7 +230,7 @@ export function UpdateBanner() {
                     <div class="space-y-2">
                       <For each={updatePlan()?.instructions || []}>
                         {(instruction, index) => (
-                          <div class="bg-slate-50 dark:bg-slate-800 rounded border border-blue-200 dark:border-blue-700 p-2">
+                          <div class="bg-surface-alt rounded border border-blue-200 dark:border-blue-700 p-2">
                             <div class="flex items-start justify-between gap-2">
                               <code class="text-xs text-base-content font-mono flex-1 break-all">
                                 {instruction}

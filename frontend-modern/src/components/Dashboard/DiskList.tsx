@@ -59,7 +59,7 @@ export function DiskList(props: DiskListProps) {
             return (
               <div class="rounded border border-slate-200 bg-slate-50 px-1.5 py-1 text-[10px] leading-tight shadow-sm dark:border-slate-700 dark:bg-slate-800">
                 <div
-                  class="truncate text-slate-700 dark:text-slate-200"
+                  class="truncate text-base-content"
                   title={label !== 'Unknown' ? label : undefined}
                 >
                   {label}
@@ -69,13 +69,13 @@ export function DiskList(props: DiskListProps) {
                     ? `${formatBytes(disk.used)}/${formatBytes(disk.total)}`
                     : 'Usage unavailable'}
                 </div>
-                <div class="relative mt-1 h-1.5 w-full overflow-hidden rounded bg-slate-200 dark:bg-slate-600">
+                <div class="relative mt-1 h-1.5 w-full overflow-hidden rounded bg-surface-hover">
                   <div
                     class={`absolute inset-y-0 left-0 ${getMetricColorClass(usage, 'disk')}`}
                     style={{ width: `${Math.min(usage, 100)}%` }}
                   />
                 </div>
-                <div class="mt-0.5 flex items-center justify-between text-[9px] font-medium text-slate-600 dark:text-slate-300">
+                <div class="mt-0.5 flex items-center justify-between text-[9px] font-medium text-muted">
                   <span>{hasCapacity ? `${usage.toFixed(0)}%` : '—'}</span>
                   <span>{disk.type?.toUpperCase() ?? ''}</span>
                 </div>

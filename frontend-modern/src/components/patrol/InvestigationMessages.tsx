@@ -44,7 +44,7 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
       </Show>
 
       <Show when={!messages.loading && messages() && messages()!.length > 0}>
-        <div class="space-y-2 max-h-80 overflow-y-auto rounded border border-border p-2 bg-slate-50 dark:bg-slate-800">
+        <div class="space-y-2 max-h-80 overflow-y-auto rounded border border-border p-2 bg-surface-alt">
           <For each={messages()}>
             {(msg: ChatMessage) => {
               if (isEmptyMessage(msg)) return null;
@@ -55,7 +55,7 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                     msg.role === 'user'
                       ? 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100'
                       : msg.role === 'system'
-                      ? 'bg-slate-100 dark:bg-slate-800 text-muted text-xs'
+                      ? 'bg-surface-alt text-muted text-xs'
                       : 'bg-surface text-base-content'
                   }`}>
                     {/* Reasoning content (extended thinking) */}

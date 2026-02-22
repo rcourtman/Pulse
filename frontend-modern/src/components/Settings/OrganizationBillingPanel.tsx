@@ -103,21 +103,21 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
                 <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {Array.from({ length: 4 }).map(() => (
                     <div class="rounded-md border border-border p-3 space-y-2">
-                      <div class="h-3 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                      <div class="h-5 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                      <div class="h-3 w-20 animate-pulse rounded bg-surface-hover" />
+                      <div class="h-5 w-24 animate-pulse rounded bg-surface-hover" />
                     </div>
                   ))}
                 </div>
 
                 <div class="space-y-3 rounded-md border border-border p-4">
-                  <div class="h-4 w-36 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div class="h-4 w-36 animate-pulse rounded bg-surface-hover" />
                   {Array.from({ length: 2 }).map(() => (
                     <div class="space-y-2">
                       <div class="flex items-center justify-between">
-                        <div class="h-3 w-14 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                        <div class="h-3 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                        <div class="h-3 w-14 animate-pulse rounded bg-surface-hover" />
+                        <div class="h-3 w-20 animate-pulse rounded bg-surface-hover" />
                       </div>
-                      <div class="h-2 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                      <div class="h-2 w-full animate-pulse rounded bg-surface-hover" />
                     </div>
                   ))}
                 </div>
@@ -125,15 +125,15 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
                 <div class="grid gap-3 sm:grid-cols-2">
                   {Array.from({ length: 2 }).map(() => (
                     <div class="rounded-md border border-border p-3 space-y-2">
-                      <div class="h-3 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                      <div class="h-5 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                      <div class="h-3 w-24 animate-pulse rounded bg-surface-hover" />
+                      <div class="h-5 w-40 animate-pulse rounded bg-surface-hover" />
                     </div>
                   ))}
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2">
-                  <div class="h-10 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                  <div class="h-10 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div class="h-10 w-40 animate-pulse rounded bg-surface-hover" />
+                  <div class="h-10 w-40 animate-pulse rounded bg-surface-hover" />
                 </div>
               </div>
             }
@@ -173,7 +173,7 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
                 </span>
               </div>
               <Show when={typeof nodeLimit() === 'number'}>
-                <div class="h-2 w-full rounded bg-slate-200 dark:bg-slate-700">
+                <div class="h-2 w-full rounded bg-surface-hover">
                   <div
                     class="h-2 rounded bg-blue-600 dark:bg-blue-500"
                     style={{ width: `${ratio(props.nodeUsage, nodeLimit())}%` }}
@@ -191,7 +191,7 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
                 </span>
               </div>
               <Show when={typeof guestLimit() === 'number'}>
-                <div class="h-2 w-full rounded bg-slate-200 dark:bg-slate-700">
+                <div class="h-2 w-full rounded bg-surface-hover">
                   <div
                     class="h-2 rounded bg-emerald-600 dark:bg-emerald-500"
                     style={{ width: `${ratio(props.guestUsage, guestLimit())}%` }}

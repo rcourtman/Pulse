@@ -55,11 +55,11 @@ export function MigrationGuide() {
     <div class="space-y-4">
       <Card class="p-5">
         <h1 class="text-base font-semibold text-base-content">Navigation Migration Guide</h1>
-        <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">
+        <p class="mt-2 text-sm text-muted">
           Pulse now uses a resource-first layout: Infrastructure, Workloads, Storage, and Recovery.
           Legacy URLs still redirect for compatibility, but this guide shows the canonical destinations.
         </p>
-        <div class="mt-3 text-xs text-slate-600 dark:text-slate-300 space-y-1">
+        <div class="mt-3 text-xs text-muted space-y-1">
           <div class="font-medium text-base-content">Why change?</div>
           <div>
             Unified resources enable one inventory, one search, and consistent filters across Proxmox, agents, Docker, Kubernetes, and new sources.
@@ -75,21 +75,21 @@ export function MigrationGuide() {
       <Card padding="none" class="overflow-hidden">
         <Table class="w-full border-collapse">
           <TableHeader>
-            <TableRow class="bg-slate-50 dark:bg-slate-800 border-b border-border">
-              <TableHead class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Legacy route</TableHead>
-              <TableHead class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">New destination</TableHead>
-              <TableHead class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Reason</TableHead>
-              <TableHead class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Status</TableHead>
+            <TableRow class="bg-surface-alt border-b border-border">
+              <TableHead class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">Legacy route</TableHead>
+              <TableHead class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">New destination</TableHead>
+              <TableHead class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">Reason</TableHead>
+              <TableHead class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody class="bg-surface divide-y divide-gray-100 dark:divide-gray-700">
             <For each={ROUTE_MAPPINGS}>
               {(item) => (
                 <TableRow>
-                  <TableCell class="px-4 py-2 text-sm font-mono text-slate-700 dark:text-slate-200">{item.legacy}</TableCell>
+                  <TableCell class="px-4 py-2 text-sm font-mono text-base-content">{item.legacy}</TableCell>
                   <TableCell class="px-4 py-2 text-sm font-mono text-blue-700 dark:text-blue-300">{item.destination}</TableCell>
-                  <TableCell class="px-4 py-2 text-sm text-slate-600 dark:text-slate-300">{item.rationale}</TableCell>
-                  <TableCell class="px-4 py-2 text-sm text-slate-600 dark:text-slate-300">{item.deprecation}</TableCell>
+                  <TableCell class="px-4 py-2 text-sm text-muted">{item.rationale}</TableCell>
+                  <TableCell class="px-4 py-2 text-sm text-muted">{item.deprecation}</TableCell>
                 </TableRow>
               )}
             </For>

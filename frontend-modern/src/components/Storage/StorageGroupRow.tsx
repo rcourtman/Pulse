@@ -21,7 +21,7 @@ const HEALTH_DOT: Record<string, string> = {
 export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
   return (
     <tr
-      class="cursor-pointer select-none bg-slate-50 dark:bg-slate-800 hover:bg-surface-hover transition-colors border-b border-border"
+      class="cursor-pointer select-none bg-surface-alt hover:bg-surface-hover transition-colors border-b border-border"
       onClick={() => props.onToggle()}
     >
       <td colSpan={99} class="px-1.5 sm:px-2 py-0.5">

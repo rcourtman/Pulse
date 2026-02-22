@@ -42,7 +42,7 @@ export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
     return (
         <div class="metric-text w-full h-5 flex items-center min-w-0">
             <div
-                class="relative w-full h-full overflow-hidden bg-slate-200 dark:bg-slate-600 rounded"
+                class="relative w-full h-full overflow-hidden bg-surface-hover rounded"
                 onMouseEnter={tip.onMouseEnter}
                 onMouseLeave={tip.onMouseLeave}
             >
@@ -63,7 +63,7 @@ export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
                 </Show>
 
                 {/* Label */}
-                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-slate-800 dark:text-slate-100 leading-none pointer-events-none min-w-0 overflow-hidden">
+                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-base-content leading-none pointer-events-none min-w-0 overflow-hidden">
                     <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
                         {formatPercent(usagePercent())} (
                         {formatBytes(props.used)}/

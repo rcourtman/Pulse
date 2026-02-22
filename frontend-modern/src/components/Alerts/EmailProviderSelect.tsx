@@ -251,7 +251,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
         </button>
 
         <Show when={showAdvanced()}>
-          <div class="mt-3 space-y-3 text-xs text-slate-700 dark:text-slate-300">
+          <div class="mt-3 space-y-3 text-xs text-base-content">
             <div class="grid gap-3 sm:grid-cols-3">
               <div class="flex items-center gap-2">
                 <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Security</label>

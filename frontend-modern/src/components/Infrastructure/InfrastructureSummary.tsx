@@ -456,7 +456,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                 <div class="rounded-md border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-3">
                     <div class="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-1 pb-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400">
                         <div class="flex items-center gap-3">
-                            <span class="font-medium text-slate-700 dark:text-slate-200">
+                            <span class="font-medium text-base-content">
                                 {hostCounts().total} {hostCounts().total === 1 ? 'resource' : 'resources'}
                             </span>
                             <Show when={hostCounts().online > 0}>

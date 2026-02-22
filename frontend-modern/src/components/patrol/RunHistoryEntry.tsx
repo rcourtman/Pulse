@@ -179,7 +179,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
         <div class="px-3 pb-3 border-t border-blue-200 dark:border-blue-800 mt-0">
 
           {/* Section 1: Narrative Summary */}
-          <div class="mt-3 flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+          <div class="mt-3 flex items-start gap-2 text-sm text-base-content">
             <SparklesIcon class="w-4 h-4 text-blue-500 dark:text-blue-400 mt-0.5 flex-shrink-0" />
             <p>
               {run.resources_checked > 0
@@ -293,7 +293,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           </div>
 
           {/* Section 4: AI Effort Bar */}
-          <div class="mt-3 flex flex-wrap items-center gap-3 px-3 py-2 rounded-md bg-slate-50 dark:bg-slate-800 text-xs text-muted">
+          <div class="mt-3 flex flex-wrap items-center gap-3 px-3 py-2 rounded-md bg-surface-alt text-xs text-muted">
             <Show when={formatDurationMs(run.duration_ms)}>
               <span class="inline-flex items-center gap-1">
                 <ClockIcon class="w-3.5 h-3.5" /> {formatDurationMs(run.duration_ms)}
@@ -336,7 +336,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
               </div>
               <Show when={showRunAnalysis()}>
                 <div
-                  class="mt-2 p-3 rounded bg-white dark:bg-slate-900 text-sm leading-relaxed text-slate-700 dark:text-slate-200 max-h-64 overflow-auto prose prose-sm max-w-none dark:prose-invert prose-headings:text-sm prose-headings:mt-2 prose-headings:mb-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0"
+                  class="mt-2 p-3 rounded bg-surface text-sm leading-relaxed text-base-content max-h-64 overflow-auto prose prose-sm max-w-none dark:prose-invert prose-headings:text-sm prose-headings:mt-2 prose-headings:mb-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0"
                   // eslint-disable-next-line solid/no-innerhtml
                   innerHTML={renderMarkdown(sanitizeAnalysis(run.ai_analysis))}
                 />

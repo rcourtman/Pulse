@@ -197,7 +197,7 @@ export const ProLicensePanel: Component = () => {
         icon={<ShieldCheck class="w-5 h-5" />}
         action={
           <button
-            class="inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-2 text-sm font-medium rounded-md border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-60"
+            class="inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-2 text-sm font-medium rounded-md border border-border text-base-content hover:bg-surface-hover transition-colors disabled:opacity-60"
             disabled={loading()}
             onClick={loadStatus}
           >
@@ -230,7 +230,7 @@ export const ProLicensePanel: Component = () => {
             {activating() ? 'Activating...' : 'Activate License'}
           </button>
           <button
-            class="min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            class="min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md border border-border text-base-content hover:bg-surface-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             onClick={handleClear}
             disabled={clearing() || loading() || !hasLicenseDetails()}
           >
@@ -239,7 +239,7 @@ export const ProLicensePanel: Component = () => {
         </div>
 
         <Show when={showTrialStart()}>
-          <div class="rounded-md border border-border bg-slate-50 dark:bg-slate-800 p-3">
+          <div class="rounded-md border border-border bg-surface-alt p-3">
             <p class="text-sm font-medium text-base-content">Try Pro for free</p>
             <p class="text-xs text-muted mt-1">
               Start a 14-day Pro trial for this organization.
@@ -341,7 +341,7 @@ export const ProLicensePanel: Component = () => {
                 <ul class="grid gap-2 sm:grid-cols-2">
                   <For each={formattedFeatures()}>
                     {(feature) => (
-                      <li class="text-sm text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                      <li class="text-sm text-base-content flex items-center gap-2">
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                         {feature}
                       </li>

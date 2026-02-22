@@ -168,7 +168,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
       <Card padding="md">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div class="min-w-0">
-            <div class="text-sm font-semibold text-slate-800 dark:text-slate-100">Swarm</div>
+            <div class="text-sm font-semibold text-base-content">Swarm</div>
             <div class="text-xs text-muted truncate" title={clusterName()}>
               {clusterName() ? `Cluster: ${clusterName()}` : 'No Swarm cluster detected'}
             </div>
@@ -238,7 +238,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
             <Card padding="none" tone="card" class="overflow-hidden">
               <div class="overflow-x-auto">
                 <Table class="w-full min-w-[900px] border-collapse text-xs">
-                  <TableHeader class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
+                  <TableHeader class="bg-surface-alt text-muted border-b border-border">
                     <TableRow class="text-left text-[10px] uppercase tracking-wide">
                       <TableHead class="px-3 py-2 font-medium">Service</TableHead>
                       <TableHead class="px-3 py-2 font-medium">Stack</TableHead>
@@ -263,7 +263,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
                         const ports = () => formatPorts(svc.docker?.endpointPorts);
 
                         return (
-                          <TableRow class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                          <TableRow class="hover:bg-surface-hover">
                             <TableCell class="px-3 py-2">
                               <div class="flex items-center gap-2 min-w-0">
                                 <span class={`h-2 w-2 rounded-full ${statusTone(svc.status)}`} title={svc.status || 'unknown'} />
@@ -272,17 +272,17 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
                                 </span>
                               </div>
                             </TableCell>
-                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{stack()}</TableCell>
-                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200 truncate" title={image()}>
+                            <TableCell class="px-3 py-2 text-base-content">{stack()}</TableCell>
+                            <TableCell class="px-3 py-2 text-base-content truncate" title={image()}>
                               {image()}
                             </TableCell>
-                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{mode()}</TableCell>
-                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{desired()}</TableCell>
-                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{running()}</TableCell>
-                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200 truncate" title={update()}>
+                            <TableCell class="px-3 py-2 text-base-content">{mode()}</TableCell>
+                            <TableCell class="px-3 py-2 text-base-content">{desired()}</TableCell>
+                            <TableCell class="px-3 py-2 text-base-content">{running()}</TableCell>
+                            <TableCell class="px-3 py-2 text-base-content truncate" title={update()}>
                               {update()}
                             </TableCell>
-                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200 truncate" title={ports()}>
+                            <TableCell class="px-3 py-2 text-base-content truncate" title={ports()}>
                               {ports()}
                             </TableCell>
                           </TableRow>
