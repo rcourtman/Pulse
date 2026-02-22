@@ -7,7 +7,8 @@ import {
     getPulseBaseUrl,
     getPulseHostname,
     isPulseHttps,
-    getPulseWebSocketUrl
+    getPulseWebSocketUrl,
+    getKioskModePreference
 } from '../url';
 
 describe('url utils', () => {
@@ -138,6 +139,86 @@ describe('url utils', () => {
             });
             const wsUrl = getPulseWebSocketUrl('/ws');
             expect(wsUrl).not.toContain('token=');
+        });
+
+        it('getPulseWebSocketUrl ignores tokens over 256 chars', () => {
+            vi.mocked(window.sessionStorage.getItem).mockImplementation((key) => {
+                if (key === 'pulse_auth') return JSON.stringify({ type: 'token', value: 'a'.repeat(300) });
+                return null;
+            });
+            const wsUrl = getPulseWebSocketUrl('/ws');
+            expect(wsUrl).not.toContain('token=');
+        });
+
+        it('getPulseWebSocketUrl ignores non-token auth', () => {
+            vi.mocked(window.sessionStorage.getItem).mockImplementation((key) => {
+                if (key === 'pulse_auth') return JSON.stringify({ type: 'session', value: 'secret' });
+                return null;
+            });
+            const wsUrl = getPulseWebSocketUrl('/ws');
+            expect(wsUrl).not.toContain('token=');
+        });
+
+        it('getPulseWebSocketUrl defaults to /ws', () => {
+            const wsUrl = getPulseWebSocketUrl();
+            expect(wsUrl).toContain('/ws');
+        });
+
+        it('getPulseWebSocketUrl handles path without leading slash', () => {
+            const wsUrl = getPulseWebSocketUrl('stream');
+            expect(wsUrl).toContain('/stream');
+        });
+
+        it('getPulseWebSocketUrl uses wss for https', () => {
+            (window.location as any).protocol = 'https:';
+            Object.defineProperty(window.location, 'origin', {
+                value: 'https://localhost:3000',
+                writable: true,
+                configurable: true
+            });
+            const wsUrl = getPulseWebSocketUrl('/ws');
+            expect(wsUrl).toContain('wss://');
+        });
+    });
+
+    describe('getKioskModePreference', () => {
+        it('returns true when kiosk is enabled in storage', () => {
+            vi.mocked(window.sessionStorage.getItem).mockReturnValue('true');
+            expect(getKioskModePreference()).toBe(true);
+        });
+
+        it('returns false when kiosk is explicitly disabled in storage', () => {
+            vi.mocked(window.sessionStorage.getItem).mockReturnValue('false');
+            expect(getKioskModePreference()).toBe(false);
+        });
+
+        it('returns null when kiosk preference is not set', () => {
+            vi.mocked(window.sessionStorage.getItem).mockReturnValue(null);
+            expect(getKioskModePreference()).toBe(null);
+        });
+    });
+
+    describe('kiosk mode edge cases', () => {
+        it('isKioskMode returns false when stored is explicitly false', () => {
+            vi.mocked(window.sessionStorage.getItem).mockReturnValue('false');
+            expect(isKioskMode()).toBe(false);
+        });
+
+        it('isKioskMode returns false when kiosk param is false', () => {
+            vi.mocked(window.sessionStorage.getItem).mockReturnValue(null);
+            window.location.search = '?kiosk=false';
+            expect(isKioskMode()).toBe(false);
+        });
+
+        it('subscribeToKioskMode notifies existing listeners on mode change', () => {
+            const listener1 = vi.fn();
+            const listener2 = vi.fn();
+            subscribeToKioskMode(listener1);
+            subscribeToKioskMode(listener2);
+
+            setKioskMode(true);
+            expect(listener1).toHaveBeenCalledWith(true);
+            expect(listener2).toHaveBeenCalledWith(true);
         });
     });
 });

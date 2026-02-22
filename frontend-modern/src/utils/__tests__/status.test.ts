@@ -13,6 +13,8 @@ import {
     getDockerHostStatusIndicator,
     getDockerContainerStatusIndicator,
     getDockerServiceStatusIndicator,
+    getPBSStatusIndicator,
+    getReplicationJobStatusIndicator,
     OFFLINE_HEALTH_STATUSES,
     DEGRADED_HEALTH_STATUSES,
     STOPPED_CONTAINER_STATES,
@@ -271,5 +273,96 @@ describe('Status sets', () => {
             expect(ERROR_CONTAINER_STATES.has('unhealthy')).toBe(true);
             expect(ERROR_CONTAINER_STATES.has('restarting')).toBe(true);
         });
+    });
+});
+
+describe('getPBSStatusIndicator', () => {
+    it('returns muted for null/undefined', () => {
+        expect(getPBSStatusIndicator(null)).toEqual({ variant: 'muted', label: 'Unknown' });
+        expect(getPBSStatusIndicator(undefined)).toEqual({ variant: 'muted', label: 'Unknown' });
+    });
+
+    it('returns danger for offline connection', () => {
+        const result = getPBSStatusIndicator({ connectionHealth: 'offline', status: 'online' });
+        expect(result.variant).toBe('danger');
+    });
+
+    it('returns danger for offline status', () => {
+        const result = getPBSStatusIndicator({ status: 'offline' });
+        expect(result.variant).toBe('danger');
+    });
+
+    it('returns success for healthy status', () => {
+        const result = getPBSStatusIndicator({ status: 'healthy' });
+        expect(result.variant).toBe('success');
+        expect(result.label).toBe('Healthy');
+    });
+
+    it('returns success for online status', () => {
+        const result = getPBSStatusIndicator({ status: 'online' });
+        expect(result.variant).toBe('success');
+        expect(result.label).toBe('Online');
+    });
+
+    it('returns success for online status even with degraded connection', () => {
+        const result = getPBSStatusIndicator({ connectionHealth: 'degraded', status: 'online' });
+        expect(result.variant).toBe('success');
+    });
+
+    it('returns warning for degraded status', () => {
+        const result = getPBSStatusIndicator({ status: 'degraded' });
+        expect(result.variant).toBe('warning');
+    });
+
+    it('returns warning for syncing status', () => {
+        const result = getPBSStatusIndicator({ status: 'syncing' });
+        expect(result.variant).toBe('warning');
+    });
+
+    it('returns warning for unknown status (in degraded set)', () => {
+        const result = getPBSStatusIndicator({ status: 'unknown' });
+        expect(result.variant).toBe('warning');
+    });
+});
+
+describe('getReplicationJobStatusIndicator', () => {
+    it('returns muted for null/undefined', () => {
+        expect(getReplicationJobStatusIndicator(null)).toEqual({ variant: 'muted', label: 'Unknown' });
+    });
+
+    it('returns danger for error status', () => {
+        const result = getReplicationJobStatusIndicator({ status: 'error' });
+        expect(result.variant).toBe('danger');
+    });
+
+    it('returns danger for error in lastSyncStatus', () => {
+        const result = getReplicationJobStatusIndicator({ status: 'idle', lastSyncStatus: 'error' });
+        expect(result.variant).toBe('danger');
+    });
+
+    it('returns warning for syncing status', () => {
+        const result = getReplicationJobStatusIndicator({ status: 'syncing' });
+        expect(result.variant).toBe('warning');
+    });
+
+    it('returns warning for sync in status', () => {
+        const result = getReplicationJobStatusIndicator({ status: 'backup-sync' });
+        expect(result.variant).toBe('warning');
+    });
+
+    it('returns success for idle status', () => {
+        const result = getReplicationJobStatusIndicator({ status: 'idle' });
+        expect(result.variant).toBe('success');
+        expect(result.label).toBe('Idle');
+    });
+
+    it('returns success for running status', () => {
+        const result = getReplicationJobStatusIndicator({ status: 'running' });
+        expect(result.variant).toBe('success');
+    });
+
+    it('returns success when using state field', () => {
+        const result = getReplicationJobStatusIndicator({ state: 'idle' });
+        expect(result.variant).toBe('success');
     });
 });
