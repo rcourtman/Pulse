@@ -654,11 +654,54 @@ func newSSOAdminRuntime(router *Router) extensions.SSOAdminRuntime {
 	runtime.GetSSOConfigSnapshot = func() extensions.SSOConfigSnapshot {
 		return toExtensionSSOConfigSnapshot(router.ensureSSOConfig())
 	}
+	runtime.SaveSSOConfigSnapshot = func(snapshot extensions.SSOConfigSnapshot) error {
+		if router == nil {
+			return nil
+		}
+		router.ssoConfig = toCoreSSOConfig(snapshot)
+		return router.saveSSOConfig()
+	}
 	runtime.GetPublicURL = func() string {
 		if router == nil || router.config == nil {
 			return ""
 		}
 		return router.config.PublicURL
+	}
+	runtime.RequireFeature = func(ctx context.Context, feature string) error {
+		if router == nil || router.licenseHandlers == nil {
+			return nil
+		}
+		svc := router.licenseHandlers.Service(ctx)
+		if svc == nil {
+			return nil
+		}
+		return svc.RequireFeature(feature)
+	}
+	runtime.WriteLicenseRequired = WriteLicenseRequired
+	runtime.InitializeSAMLProvider = func(ctx context.Context, id string, samlCfg *extensions.SAMLProviderConfig) error {
+		if router == nil || router.samlManager == nil || samlCfg == nil {
+			return nil
+		}
+		return router.samlManager.InitializeProvider(ctx, id, toCoreSAMLProviderConfig(samlCfg))
+	}
+	runtime.RemoveSAMLProvider = func(id string) {
+		if router == nil || router.samlManager == nil {
+			return
+		}
+		router.samlManager.RemoveProvider(id)
+	}
+	runtime.InitializeOIDCProvider = func(ctx context.Context, id string, provider *extensions.SSOProvider) error {
+		if router == nil || router.oidcManager == nil || provider == nil {
+			return nil
+		}
+		coreProvider := toCoreSSOProvider(*provider)
+		return router.oidcManager.InitializeProvider(ctx, id, &coreProvider, "")
+	}
+	runtime.RemoveOIDCProvider = func(id string) {
+		if router == nil || router.oidcManager == nil {
+			return
+		}
+		router.oidcManager.RemoveService(id)
 	}
 	runtime.HandleListProviders = router.handleListSSOProviders
 	runtime.HandleCreateProvider = router.handleCreateSSOProvider
@@ -817,6 +860,91 @@ func toExtensionSSOProvider(p config.SSOProvider) extensions.SSOProvider {
 	}
 
 	return out
+}
+
+func toCoreSSOConfig(snapshot extensions.SSOConfigSnapshot) *config.SSOConfig {
+	cfg := &config.SSOConfig{
+		Providers:              make([]config.SSOProvider, 0, len(snapshot.Providers)),
+		DefaultProviderID:      snapshot.DefaultProviderID,
+		AllowMultipleProviders: snapshot.AllowMultipleProviders,
+	}
+	for _, p := range snapshot.Providers {
+		cfg.Providers = append(cfg.Providers, toCoreSSOProvider(p))
+	}
+	return cfg
+}
+
+func toCoreSSOProvider(p extensions.SSOProvider) config.SSOProvider {
+	out := config.SSOProvider{
+		ID:                p.ID,
+		Name:              p.Name,
+		Type:              config.SSOProviderType(p.Type),
+		Enabled:           p.Enabled,
+		DisplayName:       p.DisplayName,
+		IconURL:           p.IconURL,
+		Priority:          p.Priority,
+		AllowedGroups:     p.AllowedGroups,
+		AllowedDomains:    p.AllowedDomains,
+		AllowedEmails:     p.AllowedEmails,
+		GroupsClaim:       p.GroupsClaim,
+		GroupRoleMappings: p.GroupRoleMappings,
+	}
+
+	if p.OIDC != nil {
+		out.OIDC = &config.OIDCProviderConfig{
+			IssuerURL:       p.OIDC.IssuerURL,
+			ClientID:        p.OIDC.ClientID,
+			ClientSecret:    p.OIDC.ClientSecret,
+			RedirectURL:     p.OIDC.RedirectURL,
+			LogoutURL:       p.OIDC.LogoutURL,
+			Scopes:          p.OIDC.Scopes,
+			UsernameClaim:   p.OIDC.UsernameClaim,
+			EmailClaim:      p.OIDC.EmailClaim,
+			CABundle:        p.OIDC.CABundle,
+			ClientSecretSet: p.OIDC.ClientSecretSet,
+		}
+	}
+
+	if p.SAML != nil {
+		out.SAML = toCoreSAMLProviderConfig(p.SAML)
+	}
+
+	return out
+}
+
+func toCoreSAMLProviderConfig(cfg *extensions.SAMLProviderConfig) *config.SAMLProviderConfig {
+	if cfg == nil {
+		return nil
+	}
+	return &config.SAMLProviderConfig{
+		IDPMetadataURL:       cfg.IDPMetadataURL,
+		IDPMetadataXML:       cfg.IDPMetadataXML,
+		IDPSSOURL:            cfg.IDPSSOURL,
+		IDPSLOURL:            cfg.IDPSLOURL,
+		IDPCertificate:       cfg.IDPCertificate,
+		IDPCertFile:          cfg.IDPCertFile,
+		IDPEntityID:          cfg.IDPEntityID,
+		IDPIssuer:            cfg.IDPIssuer,
+		SPEntityID:           cfg.SPEntityID,
+		SPACSPath:            cfg.SPACSPath,
+		SPMetadataPath:       cfg.SPMetadataPath,
+		SPCertificate:        cfg.SPCertificate,
+		SPPrivateKey:         cfg.SPPrivateKey,
+		SPCertFile:           cfg.SPCertFile,
+		SPKeyFile:            cfg.SPKeyFile,
+		SignRequests:         cfg.SignRequests,
+		WantAssertionsSigned: cfg.WantAssertionsSigned,
+		AllowUnencrypted:     cfg.AllowUnencrypted,
+		UsernameAttr:         cfg.UsernameAttr,
+		EmailAttr:            cfg.EmailAttr,
+		GroupsAttr:           cfg.GroupsAttr,
+		FirstNameAttr:        cfg.FirstNameAttr,
+		LastNameAttr:         cfg.LastNameAttr,
+		NameIDFormat:         cfg.NameIDFormat,
+		ForceAuthn:           cfg.ForceAuthn,
+		AllowIDPInitiated:    cfg.AllowIDPInitiated,
+		RelayStateTemplate:   cfg.RelayStateTemplate,
+	}
 }
 
 func previewSAMLMetadataFromRuntime(ctx context.Context, req extensions.MetadataPreviewRequest) (extensions.MetadataPreviewResponse, error) {

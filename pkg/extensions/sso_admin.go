@@ -203,21 +203,28 @@ type LogSSOAuditEventFunc func(ctx context.Context, event, path string, success 
 
 // SSOAdminRuntime exposes runtime capabilities needed by SSO admin endpoints.
 type SSOAdminRuntime struct {
-	GetClientIP          func(*http.Request) string
-	AllowAuthRequest     func(clientIP string) bool
-	TestSAMLConnection   func(context.Context, *SAMLTestConfig) SSOTestResponse
-	TestOIDCConnection   func(context.Context, *OIDCTestConfig) SSOTestResponse
-	PreviewSAMLMetadata  func(context.Context, MetadataPreviewRequest) (MetadataPreviewResponse, error)
-	IsValidProviderID    func(string) bool
-	GetSSOConfigSnapshot func() SSOConfigSnapshot
-	GetPublicURL         func() string
-	HandleListProviders  func(http.ResponseWriter, *http.Request)
-	HandleCreateProvider func(http.ResponseWriter, *http.Request)
-	HandleGetProvider    func(http.ResponseWriter, *http.Request, string)
-	HandleUpdateProvider func(http.ResponseWriter, *http.Request, string)
-	HandleDeleteProvider func(http.ResponseWriter, *http.Request, string)
-	LogAuditEvent        LogSSOAuditEventFunc
-	WriteError           WriteSSOErrorFunc
+	GetClientIP            func(*http.Request) string
+	AllowAuthRequest       func(clientIP string) bool
+	TestSAMLConnection     func(context.Context, *SAMLTestConfig) SSOTestResponse
+	TestOIDCConnection     func(context.Context, *OIDCTestConfig) SSOTestResponse
+	PreviewSAMLMetadata    func(context.Context, MetadataPreviewRequest) (MetadataPreviewResponse, error)
+	IsValidProviderID      func(string) bool
+	GetSSOConfigSnapshot   func() SSOConfigSnapshot
+	SaveSSOConfigSnapshot  func(SSOConfigSnapshot) error
+	GetPublicURL           func() string
+	RequireFeature         func(context.Context, string) error
+	WriteLicenseRequired   func(http.ResponseWriter, string, string)
+	InitializeSAMLProvider func(context.Context, string, *SAMLProviderConfig) error
+	RemoveSAMLProvider     func(string)
+	InitializeOIDCProvider func(context.Context, string, *SSOProvider) error
+	RemoveOIDCProvider     func(string)
+	HandleListProviders    func(http.ResponseWriter, *http.Request)
+	HandleCreateProvider   func(http.ResponseWriter, *http.Request)
+	HandleGetProvider      func(http.ResponseWriter, *http.Request, string)
+	HandleUpdateProvider   func(http.ResponseWriter, *http.Request, string)
+	HandleDeleteProvider   func(http.ResponseWriter, *http.Request, string)
+	LogAuditEvent          LogSSOAuditEventFunc
+	WriteError             WriteSSOErrorFunc
 }
 
 // MetadataPreviewError provides a structured error for metadata preview operations.
