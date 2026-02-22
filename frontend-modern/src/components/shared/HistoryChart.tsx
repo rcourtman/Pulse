@@ -592,7 +592,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                                 <button
                                     onClick={() => updateRange(r)}
                                     class={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${range() === r
-                                        ? 'bg-white text-base-content shadow-sm'
+                                        ? 'bg-surface text-base-content shadow-sm'
                                         : 'text-muted hover:text-base-content'
                                         }`}
                                 >
@@ -686,15 +686,17 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                 <Show when={hoveredPoint()}>
                     {(point) => (
                         <div
-                            class="fixed pointer-events-none bg-base text-white text-xs rounded px-2 py-1 shadow-sm border border-border z-[9999]"
+                            class="fixed pointer-events-none text-xs rounded px-2 py-1 shadow-lg border border-slate-600 z-[9999]"
                             style={{
                                 left: `${point().x}px`,
                                 top: `${point().y}px`,
-                                transform: 'translateX(-50%)' // Center
+                                transform: 'translateX(-50%)',
+                                'background-color': 'rgb(15, 23, 42)',
+                                color: 'rgb(248, 250, 252)',
                             }}
                         >
                             <div class="font-medium text-center mb-0.5">{new Date(point().timestamp).toLocaleString()}</div>
-                            <div class="text-slate-300">
+                            <div style={{ color: 'rgb(203, 213, 225)' }}>
                                 {formatTooltipValue(point().value, props.unit)}
                             </div>
                         </div>

@@ -251,12 +251,14 @@ export const DensityMap: Component<DensityMapProps> = (props) => {
                 <Show when={hoveredState()}>
                     {(hover) => (
                         <div
-                            class="fixed pointer-events-none bg-base text-white text-xs rounded px-2 py-1.5 shadow-sm border border-border"
+                            class="fixed pointer-events-none text-xs rounded px-2 py-1.5 shadow-lg border border-slate-600"
                             style={{
                                 left: `${hover().tooltipX}px`,
                                 top: `${hover().tooltipY - 6}px`,
                                 transform: 'translate(-50%, -100%)',
                                 'z-index': '9999',
+                                'background-color': 'rgb(15, 23, 42)',
+                                color: 'rgb(248, 250, 252)',
                             }}
                         >
                             <div class="font-medium text-center mb-1 text-slate-300">{formatHoverTime(hover().timestamp)}</div>

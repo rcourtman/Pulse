@@ -25,7 +25,7 @@ export function TooltipPortal(props: TooltipPortalProps) {
             transform: 'translate(-50%, -100%)',
           }}
         >
-          <div class="bg-base text-white text-[10px] rounded-md shadow-sm px-2 py-1.5 border border-border">
+          <div class="text-[10px] rounded-md shadow-lg px-2 py-1.5 border border-slate-600" style={{ 'background-color': 'rgb(15, 23, 42)', color: 'rgb(248, 250, 252)' }}>
             {props.children}
           </div>
         </div>
