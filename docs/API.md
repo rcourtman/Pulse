@@ -345,6 +345,22 @@ Triggers a test alert to all configured channels.
 ### Advanced Reporting (Pro)
 - `GET /api/admin/reports/generate` (admin, `settings:read`)
   - Query params: `format` (pdf/csv, default `pdf`), `resourceType`, `resourceId`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
+- `POST /api/admin/reports/generate-multi` (admin, `settings:read`)
+  - Body fields: `resources` (1-50 entries of `{resourceType,resourceId}`), `format`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
+
+Validation and limits:
+- `start` and `end` must be RFC3339 when provided.
+- `start` must be before `end`.
+- Maximum report window is 366 days.
+- `metricType` must match `[a-zA-Z0-9._:-]+` and be <= 64 chars.
+- `title` must be <= 256 chars.
+- Multi-report body max size is 1MB and rejects trailing payload or unknown JSON fields.
+
+Common reporting error codes:
+- `invalid_format`, `missing_params`, `invalid_resource_type`, `invalid_resource_id`
+- `invalid_metric_type`, `invalid_title`
+- `invalid_start`, `invalid_end`, `invalid_range`, `range_too_large`
+- `no_resources`, `too_many_resources`, `body_too_large`, `invalid_body`
 
 ### Queue and Dead-Letter Tools
 - `GET /api/notifications/queue/stats` (admin)
