@@ -22,6 +22,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Set up Helm
         uses: azure/setup-helm@v4
@@ -41,7 +44,7 @@ jobs:
             if [ -z "$APP_VERSION" ]; then
               APP_VERSION="$CHART_VERSION"
             fi
-            RELEASE_TAG="$CHART_VERSION"
+            RELEASE_TAG="v${CHART_VERSION}"
           else
             RELEASE_TAG="${{ github.event.release.tag_name }}"
             if [ -z "$RELEASE_TAG" ]; then
@@ -52,9 +55,46 @@ jobs:
             APP_VERSION="$CHART_VERSION"
           fi
 
+          IS_PRERELEASE="false"
+          if [[ "$APP_VERSION" =~ -rc\.[0-9]+$ ]] || [[ "$APP_VERSION" =~ -alpha\.[0-9]+$ ]] || [[ "$APP_VERSION" =~ -beta\.[0-9]+$ ]]; then
+            IS_PRERELEASE="true"
+          fi
+
           echo "chart_version=$CHART_VERSION" >> "$GITHUB_OUTPUT"
           echo "app_version=$APP_VERSION" >> "$GITHUB_OUTPUT"
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
+
+      - name: Validate release line policy
+        env:
+          RELEASE_TAG: ${{ steps.versions.outputs.release_tag }}
+          IS_PRERELEASE: ${{ steps.versions.outputs.is_prerelease }}
+        run: |
+          set -euo pipefail
+
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            REQUIRED_BRANCH="pulse/v6"
+          else
+            REQUIRED_BRANCH="main"
+          fi
+
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --prune --unshallow origin
+          fi
+          git fetch --prune origin main pulse/v6 --tags
+
+          if ! git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            echo "::error::Tag ${RELEASE_TAG} does not exist. Helm publish must map to a real Git tag."
+            exit 1
+          fi
+
+          TAG_COMMIT="$(git rev-list -n1 "refs/tags/${RELEASE_TAG}")"
+          if ! git merge-base --is-ancestor "$TAG_COMMIT" "origin/${REQUIRED_BRANCH}"; then
+            echo "::error::Tag ${RELEASE_TAG} is not reachable from origin/${REQUIRED_BRANCH}. Refusing cross-line Helm publish."
+            exit 1
+          fi
+
+          echo "[OK] ${RELEASE_TAG} validated against release line ${REQUIRED_BRANCH}"
 
       - name: Helm lint (strict)
         run: helm lint deploy/helm/pulse --strict

@@ -18,6 +18,18 @@ jobs:
       packages: read
 
     steps:
+      - name: Validate release branch
+        run: |
+          case "${GITHUB_REF_NAME}" in
+            main|pulse/v6)
+              echo "[OK] Dry run executing on release branch ${GITHUB_REF_NAME}"
+              ;;
+            *)
+              echo "::error::Release dry run must be executed from main (v5) or pulse/v6 (v6). Current ref: ${GITHUB_REF_NAME}"
+              exit 1
+              ;;
+          esac
+
       - name: Checkout repository
         uses: actions/checkout@v4
 

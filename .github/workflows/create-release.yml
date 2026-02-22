@@ -31,21 +31,18 @@ jobs:
       version: ${{ steps.extract.outputs.version }}
       tag: ${{ steps.extract.outputs.tag }}
       is_prerelease: ${{ steps.extract.outputs.is_prerelease }}
+      source_branch: ${{ steps.extract.outputs.source_branch }}
+      required_branch: ${{ steps.extract.outputs.required_branch }}
     steps:
       - name: Extract version
         id: extract
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            TAG="${GITHUB_REF#refs/tags/}"
-            VERSION="${TAG#v}"
-          else
-            VERSION=$(jq -r '.inputs.version // ""' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "")
-            if [ -z "$VERSION" ]; then
-              echo "::error::workflow_dispatch must include a version input"
-              exit 1
-            fi
-            TAG="v${VERSION}"
+          VERSION=$(jq -r '.inputs.version // ""' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "")
+          if [ -z "$VERSION" ]; then
+            echo "::error::workflow_dispatch must include a version input"
+            exit 1
           fi
+          TAG="v${VERSION}"
 
           IS_PRERELEASE="false"
           if [[ "$VERSION" =~ -rc\.[0-9]+$ ]] || [[ "$VERSION" =~ -alpha\.[0-9]+$ ]] || [[ "$VERSION" =~ -beta\.[0-9]+$ ]]; then
@@ -53,10 +50,29 @@ jobs:
             echo "Detected prerelease version: ${VERSION}"
           fi
 
+          if [[ "${GITHUB_REF}" != refs/heads/* ]]; then
+            echo "::error::Release workflow must be dispatched from a branch ref (current ref: ${GITHUB_REF})."
+            exit 1
+          fi
+
+          SOURCE_BRANCH="${GITHUB_REF_NAME}"
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            REQUIRED_BRANCH="pulse/v6"
+          else
+            REQUIRED_BRANCH="main"
+          fi
+
+          if [ "$SOURCE_BRANCH" != "$REQUIRED_BRANCH" ]; then
+            echo "::error::Invalid release line. Version ${VERSION} must run from ${REQUIRED_BRANCH}, but workflow ref is ${SOURCE_BRANCH}."
+            exit 1
+          fi
+
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "is_prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
-          echo "Version: ${VERSION}, Tag: ${TAG}, Prerelease: ${IS_PRERELEASE}"
+          echo "source_branch=${SOURCE_BRANCH}" >> $GITHUB_OUTPUT
+          echo "required_branch=${REQUIRED_BRANCH}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}, Tag: ${TAG}, Prerelease: ${IS_PRERELEASE}, Branch: ${SOURCE_BRANCH}"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -506,13 +522,17 @@ jobs:
           echo "[OK] Docker publish workflow dispatched"
 
       - name: Trigger demo server update
-        if: ${{ github.event.inputs.draft_only != 'true' }}
+        if: ${{ github.event.inputs.draft_only != 'true' && needs.prepare.outputs.is_prerelease != 'true' }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: |
           gh workflow run update-demo-server.yml -f tag="${{ needs.prepare.outputs.tag }}"
           echo "[OK] Demo server update dispatched"
+
+      - name: Skip demo server update for prerelease
+        if: ${{ github.event.inputs.draft_only != 'true' && needs.prepare.outputs.is_prerelease == 'true' }}
+        run: echo "Skipping demo server update for prerelease tag ${{ needs.prepare.outputs.tag }}"
 
       - name: Summary
         run: |

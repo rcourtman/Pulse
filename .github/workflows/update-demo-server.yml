@@ -27,6 +27,41 @@ jobs:
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Validate stable release line policy
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.target.outputs.tag }}"
+          VERSION="${TAG#v}"
+
+          if [[ "$VERSION" =~ -rc\.[0-9]+$ ]] || [[ "$VERSION" =~ -alpha\.[0-9]+$ ]] || [[ "$VERSION" =~ -beta\.[0-9]+$ ]]; then
+            echo "::error::Demo server updates only support stable releases. Refusing prerelease tag ${TAG}."
+            exit 1
+          fi
+
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --prune --unshallow origin
+          fi
+          git fetch --prune origin main --tags
+
+          if ! git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "::error::Tag ${TAG} does not exist in repository tags."
+            exit 1
+          fi
+
+          TAG_COMMIT="$(git rev-list -n1 "refs/tags/${TAG}")"
+          if ! git merge-base --is-ancestor "$TAG_COMMIT" "origin/main"; then
+            echo "::error::Tag ${TAG} is not reachable from origin/main. Refusing demo deployment."
+            exit 1
+          fi
+
+          echo "[OK] ${TAG} validated for stable demo deployment"
+
       - name: Skip if not latest published release
         id: gate
         if: github.event_name == 'release'

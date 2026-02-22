@@ -9,6 +9,22 @@ This runbook is the operational path for shipping v6 safely while `main` continu
 
 Do not move `main` to v6 during prerelease.
 
+## Enforced Workflow Policy
+
+Release workflows now enforce branch/tag lineage rules:
+
+- `Pulse Release Pipeline` (`create-release.yml`)
+  - Stable versions must be dispatched from `main`.
+  - Prerelease versions (`-rc.N`, `-alpha.N`, `-beta.N`) must be dispatched from `pulse/v6`.
+- `publish-docker.yml`, `promote-floating-tags.yml`, and `publish-helm-chart.yml`
+  - Validate the release tag commit is reachable from the expected branch.
+  - Stable tags must be from `main`; prerelease tags must be from `pulse/v6`.
+- `update-demo-server.yml`
+  - Accepts stable tags only.
+  - Stable tag must be reachable from `main`.
+
+This prevents accidental cross-line releases (for example, cutting stable from `pulse/v6` or prerelease from `main`).
+
 ## Important Scope Note
 
 The Pulse release workflow in this repo (`.github/workflows/create-release.yml`) builds from the checked-out `Pulse` ref and runs `./scripts/build-release.sh`, which builds `./cmd/pulse`.
@@ -65,6 +81,7 @@ git push origin pulse/v6
    - Re-run `Pulse Release Pipeline` on `pulse/v6`
    - Same `version` and notes
    - `draft_only`: `false`
+   - Demo server update is skipped automatically for prereleases.
 
 6. Canary rollout:
    - Upgrade a small user subset first.

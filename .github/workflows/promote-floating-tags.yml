@@ -71,6 +71,43 @@ jobs:
           echo "prerelease=${PRERELEASE}" >> $GITHUB_OUTPUT
           echo "Promoting floating tags for ${TAG} (prerelease: ${PRERELEASE})"
 
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Validate release line policy
+        env:
+          TAG: ${{ steps.extract.outputs.tag }}
+          PRERELEASE: ${{ steps.extract.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+
+          if [ "$PRERELEASE" = "true" ]; then
+            REQUIRED_BRANCH="pulse/v6"
+          else
+            REQUIRED_BRANCH="main"
+          fi
+
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --prune --unshallow origin
+          fi
+          git fetch --prune origin main pulse/v6 --tags
+
+          if ! git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "::error::Tag ${TAG} does not exist in repository tags."
+            exit 1
+          fi
+
+          TAG_COMMIT="$(git rev-list -n1 "refs/tags/${TAG}")"
+          if ! git merge-base --is-ancestor "$TAG_COMMIT" "origin/${REQUIRED_BRANCH}"; then
+            echo "::error::Tag ${TAG} is not reachable from origin/${REQUIRED_BRANCH}. Refusing floating-tag promotion."
+            exit 1
+          fi
+
+          echo "[OK] ${TAG} validated against release line ${REQUIRED_BRANCH}"
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:

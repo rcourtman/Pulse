@@ -28,6 +28,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Extract version from release tag
         id: version
@@ -46,6 +48,37 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "is_prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
           echo "Publishing Docker images for ${TAG} (prerelease: ${IS_PRERELEASE})"
+
+      - name: Validate release line policy
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          IS_PRERELEASE: ${{ steps.version.outputs.is_prerelease }}
+        run: |
+          set -euo pipefail
+
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            REQUIRED_BRANCH="pulse/v6"
+          else
+            REQUIRED_BRANCH="main"
+          fi
+
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --prune --unshallow origin
+          fi
+          git fetch --prune origin main pulse/v6 --tags
+
+          if ! git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "::error::Tag ${TAG} does not exist in repository tags."
+            exit 1
+          fi
+
+          TAG_COMMIT="$(git rev-list -n1 "refs/tags/${TAG}")"
+          if ! git merge-base --is-ancestor "$TAG_COMMIT" "origin/${REQUIRED_BRANCH}"; then
+            echo "::error::Tag ${TAG} is not reachable from origin/${REQUIRED_BRANCH}. Refusing cross-line Docker publish."
+            exit 1
+          fi
+
+          echo "[OK] ${TAG} validated against release line ${REQUIRED_BRANCH}"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
