@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -76,7 +75,7 @@ func (h *BillingStateHandlers) HandlePutBillingState(w http.ResponseWriter, r *h
 
 	r.Body = http.MaxBytesReader(w, r.Body, orgRequestBodyLimit)
 
-	var incoming pkglicensing.BillingState
+	var incoming billingState
 	if err := json.NewDecoder(r.Body).Decode(&incoming); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
 		return
@@ -108,14 +107,14 @@ func (h *BillingStateHandlers) HandlePutBillingState(w http.ResponseWriter, r *h
 	writeJSON(w, http.StatusOK, state)
 }
 
-func defaultBillingState() *pkglicensing.BillingState {
-	return pkglicensing.DefaultBillingState()
+func defaultBillingState() *billingState {
+	return defaultBillingStateFromLicensing()
 }
 
-func normalizeBillingState(state *pkglicensing.BillingState) *pkglicensing.BillingState {
-	return pkglicensing.NormalizeBillingState(state)
+func normalizeBillingState(state *billingState) *billingState {
+	return normalizeBillingStateFromLicensing(state)
 }
 
-func isValidBillingSubscriptionState(state pkglicensing.SubscriptionState) bool {
-	return pkglicensing.IsValidBillingSubscriptionState(state)
+func isValidBillingSubscriptionState(state subscriptionState) bool {
+	return isValidBillingSubscriptionStateFromLicensing(state)
 }

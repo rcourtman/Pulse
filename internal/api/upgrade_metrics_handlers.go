@@ -6,21 +6,20 @@ import (
 	"strings"
 	"time"
 
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
 type ConversionHandlers struct {
-	recorder *pkglicensing.Recorder
-	health   *pkglicensing.PipelineHealth
-	config   *pkglicensing.CollectionConfig
-	store    *pkglicensing.ConversionStore
+	recorder *conversionRecorder
+	health   *conversionPipelineHealth
+	config   *conversionCollectionConfig
+	store    *conversionStore
 	// disableAll, when true, forces all event ingestion to be skipped for privacy.
 	// This is a hard override; runtime collection config remains mutable but is ignored.
 	disableAll func() bool
 }
 
-func NewConversionHandlers(recorder *pkglicensing.Recorder, health *pkglicensing.PipelineHealth, config *pkglicensing.CollectionConfig, store *pkglicensing.ConversionStore, disableAll func() bool) *ConversionHandlers {
+func NewConversionHandlers(recorder *conversionRecorder, health *conversionPipelineHealth, config *conversionCollectionConfig, store *conversionStore, disableAll func() bool) *ConversionHandlers {
 	return &ConversionHandlers{
 		recorder:   recorder,
 		health:     health,
@@ -36,15 +35,15 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	var event pkglicensing.ConversionEvent
+	var event conversionEvent
 	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
-		pkglicensing.GetConversionMetrics().RecordInvalid("invalid_request_body")
+		recordConversionInvalidMetric("invalid_request_body")
 		writeConversionValidationError(w, "invalid request body")
 		return
 	}
 
 	if err := event.Validate(); err != nil {
-		pkglicensing.GetConversionMetrics().RecordInvalid(conversionValidationReason(err))
+		recordConversionInvalidMetric(conversionValidationReason(err))
 		writeConversionValidationError(w, err.Error())
 		return
 	}
@@ -54,7 +53,7 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 		contextOrgID = "default"
 	}
 	if !isValidOrganizationID(contextOrgID) {
-		pkglicensing.GetConversionMetrics().RecordInvalid("invalid_context_org_id")
+		recordConversionInvalidMetric("invalid_context_org_id")
 		writeConversionValidationError(w, "invalid tenant context")
 		return
 	}
@@ -64,12 +63,12 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 		event.OrgID = contextOrgID
 	} else {
 		if !isValidOrganizationID(event.OrgID) {
-			pkglicensing.GetConversionMetrics().RecordInvalid("invalid_event_org_id")
+			recordConversionInvalidMetric("invalid_event_org_id")
 			writeConversionValidationError(w, "invalid org_id")
 			return
 		}
 		if event.OrgID != contextOrgID {
-			pkglicensing.GetConversionMetrics().RecordInvalid("org_id_mismatch")
+			recordConversionInvalidMetric("org_id_mismatch")
 			writeConversionJSONResponse(w, http.StatusForbidden, map[string]string{
 				"error":   "org_mismatch",
 				"message": "org_id does not match authenticated tenant",
@@ -79,7 +78,7 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 	}
 
 	if h != nil && h.disableAll != nil && h.disableAll() {
-		pkglicensing.GetConversionMetrics().RecordSkipped("system_disabled")
+		recordConversionSkippedMetric("system_disabled")
 		writeConversionAccepted(w)
 		return
 	}
@@ -89,7 +88,7 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 		if !h.config.IsEnabled() {
 			reason = "collection_disabled"
 		}
-		pkglicensing.GetConversionMetrics().RecordSkipped(reason)
+		recordConversionSkippedMetric(reason)
 		writeConversionAccepted(w)
 		return
 	}
@@ -99,7 +98,7 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 			// Analytics ingestion is fire-and-forget; do not fail UX if recording fails.
 			log.Warn().Err(err).Str("event_type", event.Type).Msg("Failed to record conversion event")
 		} else {
-			pkglicensing.GetConversionMetrics().RecordEvent(event.Type, event.Surface)
+			recordConversionEventMetric(event.Type, event.Surface)
 			if h.health != nil {
 				h.health.RecordEvent(event.Type)
 			}
@@ -168,7 +167,7 @@ func (h *ConversionHandlers) HandleGetHealth(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	status := pkglicensing.HealthStatus{
+	status := conversionHealthStatus{
 		Status:              "healthy",
 		LastEventAgeSeconds: 0,
 		EventsTotal:         0,
@@ -241,7 +240,7 @@ func (h *ConversionHandlers) HandleGetConfig(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	snapshot := pkglicensing.CollectionConfigSnapshot{
+	snapshot := conversionCollectionConfigSnapshot{
 		Enabled:          true,
 		DisabledSurfaces: []string{},
 	}
@@ -259,7 +258,7 @@ func (h *ConversionHandlers) HandleUpdateConfig(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	var snapshot pkglicensing.CollectionConfigSnapshot
+	var snapshot conversionCollectionConfigSnapshot
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&snapshot); err != nil {
@@ -269,12 +268,12 @@ func (h *ConversionHandlers) HandleUpdateConfig(w http.ResponseWriter, r *http.R
 
 	if h != nil {
 		if h.config == nil {
-			h.config = pkglicensing.NewCollectionConfig()
+			h.config = newCollectionConfigFromLicensing()
 		}
 		h.config.UpdateConfig(snapshot)
 		snapshot = h.config.GetConfig()
 	} else {
-		cfg := pkglicensing.NewCollectionConfig()
+		cfg := newCollectionConfigFromLicensing()
 		cfg.UpdateConfig(snapshot)
 		snapshot = cfg.GetConfig()
 	}
@@ -283,7 +282,7 @@ func (h *ConversionHandlers) HandleUpdateConfig(w http.ResponseWriter, r *http.R
 }
 
 func conversionValidationReason(err error) string {
-	return pkglicensing.ConversionValidationReason(err)
+	return conversionValidationReasonFromLicensing(err)
 }
 
 func writeConversionValidationError(w http.ResponseWriter, message string) {
@@ -309,5 +308,5 @@ func writeConversionJSONResponse(w http.ResponseWriter, status int, payload inte
 }
 
 func parseOptionalTimeParam(raw string, defaultValue time.Time) (time.Time, error) {
-	return pkglicensing.ParseOptionalTimeParam(raw, defaultValue)
+	return parseOptionalTimeParamFromLicensing(raw, defaultValue)
 }

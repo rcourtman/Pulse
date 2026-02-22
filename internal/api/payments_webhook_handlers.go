@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 	"github.com/stripe/stripe-go/v82"
 	"github.com/stripe/stripe-go/v82/webhook"
@@ -290,12 +289,12 @@ func (h *StripeWebhookHandlers) handleCheckoutSessionCompleted(ctx context.Conte
 
 	planVersion := derivePlanVersion(session.Metadata, "")
 
-	state := &pkglicensing.BillingState{
-		Capabilities:         pkglicensing.DeriveCapabilitiesFromTier(pkglicensing.TierCloud, nil),
+	state := &billingState{
+		Capabilities:         cloudCapabilitiesFromLicensing(),
 		Limits:               map[string]int64{},
 		MetersEnabled:        []string{},
 		PlanVersion:          planVersion,
-		SubscriptionState:    pkglicensing.SubStateActive,
+		SubscriptionState:    subscriptionStateActiveValue,
 		StripeCustomerID:     session.Customer,
 		StripeSubscriptionID: strings.TrimSpace(session.Subscription),
 	}
@@ -393,7 +392,7 @@ func (h *StripeWebhookHandlers) handleSubscriptionUpdated(ctx context.Context, s
 	state.PlanVersion = derivePlanVersion(sub.Metadata, priceID)
 
 	if shouldGrantPaidCapabilities(subState) {
-		state.Capabilities = pkglicensing.DeriveCapabilitiesFromTier(pkglicensing.TierCloud, nil)
+		state.Capabilities = cloudCapabilitiesFromLicensing()
 	} else {
 		state.Capabilities = []string{}
 	}
@@ -449,7 +448,7 @@ func (h *StripeWebhookHandlers) handleSubscriptionDeleted(ctx context.Context, s
 	state := normalizeBillingState(before)
 
 	// CRITICAL: revoke paid capabilities immediately on cancellation.
-	state.SubscriptionState = pkglicensing.SubStateCanceled
+	state.SubscriptionState = subscriptionStateCanceledValue
 	state.Capabilities = []string{}
 	state.StripeCustomerID = customerID
 	state.StripeSubscriptionID = strings.TrimSpace(sub.ID)
@@ -502,16 +501,16 @@ func firstPriceID(sub stripeSubscription) string {
 	return ""
 }
 
-func mapStripeSubscriptionStatusToState(status string) pkglicensing.SubscriptionState {
-	return pkglicensing.MapStripeSubscriptionStatusToState(status)
+func mapStripeSubscriptionStatusToState(status string) subscriptionState {
+	return mapStripeSubscriptionStatusToStateFromLicensing(status)
 }
 
-func shouldGrantPaidCapabilities(state pkglicensing.SubscriptionState) bool {
-	return pkglicensing.ShouldGrantPaidCapabilities(state)
+func shouldGrantPaidCapabilities(state subscriptionState) bool {
+	return shouldGrantPaidCapabilitiesFromLicensing(state)
 }
 
 func derivePlanVersion(metadata map[string]string, priceID string) string {
-	return pkglicensing.DeriveStripePlanVersion(metadata, priceID)
+	return deriveStripePlanVersionFromLicensing(metadata, priceID)
 }
 
 func resolvePulseDataDir(dataPath string) string {

@@ -47,7 +47,7 @@ func TestRouterDecompositionRouteRegistrationDistribution(t *testing.T) {
 		"router_routes_auth_security.go": 3,
 		"router_routes_monitoring.go":    3,
 		"router_routes_ai_relay.go":      3,
-		"router_routes_org_license.go":   3,
+		"router_routes_licensing.go":     3,
 	}
 
 	for fileName, minCount := range minByFile {

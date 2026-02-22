@@ -10,10 +10,7 @@ import (
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
-
-const maxNodesLicenseGateKey = licensing.MaxNodesLicenseGateKey
 
 func maxNodesLimitForContext(ctx context.Context) int {
 	service := getLicenseServiceForContext(ctx)
@@ -31,7 +28,7 @@ func configuredNodeCount(cfg *config.Config) int {
 	if cfg == nil {
 		return 0
 	}
-	return licensing.ConfiguredNodeCount(len(cfg.PVEInstances), len(cfg.PBSInstances), len(cfg.PMGInstances))
+	return configuredNodeCountFromLicensing(len(cfg.PVEInstances), len(cfg.PBSInstances), len(cfg.PMGInstances))
 }
 
 func registeredNodeSlotCount(cfg *config.Config, monitor *monitoring.Monitor) int {
@@ -39,14 +36,14 @@ func registeredNodeSlotCount(cfg *config.Config, monitor *monitoring.Monitor) in
 	if monitor == nil {
 		return count
 	}
-	return licensing.RegisteredNodeSlotCount(count, monitor.GetLiveStateSnapshot())
+	return registeredNodeSlotCountFromLicensing(count, monitor.GetLiveStateSnapshot())
 }
 
 func writeMaxNodesLimitExceeded(w http.ResponseWriter, current, limit int) {
 	WriteLicenseRequired(
 		w,
 		maxNodesLicenseGateKey,
-		licensing.NodeLimitExceededMessage(current, limit),
+		nodeLimitExceededMessageFromLicensing(current, limit),
 	)
 }
 
@@ -62,7 +59,7 @@ func enforceNodeLimitForConfigRegistration(
 	}
 
 	current := registeredNodeSlotCount(cfg, monitor)
-	if !licensing.ExceedsNodeLimit(current, 1, limit) {
+	if !exceedsNodeLimitFromLicensing(current, 1, limit) {
 		return false
 	}
 
@@ -89,7 +86,7 @@ func enforceNodeLimitForReport(
 	}
 
 	current := registeredNodeSlotCount(monitor.GetConfig(), monitor)
-	if !licensing.ExceedsNodeLimit(current, 1, limit) {
+	if !exceedsNodeLimitFromLicensing(current, 1, limit) {
 		return false
 	}
 
@@ -142,7 +139,7 @@ func hostReportTargetsExistingHost(
 	if tokenRecord != nil {
 		tokenID = tokenRecord.ID
 	}
-	return licensing.HostReportTargetsExistingHost(snapshot, report, tokenID)
+	return hostReportTargetsExistingHostFromLicensing(snapshot, report, tokenID)
 }
 
 func dockerReportTargetsExistingHost(snapshot models.StateSnapshot, report agentsdocker.Report, tokenRecord *config.APITokenRecord) bool {
@@ -150,7 +147,7 @@ func dockerReportTargetsExistingHost(snapshot models.StateSnapshot, report agent
 	if tokenRecord != nil {
 		tokenID = tokenRecord.ID
 	}
-	return licensing.DockerReportTargetsExistingHost(snapshot, report, tokenID)
+	return dockerReportTargetsExistingHostFromLicensing(snapshot, report, tokenID)
 }
 
 func kubernetesReportTargetsExistingCluster(snapshot models.StateSnapshot, report agentsk8s.Report, tokenRecord *config.APITokenRecord) bool {
@@ -158,13 +155,13 @@ func kubernetesReportTargetsExistingCluster(snapshot models.StateSnapshot, repor
 	if tokenRecord != nil {
 		tokenID = tokenRecord.ID
 	}
-	return licensing.KubernetesReportTargetsExistingCluster(snapshot, report, tokenID)
+	return kubernetesReportTargetsExistingClusterFromLicensing(snapshot, report, tokenID)
 }
 
 func kubernetesReportIdentifier(report agentsk8s.Report) string {
-	return licensing.KubernetesReportIdentifier(report)
+	return kubernetesReportIdentifierFromLicensing(report)
 }
 
 func collectNonEmptyStrings(values ...string) []string {
-	return licensing.CollectNonEmptyStrings(values...)
+	return collectNonEmptyStringsFromLicensing(values...)
 }

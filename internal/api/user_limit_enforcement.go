@@ -5,10 +5,7 @@ import (
 	"net/http"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
-
-const maxUsersLicenseGateKey = licensing.MaxUsersLicenseGateKey
 
 // maxUsersLimitForContext returns the max_users limit from the license for the current context.
 // Returns 0 if no limit is set (unlimited).
@@ -19,7 +16,7 @@ func maxUsersLimitForContext(ctx context.Context) int {
 	}
 
 	lic := service.Current()
-	return licensing.MaxUsersLimitFromLicense(lic)
+	return maxUsersLimitFromLicensing(lic)
 }
 
 // currentUserCount returns the number of members in the organization.
@@ -40,14 +37,14 @@ func enforceUserLimitForMemberAdd(w http.ResponseWriter, ctx context.Context, or
 	}
 
 	current := currentUserCount(org)
-	if !licensing.ExceedsUserLimit(current, 1, limit) {
+	if !exceedsUserLimitFromLicensing(current, 1, limit) {
 		return false // Within limit
 	}
 
 	WriteLicenseRequired(
 		w,
 		maxUsersLicenseGateKey,
-		licensing.UserLimitExceededMessage(current, limit),
+		userLimitExceededMessageFromLicensing(current, limit),
 	)
 	return true
 }

@@ -18,6 +18,8 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
   Practical upgrade guidance and post-upgrade checks for Pulse v6.
 - **[Upgrade to v5](UPGRADE_v5.md)**  
   Practical upgrade guidance and post-upgrade checks.
+- **[v6 Prerelease Runbook](releases/V6_PRERELEASE_RUNBOOK.md)**  
+  Step-by-step release operations for shipping v6 RCs while `main` remains on v5.
 - **[FAQ](FAQ.md)**  
   Common questions and quick answers.
 

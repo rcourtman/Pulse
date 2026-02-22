@@ -11,8 +11,8 @@ func TestReconcileInterval(t *testing.T) {
 	}
 }
 
-func TestStaleBillingWindow(t *testing.T) {
-	if staleBillingWindow != 48*time.Hour {
-		t.Errorf("expected staleBillingWindow=48h, got %v", staleBillingWindow)
+func TestStaleSubscriptionStateWindow(t *testing.T) {
+	if staleSubscriptionState != 48*time.Hour {
+		t.Errorf("expected staleSubscriptionState=48h, got %v", staleSubscriptionState)
 	}
 }

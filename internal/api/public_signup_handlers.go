@@ -15,7 +15,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/hosted"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -162,11 +161,11 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 	// Seed trial billing state so the tenant is usable immediately (before Stripe checkout completes).
 	// Stripe webhook will overwrite this with active subscription state on successful checkout.
 	if h.billingStore != nil {
-		trialState := pkglicensing.BuildTrialBillingStateWithPlan(
+		trialState := buildTrialBillingStateWithPlanFromLicensing(
 			now,
-			pkglicensing.DeriveCapabilitiesFromTier(pkglicensing.TierCloud, nil),
+			cloudCapabilitiesFromLicensing(),
 			"cloud_trial",
-			pkglicensing.DefaultTrialDuration,
+			defaultTrialDurationFromLicensing(),
 		)
 		if err := h.billingStore.SaveBillingState(orgID, trialState); err != nil {
 			cleanupProvisioning()

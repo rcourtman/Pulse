@@ -5,19 +5,17 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 // EntitlementPayload is the normalized entitlement response for frontend consumption.
 // Frontend should use this instead of inferring capabilities from tier names.
-type EntitlementPayload = pkglicensing.EntitlementPayload
+type EntitlementPayload = entitlementPayloadModel
 
 // LimitStatus represents a quantitative limit with current usage state.
-type LimitStatus = pkglicensing.LimitStatus
+type LimitStatus = limitStatusModel
 
 // UpgradeReason provides context for why a user should upgrade.
-type UpgradeReason = pkglicensing.UpgradeReason
+type UpgradeReason = upgradeReasonModel
 
 // HandleEntitlements returns the normalized entitlement payload for the current tenant.
 // This is the primary endpoint the frontend should use for feature gating decisions.
@@ -49,7 +47,7 @@ func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Requ
 	json.NewEncoder(w).Encode(payload)
 }
 
-func trialEndsAtUnixFromService(svc *pkglicensing.Service) *int64 {
+func trialEndsAtUnixFromService(svc *licenseService) *int64 {
 	if svc == nil {
 		return nil
 	}
@@ -60,7 +58,7 @@ func trialEndsAtUnixFromService(svc *pkglicensing.Service) *int64 {
 	return eval.TrialEndsAt()
 }
 
-type entitlementUsageSnapshot = pkglicensing.EntitlementUsageSnapshot
+type entitlementUsageSnapshot = entitlementUsageSnapshotModel
 
 // entitlementUsageSnapshot returns best-effort runtime usage counts for limits.
 func (h *LicenseHandlers) entitlementUsageSnapshot(ctx context.Context) entitlementUsageSnapshot {
@@ -93,22 +91,22 @@ func (h *LicenseHandlers) entitlementUsageSnapshot(ctx context.Context) entitlem
 
 // buildEntitlementPayload constructs the normalized payload from LicenseStatus.
 // This provides backward compatibility before the evaluator is wired in.
-func buildEntitlementPayload(status *pkglicensing.LicenseStatus, subscriptionState string) EntitlementPayload {
-	return pkglicensing.BuildEntitlementPayload(status, subscriptionState)
+func buildEntitlementPayload(status *licenseStatus, subscriptionState string) EntitlementPayload {
+	return buildEntitlementPayloadFromLicensing(status, subscriptionState)
 }
 
 // buildEntitlementPayloadWithUsage constructs the normalized payload from LicenseStatus and observed usage.
 func buildEntitlementPayloadWithUsage(
-	status *pkglicensing.LicenseStatus,
+	status *licenseStatus,
 	subscriptionState string,
 	usage entitlementUsageSnapshot,
 	trialEndsAtUnix *int64,
 ) EntitlementPayload {
-	return pkglicensing.BuildEntitlementPayloadWithUsage(status, subscriptionState, usage, trialEndsAtUnix)
+	return buildEntitlementPayloadWithUsageFromLicensing(status, subscriptionState, usage, trialEndsAtUnix)
 }
 
 // limitState returns the over-limit UX state string.
 // Exported for testing.
 func limitState(current, limit int64) string {
-	return pkglicensing.LimitState(current, limit)
+	return limitStateFromLicensing(current, limit)
 }
