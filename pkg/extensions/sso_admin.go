@@ -14,6 +14,114 @@ type SSOAdminEndpoints interface {
 	HandleMetadataPreview(http.ResponseWriter, *http.Request)
 }
 
+// SSOProviderType identifies the SSO provider implementation type.
+type SSOProviderType string
+
+const (
+	SSOProviderTypeOIDC SSOProviderType = "oidc"
+	SSOProviderTypeSAML SSOProviderType = "saml"
+)
+
+// OIDCProviderConfig contains OIDC provider settings.
+type OIDCProviderConfig struct {
+	IssuerURL       string   `json:"issuerUrl"`
+	ClientID        string   `json:"clientId"`
+	ClientSecret    string   `json:"clientSecret,omitempty"`
+	RedirectURL     string   `json:"redirectUrl,omitempty"`
+	LogoutURL       string   `json:"logoutUrl,omitempty"`
+	Scopes          []string `json:"scopes,omitempty"`
+	UsernameClaim   string   `json:"usernameClaim,omitempty"`
+	EmailClaim      string   `json:"emailClaim,omitempty"`
+	CABundle        string   `json:"caBundle,omitempty"`
+	ClientSecretSet bool     `json:"clientSecretSet,omitempty"`
+}
+
+// SAMLProviderConfig contains SAML provider settings.
+type SAMLProviderConfig struct {
+	IDPMetadataURL       string `json:"idpMetadataUrl,omitempty"`
+	IDPMetadataXML       string `json:"idpMetadataXml,omitempty"`
+	IDPSSOURL            string `json:"idpSsoUrl,omitempty"`
+	IDPSLOURL            string `json:"idpSloUrl,omitempty"`
+	IDPCertificate       string `json:"idpCertificate,omitempty"`
+	IDPCertFile          string `json:"idpCertFile,omitempty"`
+	IDPEntityID          string `json:"idpEntityId,omitempty"`
+	IDPIssuer            string `json:"idpIssuer,omitempty"`
+	SPEntityID           string `json:"spEntityId,omitempty"`
+	SPACSPath            string `json:"spAcsPath,omitempty"`
+	SPMetadataPath       string `json:"spMetadataPath,omitempty"`
+	SPCertificate        string `json:"spCertificate,omitempty"`
+	SPPrivateKey         string `json:"spPrivateKey,omitempty"`
+	SPCertFile           string `json:"spCertFile,omitempty"`
+	SPKeyFile            string `json:"spKeyFile,omitempty"`
+	SignRequests         bool   `json:"signRequests,omitempty"`
+	WantAssertionsSigned bool   `json:"wantAssertionsSigned,omitempty"`
+	AllowUnencrypted     bool   `json:"allowUnencrypted,omitempty"`
+	UsernameAttr         string `json:"usernameAttr,omitempty"`
+	EmailAttr            string `json:"emailAttr,omitempty"`
+	GroupsAttr           string `json:"groupsAttr,omitempty"`
+	FirstNameAttr        string `json:"firstNameAttr,omitempty"`
+	LastNameAttr         string `json:"lastNameAttr,omitempty"`
+	NameIDFormat         string `json:"nameIdFormat,omitempty"`
+	ForceAuthn           bool   `json:"forceAuthn,omitempty"`
+	AllowIDPInitiated    bool   `json:"allowIdpInitiated,omitempty"`
+	RelayStateTemplate   string `json:"relayStateTemplate,omitempty"`
+}
+
+// SSOProvider describes a configured provider.
+type SSOProvider struct {
+	ID                string              `json:"id"`
+	Name              string              `json:"name"`
+	Type              SSOProviderType     `json:"type"`
+	Enabled           bool                `json:"enabled"`
+	DisplayName       string              `json:"displayName,omitempty"`
+	IconURL           string              `json:"iconUrl,omitempty"`
+	Priority          int                 `json:"priority,omitempty"`
+	AllowedGroups     []string            `json:"allowedGroups,omitempty"`
+	AllowedDomains    []string            `json:"allowedDomains,omitempty"`
+	AllowedEmails     []string            `json:"allowedEmails,omitempty"`
+	GroupsClaim       string              `json:"groupsClaim,omitempty"`
+	GroupRoleMappings map[string]string   `json:"groupRoleMappings,omitempty"`
+	OIDC              *OIDCProviderConfig `json:"oidc,omitempty"`
+	SAML              *SAMLProviderConfig `json:"saml,omitempty"`
+}
+
+// SSOConfigSnapshot is the runtime snapshot used by enterprise handlers.
+type SSOConfigSnapshot struct {
+	Providers              []SSOProvider `json:"providers,omitempty"`
+	DefaultProviderID      string        `json:"defaultProviderId,omitempty"`
+	AllowMultipleProviders bool          `json:"allowMultipleProviders,omitempty"`
+}
+
+// SSOProviderResponse is the API response shape for SSO providers.
+type SSOProviderResponse struct {
+	ID                  string   `json:"id"`
+	Name                string   `json:"name"`
+	Type                string   `json:"type"`
+	Enabled             bool     `json:"enabled"`
+	DisplayName         string   `json:"displayName,omitempty"`
+	IconURL             string   `json:"iconUrl,omitempty"`
+	Priority            int      `json:"priority"`
+	OIDCIssuerURL       string   `json:"oidcIssuerUrl,omitempty"`
+	OIDCClientID        string   `json:"oidcClientId,omitempty"`
+	OIDCClientSecretSet bool     `json:"oidcClientSecretSet,omitempty"`
+	OIDCLoginURL        string   `json:"oidcLoginUrl,omitempty"`
+	OIDCCallbackURL     string   `json:"oidcCallbackUrl,omitempty"`
+	SAMLIDPEntityID     string   `json:"samlIdpEntityId,omitempty"`
+	SAMLSPEntityID      string   `json:"samlSpEntityId,omitempty"`
+	SAMLMetadataURL     string   `json:"samlMetadataUrl,omitempty"`
+	SAMLACSURL          string   `json:"samlAcsUrl,omitempty"`
+	AllowedGroups       []string `json:"allowedGroups,omitempty"`
+	AllowedDomains      []string `json:"allowedDomains,omitempty"`
+	AllowedEmails       []string `json:"allowedEmails,omitempty"`
+}
+
+// SSOProvidersListResponse is the API response shape for list requests.
+type SSOProvidersListResponse struct {
+	Providers              []SSOProviderResponse `json:"providers"`
+	DefaultProviderID      string                `json:"defaultProviderId,omitempty"`
+	AllowMultipleProviders bool                  `json:"allowMultipleProviders"`
+}
+
 // SSOTestRequest represents a request to test SSO provider configuration.
 type SSOTestRequest struct {
 	Type string          `json:"type"` // "saml" or "oidc"
@@ -101,6 +209,8 @@ type SSOAdminRuntime struct {
 	TestOIDCConnection   func(context.Context, *OIDCTestConfig) SSOTestResponse
 	PreviewSAMLMetadata  func(context.Context, MetadataPreviewRequest) (MetadataPreviewResponse, error)
 	IsValidProviderID    func(string) bool
+	GetSSOConfigSnapshot func() SSOConfigSnapshot
+	GetPublicURL         func() string
 	HandleListProviders  func(http.ResponseWriter, *http.Request)
 	HandleCreateProvider func(http.ResponseWriter, *http.Request)
 	HandleGetProvider    func(http.ResponseWriter, *http.Request, string)
