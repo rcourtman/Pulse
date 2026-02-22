@@ -82,6 +82,14 @@
     overflow-x: hidden;
   }
 
+  /* Form elements: inherit surface background so they don't show white in dark mode */
+  select,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea {
+    background-color: var(--color-bg-surface);
+    color: var(--color-text-base);
+  }
+
   /* Hide scrollbars during transitions to prevent flicker */
   html {
     overflow-y: scroll;

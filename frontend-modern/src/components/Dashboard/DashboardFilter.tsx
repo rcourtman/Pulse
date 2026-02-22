@@ -109,25 +109,25 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                   </label>
                   <select
                     id={hostFilter().id ?? 'dashboard-host-filter'}
- value={hostFilter().value}
- onChange={(e) => hostFilter().onChange(e.currentTarget.value)}
- class="min-w-[8rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
- >
- <For each={hostFilter().options}>
- {(option) => (
- <option value={option.value}>{option.label}</option>
- )}
- </For>
- </select>
- </div>
- )}
- </Show>
+                    value={hostFilter().value}
+                    onChange={(e) => hostFilter().onChange(e.currentTarget.value)}
+                    class="min-w-[8rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <For each={hostFilter().options}>
+                      {(option) => (
+                        <option value={option.value}>{option.label}</option>
+                      )}
+                    </For>
+                  </select>
+                </div>
+              )}
+            </Show>
 
- <Show when={props.namespaceFilter}>
- {(namespaceFilter) => (
- <div class="inline-flex items-center rounded-md bg-surface-hover p-0.5">
- <label
- for={namespaceFilter().id ??'dashboard-namespace-filter'}
+            <Show when={props.namespaceFilter}>
+              {(namespaceFilter) => (
+                <div class="inline-flex items-center rounded-md bg-surface-hover p-0.5">
+                  <label
+                    for={namespaceFilter().id ?? 'dashboard-namespace-filter'}
                     class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
                   >
                     {namespaceFilter().label ?? 'Namespace'}
@@ -159,65 +159,65 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                   </label>
                   <select
                     id={runtimeFilter().id ?? 'dashboard-runtime-filter'}
- value={runtimeFilter().value}
- onChange={(e) => runtimeFilter().onChange(e.currentTarget.value)}
- class="min-w-[7rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
- >
- <For each={runtimeFilter().options}>
- {(option) => (
- <option value={option.value}>{option.label}</option>
- )}
- </For>
- </select>
- </div>
- )}
- </Show>
+                    value={runtimeFilter().value}
+                    onChange={(e) => runtimeFilter().onChange(e.currentTarget.value)}
+                    class="min-w-[7rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <For each={runtimeFilter().options}>
+                      {(option) => (
+                        <option value={option.value}>{option.label}</option>
+                      )}
+                    </For>
+                  </select>
+                </div>
+              )}
+            </Show>
 
- <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
- <label
- for="dashboard-type-filter"
- class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
- >
- Type
- </label>
- <select
- id="dashboard-type-filter"
- value={props.viewMode()}
- onChange={(event) => props.setViewMode(event.currentTarget.value as'all' | 'vm' | 'lxc' | 'docker' | 'k8s')}
- class="min-w-[7rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
- >
- <option value="all">All</option>
- <option value="vm">VMs</option>
- <option value="lxc">LXCs</option>
- <option value="docker">Containers</option>
- <option value="k8s">K8s</option>
- </select>
- </div>
+            <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
+              <label
+                for="dashboard-type-filter"
+                class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
+              >
+                Type
+              </label>
+              <select
+                id="dashboard-type-filter"
+                value={props.viewMode()}
+                onChange={(event) => props.setViewMode(event.currentTarget.value as 'all' | 'vm' | 'lxc' | 'docker' | 'k8s')}
+                class="min-w-[7rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All</option>
+                <option value="vm">VMs</option>
+                <option value="lxc">LXCs</option>
+                <option value="docker">Containers</option>
+                <option value="k8s">K8s</option>
+              </select>
+            </div>
 
- <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
- <label
- for="dashboard-status-filter"
- class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
- >
- Status
- </label>
- <select
- id="dashboard-status-filter"
- value={props.statusMode()}
- onChange={(event) => props.setStatusMode(event.currentTarget.value as'all' | 'running' | 'degraded' | 'stopped')}
- class="min-w-[8rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
- >
- <option value="all">All</option>
- <option value="running">Running</option>
- <option value="degraded">Degraded</option>
- <option value="stopped">Stopped</option>
- </select>
- </div>
+            <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
+              <label
+                for="dashboard-status-filter"
+                class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
+              >
+                Status
+              </label>
+              <select
+                id="dashboard-status-filter"
+                value={props.statusMode()}
+                onChange={(event) => props.setStatusMode(event.currentTarget.value as 'all' | 'running' | 'degraded' | 'stopped')}
+                class="min-w-[8rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All</option>
+                <option value="running">Running</option>
+                <option value="degraded">Degraded</option>
+                <option value="stopped">Stopped</option>
+              </select>
+            </div>
 
- <div class="inline-flex rounded-md bg-surface-hover p-0.5">
- <button
- type="button"
- onClick={() => props.setGroupingMode('grouped')}
+            <div class="inline-flex rounded-md bg-surface-hover p-0.5">
+              <button
+                type="button"
+                onClick={() => props.setGroupingMode('grouped')}
                 class={segmentedButtonClass(props.groupingMode() === 'grouped')}
                 title="Group by node"
               >
