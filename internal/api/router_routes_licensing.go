@@ -342,6 +342,9 @@ func newReportingAdminRuntime(handlers *ReportingHandlers) extensions.ReportingA
 		return runtime
 	}
 
+	runtime.GetStateSnapshot = handlers.getRuntimeStateSnapshot
+	runtime.ListBackupsForResource = handlers.listBackupsForReport
+
 	runtime.EnrichReportRequest = func(ctx context.Context, orgID string, req *reporting.MetricReportRequest, start, end time.Time) {
 		if req == nil || handlers.mtMonitor == nil {
 			return
