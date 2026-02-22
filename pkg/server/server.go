@@ -48,6 +48,10 @@ type BusinessHooks struct {
 	// BindRBACAdminEndpoints allows enterprise modules to replace or decorate
 	// RBAC admin endpoints without importing internal API packages.
 	BindRBACAdminEndpoints extensions.BindRBACAdminEndpointsFunc
+
+	// BindAuditAdminEndpoints allows enterprise modules to replace or decorate
+	// audit admin endpoints without importing internal API packages.
+	BindAuditAdminEndpoints extensions.BindAuditAdminEndpointsFunc
 }
 
 var (
@@ -238,9 +242,11 @@ func Run(ctx context.Context, version string) error {
 	globalHooksMu.Lock()
 	onMetricsStoreReady := globalHooks.OnMetricsStoreReady
 	bindRBACAdminEndpoints := globalHooks.BindRBACAdminEndpoints
+	bindAuditAdminEndpoints := globalHooks.BindAuditAdminEndpoints
 	globalHooksMu.Unlock()
 
 	api.SetRBACAdminEndpointsBinder(bindRBACAdminEndpoints)
+	api.SetAuditAdminEndpointsBinder(bindAuditAdminEndpoints)
 
 	if onMetricsStoreReady != nil {
 		func() {

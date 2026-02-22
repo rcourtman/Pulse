@@ -77,36 +77,41 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 	r.mux.HandleFunc("POST /api/orgs/{id}/shares", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, orgHandlers.HandleCreateShare)))
 	r.mux.HandleFunc("DELETE /api/orgs/{id}/shares/{shareId}", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, orgHandlers.HandleDeleteShare)))
 
+	auditAdminEndpoints := resolveAuditAdminEndpoints(
+		auditAdminEndpointAdapter{handlers: auditHandlers},
+		newAuditAdminRuntime(),
+	)
+
 	// Audit log routes (Enterprise feature)
 	r.mux.HandleFunc("GET /api/audit", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeSettingsRead, auditAdminEndpoints.HandleListEvents))(w, req)
 	}))
 	r.mux.HandleFunc("GET /api/audit/", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeSettingsRead, auditAdminEndpoints.HandleListEvents))(w, req)
 	}))
 	r.mux.HandleFunc("GET /api/audit/{id}/verify", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleVerifyAuditEvent))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeSettingsRead, auditAdminEndpoints.HandleVerifyEvent))(w, req)
 	}))
 	r.mux.HandleFunc("GET /api/audit/export", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleExportAuditEvents))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeSettingsRead, auditAdminEndpoints.HandleExportEvents))(w, req)
 	}))
 	r.mux.HandleFunc("GET /api/audit/summary", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleAuditSummary))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeSettingsRead, auditAdminEndpoints.HandleSummary))(w, req)
 	}))
 
 	// RBAC routes (Phase 2 - Enterprise feature)
@@ -173,12 +178,66 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 		}
 		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, func(w http.ResponseWriter, req *http.Request) {
 			if req.Method == http.MethodGet {
-				RequireScope(config.ScopeSettingsRead, auditHandlers.HandleGetWebhooks)(w, req)
+				RequireScope(config.ScopeSettingsRead, auditAdminEndpoints.HandleGetWebhooks)(w, req)
 			} else {
-				RequireScope(config.ScopeSettingsWrite, auditHandlers.HandleUpdateWebhooks)(w, req)
+				RequireScope(config.ScopeSettingsWrite, auditAdminEndpoints.HandleUpdateWebhooks)(w, req)
 			}
 		})(w, req)
 	}))
+}
+
+type auditAdminEndpointAdapter struct {
+	handlers *AuditHandlers
+}
+
+var _ extensions.AuditAdminEndpoints = auditAdminEndpointAdapter{}
+
+func (a auditAdminEndpointAdapter) HandleListEvents(w http.ResponseWriter, req *http.Request) {
+	if a.handlers == nil {
+		writeErrorResponse(w, http.StatusNotImplemented, "audit_unavailable", "Audit management is not available", nil)
+		return
+	}
+	a.handlers.HandleListAuditEvents(w, req)
+}
+
+func (a auditAdminEndpointAdapter) HandleVerifyEvent(w http.ResponseWriter, req *http.Request) {
+	if a.handlers == nil {
+		writeErrorResponse(w, http.StatusNotImplemented, "audit_unavailable", "Audit management is not available", nil)
+		return
+	}
+	a.handlers.HandleVerifyAuditEvent(w, req)
+}
+
+func (a auditAdminEndpointAdapter) HandleExportEvents(w http.ResponseWriter, req *http.Request) {
+	if a.handlers == nil {
+		writeErrorResponse(w, http.StatusNotImplemented, "audit_unavailable", "Audit management is not available", nil)
+		return
+	}
+	a.handlers.HandleExportAuditEvents(w, req)
+}
+
+func (a auditAdminEndpointAdapter) HandleSummary(w http.ResponseWriter, req *http.Request) {
+	if a.handlers == nil {
+		writeErrorResponse(w, http.StatusNotImplemented, "audit_unavailable", "Audit management is not available", nil)
+		return
+	}
+	a.handlers.HandleAuditSummary(w, req)
+}
+
+func (a auditAdminEndpointAdapter) HandleGetWebhooks(w http.ResponseWriter, req *http.Request) {
+	if a.handlers == nil {
+		writeErrorResponse(w, http.StatusNotImplemented, "audit_unavailable", "Audit management is not available", nil)
+		return
+	}
+	a.handlers.HandleGetWebhooks(w, req)
+}
+
+func (a auditAdminEndpointAdapter) HandleUpdateWebhooks(w http.ResponseWriter, req *http.Request) {
+	if a.handlers == nil {
+		writeErrorResponse(w, http.StatusNotImplemented, "audit_unavailable", "Audit management is not available", nil)
+		return
+	}
+	a.handlers.HandleUpdateWebhooks(w, req)
 }
 
 type rbacAdminEndpointAdapter struct {
@@ -229,5 +288,15 @@ func newRBACAdminRuntime(handlers *RBACHandlers) extensions.RBACAdminRuntime {
 			return ResetAdminRole(handlers.rbacProvider, orgID, username)
 		},
 		WriteError: writeErrorResponse,
+	}
+}
+
+func newAuditAdminRuntime() extensions.AuditAdminRuntime {
+	return extensions.AuditAdminRuntime{
+		GetRequestOrgID:    GetOrgID,
+		ResolveLogger:      getLoggerForOrg,
+		IsPersistentLogger: isPersistentLogger,
+		ValidateWebhookURL: validateWebhookURL,
+		WriteError:         writeErrorResponse,
 	}
 }
