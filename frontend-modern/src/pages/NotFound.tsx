@@ -27,7 +27,7 @@ const NotFound: Component = () => {
           <div class="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+              class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:bg-surface-hover"
               onClick={() => navigate(recoveryTarget())}
             >
               Go to Recovery
@@ -41,7 +41,7 @@ const NotFound: Component = () => {
             </button>
             <button
               type="button"
-              class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+              class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:bg-surface-hover"
               onClick={() => navigate(DASHBOARD_PATH)}
             >
               Go to Dashboard

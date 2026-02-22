@@ -406,7 +406,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
     <div class="space-y-4">
       <Show when={showHostTable()}>
         <Card padding="none" tone="card" class="mb-0 overflow-hidden">
-          <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+          <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
             Host Infrastructure
           </div>
           <div class="overflow-x-auto">
@@ -759,27 +759,27 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 
                 <Show when={hostWindowing.isWindowed() && hostBottomSpacerHeight() > 0}>
                   <TableRow aria-hidden="true">
-                    <TableCell colspan={9} style={{ height: `${hostBottomSpacerHeight()}px`, padding: '0', border: '0' }} />
-                  </TableRow>
-                </Show>
-              </TableBody>
-            </Table>
-          </div>
-        </Card>
-      </Show>
+                    <TableCell colspan={9} style={{ height: `${hostBottomSpacerHeight()}px`, padding: '0', border: '0'}} />
+ </TableRow>
+ </Show>
+ </TableBody>
+ </Table>
+ </div>
+ </Card>
+ </Show>
 
-      <Show when={sortedPBSResources().length > 0 || sortedPMGResources().length > 0}>
-        <Card padding="none" tone="card" class="mb-0 overflow-hidden">
-          <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
-            Service Infrastructure
-          </div>
+ <Show when={sortedPBSResources().length > 0 || sortedPMGResources().length > 0}>
+ <Card padding="none" tone="card" class="mb-0 overflow-hidden">
+ <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+ Service Infrastructure
+ </div>
 
-          <Show when={sortedPBSResources().length > 0}>
-            <div class="border-b border-border-subtle px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
-              PBS Services
-            </div>
-            <div class="overflow-x-auto">
-              <Table class="whitespace-nowrap min-w-[max-content]" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : 'max-content' }}>
+ <Show when={sortedPBSResources().length > 0}>
+ <div class="border-b border-border-subtle px-3 py-2 text-[11px] font-semibold uppercase tracking-wide ">
+ PBS Services
+ </div>
+ <div class="overflow-x-auto">
+ <Table class="whitespace-nowrap min-w-[max-content]" style={{'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : 'max-content' }}>
                 <TableHeader>
                   <TableRow class="bg-surface-alt text-muted border-b border-border">
                     <TableHead class="text-left pl-2 sm:pl-3" style={resourceColumnStyle()}>

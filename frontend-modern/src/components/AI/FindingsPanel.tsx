@@ -45,7 +45,7 @@ const severityColors: Record<string, string> = {
   critical: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
   warning: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
   info: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  watch: 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  watch: 'border-border bg-surface-alt text-base-content',
 };
 
 // Source badge colors
@@ -60,7 +60,7 @@ const sourceColors: Record<string, string> = {
 
 // Investigation status badge colors
 const investigationStatusColors: Record<InvestigationStatus, string> = {
-  pending: 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400',
+  pending: 'border-border bg-surface-alt text-muted',
   running: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
   completed: 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900 dark:text-green-300',
   failed: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
@@ -75,11 +75,11 @@ const loopStateColors: Record<string, string> = {
   remediating: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
   remediation_failed: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
   needs_attention: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
-  timed_out: 'border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300',
+  timed_out: 'border-border bg-surface-alt text-base-content',
   resolved: 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900 dark:text-green-300',
-  dismissed: 'border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300',
+  dismissed: 'border-border bg-surface-alt text-muted',
   snoozed: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  suppressed: 'border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300',
+  suppressed: 'border-border bg-surface-alt text-muted',
 };
 
 const formatLoopState = (s: string) => s.replace(/_/g, ' ');
@@ -499,12 +499,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <div class="flex items-center gap-2 flex-wrap">
             {/* Status badge for non-active findings */}
             <Show when={finding.status !== 'active'}>
-              <span class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${finding.status === 'resolved'
- ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900 dark:text-green-300'
- : finding.status === 'snoozed'
- ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300'
- : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
- }`}>
+              <span class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${finding.status === 'resolved' ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900 dark:text-green-300' : finding.status === 'snoozed' ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300' : 'border-border bg-surface-alt text-muted' }`}>
                 {finding.status === 'resolved' ? 'Resolved' : finding.status === 'snoozed' ? 'Snoozed' : 'Dismissed'}
               </span>
             </Show>
@@ -528,13 +523,13 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </span>
             </Show>
             <Show when={finding.acknowledgedAt && finding.status === 'active'}>
-              <span class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-border bg-surface-hover text-slate-600 dark:text-slate-300">
+              <span class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-border bg-surface-hover text-muted">
                 Acknowledged
               </span>
             </Show>
             <Show when={finding.status === 'active' && finding.loopState && !finding.investigationStatus && !finding.investigationOutcome}>
               <span
-                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${loopStateColors[finding.loopState!] || 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 text-muted'}`}
+                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${loopStateColors[finding.loopState!] || 'border-slate-200 bg-surface-alt dark:border-slate-700 text-muted'}`}
                 title={`Patrol loop: ${formatLoopState(finding.loopState!)}`}
               >
                 {formatLoopState(finding.loopState!)}
@@ -562,7 +557,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </Show>
             {/* Investigation outcome badge — replaces status badge when outcome is known */}
             <Show when={finding.investigationOutcome && finding.investigationStatus !== 'running' && finding.investigationStatus !== 'pending'}>
-              <span class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${investigationOutcomeColors[finding.investigationOutcome!] || 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 text-muted'}`}>
+              <span class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${investigationOutcomeColors[finding.investigationOutcome!] || 'border-slate-200 bg-surface-alt dark:border-slate-700 text-muted'}`}>
                 {investigationOutcomeLabels[finding.investigationOutcome!]}
               </span>
             </Show>

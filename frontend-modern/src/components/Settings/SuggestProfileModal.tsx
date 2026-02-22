@@ -257,7 +257,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                     <button
                         type="button"
                         onClick={props.onClose}
-                        class="p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800"
+                        class="p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-surface-hover dark:hover:text-slate-300"
                     >
                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -277,7 +277,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                             onInput={(e) => setPrompt(e.currentTarget.value)}
                             placeholder="Describe the agents and use case for this profile..."
                             rows={3}
-                            class="w-full rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:focus:border-blue-400 dark:focus:ring-blue-800 resize-none"
+                            class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-800 resize-none"
                             disabled={loading()}
                         />
                         <Show when={suggestion()}>
@@ -297,7 +297,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                         <button
                                             type="button"
                                             onClick={() => handleUseExample(example)}
-                                            class="text-xs px-2 py-1 rounded-md text-slate-600 hover:bg-surface-alt dark:text-slate-400 dark:hover:bg-slate-700 transition-colors"
+                                            class="text-xs px-2 py-1 rounded-md text-muted hover:bg-surface-alt dark:hover:bg-slate-700 transition-colors"
                                             disabled={loading()}
                                         >
                                             {example}
@@ -584,7 +584,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                     <button
                         type="button"
                         onClick={props.onClose}
-                        class="rounded-md px-4 py-2 text-sm font-medium text-base-content hover:bg-slate-100 dark:hover:bg-slate-800"
+                        class="rounded-md px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover"
                     >
                         Cancel
                     </button>

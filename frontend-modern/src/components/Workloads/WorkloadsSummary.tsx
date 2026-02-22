@@ -694,7 +694,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
  onClick={() => props.onTimeRangeChange?.(range)}
  class={`rounded px-2 py-1 ${selectedRange() === range
  ?'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
- : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+ : 'text-muted hover:bg-surface-hover'
  }`}
                 >
                   {SUMMARY_TIME_RANGE_LABEL[range]}

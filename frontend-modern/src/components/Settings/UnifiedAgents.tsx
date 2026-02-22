@@ -977,7 +977,7 @@ export const UnifiedAgents: Component = () => {
                                         }
                                     }}
                                     placeholder="Token name (optional)"
-                                    class="flex-1 rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:focus:border-blue-400 dark:focus:ring-blue-900"
+                                    class="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900"
                                 />
                                 <button
                                     type="button"
@@ -1088,7 +1088,7 @@ export const UnifiedAgents: Component = () => {
  type="checkbox"
  checked={insecureMode()}
  onChange={(e) => setInsecureMode(e.currentTarget.checked)}
- class="rounded text-blue-600 focus:ring-blue-500 "
+ class="rounded text-blue-600 focus:ring-blue-500"
  />
  Skip TLS certificate verification (self-signed certs; not recommended)
  </label>
@@ -1097,7 +1097,7 @@ export const UnifiedAgents: Component = () => {
  type="checkbox"
  checked={enableCommands()}
  onChange={(e) => setEnableCommands(e.currentTarget.checked)}
- class="rounded text-blue-600 focus:ring-blue-500 "
+ class="rounded text-blue-600 focus:ring-blue-500"
  />
  Enable Pulse command execution (for Patrol auto-fix)
  </label>
@@ -1424,7 +1424,7 @@ export const UnifiedAgents: Component = () => {
                             id="agent-filter-type"
                             value={filterType()}
                             onChange={(event) => setFilterType(event.currentTarget.value as 'all'| UnifiedAgentType)}
- class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+ class="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
  >
  <option value="all">All types</option>
  <option value="host">Host</option>
@@ -1438,7 +1438,7 @@ export const UnifiedAgents: Component = () => {
  id="agent-filter-status"
  value={filterStatus()}
  onChange={(event) => setFilterStatus(event.currentTarget.value as'all'| UnifiedAgentStatus)}
- class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+ class="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
  >
  <option value="all">All statuses</option>
  <option value="active">Active</option>
@@ -1451,7 +1451,7 @@ export const UnifiedAgents: Component = () => {
  id="agent-filter-scope"
  value={filterScope()}
  onChange={(event) => setFilterScope(event.currentTarget.value as'all' | Exclude<ScopeCategory, 'na'>)}
- class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+ class="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
  >
  <option value="all">All scopes</option>
  <option value="default">Default</option>
@@ -1467,17 +1467,14 @@ export const UnifiedAgents: Component = () => {
  value={filterSearch()}
  onInput={(event) => setFilterSearch(event.currentTarget.value)}
  placeholder="Search name, hostname, or ID"
- class="w-full min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+ class="w-full min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
  />
  </div>
  <button
  type="button"
  onClick={resetFilters}
  disabled={!hasFilters()}
- class={`min-h-10 sm:min-h-9 rounded-md px-3 py-2 text-sm font-medium transition-colors ${hasFilters()
- ?' text-slate-700 hover:bg-surface-alt dark:text-slate-200 dark:hover:bg-slate-700'
- : ' text-slate-400 cursor-not-allowed dark:text-slate-500'
- }`}
+ class={`min-h-10 sm:min-h-9 rounded-md px-3 py-2 text-sm font-medium transition-colors ${hasFilters() ?' text-base-content hover:bg-surface-alt dark:hover:bg-slate-700' : ' text-slate-400 cursor-not-allowed ' }`}
                     >
                         Clear
                     </button>
@@ -1614,7 +1611,7 @@ export const UnifiedAgents: Component = () => {
  void updateScopeAssignment(resolvedAgentId, nextValue || null, agentName);
  }}
  disabled={isScopeUpdating()}
- class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+ class="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:focus:border-blue-400 dark:focus:ring-blue-800"
  >
  <option value="">Default (Auto-detect)</option>
  <For each={profiles()}>

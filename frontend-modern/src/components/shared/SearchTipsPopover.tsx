@@ -68,9 +68,7 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
     'text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-white dark:focus:ring-blue-400 dark:focus:ring-offset-gray-900';
 
   const triggerClasses =
-    triggerVariant === 'button'
-      ? `rounded-md border border-slate-200 px-2.5 py-1 text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700 ${triggerBaseClasses}`
-      : triggerVariant === 'link'? `rounded px-1 py-0.5 underline decoration-dotted underline-offset-4 transition-colors hover:text-base-content ${triggerBaseClasses}`
+    triggerVariant === 'button'? `rounded-md border border-border px-2.5 py-1 text-muted transition-colors hover:bg-surface-hover ${triggerBaseClasses}` : triggerVariant ==='link'? `rounded px-1 py-0.5 underline decoration-dotted underline-offset-4 transition-colors hover:text-base-content ${triggerBaseClasses}`
  : `flex h-5 w-5 items-center justify-center rounded-full transition-colors hover:text-muted ${triggerBaseClasses}`;
 
  const handleMouseEnter = () => {
@@ -127,7 +125,7 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
           id={popoverId}
           role="dialog"
           aria-label={props.title ?? 'Search tips'}
- class={`absolute ${popoverPositionClass} z-50 mt-2 w-72 overflow-hidden rounded-md border bg-white text-left shadow-sm dark:bg-slate-800`}
+ class={`absolute ${popoverPositionClass} z-50 mt-2 w-72 overflow-hidden rounded-md border bg-surface text-left shadow-sm`}
  >
  <div class="flex items-center justify-between border-b border-border-subtle px-3 py-2">
  <span class="text-sm font-semibold text-base-content">

@@ -441,7 +441,7 @@ export default function AuditLogPanel() {
 
     const getVerificationBadge = (state?: VerificationState) => {
         if (!state) {
-            return { label: 'Not checked', class: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' };
+            return { label: 'Not checked', class: 'bg-surface-alt text-base-content' };
         }
         switch (state.status) {
             case 'verified':
@@ -451,7 +451,7 @@ export default function AuditLogPanel() {
             case 'error':
                 return { label: 'Error', class: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' };
             default:
-                return { label: 'Unavailable', class: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' };
+                return { label: 'Unavailable', class: 'bg-surface-alt text-base-content' };
         }
     };
 

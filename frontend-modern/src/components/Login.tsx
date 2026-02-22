@@ -589,7 +589,7 @@ const LoginForm: Component<{
  type="text"
  autocomplete="username"
  required
- class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-slate-300 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm dark:border-slate-600 dark:placeholder-gray-400"
+ class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-border placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm dark:placeholder-gray-400"
  placeholder="Username"
  value={username()}
  onInput={(e) => setUsername(e.currentTarget.value)}
@@ -620,7 +620,7 @@ const LoginForm: Component<{
  type="password"
  autocomplete="current-password"
  required
- class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-slate-300 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm dark:border-slate-600 dark:placeholder-gray-400"
+ class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-border placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm dark:placeholder-gray-400"
  placeholder="Password"
  value={password()}
  onInput={(e) => setPassword(e.currentTarget.value)}
@@ -633,7 +633,7 @@ const LoginForm: Component<{
  type="checkbox"
  checked={rememberMe()}
  onChange={(e) => setRememberMe(e.currentTarget.checked)}
- class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded cursor-pointer dark:border-slate-600 "
+ class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-border rounded cursor-pointer"
  />
  <label
  for="remember-me"

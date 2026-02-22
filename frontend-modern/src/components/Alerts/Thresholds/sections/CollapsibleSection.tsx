@@ -65,12 +65,7 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
 
     return (
         <div
-            class={`rounded-md border transition-all duration-200
- ${props.isGloballyDisabled
- ? 'border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 opacity-60'
- : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800'
- }
- ${props.hasChanges ? 'ring-2 ring-blue-400 ring-opacity-50' : ''}`}
+            class={`rounded-md border transition-all duration-200 ${props.isGloballyDisabled ? ' bg-surface-alt opacity-60' : 'border-border bg-surface ' } ${props.hasChanges ? 'ring-2 ring-blue-400 ring-opacity-50' : ''}`}
             data-testid={props.testId || `section-${props.id}`}
         >
             {/* Section Header */}
@@ -108,7 +103,7 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
                                 {props.title}
                             </h3>
                             <Show when={props.resourceCount !== undefined}>
-                                <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface-alt text-slate-600 dark:text-slate-300">
+                                <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface-alt text-muted">
                                     {props.resourceCount}
                                 </span>
                             </Show>

@@ -543,7 +543,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
  <button
  type="button"
  onClick={() => props.onClose?.()}
- class="rounded-md p-1 hover:bg-slate-100 hover: dark:hover:bg-slate-700 dark:hover:text-slate-300"
+ class="rounded-md p-1 hover:bg-surface-hover hover: dark:hover:text-slate-300"
  aria-label="Close"
  >
  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -843,7 +843,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         setDockerActionBusy(false);
                       }
                     }}
-                    class="rounded-md border border-border bg-surface px-2.5 py-1 text-[11px] font-semibold text-base-content hover:bg-slate-50 disabled:opacity-60 disabled:hover: dark:hover:bg-slate-800 dark:disabled:hover:bg-slate-900"
+                    class="rounded-md border border-border bg-surface px-2.5 py-1 text-[11px] font-semibold text-base-content hover:bg-surface-hover disabled:opacity-60 disabled:hover: dark:disabled:hover:bg-slate-900"
                     title={dockerUpdateActionsLoading() ? 'Loading server settings...' : undefined}
                   >
                     Check Updates
@@ -1069,7 +1069,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
  <Show
  when={discoveryConfig()}
  fallback={
- <div class="rounded border border-dashed border-slate-300 bg-surface-hover p-4 text-sm dark:border-slate-600">
+ <div class="rounded border border-dashed border-border bg-surface-hover p-4 text-sm">
  Discovery is not available for this resource type yet.
  </div>
  }
@@ -1101,7 +1101,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           <Show
             when={props.resource.type === 'pmg'}
             fallback={
-              <div class="rounded border border-dashed border-slate-300 bg-surface-hover p-4 text-sm text-slate-600 dark:border-slate-600 dark:text-slate-300">
+              <div class="rounded border border-dashed border-border bg-surface-hover p-4 text-sm text-muted">
                 Mail details are only available for PMG resources.
               </div>
             }
@@ -1121,7 +1121,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           <Show
             when={props.resource.type === 'k8s-cluster'}
             fallback={
-              <div class="rounded border border-dashed border-slate-300 bg-surface-hover p-4 text-sm text-slate-600 dark:border-slate-600 dark:text-slate-300">
+              <div class="rounded border border-dashed border-border bg-surface-hover p-4 text-sm text-muted">
                 Namespaces are only available for Kubernetes cluster resources.
               </div>
             }
@@ -1144,7 +1144,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           <Show
             when={props.resource.type === 'k8s-cluster'}
             fallback={
-              <div class="rounded border border-dashed border-slate-300 bg-surface-hover p-4 text-sm text-slate-600 dark:border-slate-600 dark:text-slate-300">
+              <div class="rounded border border-dashed border-border bg-surface-hover p-4 text-sm text-muted">
                 Deployments are only available for Kubernetes cluster resources.
               </div>
             }
@@ -1164,7 +1164,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           <Show
             when={props.resource.type === 'docker-host' && dockerSwarmClusterKey()}
             fallback={
-              <div class="rounded border border-dashed border-slate-300 bg-surface-hover p-4 text-sm text-slate-600 dark:border-slate-600 dark:text-slate-300">
+              <div class="rounded border border-dashed border-border bg-surface-hover p-4 text-sm text-muted">
                 Swarm details are only available for Docker hosts reporting Swarm metadata.
               </div>
             }
@@ -1184,7 +1184,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
  <button
  type="button"
  onClick={handleCopyJson}
- class="rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+ class="rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
  >
  {copied() ?'Copied' : 'Copy JSON'}
             </button>

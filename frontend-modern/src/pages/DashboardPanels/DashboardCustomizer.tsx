@@ -86,7 +86,7 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
                     <label class="flex min-w-0 flex-1 items-center gap-2.5 cursor-pointer">
                       <input
                         type="checkbox"
-                        class="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 dark:border-slate-600 dark:bg-slate-700 dark:checked:bg-blue-600"
+                        class="w-3.5 h-3.5 rounded border-border text-blue-600 focus:ring-blue-500 focus:ring-offset-0 dark:bg-slate-700 dark:checked:bg-blue-600"
                         checked={visible()}
                         onChange={() => props.toggleWidget(widget.id)}
                       />

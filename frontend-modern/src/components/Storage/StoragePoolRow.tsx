@@ -37,7 +37,7 @@ const HEALTH_BADGE: Record<NormalizedHealth, { bg: string; text: string }> = {
 
 const TYPE_BADGE: Record<string, string> = {
   zfspool: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-  dir: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  dir: 'bg-surface-alt text-base-content',
   lvm: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
   lvmthin: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
   nfs: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',

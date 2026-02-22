@@ -217,7 +217,7 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
         {/* Client IP Badge */}
         <Show when={props.status.clientIP}>
           <div class="mt-4 pt-4 border-t border-border flex items-center justify-end">
-            <span class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-full bg-surface-alt text-slate-600 dark:text-slate-300">
+            <span class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-full bg-surface-alt text-muted">
               Your IP: {props.status.clientIP}
             </span>
           </div>

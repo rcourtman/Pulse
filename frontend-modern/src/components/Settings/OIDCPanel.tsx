@@ -343,7 +343,7 @@ export const OIDCPanel: Component<Props> = (props) => {
                 <Show when={config()?.clientSecretSet}>
                   <button
                     type="button"
-                    class="text-xs text-slate-600 hover:underline dark:text-slate-300"
+                    class="text-xs text-muted hover:underline"
                     onClick={() => {
                       if (!isEnvLocked() && !saving()) {
                         setForm('clientSecret', '');
@@ -413,7 +413,7 @@ export const OIDCPanel: Component<Props> = (props) => {
           <div class="space-y-4">
             <button
               type="button"
-              class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md border border-border px-3 py-2.5 text-sm font-semibold text-base-content hover:bg-slate-50 dark:hover:bg-slate-800"
+              class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md border border-border px-3 py-2.5 text-sm font-semibold text-base-content hover:bg-surface-hover"
               onClick={() => setAdvancedOpen(!advancedOpen())}
             >
               {advancedOpen() ? 'Hide advanced OIDC options' : 'Show advanced OIDC options'}

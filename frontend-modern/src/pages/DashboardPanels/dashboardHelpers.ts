@@ -9,20 +9,9 @@ export function statusBadgeClass(tone: StatusTone): string {
       return `${base} border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300`;
     case 'critical':
       return `${base} border-red-200 bg-red-100 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300`;
-    case 'offline':
-      return `${base} border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200`;
-    default:
-      return `${base} border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400`;
-  }
-}
-
-export function formatPercent(value: number): string {
-  return `${Math.round(value)}%`;
-}
-
-export function formatDelta(delta: number | null): string | null {
-  if (delta === null) return null;
-  const sign = delta >= 0 ? '+' : '';
+    case 'offline': return `${base} border-border bg-surface-alt text-base-content`; default: return `${base} border-border bg-surface-alt text-muted`; }
+} export function formatPercent(value: number): string { return `${Math.round(value)}%`;
+} export function formatDelta(delta: number | null): string | null { if (delta === null) return null; const sign = delta >= 0 ?'+' : '';
   return `${sign}${delta.toFixed(1)}%`;
 }
 

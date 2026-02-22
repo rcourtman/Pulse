@@ -44,7 +44,7 @@ function TierCtaButton(props: { children: string; disabled?: boolean; onClick?: 
       class={[
         'w-full inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold transition-colors',
         props.disabled
-          ? 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-200 cursor-not-allowed'
+          ? 'bg-surface-hover text-slate-600 dark:text-slate-200 cursor-not-allowed'
           : 'bg-blue-600 text-white hover:bg-blue-700',
       ].join(' ')}
       disabled={props.disabled}
@@ -251,7 +251,7 @@ export default function Pricing() {
  </ul>
  <div class="mt-6">
  <a
- class="w-full inline-flex items-center justify-center rounded-md border border-border bg-surface px-4 py-2 text-sm font-semibold transition-colors hover:bg-slate-50 dark:hover:bg-slate-700"
+ class="w-full inline-flex items-center justify-center rounded-md border border-border bg-surface px-4 py-2 text-sm font-semibold transition-colors hover:bg-surface-hover"
  href={getUpgradeActionUrlOrFallback('cloud')}
               target="_blank"
               rel="noopener noreferrer"

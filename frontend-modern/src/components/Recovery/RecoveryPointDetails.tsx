@@ -197,7 +197,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
         <button
           type="button"
           onClick={() => void copyJSON()}
-          class="rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-base-content hover:bg-slate-50 dark:hover:bg-slate-700"
+          class="rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-base-content hover:bg-surface-hover"
         >
           <Show when={copied()} fallback="Copy JSON">
             Copied

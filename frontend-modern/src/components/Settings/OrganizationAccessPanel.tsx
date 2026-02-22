@@ -188,7 +188,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
  <select
  value={inviteRole()}
  onChange={(event) => setInviteRole(event.currentTarget.value as Exclude<OrganizationRole,'member'>)}
-                          class="rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600"
+                          class="rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <For each={roleOptions.filter((option) => option.value !== 'owner' || currentOrg().ownerUserId === props.currentUser)}>
                             {(option) => <option value={option.value}>{option.label}</option>}
@@ -242,7 +242,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                                     void updateRole(member, event.currentTarget.value as Exclude<OrganizationRole, 'member'>);
                                   }}
                                   disabled={saving() || (isOwner() && props.currentUser !== currentOrg().ownerUserId)}
-                                  class="rounded-md border border-slate-300 bg-surface px-2 py-1 text-xs text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600"
+                                  class="rounded-md border border-border bg-surface px-2 py-1 text-xs text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                   <For
                                     each={roleOptions.filter(

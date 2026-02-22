@@ -71,7 +71,7 @@ const OUTCOME_BADGE_CLASS: Record<KnownOutcome, string> = {
   warning: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
   failed: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
   running: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-  unknown: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  unknown: 'bg-surface-alt text-base-content',
 };
 
 const titleize = (value: string): string =>
@@ -1019,10 +1019,7 @@ const Recovery: Component = () => {
                     type="button"
                     aria-pressed={protectedStaleOnly()}
                     onClick={() => setProtectedStaleOnly((v) => !v)}
-                    class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${protectedStaleOnly()
- ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100'
- : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
- }`}
+                    class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${protectedStaleOnly() ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100' : 'border-border bg-surface text-base-content hover:bg-surface-hover' }`}
                   >
                     Stale only
                   </button>
@@ -1045,7 +1042,7 @@ const Recovery: Component = () => {
         </Show>
 
         <Card padding="none" tone="card" class="mb-4 overflow-hidden">
-          <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+          <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
             Protected Items
           </div>
           <Show when={recoveryRollups.rollups.loading && (filteredRollups()?.length ?? 0) === 0}>
@@ -1114,7 +1111,7 @@ const Recovery: Component = () => {
                       const neverSucceeded = (!Number.isFinite(successMs) || successMs <= 0) && Number.isFinite(attemptMs) && attemptMs > 0;
                       return (
                         <TableRow
-                          class="cursor-pointer border-b border-border hover:bg-slate-50 dark:hover:bg-slate-800"
+                          class="cursor-pointer border-b border-border hover:bg-surface-hover"
                           onClick={() => {
                             setView('events');
                             setRollupId(r.rollupId);
@@ -1304,7 +1301,7 @@ const Recovery: Component = () => {
                     Remote
                   </span>
                 </div>
-                <div class="inline-flex rounded border border-slate-300 bg-surface p-0.5 text-xs dark:border-slate-700">
+                <div class="inline-flex rounded border border-border bg-surface p-0.5 text-xs">
                   <For each={[7, 30, 90, 365] as const}>
                     {(range) => (
                       <button
@@ -1316,7 +1313,7 @@ const Recovery: Component = () => {
                         }}
                         class={`rounded px-2 py-1 ${chartRangeDays() === range
  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
- : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+ : 'text-muted hover:bg-surface-hover'
  }`}
                       >
                         {range === 365 ? '1y' : `${range}d`}
@@ -1667,7 +1664,7 @@ const Recovery: Component = () => {
                       aria-expanded={moreFiltersOpen()}
                       aria-controls="recovery-more-filters"
                       onClick={() => setMoreFiltersOpen((v) => !v)}
-                      class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-base-content hover:bg-slate-50 dark:hover:bg-slate-700"
+                      class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-base-content hover:bg-surface-hover"
                     >
                       <span>{moreFiltersOpen() ? 'Less filters' : 'More filters'}</span>
                       <Show when={activeAdvancedFilterCount() > 0}>
@@ -1897,7 +1894,7 @@ const Recovery: Component = () => {
                               return (
                                 <>
                                   <TableRow
-                                    class={`cursor-pointer border-b ${selectedPoint()?.id === p.id ? 'bg-blue-50 border-blue-200 dark:bg-blue-900 dark:border-blue-800' : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'}`}
+                                    class={`cursor-pointer border-b ${selectedPoint()?.id === p.id ? 'bg-blue-50 border-blue-200 dark:bg-blue-900 dark:border-blue-800' : 'border-border hover:bg-surface-hover'}`}
                                     onClick={() => setSelectedPoint(selectedPoint()?.id === p.id ? null : p)}
                                   >
                                     <For each={mobileVisibleArtifactColumns()}>

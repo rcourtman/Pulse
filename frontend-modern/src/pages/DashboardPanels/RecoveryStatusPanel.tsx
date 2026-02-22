@@ -20,17 +20,8 @@ const outcomeBadgeClass = (outcome: ProtectionOutcome): string => {
       return `${base} bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300`;
     case 'failed':
       return `${base} bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300`;
-    case 'running':
-      return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300`;
-    default:
-      return `${base} bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300`;
-  }
-};
-
-export function RecoveryStatusPanel(props: RecoveryStatusPanelProps) {
-  const latestAgeMs = createMemo(() => {
-    const ts = props.recovery.latestEventTimestamp;
-    if (typeof ts !== 'number' || !Number.isFinite(ts)) return null;
+    case 'running': return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300`; default: return `${base} bg-surface-alt text-muted`; }
+}; export function RecoveryStatusPanel(props: RecoveryStatusPanelProps) { const latestAgeMs = createMemo(() => { const ts = props.recovery.latestEventTimestamp; if (typeof ts !=='number' || !Number.isFinite(ts)) return null;
     return Date.now() - ts;
   });
 

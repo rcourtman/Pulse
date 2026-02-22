@@ -209,7 +209,7 @@ export const RolesPanel: Component = () => {
                                         <div class="flex flex-wrap gap-1">
                                             <For each={role.permissions}>
                                                 {(perm) => (
-                                                    <span class="inline-flex items-center rounded-md bg-surface-alt px-2 py-0.5 text-xs font-medium text-slate-600 dark:text-slate-400 border border-border">
+                                                    <span class="inline-flex items-center rounded-md bg-surface-alt px-2 py-0.5 text-xs font-medium text-muted border border-border">
                                                         {perm.action}:{perm.resource}
                                                     </span>
                                                 )}
@@ -227,7 +227,7 @@ export const RolesPanel: Component = () => {
  <button
  type="button"
  onClick={() => handleEdit(role)}
- class="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:text-blue-300 dark:hover:bg-slate-800"
+ class="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-surface-hover dark:hover:text-blue-300"
  title="Edit role"
  >
  <Pencil class="w-4 h-4" />
@@ -268,7 +268,7 @@ export const RolesPanel: Component = () => {
  <button
  type="button"
  onClick={() => setShowModal(false)}
- class="p-1.5 rounded-md text-slate-500 hover: hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800"
+ class="p-1.5 rounded-md text-slate-500 hover: hover:bg-surface-hover dark:hover:text-slate-300"
  >
  <X class="w-5 h-5" />
  </button>
@@ -286,7 +286,7 @@ export const RolesPanel: Component = () => {
  onInput={(e) => setFormId(e.currentTarget.value)}
  placeholder="e.g., custom-auditor"
  disabled={!!editingRole()}
- class="w-full rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:focus:border-blue-400 dark:focus:ring-blue-900 disabled:opacity-50"
+ class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900 disabled:opacity-50"
  />
  </div>
  <div class="space-y-1">
@@ -298,7 +298,7 @@ export const RolesPanel: Component = () => {
  value={formName()}
  onInput={(e) => setFormName(e.currentTarget.value)}
  placeholder="e.g., Custom Auditor"
- class="w-full rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:focus:border-blue-400 dark:focus:ring-blue-900"
+ class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900"
  />
  </div>
  </div>
@@ -311,7 +311,7 @@ export const RolesPanel: Component = () => {
  value={formDescription()}
  onInput={(e) => setFormDescription(e.currentTarget.value)}
  placeholder="Brief description of this role's purpose"
-                                    class="w-full rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:focus:border-blue-400 dark:focus:ring-blue-900"
+                                    class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900"
                                 />
                             </div>
 
@@ -336,7 +336,7 @@ export const RolesPanel: Component = () => {
                                                 <select
                                                     value={perm.action}
                                                     onChange={(e) => updatePermission(index(), 'action', e.currentTarget.value)}
-                                                    class="w-full sm:flex-1 rounded-md border border-slate-300 bg-surface px-2 py-1.5 text-sm text-base-content dark:border-slate-600"
+                                                    class="w-full sm:flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-base-content"
                                                 >
                                                     <For each={ACTIONS}>
                                                         {(action) => <option value={action}>{action}</option>}
@@ -371,7 +371,7 @@ export const RolesPanel: Component = () => {
  <button
  type="button"
  onClick={() => setShowModal(false)}
- class="w-full sm:w-auto rounded-md px-4 py-2 text-sm font-medium text-base-content hover:bg-slate-100 dark:hover:bg-slate-800"
+ class="w-full sm:w-auto rounded-md px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover"
  >
  Cancel
  </button>

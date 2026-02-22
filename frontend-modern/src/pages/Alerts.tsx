@@ -1588,7 +1588,7 @@ export function Alerts() {
                 Save Changes
               </button>
               <button
-                class="flex-1 px-4 py-2 text-sm transition-colors border border-slate-300 rounded-md text-base-content dark:border-slate-600 hover:bg-surface-hover sm:flex-initial disabled:opacity-60 disabled:cursor-not-allowed"
+                class="flex-1 px-4 py-2 text-sm transition-colors border border-border rounded-md text-base-content hover:bg-surface-hover sm:flex-initial disabled:opacity-60 disabled:cursor-not-allowed"
                 disabled={isReloadingConfig()}
                 onClick={async () => {
                   await loadAlertConfiguration({ notify: true });
@@ -1674,7 +1674,7 @@ export function Alerts() {
  ? 'cursor-not-allowed text-muted bg-surface-alt'
  : activeTab() === item.id
  ? 'bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-200'
- : ' hover: hover:text-slate-900 dark:hover:bg-slate-700 dark:hover:text-slate-100'
+ : 'hover: hover:text-base-content dark:hover:bg-slate-700'
  }`}
                               onClick={() => handleTabChange(item.id)}
                               title={sidebarCollapsed() ? item.label : undefined}
@@ -2361,7 +2361,7 @@ function DestinationsTab(props: DestinationsTabProps) {
               }
             />
             <button
-              class="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-base-content transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:hover:bg-slate-700"
+              class="rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
               disabled={!appriseState().enabled || testingApprise()}
               onClick={testApprise}
             >
@@ -2737,7 +2737,7 @@ function ScheduleTab(props: ScheduleTabProps) {
  <button
  type="button"
  onClick={resetToDefaults}
- class="inline-flex items-center gap-2 self-start rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700"
+ class="inline-flex items-center gap-2 self-start rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-surface-hover"
  title="Restore quiet hours, cooldown, grouping, and escalation settings to their defaults"
  >
  <svg
@@ -2841,10 +2841,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                           props.setHasUnsavedChanges(true);
                         }}
                         title={day.fullLabel}
-                        class={`px-2 py-2 text-xs font-medium transition-all duration-200 ${quietHours().days[day.id]
- ? 'rounded-md bg-blue-500 text-white shadow-sm'
- : 'rounded-md text-slate-600 hover:bg-surface-hover dark:text-slate-400 '
- }`}
+                        class={`px-2 py-2 text-xs font-medium transition-all duration-200 ${quietHours().days[day.id] ? 'rounded-md bg-blue-500 text-white shadow-sm' : 'rounded-md text-muted hover:bg-surface-hover ' }`}
                       >
                         {day.label}
                       </button>
@@ -2894,7 +2891,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                       <label
                         class={`flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2 transition-colors ${quietHours().suppress[option.key]
  ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-500'
- : 'border-slate-200 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700'
+ : 'border-border hover:bg-surface-hover'
  }`}
                       >
                         <input
@@ -3097,7 +3094,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   <label
                     class={`relative flex items-center gap-2 rounded-md border-2 p-3 transition-all ${grouping().byNode
  ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900'
- : 'border-slate-200 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700'
+ : 'border-border hover:bg-surface-hover'
  }`}
                   >
                     <input
@@ -3135,7 +3132,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   <label
                     class={`relative flex items-center gap-2 rounded-md border-2 p-3 transition-all ${grouping().byGuest
  ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900'
- : 'border-slate-200 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700'
+ : 'border-border hover:bg-surface-hover'
  }`}
                   >
                     <input
@@ -3312,7 +3309,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   });
                   props.setHasUnsavedChanges(true);
                 }}
-                class="flex w-full items-center justify-center gap-2 rounded-md border-2 border-dashed border-slate-300 py-2 text-sm text-slate-600 transition-all hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-400 dark:hover:border-slate-500 dark:hover:bg-slate-700"
+                class="flex w-full items-center justify-center gap-2 rounded-md border-2 border-dashed border-border py-2 text-sm text-muted transition-all hover:border-slate-400 hover:bg-surface-hover dark:hover:border-slate-500"
               >
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -3442,7 +3439,7 @@ export function IncidentEventFilters(props: {
               type="button"
               class={`px-2 py-0.5 rounded border text-[10px] ${selected()
  ? 'border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300'
- : 'border-slate-300 text-slate-500 dark:border-slate-600 dark:text-slate-300'
+ : 'border-border text-slate-500 dark:text-slate-300'
  }`}
               onClick={() => toggleFilter(type)}
             >

@@ -2486,10 +2486,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={() => handleTabClick('proxmox')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'proxmox'
- ? 'border-blue-500 text-blue-600 dark:text-blue-400'
- : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300'
- }`}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'proxmox' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-slate-700 hover:border-slate-300 dark:hover:text-slate-300' }`}
           >
             <Server class="w-4 h-4" />
             <span class="hidden sm:inline">Proxmox / PBS</span>
@@ -2498,10 +2495,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={() => handleTabClick('pmg')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'pmg'
- ? 'border-blue-500 text-blue-600 dark:text-blue-400'
- : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300'
- }`}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'pmg' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-slate-700 hover:border-slate-300 dark:hover:text-slate-300' }`}
           >
             <Mail class="w-4 h-4" />
             <span class="hidden sm:inline">Mail Gateway</span>
@@ -2510,10 +2504,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={() => handleTabClick('hosts')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'hosts'
- ? 'border-blue-500 text-blue-600 dark:text-blue-400'
- : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300'
- }`}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'hosts' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-slate-700 hover:border-slate-300 dark:hover:text-slate-300' }`}
           >
             <Users class="w-4 h-4" />
             <span class="hidden sm:inline">Host Agents</span>
@@ -2522,10 +2513,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={() => handleTabClick('docker')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'docker'
- ? 'border-blue-500 text-blue-600 dark:text-blue-400'
- : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300'
- }`}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'docker' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-slate-700 hover:border-slate-300 dark:hover:text-slate-300' }`}
           >
             <Boxes class="w-4 h-4" />
             <span>Containers</span>
@@ -3099,7 +3087,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show
             when={pmgServersWithOverrides().length > 0}
             fallback={
-              <div class="rounded-md border border-border bg-surface p-6 text-sm text-slate-600 dark:text-slate-300">
+              <div class="rounded-md border border-border bg-surface p-6 text-sm text-muted">
                 No mail gateways configured yet. Add a PMG instance in Settings to manage
                 thresholds.
               </div>
@@ -3284,7 +3272,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               }}
               placeholder="runner-"
               rows={4}
-              class="mt-4 w-full rounded-md border border-slate-300 bg-surface p-3 text-sm text-base-content focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:focus:border-sky-400 dark:focus:ring-sky-600"
+              class="mt-4 w-full rounded-md border border-border bg-surface p-3 text-sm text-base-content focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:focus:border-sky-400 dark:focus:ring-sky-600"
             />
           </Card>
 
@@ -3331,7 +3319,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     }));
                     props.setHasUnsavedChanges(true);
                   }}
-                  class="mt-1 w-full rounded-md border border-slate-300 bg-surface p-2 text-sm text-base-content focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:focus:border-sky-400 dark:focus:ring-sky-600"
+                  class="mt-1 w-full rounded-md border border-border bg-surface p-2 text-sm text-base-content focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:focus:border-sky-400 dark:focus:ring-sky-600"
                 />
                 <p class="mt-1 text-xs text-muted">
                   Convert to warning when at least this percentage of replicas are missing.
@@ -3359,7 +3347,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     }));
                     props.setHasUnsavedChanges(true);
                   }}
-                  class="mt-1 w-full rounded-md border border-slate-300 bg-surface p-2 text-sm text-base-content focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:focus:border-sky-400 dark:focus:ring-sky-600"
+                  class="mt-1 w-full rounded-md border border-border bg-surface p-2 text-sm text-base-content focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:focus:border-sky-400 dark:focus:ring-sky-600"
                 />
                 <p class="mt-1 text-xs text-muted">
                   Raise a critical alert when the missing replica gap meets or exceeds this value.

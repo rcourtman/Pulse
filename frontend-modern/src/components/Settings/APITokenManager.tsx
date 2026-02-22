@@ -477,10 +477,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
  </p>
  </div>
  <div
- class={`rounded-md border p-4 text-sm shadow-sm ${hasWildcardTokens()
- ?'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100'
- : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
- }`}
+ class={`rounded-md border p-4 text-sm shadow-sm ${hasWildcardTokens() ?'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100' : 'border-border bg-surface text-base-content' }`}
             >
               <div
                 class={`text-[0.7rem] font-semibold uppercase tracking-wide ${hasWildcardTokens()
@@ -586,7 +583,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
           <Card
             tone="muted"
             padding="md"
-            class="border border-dashed border-slate-300 text-sm text-slate-600 dark:border-slate-600 dark:text-slate-400"
+            class="border border-dashed border-border text-sm text-muted"
           >
             No tokens yet.{' '}
             <button onClick={focusCreateSection} class="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400">
@@ -647,7 +644,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                               <span
                                 class={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${isWildcard
  ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
- : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+ : 'bg-surface-alt text-base-content'
  }`}
                                 title={scope.value}
                               >
@@ -784,7 +781,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
  value={nameInput()}
  onInput={(e) => setNameInput(e.currentTarget.value)}
  placeholder="e.g. Container pipeline"
- class="w-full min-h-10 sm:min-h-10 rounded-md border border-slate-300 bg-surface px-3 py-2.5 text-sm text-base-content shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:focus:border-blue-400 dark:focus:ring-blue-500"
+ class="w-full min-h-10 sm:min-h-10 rounded-md border border-border bg-surface px-3 py-2.5 text-sm text-base-content shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-500"
  />
  </div>
 
@@ -806,10 +803,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
  <div class="flex flex-wrap gap-2">
  <button
  type="button"
- class={`inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition ${isFullAccessSelected()
- ?'border-blue-500 bg-blue-600 text-white shadow-sm'
- : 'border-slate-300 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
- }`}
+ class={`inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition ${isFullAccessSelected() ?'border-blue-500 bg-blue-600 text-white shadow-sm' : 'border-border bg-surface text-base-content hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-200' }`}
                   onClick={clearScopes}
                   title="Legacy wildcard – all permissions"
                 >
@@ -820,10 +814,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                   {(preset) => (
                     <button
                       type="button"
-                      class={`inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition ${presetMatchesSelection(preset.scopes)
- ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
- : 'border-slate-300 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
- }`}
+                      class={`inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition ${presetMatchesSelection(preset.scopes) ? 'border-blue-500 bg-blue-600 text-white shadow-sm' : 'border-border bg-surface text-base-content hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-200' }`}
                       onClick={() => applyScopePreset(preset.scopes)}
                       title={preset.description}
                     >
@@ -852,10 +843,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                             return (
                               <button
                                 type="button"
-                                class={`min-h-10 sm:min-h-10 rounded-full border px-3 py-2 text-sm font-semibold transition ${isActive()
- ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
- : 'border-slate-300 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
- }`}
+                                class={`min-h-10 sm:min-h-10 rounded-full border px-3 py-2 text-sm font-semibold transition ${isActive() ? 'border-blue-500 bg-blue-600 text-white shadow-sm' : 'border-border bg-surface text-base-content hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-200' }`}
                                 onClick={() => {
                                   setSelectedScopes((prev) => {
                                     if (prev.includes(option.value)) {

@@ -68,11 +68,7 @@ function IncidentEventFilters(props: {
           return (
             <button
               onClick={() => toggleFilter(type)}
-              class={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
- selected()
- ? 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-800'
- : ' text-slate-600 border-slate-200 hover:bg-surface-alt dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'
- } border`}
+              class={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${ selected() ? 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-800' : ' text-muted border-border hover:bg-surface-alt dark:hover:bg-slate-700' } border`}
             >
               {INCIDENT_EVENT_LABELS[type]}
             </button>

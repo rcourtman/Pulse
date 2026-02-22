@@ -352,7 +352,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
  <button
  onClick={() => toggleAllWebhooks(false)}
  disabled={!someEnabled()}
- class="w-full rounded border px-3 py-1 text-xs transition-colors hover:bg-slate-100 dark:hover:bg-slate-700 sm:w-auto"
+ class="w-full rounded border px-3 py-1 text-xs transition-colors hover:bg-surface-hover sm:w-auto"
  >
  Disable All
  </button>
@@ -372,10 +372,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
  <span class="font-medium text-base-content">{webhook.name}</span>
  <button
  onClick={() => props.onUpdate({ ...webhook, enabled: !webhook.enabled })}
- class={`rounded border px-3 py-1 text-xs font-medium transition-colors ${webhook.enabled
- ?'border-green-500 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900'
- : 'border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
- }`}
+ class={`rounded border px-3 py-1 text-xs font-medium transition-colors ${webhook.enabled ?'border-green-500 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900' : 'border-border text-muted hover:bg-surface-hover' }`}
                   >
                     {webhook.enabled ? 'Enabled' : 'Disabled'}
  </button>
@@ -398,7 +395,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
  <button
  onClick={() => webhook.id && props.onTest(webhook.id)}
  disabled={props.testing === webhook.id || !webhook.enabled}
- class="rounded border px-3 py-1 text-xs text-base-content transition-colors hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50"
+ class="rounded border px-3 py-1 text-xs text-base-content transition-colors hover:bg-surface-hover disabled:opacity-50"
  >
  {props.testing === webhook.id ?'Testing…' : 'Test'}
                   </button>
@@ -705,7 +702,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
  },
  ]);
  }}
- class="w-full border border-dashed border-slate-300 px-2 py-1 text-xs hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
+ class="w-full border border-dashed border-border px-2 py-1 text-xs hover:bg-surface-hover"
  >
  + Add custom field
  </button>
@@ -781,7 +778,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
  },
  ]);
  }}
- class="w-full border border-dashed border-slate-300 px-2 py-1 text-xs hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
+ class="w-full border border-dashed border-border px-2 py-1 text-xs hover:bg-surface-hover"
  >
  + Add header
  </button>
@@ -806,7 +803,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
  <div class="flex justify-end gap-2 text-xs">
  <button
  onClick={cancelForm}
- class="px-3 py-1.5 border border-slate-300 rounded text-xs hover:bg-slate-100 dark:border-slate-600"
+ class="px-3 py-1.5 border border-border rounded text-xs hover:"
  >
  Cancel
  </button>
@@ -834,7 +831,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                   props.onTest(tempId, testPayload);
                 }}
                 disabled={props.testing === (editingId() || 'temp-new-webhook')}
-                class="px-3 py-1.5 border border-slate-300 rounded text-xs hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200"
+                class="px-3 py-1.5 border border-border rounded text-xs hover:bg-slate-100 dark:text-slate-200"
               >
                 {props.testing === (editingId() || 'temp-new-webhook') ? 'Testing...' : 'Test'}
               </button>
@@ -865,7 +862,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
             ]);
             setCustomFieldInputs([]);
           }}
-          class="w-full border border-dashed border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-400 dark:hover:bg-slate-800"
+          class="w-full border border-dashed border-border px-2 py-1 text-xs text-muted hover:bg-surface-hover"
         >
           + Add Webhook
         </button>

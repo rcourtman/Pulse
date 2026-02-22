@@ -41,7 +41,7 @@ export function TagInput(props: TagInputProps) {
 
     return (
         <div
-            class={`min-h-[42px] flex flex-wrap items-center gap-2 rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 focus-within:border-sky-500 focus-within:ring-1 focus-within:ring-sky-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 ${props.class || ''}`}
+            class={`min-h-[42px] flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface p-2 text-sm text-base-content focus-within:border-sky-500 focus-within:ring-1 focus-within:ring-sky-500 ${props.class || ''}`}
             onClick={(e) => {
                 // Focus the input when clicking anywhere in the container
                 const input = e.currentTarget.querySelector('input');

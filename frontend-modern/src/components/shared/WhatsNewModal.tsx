@@ -45,7 +45,7 @@ export function WhatsNewModal() {
             </div>
             <button
               onClick={handleClose}
-              class="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+              class="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-surface-hover hover:text-slate-600 dark:hover:text-slate-300"
               aria-label="Close"
             >
               <XIcon class="h-5 w-5" />

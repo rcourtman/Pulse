@@ -467,7 +467,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                             </Show>
                         </div>
                         <Show when={props.onTimeRangeChange}>
-                            <div class="inline-flex shrink-0 rounded border border-slate-300 bg-surface p-0.5 text-xs dark:border-slate-700">
+                            <div class="inline-flex shrink-0 rounded border border-border bg-surface p-0.5 text-xs">
                                 <For each={SUMMARY_TIME_RANGES}>
                                     {(range) => (
                                         <button
@@ -475,7 +475,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                                             onClick={() => props.onTimeRangeChange?.(range)}
                                             class={`rounded px-2 py-1 ${selectedRange() === range
  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
- : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+ : 'text-muted hover:bg-surface-hover'
  }`}
                                         >
                                             {SUMMARY_TIME_RANGE_LABEL[range]}

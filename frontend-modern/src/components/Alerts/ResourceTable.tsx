@@ -452,64 +452,7 @@ export function ResourceTable(props: ResourceTableProps) {
           {displayText}
         </span>
         <Show when={props.hasActiveAlert(metricProps.resourceId, metricProps.metric)}>
-          <div class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" title="Active alert" />
-        </Show>
-      </div>
-    );
-  };
-
-  const renderToggleBadge = (config: {
-    isEnabled: boolean;
-    disabled?: boolean;
-    size?: 'sm' | 'md';
-    onToggle?: () => void;
-    labelEnabled?: string;
-    labelDisabled?: string;
-    titleEnabled?: string;
-    titleDisabled?: string;
-    titleWhenDisabled?: string;
-  }) => <StatusBadge {...config} />;
-
-  const offlineStateOrder: OfflineState[] = ['off', 'warning', 'critical'];
-
-  const offlineStateConfig: Record<
-    OfflineState,
-    { label: string; className: string; title: string }
-  > = {
-    off: {
-      label: 'Off',
-      className:
-        'bg-slate-200 text-slate-600 hover:bg-surface-hover dark:text-slate-300 dark:hover:bg-slate-600',
-      title: 'Offline alerts disabled for this resource.',
-    },
-    warning: {
-      label: 'Warn',
-      className:
-        'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800',
-      title: 'Offline alerts will raise warning-level notifications.',
-    },
-    critical: {
-      label: 'Crit',
-      className:
-        'bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800',
-      title: 'Offline alerts will raise critical-level notifications.',
-    },
-  };
-
-  const nextOfflineState = (state: OfflineState): OfflineState => {
-    const idx = offlineStateOrder.indexOf(state);
-    return offlineStateOrder[(idx + 1) % offlineStateOrder.length];
-  };
-
-  const renderOfflineStateButton = (
-    state: OfflineState,
-    disabled: boolean,
-    onToggle: () => void,
-  ) => {
-    const config = offlineStateConfig[state];
-    return (
-      <button
-        type="button"
+          <div class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" title="Active alert"/> </Show> </div> ); }; const renderToggleBadge = (config: { isEnabled: boolean; disabled?: boolean; size?: 'sm' | 'md'; onToggle?: () => void; labelEnabled?: string; labelDisabled?: string; titleEnabled?: string; titleDisabled?: string; titleWhenDisabled?: string; }) => <StatusBadge {...config} />; const offlineStateOrder: OfflineState[] = ['off', 'warning', 'critical']; const offlineStateConfig: Record< OfflineState, { label: string; className: string; title: string } > = { off: { label: 'Off', className: 'bg-slate-200 text-muted hover:bg-surface-hover dark:hover:bg-slate-600', title: 'Offline alerts disabled for this resource.', }, warning: { label: 'Warn', className: 'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800', title: 'Offline alerts will raise warning-level notifications.', }, critical: { label: 'Crit', className: 'bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800', title: 'Offline alerts will raise critical-level notifications.', }, }; const nextOfflineState = (state: OfflineState): OfflineState => { const idx = offlineStateOrder.indexOf(state); return offlineStateOrder[(idx + 1) % offlineStateOrder.length]; }; const renderOfflineStateButton = ( state: OfflineState, disabled: boolean, onToggle: () => void, ) => { const config = offlineStateConfig[state]; return ( <button type="button"
         class={`inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 ${config.className} ${disabled ? 'opacity-60 cursor-not-allowed pointer-events-none' : ''}`.trim()}
         disabled={disabled}
         onClick={() => {
@@ -1198,7 +1141,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                     type="checkbox"
                                     checked={selectedIds().has(resource.id)}
                                     onChange={(e) => toggleSelection(resource.id, e.currentTarget.checked)}
-                                    class="rounded border-slate-300 text-sky-600 focus:ring-sky-500 dark:border-slate-600 dark:bg-slate-700 transition-shadow cursor-pointer"
+                                    class="rounded border-border text-sky-600 focus:ring-sky-500 dark:bg-slate-700 transition-shadow cursor-pointer"
                                     aria-label={`Select ${resource.displayName || resource.name}`}
                                   />
                                 </TableCell>
@@ -1314,7 +1257,7 @@ export function ResourceTable(props: ResourceTableProps) {
  </label>
  <textarea
  id={`note-${resource.id}`}
- class="w-full rounded border border-slate-300 bg-surface px-2 py-1 text-xs text-base-content focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600"
+ class="w-full rounded border border-border bg-surface px-2 py-1 text-xs text-base-content focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
  rows={2}
  placeholder="Add a note about this override (optional)"
  value={props.editingNote()}
@@ -1740,7 +1683,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 type="checkbox"
                                 checked={selectedIds().has(resource.id)}
                                 onChange={(e) => toggleSelection(resource.id, e.currentTarget.checked)}
-                                class="rounded border-slate-300 text-sky-600 focus:ring-sky-500 dark:border-slate-600 dark:bg-slate-700 transition-shadow cursor-pointer"
+                                class="rounded border-border text-sky-600 focus:ring-sky-500 dark:bg-slate-700 transition-shadow cursor-pointer"
                                 aria-label={`Select ${resource.displayName || resource.name}`}
                               />
                             </TableCell>

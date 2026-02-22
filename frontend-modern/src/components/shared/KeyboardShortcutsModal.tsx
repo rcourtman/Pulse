@@ -98,7 +98,7 @@ export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
         </For>
       </div>
 
-      <div class="border-t border-border px-5 py-3 text-xs text-slate-500 dark:text-slate-400">
+      <div class="border-t border-border px-5 py-3 text-xs text-muted">
         Press <span class="font-medium">?</span> again or <span class="font-medium">Esc</span> to close.
       </div>
     </Dialog>

@@ -266,7 +266,7 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
                               <button
                                 type="button"
                                 onClick={() => openPods(dep.kubernetes?.namespace)}
-                                class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+                                class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-surface-hover"
                               >
                                 View Pods
                               </button>

@@ -171,7 +171,7 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
 
   return (
     <Show when={metadataId()}>
-      <div class={`rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800 ${props.class ?? ''}`}>
+      <div class={`rounded border border-border bg-surface p-3 shadow-sm ${props.class ?? ''}`}>
         <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
           Web Interface URL
         </div>

@@ -2287,14 +2287,7 @@ const Settings: Component<SettingsProps> = (props) => {
  type="button"
  aria-current={isActive() ?'page' : undefined}
                                   disabled={item.disabled}
-                                  class={`group flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'justify-between'
- } lg:rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-4 py-3.5 lg:px-3 lg:py-2'
- } text-[15px] lg:text-sm font-medium transition-colors ${item.disabled
- ? 'opacity-60 cursor-not-allowed text-muted'
- : isActive()
- ? 'lg:bg-blue-50 text-blue-600 dark:lg:bg-blue-900 dark:text-blue-300 lg:dark:text-blue-200 bg-white dark:bg-gray-900'
- : 'text-gray-700 lg:hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-700 dark:hover:text-gray-100 active:bg-gray-50 dark:active:bg-gray-800 lg:active:bg-transparent'
- }`}
+                                  class={`group flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'justify-between' } lg:rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-4 py-3.5 lg:px-3 lg:py-2' } text-[15px] lg:text-sm font-medium transition-colors ${item.disabled ? 'opacity-60 cursor-not-allowed text-muted' : isActive() ? 'lg:bg-blue-50 text-blue-600 dark:lg:bg-blue-900 dark:text-blue-300 lg:dark:text-blue-200 bg-white dark:bg-gray-900' : ' lg:hover:bg-gray-100 hover:text-base-content dark:hover:bg-gray-700 active:bg-gray-50 dark:active:bg-gray-800 lg:active:bg-transparent' }`}
                                   onClick={() => {
                                     if (item.disabled) return;
                                     setActiveTab(item.id);
@@ -3308,7 +3301,7 @@ const Settings: Component<SettingsProps> = (props) => {
                           Use this in production environments where you prefer Pulse to be read-only.
                         </p>
                         <p class="text-xs text-muted mt-1">
-                          Can also be set via environment variable: <code class="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-base-content">PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true</code>
+                          Can also be set via environment variable: <code class="px-1 py-0.5 rounded bg-surface-hover text-base-content">PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true</code>
                         </p>
                       </div>
                       <div class="flex-shrink-0">

@@ -21,7 +21,7 @@ export function OrgSwitcher(props: OrgSwitcherProps) {
         when={props.orgs.length > 1}
         fallback={
           <span
-            class="inline-flex h-7 items-center rounded-md border border-slate-300 bg-surface px-2 text-xs font-medium text-base-content dark:border-slate-600"
+            class="inline-flex h-7 items-center rounded-md border border-border bg-surface px-2 text-xs font-medium text-base-content"
             title={selectedOrgName()}
           >
             {selectedOrgName()}
@@ -37,7 +37,7 @@ export function OrgSwitcher(props: OrgSwitcherProps) {
           value={props.selectedOrgId}
           disabled={Boolean(props.loading)}
           onChange={(event) => props.onChange(event.currentTarget.value)}
-          class="h-7 max-w-44 rounded-md border border-slate-300 bg-surface px-2 text-xs text-base-content shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600"
+          class="h-7 max-w-44 rounded-md border border-border bg-surface px-2 text-xs text-base-content shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <For each={props.orgs}>
             {(org) => (

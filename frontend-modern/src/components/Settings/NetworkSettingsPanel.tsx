@@ -228,10 +228,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                           return (
                             <button
                               type="button"
-                              class={`rounded border px-2.5 py-1 text-[0.7rem] transition-colors ${isActive
- ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500'
- : 'border-slate-300 text-slate-700 hover:border-blue-400 hover:bg-blue-50 dark:border-slate-600 dark:text-slate-300 dark:hover:border-blue-500 dark:hover:bg-blue-900'
- }`}
+                              class={`rounded border px-2.5 py-1 text-[0.7rem] transition-colors ${isActive ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500' : 'border-border text-base-content hover:border-blue-400 hover:bg-blue-50 dark:hover:border-blue-500 dark:hover:bg-blue-900' }`}
                               onClick={async () => {
                                 if (props.envOverrides().discoverySubnet) {
                                   return;
@@ -315,7 +312,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                   }
                   class={`w-full min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${props.envOverrides().discoverySubnet
  ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900 dark:text-amber-200 cursor-not-allowed opacity-60'
- : 'border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800'
+ : 'border-border bg-surface'
  }`}
                   disabled={props.envOverrides().discoverySubnet}
                   onInput={(e) => {

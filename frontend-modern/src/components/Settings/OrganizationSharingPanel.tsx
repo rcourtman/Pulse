@@ -390,8 +390,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                       <select
                         value={targetOrgId()}
                         onChange={(event) => updateTargetOrg(event.currentTarget.value)}
-                        class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${targetOrgError() ? 'border-red-400 dark:border-red-500' : 'border-border'
- }`}
+                        class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${targetOrgError() ? 'border-red-400 dark:border-red-500' : 'border-border' }`}
                       >
                         <option value="">Select organization</option>
                         <For each={targetOrgOptions()}>
@@ -410,7 +409,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
  <select
  value={accessRole()}
  onChange={(event) => setAccessRole(event.currentTarget.value as ShareAccessRole)}
- class="w-full rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600"
+ class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
  >
  <For each={accessRoleOptions}>
  {(option) => <option value={option.value}>{option.label}</option>}
@@ -473,8 +472,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                           value={resourceType()}
                           onInput={(event) => updateResourceType(event.currentTarget.value)}
                           placeholder={VALID_RESOURCE_TYPES.join(' | ')}
-                          class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${resourceTypeError() ? 'border-red-400 dark:border-red-500' : 'border-border'
- }`}
+                          class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${resourceTypeError() ? 'border-red-400 dark:border-red-500' : 'border-border' }`}
                         />
                         <Show when={resourceTypeError() !== ''}>
  <p class="text-xs text-red-600 dark:text-red-400">{resourceTypeError()}</p>
@@ -490,8 +488,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
  value={resourceId()}
  onInput={(event) => updateResourceId(event.currentTarget.value)}
  placeholder="resource identifier"
- class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 ${resourceIdError() ?'border-red-400 dark:border-red-500' : 'border-border'
- }`}
+ class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${resourceIdError() ?'border-red-400 dark:border-red-500' : 'border-border' }`}
                         />
                         <Show when={resourceIdError() !== ''}>
  <p class="text-xs text-red-600 dark:text-red-400">{resourceIdError()}</p>
@@ -507,7 +504,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
  value={resourceName()}
  onInput={(event) => updateResourceName(event.currentTarget.value)}
  placeholder="optional display name"
- class="w-full rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600"
+ class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
  />
  </label>
  </div>

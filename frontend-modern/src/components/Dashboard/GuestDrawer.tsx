@@ -145,7 +145,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                 <button
                     type="button"
                     onClick={() => navigate(infrastructureHref())}
-                    class="inline-flex items-center rounded border border-slate-300 bg-surface-alt px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-slate-200 dark:border-slate-600 dark:hover:bg-slate-700"
+                    class="inline-flex items-center rounded border border-border bg-surface-alt px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-slate-200 dark:hover:bg-slate-700"
                 >
                     Open related infrastructure
                 </button>

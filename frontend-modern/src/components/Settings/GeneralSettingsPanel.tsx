@@ -290,10 +290,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                   {(option) => (
                     <button
                       type="button"
-                      class={`min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-center text-sm font-medium transition-colors ${props.pvePollingSelection() === option.value
- ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900 dark:text-blue-200'
- : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700'
- } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      class={`min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-center text-sm font-medium transition-colors ${props.pvePollingSelection() === option.value ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900 dark:text-blue-200' : 'border-border bg-surface text-base-content hover:border-border hover:bg-surface-hover' } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
                       disabled={props.pvePollingEnvLocked()}
                       onClick={() => {
                         if (props.pvePollingEnvLocked()) return;
@@ -308,10 +305,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                 </For>
                 <button
                   type="button"
-                  class={`min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-center text-sm font-medium transition-colors ${props.pvePollingSelection() === 'custom'
- ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900 dark:text-blue-200'
- : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700'
- } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  class={`min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-center text-sm font-medium transition-colors ${props.pvePollingSelection() === 'custom' ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900 dark:text-blue-200' : 'border-border bg-surface text-base-content hover:border-border hover:bg-surface-hover' } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
                   disabled={props.pvePollingEnvLocked()}
                   onClick={() => {
                     if (props.pvePollingEnvLocked()) return;
@@ -326,7 +320,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
 
               {/* Custom interval input */}
               <Show when={props.pvePollingSelection() === 'custom'}>
-                <div class="mt-4 flex flex-col sm:flex-row sm:items-center gap-4 rounded-md border border-dashed border-slate-300 bg-surface-hover p-4 dark:border-slate-700 transition-all animate-in fade-in slide-in-from-top-1">
+                <div class="mt-4 flex flex-col sm:flex-row sm:items-center gap-4 rounded-md border border-dashed border-border bg-surface-hover p-4 transition-all animate-in fade-in slide-in-from-top-1">
                   <div class="flex-1 min-w-0">
                     <label class="block text-sm font-medium text-base-content truncate">
                       Custom polling interval
@@ -340,7 +334,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                     min={PVE_POLLING_MIN_SECONDS}
                     max={PVE_POLLING_MAX_SECONDS}
                     value={props.pvePollingCustomSeconds()}
-                    class="w-full sm:w-32 min-h-10 rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-blue-400 shadow-sm"
+                    class="w-full sm:w-32 min-h-10 rounded-md border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-blue-400 shadow-sm"
                     disabled={props.pvePollingEnvLocked()}
                     onInput={(e) => {
                       if (props.pvePollingEnvLocked()) return;

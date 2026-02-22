@@ -108,7 +108,7 @@ export const K8sNamespacesDrawer: Component<{
  <button
  type="button"
  onClick={() => openPods(null)}
- class="rounded-md border border-border bg-surface px-3 py-1 text-xs font-semibold shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+ class="rounded-md border border-border bg-surface px-3 py-1 text-xs font-semibold shadow-sm hover:bg-surface-hover"
  >
  Open All Pods
  </button>
@@ -189,7 +189,7 @@ export const K8sNamespacesDrawer: Component<{
                               <button
                                 type="button"
                                 onClick={() => openPods(row.namespace)}
-                                class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+                                class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-surface-hover"
                               >
                                 Open Pods
                               </button>
@@ -197,7 +197,7 @@ export const K8sNamespacesDrawer: Component<{
                                 <button
                                   type="button"
                                   onClick={() => props.onOpenDeployments?.(row.namespace)}
-                                  class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+                                  class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-surface-hover"
                                 >
                                   View Deployments
                                 </button>

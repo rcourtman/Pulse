@@ -442,7 +442,7 @@ export const AgentProfilesPanel: Component = () => {
                                                     <select
                                                         value={assignment()?.profile_id || ''}
                                                         onChange={(e) => handleAssign(agent.id, e.currentTarget.value)}
-                                                        class="min-h-10 sm:min-h-9 w-full sm:max-w-xs rounded-md border border-slate-300 bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600"
+                                                        class="min-h-10 sm:min-h-9 w-full sm:max-w-xs rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                                     >
                                                         <option value="">No profile</option>
                                                         <For each={profiles()}>
@@ -462,7 +462,7 @@ export const AgentProfilesPanel: Component = () => {
                                                 return (
                                                     <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${isOnline()
  ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
- : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+ : 'bg-surface-alt text-muted'
  }`}>
                                                         {isOnline() ? 'Online' : 'Offline'}
                                                     </span>
@@ -500,7 +500,7 @@ export const AgentProfilesPanel: Component = () => {
                                     <button
                                         type="button"
                                         onClick={() => setShowModal(false)}
-                                        class="p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800"
+                                        class="p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-surface-hover dark:hover:text-slate-300"
                                     >
                                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -519,7 +519,7 @@ export const AgentProfilesPanel: Component = () => {
                                             value={formName()}
                                             onInput={(e) => setFormName(e.currentTarget.value)}
                                             placeholder="e.g., Production Servers"
-                                            class="w-full rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                            class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-800"
                                         />
                                     </div>
 
@@ -533,7 +533,7 @@ export const AgentProfilesPanel: Component = () => {
                                             onInput={(e) => setFormDescription(e.currentTarget.value)}
                                             placeholder="What is this profile for?"
                                             rows={2}
-                                            class="w-full rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:focus:border-blue-400 dark:focus:ring-blue-800 resize-none"
+                                            class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-800 resize-none"
                                         />
                                     </div>
 
@@ -584,7 +584,7 @@ export const AgentProfilesPanel: Component = () => {
                                                             <select
                                                                 value={(formSettings()[setting.key] as string) || ''}
                                                                 onChange={(e) => updateSetting(setting.key, e.currentTarget.value || undefined)}
-                                                                class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600"
+                                                                class="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                                             >
                                                                 <option value="">Default</option>
                                                                 <For each={(setting as SelectSetting).options}>
@@ -598,7 +598,7 @@ export const AgentProfilesPanel: Component = () => {
                                                                 value={(formSettings()[setting.key] as string) || ''}
                                                                 onInput={(e) => updateSetting(setting.key, e.currentTarget.value || undefined)}
                                                                 placeholder="30s"
-                                                                class="min-h-10 sm:min-h-9 w-24 rounded-md border border-slate-300 bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600"
+                                                                class="min-h-10 sm:min-h-9 w-24 rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                                             />
                                                         </Show>
                                                         <Show when={setting.type === 'string'}>
@@ -668,7 +668,7 @@ export const AgentProfilesPanel: Component = () => {
  <button
  type="button"
  onClick={() => setShowModal(false)}
- class="rounded-md px-4 py-2 text-sm font-medium text-base-content hover:bg-slate-100 dark:hover:bg-slate-800"
+ class="rounded-md px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover"
  >
  Cancel
  </button>

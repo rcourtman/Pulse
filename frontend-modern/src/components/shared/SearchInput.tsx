@@ -313,7 +313,7 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
                     </button>
                     <button
                       type="button"
-                      class="ml-1 flex h-6 w-6 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 focus:outline-none dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                      class="ml-1 flex h-6 w-6 items-center justify-center rounded text-slate-400 transition-colors hover:bg-surface-hover hover:text-slate-600 focus:outline-none dark:text-slate-500 dark:hover:text-slate-200"
                       title="Remove from history"
                       onClick={() => deleteHistoryEntry(entry)}
                       onMouseDown={markSuppressCommit}
@@ -333,7 +333,7 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
             </div>
             <button
               type="button"
-              class="flex w-full items-center justify-center gap-2 border-t border-border px-3 py-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+              class="flex w-full items-center justify-center gap-2 border-t border-border px-3 py-2 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-slate-700 dark:hover:text-slate-200"
               onClick={clearHistory}
               onMouseDown={markSuppressCommit}
             >

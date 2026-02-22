@@ -267,17 +267,14 @@ export const UserAssignmentsPanel: Component = () => {
  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
  <For each={roles()}>
  {(role) => (
- <label class={`flex flex-col p-3 rounded-md border transition-all cursor-pointer ${formRoleIds().includes(role.id)
- ?'bg-blue-50 border-blue-200 dark:bg-blue-900 dark:border-blue-800'
- : 'bg-white border-slate-200 hover:border-blue-100 dark:bg-slate-800 dark:border-slate-700 dark:hover:border-blue-900'
- }`}>
+ <label class={`flex flex-col p-3 rounded-md border transition-all cursor-pointer ${formRoleIds().includes(role.id) ?'bg-blue-50 border-blue-200 dark:bg-blue-900 dark:border-blue-800' : 'bg-surface border-border hover:border-blue-100 dark:hover:border-blue-900' }`}>
                                                 <div class="flex items-start justify-between gap-2 mb-1">
                                                     <div class="flex items-center gap-2 shadow-sm">
                                                         <input
                                                             type="checkbox"
                                                             checked={formRoleIds().includes(role.id)}
                                                             onChange={() => toggleRole(role.id)}
-                                                            class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 dark:border-slate-600"
+                                                            class="w-4 h-4 text-blue-600 rounded border-border focus:ring-blue-500"
                                                         />
                                                         <span class="text-sm font-semibold text-base-content">
                                                             {role.name}
@@ -335,7 +332,7 @@ export const UserAssignmentsPanel: Component = () => {
                             <button
                                 type="button"
                                 onClick={() => setShowModal(false)}
-                                class="w-full sm:w-auto rounded-md px-4 py-2 text-sm font-medium text-base-content hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                class="w-full sm:w-auto rounded-md px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover transition-colors"
                             >
                                 Cancel
                             </button>
