@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -18,7 +17,7 @@ import (
 type LicenseHandlers struct {
 	mtPersistence *config.MultiTenantPersistence
 	hostedMode    bool
-	services      sync.Map // map[string]*pkglicensing.Service
+	services      sync.Map // map[string]*licenseService
 	trialLimiter  *RateLimiter
 }
 
@@ -34,12 +33,12 @@ func NewLicenseHandlers(mtp *config.MultiTenantPersistence, hostedMode bool) *Li
 
 // getTenantComponents resolves the license service and persistence for the current tenant.
 // It initializes them if they haven't been loaded yet.
-func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*pkglicensing.Service, *pkglicensing.Persistence, error) {
+func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseService, *licensePersistence, error) {
 	orgID := GetOrgID(ctx)
 
 	// Check if service already exists
 	if v, ok := h.services.Load(orgID); ok {
-		svc := v.(*pkglicensing.Service)
+		svc := v.(*licenseService)
 		if err := h.ensureEvaluatorForOrg(orgID, svc); err != nil {
 			log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to refresh license evaluator for org")
 		}
@@ -57,7 +56,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*pkglicensin
 		return nil, nil, err
 	}
 
-	service := pkglicensing.NewService()
+	service := newLicenseService()
 
 	if err := h.ensureEvaluatorForOrg(orgID, service); err != nil {
 		log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to initialize license evaluator for org")
@@ -84,7 +83,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*pkglicensin
 	return service, persistence, nil
 }
 
-func (h *LicenseHandlers) ensureEvaluatorForOrg(orgID string, service *pkglicensing.Service) error {
+func (h *LicenseHandlers) ensureEvaluatorForOrg(orgID string, service *licenseService) error {
 	if h == nil || service == nil || h.mtPersistence == nil {
 		return nil
 	}
@@ -97,8 +96,7 @@ func (h *LicenseHandlers) ensureEvaluatorForOrg(orgID string, service *pkglicens
 
 	// Hosted non-default tenants always consult billing state (fail-open).
 	if h.hostedMode && orgID != "default" && orgID != "" {
-		dbSource := pkglicensing.NewDatabaseSource(billingStore, orgID, time.Hour)
-		evaluator := pkglicensing.NewEvaluator(dbSource)
+		evaluator := newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, orgID, time.Hour)
 		service.SetEvaluator(evaluator)
 		return nil
 	}
@@ -114,31 +112,30 @@ func (h *LicenseHandlers) ensureEvaluatorForOrg(orgID string, service *pkglicens
 	}
 
 	// Billing state exists: wire evaluator without caching so UI updates immediately after writes.
-	dbSource := pkglicensing.NewDatabaseSource(billingStore, orgID, 0)
-	evaluator := pkglicensing.NewEvaluator(dbSource)
+	evaluator := newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, orgID, 0)
 	service.SetEvaluator(evaluator)
 	return nil
 }
 
-func (h *LicenseHandlers) getPersistenceForOrg(orgID string) (*pkglicensing.Persistence, error) {
+func (h *LicenseHandlers) getPersistenceForOrg(orgID string) (*licensePersistence, error) {
 	configPersistence, err := h.mtPersistence.GetPersistence(orgID)
 	if err != nil {
 		return nil, err
 	}
-	return pkglicensing.NewPersistence(configPersistence.GetConfigDir())
+	return newLicensePersistenceFromLicensing(configPersistence.GetConfigDir())
 }
 
 // Service returns the license service for use by other handlers.
 // NOTE: This now requires context to identify the tenant.
 // Handlers using this will need to be updated.
-func (h *LicenseHandlers) Service(ctx context.Context) *pkglicensing.Service {
+func (h *LicenseHandlers) Service(ctx context.Context) *licenseService {
 	svc, _, _ := h.getTenantComponents(ctx)
 	return svc
 }
 
 // FeatureService resolves a request-scoped feature checker.
 // This satisfies pkg/licensing.FeatureServiceResolver for reusable middleware.
-func (h *LicenseHandlers) FeatureService(ctx context.Context) pkglicensing.FeatureChecker {
+func (h *LicenseHandlers) FeatureService(ctx context.Context) licenseFeatureChecker {
 	if h == nil {
 		return nil
 	}
@@ -174,9 +171,9 @@ func (h *LicenseHandlers) HandleStartTrial(w http.ResponseWriter, r *http.Reques
 		writeErrorResponse(w, http.StatusInternalServerError, "billing_state_load_failed", "Failed to load billing state", nil)
 		return
 	}
-	decision := pkglicensing.EvaluateTrialStartEligibility(svc.Current() != nil && svc.IsValid(), existing)
+	decision := evaluateTrialStartEligibilityFromLicensing(svc.Current() != nil && svc.IsValid(), existing)
 	if !decision.Allowed {
-		code, message, includeOrgID := pkglicensing.TrialStartError(decision.Reason)
+		code, message, includeOrgID := trialStartErrorFromLicensing(decision.Reason)
 		details := map[string]string(nil)
 		if includeOrgID {
 			details = map[string]string{"org_id": orgID}
@@ -193,7 +190,7 @@ func (h *LicenseHandlers) HandleStartTrial(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	state := pkglicensing.BuildTrialBillingState(time.Now(), pkglicensing.TierFeatures[pkglicensing.TierPro])
+	state := buildProTrialBillingStateFromLicensing(time.Now())
 
 	if err := billingStore.SaveBillingState(orgID, state); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "billing_state_save_failed", "Failed to save billing state", nil)
@@ -203,7 +200,7 @@ func (h *LicenseHandlers) HandleStartTrial(w http.ResponseWriter, r *http.Reques
 	// Ensure the in-memory service reflects the trial immediately.
 	// Note: JWT licenses (if present) still take precedence over evaluator.
 	if svc.Current() == nil {
-		eval := pkglicensing.NewEvaluator(pkglicensing.NewDatabaseSource(billingStore, orgID, 0))
+		eval := newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, orgID, 0)
 		svc.SetEvaluator(eval)
 	}
 
@@ -233,7 +230,7 @@ func (h *LicenseHandlers) HandleLicenseStatus(w http.ResponseWriter, r *http.Req
 }
 
 // LicenseFeaturesResponse provides a minimal, non-admin license view for feature gating.
-type LicenseFeaturesResponse = pkglicensing.LicenseFeaturesResponse
+type LicenseFeaturesResponse = licenseFeaturesResponse
 
 // HandleLicenseFeatures handles GET /api/license/features
 // Returns license state and feature availability for authenticated users.
@@ -253,8 +250,8 @@ func (h *LicenseHandlers) HandleLicenseFeatures(w http.ResponseWriter, r *http.R
 	state, _ := service.GetLicenseState()
 	response := LicenseFeaturesResponse{
 		LicenseStatus: string(state),
-		Features:      pkglicensing.BuildFeatureMap(service, nil),
-		UpgradeURL:    pkglicensing.UpgradeURLForFeature(""),
+		Features:      buildFeatureMapFromLicensing(service),
+		UpgradeURL:    upgradeURLForFeatureFromLicensing(""),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -262,10 +259,10 @@ func (h *LicenseHandlers) HandleLicenseFeatures(w http.ResponseWriter, r *http.R
 }
 
 // ActivateLicenseRequest is the request body for activating a license.
-type ActivateLicenseRequest = pkglicensing.ActivateLicenseRequest
+type ActivateLicenseRequest = activateLicenseRequestModel
 
 // ActivateLicenseResponse is the response for license activation.
-type ActivateLicenseResponse = pkglicensing.ActivateLicenseResponse
+type ActivateLicenseResponse = activateLicenseResponseModel
 
 // HandleActivateLicense handles POST /api/license/activate
 // Validates and activates a license key.
@@ -384,17 +381,17 @@ func (h *LicenseHandlers) HandleClearLicense(w http.ResponseWriter, r *http.Requ
 //
 // NOTE: Direct 402 responses are intentionally centralized in this file to keep API behavior consistent.
 func writePaymentRequired(w http.ResponseWriter, payload map[string]interface{}) {
-	pkglicensing.WritePaymentRequired(w, payload)
+	writePaymentRequiredFromLicensing(w, payload)
 }
 
 func WriteLicenseRequired(w http.ResponseWriter, feature, message string) {
-	pkglicensing.WriteLicenseRequired(w, feature, message, pkglicensing.UpgradeURLForFeature)
+	writeLicenseRequiredFromLicensing(w, feature, message)
 }
 
 // RequireLicenseFeature is a middleware that checks if a license feature is available.
 // Returns HTTP 402 Payment Required if the feature is not licensed.
 // Note: Changed to take *LicenseHandlers to access service at runtime.
-func RequireLicenseFeature(resolver pkglicensing.FeatureServiceResolver, feature string, next http.HandlerFunc) http.HandlerFunc {
+func RequireLicenseFeature(resolver licenseFeatureServiceResolver, feature string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if resolver == nil {
 			WriteLicenseRequired(w, feature, "license service unavailable")
@@ -421,7 +418,7 @@ func RequireLicenseFeature(resolver pkglicensing.FeatureServiceResolver, feature
 // Use this instead of RequireLicenseFeature when the endpoint should return empty data
 // rather than a 402 error (to avoid breaking Promise.all in the frontend).
 // The X-License-Required header indicates upgrade is needed.
-func LicenseGatedEmptyResponse(resolver pkglicensing.FeatureServiceResolver, feature string, next http.HandlerFunc) http.HandlerFunc {
+func LicenseGatedEmptyResponse(resolver licenseFeatureServiceResolver, feature string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if resolver == nil {
 			w.Header().Set("Content-Type", "application/json")

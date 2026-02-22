@@ -24,7 +24,7 @@ func createTestHandler(t *testing.T) *LicenseHandlers {
 	return NewLicenseHandlers(mtp, false)
 }
 
-type licenseFeaturesResponse struct {
+type licenseFeaturesResponseDTO struct {
 	LicenseStatus string          `json:"license_status"`
 	Features      map[string]bool `json:"features"`
 	UpgradeURL    string          `json:"upgrade_url"`
@@ -55,7 +55,7 @@ func TestHandleLicenseFeatures_NoLicense(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
 
-	var resp licenseFeaturesResponse
+	var resp licenseFeaturesResponseDTO
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestHandleLicenseFeatures_WithActiveLicense(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
 
-	var resp licenseFeaturesResponse
+	var resp licenseFeaturesResponseDTO
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
