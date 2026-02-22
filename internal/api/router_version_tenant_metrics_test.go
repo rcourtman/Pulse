@@ -49,8 +49,8 @@ func TestGetTenantMonitor_FallbackOnError(t *testing.T) {
 	router := &Router{monitor: defaultMonitor, mtMonitor: mtm}
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, "../bad")
 
-	if got := router.getTenantMonitor(ctx); got != defaultMonitor {
-		t.Fatalf("expected fallback to default monitor")
+	if got := router.getTenantMonitor(ctx); got != nil {
+		t.Fatalf("expected nil monitor on tenant resolution error")
 	}
 }
 

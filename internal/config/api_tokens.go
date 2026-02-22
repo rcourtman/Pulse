@@ -129,14 +129,15 @@ func (r *APITokenRecord) Clone() APITokenRecord {
 
 // CanAccessOrg checks if this token is authorized to access the specified organization.
 // Returns true if:
-// - Token has no org binding (legacy wildcard access)
+// - Token has no org binding (legacy compatibility): default org only
 // - Token's OrgID matches the requested orgID
 // - Token's OrgIDs contains the requested orgID
 // - Requested orgID is "default" and token is explicitly bound to "default"
 func (r *APITokenRecord) CanAccessOrg(orgID string) bool {
-	// Legacy tokens (no org binding) have wildcard access during migration period
+	// Legacy tokens (no org binding) are restricted to the default org only.
+	// This prevents cross-tenant access by unscoped tokens.
 	if r.OrgID == "" && len(r.OrgIDs) == 0 {
-		return true
+		return orgID == "" || orgID == "default"
 	}
 
 	// Check multi-org binding first (takes precedence)

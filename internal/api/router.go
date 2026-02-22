@@ -273,6 +273,9 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	if r.tenantRateLimiter != nil {
 		handler = TenantRateLimitMiddleware(r.tenantRateLimiter)(handler)
 	}
+	// Security: fail closed for non-default org requests when tenant monitor resolution fails.
+	// Wrapped before TenantMiddleware so TenantMiddleware executes first and sets org context.
+	handler = r.tenantMonitorGuardMiddleware(handler)
 	handler = tenantMiddleware.Middleware(handler)
 
 	// Auth context middleware extracts user/token info BEFORE tenant middleware
@@ -281,6 +284,28 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	handler = UniversalRateLimitMiddleware(handler)
 	r.wrapped = handler
 	return r
+}
+
+func (r *Router) tenantMonitorGuardMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		orgID := strings.TrimSpace(GetOrgID(req.Context()))
+		if orgID == "" || orgID == "default" {
+			next.ServeHTTP(w, req)
+			return
+		}
+
+		if r.mtMonitor == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "tenant_unavailable", "Tenant monitor is not configured", nil)
+			return
+		}
+		monitor, err := r.mtMonitor.GetMonitor(orgID)
+		if err != nil || monitor == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "tenant_unavailable", "Tenant monitor is not available", nil)
+			return
+		}
+
+		next.ServeHTTP(w, req)
+	})
 }
 
 // setupRoutes configures all routes
@@ -901,29 +926,33 @@ func (h *AISettingsHandler) SetUnifiedResourceProvider(urp ai.UnifiedResourcePro
 }
 
 // getTenantMonitor returns the appropriate monitor for the current request's tenant.
-// It extracts the org ID from the request context and returns the corresponding monitor.
-// Falls back to the default monitor if multi-tenant is not configured or on error.
+// For non-default orgs, it fails closed when tenant monitor resolution fails.
 func (r *Router) getTenantMonitor(ctx context.Context) *monitoring.Monitor {
-	// Get org ID from context
 	orgID := GetOrgID(ctx)
 
-	// If multi-tenant monitor is configured, get the tenant-specific monitor
-	if r.mtMonitor != nil && orgID != "" {
-		monitor, err := r.mtMonitor.GetMonitor(orgID)
-		if err != nil {
-			log.Warn().
-				Err(err).
-				Str("org_id", orgID).
-				Msg("Failed to get tenant monitor, falling back to default")
-			return r.monitor
-		}
-		if monitor != nil {
-			return monitor
-		}
+	// Default/legacy path remains backward compatible.
+	if orgID == "" || orgID == "default" {
+		return r.monitor
 	}
 
-	// Fall back to the default monitor
-	return r.monitor
+	// Security: non-default orgs must never use the default monitor.
+	if r.mtMonitor == nil {
+		log.Warn().
+			Str("org_id", orgID).
+			Msg("Tenant monitor unavailable for non-default org request")
+		return nil
+	}
+
+	monitor, err := r.mtMonitor.GetMonitor(orgID)
+	if err != nil || monitor == nil {
+		log.Warn().
+			Err(err).
+			Str("org_id", orgID).
+			Msg("Failed to resolve tenant monitor for non-default org request")
+		return nil
+	}
+
+	return monitor
 }
 
 // SetConfig refreshes the configuration reference used by the router and dependent handlers.
@@ -4222,6 +4251,10 @@ func (r *Router) handleStorage(w http.ResponseWriter, req *http.Request) {
 
 	// Get tenant-specific monitor and current state
 	monitor := r.getTenantMonitor(req.Context())
+	if monitor == nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "tenant_unavailable", "Tenant monitor is not available", nil)
+		return
+	}
 	state := monitor.GetState()
 
 	// Find the storage by ID
@@ -4273,6 +4306,10 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 
 	// Get tenant-specific monitor and current state
 	monitor := r.getTenantMonitor(req.Context())
+	if monitor == nil {
+		http.Error(w, "Tenant monitor is not available", http.StatusInternalServerError)
+		return
+	}
 	state := monitor.GetState()
 	metricsStoreEnabled := monitor.GetMetricsStore() != nil
 	primarySourceHint := "memory"
@@ -5000,6 +5037,10 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 	duration := parseChartsRangeDuration(timeRange)
 
 	monitor := r.getTenantMonitor(req.Context())
+	if monitor == nil {
+		http.Error(w, "Tenant monitor is not available", http.StatusInternalServerError)
+		return
+	}
 	state := monitor.GetState()
 	metricsStoreEnabled := monitor.GetMetricsStore() != nil
 	primarySourceHint := "memory"
@@ -5851,6 +5892,10 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 	duration := parseChartsRangeDuration(timeRange)
 
 	monitor := r.getTenantMonitor(req.Context())
+	if monitor == nil {
+		http.Error(w, "Tenant monitor is not available", http.StatusInternalServerError)
+		return
+	}
 	state := monitor.GetState()
 	mockModeEnabled := mock.IsMockEnabled()
 	metricsStoreEnabled := monitor.GetMetricsStore() != nil

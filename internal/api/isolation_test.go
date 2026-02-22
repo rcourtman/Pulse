@@ -47,8 +47,8 @@ func TestGetTenantMonitor_Permanent(t *testing.T) {
 	mon := router.getTenantMonitor(req.Context())
 	assert.Equal(t, defaultMon, mon)
 
-	// Case 2: Tenant Context but NO MT Monitor -> Default Fallback
+	// Case 2: Tenant Context but NO MT Monitor -> fail closed
 	ctx := context.WithValue(req.Context(), OrgIDContextKey, "tenant-1")
 	mon = router.getTenantMonitor(ctx)
-	assert.Equal(t, defaultMon, mon, "Should fallback to default monitor if mtMonitor is nil/failed")
+	assert.Nil(t, mon, "Should fail closed for non-default org when tenant monitor is unavailable")
 }

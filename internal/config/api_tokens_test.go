@@ -15,10 +15,10 @@ func TestAPITokenRecord_CanAccessOrg(t *testing.T) {
 	}{
 		// Legacy / Wildcard
 		{
-			name:     "Legacy Token (No OrgID) - Access Random Org",
+			name:     "Legacy Token (No OrgID) - Access Random Org Denied",
 			token:    APITokenRecord{OrgID: ""},
 			orgID:    "any-org",
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "Legacy Token - Access Default",

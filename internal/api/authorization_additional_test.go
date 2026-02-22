@@ -15,8 +15,8 @@ func TestMultiTenantOrganizationLoader_NoPersistence(t *testing.T) {
 
 func TestDefaultAuthorizationChecker_CanAccessOrg_Default(t *testing.T) {
 	checker := NewAuthorizationChecker(nil)
-	if !checker.CanAccessOrg("user", nil, "default") {
-		t.Fatalf("expected default org access")
+	if checker.CanAccessOrg("user", nil, "default") {
+		t.Fatalf("expected default org access denial without organization loader")
 	}
 }
 

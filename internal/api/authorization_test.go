@@ -46,7 +46,8 @@ func TestDefaultAuthorizationChecker_TokenCanAccessOrg(t *testing.T) {
 
 	t.Run("wildcard legacy access", func(t *testing.T) {
 		token := &config.APITokenRecord{} // empty orgs = legacy
-		assert.True(t, checker.TokenCanAccessOrg(token, "tenant1"))
+		assert.False(t, checker.TokenCanAccessOrg(token, "tenant1"))
+		assert.True(t, checker.TokenCanAccessOrg(token, "default"))
 	})
 }
 
@@ -54,9 +55,9 @@ func TestDefaultAuthorizationChecker_UserCanAccessOrg(t *testing.T) {
 	ml := new(mockOrgLoader)
 	checker := NewAuthorizationChecker(ml)
 
-	t.Run("default org legacy fallback when metadata missing", func(t *testing.T) {
+	t.Run("default org denied when metadata missing", func(t *testing.T) {
 		ml.On("GetOrganization", "default").Return(nil, nil).Once()
-		assert.True(t, checker.UserCanAccessOrg("user1", "default"))
+		assert.False(t, checker.UserCanAccessOrg("user1", "default"))
 	})
 
 	t.Run("default org enforces membership when metadata configured", func(t *testing.T) {
@@ -74,7 +75,7 @@ func TestDefaultAuthorizationChecker_UserCanAccessOrg(t *testing.T) {
 
 	t.Run("missing loader", func(t *testing.T) {
 		badChecker := NewAuthorizationChecker(nil)
-		assert.True(t, badChecker.UserCanAccessOrg("user1", "default"))
+		assert.False(t, badChecker.UserCanAccessOrg("user1", "default"))
 		assert.False(t, badChecker.UserCanAccessOrg("user1", "acme"))
 	})
 
@@ -121,10 +122,10 @@ func TestDefaultAuthorizationChecker_CheckAccess(t *testing.T) {
 		assert.True(t, res.Allowed)
 		assert.False(t, res.IsLegacyToken)
 
-		tokenLegacy := &config.APITokenRecord{OrgID: ""} // Wildcard
+		tokenLegacy := &config.APITokenRecord{OrgID: ""} // Legacy default-only
 		res = checker.CheckAccess(tokenLegacy, "user1", "acme")
-		assert.True(t, res.Allowed)
-		assert.True(t, res.IsLegacyToken)
+		assert.False(t, res.Allowed)
+		assert.False(t, res.IsLegacyToken)
 
 		tokenDenied := &config.APITokenRecord{OrgID: "other"}
 		res = checker.CheckAccess(tokenDenied, "user1", "acme")
