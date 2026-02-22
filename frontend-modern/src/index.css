@@ -49,10 +49,32 @@
     --pulse-shell-max-width: min(97vw, 1560px);
     --pulse-shell-padding-inline: clamp(0.75rem, 1.2vw, 1.5rem);
     --pulse-panel-padding: clamp(0.75rem, 1.4vw, 1.25rem);
+
+    /* Semantic Colors - Light Mode */
+    --color-bg-base: theme('colors.slate.100');
+    --color-bg-surface: theme('colors.white');
+    --color-bg-surface-hover: theme('colors.slate.50');
+    --color-border-subtle: theme('colors.slate.100');
+    --color-border-base: theme('colors.slate.200');
+    --color-text-base: theme('colors.slate.900');
+    --color-text-muted: theme('colors.slate.500');
+  }
+
+  .dark {
+    /* Semantic Colors - Dark Mode */
+    --color-bg-base: theme('colors.slate.900');
+    --color-bg-surface: theme('colors.slate.800');
+    --color-bg-surface-hover: theme('colors.slate.750', #2d3748);
+    /* Fallback */
+    --color-border-subtle: theme('colors.slate.800');
+    --color-border-base: theme('colors.slate.700');
+    --color-text-base: theme('colors.slate.100');
+    --color-text-muted: theme('colors.slate.400');
   }
 
   body {
-    @apply bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100;
+    background-color: var(--color-bg-base);
+    color: var(--color-text-base);
     /* Ensure body scrollbar follows our styling */
     overflow-y: auto;
     overflow-x: hidden;
@@ -175,7 +197,7 @@
 
   /* Card styles */
   .card {
-    @apply bg-white dark:bg-slate-800 rounded-md shadow-sm border border-slate-200 dark:border-slate-700;
+    @apply bg-surface border-border shadow-sm rounded-md;
   }
 
   /* Table styles */

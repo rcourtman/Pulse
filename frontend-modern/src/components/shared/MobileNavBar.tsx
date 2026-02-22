@@ -143,7 +143,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
     <>
       {/* Bottom navigation bar */}
       <nav
-        class="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 md:hidden pb-safe"
+        class="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface md:hidden pb-safe"
       >
         <div class="relative">
           <div
@@ -161,7 +161,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
                   title={platform.tooltip}
                   class={`relative flex min-h-10 shrink-0 flex-col items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors ${props.activeTab() === platform.id
                     ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                    : 'text-slate-500 dark:text-slate-400'
+                    : 'text-muted'
                     } ${platform.enabled ? '' : 'opacity-70'}`}
                 >
                   <span class="relative flex items-center justify-center">
@@ -174,7 +174,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
                     </span>
                   </Show>
                   <Show when={platform.badge}>
-                    <span class="rounded-full bg-slate-200 px-1.5 py-0.5 text-[9px] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                    <span class="rounded-full bg-surface-hover px-1.5 py-0.5 text-[9px] font-semibold text-muted">
                       {platform.badge}
                     </span>
                   </Show>
@@ -191,7 +191,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
                   title={tab.tooltip}
                   class={`relative flex min-h-10 shrink-0 flex-col items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors ${props.activeTab() === tab.id
                     ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                    : 'text-slate-500 dark:text-slate-400'
+                    : 'text-muted'
                     }`}
                 >
                   <span class="relative flex items-center justify-center">

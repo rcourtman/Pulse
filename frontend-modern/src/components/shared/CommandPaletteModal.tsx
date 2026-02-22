@@ -212,8 +212,8 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
       panelClass="max-w-xl"
       ariaLabel="Command palette"
     >
-      <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-700">
-        <div class="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus-within:border-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus-within:border-blue-400">
+      <div class="border-b border-border px-5 py-4">
+        <div class="flex items-center gap-2 rounded-md border border-border bg-base px-3 py-2 text-sm text-base-content focus-within:border-blue-500">
           <svg class="h-4 w-4 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
@@ -232,9 +232,9 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
               }
             }}
             placeholder="Type a command or search..."
-            class="w-full bg-transparent text-sm text-slate-800 placeholder-gray-400 focus:outline-none dark:text-slate-100 dark:placeholder-gray-500"
+            class="w-full bg-transparent text-sm text-base-content placeholder-muted focus:outline-none"
           />
-          <span class="text-[11px] text-slate-400 dark:text-slate-500">Cmd+K</span>
+          <span class="text-[11px] text-muted">Cmd+K</span>
         </div>
       </div>
 
@@ -242,7 +242,7 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
         <Show
           when={filteredCommands().length > 0}
           fallback={
-            <div class="px-3 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+            <div class="px-3 py-8 text-center text-sm text-muted">
               No matches found.
             </div>
           }
@@ -251,19 +251,19 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
             {(command) => (
               <button
                 type="button"
-                class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 dark:text-slate-200 dark:hover:bg-blue-900"
+                class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-base-content hover:bg-surface-hover"
                 onClick={() => handleSelect(command)}
               >
                 <div>
                   <div class="font-medium">{command.label}</div>
                   <Show when={command.description}>
-                    <div class="text-xs text-slate-500 dark:text-slate-400">
+                    <div class="text-xs text-muted">
                       {command.description}
                     </div>
                   </Show>
                 </div>
                 <Show when={command.shortcut}>
-                  <span class="rounded bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-200">
+                  <span class="rounded bg-base px-2 py-1 text-[10px] font-medium text-base-content border border-border-subtle">
                     {command.shortcut}
                   </span>
                 </Show>

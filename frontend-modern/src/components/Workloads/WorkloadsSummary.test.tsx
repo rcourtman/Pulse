@@ -32,6 +32,22 @@ vi.mock('@/components/shared/InteractiveSparkline', () => ({
   },
 }));
 
+vi.mock('@/components/shared/DensityMap', () => ({
+  DensityMap: (props: { series?: Array<{ id?: string; name?: string; data?: Array<unknown> }> }) => {
+    const series = props.series ?? [];
+    const maxPoints = series.reduce((max, current) => Math.max(max, current.data?.length ?? 0), 0);
+    return (
+      <div
+        data-testid="sparkline"
+        data-series-count={series.length}
+        data-series-ids={series.map((current) => current.id || '').join('|')}
+        data-series-names={series.map((current) => current.name || '').join('|')}
+        data-max-points={maxPoints}
+      />
+    );
+  },
+}));
+
 const now = Date.now();
 const twoPointSeries = [
   { timestamp: now - 60_000, value: 12 },
@@ -104,7 +120,7 @@ describe('WorkloadsSummary performance behavior', () => {
     };
     localStorage.setItem(makeCacheKey('1h', ''), JSON.stringify(cachePayload));
 
-    mockGetWorkloadCharts.mockImplementationOnce(() => new Promise(() => {}));
+    mockGetWorkloadCharts.mockImplementationOnce(() => new Promise(() => { }));
 
     render(() => (
       <WorkloadsSummary

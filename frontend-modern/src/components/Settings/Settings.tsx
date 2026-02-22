@@ -2278,7 +2278,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             {group.label}
                           </p>
                         </Show>
-                        <div class="bg-white lg:bg-transparent dark:bg-[#1a1c23] lg:dark:bg-transparent border-y lg:border-none border-gray-200 dark:border-gray-800 divide-y lg:divide-y-0 divide-gray-100 dark:divide-gray-800 flex flex-col lg:space-y-1.5">
+                        <div class="bg-white lg:bg-transparent dark:bg-gray-900 lg:dark:bg-transparent border-y lg:border-none border-gray-200 dark:border-gray-800 divide-y lg:divide-y-0 divide-gray-100 dark:divide-gray-800 flex flex-col lg:space-y-1.5">
                           <For each={group.items}>
                             {(item) => {
                               const isActive = () => activeTab() === item.id;
@@ -2292,7 +2292,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                     } text-[15px] lg:text-sm font-medium transition-colors ${item.disabled
                                       ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-500'
                                       : isActive()
-                                        ? 'lg:bg-blue-50 text-blue-600 dark:lg:bg-blue-900 dark:text-blue-300 lg:dark:text-blue-200 bg-white dark:bg-[#1a1c23]'
+                                        ? 'lg:bg-blue-50 text-blue-600 dark:lg:bg-blue-900 dark:text-blue-300 lg:dark:text-blue-200 bg-white dark:bg-gray-900'
                                         : 'text-gray-700 lg:hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-gray-100 active:bg-gray-50 dark:active:bg-gray-800 lg:active:bg-transparent'
                                     }`}
                                   onClick={() => {

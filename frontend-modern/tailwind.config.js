@@ -17,6 +17,15 @@ export default {
     },
     extend: {
       colors: {
+        // Semantic design system mapped to index.css
+        base: 'var(--color-bg-base)',
+        surface: 'var(--color-bg-surface)',
+        'surface-hover': 'var(--color-bg-surface-hover)',
+        border: 'var(--color-border-base)',
+        'border-subtle': 'var(--color-border-subtle)',
+        'base-content': 'var(--color-text-base)',
+        muted: 'var(--color-text-muted)',
+
         gray: {
           750: '#2d3748',
         },

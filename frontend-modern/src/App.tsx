@@ -1793,7 +1793,7 @@ function AppLayout(props: {
       </Show>
       <div
         class={`header mb-3 flex items-center gap-2 ${kioskMode()
-          ? 'fixed top-0 left-0 right-0 z-50 justify-end bg-white dark:bg-slate-800  shadow-sm'
+          ? 'fixed top-0 left-0 right-0 z-50 justify-end bg-surface shadow-sm'
           : 'justify-between sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0'}`}
         style={kioskMode()
           ? {
@@ -1855,7 +1855,7 @@ function AppLayout(props: {
                   r="26"
                 />
               </svg>
-              <span class="text-lg font-medium text-slate-800 dark:text-slate-200">Pulse</span>
+              <span class="text-lg font-medium text-base-content">Pulse</span>
               <Show when={props.versionInfo()?.channel === 'rc'}>
                 <span class="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded font-bold">
                   RC
@@ -1881,7 +1881,7 @@ function AppLayout(props: {
                 onClick={toggleKioskMode}
                 class={`group relative flex h-11 w-11 items-center justify-center rounded-full text-xs transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10 ${kioskMode()
                   ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800'
-                  : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'
+                  : 'bg-surface-hover text-base-content hover:bg-border'
                   }`}
                 title={kioskMode() ? 'Exit kiosk mode (show navigation)' : 'Enter kiosk mode (hide navigation)'}
                 aria-label={kioskMode() ? 'Exit kiosk mode' : 'Enter kiosk mode'}
@@ -1892,14 +1892,14 @@ function AppLayout(props: {
                 </Show>
               </button>
               <Show when={props.proxyAuthInfo()?.username}>
-                <span class="text-xs px-2 py-1 text-slate-600 dark:text-slate-400">
+                <span class="text-xs px-2 py-1 text-muted">
                   {props.proxyAuthInfo()?.username}
                 </span>
               </Show>
               <button
                 type="button"
                 onClick={props.handleLogout}
-                class="group relative flex h-11 w-11 items-center justify-center rounded-full bg-slate-200 text-xs text-slate-700 transition hover:bg-slate-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
+                class="group relative flex h-11 w-11 items-center justify-center rounded-full bg-surface-hover text-xs text-base-content transition hover:bg-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10"
                 title="Logout"
                 aria-label="Logout"
               >
@@ -1932,7 +1932,7 @@ function AppLayout(props: {
       {/* Tabs - hidden in kiosk mode */}
       <Show when={!kioskMode()}>
         <div
-          class="tabs mb-2 hidden md:flex items-end gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-slate-300 dark:border-slate-700 scrollbar-hide"
+          class="tabs mb-2 hidden md:flex items-end gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-border scrollbar-hide"
           role="tablist"
           aria-label="Primary navigation"
         >
@@ -1946,12 +1946,12 @@ function AppLayout(props: {
 
                 const className = () => {
                   if (isActive()) {
-                    return `${baseClasses} bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border-slate-300 dark:border-slate-700 border-b border-b-white dark:border-b-gray-800 shadow-sm font-semibold`;
+                    return `${baseClasses} bg-surface text-blue-600 dark:text-blue-400 border-border border-b border-b-surface shadow-sm font-semibold`;
                   }
                   if (disabled()) {
-                    return `${baseClasses} cursor-not-allowed text-slate-400 dark:text-slate-600 opacity-70 bg-slate-100 dark:bg-slate-800`;
+                    return `${baseClasses} cursor-not-allowed text-muted opacity-70 bg-base`;
                   }
-                  return `${baseClasses} text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700`;
+                  return `${baseClasses} text-muted hover:text-base-content hover:bg-surface-hover`;
                 };
 
                 const title = () =>
@@ -1971,7 +1971,7 @@ function AppLayout(props: {
                     <span class="hidden xs:inline-flex items-center gap-1">
                       <span>{platform.label}</span>
                       <Show when={platform.badge}>
-                        <span class="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 bg-slate-200 dark:bg-slate-800 rounded">
+                        <span class="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted bg-surface-hover rounded">
                           {platform.badge}
                         </span>
                       </Show>
@@ -1992,9 +1992,9 @@ function AppLayout(props: {
 
                   const className = () => {
                     if (isActive()) {
-                      return `${baseClasses} bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border-slate-300 dark:border-slate-700 border-b border-b-white dark:border-b-gray-800 shadow-sm font-semibold`;
+                      return `${baseClasses} bg-surface text-blue-600 dark:text-blue-400 border-border border-b border-b-surface shadow-sm font-semibold`;
                     }
-                    return `${baseClasses} text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700`;
+                    return `${baseClasses} text-muted hover:text-base-content hover:bg-surface-hover`;
                   };
 
                   return (

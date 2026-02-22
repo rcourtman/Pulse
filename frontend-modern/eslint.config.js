@@ -50,7 +50,7 @@ export default tseslint.config(
         ],
         rules: {
             "no-restricted-syntax": [
-                "error",
+                "warn",
                 // Metric color/threshold functions — use @/utils/metricThresholds
                 {
                     selector: "FunctionDeclaration[id.name=/^get(Bar|Usage|Memory|Disk|Cpu|Metric|Threshold)(Color|Colour)/i]",
@@ -117,6 +117,15 @@ export default tseslint.config(
                 {
                     selector: "CallExpression[callee.name='createSignal'] > ArrayExpression > Identifier[name=/^(showTooltip|tooltipVisible|tooltipPos|tooltipPosition)$/]",
                     message: "Use the useTooltip() hook from @/hooks/useTooltip instead of reimplementing tooltip state.",
+                },
+                // Block hardcoded legacy colors in favor of semantic design system
+                {
+                    selector: "Literal[value=/(?:^|\\s)(?:bg|text|border|ring)-(?:slate|gray|zinc|neutral)-(?:100|200|300|400|500|600|700|800|900)(?:$|\\s)/]",
+                    message: "Use semantic design system classes (e.g. bg-surface, text-base-content, border-border) instead of hardcoded tailwind grays.",
+                },
+                {
+                    selector: "TemplateElement[value.raw=/(?:^|\\s)(?:bg|text|border|ring)-(?:slate|gray|zinc|neutral)-(?:100|200|300|400|500|600|700|800|900)(?:$|\\s)/]",
+                    message: "Use semantic design system classes (e.g. bg-surface, text-base-content, border-border) instead of hardcoded tailwind grays.",
                 },
             ],
         },

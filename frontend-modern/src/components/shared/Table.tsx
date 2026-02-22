@@ -21,7 +21,7 @@ export type TableHeaderProps = JSX.HTMLAttributes<HTMLTableSectionElement>;
 export function TableHeader(props: TableHeaderProps) {
     const [local, rest] = splitProps(props, ['class', 'children']);
     return (
-        <thead class={`bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 ${local.class || ''}`} {...rest}>
+        <thead class={`bg-surface text-muted border-b border-border ${local.class || ''}`} {...rest}>
             {local.children}
         </thead>
     );
@@ -32,7 +32,7 @@ export type TableBodyProps = JSX.HTMLAttributes<HTMLTableSectionElement>;
 export function TableBody(props: TableBodyProps) {
     const [local, rest] = splitProps(props, ['class', 'children']);
     return (
-        <tbody class={`divide-y divide-slate-200 dark:divide-slate-700 ${local.class || ''}`} {...rest}>
+        <tbody class={`divide-y divide-border ${local.class || ''}`} {...rest}>
             {local.children}
         </tbody>
     );
@@ -43,7 +43,7 @@ export type TableRowProps = JSX.HTMLAttributes<HTMLTableRowElement>;
 export function TableRow(props: TableRowProps) {
     const [local, rest] = splitProps(props, ['class', 'children']);
     return (
-        <tr class={`group transition-colors duration-150 hover:bg-slate-50 dark:hover:bg-slate-700 ${local.class || ''}`} {...rest}>
+        <tr class={`group transition-colors duration-150 hover:bg-surface-hover ${local.class || ''}`} {...rest}>
             {local.children}
         </tr>
     );

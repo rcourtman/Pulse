@@ -16,7 +16,7 @@ export default function Dashboard() {
 
   // REST-backed resources: instant first paint, no WebSocket wait.
   const dashboardResources = useUnifiedResources({ query: '', cacheKey: 'dashboard-all' });
-  const resources = createMemo(() => dashboardResources.resources() ?? []);
+  const resources = createMemo(() => dashboardResources.resources?.() ?? []);
 
   const alertsList = createMemo<Alert[]>(() =>
     Object.values(activeAlerts as Record<string, Alert | undefined>).filter((a): a is Alert => a !== undefined),
@@ -69,7 +69,7 @@ export default function Dashboard() {
   });
 
   const isEmpty = createMemo(
-    () => !isLoading() && !hasConnectionError() && resources().length === 0,
+    () => !isLoading() && !hasConnectionError() && (resources()?.length ?? 0) === 0,
   );
 
   const storageCapacityPercent = createMemo(() => {

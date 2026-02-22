@@ -11,14 +11,14 @@ type CardProps = {
 } & JSX.HTMLAttributes<HTMLDivElement>;
 
 const toneClassMap: Record<Tone, string> = {
-  default: 'bg-white dark:bg-slate-800',
-  muted: 'bg-slate-50 dark:bg-slate-900',
+  default: 'bg-surface',
+  muted: 'bg-base',
   info: 'bg-blue-50 dark:bg-blue-900',
   success: 'bg-emerald-50 dark:bg-emerald-900',
   warning: 'bg-amber-50 dark:bg-amber-900',
   danger: 'bg-red-50 dark:bg-red-900',
-  card: 'bg-white dark:bg-slate-800',
-  glass: 'bg-slate-50 dark:bg-slate-900',
+  card: 'bg-surface',
+  glass: 'bg-base',
 };
 
 const paddingClassMap: Record<Padding, string> = {
@@ -38,8 +38,8 @@ export function Card(props: CardProps) {
   const baseClass = 'rounded-md transition-shadow duration-200 max-w-full';
   const toneClass = toneClassMap[local.tone];
   const paddingClass = paddingClassMap[local.padding];
-  const borderClass = local.border ? 'border border-slate-200 dark:border-slate-700' : '';
-  const hoverClass = local.hoverable ? '' : '';
+  const borderClass = local.border ? 'border border-border' : '';
+  const hoverClass = local.hoverable ? 'hover:bg-surface-hover' : '';
 
   return (
     <div

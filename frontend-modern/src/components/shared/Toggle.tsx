@@ -44,10 +44,10 @@ export function TogglePrimitive(props: BaseToggleProps): JSX.Element {
   const size = props.size ?? 'sm';
   const config = sizeConfig[size];
   const isDisabled = () => Boolean(props.disabled);
-  const checkedClass = 'bg-blue-500 dark:bg-blue-500';
-  const uncheckedClass = 'bg-slate-200 dark:bg-slate-700';
-  const disabledClass = 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed opacity-50';
-  const knobBase = 'bg-white border border-slate-100 dark:border-slate-200';
+  const checkedClass = 'bg-blue-500';
+  const uncheckedClass = 'bg-border';
+  const disabledClass = 'bg-base cursor-not-allowed opacity-50';
+  const knobBase = 'bg-surface border border-border-subtle';
 
   const handleClick = () => {
     if (isDisabled()) return;
@@ -107,10 +107,10 @@ export function Toggle(props: LabeledToggleProps) {
     <div class={`flex items-center gap-3 ${props.containerClass ?? ''}`.trim()}>
       <TogglePrimitive {...props} size={size} />
       {(props.label || props.description) && (
-        <span class="flex flex-col text-sm text-slate-700 dark:text-slate-300">
+        <span class="flex flex-col text-sm text-base-content">
           {props.label}
           {props.description && (
-            <span class="text-xs text-slate-500 dark:text-slate-400">{props.description}</span>
+            <span class="text-xs text-muted">{props.description}</span>
           )}
         </span>
       )}
