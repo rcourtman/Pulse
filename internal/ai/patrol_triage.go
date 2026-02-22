@@ -10,6 +10,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // TriageFlag represents a single deterministic issue detected during triage.
@@ -344,8 +345,17 @@ func triageBackupChecks(state models.StateSnapshot, scopedSet map[string]bool) [
 func triageDiskHealthChecks(state models.StateSnapshot, scopedSet map[string]bool) []TriageFlag {
 	flags := make([]TriageFlag, 0)
 
-	for _, d := range state.PhysicalDisks {
-		resourceID := d.ID
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(state)
+	physicalDisks := registry.ListByType(unifiedresources.ResourceTypePhysicalDisk)
+
+	for _, disk := range physicalDisks {
+		if disk.PhysicalDisk == nil {
+			continue
+		}
+
+		d := disk.PhysicalDisk
+		resourceID := disk.ID
 		if resourceID == "" {
 			resourceID = d.DevPath
 		}
@@ -354,6 +364,9 @@ func triageDiskHealthChecks(state models.StateSnapshot, scopedSet map[string]boo
 		}
 
 		resourceName := d.DevPath
+		if resourceName == "" {
+			resourceName = disk.Name
+		}
 		if resourceName == "" {
 			resourceName = d.Model
 		}

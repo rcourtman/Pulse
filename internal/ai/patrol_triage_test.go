@@ -140,16 +140,22 @@ func TestTriageDiskHealthChecks(t *testing.T) {
 		t.Fatalf("expected 3 disk-health flags, got %d", len(flags))
 	}
 
-	if triageFindFlag(flags, func(f TriageFlag) bool { return f.ResourceID == "disk-1" && f.Severity == "critical" }) == nil {
-		t.Fatalf("expected critical health flag for disk-1")
+	if triageFindFlag(flags, func(f TriageFlag) bool {
+		return f.Severity == "critical" && strings.Contains(f.Reason, "Disk health reported FAILED")
+	}) == nil {
+		t.Fatalf("expected critical health flag for failed disk")
 	}
-	if triageFindFlag(flags, func(f TriageFlag) bool { return f.ResourceID == "disk-2" && strings.Contains(f.Reason, "remaining") }) == nil {
-		t.Fatalf("expected wearout warning for disk-2")
+	if triageFindFlag(flags, func(f TriageFlag) bool {
+		return f.Severity == "warning" && strings.Contains(f.Reason, "wearout at 15% remaining")
+	}) == nil {
+		t.Fatalf("expected wearout warning for 15%% remaining")
 	}
-	if triageFindFlag(flags, func(f TriageFlag) bool { return f.ResourceID == "disk-3" && strings.Contains(f.Reason, "temperature") }) == nil {
-		t.Fatalf("expected temperature warning for disk-3")
+	if triageFindFlag(flags, func(f TriageFlag) bool {
+		return f.Severity == "warning" && strings.Contains(f.Reason, "Disk temperature 60")
+	}) == nil {
+		t.Fatalf("expected temperature warning for 60C disk")
 	}
-	if triageFindFlag(flags, func(f TriageFlag) bool { return f.ResourceID == "disk-4" }) != nil {
+	if triageFindFlag(flags, func(f TriageFlag) bool { return strings.Contains(f.Reason, "wearout at 85% remaining") }) != nil {
 		t.Fatalf("did not expect wearout flag for disk-4 (85%% remaining)")
 	}
 }

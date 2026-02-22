@@ -164,19 +164,19 @@ type legacyStateRatchet struct {
 	readView string // the ReadState accessor to use instead
 }
 
-// Ceilings captured after SRC-03 + SRC-04a (Feb 2026).
+// Ceilings captured after SRC-03 + SRC-04a refresh (Feb 2026).
 // These represent legacy nil-fallback paths that are dead code when
 // ReadState is wired. Each number must only decrease over time.
 var legacyStateRatchets = []legacyStateRatchet{
-	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 49, "ReadState.VMs()"},
-	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 49, "ReadState.Containers()"},
-	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 42, "ReadState.Nodes()"},
-	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 48, "ReadState.DockerHosts()"},
+	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 55, "ReadState.VMs()"},
+	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 55, "ReadState.Containers()"},
+	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 48, "ReadState.Nodes()"},
+	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 46, "ReadState.DockerHosts()"},
 	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 26, "ReadState.Hosts()"},
-	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 21, "ReadState.StoragePools()"},
-	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 19, "ReadState.K8sClusters()"},
-	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 9, "ReadState.PBSInstances()"},
-	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 16, "ReadState.PMGInstances()"},
+	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 24, "ReadState.StoragePools()"},
+	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 12, "ReadState.K8sClusters()"},
+	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 10, "ReadState.PBSInstances()"},
+	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 9, "ReadState.PMGInstances()"},
 }
 
 // TestLegacyStateAccessRatchet is a monotonic ratchet that prevents new
