@@ -343,6 +343,9 @@ Triggers a test alert to all configured channels.
 - `POST /api/admin/webhooks/audit` (admin, `settings:write`)
   - Body: `{ "urls": ["https://..."] }`
   - Strict JSON contract: unknown fields and trailing payload are rejected.
+  - Maximum `20` webhook URLs per update request.
+  - URLs are normalized (trimmed) and duplicate entries are ignored.
+  - Endpoint fails closed if URL validation runtime is unavailable.
 
 ### Advanced Reporting (Pro)
 - `GET /api/admin/reports/generate` (admin, `settings:read`)
