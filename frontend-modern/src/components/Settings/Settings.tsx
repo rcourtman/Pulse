@@ -2192,109 +2192,109 @@ const Settings: Component<SettingsProps> = (props) => {
         <Card padding="none" class="relative flex lg:flex-row overflow-hidden min-h-[600px]">
           {/* Settings Sidebar / Mobile Drill-Down Menu */}
           <div
-            class={`${isMobileMenuOpen() ? 'flex flex-col w-full' : 'hidden lg:flex lg:flex-col'} ${sidebarCollapsed() ? 'lg:w-16 lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-border lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-200 bg-white dark:bg-gray-900 lg:bg-transparent z-10`}
+            class={`${isMobileMenuOpen() ? 'flex flex-col w-full' : 'hidden lg:flex lg:flex-col'} ${sidebarCollapsed() ? 'lg:w-16 lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-border lg:border-b-0 lg:border-r lg: dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-200 bg-white dark:bg-gray-900 lg:bg-transparent z-10`}
             aria-label="Settings navigation"
             aria-expanded={!sidebarCollapsed()}
           >
             <div
               class={`sticky top-0 ${sidebarCollapsed() ? 'px-2' : 'px-4'} py-5 space-y-5 transition-all duration-200`}
-            >
-              <Show when={!sidebarCollapsed()}>
-                <div class="flex items-center justify-between pb-2 border-b border-border">
-                  <h2 class="text-sm font-semibold text-base-content">Settings</h2>
-                  <button
-                    type="button"
-                    onClick={() => setSidebarCollapsed(true)}
-                    class="p-1 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                    aria-label="Collapse sidebar"
-                  >
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </Show>
-              <Show when={sidebarCollapsed()}>
-                <button
-                  type="button"
-                  onClick={() => setSidebarCollapsed(false)}
-                  class="w-full p-2 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                  aria-label="Expand sidebar"
-                >
-                  <svg
-                    class="w-5 h-5 mx-auto"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M13 5l7 7-7 7M5 5l7 7-7 7"
-                    />
-                  </svg>
-                </button>
-              </Show>
-              <div id="settings-sidebar-menu" class="space-y-4">
-                <Show when={!sidebarCollapsed()}>
-                  <div class="px-2 pb-2">
-                    <div class="relative group">
-                      <Search class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                      <input
-                        ref={searchInputRef}
-                        type="search"
-                        placeholder="Search settings..."
-                        value={searchQuery()}
-                        onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                        class="w-full pl-9 pr-3 py-1.5 bg-surface-alt border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm text-base-content placeholder-gray-400"
-                      />
-                      <Show when={!searchQuery()}>
-                        <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:flex items-center">
-                          <kbd class="px-1.5 py-0.5 text-[10px] font-semibold text-muted bg-surface-alt rounded border border-border">Any key</kbd>
-                        </div>
-                      </Show>
-                    </div>
-                  </div>
-                </Show>
+ >
+ <Show when={!sidebarCollapsed()}>
+ <div class="flex items-center justify-between pb-2 border-b border-border">
+ <h2 class="text-sm font-semibold text-base-content">Settings</h2>
+ <button
+ type="button"
+ onClick={() => setSidebarCollapsed(true)}
+ class="p-1 rounded-md hover: dark:hover:bg-gray-800 transition-colors"
+ aria-label="Collapse sidebar"
+ >
+ <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+ <path
+ stroke-linecap="round"
+ stroke-linejoin="round"
+ stroke-width="2"
+ d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+ />
+ </svg>
+ </button>
+ </div>
+ </Show>
+ <Show when={sidebarCollapsed()}>
+ <button
+ type="button"
+ onClick={() => setSidebarCollapsed(false)}
+ class="w-full p-2 rounded-md hover: dark:hover:bg-gray-800 transition-colors"
+ aria-label="Expand sidebar"
+ >
+ <svg
+ class="w-5 h-5 mx-auto"
+ fill="none"
+ viewBox="0 0 24 24"
+ stroke="currentColor"
+ >
+ <path
+ stroke-linecap="round"
+ stroke-linejoin="round"
+ stroke-width="2"
+ d="M13 5l7 7-7 7M5 5l7 7-7 7"
+ />
+ </svg>
+ </button>
+ </Show>
+ <div id="settings-sidebar-menu" class="space-y-4">
+ <Show when={!sidebarCollapsed()}>
+ <div class="px-2 pb-2">
+ <div class="relative group">
+ <Search class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 group-focus-within:text-blue-500 transition-colors" />
+ <input
+ ref={searchInputRef}
+ type="search"
+ placeholder="Search settings..."
+ value={searchQuery()}
+ onInput={(e) => setSearchQuery(e.currentTarget.value)}
+ class="w-full pl-9 pr-3 py-1.5 bg-surface-alt border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm text-base-content placeholder-gray-400"
+ />
+ <Show when={!searchQuery()}>
+ <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:flex items-center">
+ <kbd class="px-1.5 py-0.5 text-[10px] font-semibold text-muted bg-surface-alt rounded border border-border">Any key</kbd>
+ </div>
+ </Show>
+ </div>
+ </div>
+ </Show>
 
-                <Show when={searchQuery().trim().length > 0 && filteredTabGroups().length === 0}>
-                  <div class="py-4 px-4 text-center text-sm text-muted">
-                    No settings found for "{searchQuery()}"
-                  </div>
-                </Show>
+ <Show when={searchQuery().trim().length > 0 && filteredTabGroups().length === 0}>
+ <div class="py-4 px-4 text-center text-sm text-muted">
+ No settings found for "{searchQuery()}"
+ </div>
+ </Show>
 
-                <For each={filteredTabGroups()}>
-                  {(group) => {
-                    return (
-                      <div class="mb-6 lg:mb-2 lg:space-y-2">
-                        <Show when={!sidebarCollapsed()}>
-                          <p class="px-4 lg:px-0 mb-2 lg:mb-0 text-[13px] lg:text-xs font-[500] uppercase tracking-wider text-muted">
-                            {group.label}
-                          </p>
-                        </Show>
-                        <div class="bg-white lg:bg-transparent dark:bg-gray-900 lg:dark:bg-transparent border-y lg:border-none border-gray-200 dark:border-gray-800 divide-y lg:divide-y-0 divide-gray-100 dark:divide-gray-800 flex flex-col lg:space-y-1.5">
-                          <For each={group.items}>
-                            {(item) => {
-                              const isActive = () => activeTab() === item.id;
-                              return (
-                                <button
-                                  type="button"
-                                  aria-current={isActive() ? 'page' : undefined}
+ <For each={filteredTabGroups()}>
+ {(group) => {
+ return (
+ <div class="mb-6 lg:mb-2 lg:space-y-2">
+ <Show when={!sidebarCollapsed()}>
+ <p class="px-4 lg:px-0 mb-2 lg:mb-0 text-[13px] lg:text-xs font-[500] uppercase tracking-wider text-muted">
+ {group.label}
+ </p>
+ </Show>
+ <div class=" lg:bg-transparent dark:bg-gray-900 lg:dark:bg-transparent border-y lg:border-none divide-y lg:divide-y-0 divide-gray-100 dark:divide-gray-800 flex flex-col lg:space-y-1.5">
+ <For each={group.items}>
+ {(item) => {
+ const isActive = () => activeTab() === item.id;
+ return (
+ <button
+ type="button"
+ aria-current={isActive() ?'page' : undefined}
                                   disabled={item.disabled}
                                   class={`group flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'justify-between'
-                                    } lg:rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-4 py-3.5 lg:px-3 lg:py-2'
-                                    } text-[15px] lg:text-sm font-medium transition-colors ${item.disabled
-                                      ? 'opacity-60 cursor-not-allowed text-muted'
-                                      : isActive()
-                                        ? 'lg:bg-blue-50 text-blue-600 dark:lg:bg-blue-900 dark:text-blue-300 lg:dark:text-blue-200 bg-white dark:bg-gray-900'
-                                        : 'text-gray-700 lg:hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-gray-100 active:bg-gray-50 dark:active:bg-gray-800 lg:active:bg-transparent'
-                                    }`}
+ } lg:rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-4 py-3.5 lg:px-3 lg:py-2'
+ } text-[15px] lg:text-sm font-medium transition-colors ${item.disabled
+ ? 'opacity-60 cursor-not-allowed text-muted'
+ : isActive()
+ ? 'lg:bg-blue-50 text-blue-600 dark:lg:bg-blue-900 dark:text-blue-300 lg:dark:text-blue-200 bg-white dark:bg-gray-900'
+ : 'text-gray-700 lg:hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-700 dark:hover:text-gray-100 active:bg-gray-50 dark:active:bg-gray-800 lg:active:bg-transparent'
+ }`}
                                   onClick={() => {
                                     if (item.disabled) return;
                                     setActiveTab(item.id);
@@ -2332,7 +2332,7 @@ const Settings: Component<SettingsProps> = (props) => {
           {/* Settings Content Area */}
           <div class={`flex-1 overflow-hidden ${isMobileMenuOpen() ? 'hidden lg:block' : 'block animate-slideInRight lg:animate-none'}`}>
             <Show when={flatTabs.length > 0}>
-              <div class="lg:hidden sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95  border-b border-border-subtle px-3 py-2.5 flex items-center shadow-none">
+              <div class="lg:hidden sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95 border-b border-border-subtle px-3 py-2.5 flex items-center shadow-none">
                 <button
                   type="button"
                   onClick={() => setIsMobileMenuOpen(true)}
@@ -2637,57 +2637,57 @@ const Settings: Component<SettingsProps> = (props) => {
                                   status: 'pending',
                                 } as NodeConfigWithStatus);
                                 setCurrentNodeType('pve');
-                                setShowNodeModal(true);
-                              }}
-                            >
-                              <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                                <div class="flex-1 min-w-0">
-                                  <div class="flex items-start gap-3">
-                                    <div class="flex-shrink-0 w-3 h-3 mt-1.5 rounded-full bg-gray-400 animate-pulse"></div>
-                                    <div class="flex-1 min-w-0">
-                                      <h4 class="font-medium text-base-content">
-                                        {server.hostname || `Proxmox VE at ${server.ip}`}
-                                      </h4>
-                                      <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
-                                        {server.ip}:{server.port}
-                                      </p>
-                                      <div class="flex items-center gap-2 mt-2">
-                                        <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400 rounded">
-                                          Discovered
-                                        </span>
-                                        <span class="text-xs text-muted">
-                                          Click to configure
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                                <svg
-                                  width="20"
-                                  height="20"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  class="text-gray-400 mt-1"
-                                >
-                                  <path
-                                    d="M12 5v14m-7-7h14"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                    stroke-linecap="round"
-                                  />
-                                </svg>
-                              </div>
-                            </div>
-                          )}
-                        </For>
-                      </div>
-                    </Show>
-                  </div>
-                </div>
-              </Show>
+ setShowNodeModal(true);
+ }}
+ >
+ <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+ <div class="flex-1 min-w-0">
+ <div class="flex items-start gap-3">
+ <div class="flex-shrink-0 w-3 h-3 mt-1.5 rounded-full bg-gray-400 animate-pulse"></div>
+ <div class="flex-1 min-w-0">
+ <h4 class="font-medium text-base-content">
+ {server.hostname || `Proxmox VE at ${server.ip}`}
+ </h4>
+ <p class="text-sm mt-1">
+ {server.ip}:{server.port}
+ </p>
+ <div class="flex items-center gap-2 mt-2">
+ <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400 rounded">
+ Discovered
+ </span>
+ <span class="text-xs text-muted">
+ Click to configure
+ </span>
+ </div>
+ </div>
+ </div>
+ </div>
+ <svg
+ width="20"
+ height="20"
+ viewBox="0 0 24 24"
+ fill="none"
+ class=" mt-1"
+ >
+ <path
+ d="M12 5v14m-7-7h14"
+ stroke="currentColor"
+ stroke-width="2"
+ stroke-linecap="round"
+ />
+ </svg>
+ </div>
+ </div>
+ )}
+ </For>
+ </div>
+ </Show>
+ </div>
+ </div>
+ </Show>
 
-              {/* PBS Nodes Tab */}
-              <Show when={activeTab() === 'proxmox' && selectedAgent() === 'pbs'}>
+ {/* PBS Nodes Tab */}
+ <Show when={activeTab() ==='proxmox' && selectedAgent() === 'pbs'}>
                 <div class="space-y-6 mt-6">
                   <div class="space-y-4">
                     <Show when={!initialLoadComplete()}>
@@ -2925,56 +2925,56 @@ const Settings: Component<SettingsProps> = (props) => {
                                   status: 'pending',
                                 } as NodeConfigWithStatus);
                                 setCurrentNodeType('pbs');
-                                setShowNodeModal(true);
-                              }}
-                            >
-                              <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                                <div class="flex-1 min-w-0">
-                                  <div class="flex items-start gap-3">
-                                    <div class="flex-shrink-0 w-3 h-3 mt-1.5 rounded-full bg-gray-400 animate-pulse"></div>
-                                    <div class="flex-1 min-w-0">
-                                      <h4 class="font-medium text-base-content">
-                                        {server.hostname || `Backup Server at ${server.ip}`}
-                                      </h4>
-                                      <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
-                                        {server.ip}:{server.port}
-                                      </p>
-                                      <div class="flex items-center gap-2 mt-2">
-                                        <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400 rounded">
-                                          Discovered
-                                        </span>
-                                        <span class="text-xs text-muted">
-                                          Click to configure
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                                <svg
-                                  width="20"
-                                  height="20"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  class="text-gray-400 mt-1"
-                                >
-                                  <path
-                                    d="M12 5v14m-7-7h14"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                    stroke-linecap="round"
-                                  />
-                                </svg>
-                              </div>
-                            </div>
-                          )}
-                        </For>
-                      </div>
-                    </Show>
-                  </div>
-                </div>
-              </Show>
-              {/* PMG Nodes Tab */}
-              <Show when={activeTab() === 'proxmox' && selectedAgent() === 'pmg'}>
+ setShowNodeModal(true);
+ }}
+ >
+ <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+ <div class="flex-1 min-w-0">
+ <div class="flex items-start gap-3">
+ <div class="flex-shrink-0 w-3 h-3 mt-1.5 rounded-full bg-gray-400 animate-pulse"></div>
+ <div class="flex-1 min-w-0">
+ <h4 class="font-medium text-base-content">
+ {server.hostname || `Backup Server at ${server.ip}`}
+ </h4>
+ <p class="text-sm mt-1">
+ {server.ip}:{server.port}
+ </p>
+ <div class="flex items-center gap-2 mt-2">
+ <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400 rounded">
+ Discovered
+ </span>
+ <span class="text-xs text-muted">
+ Click to configure
+ </span>
+ </div>
+ </div>
+ </div>
+ </div>
+ <svg
+ width="20"
+ height="20"
+ viewBox="0 0 24 24"
+ fill="none"
+ class=" mt-1"
+ >
+ <path
+ d="M12 5v14m-7-7h14"
+ stroke="currentColor"
+ stroke-width="2"
+ stroke-linecap="round"
+ />
+ </svg>
+ </div>
+ </div>
+ )}
+ </For>
+ </div>
+ </Show>
+ </div>
+ </div>
+ </Show>
+ {/* PMG Nodes Tab */}
+ <Show when={activeTab() ==='proxmox' && selectedAgent() === 'pmg'}>
                 <div class="space-y-6 mt-6">
                   <div class="space-y-4">
                     <Show when={!initialLoadComplete()}>
@@ -3208,66 +3208,66 @@ const Settings: Component<SettingsProps> = (props) => {
                                   if (hostInput) {
                                     hostInput.value = server.ip;
                                     hostInput.dispatchEvent(new Event('input', { bubbles: true }));
-                                  }
-                                }, 50);
-                              }}
-                            >
-                              <div class="flex items-start justify-between">
-                                <div class="flex items-start gap-3 flex-1 min-w-0">
-                                  <svg
-                                    width="24"
-                                    height="24"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                    class="text-purple-500 flex-shrink-0 mt-0.5"
-                                  >
-                                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                                    <polyline points="22,6 12,13 2,6"></polyline>
-                                  </svg>
-                                  <div class="flex-1 min-w-0">
-                                    <h4 class="font-medium text-base-content truncate">
-                                      {server.hostname || `PMG at ${server.ip}`}
-                                    </h4>
-                                    <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
-                                      {server.ip}:{server.port}
-                                    </p>
-                                    <div class="flex items-center gap-2 mt-2">
-                                      <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400 rounded">
-                                        Discovered
-                                      </span>
-                                      <span class="text-xs text-muted">
-                                        Click to configure
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <svg
-                                  width="20"
-                                  height="20"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  class="text-gray-400 mt-1"
-                                >
-                                  <path
-                                    d="M12 5v14m-7-7h14"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                    stroke-linecap="round"
-                                  />
-                                </svg>
-                              </div>
-                            </div>
-                          )}
-                        </For>
-                      </div>
-                    </Show>
-                  </div>
-                </div>
-              </Show>
-              {/* Unified Agents Tab */}
-              <Show when={activeTab() === 'agents'}>
+ }
+ }, 50);
+ }}
+ >
+ <div class="flex items-start justify-between">
+ <div class="flex items-start gap-3 flex-1 min-w-0">
+ <svg
+ width="24"
+ height="24"
+ viewBox="0 0 24 24"
+ fill="none"
+ stroke="currentColor"
+ stroke-width="2"
+ class="text-purple-500 flex-shrink-0 mt-0.5"
+ >
+ <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+ <polyline points="22,6 12,13 2,6"></polyline>
+ </svg>
+ <div class="flex-1 min-w-0">
+ <h4 class="font-medium text-base-content truncate">
+ {server.hostname || `PMG at ${server.ip}`}
+ </h4>
+ <p class="text-sm mt-1">
+ {server.ip}:{server.port}
+ </p>
+ <div class="flex items-center gap-2 mt-2">
+ <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400 rounded">
+ Discovered
+ </span>
+ <span class="text-xs text-muted">
+ Click to configure
+ </span>
+ </div>
+ </div>
+ </div>
+ <svg
+ width="20"
+ height="20"
+ viewBox="0 0 24 24"
+ fill="none"
+ class=" mt-1"
+ >
+ <path
+ d="M12 5v14m-7-7h14"
+ stroke="currentColor"
+ stroke-width="2"
+ stroke-linecap="round"
+ />
+ </svg>
+ </div>
+ </div>
+ )}
+ </For>
+ </div>
+ </Show>
+ </div>
+ </div>
+ </Show>
+ {/* Unified Agents Tab */}
+ <Show when={activeTab() ==='agents'}>
                 <UnifiedAgents />
 
                 {/* Agent Profiles (Pro Feature) */}
@@ -3317,16 +3317,16 @@ const Settings: Component<SettingsProps> = (props) => {
                           onClick={() => handleDisableDockerUpdateActionsChange(!disableDockerUpdateActions())}
                           disabled={disableDockerUpdateActionsLocked() || savingDockerUpdateActions()}
                           class={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${disableDockerUpdateActions()
-                            ? 'bg-blue-600'
-                            : 'bg-gray-300 dark:bg-gray-600'
-                            } ${disableDockerUpdateActionsLocked() ? 'opacity-50 cursor-not-allowed' : ''}`}
+ ? 'bg-blue-600'
+ : 'bg-gray-300 dark:bg-gray-600'
+ } ${disableDockerUpdateActionsLocked() ? 'opacity-50 cursor-not-allowed' : ''}`}
                           role="switch"
                           aria-checked={disableDockerUpdateActions()}
                           title={disableDockerUpdateActionsLocked() ? 'Locked by environment variable' : undefined}
                         >
                           <span
                             class={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${disableDockerUpdateActions() ? 'translate-x-6' : 'translate-x-1'
-                              }`}
+ }`}
                           />
                         </button>
                       </div>
@@ -3938,63 +3938,63 @@ const Settings: Component<SettingsProps> = (props) => {
                   onClick={() => {
                     setShowExportDialog(false);
                     setExportPassphrase('');
-                    setUseCustomPassphrase(false);
-                  }}
-                  class="px-4 py-2 border border-border text-base-content rounded-md hover:bg-surface-hover"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleExport}
-                  disabled={
-                    !exportPassphrase() || (useCustomPassphrase() && exportPassphrase().length < 12)
-                  }
-                  class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Export
-                </button>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </Show >
+ setUseCustomPassphrase(false);
+ }}
+ class="px-4 py-2 border border-border text-base-content rounded-md hover:bg-surface-hover"
+ >
+ Cancel
+ </button>
+ <button
+ type="button"
+ onClick={handleExport}
+ disabled={
+ !exportPassphrase() || (useCustomPassphrase() && exportPassphrase().length < 12)
+ }
+ class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+ >
+ Export
+ </button>
+ </div>
+ </div>
+ </Card>
+ </div>
+ </Show >
 
-      {/* API Token Modal */}
-      < Show when={showApiTokenModal()} >
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <Card padding="lg" class="max-w-md w-full">
-            <SectionHeader title="API token required" size="md" class="mb-4" />
+ {/* API Token Modal */}
+ < Show when={showApiTokenModal()} >
+ <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+ <Card padding="lg" class="max-w-md w-full">
+ <SectionHeader title="API token required" size="md" class="mb-4" />
 
-            <div class="space-y-4">
-              <p class="text-sm text-muted">
-                This Pulse instance requires an API token for export/import operations. Please enter
-                the API token configured on the server.
-              </p>
+ <div class="space-y-4">
+ <p class="text-sm text-muted">
+ This Pulse instance requires an API token for export/import operations. Please enter
+ the API token configured on the server.
+ </p>
 
-              <div class={formField}>
-                <label class={labelClass()}>API Token</label>
-                <input
-                  type="password"
-                  value={apiTokenInput()}
-                  onInput={(e) => setApiTokenInput(e.currentTarget.value)}
-                  placeholder="Enter API token"
-                  class={controlClass()}
-                />
-              </div>
+ <div class={formField}>
+ <label class={labelClass()}>API Token</label>
+ <input
+ type="password"
+ value={apiTokenInput()}
+ onInput={(e) => setApiTokenInput(e.currentTarget.value)}
+ placeholder="Enter API token"
+ class={controlClass()}
+ />
+ </div>
 
-              <div class="text-xs text-muted bg-gray-100 dark:bg-gray-700 rounded p-2">
-                <p class="font-semibold mb-1">The API token is set as an environment variable:</p>
-                <code class="block">API_TOKENS=token-for-export,token-for-automation</code>
-              </div>
-            </div>
+ <div class="text-xs text-muted dark:bg-gray-700 rounded p-2">
+ <p class="font-semibold mb-1">The API token is set as an environment variable:</p>
+ <code class="block">API_TOKENS=token-for-export,token-for-automation</code>
+ </div>
+ </div>
 
-            <div class="flex justify-end space-x-2 mt-6">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowApiTokenModal(false);
-                  setApiTokenInput('');
+ <div class="flex justify-end space-x-2 mt-6">
+ <button
+ type="button"
+ onClick={() => {
+ setShowApiTokenModal(false);
+ setApiTokenInput('');
                 }}
                 class="px-4 py-2 border border-border text-base-content rounded-md hover:bg-surface-hover"
               >

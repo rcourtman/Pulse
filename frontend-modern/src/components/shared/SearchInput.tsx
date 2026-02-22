@@ -188,8 +188,8 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
           }
         }}
         class={`w-full pl-8 sm:pl-9 ${inputPaddingRight()} py-1.5 sm:py-2 text-sm border border-border rounded-md
-               bg-surface text-base-content placeholder-muted
-               focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all`}
+ bg-surface text-base-content placeholder-muted
+ focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all`}
         title={props.title}
         data-global-search
       />
@@ -212,9 +212,9 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
         <button
           type="button"
           class={`absolute top-1/2 -translate-y-1/2 transform p-1 rounded-full
-                 bg-surface-hover text-muted
-                 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900 dark:hover:text-red-400
-                 transition-all duration-150 active:scale-90 ${isSimple() ? 'right-2' : 'right-12 sm:right-14'}`}
+ bg-surface-hover text-muted
+ hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900 dark:hover:text-red-400
+ transition-all duration-150 active:scale-90 ${isSimple() ? 'right-2' : 'right-12 sm:right-14'}`}
           onClick={() => props.onChange('')}
           onMouseDown={hasHistory() ? markSuppressCommit : undefined}
           aria-label="Clear search"
@@ -237,10 +237,10 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
               ref={(el) => (historyToggleRef = el)}
               type="button"
               class={`flex h-7 w-7 items-center justify-center rounded-md transition-colors
-                     ${isHistoryOpen()
-                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400'
-                  : 'text-muted hover:bg-surface-hover hover:text-slate-600 dark:hover:text-slate-300'
-                }`}
+ ${isHistoryOpen()
+ ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400'
+ : 'text-muted hover:bg-surface-hover hover: dark:hover:text-slate-300'
+ }`}
               onClick={() =>
                 setIsHistoryOpen((prev) => {
                   const next = !prev;

@@ -531,7 +531,7 @@ export const AICostDashboard: Component = () => {
                             <TableCell class="py-2 px-2 text-right text-base-content">
                               <Show
                                 when={t.pricing_known}
-                                fallback={<span class="text-slate-500 dark:text-slate-500">—</span>}
+                                fallback={<span class="text-muted">—</span>}
                               >
                                 {formatUSD(t.estimated_usd ?? 0)}
                               </Show>
@@ -575,7 +575,7 @@ export const AICostDashboard: Component = () => {
                           <TableCell class="py-2 px-2 text-right text-base-content">
                             <Show
                               when={pm.pricing_known}
-                              fallback={<span class="text-slate-500 dark:text-slate-500">—</span>}
+                              fallback={<span class="text-muted">—</span>}
                             >
                               {formatUSD(pm.estimated_usd ?? 0)}
                             </Show>

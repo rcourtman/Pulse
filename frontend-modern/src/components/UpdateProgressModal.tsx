@@ -345,43 +345,43 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
     }
 
     return currentStatus.message || 'Updating...';
-  };
+ };
 
-  return (
-    <Show when={props.isOpen}>
-      <div class="fixed inset-0 bg-black flex items-center justify-center z-50 p-4">
-        <div class="bg-surface rounded-md shadow-sm max-w-2xl w-full">
-          {/* Header */}
-          <div class="px-6 py-4 border-b border-border">
-            <div class="flex items-center justify-between">
-              <h2 class="text-xl font-semibold text-base-content">
-                Updating Pulse
-              </h2>
-              <Show when={isComplete()}>
-                <button
-                  onClick={props.onClose}
-                  class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                >
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </Show>
-            </div>
-          </div>
+ return (
+ <Show when={props.isOpen}>
+ <div class="fixed inset-0 bg-black flex items-center justify-center z-50 p-4">
+ <div class="bg-surface rounded-md shadow-sm max-w-2xl w-full">
+ {/* Header */}
+ <div class="px-6 py-4 border-b border-border">
+ <div class="flex items-center justify-between">
+ <h2 class="text-xl font-semibold text-base-content">
+ Updating Pulse
+ </h2>
+ <Show when={isComplete()}>
+ <button
+ onClick={props.onClose}
+ class=" hover: dark:hover:text-slate-300"
+ >
+ <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+ </svg>
+ </button>
+ </Show>
+ </div>
+ </div>
 
-          {/* Body */}
-          <div class="px-6 py-8">
-            {/* Icon and Status */}
-            <div class="flex flex-col items-center text-center space-y-4">
-              {getStageIcon()}
-              <div>
-                <div class="text-lg font-medium text-base-content">
-                  {getStatusText()}
-                </div>
-                <Show when={status()?.status && !isComplete()}>
-                  <div class="text-sm text-muted mt-1 capitalize">
-                    {status()!.status.replace('-', ' ')}
+ {/* Body */}
+ <div class="px-6 py-8">
+ {/* Icon and Status */}
+ <div class="flex flex-col items-center text-center space-y-4">
+ {getStageIcon()}
+ <div>
+ <div class="text-lg font-medium text-base-content">
+ {getStatusText()}
+ </div>
+ <Show when={status()?.status && !isComplete()}>
+ <div class="text-sm text-muted mt-1 capitalize">
+ {status()!.status.replace('-', ' ')}
                   </div>
                 </Show>
               </div>

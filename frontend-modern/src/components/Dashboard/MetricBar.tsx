@@ -60,14 +60,14 @@ export function MetricBar(props: MetricBarProps) {
   return (
     <div ref={containerRef} class="metric-text w-full h-4 flex items-center justify-center min-w-0">
       <div class={`relative w-full h-full overflow-hidden bg-surface-hover rounded ${props.class || ''}`}>
-        <div class={`absolute top-0 left-0 h-full ${progressColorClass()}`} style={{ width: `${width()}%` }} />
-        <Show when={showLabel()}>
-          <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700 dark:text-slate-100 leading-none min-w-0 overflow-hidden">
-            <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
-              <span>{props.label}</span>
-              <Show when={showSublabel()}>
-                <span class="metric-sublabel font-normal text-muted">
-                  {' '}({props.sublabel})
+ <div class={`absolute top-0 left-0 h-full ${progressColorClass()}`} style={{ width: `${width()}%` }} />
+ <Show when={showLabel()}>
+ <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700 leading-none min-w-0 overflow-hidden">
+ <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
+ <span>{props.label}</span>
+ <Show when={showSublabel()}>
+ <span class="metric-sublabel font-normal text-muted">
+ {' '}({props.sublabel})
                 </span>
               </Show>
             </span>

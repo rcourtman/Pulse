@@ -366,59 +366,59 @@ export const AgentProfilesPanel: Component = () => {
                                             key: 'actions',
                                             label: 'Actions',
                                             align: 'right',
-                                            render: (profile) => (
-                                                <div class="inline-flex items-center gap-1">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleEdit(profile)}
-                                                        class="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900"
-                                                        title="Edit profile"
-                                                    >
-                                                        <Pencil class="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDelete(profile)}
-                                                        class="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
-                                                        title="Delete profile"
-                                                    >
-                                                        <Trash2 class="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            )
-                                        }
-                                    ]}
-                                    keyExtractor={(profile) => profile.id}
-                                    emptyState="No profiles yet. Create one to get started."
-                                    desktopMinWidth="600px"
-                                    class="border-x-0 sm:border-x border-slate-200 dark:border-slate-800"
-                                />
-                            </div>
-                        </Show>
-                    </SettingsPanel>
+ render: (profile) => (
+ <div class="inline-flex items-center gap-1">
+ <button
+ type="button"
+ onClick={() => handleEdit(profile)}
+ class="p-1.5 rounded-md hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900"
+ title="Edit profile"
+ >
+ <Pencil class="w-4 h-4" />
+ </button>
+ <button
+ type="button"
+ onClick={() => handleDelete(profile)}
+ class="p-1.5 rounded-md hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
+ title="Delete profile"
+ >
+ <Trash2 class="w-4 h-4" />
+ </button>
+ </div>
+ )
+ }
+ ]}
+ keyExtractor={(profile) => profile.id}
+ emptyState="No profiles yet. Create one to get started."
+ desktopMinWidth="600px"
+ class="border-x-0 sm:border-x border-border"
+ />
+ </div>
+ </Show>
+ </SettingsPanel>
 
-                    {/* Assignments Section */}
-                    <SettingsPanel
-                        title="Agent Assignments"
-                        description="Assign profiles to connected agents"
-                        icon={<Users class="w-5 h-5" strokeWidth={2} />}
-                        noPadding
-                        bodyClass="divide-y divide-border"
-                    >
-                        <Show when={connectedAgents().length === 0}>
-                            <div class="text-center py-8 text-muted">
-                                <Users class="w-12 h-12 mx-auto mb-3 opacity-50" />
-                                <p class="text-sm">No agents connected. Install an agent to assign profiles.</p>
-                            </div>
-                        </Show>
+ {/* Assignments Section */}
+ <SettingsPanel
+ title="Agent Assignments"
+ description="Assign profiles to connected agents"
+ icon={<Users class="w-5 h-5" strokeWidth={2} />}
+ noPadding
+ bodyClass="divide-y divide-border"
+ >
+ <Show when={connectedAgents().length === 0}>
+ <div class="text-center py-8 text-muted">
+ <Users class="w-12 h-12 mx-auto mb-3 opacity-50" />
+ <p class="text-sm">No agents connected. Install an agent to assign profiles.</p>
+ </div>
+ </Show>
 
-                        <Show when={connectedAgents().length > 0}>
-                            <div class="w-full overflow-x-auto">
-                                <PulseDataGrid
-                                    data={connectedAgents()}
-                                    columns={[
-                                        {
-                                            key: 'agent',
+ <Show when={connectedAgents().length > 0}>
+ <div class="w-full overflow-x-auto">
+ <PulseDataGrid
+ data={connectedAgents()}
+ columns={[
+ {
+ key:'agent',
                                             label: 'Agent',
                                             render: (agent) => (
                                                 <div>
@@ -461,9 +461,9 @@ export const AgentProfilesPanel: Component = () => {
                                                 const isOnline = () => agent.status?.toLowerCase() === 'online' || agent.status?.toLowerCase() === 'running';
                                                 return (
                                                     <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${isOnline()
-                                                        ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                                                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                                        }`}>
+ ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+ : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+ }`}>
                                                         {isOnline() ? 'Online' : 'Offline'}
                                                     </span>
                                                 );
@@ -476,26 +476,26 @@ export const AgentProfilesPanel: Component = () => {
                                             render: (agent) => (
                                                 <span class="text-muted">
                                                     {agent.lastSeen ? formatRelativeTime(agent.lastSeen) : 'Never'}
-                                                </span>
-                                            )
-                                        }
-                                    ]}
-                                    keyExtractor={(agent) => agent.id}
-                                    emptyState="No agents connected. Install an agent to assign profiles."
-                                    desktopMinWidth="800px"
-                                    class="border-x-0 sm:border-x border-slate-200 dark:border-slate-800"
-                                />
-                            </div>
-                        </Show>
-                    </SettingsPanel>
+ </span>
+ )
+ }
+ ]}
+ keyExtractor={(agent) => agent.id}
+ emptyState="No agents connected. Install an agent to assign profiles."
+ desktopMinWidth="800px"
+ class="border-x-0 sm:border-x "
+ />
+ </div>
+ </Show>
+ </SettingsPanel>
 
-                    {/* Profile Modal */}
-                    <Show when={showModal()}>
-                        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
-                            <div class="w-full max-w-lg bg-surface rounded-md shadow-sm border border-border mx-4">
-                                <div class="flex items-center justify-between px-6 py-4 border-b border-border">
-                                    <h3 class="text-lg font-semibold text-base-content">
-                                        {editingProfile() ? 'Edit Profile' : 'New Profile'}
+ {/* Profile Modal */}
+ <Show when={showModal()}>
+ <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
+ <div class="w-full max-w-lg bg-surface rounded-md shadow-sm border border-border mx-4">
+ <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+ <h3 class="text-lg font-semibold text-base-content">
+ {editingProfile() ?'Edit Profile' : 'New Profile'}
                                     </h3>
                                     <button
                                         type="button"
@@ -564,19 +564,19 @@ export const AgentProfilesPanel: Component = () => {
                                                                     }
                                                                 }}
                                                                 class={`relative inline-flex h-8 w-12 sm:h-7 sm:w-12 items-center rounded-full transition-colors ${formSettings()[setting.key] === true
-                                                                    ? 'bg-blue-600'
-                                                                    : formSettings()[setting.key] === false
-                                                                        ? 'bg-slate-400'
-                                                                        : 'bg-surface-hover'
-                                                                    }`}
+ ? 'bg-blue-600'
+ : formSettings()[setting.key] === false
+ ? 'bg-slate-400'
+ : 'bg-surface-hover'
+ }`}
                                                             >
                                                                 <span
                                                                     class={`inline-block h-6 w-6 sm:h-5 sm:w-5 transform rounded-full bg-white transition-transform ${formSettings()[setting.key] === true
-                                                                        ? 'translate-x-4 sm:translate-x-5'
-                                                                        : formSettings()[setting.key] === false
-                                                                            ? 'translate-x-1'
-                                                                            : 'translate-x-3'
-                                                                        }`}
+ ? 'translate-x-4 sm:translate-x-5'
+ : formSettings()[setting.key] === false
+ ? 'translate-x-1'
+ : 'translate-x-3'
+ }`}
                                                                 />
                                                             </button>
                                                         </Show>
@@ -607,78 +607,78 @@ export const AgentProfilesPanel: Component = () => {
                                                                 value={(formSettings()[setting.key] as string) || ''}
                                                                 onInput={(e) => updateSetting(setting.key, e.currentTarget.value || undefined)}
                                                                 placeholder={(setting as StringSetting).placeholder || ''}
-                                                                class="min-h-10 sm:min-h-9 w-40 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                                                            />
-                                                        </Show>
-                                                    </div>
-                                                    <p class="text-xs text-muted">{setting.description}</p>
-                                                </div>
-                                            )}
-                                        </For>
+ class="min-h-10 sm:min-h-9 w-40 rounded-md border bg-white px-2.5 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-slate-800 "
+ />
+ </Show>
+ </div>
+ <p class="text-xs text-muted">{setting.description}</p>
+ </div>
+ )}
+ </For>
 
-                                        {/* Unknown Keys Section */}
-                                        <Show when={unknownKeys().length > 0}>
-                                            <div class="pt-3 mt-3 border-t border-border">
-                                                <p class="text-xs text-amber-600 dark:text-amber-400 mb-2">
-                                                    Additional settings (not in standard list):
-                                                </p>
-                                                <For each={unknownKeys()}>
-                                                    {(key) => (
-                                                        <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 mb-2">
-                                                            <div class="flex items-center justify-between">
-                                                                <label class="text-sm font-medium text-base-content font-mono">
-                                                                    {key}
-                                                                </label>
-                                                                <div class="flex items-center gap-2">
-                                                                    <input
-                                                                        type="text"
-                                                                        value={String(formSettings()[key] ?? '')}
-                                                                        onInput={(e) => {
-                                                                            const val = e.currentTarget.value;
-                                                                            // Try to parse as JSON for complex values
-                                                                            try {
-                                                                                updateSetting(key, JSON.parse(val));
-                                                                            } catch {
-                                                                                updateSetting(key, val || undefined);
-                                                                            }
-                                                                        }}
-                                                                        class="min-h-10 sm:min-h-9 w-32 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                                                                    />
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => updateSetting(key, undefined)}
-                                                                        class="inline-flex min-h-10 min-w-10 sm:min-h-9 sm:min-w-9 items-center justify-center rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900"
-                                                                        title="Remove this setting"
-                                                                    >
-                                                                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                                                        </svg>
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </For>
-                                            </div>
-                                        </Show>
-                                    </div>
-                                </div>
+ {/* Unknown Keys Section */}
+ <Show when={unknownKeys().length > 0}>
+ <div class="pt-3 mt-3 border-t border-border">
+ <p class="text-xs text-amber-600 dark:text-amber-400 mb-2">
+ Additional settings (not in standard list):
+ </p>
+ <For each={unknownKeys()}>
+ {(key) => (
+ <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 mb-2">
+ <div class="flex items-center justify-between">
+ <label class="text-sm font-medium text-base-content font-mono">
+ {key}
+ </label>
+ <div class="flex items-center gap-2">
+ <input
+ type="text"
+ value={String(formSettings()[key] ??'')}
+ onInput={(e) => {
+ const val = e.currentTarget.value;
+ // Try to parse as JSON for complex values
+ try {
+ updateSetting(key, JSON.parse(val));
+ } catch {
+ updateSetting(key, val || undefined);
+ }
+ }}
+ class="min-h-10 sm:min-h-9 w-32 rounded-md border bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100"
+ />
+ <button
+ type="button"
+ onClick={() => updateSetting(key, undefined)}
+ class="inline-flex min-h-10 min-w-10 sm:min-h-9 sm:min-w-9 items-center justify-center rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900"
+ title="Remove this setting"
+ >
+ <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+ </svg>
+ </button>
+ </div>
+ </div>
+ </div>
+ )}
+ </For>
+ </div>
+ </Show>
+ </div>
+ </div>
 
-                                <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowModal(false)}
-                                        class="rounded-md px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleSave}
-                                        disabled={saving() || !formName().trim()}
-                                        class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                        {saving() ? 'Saving...' : editingProfile() ? 'Update Profile' : 'Create Profile'}
+ <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+ <button
+ type="button"
+ onClick={() => setShowModal(false)}
+ class="rounded-md px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+ >
+ Cancel
+ </button>
+ <button
+ type="button"
+ onClick={handleSave}
+ disabled={saving() || !formName().trim()}
+ class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+ >
+ {saving() ?'Saving...' : editingProfile() ? 'Update Profile' : 'Create Profile'}
                                     </button>
                                 </div>
                             </div>

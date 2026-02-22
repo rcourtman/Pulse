@@ -268,20 +268,20 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                 style={{
                   width: `${barPercent()}%`,
                   'background-color': barColor(),
-                }}
-              />
-            </Show>
+ }}
+ />
+ </Show>
 
-            {/* Label overlay */}
-            <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700 dark:text-slate-100 leading-none min-w-0 overflow-hidden">
-              <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
-                <span>{displayLabel()}</span>
-                <Show when={showMaxLabel()}>
-                  <span
-                    class="text-[8px] font-normal text-muted"
-                    title={maxLabelFull()}
-                  >
-                    {' '}{maxLabelShort()}
+ {/* Label overlay */}
+ <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700 leading-none min-w-0 overflow-hidden">
+ <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
+ <span>{displayLabel()}</span>
+ <Show when={showMaxLabel()}>
+ <span
+ class="text-[8px] font-normal text-muted"
+ title={maxLabelFull()}
+ >
+ {' '}{maxLabelShort()}
                   </span>
                 </Show>
                 <Show when={showSublabel()}>

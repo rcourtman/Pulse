@@ -221,96 +221,96 @@ export const RolesPanel: Component = () => {
                                     key: 'actions',
                                     label: 'Actions',
                                     align: 'right',
-                                    render: (role) => (
-                                        <div class="inline-flex items-center gap-1">
-                                            <Show when={!role.isBuiltIn}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleEdit(role)}
-                                                    class="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:text-blue-300 dark:hover:bg-slate-800"
-                                                    title="Edit role"
-                                                >
-                                                    <Pencil class="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDelete(role)}
-                                                    class="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
-                                                    title="Delete role"
-                                                >
-                                                    <Trash2 class="w-4 h-4" />
-                                                </button>
-                                            </Show>
-                                            <Show when={role.isBuiltIn}>
-                                                <span class="text-xs text-slate-400 italic">Read-only</span>
-                                            </Show>
-                                        </div>
-                                    )
-                                }
-                            ]}
-                            keyExtractor={(role) => role.id}
-                            emptyState="No roles available."
-                            desktopMinWidth="620px"
-                            class="border-x-0 sm:border-x border-slate-200 dark:border-slate-800"
-                        />
-                    </div>
-                </Show>
-            </SettingsPanel>
+ render: (role) => (
+ <div class="inline-flex items-center gap-1">
+ <Show when={!role.isBuiltIn}>
+ <button
+ type="button"
+ onClick={() => handleEdit(role)}
+ class="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:text-blue-300 dark:hover:bg-slate-800"
+ title="Edit role"
+ >
+ <Pencil class="w-4 h-4" />
+ </button>
+ <button
+ type="button"
+ onClick={() => handleDelete(role)}
+ class="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
+ title="Delete role"
+ >
+ <Trash2 class="w-4 h-4" />
+ </button>
+ </Show>
+ <Show when={role.isBuiltIn}>
+ <span class="text-xs text-slate-400 italic">Read-only</span>
+ </Show>
+ </div>
+ )
+ }
+ ]}
+ keyExtractor={(role) => role.id}
+ emptyState="No roles available."
+ desktopMinWidth="620px"
+ class="border-x-0 sm:border-x "
+ />
+ </div>
+ </Show>
+ </SettingsPanel>
 
-            {/* Role Modal */}
-            <Show when={showModal()}>
-                <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
-                    <div class="w-full max-w-2xl bg-surface rounded-md shadow-sm border border-border mx-4 max-h-[92vh] overflow-hidden">
-                        <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
-                            <h3 class="text-lg font-semibold text-base-content">
-                                {editingRole() ? 'Edit Role' : 'New Role'}
-                            </h3>
-                            <button
-                                type="button"
-                                onClick={() => setShowModal(false)}
-                                class="p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800"
-                            >
-                                <X class="w-5 h-5" />
-                            </button>
-                        </div>
+ {/* Role Modal */}
+ <Show when={showModal()}>
+ <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
+ <div class="w-full max-w-2xl bg-surface rounded-md shadow-sm border border-border mx-4 max-h-[92vh] overflow-hidden">
+ <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
+ <h3 class="text-lg font-semibold text-base-content">
+ {editingRole() ?'Edit Role' : 'New Role'}
+ </h3>
+ <button
+ type="button"
+ onClick={() => setShowModal(false)}
+ class="p-1.5 rounded-md text-slate-500 hover: hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800"
+ >
+ <X class="w-5 h-5" />
+ </button>
+ </div>
 
-                        <div class="px-4 sm:px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div class="space-y-1">
-                                    <label class="block text-sm font-medium text-base-content">
-                                        Role ID
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={formId()}
-                                        onInput={(e) => setFormId(e.currentTarget.value)}
-                                        placeholder="e.g., custom-auditor"
-                                        disabled={!!editingRole()}
-                                        class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-900 disabled:opacity-50"
-                                    />
-                                </div>
-                                <div class="space-y-1">
-                                    <label class="block text-sm font-medium text-base-content">
-                                        Role Name
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={formName()}
-                                        onInput={(e) => setFormName(e.currentTarget.value)}
-                                        placeholder="e.g., Custom Auditor"
-                                        class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-900"
-                                    />
-                                </div>
-                            </div>
-                            <div class="space-y-1">
-                                <label class="block text-sm font-medium text-base-content">
-                                    Description
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formDescription()}
-                                    onInput={(e) => setFormDescription(e.currentTarget.value)}
-                                    placeholder="Brief description of this role's purpose"
+ <div class="px-4 sm:px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+ <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+ <div class="space-y-1">
+ <label class="block text-sm font-medium text-base-content">
+ Role ID
+ </label>
+ <input
+ type="text"
+ value={formId()}
+ onInput={(e) => setFormId(e.currentTarget.value)}
+ placeholder="e.g., custom-auditor"
+ disabled={!!editingRole()}
+ class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:focus:border-blue-400 dark:focus:ring-blue-900 disabled:opacity-50"
+ />
+ </div>
+ <div class="space-y-1">
+ <label class="block text-sm font-medium text-base-content">
+ Role Name
+ </label>
+ <input
+ type="text"
+ value={formName()}
+ onInput={(e) => setFormName(e.currentTarget.value)}
+ placeholder="e.g., Custom Auditor"
+ class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:focus:border-blue-400 dark:focus:ring-blue-900"
+ />
+ </div>
+ </div>
+ <div class="space-y-1">
+ <label class="block text-sm font-medium text-base-content">
+ Description
+ </label>
+ <input
+ type="text"
+ value={formDescription()}
+ onInput={(e) => setFormDescription(e.currentTarget.value)}
+ placeholder="Brief description of this role's purpose"
                                     class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-900"
                                 />
                             </div>
@@ -346,42 +346,42 @@ export const RolesPanel: Component = () => {
                                                 <select
                                                     value={perm.resource}
                                                     onChange={(e) => updatePermission(index(), 'resource', e.currentTarget.value)}
-                                                    class="w-full sm:flex-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                                                >
-                                                    <For each={RESOURCES}>
-                                                        {(resource) => <option value={resource}>{resource}</option>}
-                                                    </For>
-                                                </select>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => removePermission(index())}
-                                                    disabled={formPermissions().length <= 1}
-                                                    class="self-end sm:self-auto p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30"
-                                                >
-                                                    <Trash2 class="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        )}
-                                    </For>
-                                </div>
-                            </div>
-                        </div>
+ class="w-full sm:flex-1 rounded-md border bg-white px-2 py-1.5 text-sm text-slate-900 dark:bg-slate-800 dark:text-slate-100"
+ >
+ <For each={RESOURCES}>
+ {(resource) => <option value={resource}>{resource}</option>}
+ </For>
+ </select>
+ <button
+ type="button"
+ onClick={() => removePermission(index())}
+ disabled={formPermissions().length <= 1}
+ class="self-end sm:self-auto p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30"
+ >
+ <Trash2 class="w-4 h-4" />
+ </button>
+ </div>
+ )}
+ </For>
+ </div>
+ </div>
+ </div>
 
-                        <div class="grid grid-cols-1 sm:flex sm:items-center sm:justify-end gap-3 px-4 sm:px-6 py-4 border-t border-border">
-                            <button
-                                type="button"
-                                onClick={() => setShowModal(false)}
-                                class="w-full sm:w-auto rounded-md px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleSave}
-                                disabled={saving() || !formName().trim()}
-                                class="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                                {saving() ? 'Saving...' : editingRole() ? 'Update Role' : 'Create Role'}
+ <div class="grid grid-cols-1 sm:flex sm:items-center sm:justify-end gap-3 px-4 sm:px-6 py-4 border-t border-border">
+ <button
+ type="button"
+ onClick={() => setShowModal(false)}
+ class="w-full sm:w-auto rounded-md px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+ >
+ Cancel
+ </button>
+ <button
+ type="button"
+ onClick={handleSave}
+ disabled={saving() || !formName().trim()}
+ class="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+ >
+ {saving() ?'Saving...' : editingRole() ? 'Update Role' : 'Create Role'}
                             </button>
                         </div>
                     </div>

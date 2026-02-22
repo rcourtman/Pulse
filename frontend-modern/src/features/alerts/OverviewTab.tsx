@@ -69,10 +69,10 @@ function IncidentEventFilters(props: {
             <button
               onClick={() => toggleFilter(type)}
               class={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
-                selected()
-                  ? 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-800'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-surface-alt dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'
-              } border`}
+ selected()
+ ? 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-800'
+ : ' text-slate-600 border-slate-200 hover:bg-surface-alt dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700'
+ } border`}
             >
               {INCIDENT_EVENT_LABELS[type]}
             </button>
@@ -424,23 +424,23 @@ export function OverviewTab(props: {
                 <div
                   id={`alert-${alert.id}`}
                   class={`border rounded-md p-3 sm:p-4 transition-all ${processingAlerts().has(alert.id) ? 'opacity-50' : ''
-                    } ${alert.acknowledged
-                      ? 'opacity-60 border-border bg-surface-alt'
-                      : alert.level === 'critical'
-                        ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900'
-                        : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900'
-                    }`}
+ } ${alert.acknowledged
+ ? 'opacity-60 border-border bg-surface-alt'
+ : alert.level === 'critical'
+ ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900'
+ : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900'
+ }`}
                 >
                   <div class="flex flex-col sm:flex-row sm:items-start">
                     <div class="flex items-start flex-1">
                       {/* Status icon */}
                       <div
                         class={`mr-3 mt-0.5 transition-all ${alert.acknowledged
-                          ? 'text-green-600 dark:text-green-400'
-                          : alert.level === 'critical'
-                            ? 'text-red-600 dark:text-red-400'
-                            : 'text-yellow-600 dark:text-yellow-400'
-                          }`}
+ ? 'text-green-600 dark:text-green-400'
+ : alert.level === 'critical'
+ ? 'text-red-600 dark:text-red-400'
+ : 'text-yellow-600 dark:text-yellow-400'
+ }`}
                       >
                         {alert.acknowledged ? (
                           // Checkmark for acknowledged
@@ -478,9 +478,9 @@ export function OverviewTab(props: {
                         <div class="flex flex-wrap items-center gap-2">
                           <span
                             class={`text-sm font-medium truncate ${alert.level === 'critical'
-                              ? 'text-red-700 dark:text-red-400'
-                              : 'text-yellow-700 dark:text-yellow-400'
-                              }`}
+ ? 'text-red-700 dark:text-red-400'
+ : 'text-yellow-700 dark:text-yellow-400'
+ }`}
                           >
                             {alert.resourceName}
                           </span>
@@ -488,7 +488,7 @@ export function OverviewTab(props: {
                             ({alert.type})
                           </span>
                           <Show when={alert.node}>
-                            <span class="text-xs text-slate-500 dark:text-slate-500">
+                            <span class="text-xs text-muted">
                               on {alert.nodeDisplayName || alert.node}
                             </span>
                           </Show>
@@ -509,9 +509,9 @@ export function OverviewTab(props: {
                     <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start justify-end">
                       <button
                         class={`px-3 py-1.5 text-xs font-medium border rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed ${alert.acknowledged
-                          ? 'bg-white dark:bg-slate-700 text-base-content border-border hover:bg-slate-50 dark:hover:bg-slate-600'
-                          : 'bg-white dark:bg-slate-700 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900'
-                          }`}
+ ? 'bg-white dark:bg-slate-700 text-base-content border-border hover:bg-slate-50 dark:hover:bg-slate-600'
+ : 'bg-white dark:bg-slate-700 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900'
+ }`}
                         disabled={processingAlerts().has(alert.id)}
                         onClick={async (e) => {
                           e.preventDefault();

@@ -82,67 +82,67 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
     void loadBillingData();
 
     const unsubscribe = eventBus.on('org_switched', () => {
-      void loadBillingData();
-    });
-    onCleanup(unsubscribe);
-  });
+ void loadBillingData();
+ });
+ onCleanup(unsubscribe);
+ });
 
-  return (
-    <Show when={isMultiTenantEnabled()} fallback={<div class="p-4 text-sm text-slate-500">This feature is not available.</div>}>
-      <div class="space-y-6">
-        <SettingsPanel
-          title="Billing & Plan"
-          description="Review your current plan tier, usage against limits, and available upgrade paths."
-          icon={<CreditCard class="w-5 h-5" />}
-          bodyClass="space-y-5"
-        >
-          <Show
-            when={!loading()}
-            fallback={
-              <div class="space-y-5">
-                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {Array.from({ length: 4 }).map(() => (
-                    <div class="rounded-md border border-border p-3 space-y-2">
-                      <div class="h-3 w-20 animate-pulse rounded bg-surface-hover" />
-                      <div class="h-5 w-24 animate-pulse rounded bg-surface-hover" />
-                    </div>
-                  ))}
-                </div>
+ return (
+ <Show when={isMultiTenantEnabled()} fallback={<div class="p-4 text-sm ">This feature is not available.</div>}>
+ <div class="space-y-6">
+ <SettingsPanel
+ title="Billing & Plan"
+ description="Review your current plan tier, usage against limits, and available upgrade paths."
+ icon={<CreditCard class="w-5 h-5" />}
+ bodyClass="space-y-5"
+ >
+ <Show
+ when={!loading()}
+ fallback={
+ <div class="space-y-5">
+ <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+ {Array.from({ length: 4 }).map(() => (
+ <div class="rounded-md border border-border p-3 space-y-2">
+ <div class="h-3 w-20 animate-pulse rounded bg-surface-hover" />
+ <div class="h-5 w-24 animate-pulse rounded bg-surface-hover" />
+ </div>
+ ))}
+ </div>
 
-                <div class="space-y-3 rounded-md border border-border p-4">
-                  <div class="h-4 w-36 animate-pulse rounded bg-surface-hover" />
-                  {Array.from({ length: 2 }).map(() => (
-                    <div class="space-y-2">
-                      <div class="flex items-center justify-between">
-                        <div class="h-3 w-14 animate-pulse rounded bg-surface-hover" />
-                        <div class="h-3 w-20 animate-pulse rounded bg-surface-hover" />
-                      </div>
-                      <div class="h-2 w-full animate-pulse rounded bg-surface-hover" />
-                    </div>
-                  ))}
-                </div>
+ <div class="space-y-3 rounded-md border border-border p-4">
+ <div class="h-4 w-36 animate-pulse rounded bg-surface-hover" />
+ {Array.from({ length: 2 }).map(() => (
+ <div class="space-y-2">
+ <div class="flex items-center justify-between">
+ <div class="h-3 w-14 animate-pulse rounded bg-surface-hover" />
+ <div class="h-3 w-20 animate-pulse rounded bg-surface-hover" />
+ </div>
+ <div class="h-2 w-full animate-pulse rounded bg-surface-hover" />
+ </div>
+ ))}
+ </div>
 
-                <div class="grid gap-3 sm:grid-cols-2">
-                  {Array.from({ length: 2 }).map(() => (
-                    <div class="rounded-md border border-border p-3 space-y-2">
-                      <div class="h-3 w-24 animate-pulse rounded bg-surface-hover" />
-                      <div class="h-5 w-40 animate-pulse rounded bg-surface-hover" />
-                    </div>
-                  ))}
-                </div>
+ <div class="grid gap-3 sm:grid-cols-2">
+ {Array.from({ length: 2 }).map(() => (
+ <div class="rounded-md border border-border p-3 space-y-2">
+ <div class="h-3 w-24 animate-pulse rounded bg-surface-hover" />
+ <div class="h-5 w-40 animate-pulse rounded bg-surface-hover" />
+ </div>
+ ))}
+ </div>
 
-                <div class="flex flex-wrap items-center gap-2">
-                  <div class="h-10 w-40 animate-pulse rounded bg-surface-hover" />
-                  <div class="h-10 w-40 animate-pulse rounded bg-surface-hover" />
-                </div>
-              </div>
-            }
-          >
-          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div class="rounded-md border border-border p-3">
-              <p class="text-xs uppercase tracking-wide text-muted">Plan Tier</p>
-              <p class="mt-1 text-sm font-medium text-base-content">
-                {tierLabel[status()?.tier || 'free'] || status()?.tier || 'Free'}
+ <div class="flex flex-wrap items-center gap-2">
+ <div class="h-10 w-40 animate-pulse rounded bg-surface-hover" />
+ <div class="h-10 w-40 animate-pulse rounded bg-surface-hover" />
+ </div>
+ </div>
+ }
+ >
+ <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+ <div class="rounded-md border border-border p-3">
+ <p class="text-xs uppercase tracking-wide text-muted">Plan Tier</p>
+ <p class="mt-1 text-sm font-medium text-base-content">
+ {tierLabel[status()?.tier ||'free'] || status()?.tier || 'Free'}
               </p>
             </div>
             <div class="rounded-md border border-border p-3">

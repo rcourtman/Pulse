@@ -100,6 +100,19 @@ const REPLACEMENTS = [
     ['text-slate-600 dark:text-slate-300', 'text-muted', 'muted text'],
     ['text-slate-500 dark:text-slate-300', 'text-muted', 'muted text'],
     ['text-slate-600 dark:text-slate-200', 'text-muted', 'muted text'],
+    ['text-slate-700 dark:text-slate-400', 'text-muted', 'muted text (body→muted)'],
+    ['text-slate-800 dark:text-slate-400', 'text-muted', 'muted text'],
+    ['text-slate-500 dark:text-slate-500', 'text-muted', 'muted text (same shade)'],
+    ['text-slate-900 dark:text-slate-50', 'text-base-content', 'base text (extreme)'],
+    ['text-slate-900 dark:text-slate-300', 'text-base-content', 'base text'],
+    ['text-slate-900 dark:text-slate-400', 'text-base-content', 'base text'],
+    ['text-slate-700 dark:text-slate-100', 'text-base-content', 'base text'],
+    ['text-slate-800 dark:text-slate-300', 'text-base-content', 'base text'],
+    ['text-slate-600 dark:text-slate-500', 'text-muted', 'muted text'],
+    ['text-slate-400 dark:text-slate-600', 'text-muted', 'muted text (inverted)'],
+    ['text-slate-300 dark:text-slate-600', 'text-muted', 'muted text (inverted)'],
+    ['text-slate-200 dark:text-slate-700', 'text-muted', 'muted text (inverted)'],
+    ['text-slate-300 dark:text-slate-700', 'text-muted', 'muted text (inverted)'],
     // Placeholder text
     ['placeholder-slate-400 dark:placeholder-slate-500', 'placeholder-muted', 'placeholder'],
     ['placeholder-gray-400 dark:placeholder-gray-500', 'placeholder-muted', 'placeholder'],
@@ -115,6 +128,21 @@ const REPLACEMENTS = [
     ['hover:text-slate-900 dark:hover:text-white', 'hover:text-base-content', 'hover text'],
     ['hover:text-slate-800 dark:hover:text-slate-100', 'hover:text-base-content', 'hover text'],
     ['hover:text-slate-700 dark:hover:text-slate-200', 'hover:text-base-content', 'hover text'],
+    ['hover:text-slate-900 dark:hover:text-slate-300', 'hover:text-base-content', 'hover text'],
+
+    // ─── Additional borders (wave 3) ───
+    ['border-slate-100 dark:border-slate-700', 'border-border-subtle', 'subtle border'],
+    ['border-slate-200 dark:border-slate-800', 'border-border', 'border (alt shades)'],
+
+    // ─── Additional backgrounds (wave 3) ───
+    ['bg-slate-900 dark:bg-slate-800', 'bg-base', 'base bg (deep)'],
+    ['bg-slate-300 dark:bg-slate-600', 'bg-surface-hover', 'hover surface (strong)'],
+    ['bg-slate-300 dark:bg-slate-700', 'bg-surface-hover', 'hover surface (strong)'],
+
+    // ─── Hover backgrounds (wave 3) ───
+    ['hover:bg-slate-200 dark:hover:bg-slate-600', 'hover:bg-surface-hover', 'hover surface'],
+    ['hover:bg-slate-200 dark:hover:bg-slate-700', 'hover:bg-surface-hover', 'hover surface'],
+    ['hover:bg-slate-100 dark:hover:bg-slate-600', 'hover:bg-surface-hover', 'hover surface'],
 ];
 
 // ── Find all .tsx files ──

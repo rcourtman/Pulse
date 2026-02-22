@@ -26,7 +26,7 @@ export const ProtectionHero: Component<ProtectionHeroProps> = (props) => {
     { value: props.summary.counts.warning, color: 'text-amber-500 dark:text-amber-400' },
     { value: props.summary.counts.failed, color: 'text-red-500 dark:text-red-400' },
     { value: props.summary.counts.running, color: 'text-blue-500 dark:text-blue-400' },
-    { value: props.summary.counts.unknown, color: 'text-slate-300 dark:text-slate-600' },
+    { value: props.summary.counts.unknown, color: 'text-muted' },
   ]);
 
   const segmentPercentages = createMemo(() => {

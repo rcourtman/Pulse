@@ -270,38 +270,38 @@ export const ProLicensePanel: Component = () => {
             <a
               class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-red-900 dark:text-red-100 hover:underline"
               href={getUpgradeActionUrlOrFallback('trial_expired')}
-              target="_blank"
-              rel="noreferrer"
-            >
-              View Pro plans
-            </a>
-          </div>
-        </Show>
-        <Show when={!loading()} fallback={<p class="text-sm text-slate-500">Loading license status...</p>}>
-          <div class="flex flex-wrap items-center gap-2">
-            <span class={`px-2 py-1 text-xs font-medium rounded-full ${statusTone()}`}>
-              {statusLabel()}
-            </span>
-            <Show when={status()?.in_grace_period}>
-              <span class="text-xs text-amber-700 dark:text-amber-300">
-                Grace until {formatDate(status()?.grace_period_end)}
-              </span>
-            </Show>
-          </div>
+ target="_blank"
+ rel="noreferrer"
+ >
+ View Pro plans
+ </a>
+ </div>
+ </Show>
+ <Show when={!loading()} fallback={<p class="text-sm ">Loading license status...</p>}>
+ <div class="flex flex-wrap items-center gap-2">
+ <span class={`px-2 py-1 text-xs font-medium rounded-full ${statusTone()}`}>
+ {statusLabel()}
+ </span>
+ <Show when={status()?.in_grace_period}>
+ <span class="text-xs text-amber-700 dark:text-amber-300">
+ Grace until {formatDate(status()?.grace_period_end)}
+ </span>
+ </Show>
+ </div>
 
-          <Show when={hasLicenseDetails()} fallback={
-            <div class="text-sm text-muted">
-              No Pro license is active.
-            </div>
-          }>
-            <div class="grid gap-4 sm:grid-cols-2">
-              <div>
-                <p class="text-xs uppercase tracking-wide text-muted">Tier</p>
-                <p class="text-sm font-medium text-base-content">{formattedTier()}</p>
-              </div>
-              <div>
-                <p class="text-xs uppercase tracking-wide text-muted">Licensed Email</p>
-                <p class="text-sm font-medium text-base-content">{status()?.email || 'Not available'}</p>
+ <Show when={hasLicenseDetails()} fallback={
+ <div class="text-sm text-muted">
+ No Pro license is active.
+ </div>
+ }>
+ <div class="grid gap-4 sm:grid-cols-2">
+ <div>
+ <p class="text-xs uppercase tracking-wide text-muted">Tier</p>
+ <p class="text-sm font-medium text-base-content">{formattedTier()}</p>
+ </div>
+ <div>
+ <p class="text-xs uppercase tracking-wide text-muted">Licensed Email</p>
+ <p class="text-sm font-medium text-base-content">{status()?.email ||'Not available'}</p>
               </div>
               <div>
                 <p class="text-xs uppercase tracking-wide text-muted">Expires</p>

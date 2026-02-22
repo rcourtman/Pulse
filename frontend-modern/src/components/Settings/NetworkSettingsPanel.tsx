@@ -150,9 +150,9 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                   {/* Auto mode */}
                   <label
                     class={`flex items-start gap-3 rounded-md border p-2 transition-colors ${props.discoveryMode() === 'auto'
-                      ? 'border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900'
-                      : 'border-transparent hover:border-slate-200 dark:hover:border-slate-600'
-                      }`}
+ ? 'border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900'
+ : 'border-transparent hover:border-slate-200 dark:hover:border-slate-600'
+ }`}
                   >
                     <input
                       type="radio"
@@ -184,9 +184,9 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                   {/* Custom mode */}
                   <label
                     class={`flex items-start gap-3 rounded-md border p-2 transition-colors ${props.discoveryMode() === 'custom'
-                      ? 'border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900'
-                      : 'border-transparent hover:border-slate-200 dark:hover:border-slate-600'
-                      }`}
+ ? 'border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900'
+ : 'border-transparent hover:border-slate-200 dark:hover:border-slate-600'
+ }`}
                   >
                     <input
                       type="radio"
@@ -229,9 +229,9 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                             <button
                               type="button"
                               class={`rounded border px-2.5 py-1 text-[0.7rem] transition-colors ${isActive
-                                ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500'
-                                : 'border-slate-300 text-slate-700 hover:border-blue-400 hover:bg-blue-50 dark:border-slate-600 dark:text-slate-300 dark:hover:border-blue-500 dark:hover:bg-blue-900'
-                                }`}
+ ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500'
+ : 'border-slate-300 text-slate-700 hover:border-blue-400 hover:bg-blue-50 dark:border-slate-600 dark:text-slate-300 dark:hover:border-blue-500 dark:hover:bg-blue-900'
+ }`}
                               onClick={async () => {
                                 if (props.envOverrides().discoverySubnet) {
                                   return;
@@ -264,59 +264,59 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                               disabled={props.envOverrides().discoverySubnet}
                               classList={{
                                 'cursor-not-allowed opacity-60':
-                                  props.envOverrides().discoverySubnet,
-                              }}
-                            >
-                              {preset}
-                            </button>
-                          );
-                        }}
-                      </For>
-                    </div>
-                  </Show>
-                </div>
-              </fieldset>
+ props.envOverrides().discoverySubnet,
+ }}
+ >
+ {preset}
+ </button>
+ );
+ }}
+ </For>
+ </div>
+ </Show>
+ </div>
+ </fieldset>
 
-              {/* Subnet Input */}
-              <div class="space-y-2">
-                <div class="flex items-center justify-between gap-2">
-                  <label
-                    for="discoverySubnetInput"
-                    class="text-xs font-medium text-base-content"
-                  >
-                    Discovery subnet
-                  </label>
-                  <span
-                    class="text-slate-400 hover:text-slate-500 dark:text-slate-500 dark:hover:text-slate-300"
-                    title="Use CIDR notation (comma-separated for multiple), e.g. 192.168.1.0/24, 10.0.0.0/24. Smaller ranges keep scans quick."
-                  >
-                    <svg
-                      class="h-5 w-5 sm:h-4 sm:w-4"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <circle cx="12" cy="12" r="10"></circle>
-                      <path d="M12 16v-4"></path>
-                      <path d="M12 8h.01"></path>
-                    </svg>
-                  </span>
-                </div>
-                <input
-                  id="discoverySubnetInput"
-                  ref={props.discoverySubnetInputRef}
-                  type="text"
-                  value={props.discoverySubnetDraft()}
-                  placeholder={
-                    props.discoveryMode() === 'auto'
+ {/* Subnet Input */}
+ <div class="space-y-2">
+ <div class="flex items-center justify-between gap-2">
+ <label
+ for="discoverySubnetInput"
+ class="text-xs font-medium text-base-content"
+ >
+ Discovery subnet
+ </label>
+ <span
+ class="text-slate-400 hover:text-slate-500 dark:hover:text-slate-300"
+ title="Use CIDR notation (comma-separated for multiple), e.g. 192.168.1.0/24, 10.0.0.0/24. Smaller ranges keep scans quick."
+ >
+ <svg
+ class="h-5 w-5 sm:h-4 sm:w-4"
+ viewBox="0 0 24 24"
+ fill="none"
+ stroke="currentColor"
+ stroke-width="2"
+ >
+ <circle cx="12" cy="12" r="10"></circle>
+ <path d="M12 16v-4"></path>
+ <path d="M12 8h.01"></path>
+ </svg>
+ </span>
+ </div>
+ <input
+ id="discoverySubnetInput"
+ ref={props.discoverySubnetInputRef}
+ type="text"
+ value={props.discoverySubnetDraft()}
+ placeholder={
+ props.discoveryMode() ==='auto'
                       ? 'auto (scan every network phase)'
                       : '192.168.1.0/24, 10.0.0.0/24'
                   }
                   class={`w-full min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${props.envOverrides().discoverySubnet
-                    ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900 dark:text-amber-200 cursor-not-allowed opacity-60'
-                    : 'border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800'
-                    }`}
+ ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900 dark:text-amber-200 cursor-not-allowed opacity-60'
+ : 'border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800'
+ }`}
                   disabled={props.envOverrides().discoverySubnet}
                   onInput={(e) => {
                     if (props.envOverrides().discoverySubnet) {
@@ -439,9 +439,9 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                 disabled={props.envOverrides().publicURL}
                 placeholder="http://192.168.1.100:8080"
                 class={`w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md ${props.envOverrides().publicURL
-                  ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900 cursor-not-allowed opacity-75'
-                  : 'border-border bg-surface'
-                  }`}
+ ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900 cursor-not-allowed opacity-75'
+ : 'border-border bg-surface'
+ }`}
               />
               {props.envOverrides().publicURL && (
                 <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
@@ -505,9 +505,9 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                 disabled={props.envOverrides().allowedOrigins}
                 placeholder="* or https://example.com"
                 class={`w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md ${props.envOverrides().allowedOrigins
-                  ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900 cursor-not-allowed opacity-75'
-                  : 'border-border bg-surface'
-                  }`}
+ ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900 cursor-not-allowed opacity-75'
+ : 'border-border bg-surface'
+ }`}
               />
               {props.envOverrides().allowedOrigins && (
                 <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">

@@ -182,7 +182,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
       };
     }
     return {
-      color: 'text-slate-700 dark:text-slate-400',
+      color: 'text-muted',
       bgColor: 'bg-surface-hover',
       text: 'UNKNOWN',
     };
@@ -198,7 +198,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
       case 'sas':
         return 'bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-300';
       default:
-        return 'bg-surface-hover text-slate-800 dark:text-slate-300';
+        return 'bg-surface-hover text-base-content';
     }
   };
 
@@ -234,50 +234,50 @@ export const DiskList: Component<DiskListProps> = (props) => {
     if (!hostId) return null;
     // Strip /dev/ if present to match agent metric key
     const deviceName = data.devPath.replace('/dev/', '');
-    return `${hostId}:${deviceName}`;
-  };
+ return `${hostId}:${deviceName}`;
+ };
 
-  return (
-    <div>
-      <Show when={filteredDisks().length === 0}>
-        <Card padding="lg" class="text-center">
-          <div class="text-slate-500">
-            <p class="text-sm font-medium">No physical disks found</p>
-            {selectedNodeName() && <p class="text-xs mt-1">for node {selectedNodeName()}</p>}
-            {props.searchTerm && <p class="text-xs mt-1">matching "{props.searchTerm}"</p>}
-          </div>
-          <Show when={!props.searchTerm && (props.disks || []).length === 0}>
-            <Show
-              when={hasPVENodes()}
-              fallback={
-                <div class="mt-4 p-4 bg-surface-alt border border-border rounded-md text-left">
-                  <p class="text-sm text-muted">
-                    No Proxmox nodes configured. Add a Proxmox VE cluster in Settings to monitor physical disks.
-                  </p>
-                </div>
-              }
-            >
-              <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md text-left">
-                <p class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
-                  Physical disk monitoring requirements:
-                </p>
-                <ol class="text-xs text-blue-800 dark:text-blue-200 space-y-1.5 ml-4 list-decimal">
-                  <li>Enable "Monitor physical disk health (SMART)" in Settings → Infrastructure (Proxmox node advanced settings)</li>
-                  <li>Enable SMART monitoring in Proxmox VE at Datacenter → Node → System → Advanced → "Monitor physical disk health"</li>
-                  <li>Wait 5 minutes for Proxmox to collect SMART data</li>
-                </ol>
-                <p class="text-xs text-blue-700 dark:text-blue-300 mt-3 italic">
-                  Note: Both Pulse and Proxmox must have SMART monitoring enabled.
-                </p>
-              </div>
-            </Show>
-          </Show>
-        </Card>
-      </Show>
+ return (
+ <div>
+ <Show when={filteredDisks().length === 0}>
+ <Card padding="lg" class="text-center">
+ <div class="">
+ <p class="text-sm font-medium">No physical disks found</p>
+ {selectedNodeName() && <p class="text-xs mt-1">for node {selectedNodeName()}</p>}
+ {props.searchTerm && <p class="text-xs mt-1">matching "{props.searchTerm}"</p>}
+ </div>
+ <Show when={!props.searchTerm && (props.disks || []).length === 0}>
+ <Show
+ when={hasPVENodes()}
+ fallback={
+ <div class="mt-4 p-4 bg-surface-alt border border-border rounded-md text-left">
+ <p class="text-sm text-muted">
+ No Proxmox nodes configured. Add a Proxmox VE cluster in Settings to monitor physical disks.
+ </p>
+ </div>
+ }
+ >
+ <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md text-left">
+ <p class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+ Physical disk monitoring requirements:
+ </p>
+ <ol class="text-xs text-blue-800 dark:text-blue-200 space-y-1.5 ml-4 list-decimal">
+ <li>Enable "Monitor physical disk health (SMART)" in Settings → Infrastructure (Proxmox node advanced settings)</li>
+ <li>Enable SMART monitoring in Proxmox VE at Datacenter → Node → System → Advanced → "Monitor physical disk health"</li>
+ <li>Wait 5 minutes for Proxmox to collect SMART data</li>
+ </ol>
+ <p class="text-xs text-blue-700 dark:text-blue-300 mt-3 italic">
+ Note: Both Pulse and Proxmox must have SMART monitoring enabled.
+ </p>
+ </div>
+ </Show>
+ </Show>
+ </Card>
+ </Show>
 
-      <Show when={filteredDisks().length > 0}>
-        <Card padding="none" tone="card" class="overflow-hidden">
-          <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
+ <Show when={filteredDisks().length > 0}>
+ <Card padding="none" tone="card" class="overflow-hidden">
+ <div class="overflow-x-auto" style={{'-webkit-overflow-scrolling': 'touch' }}>
             <Table class="w-full">
               <TableHeader>
                 <TableRow class="bg-surface-alt text-muted border-b border-border">
@@ -340,24 +340,24 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             <div class="flex items-center gap-1.5 min-w-0">
                               <div
                                 class={`cursor-pointer transition-transform duration-200 ${isSelected() ? 'rotate-90' : ''}`}
-                              >
-                                <svg class="w-3.5 h-3.5 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                                </svg>
-                              </div>
-                              <span class="font-medium text-base-content">
-                                {data.node}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
-                            <span class="font-mono text-muted">
-                              {data.devPath}
-                            </span>
-                          </TableCell>
-                          <TableCell class="px-1.5 sm:px-2 py-0.5 text-xs">
-                            <span class="text-base-content">
-                              {data.model || 'Unknown'}
+ >
+ <svg class="w-3.5 h-3.5 hover: dark:hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+ </svg>
+ </div>
+ <span class="font-medium text-base-content">
+ {data.node}
+ </span>
+ </div>
+ </TableCell>
+ <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
+ <span class="font-mono text-muted">
+ {data.devPath}
+ </span>
+ </TableCell>
+ <TableCell class="px-1.5 sm:px-2 py-0.5 text-xs">
+ <span class="text-base-content">
+ {data.model ||'Unknown'}
                             </span>
                           </TableCell>
                           <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
@@ -370,40 +370,40 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
                             <Show
                               when={data.used && data.used !== 'unknown'}
-                              fallback={<span class="text-slate-400">-</span>}
-                            >
-                              <span class="text-[10px] font-mono text-muted">
-                                {data.used}
-                              </span>
-                            </Show>
-                          </TableCell>
-                          <TableCell class="px-1.5 sm:px-2 py-0.5 text-xs">
-                            <span
-                              class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${health.bgColor} ${health.color}`}
-                            >
-                              {health.text}
-                            </span>
-                            <Show when={warning}>
-                              <span class="ml-1 text-yellow-500 dark:text-yellow-400" title="SMART warning: critical counters non-zero">
-                                &#9888;
-                              </span>
-                            </Show>
-                          </TableCell>
-                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
-                            <Show
-                              when={data.wearout > 0}
-                              fallback={<span class="text-slate-400">-</span>}
-                            >
-                              <div class="relative w-24 h-3.5 rounded overflow-hidden bg-surface-hover">
-                                <div
-                                  class={`absolute top-0 left-0 h-full ${data.wearout >= 50
-                                    ? 'bg-green-500 dark:bg-green-500'
-                                    : data.wearout >= 20
-                                      ? 'bg-yellow-500 dark:bg-yellow-500'
-                                      : data.wearout >= 10
-                                        ? 'bg-orange-500 dark:bg-orange-500'
-                                        : 'bg-red-500 dark:bg-red-500'
-                                    }`}
+ fallback={<span class="">-</span>}
+ >
+ <span class="text-[10px] font-mono text-muted">
+ {data.used}
+ </span>
+ </Show>
+ </TableCell>
+ <TableCell class="px-1.5 sm:px-2 py-0.5 text-xs">
+ <span
+ class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${health.bgColor} ${health.color}`}
+ >
+ {health.text}
+ </span>
+ <Show when={warning}>
+ <span class="ml-1 text-yellow-500 dark:text-yellow-400" title="SMART warning: critical counters non-zero">
+ &#9888;
+ </span>
+ </Show>
+ </TableCell>
+ <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
+ <Show
+ when={data.wearout > 0}
+ fallback={<span class="">-</span>}
+ >
+ <div class="relative w-24 h-3.5 rounded overflow-hidden bg-surface-hover">
+ <div
+ class={`absolute top-0 left-0 h-full ${data.wearout >= 50
+ ?'bg-green-500 dark:bg-green-500'
+ : data.wearout >= 20
+ ? 'bg-yellow-500 dark:bg-yellow-500'
+ : data.wearout >= 10
+ ? 'bg-orange-500 dark:bg-orange-500'
+ : 'bg-red-500 dark:bg-red-500'
+ }`}
                                   style={{ width: `${data.wearout}%` }}
                                 />
                                 <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-base-content leading-none">
@@ -429,11 +429,11 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             >
                               <span
                                 class={`font-medium ${data.temperature > 70
-                                  ? 'text-red-600 dark:text-red-400'
-                                  : data.temperature > 60
-                                    ? 'text-yellow-600 dark:text-yellow-400'
-                                    : 'text-green-600 dark:text-green-400'
-                                  }`}
+ ? 'text-red-600 dark:text-red-400'
+ : data.temperature > 60
+ ? 'text-yellow-600 dark:text-yellow-400'
+ : 'text-green-600 dark:text-green-400'
+ }`}
                               >
                                 {formatTemperature(data.temperature)}
                               </span>
@@ -468,7 +468,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         </TableRow>
                         <Show when={isSelected()}>
                           <TableRow>
-                            <TableCell colSpan={13} class="bg-surface-alt px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
+                            <TableCell colSpan={13} class="bg-surface-alt px-4 py-4 border-b border-border-subtle shadow-inner">
                               <DiskDetail disk={disk} nodes={props.nodes} />
                             </TableCell>
                           </TableRow>

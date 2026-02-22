@@ -325,7 +325,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     return sortDirection() === 'asc' ? '▲' : '▼';
   };
 
-  const thClassBase = "px-1.5 sm:px-2 py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 whitespace-nowrap";
+  const thClassBase = "px-1.5 sm:px-2 py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-surface-hover whitespace-nowrap";
   const thClass = `${thClassBase} text-center`;
 
   // Cell class constants for consistency
@@ -499,47 +499,47 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         <Show when={isPVEItem}>
                           <div
                             class={`cursor-pointer transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}
-                            onClick={(e) => toggleNodeExpand(nodeId, e)}
-                          >
-                            <svg class="w-3.5 h-3.5 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                            </svg>
-                          </div>
-                        </Show>
-                        <StatusDot
-                          variant={statusIndicator().variant}
-                          title={statusIndicator().label}
-                          ariaLabel={statusIndicator().label}
-                          size="xs"
-                        />
-                        <span
-                          class="font-medium text-[11px] text-base-content whitespace-nowrap select-text"
-                          title={displayName()}
-                        >
-                          {displayName()}
-                        </span>
-                        <Show when={showActualName()}>
-                          <span class="text-[9px] text-muted whitespace-nowrap">
-                            ({(node as Node).name})
-                          </span>
-                        </Show>
-                        <div class="hidden xl:flex items-center gap-1.5 ml-1 flex-shrink min-w-0 overflow-hidden">
-                          <Show when={isPVEItem}>
-                            <span class="text-[9px] px-1 py-0 rounded font-medium bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400">
-                              PVE
-                            </span>
-                          </Show>
-                          <Show when={isPVEItem && node!.pveVersion}>
-                            <span class="text-[9px] text-muted whitespace-nowrap">
-                              v{node!.pveVersion.split('/')[1] || node!.pveVersion}
+ onClick={(e) => toggleNodeExpand(nodeId, e)}
+ >
+ <svg class="w-3.5 h-3.5 hover: dark:hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+ </svg>
+ </div>
+ </Show>
+ <StatusDot
+ variant={statusIndicator().variant}
+ title={statusIndicator().label}
+ ariaLabel={statusIndicator().label}
+ size="xs"
+ />
+ <span
+ class="font-medium text-[11px] text-base-content whitespace-nowrap select-text"
+ title={displayName()}
+ >
+ {displayName()}
+ </span>
+ <Show when={showActualName()}>
+ <span class="text-[9px] text-muted whitespace-nowrap">
+ ({(node as Node).name})
+ </span>
+ </Show>
+ <div class="hidden xl:flex items-center gap-1.5 ml-1 flex-shrink min-w-0 overflow-hidden">
+ <Show when={isPVEItem}>
+ <span class="text-[9px] px-1 py-0 rounded font-medium bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400">
+ PVE
+ </span>
+ </Show>
+ <Show when={isPVEItem && node!.pveVersion}>
+ <span class="text-[9px] text-muted whitespace-nowrap">
+ v{node!.pveVersion.split('/')[1] || node!.pveVersion}
                             </span>
                           </Show>
                           <Show when={isPVEItem && node!.isClusterMember !== undefined}>
                             <span
                               class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${node!.isClusterMember
-                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-400'
-                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                }`}
+ ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-400'
+ : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+ }`}
                             >
                               {node!.isClusterMember ? node!.clusterName : 'Standalone'}
                             </span>
@@ -555,9 +555,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                           <Show when={isPVEItem && online && node!.pendingUpdates !== undefined && node!.pendingUpdates > 0}>
                             <span
                               class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${(node!.pendingUpdates ?? 0) >= 10
-                                ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400'
-                                : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400'
-                                }`}
+ ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400'
+ : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400'
+ }`}
                               title={`${node!.pendingUpdates} pending apt update${node!.pendingUpdates !== 1 ? 's' : ''}`}
                             >
                               {node!.pendingUpdates} updates
@@ -584,9 +584,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                       <div class="flex justify-center">
                         <span
                           class={`text-xs whitespace-nowrap ${isPVEItem && (node?.uptime ?? 0) < 3600
-                            ? 'text-orange-500'
-                            : 'text-muted'
-                            }`}
+ ? 'text-orange-500'
+ : 'text-muted'
+ }`}
                         >
                           <Show when={online && uptimeValue} fallback="-">
                             <Show when={isMobile()} fallback={formatUptime(uptimeValue)}>
@@ -793,7 +793,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                   </TableRow>
                   <Show when={isExpanded() && isPVEItem}>
                     <TableRow>
-                      <TableCell colspan={totalColumnCount()} class="bg-surface-alt px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
+                      <TableCell colspan={totalColumnCount()} class="bg-surface-alt px-4 py-4 border-b border-border-subtle shadow-inner">
                         <Suspense fallback={<div class="flex justify-center p-4">Loading stats...</div>}>
                           <NodeDrawer node={node!} host={linkedHostForDrawer()} />
                         </Suspense>

@@ -81,10 +81,10 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
                         onClick={() => handleSelectOption(q.id, option.value)}
                         disabled={props.question.isAnswering}
                         class={`w-full px-3 py-2 text-sm text-left rounded-md border transition-colors ${
-                          answers()[q.id] === option.value
-                            ? 'bg-blue-100 dark:bg-blue-800 border-blue-400 dark:border-blue-600 text-blue-800 dark:text-blue-200'
-                            : 'bg-surface border-blue-200 dark:border-blue-700 text-base-content hover:bg-blue-50 dark:hover:bg-blue-900'
-                        } ${props.question.isAnswering ? 'opacity-50 cursor-not-allowed' : ''}`}
+ answers()[q.id] === option.value
+ ? 'bg-blue-100 dark:bg-blue-800 border-blue-400 dark:border-blue-600 text-blue-800 dark:text-blue-200'
+ : 'bg-surface border-blue-200 dark:border-blue-700 text-base-content hover:bg-blue-50 dark:hover:bg-blue-900'
+ } ${props.question.isAnswering ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         <div class="flex flex-col gap-0.5">
                           <span>{option.label}</span>
@@ -110,12 +110,12 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
             onClick={handleSubmit}
             disabled={props.question.isAnswering || !isValid()}
             class={`flex-1 px-3 py-2 text-xs font-semibold rounded-md transition-all ${
-              props.question.isAnswering
-                ? 'bg-blue-400 text-white cursor-wait'
-                : !isValid()
-                ? 'bg-slate-300 dark:bg-slate-600 text-muted cursor-not-allowed'
-                : 'bg-blue-500 hover:bg-blue-600 text-white shadow-sm hover:shadow-sm'
-            }`}
+ props.question.isAnswering
+ ? 'bg-blue-400 text-white cursor-wait'
+ : !isValid()
+ ? 'bg-surface-hover text-muted cursor-not-allowed'
+ : 'bg-blue-500 hover:bg-blue-600 text-white shadow-sm hover:shadow-sm'
+ }`}
           >
             <Show
               when={!props.question.isAnswering}
@@ -141,7 +141,7 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
             type="button"
             onClick={props.onSkip}
             disabled={props.question.isAnswering}
-            class="flex-1 px-3 py-2 text-xs font-semibold bg-slate-100 hover:bg-surface-hover dark:hover:bg-slate-600 text-base-content rounded-md transition-colors disabled:opacity-50"
+            class="flex-1 px-3 py-2 text-xs font-semibold hover:bg-surface-hover text-base-content rounded-md transition-colors disabled:opacity-50"
           >
             <span class="flex items-center justify-center gap-1.5">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

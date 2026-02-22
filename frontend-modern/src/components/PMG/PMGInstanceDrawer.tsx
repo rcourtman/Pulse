@@ -220,7 +220,7 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                     <div class="mt-1 text-xs text-muted">
                       {pmgData().hostname || 'Unknown host'}
                       <Show when={pmgData().version}>
-                        <span class="mx-2 text-slate-300 dark:text-slate-700">|</span>
+                        <span class="mx-2 text-muted">|</span>
                         <span>v{pmgData().version}</span>
                       </Show>
                     </div>
@@ -299,91 +299,91 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                               <TableCell class="py-2 pr-3 font-medium text-base-content">{node.name}</TableCell>
                               <TableCell class="py-2 pr-3 text-muted">{node.role || '—'}</TableCell>
                               <TableCell class="py-2 pr-3 text-muted">{node.status || '—'}</TableCell>
-                              <TableCell class="py-2 pl-3 text-right text-muted">
-                                {formatCompact(node.queueStatus?.total ?? 0)}
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </For>
-                      </TableBody>
-                    </Table>
-                  </div>
-                </Card>
-              </Show>
+ <TableCell class="py-2 pl-3 text-right text-muted">
+ {formatCompact(node.queueStatus?.total ?? 0)}
+ </TableCell>
+ </TableRow>
+ )}
+ </For>
+ </TableBody>
+ </Table>
+ </div>
+ </Card>
+ </Show>
 
-              <Show when={(pmgData().relayDomains || []).length > 0}>
-                <Card padding="lg">
-                  <div class="flex items-center justify-between gap-3">
-                    <div class="text-xs font-semibold text-base-content">Relay Domains</div>
-                    <input
-                      value={searchRelay()}
-                      onInput={(e) => setSearchRelay(e.currentTarget.value)}
-                      placeholder="Search domains..."
-                      class="w-56 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                    />
-                  </div>
-                  <div class="mt-2 overflow-x-auto">
-                    <Table class="min-w-full text-xs">
-                      <TableHeader class="text-[10px] uppercase tracking-wide text-muted">
-                        <TableRow>
-                          <TableHead class="text-left py-2 pr-3">Domain</TableHead>
-                          <TableHead class="text-left py-2 pr-3">Comment</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody class="divide-y divide-gray-100 dark:divide-gray-800">
-                        <For each={relayDomains()}>
-                          {(row) => (
-                            <TableRow>
-                              <TableCell class="py-2 pr-3 font-medium text-base-content">{row.domain}</TableCell>
-                              <TableCell class="py-2 pr-3 text-muted">{row.comment || '—'}</TableCell>
-                            </TableRow>
-                          )}
-                        </For>
-                      </TableBody>
-                    </Table>
-                  </div>
-                </Card>
-              </Show>
+ <Show when={(pmgData().relayDomains || []).length > 0}>
+ <Card padding="lg">
+ <div class="flex items-center justify-between gap-3">
+ <div class="text-xs font-semibold text-base-content">Relay Domains</div>
+ <input
+ value={searchRelay()}
+ onInput={(e) => setSearchRelay(e.currentTarget.value)}
+ placeholder="Search domains..."
+ class="w-56 rounded border border-slate-200 bg-white px-2 py-1 text-xs placeholder: dark:border-slate-700 dark:bg-slate-800 "
+ />
+ </div>
+ <div class="mt-2 overflow-x-auto">
+ <Table class="min-w-full text-xs">
+ <TableHeader class="text-[10px] uppercase tracking-wide text-muted">
+ <TableRow>
+ <TableHead class="text-left py-2 pr-3">Domain</TableHead>
+ <TableHead class="text-left py-2 pr-3">Comment</TableHead>
+ </TableRow>
+ </TableHeader>
+ <TableBody class="divide-y divide-gray-100 dark:divide-gray-800">
+ <For each={relayDomains()}>
+ {(row) => (
+ <TableRow>
+ <TableCell class="py-2 pr-3 font-medium text-base-content">{row.domain}</TableCell>
+ <TableCell class="py-2 pr-3 text-muted">{row.comment ||'—'}</TableCell>
+ </TableRow>
+ )}
+ </For>
+ </TableBody>
+ </Table>
+ </div>
+ </Card>
+ </Show>
 
-              <Show when={(pmgData().domainStats || []).length > 0}>
-                <Card padding="lg">
-                  <div class="flex items-center justify-between gap-3">
-                    <div class="min-w-0">
-                      <div class="text-xs font-semibold text-base-content">Domain Stats</div>
-                      <Show when={domainStatsAsOfRelative()}>
-                        <div class="mt-0.5 text-[11px] text-muted">
-                          As of {domainStatsAsOfRelative()}
-                        </div>
-                      </Show>
-                    </div>
-                    <input
-                      value={searchDomain()}
-                      onInput={(e) => setSearchDomain(e.currentTarget.value)}
-                      placeholder="Search domains..."
-                      class="w-56 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                    />
-                  </div>
-                  <div class="mt-2 overflow-x-auto">
-                    <Table class="min-w-full text-xs">
-                      <TableHeader class="text-[10px] uppercase tracking-wide text-muted">
-                        <TableRow>
-                          <TableHead class="text-left py-2 pr-3">Domain</TableHead>
-                          <TableHead class="text-right py-2 pl-3">Mail</TableHead>
-                          <TableHead class="text-right py-2 pl-3">Spam</TableHead>
-                          <TableHead class="text-right py-2 pl-3">Virus</TableHead>
-                          <TableHead class="text-right py-2 pl-3">Bytes</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody class="divide-y divide-gray-100 dark:divide-gray-800">
-                        <For each={domainStats()}>
-                          {(row) => (
-                            <TableRow>
-                              <TableCell class="py-2 pr-3 font-medium text-base-content">{row.domain}</TableCell>
-                              <TableCell class="py-2 pl-3 text-right text-muted">{formatCompact(row.mailCount)}</TableCell>
-                              <TableCell class="py-2 pl-3 text-right text-muted">{formatCompact(row.spamCount)}</TableCell>
-                              <TableCell class="py-2 pl-3 text-right text-muted">{formatCompact(row.virusCount)}</TableCell>
-                              <TableCell class="py-2 pl-3 text-right text-muted">
-                                {row.bytes ? formatBytes(row.bytes) : '—'}
+ <Show when={(pmgData().domainStats || []).length > 0}>
+ <Card padding="lg">
+ <div class="flex items-center justify-between gap-3">
+ <div class="min-w-0">
+ <div class="text-xs font-semibold text-base-content">Domain Stats</div>
+ <Show when={domainStatsAsOfRelative()}>
+ <div class="mt-0.5 text-[11px] text-muted">
+ As of {domainStatsAsOfRelative()}
+ </div>
+ </Show>
+ </div>
+ <input
+ value={searchDomain()}
+ onInput={(e) => setSearchDomain(e.currentTarget.value)}
+ placeholder="Search domains..."
+ class="w-56 rounded border border-slate-200 bg-white px-2 py-1 text-xs placeholder: dark:border-slate-700 dark:bg-slate-800 "
+ />
+ </div>
+ <div class="mt-2 overflow-x-auto">
+ <Table class="min-w-full text-xs">
+ <TableHeader class="text-[10px] uppercase tracking-wide text-muted">
+ <TableRow>
+ <TableHead class="text-left py-2 pr-3">Domain</TableHead>
+ <TableHead class="text-right py-2 pl-3">Mail</TableHead>
+ <TableHead class="text-right py-2 pl-3">Spam</TableHead>
+ <TableHead class="text-right py-2 pl-3">Virus</TableHead>
+ <TableHead class="text-right py-2 pl-3">Bytes</TableHead>
+ </TableRow>
+ </TableHeader>
+ <TableBody class="divide-y divide-gray-100 dark:divide-gray-800">
+ <For each={domainStats()}>
+ {(row) => (
+ <TableRow>
+ <TableCell class="py-2 pr-3 font-medium text-base-content">{row.domain}</TableCell>
+ <TableCell class="py-2 pl-3 text-right text-muted">{formatCompact(row.mailCount)}</TableCell>
+ <TableCell class="py-2 pl-3 text-right text-muted">{formatCompact(row.spamCount)}</TableCell>
+ <TableCell class="py-2 pl-3 text-right text-muted">{formatCompact(row.virusCount)}</TableCell>
+ <TableCell class="py-2 pl-3 text-right text-muted">
+ {row.bytes ? formatBytes(row.bytes) :'—'}
                               </TableCell>
                             </TableRow>
                           )}

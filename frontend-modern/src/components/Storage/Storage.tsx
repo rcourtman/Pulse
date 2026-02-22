@@ -415,8 +415,8 @@ const Storage: Component = () => {
                     </div>
                     <span
                       class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${getCephHealthStyles(
-                        cluster.health,
-                      )}`}
+ cluster.health,
+ )}`}
                     >
                       {getCephHealthLabel(cluster.health)}
                     </span>
@@ -468,77 +468,77 @@ const Storage: Component = () => {
                   onClick={() => setView('disks')}
                   aria-pressed={view() === 'disks'}
                   class={segmentedButtonClass(view() === 'disks')}
-                >
-                  Physical Disks
-                </button>
-              </div>
-              <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
-              <select
-                value={selectedNodeId()}
-                onChange={(event) => setSelectedNodeId(event.currentTarget.value)}
-                class="px-2 py-1 text-xs border border-border rounded-md bg-surface text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                aria-label="Node"
-              >
-                <option value="all">All Nodes</option>
-                <For each={nodeOptions()}>{(node) => <option value={node.id}>{node.label}</option>}</For>
-              </select>
-              <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
-            </>
-          }
-        />
-      </Show>
+ >
+ Physical Disks
+ </button>
+ </div>
+ <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
+ <select
+ value={selectedNodeId()}
+ onChange={(event) => setSelectedNodeId(event.currentTarget.value)}
+ class="px-2 py-1 text-xs border border-border rounded-md bg-surface text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+ aria-label="Node"
+ >
+ <option value="all">All Nodes</option>
+ <For each={nodeOptions()}>{(node) => <option value={node.id}>{node.label}</option>}</For>
+ </select>
+ <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
+ </>
+ }
+ />
+ </Show>
 
-      <Show when={reconnecting()}>
-        <Card padding="sm" tone="warning">
-          <div class="flex items-center justify-between gap-3">
-            <span class="text-xs text-amber-800 dark:text-amber-200">Reconnecting to backend data stream…</span>
-            <button
-              type="button"
-              onClick={() => reconnect()}
-              class="rounded border border-amber-300 bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200 dark:hover:bg-amber-900"
-            >
-              Retry now
-            </button>
-          </div>
-        </Card>
-      </Show>
+ <Show when={reconnecting()}>
+ <Card padding="sm" tone="warning">
+ <div class="flex items-center justify-between gap-3">
+ <span class="text-xs text-amber-800 dark:text-amber-200">Reconnecting to backend data stream…</span>
+ <button
+ type="button"
+ onClick={() => reconnect()}
+ class="rounded border border-amber-300 bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200 dark:hover:bg-amber-900"
+ >
+ Retry now
+ </button>
+ </div>
+ </Card>
+ </Show>
 
-      <Show when={hasFetchError()}>
-        <Card padding="sm" tone="warning">
-          <div class="text-xs text-amber-800 dark:text-amber-200">
-            Unable to refresh storage resources. Showing latest available data.
-          </div>
-        </Card>
-      </Show>
+ <Show when={hasFetchError()}>
+ <Card padding="sm" tone="warning">
+ <div class="text-xs text-amber-800 dark:text-amber-200">
+ Unable to refresh storage resources. Showing latest available data.
+ </div>
+ </Card>
+ </Show>
 
-      <Show when={isDisconnectedAfterLoad()}>
-        <Card padding="sm" tone="warning">
-          <div class="flex items-center justify-between gap-3">
-            <span class="text-xs text-amber-800 dark:text-amber-200">
-              Storage data stream disconnected. Data may be stale.
-            </span>
-            <button
-              type="button"
-              onClick={() => reconnect()}
-              class="rounded border border-amber-300 bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200 dark:hover:bg-amber-900"
-            >
-              Reconnect
-            </button>
-          </div>
-        </Card>
-      </Show>
+ <Show when={isDisconnectedAfterLoad()}>
+ <Card padding="sm" tone="warning">
+ <div class="flex items-center justify-between gap-3">
+ <span class="text-xs text-amber-800 dark:text-amber-200">
+ Storage data stream disconnected. Data may be stale.
+ </span>
+ <button
+ type="button"
+ onClick={() => reconnect()}
+ class="rounded border border-amber-300 bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200 dark:hover:bg-amber-900"
+ >
+ Reconnect
+ </button>
+ </div>
+ </Card>
+ </Show>
 
-      <Show when={isWaitingForData()}>
-        <Card padding="sm" tone="warning">
-          <div class="text-xs text-amber-800 dark:text-amber-200">
-            Waiting for storage data from connected platforms.
-          </div>
-        </Card>
-      </Show>
+ <Show when={isWaitingForData()}>
+ <Card padding="sm" tone="warning">
+ <div class="text-xs text-amber-800 dark:text-amber-200">
+ Waiting for storage data from connected platforms.
+ </div>
+ </Card>
+ </Show>
 
-      <Card padding="none" class="overflow-hidden">
-        <div class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-          {view() === 'pools' ? 'Storage Pools' : 'Physical Disks'}
+ <Card padding="none" class="overflow-hidden">
+ <div class="border-b px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 ">
+ {view() ==='pools' ? 'Storage Pools' : 'Physical Disks'}
         </div>
         <Show when={view() === 'disks'}>
           <div class="p-2">

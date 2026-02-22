@@ -170,20 +170,20 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                             </p>
                           </div>
                         </div>
-                        <Show when={node.type === 'pve' && 'isCluster' in node && node.isCluster}>
-                          <div class="rounded-md border border-border bg-surface-alt px-3 py-2 space-y-2">
-                            <div class="flex items-center gap-2 text-xs font-semibold text-base-content">
-                              <span>{clusterName()} Cluster</span>
-                              <span class="ml-auto text-[0.65rem] font-normal text-slate-500 dark:text-slate-500">
-                                {clusterEndpoints().length} nodes
-                              </span>
-                            </div>
-                            <Show when={clusterEndpoints().length > 0}>
-                              <div class="flex flex-col gap-2">
-                                <For each={clusterEndpoints()}>
-                                  {(endpoint) => {
-                                    const pulseStatus = endpoint.PulseReachable === null || endpoint.PulseReachable === undefined
-                                      ? 'unknown'
+                        <Show when={node.type === 'pve' && 'isCluster'in node && node.isCluster}>
+ <div class="rounded-md border border-border bg-surface-alt px-3 py-2 space-y-2">
+ <div class="flex items-center gap-2 text-xs font-semibold text-base-content">
+ <span>{clusterName()} Cluster</span>
+ <span class="ml-auto text-[0.65rem] font-normal text-slate-500">
+ {clusterEndpoints().length} nodes
+ </span>
+ </div>
+ <Show when={clusterEndpoints().length > 0}>
+ <div class="flex flex-col gap-2">
+ <For each={clusterEndpoints()}>
+ {(endpoint) => {
+ const pulseStatus = endpoint.PulseReachable === null || endpoint.PulseReachable === undefined
+ ?'unknown'
                                       : endpoint.PulseReachable
                                         ? 'reachable'
                                         : 'unreachable';
@@ -237,7 +237,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                                 <button
                                   type="button"
                                   onClick={() => props.onRefreshCluster?.(node.id)}
-                                  class="flex min-h-10 sm:min-h-9 items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 bg-white dark:bg-slate-700 border border-border rounded hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+                                  class="flex min-h-10 sm:min-h-9 items-center gap-1 px-2.5 py-1.5 text-xs font-medium hover:text-muted dark:hover:text-slate-200 bg-white dark:bg-slate-700 border border-border rounded hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
                                   title="Re-detect cluster membership (use if nodes were added to the Proxmox cluster)"
                                 >
                                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -398,63 +398,63 @@ const resolvePbsStatusMeta = (
     case 'disconnected':
     case 'offline':
     case 'error':
-      return STATUS_META.offline;
-    default:
-      return STATUS_META.unknown;
-  }
+ return STATUS_META.offline;
+ default:
+ return STATUS_META.unknown;
+ }
 };
 
 export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
-  return (
-    <Card padding="none" tone="card" class="rounded-md">
-      <div class="overflow-x-auto">
-        <Table class="min-w-[max-content] divide-y divide-border text-sm">
-          <TableHeader class="bg-surface-alt">
-            <TableRow>
-              <TableHead class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                Node
-              </TableHead>
-              <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                Credentials
-              </TableHead>
-              <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                Capabilities
-              </TableHead>
-              <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                Status
-              </TableHead>
-              <TableHead class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-muted">
-                Actions
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody class="divide-y divide-border bg-surface">
-            <For each={props.nodes}>
-              {(node) => {
-                const statusMeta = createMemo(() => resolvePbsStatusMeta(node, props.statePbs));
-                return (
-                  <TableRow class="even:bg-slate-50 dark:even:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
-                    <TableCell class="align-top py-3 pl-4 pr-3">
-                      <div class="min-w-0 space-y-1">
-                        <div class="flex items-start gap-3">
-                          <div class={`mt-1.5 h-3 w-3 rounded-full ${statusMeta().dotClass}`}></div>
-                          <div class="min-w-0 flex-1">
-                            <p class="font-medium text-base-content truncate">
-                              {node.name}
-                            </p>
-                            <p class="text-xs text-muted truncate">
-                              {node.host}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell class="align-top px-3 py-3">
-                      <div class="flex flex-col gap-1">
-                        <span class="text-xs text-muted">
-                          {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
-                        </span>
-                        <Show when={node.source === 'agent'}>
+ return (
+ <Card padding="none" tone="card" class="rounded-md">
+ <div class="overflow-x-auto">
+ <Table class="min-w-[max-content] divide-y divide-border text-sm">
+ <TableHeader class="bg-surface-alt">
+ <TableRow>
+ <TableHead class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+ Node
+ </TableHead>
+ <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+ Credentials
+ </TableHead>
+ <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+ Capabilities
+ </TableHead>
+ <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+ Status
+ </TableHead>
+ <TableHead class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-muted">
+ Actions
+ </TableHead>
+ </TableRow>
+ </TableHeader>
+ <TableBody class="divide-y divide-border bg-surface">
+ <For each={props.nodes}>
+ {(node) => {
+ const statusMeta = createMemo(() => resolvePbsStatusMeta(node, props.statePbs));
+ return (
+ <TableRow class="even: dark:even:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
+ <TableCell class="align-top py-3 pl-4 pr-3">
+ <div class="min-w-0 space-y-1">
+ <div class="flex items-start gap-3">
+ <div class={`mt-1.5 h-3 w-3 rounded-full ${statusMeta().dotClass}`}></div>
+ <div class="min-w-0 flex-1">
+ <p class="font-medium text-base-content truncate">
+ {node.name}
+ </p>
+ <p class="text-xs text-muted truncate">
+ {node.host}
+ </p>
+ </div>
+ </div>
+ </div>
+ </TableCell>
+ <TableCell class="align-top px-3 py-3">
+ <div class="flex flex-col gap-1">
+ <span class="text-xs text-muted">
+ {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
+ </span>
+ <Show when={node.source ==='agent'}>
                           <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-surface-hover text-base-content rounded w-fit">
                             <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
                             Agent
@@ -596,63 +596,63 @@ const resolvePmgStatusMeta = (
     case 'disconnected':
     case 'offline':
     case 'error':
-      return STATUS_META.offline;
-    default:
-      return STATUS_META.unknown;
-  }
+ return STATUS_META.offline;
+ default:
+ return STATUS_META.unknown;
+ }
 };
 
 export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
-  return (
-    <Card padding="none" tone="card" class="rounded-md">
-      <div class="overflow-x-auto">
-        <Table class="min-w-[max-content] divide-y divide-border text-sm">
-          <TableHeader class="bg-surface-alt">
-            <TableRow>
-              <TableHead class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                Node
-              </TableHead>
-              <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                Credentials
-              </TableHead>
-              <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                Capabilities
-              </TableHead>
-              <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                Status
-              </TableHead>
-              <TableHead class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-muted">
-                Actions
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody class="divide-y divide-border bg-surface">
-            <For each={props.nodes}>
-              {(node) => {
-                const statusMeta = createMemo(() => resolvePmgStatusMeta(node, props.statePmg));
-                return (
-                  <TableRow class="even:bg-slate-50 dark:even:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
-                    <TableCell class="align-top py-3 pl-4 pr-3">
-                      <div class="min-w-0 space-y-1">
-                        <div class="flex items-start gap-3">
-                          <div class={`mt-1.5 h-3 w-3 rounded-full ${statusMeta().dotClass}`}></div>
-                          <div class="min-w-0 flex-1">
-                            <p class="font-medium text-base-content truncate">
-                              {node.name}
-                            </p>
-                            <p class="text-xs text-muted truncate">
-                              {node.host}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell class="align-top px-3 py-3">
-                      <div class="flex flex-col gap-1">
-                        <span class="text-xs text-muted">
-                          {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
-                        </span>
-                        <Show when={node.source === 'agent'}>
+ return (
+ <Card padding="none" tone="card" class="rounded-md">
+ <div class="overflow-x-auto">
+ <Table class="min-w-[max-content] divide-y divide-border text-sm">
+ <TableHeader class="bg-surface-alt">
+ <TableRow>
+ <TableHead class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+ Node
+ </TableHead>
+ <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+ Credentials
+ </TableHead>
+ <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+ Capabilities
+ </TableHead>
+ <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+ Status
+ </TableHead>
+ <TableHead class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-muted">
+ Actions
+ </TableHead>
+ </TableRow>
+ </TableHeader>
+ <TableBody class="divide-y divide-border bg-surface">
+ <For each={props.nodes}>
+ {(node) => {
+ const statusMeta = createMemo(() => resolvePmgStatusMeta(node, props.statePmg));
+ return (
+ <TableRow class="even: dark:even:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
+ <TableCell class="align-top py-3 pl-4 pr-3">
+ <div class="min-w-0 space-y-1">
+ <div class="flex items-start gap-3">
+ <div class={`mt-1.5 h-3 w-3 rounded-full ${statusMeta().dotClass}`}></div>
+ <div class="min-w-0 flex-1">
+ <p class="font-medium text-base-content truncate">
+ {node.name}
+ </p>
+ <p class="text-xs text-muted truncate">
+ {node.host}
+ </p>
+ </div>
+ </div>
+ </div>
+ </TableCell>
+ <TableCell class="align-top px-3 py-3">
+ <div class="flex flex-col gap-1">
+ <span class="text-xs text-muted">
+ {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
+ </span>
+ <Show when={node.source ==='agent'}>
                           <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-surface-hover text-base-content rounded w-fit">
                             <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
                             Agent

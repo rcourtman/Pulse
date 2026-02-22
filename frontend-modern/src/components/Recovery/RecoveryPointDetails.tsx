@@ -297,72 +297,72 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
                 const datastore = match().datastore;
                 const usagePercent = computeDatastoreUsagePercent(datastore);
                 const status = String(datastore.status || '').trim();
-                const dedupFactor = datastore.deduplicationFactor;
-                return (
-                  <div class="rounded border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800">
-                    <div class="flex items-center justify-between gap-2">
-                      <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                        Repository Health
-                      </div>
-                      <Show when={status.length > 0}>
-                        <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
-                          {status}
-                        </span>
-                      </Show>
-                    </div>
+ const dedupFactor = datastore.deduplicationFactor;
+ return (
+ <div class="rounded border border-slate-200 px-3 py-2 text-xs dark:border-slate-700">
+ <div class="flex items-center justify-between gap-2">
+ <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
+ Repository Health
+ </div>
+ <Show when={status.length > 0}>
+ <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium">
+ {status}
+ </span>
+ </Show>
+ </div>
 
-                    <div class="mt-0.5 font-mono text-[11px] text-base-content break-all">
-                      Datastore: {datastore.name}
-                    </div>
+ <div class="mt-0.5 font-mono text-[11px] text-base-content break-all">
+ Datastore: {datastore.name}
+ </div>
 
-                    <div class="mt-2">
-                      <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                        Space Usage
-                      </div>
-                      <div class="mt-0.5 font-mono text-[11px] text-base-content">
-                        {formatBytes(datastore.used, 2)} / {formatBytes(datastore.total, 2)} ({Math.round(usagePercent)}%)
-                      </div>
-                      <div class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-hover">
-                        <div
-                          class={`h-full rounded-full transition-[width] ${usageBarColorClass(usagePercent)}`}
-                          style={{ width: `${usagePercent}%` }}
-                        />
-                      </div>
-                    </div>
+ <div class="mt-2">
+ <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
+ Space Usage
+ </div>
+ <div class="mt-0.5 font-mono text-[11px] text-base-content">
+ {formatBytes(datastore.used, 2)} / {formatBytes(datastore.total, 2)} ({Math.round(usagePercent)}%)
+ </div>
+ <div class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-hover">
+ <div
+ class={`h-full rounded-full transition-[width] ${usageBarColorClass(usagePercent)}`}
+ style={{ width: `${usagePercent}%` }}
+ />
+ </div>
+ </div>
 
-                    <Show
-                      when={
-                        typeof dedupFactor === 'number' &&
-                        Number.isFinite(dedupFactor) &&
-                        dedupFactor > 0
-                      }
-                    >
-                      <div class="mt-2">
-                        <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                          Dedup Factor
-                        </div>
-                        <div class="mt-0.5 font-mono text-[11px] text-base-content">
-                          {Number(dedupFactor).toFixed(2)}x
-                        </div>
-                      </div>
-                    </Show>
-                  </div>
-                );
-              }}
-            </Show>
+ <Show
+ when={
+ typeof dedupFactor ==='number'&&
+ Number.isFinite(dedupFactor) &&
+ dedupFactor > 0
+ }
+ >
+ <div class="mt-2">
+ <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
+ Dedup Factor
+ </div>
+ <div class="mt-0.5 font-mono text-[11px] text-base-content">
+ {Number(dedupFactor).toFixed(2)}x
+ </div>
+ </div>
+ </Show>
+ </div>
+ );
+ }}
+ </Show>
 
-            <Show when={pbsFiles().length > 0}>
-              <div class="rounded border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowPbsFiles((v) => !v)}
-                  class="flex w-full items-center justify-between px-3 py-2 text-left text-xs text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700"
-                >
-                  <span class="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                    Files ({pbsFiles().length})
-                  </span>
-                  <svg
-                    class={`h-3 w-3 text-slate-400 transition-transform ${showPbsFiles() ? 'rotate-180' : ''}`}
+ <Show when={pbsFiles().length > 0}>
+ <div class="rounded border border-border ">
+ <button
+ type="button"
+ onClick={() => setShowPbsFiles((v) => !v)}
+ class="flex w-full items-center justify-between px-3 py-2 text-left text-xs hover:bg-surface-hover"
+ >
+ <span class="text-[10px] font-semibold uppercase tracking-wide text-muted">
+ Files ({pbsFiles().length})
+ </span>
+ <svg
+ class={`h-3 w-3 transition-transform ${showPbsFiles() ?'rotate-180' : ''}`}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"

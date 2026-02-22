@@ -77,103 +77,103 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
     void loadOrganization();
 
     const unsubscribe = eventBus.on('org_switched', () => {
-      void loadOrganization();
-    });
-    onCleanup(unsubscribe);
-  });
+ void loadOrganization();
+ });
+ onCleanup(unsubscribe);
+ });
 
-  return (
-    <Show when={isMultiTenantEnabled()} fallback={<div class="p-4 text-sm text-slate-500">This feature is not available.</div>}>
-      <div class="space-y-6">
-        <SettingsPanel
-          title="Organization Overview"
-          description="Review organization metadata, membership footprint, and edit the display name."
-          icon={<Building2 class="w-5 h-5" />}
-          noPadding
-          bodyClass="divide-y divide-border"
-        >
-          <Show
-            when={!loading()}
-            fallback={
-              <div class="space-y-5 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
-                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {Array.from({ length: 4 }).map(() => (
-                    <div class="rounded-md border border-border p-3 space-y-2">
-                      <div class="h-3 w-20 animate-pulse rounded bg-surface-hover" />
-                      <div class="h-5 w-28 animate-pulse rounded bg-surface-hover" />
-                    </div>
-                  ))}
-                </div>
+ return (
+ <Show when={isMultiTenantEnabled()} fallback={<div class="p-4 text-sm ">This feature is not available.</div>}>
+ <div class="space-y-6">
+ <SettingsPanel
+ title="Organization Overview"
+ description="Review organization metadata, membership footprint, and edit the display name."
+ icon={<Building2 class="w-5 h-5" />}
+ noPadding
+ bodyClass="divide-y divide-border"
+ >
+ <Show
+ when={!loading()}
+ fallback={
+ <div class="space-y-5 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+ <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+ {Array.from({ length: 4 }).map(() => (
+ <div class="rounded-md border border-border p-3 space-y-2">
+ <div class="h-3 w-20 animate-pulse rounded bg-surface-hover" />
+ <div class="h-5 w-28 animate-pulse rounded bg-surface-hover" />
+ </div>
+ ))}
+ </div>
 
-                <div class="space-y-2">
-                  <div class="h-4 w-24 animate-pulse rounded bg-surface-hover" />
-                  <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <div class="h-10 w-full animate-pulse rounded bg-surface-hover" />
-                    <div class="h-10 w-20 animate-pulse rounded bg-surface-hover" />
-                  </div>
-                </div>
+ <div class="space-y-2">
+ <div class="h-4 w-24 animate-pulse rounded bg-surface-hover" />
+ <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+ <div class="h-10 w-full animate-pulse rounded bg-surface-hover" />
+ <div class="h-10 w-20 animate-pulse rounded bg-surface-hover" />
+ </div>
+ </div>
 
-                <div class="space-y-2">
-                  <div class="h-4 w-24 animate-pulse rounded bg-surface-hover" />
-                  <div class="overflow-hidden rounded-md border border-border">
-                    <div class="h-10 w-full animate-pulse bg-surface-alt" />
-                    {Array.from({ length: 3 }).map(() => (
-                      <div class="border-t border-border-subtle px-3 py-3">
-                        <div class="flex items-center gap-3">
-                          <div class="h-4 w-40 animate-pulse rounded bg-surface-hover" />
-                          <div class="h-4 w-14 animate-pulse rounded-full bg-surface-hover" />
-                          <div class="h-4 w-24 animate-pulse rounded bg-surface-hover" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            }
-          >
-            <Show when={org()}>
-              {(currentOrg) => (
-                <>
-                  <div class="space-y-6 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
-                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                      <div class="rounded-md border border-border p-3">
-                        <p class="text-xs uppercase tracking-wide text-muted">Organization</p>
-                        <p class="mt-1 text-sm font-medium text-base-content">{currentOrg().displayName || currentOrg().id}</p>
-                      </div>
-                      <div class="rounded-md border border-border p-3">
-                        <p class="text-xs uppercase tracking-wide text-muted">Org ID</p>
-                        <p class="mt-1 text-sm font-mono break-all text-base-content">{currentOrg().id}</p>
-                      </div>
-                      <div class="rounded-md border border-border p-3">
-                        <p class="text-xs uppercase tracking-wide text-muted">Created</p>
-                        <p class="mt-1 text-sm font-medium text-base-content">{formatOrgDate(currentOrg().createdAt)}</p>
-                      </div>
-                      <div class="rounded-md border border-border p-3">
-                        <p class="text-xs uppercase tracking-wide text-muted">Members</p>
-                        <p class="mt-1 text-sm font-medium text-base-content">{members().length}</p>
-                      </div>
-                    </div>
+ <div class="space-y-2">
+ <div class="h-4 w-24 animate-pulse rounded bg-surface-hover" />
+ <div class="overflow-hidden rounded-md border border-border">
+ <div class="h-10 w-full animate-pulse bg-surface-alt" />
+ {Array.from({ length: 3 }).map(() => (
+ <div class="border-t border-border-subtle px-3 py-3">
+ <div class="flex items-center gap-3">
+ <div class="h-4 w-40 animate-pulse rounded bg-surface-hover" />
+ <div class="h-4 w-14 animate-pulse rounded-full bg-surface-hover" />
+ <div class="h-4 w-24 animate-pulse rounded bg-surface-hover" />
+ </div>
+ </div>
+ ))}
+ </div>
+ </div>
+ </div>
+ }
+ >
+ <Show when={org()}>
+ {(currentOrg) => (
+ <>
+ <div class="space-y-6 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+ <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+ <div class="rounded-md border border-border p-3">
+ <p class="text-xs uppercase tracking-wide text-muted">Organization</p>
+ <p class="mt-1 text-sm font-medium text-base-content">{currentOrg().displayName || currentOrg().id}</p>
+ </div>
+ <div class="rounded-md border border-border p-3">
+ <p class="text-xs uppercase tracking-wide text-muted">Org ID</p>
+ <p class="mt-1 text-sm font-mono break-all text-base-content">{currentOrg().id}</p>
+ </div>
+ <div class="rounded-md border border-border p-3">
+ <p class="text-xs uppercase tracking-wide text-muted">Created</p>
+ <p class="mt-1 text-sm font-medium text-base-content">{formatOrgDate(currentOrg().createdAt)}</p>
+ </div>
+ <div class="rounded-md border border-border p-3">
+ <p class="text-xs uppercase tracking-wide text-muted">Members</p>
+ <p class="mt-1 text-sm font-medium text-base-content">{members().length}</p>
+ </div>
+ </div>
 
-                    <div class="space-y-2">
-                      <label class="block text-sm font-medium text-base-content" for="org-display-name-input">
-                        Display Name
-                      </label>
-                      <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <input
-                          id="org-display-name-input"
-                          type="text"
-                          value={displayNameDraft()}
-                          onInput={(event) => setDisplayNameDraft(event.currentTarget.value)}
-                          disabled={!canManageOrg(currentOrg(), props.currentUser) || saving()}
-                          class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                        />
-                        <button
-                          type="button"
-                          onClick={saveDisplayName}
-                          disabled={!canManageOrg(currentOrg(), props.currentUser) || saving()}
-                          class="inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {saving() ? 'Saving...' : 'Save'}
+ <div class="space-y-2">
+ <label class="block text-sm font-medium text-base-content" for="org-display-name-input">
+ Display Name
+ </label>
+ <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+ <input
+ id="org-display-name-input"
+ type="text"
+ value={displayNameDraft()}
+ onInput={(event) => setDisplayNameDraft(event.currentTarget.value)}
+ disabled={!canManageOrg(currentOrg(), props.currentUser) || saving()}
+ class="w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 "
+ />
+ <button
+ type="button"
+ onClick={saveDisplayName}
+ disabled={!canManageOrg(currentOrg(), props.currentUser) || saving()}
+ class="inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+ >
+ {saving() ?'Saving...' : 'Save'}
                         </button>
                       </div>
                       <Show when={!canManageOrg(currentOrg(), props.currentUser)}>
@@ -215,7 +215,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
                         keyExtractor={(member) => member.userId}
                         emptyState="No members found."
                         desktopMinWidth="560px"
-                        class="border-x-0 sm:border-x sm:border-t sm:border-b sm:rounded-md border-y border-slate-200 dark:border-slate-800"
+                        class="border-x-0 sm:border-x sm:border-t sm:border-b sm:rounded-md border-y border-border"
                       />
                     </div>
                   </div>

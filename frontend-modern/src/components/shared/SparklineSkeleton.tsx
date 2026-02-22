@@ -28,7 +28,7 @@ export const SparklineSkeleton: Component<SparklineSkeletonProps> = (props) => {
 
                     {/* Animated line representing the graph */}
                     <svg
-                        class="w-full h-full animate-pulse text-slate-200 dark:text-slate-700"
+                        class="w-full h-full animate-pulse text-muted"
                         preserveAspectRatio="none"
                         viewBox="0 0 200 100"
                         fill="none"

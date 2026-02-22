@@ -171,26 +171,26 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
             <div class="text-sm font-semibold text-base-content">Swarm</div>
             <div class="text-xs text-muted truncate" title={clusterName()}>
               {clusterName() ? `Cluster: ${clusterName()}` : 'No Swarm cluster detected'}
-            </div>
-          </div>
+ </div>
+ </div>
 
-          <div class="flex flex-wrap items-center gap-2">
-            <input
-              value={search()}
-              onInput={(e) => setSearch(e.currentTarget.value)}
-              placeholder="Search services..."
-              class="w-[12rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            />
-          </div>
-        </div>
+ <div class="flex flex-wrap items-center gap-2">
+ <input
+ value={search()}
+ onInput={(e) => setSearch(e.currentTarget.value)}
+ placeholder="Search services..."
+ class="w-[12rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 "
+ />
+ </div>
+ </div>
 
-        <Show when={clusterId()}>
-          <div class="mt-2 text-[10px] text-muted truncate" title={clusterId()}>
-            Cluster ID: {clusterId()}
-          </div>
-        </Show>
+ <Show when={clusterId()}>
+ <div class="mt-2 text-[10px] text-muted truncate" title={clusterId()}>
+ Cluster ID: {clusterId()}
+ </div>
+ </Show>
 
-        <Show when={normalize(swarm()?.nodeRole) || normalize(swarm()?.localState) || typeof swarm()?.controlAvailable === 'boolean'}>
+ <Show when={normalize(swarm()?.nodeRole) || normalize(swarm()?.localState) || typeof swarm()?.controlAvailable ==='boolean'}>
           <div class="mt-2 flex flex-wrap gap-2 text-[11px]">
             <Show when={normalize(swarm()?.nodeRole)}>
               <span class="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-slate-700 dark:bg-slate-800 dark:text-slate-200">

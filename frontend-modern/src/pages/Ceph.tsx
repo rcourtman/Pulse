@@ -129,7 +129,7 @@ const HealthBadge: Component<{ health: string; message?: string }> = (props) => 
                             transform: 'translate(-50%, -100%)',
                         }}
                     >
-                        <div class="bg-slate-900 dark:bg-slate-800 text-white text-[10px] rounded-md shadow-sm px-2.5 py-1.5 max-w-[280px] border border-slate-700">
+                        <div class="bg-base text-white text-[10px] rounded-md shadow-sm px-2.5 py-1.5 max-w-[280px] border border-slate-700">
                             {props.message}
                         </div>
                     </div>
@@ -189,7 +189,7 @@ const ServiceStatusCell: Component<{ services: CephServiceStatus[] }> = (props) 
                             transform: 'translate(-50%, -100%)',
                         }}
                     >
-                        <div class="bg-slate-900 dark:bg-slate-800 text-white text-[10px] rounded-md shadow-sm px-2.5 py-2 min-w-[180px] border border-slate-700">
+                        <div class="bg-base text-white text-[10px] rounded-md shadow-sm px-2.5 py-2 min-w-[180px] border border-slate-700">
                             <div class="font-medium mb-1.5 text-slate-300 border-b border-slate-700 pb-1">
                                 Ceph Services
                             </div>
@@ -384,7 +384,7 @@ const Ceph: Component = () => {
 
     const isLoading = createMemo(() => connected() && !initialDataReceived());
 
-    const thClass = "px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-600 whitespace-nowrap transition-colors";
+    const thClass = "px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-surface-hover whitespace-nowrap transition-colors";
 
     return (
         <div class="space-y-4">

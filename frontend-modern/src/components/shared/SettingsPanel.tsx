@@ -31,11 +31,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
     <Card
       padding="none"
       tone={local.tone ?? 'default'}
-      class={`overflow-hidden border border-slate-200 dark:border-slate-800 ${local.class ?? ''}`.trim()}
+      class={`overflow-hidden border border-border ${local.class ?? ''}`.trim()}
       border={false}
       {...rest}
     >
-      <div class="px-3 py-3 sm:px-6 sm:py-4 border-b border-slate-200 dark:border-slate-800 bg-surface-alt">
+      <div class="px-3 py-3 sm:px-6 sm:py-4 border-b border-border bg-surface-alt">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div class="flex min-w-0 items-center gap-3 flex-1">
             <Show when={local.icon}>

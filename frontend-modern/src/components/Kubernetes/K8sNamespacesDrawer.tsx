@@ -83,52 +83,52 @@ export const K8sNamespacesDrawer: Component<{
     navigate(
       buildWorkloadsPath({
         type: 'k8s',
-        context: cluster,
-        namespace: namespace ? normalize(namespace) : null,
-      }),
-    );
-  };
+ context: cluster,
+ namespace: namespace ? normalize(namespace) : null,
+ }),
+ );
+ };
 
-  return (
-    <div class="space-y-3">
-      <Card padding="md">
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div class="min-w-0">
-            <div class="text-sm font-semibold text-base-content">{PAGE_TITLE}</div>
-            <div class="text-xs text-muted">Scope Pods and Deployments by namespace</div>
-          </div>
+ return (
+ <div class="space-y-3">
+ <Card padding="md">
+ <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+ <div class="min-w-0">
+ <div class="text-sm font-semibold text-base-content">{PAGE_TITLE}</div>
+ <div class="text-xs text-muted">Scope Pods and Deployments by namespace</div>
+ </div>
 
-          <div class="flex flex-wrap items-center gap-2">
-            <input
-              value={search()}
-              onInput={(e) => setSearch(e.currentTarget.value)}
-              placeholder="Search namespaces..."
-              class="w-[12rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            />
-            <button
-              type="button"
-              onClick={() => openPods(null)}
-              class="rounded-md border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              Open All Pods
-            </button>
-          </div>
-        </div>
-      </Card>
+ <div class="flex flex-wrap items-center gap-2">
+ <input
+ value={search()}
+ onInput={(e) => setSearch(e.currentTarget.value)}
+ placeholder="Search namespaces..."
+ class="w-[12rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 "
+ />
+ <button
+ type="button"
+ onClick={() => openPods(null)}
+ class="rounded-md border border-slate-200 bg-white px-3 py-1 text-xs font-semibold shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800"
+ >
+ Open All Pods
+ </button>
+ </div>
+ </div>
+ </Card>
 
-      <Show
-        when={!namespaces.loading}
-        fallback={
-          <Card padding="lg">
-            <EmptyState title="Loading namespaces..." description="Aggregating Kubernetes namespaces." />
-          </Card>
-        }
-      >
-        <Show
-          when={!loadError()}
-          fallback={
-            <Card padding="lg" tone="danger">
-              <EmptyState title="Failed to load namespaces" description={loadError() || 'Unknown error'} tone="danger" />
+ <Show
+ when={!namespaces.loading}
+ fallback={
+ <Card padding="lg">
+ <EmptyState title="Loading namespaces..." description="Aggregating Kubernetes namespaces." />
+ </Card>
+ }
+ >
+ <Show
+ when={!loadError()}
+ fallback={
+ <Card padding="lg" tone="danger">
+ <EmptyState title="Failed to load namespaces" description={loadError() ||'Unknown error'} tone="danger" />
             </Card>
           }
         >

@@ -32,7 +32,7 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
   const recent = createMemo(() => sortByStartTimeDesc(props.alerts).slice(0, 4));
 
   return (
-    <Card padding="none" tone="default" class="px-4 py-3.5 border-slate-100 dark:border-slate-700">
+    <Card padding="none" tone="default" class="px-4 py-3.5 border-border-subtle">
       <div class="flex items-center justify-between gap-2">
         <h2 class="text-sm font-semibold text-base-content">Alerts</h2>
         <div class="flex items-center gap-2">

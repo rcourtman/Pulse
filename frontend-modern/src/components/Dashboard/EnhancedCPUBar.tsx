@@ -20,31 +20,31 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
     // Bar color based on usage (from centralized thresholds)
     const barColor = createMemo(() => getMetricColorClass(props.usage, 'cpu'));
 
-    const anomalyRatio = createMemo(() => formatAnomalyRatio(props.anomaly));
+ const anomalyRatio = createMemo(() => formatAnomalyRatio(props.anomaly));
 
-    return (
-        <div class="metric-text w-full h-4 flex items-center justify-center">
-            <div
-                class="relative w-full h-full overflow-hidden bg-surface-hover rounded"
-                onMouseEnter={tip.onMouseEnter}
-                onMouseLeave={tip.onMouseLeave}
-            >
-                {/* Usage Bar */}
-                <div
-                    class={`absolute top-0 left-0 h-full transition-all duration-300 ${barColor()}`}
-                    style={{ width: `${Math.min(props.usage, 100)}%` }}
-                />
+ return (
+ <div class="metric-text w-full h-4 flex items-center justify-center">
+ <div
+ class="relative w-full h-full overflow-hidden bg-surface-hover rounded"
+ onMouseEnter={tip.onMouseEnter}
+ onMouseLeave={tip.onMouseLeave}
+ >
+ {/* Usage Bar */}
+ <div
+ class={`absolute top-0 left-0 h-full transition-all duration-300 ${barColor()}`}
+ style={{ width: `${Math.min(props.usage, 100)}%` }}
+ />
 
-                {/* Label with optional anomaly indicator */}
-                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700 dark:text-slate-100 leading-none pointer-events-none">
-                    {formatPercent(props.usage)}
-                    <Show when={props.cores}>
-                        <span class="hidden sm:inline font-normal text-muted ml-1">({props.cores})</span>
-                    </Show>
-                    {/* Anomaly indicator */}
-                    <Show when={props.anomaly && anomalyRatio()}>
-                        <span
-                            class={`ml-1 font-bold animate-pulse ${ANOMALY_SEVERITY_CLASS[props.anomaly!.severity] || 'text-yellow-400'}`}
+ {/* Label with optional anomaly indicator */}
+ <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700 leading-none pointer-events-none">
+ {formatPercent(props.usage)}
+ <Show when={props.cores}>
+ <span class="hidden sm:inline font-normal text-muted ml-1">({props.cores})</span>
+ </Show>
+ {/* Anomaly indicator */}
+ <Show when={props.anomaly && anomalyRatio()}>
+ <span
+ class={`ml-1 font-bold animate-pulse ${ANOMALY_SEVERITY_CLASS[props.anomaly!.severity] ||'text-yellow-400'}`}
                             title={props.anomaly!.description}
                         >
                             {anomalyRatio()}

@@ -45,10 +45,10 @@ export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
             onClick={props.onApprove}
             disabled={props.approval.isExecuting}
             class={`flex-1 px-3 py-2 text-xs font-semibold rounded-md transition-all ${
-              props.approval.isExecuting
-                ? 'bg-green-400 text-white cursor-wait'
-                : 'bg-green-500 hover:bg-green-600 text-white shadow-sm hover:shadow-sm'
-            }`}
+ props.approval.isExecuting
+ ? 'bg-green-400 text-white cursor-wait'
+ : 'bg-green-500 hover:bg-green-600 text-white shadow-sm hover:shadow-sm'
+ }`}
           >
             <Show
               when={!props.approval.isExecuting}
@@ -74,7 +74,7 @@ export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
             type="button"
             onClick={props.onSkip}
             disabled={props.approval.isExecuting}
-            class="flex-1 px-3 py-2 text-xs font-semibold bg-slate-100 hover:bg-surface-hover dark:hover:bg-slate-600 text-base-content rounded-md transition-colors disabled:opacity-50"
+            class="flex-1 px-3 py-2 text-xs font-semibold hover:bg-surface-hover text-base-content rounded-md transition-colors disabled:opacity-50"
           >
             <span class="flex items-center justify-center gap-1.5">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -39,10 +39,10 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
       <button
         type="button"
         class={`inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-xs font-medium rounded-md transition-all ${
-          open()
-            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-            : 'bg-surface-hover text-muted hover:bg-slate-200 dark:hover:bg-slate-600'
-        }`}
+ open()
+ ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+ : 'bg-surface-hover text-muted hover:bg-surface-hover'
+ }`}
         title="Customize dashboard widgets"
         onClick={() => setOpen(!open())}
       >
@@ -59,7 +59,7 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
 
       <Show when={open()}>
         <div class="absolute right-0 mt-1 w-64 rounded-md border border-slate-200 bg-white shadow-sm z-50 dark:border-slate-700 dark:bg-slate-800">
-          <div class="px-3 py-2 border-b border-slate-100 dark:border-slate-700">
+          <div class="px-3 py-2 border-b border-border-subtle">
             <div class="flex items-center justify-between">
               <span class="text-xs font-medium text-base-content">Dashboard Widgets</span>
               <Show when={!props.isDefault()}>
@@ -92,8 +92,8 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
                       />
                       <span
                         class={`truncate text-sm ${
-                          visible() ? 'text-base-content' : 'text-muted'
-                        }`}
+ visible() ? 'text-base-content' : 'text-muted'
+ }`}
                       >
                         {widget.label}
                       </span>
@@ -102,7 +102,7 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
                     <div class="flex items-center gap-0.5">
                       <button
                         type="button"
-                        class="rounded p-1 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-600 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                        class="rounded p-1 transition-colors hover:bg-slate-200 hover:text-muted dark:hover:bg-slate-600 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
                         title="Move up"
                         aria-label={`Move ${widget.label} up`}
                         disabled={isFirst()}
@@ -114,7 +114,7 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
                       </button>
                       <button
                         type="button"
-                        class="rounded p-1 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-600 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                        class="rounded p-1 transition-colors hover:bg-slate-200 hover:text-muted dark:hover:bg-slate-600 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
                         title="Move down"
                         aria-label={`Move ${widget.label} down`}
                         disabled={isLast()}

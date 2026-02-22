@@ -516,45 +516,45 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
       setShowMetadataPreview(true);
     } catch (error) {
       logger.error('[SSOProvidersPanel] Metadata preview error:', error);
-      notificationStore.error(`Failed to fetch metadata: ${error}`);
-    } finally {
-      setLoadingPreview(false);
-    }
-  };
+ notificationStore.error(`Failed to fetch metadata: ${error}`);
+ } finally {
+ setLoadingPreview(false);
+ }
+ };
 
-  return (
-    <div class="space-y-6">
-      <Show when={showSamlUpsell()}>
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
-          <div class="w-full max-w-lg bg-surface rounded-md shadow-sm border border-border mx-4">
-            <div class="flex items-center justify-between px-6 py-4 border-b border-border">
-              <div>
-                <h3 class="text-lg font-semibold text-base-content">Add SAML Provider</h3>
-                <p class="text-xs text-muted mt-0.5">Pro feature</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowSamlUpsell(false)}
-                class="p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800"
-                aria-label="Close"
-              >
-                <X class="w-5 h-5" />
-              </button>
-            </div>
-            <div class="px-6 py-5 space-y-4">
-              <p class="text-sm text-muted">
-                SAML 2.0 and multi-provider SSO requires Pro.
-              </p>
-              <div class="flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowSamlUpsell(false)}
-                  class="px-4 py-2 text-sm font-medium text-base-content bg-white dark:bg-slate-700 border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600"
-                >
-                  Not now
-                </button>
-                <a
-                  href={getUpgradeActionUrlOrFallback('advanced_sso')}
+ return (
+ <div class="space-y-6">
+ <Show when={showSamlUpsell()}>
+ <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
+ <div class="w-full max-w-lg bg-surface rounded-md shadow-sm border border-border mx-4">
+ <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+ <div>
+ <h3 class="text-lg font-semibold text-base-content">Add SAML Provider</h3>
+ <p class="text-xs text-muted mt-0.5">Pro feature</p>
+ </div>
+ <button
+ type="button"
+ onClick={() => setShowSamlUpsell(false)}
+ class="p-1.5 rounded-md hover: hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800"
+ aria-label="Close"
+ >
+ <X class="w-5 h-5" />
+ </button>
+ </div>
+ <div class="px-6 py-5 space-y-4">
+ <p class="text-sm text-muted">
+ SAML 2.0 and multi-provider SSO requires Pro.
+ </p>
+ <div class="flex items-center justify-end gap-2">
+ <button
+ type="button"
+ onClick={() => setShowSamlUpsell(false)}
+ class="px-4 py-2 text-sm font-medium text-base-content border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600"
+ >
+ Not now
+ </button>
+ <a
+ href={getUpgradeActionUrlOrFallback('advanced_sso')}
                   target="_blank"
                   rel="noopener noreferrer"
                   class="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
@@ -656,23 +656,23 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div class="flex items-center gap-3 min-w-0">
                       <div class="p-2 rounded-md bg-surface-hover">
-                        {provider.type === 'oidc' ? (
-                          <Globe class="w-5 h-5 text-muted" />
-                        ) : (
-                          <Key class="w-5 h-5 text-muted" />
-                        )}
-                      </div>
-                      <div class="min-w-0">
-                        <div class="flex items-center gap-2">
-                          <span class="font-medium text-base-content truncate">
-                            {provider.name}
-                          </span>
-                          <span class="px-1.5 py-0.5 text-xs font-medium rounded bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300">
-                            {provider.type.toUpperCase()}
-                          </span>
-                        </div>
-                        <p class="text-xs text-muted truncate">
-                          {provider.type === 'oidc'
+                        {provider.type === 'oidc'? (
+ <Globe class="w-5 h-5 text-muted" />
+ ) : (
+ <Key class="w-5 h-5 text-muted" />
+ )}
+ </div>
+ <div class="min-w-0">
+ <div class="flex items-center gap-2">
+ <span class="font-medium text-base-content truncate">
+ {provider.name}
+ </span>
+ <span class="px-1.5 py-0.5 text-xs font-medium rounded bg-surface-hover ">
+ {provider.type.toUpperCase()}
+ </span>
+ </div>
+ <p class="text-xs text-muted truncate">
+ {provider.type ==='oidc'
                             ? provider.oidcIssuerUrl
                             : provider.samlIdpEntityId || provider.samlMetadataUrl}
                         </p>
@@ -705,7 +705,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
 
                   {/* SAML metadata info */}
                   <Show when={provider.type === 'saml' && provider.enabled}>
-                    <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+                    <div class="mt-3 pt-3 border-t border-border-subtle">
                       <div class="flex flex-wrap gap-4 text-xs">
                         <div class="flex items-center gap-1">
                           <span class="text-slate-500">SP Metadata:</span>
@@ -799,7 +799,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                           type="button"
                           onClick={testConnection}
                           disabled={testing() || !canTest()}
-                          class="px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                          class="px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                           title="Test connection to IdP"
                         >
                           {testing() ? 'Testing...' : 'Test'}
@@ -873,7 +873,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                         type="button"
                         onClick={testConnection}
                         disabled={testing() || !canTest()}
-                        class="px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                        class="px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                         title="Test connection to IdP"
                       >
                         {testing() ? 'Testing...' : 'Test'}
@@ -882,7 +882,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                         type="button"
                         onClick={fetchMetadataPreview}
                         disabled={loadingPreview() || !form.samlIdpMetadataUrl.trim()}
-                        class="px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center gap-1"
+                        class="px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center gap-1"
                         title="Preview IdP metadata XML"
                       >
                         <Eye class="w-4 h-4" />
@@ -979,9 +979,9 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
               <Show when={testResult()}>
                 <div
                   class={`p-4 rounded-md border ${testResult()?.success
-                    ? 'bg-green-50 dark:bg-green-900 border-green-200 dark:border-green-800'
-                    : 'bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800'
-                    }`}
+ ? 'bg-green-50 dark:bg-green-900 border-green-200 dark:border-green-800'
+ : 'bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800'
+ }`}
                 >
                   <div class="flex items-start gap-3">
                     {testResult()?.success ? (
@@ -992,9 +992,9 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                     <div class="flex-1 min-w-0">
                       <p
                         class={`text-sm font-medium ${testResult()?.success
-                          ? 'text-green-800 dark:text-green-200'
-                          : 'text-red-800 dark:text-red-200'
-                          }`}
+ ? 'text-green-800 dark:text-green-200'
+ : 'text-red-800 dark:text-red-200'
+ }`}
                       >
                         {testResult()?.message}
                       </p>
@@ -1246,7 +1246,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                       notificationStore.success('XML copied to clipboard');
                     }
                   }}
-                  class="px-2 py-1 text-xs font-medium text-muted bg-surface-hover rounded hover:bg-slate-200 dark:hover:bg-slate-600 flex items-center gap-1"
+                  class="px-2 py-1 text-xs font-medium text-muted bg-surface-hover rounded hover:bg-surface-hover flex items-center gap-1"
                 >
                   <Copy class="w-3 h-3" />
                   Copy

@@ -6,96 +6,96 @@ import Shield from 'lucide-solid/icons/shield';
 import Info from 'lucide-solid/icons/info';
 
 interface SecurityStatusInfo {
-  hasAuthentication: boolean;
-  oidcEnabled?: boolean;
-  hasProxyAuth?: boolean;
-  apiTokenConfigured: boolean;
-  exportProtected: boolean;
-  unprotectedExportAllowed?: boolean;
-  hasHTTPS?: boolean;
-  hasAuditLogging: boolean;
-  requiresAuth: boolean;
-  publicAccess?: boolean;
-  isPrivateNetwork?: boolean;
-  clientIP?: string;
-  proxyAuthUsername?: string;
-  proxyAuthIsAdmin?: boolean;
-  proxyAuthLogoutURL?: string;
+ hasAuthentication: boolean;
+ oidcEnabled?: boolean;
+ hasProxyAuth?: boolean;
+ apiTokenConfigured: boolean;
+ exportProtected: boolean;
+ unprotectedExportAllowed?: boolean;
+ hasHTTPS?: boolean;
+ hasAuditLogging: boolean;
+ requiresAuth: boolean;
+ publicAccess?: boolean;
+ isPrivateNetwork?: boolean;
+ clientIP?: string;
+ proxyAuthUsername?: string;
+ proxyAuthIsAdmin?: boolean;
+ proxyAuthLogoutURL?: string;
 }
 
 interface SecurityOverviewPanelProps {
-  securityStatus: Accessor<SecurityStatusInfo | null>;
-  securityStatusLoading: Accessor<boolean>;
+ securityStatus: Accessor<SecurityStatusInfo | null>;
+ securityStatusLoading: Accessor<boolean>;
 }
 
 export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (props) => {
-  return (
-    <div class="space-y-6">
-      {/* Loading State */}
-      <Show when={props.securityStatusLoading()}>
-        <Card
-          padding="none"
-          class="overflow-hidden border border-border"
-          border={false}
-        >
-          <div class="bg-surface-alt px-6 py-5 animate-pulse">
-            <div class="flex items-center gap-4">
-              <div class="w-12 h-12 bg-slate-300 dark:bg-slate-600 rounded-md"></div>
-              <div class="flex-1 space-y-2">
-                <div class="h-5 bg-slate-300 dark:bg-slate-600 rounded w-1/3"></div>
-                <div class="h-4 bg-slate-300 dark:bg-slate-600 rounded w-1/2"></div>
-              </div>
-              <div class="text-right space-y-2">
-                <div class="h-8 bg-slate-300 dark:bg-slate-600 rounded w-16 ml-auto"></div>
-                <div class="h-4 bg-slate-300 dark:bg-slate-600 rounded w-12 ml-auto"></div>
-              </div>
-            </div>
-          </div>
-          <div class="p-6">
-            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {[1, 2, 3, 4].map(() => (
-                <div class="rounded-md border border-border p-4 animate-pulse">
-                  <div class="h-4 bg-surface-hover rounded w-2/3 mb-2"></div>
-                  <div class="h-3 bg-surface-hover rounded w-1/2"></div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Card>
-      </Show>
+ return (
+ <div class="space-y-6">
+ {/* Loading State */}
+ <Show when={props.securityStatusLoading()}>
+ <Card
+ padding="none"
+ class="overflow-hidden border border-border"
+ border={false}
+ >
+ <div class="bg-surface-alt px-6 py-5 animate-pulse">
+ <div class="flex items-center gap-4">
+ <div class="w-12 h-12 bg-slate-300 rounded-md"></div>
+ <div class="flex-1 space-y-2">
+ <div class="h-5 bg-slate-300 rounded w-1/3"></div>
+ <div class="h-4 bg-slate-300 rounded w-1/2"></div>
+ </div>
+ <div class="text-right space-y-2">
+ <div class="h-8 bg-slate-300 rounded w-16 ml-auto"></div>
+ <div class="h-4 bg-slate-300 rounded w-12 ml-auto"></div>
+ </div>
+ </div>
+ </div>
+ <div class="p-6">
+ <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+ {[1, 2, 3, 4].map(() => (
+ <div class="rounded-md border border-border p-4 animate-pulse">
+ <div class="h-4 bg-surface-hover rounded w-2/3 mb-2"></div>
+ <div class="h-3 bg-surface-hover rounded w-1/2"></div>
+ </div>
+ ))}
+ </div>
+ </div>
+ </Card>
+ </Show>
 
-      {/* Security Summary */}
-      <Show when={!props.securityStatusLoading() && props.securityStatus()}>
-        <SecurityPostureSummary status={props.securityStatus()!} />
-      </Show>
+ {/* Security Summary */}
+ <Show when={!props.securityStatusLoading() && props.securityStatus()}>
+ <SecurityPostureSummary status={props.securityStatus()!} />
+ </Show>
 
-      {/* Proxy Auth Notice */}
-      <Show when={!props.securityStatusLoading() && props.securityStatus()?.hasProxyAuth}>
-        <Card
-          padding="none"
-          class="overflow-hidden border border-blue-200 dark:border-blue-800"
-          border={false}
-        >
-          <div class="bg-blue-50 dark:bg-blue-900 px-6 py-4 border-b border-blue-200 dark:border-blue-700">
-            <div class="flex items-center gap-3">
-              <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
-                <Shield class="w-5 h-5 text-blue-600 dark:text-blue-300" strokeWidth={2} />
-              </div>
-              <SectionHeader
-                title="Proxy Authentication Active"
-                description="Requests are validated by an upstream proxy"
-                size="sm"
-                class="flex-1"
-              />
-            </div>
-          </div>
-          <div class="p-4 text-sm text-blue-800 dark:text-blue-200 space-y-2">
-            <p>
-              The current proxied user is
-              <span class="font-semibold">
-                {props.securityStatus()?.proxyAuthUsername
-                  ? ` ${props.securityStatus()?.proxyAuthUsername}`
-                  : ' available once a request is received'}
+ {/* Proxy Auth Notice */}
+ <Show when={!props.securityStatusLoading() && props.securityStatus()?.hasProxyAuth}>
+ <Card
+ padding="none"
+ class="overflow-hidden border border-blue-200 dark:border-blue-800"
+ border={false}
+ >
+ <div class="bg-blue-50 dark:bg-blue-900 px-6 py-4 border-b border-blue-200 dark:border-blue-700">
+ <div class="flex items-center gap-3">
+ <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
+ <Shield class="w-5 h-5 text-blue-600 dark:text-blue-300" strokeWidth={2} />
+ </div>
+ <SectionHeader
+ title="Proxy Authentication Active"
+ description="Requests are validated by an upstream proxy"
+ size="sm"
+ class="flex-1"
+ />
+ </div>
+ </div>
+ <div class="p-4 text-sm text-blue-800 dark:text-blue-200 space-y-2">
+ <p>
+ The current proxied user is
+ <span class="font-semibold">
+ {props.securityStatus()?.proxyAuthUsername
+ ? ` ${props.securityStatus()?.proxyAuthUsername}`
+ :' available once a request is received'}
               </span>
               .
               {props.securityStatus()?.proxyAuthIsAdmin && (

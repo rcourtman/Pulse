@@ -38,7 +38,7 @@ export const ThinkingBlock: Component<ThinkingBlockProps> = (props) => {
       <button
         type="button"
         onClick={() => setExpanded(!expanded())}
-        class="w-full flex items-center gap-2 px-3 py-1.5 rounded-md bg-surface-alt hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-left group"
+        class="w-full flex items-center gap-2 px-3 py-1.5 rounded-md bg-surface-alt hover:bg-surface-hover transition-colors text-left group"
       >
         {/* Thinking icon */}
         <div class={`flex items-center justify-center w-4 h-4 ${props.isStreaming ? 'animate-pulse' : ''}`}>
@@ -50,23 +50,23 @@ export const ThinkingBlock: Component<ThinkingBlockProps> = (props) => {
         {/* Label */}
         <span class="text-blue-600 dark:text-blue-400 font-medium uppercase text-[10px] tracking-wider">
           {props.isStreaming ? 'Thinking...' : 'Thinking'}
-        </span>
+ </span>
 
-        {/* Preview (when collapsed) */}
-        <Show when={!expanded() && preview()}>
-          <span class="text-muted truncate flex-1">
-            {preview()}
-          </span>
-        </Show>
+ {/* Preview (when collapsed) */}
+ <Show when={!expanded() && preview()}>
+ <span class="text-muted truncate flex-1">
+ {preview()}
+ </span>
+ </Show>
 
-        {/* Stats */}
-        <span class="text-muted text-[10px] ml-auto">
-          {stats().lines} lines · {stats().words} words
-        </span>
+ {/* Stats */}
+ <span class="text-muted text-[10px] ml-auto">
+ {stats().lines} lines · {stats().words} words
+ </span>
 
-        {/* Expand/collapse chevron */}
-        <svg
-          class={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded() ? 'rotate-180' : ''}`}
+ {/* Expand/collapse chevron */}
+ <svg
+ class={`w-3.5 h-3.5 transition-transform ${expanded() ?'rotate-180' : ''}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"

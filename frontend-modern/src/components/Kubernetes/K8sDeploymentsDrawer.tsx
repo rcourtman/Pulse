@@ -149,71 +149,71 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
     navigate(
       buildWorkloadsPath({
         type: 'k8s',
-        context: cluster,
-        namespace: normalize(ns) || null,
-      }),
-    );
-  };
+ context: cluster,
+ namespace: normalize(ns) || null,
+ }),
+ );
+ };
 
-  return (
-    <div class="space-y-3">
-      <Card padding="md">
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div class="min-w-0">
-            <div class="text-sm font-semibold text-base-content">Deployments</div>
-            <div class="text-xs text-muted">Desired state controllers (not Pods)</div>
-          </div>
+ return (
+ <div class="space-y-3">
+ <Card padding="md">
+ <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+ <div class="min-w-0">
+ <div class="text-sm font-semibold text-base-content">Deployments</div>
+ <div class="text-xs text-muted">Desired state controllers (not Pods)</div>
+ </div>
 
-          <div class="flex flex-wrap items-center gap-2">
-            <input
-              value={search()}
-              onInput={(e) => setSearch(e.currentTarget.value)}
-              placeholder="Search deployments..."
-              class="w-[12rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            />
+ <div class="flex flex-wrap items-center gap-2">
+ <input
+ value={search()}
+ onInput={(e) => setSearch(e.currentTarget.value)}
+ placeholder="Search deployments..."
+ class="w-[12rem] rounded-md border border-slate-200 px-2 py-1 text-xs font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 "
+ />
 
-            <Show when={namespaceOptions().length > 0}>
-              <div class="inline-flex items-center rounded-md bg-surface-hover p-0.5">
-                <label
-                  for="k8s-deployments-namespace"
-                  class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
-                >
-                  Namespace
-                </label>
-                <select
-                  id="k8s-deployments-namespace"
-                  value={namespace()}
-                  onChange={(e) => setNamespace(e.currentTarget.value)}
-                  class="min-w-[10rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                >
-                  <option value="">All namespaces</option>
-                  <For each={namespaceOptions()}>
-                    {(ns) => <option value={ns}>{ns}</option>}
-                  </For>
-                </select>
-              </div>
-            </Show>
+ <Show when={namespaceOptions().length > 0}>
+ <div class="inline-flex items-center rounded-md bg-surface-hover p-0.5">
+ <label
+ for="k8s-deployments-namespace"
+ class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
+ >
+ Namespace
+ </label>
+ <select
+ id="k8s-deployments-namespace"
+ value={namespace()}
+ onChange={(e) => setNamespace(e.currentTarget.value)}
+ class="min-w-[10rem] rounded-md border border-slate-200 px-2 py-1 text-xs font-medium shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 "
+ >
+ <option value="">All namespaces</option>
+ <For each={namespaceOptions()}>
+ {(ns) => <option value={ns}>{ns}</option>}
+ </For>
+ </select>
+ </div>
+ </Show>
 
-            <button
-              type="button"
-              onClick={() => openPods(namespace() || undefined)}
-              class="rounded-md border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              Open Pods
-            </button>
-          </div>
-        </div>
-      </Card>
+ <button
+ type="button"
+ onClick={() => openPods(namespace() || undefined)}
+ class="rounded-md border border-slate-200 px-3 py-1 text-xs font-semibold shadow-sm hover: dark:border-slate-700 dark:hover:bg-slate-800"
+ >
+ Open Pods
+ </button>
+ </div>
+ </div>
+ </Card>
 
-      <Show
-        when={deployments.loading}
-        fallback={
-          <Show
-            when={filteredDeployments().length > 0}
-            fallback={
-              <Card padding="lg">
-                <EmptyState
-                  title={deployments().length > 0 ? 'No deployments match your filters' : 'No deployments found'}
+ <Show
+ when={deployments.loading}
+ fallback={
+ <Show
+ when={filteredDeployments().length > 0}
+ fallback={
+ <Card padding="lg">
+ <EmptyState
+ title={deployments().length > 0 ?'No deployments match your filters' : 'No deployments found'}
                   description={
                     deployments().length > 0
                       ? 'Try clearing the search or namespace filter.'

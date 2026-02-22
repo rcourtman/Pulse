@@ -159,27 +159,27 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                                     width: `${segment.percent}%`,
                                     'background-color': segment.color,
                                     'border-right': idx() < segments().length - 1 ? '1px solid rgba(255,255,255,0.3)' : 'none',
-                                }}
-                            />
-                        );
-                    }}
-                </For>
+ }}
+ />
+ );
+ }}
+ </For>
 
-                {/* Swap Indicator (Thin line at bottom if swap is used) */}
-                <Show when={hasSwap() && (props.swapUsed || 0) > 0}>
-                    <div
-                        class="absolute bottom-0 left-0 h-[3px] w-full bg-purple-500"
-                        style={{ width: `${Math.min(swapPercent(), 100)}%` }}
-                    />
-                </Show>
+ {/* Swap Indicator (Thin line at bottom if swap is used) */}
+ <Show when={hasSwap() && (props.swapUsed || 0) > 0}>
+ <div
+ class="absolute bottom-0 left-0 h-[3px] w-full bg-purple-500"
+ style={{ width: `${Math.min(swapPercent(), 100)}%` }}
+ />
+ </Show>
 
-                {/* Label overlay */}
-                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700 dark:text-slate-100 leading-none pointer-events-none min-w-0 overflow-hidden">
-                    <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
-                        <span>{displayLabel()}</span>
-                        <Show when={showSublabel()}>
-                            <span class="metric-sublabel font-normal text-muted">
-                                {' '}({displaySublabel()})
+ {/* Label overlay */}
+ <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700 leading-none pointer-events-none min-w-0 overflow-hidden">
+ <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
+ <span>{displayLabel()}</span>
+ <Show when={showSublabel()}>
+ <span class="metric-sublabel font-normal text-muted">
+ {' '}({displaySublabel()})
                             </span>
                         </Show>
                         {/* Anomaly indicator */}

@@ -170,80 +170,80 @@ export default function Dashboard() {
             <div class="border border-border rounded-md p-4 sm:p-5 bg-surface">
               <div class="space-y-4">
                 <For each={['h-4 w-44', 'h-10 w-40']}>
-                  {(dims) => <div data-testid="dashboard-skeleton-block" class={`animate-pulse bg-surface-hover rounded ${dims}`} />}
-                </For>
-                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-                  <For each={Array.from({ length: 5 })}>
-                    {() => <div data-testid="dashboard-skeleton-block" class="animate-pulse bg-surface-hover rounded h-8" />}
-                  </For>
-                </div>
-              </div>
-            </div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <For each={Array.from({ length: 2 })}>
-                {() => (
-                  <div data-testid="dashboard-skeleton-block" class="border border-border rounded-md p-4 sm:p-5 bg-surface"><div class="animate-pulse bg-surface-hover rounded h-24" /></div>
-                )}
-              </For>
-            </div>
-          </section>
-        </Match>
+ {(dims) => <div data-testid="dashboard-skeleton-block" class={`animate-pulse bg-surface-hover rounded ${dims}`} />}
+ </For>
+ <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+ <For each={Array.from({ length: 5 })}>
+ {() => <div data-testid="dashboard-skeleton-block" class="animate-pulse bg-surface-hover rounded h-8" />}
+ </For>
+ </div>
+ </div>
+ </div>
+ <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+ <For each={Array.from({ length: 2 })}>
+ {() => (
+ <div data-testid="dashboard-skeleton-block" class="border border-border rounded-md p-4 sm:p-5 bg-surface"><div class="animate-pulse bg-surface-hover rounded h-24" /></div>
+ )}
+ </For>
+ </div>
+ </section>
+ </Match>
 
-        <Match when={hasConnectionError()}>
-          <section class="border border-border rounded-md p-4 sm:p-5 bg-surface" aria-live="polite">
-            <h2 class="text-base sm:text-lg font-semibold text-base-content">Dashboard unavailable</h2>
-            <p class="mt-2 text-sm text-muted">Real-time dashboard data is currently unavailable. Reconnect to try again.</p>
-            <button
-              type="button"
-              onClick={() => reconnect()}
-              class="mt-4 inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-            >
-              Reconnect
-            </button>
-          </section>
-        </Match>
+ <Match when={hasConnectionError()}>
+ <section class="border border-border rounded-md p-4 sm:p-5 bg-surface" aria-live="polite">
+ <h2 class="text-base sm:text-lg font-semibold text-base-content">Dashboard unavailable</h2>
+ <p class="mt-2 text-sm text-muted">Real-time dashboard data is currently unavailable. Reconnect to try again.</p>
+ <button
+ type="button"
+ onClick={() => reconnect()}
+ class="mt-4 inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-medium hover: dark:hover:bg-slate-700"
+ >
+ Reconnect
+ </button>
+ </section>
+ </Match>
 
-        <Match when={isEmpty()}>
-          <section class="border border-border rounded-md p-4 sm:p-5 bg-surface" aria-live="polite">
-            <h2 class="text-base sm:text-lg font-semibold text-base-content">No resources yet</h2>
-            <p class="mt-2 text-sm text-muted">Once connected platforms report resources, your dashboard overview will appear here.</p>
-          </section>
-        </Match>
+ <Match when={isEmpty()}>
+ <section class="border border-border rounded-md p-4 sm:p-5 bg-surface" aria-live="polite">
+ <h2 class="text-base sm:text-lg font-semibold text-base-content">No resources yet</h2>
+ <p class="mt-2 text-sm text-muted">Once connected platforms report resources, your dashboard overview will appear here.</p>
+ </section>
+ </Match>
 
-        <Match when={initialLoadComplete() && !hasConnectionError() && !isEmpty()}>
-          <section class="space-y-5">
-            <DashboardHero
-              criticalAlerts={overview().health.criticalAlerts}
-              warningAlerts={overview().health.warningAlerts}
-              infrastructure={{
-                total: overview().infrastructure.total,
-                online: overview().infrastructure.byStatus.online ?? 0,
-                byType: overview().infrastructure.byType,
-              }}
-              workloads={{
-                total: overview().workloads.total,
-                running: overview().workloads.running,
-                stopped: overview().workloads.stopped,
-                byType: overview().workloads.byType,
-              }}
-              storage={{
-                capacityPercent: storageCapacityPercent(),
-                totalUsed: overview().storage.totalUsed,
-                totalCapacity: overview().storage.totalCapacity,
-                warningCount: overview().storage.warningCount,
-                criticalCount: overview().storage.criticalCount,
-              }}
-              alerts={{
-                activeCritical: overview().alerts.activeCritical,
-                activeWarning: overview().alerts.activeWarning,
-                total: overview().alerts.total,
-              }}
-              recovery={recovery()}
-              topCPU={overview().infrastructure.topCPU}
-            />
-            <For each={widgetGroups()}>
-              {(group) =>
-                group.type === 'full'
+ <Match when={initialLoadComplete() && !hasConnectionError() && !isEmpty()}>
+ <section class="space-y-5">
+ <DashboardHero
+ criticalAlerts={overview().health.criticalAlerts}
+ warningAlerts={overview().health.warningAlerts}
+ infrastructure={{
+ total: overview().infrastructure.total,
+ online: overview().infrastructure.byStatus.online ?? 0,
+ byType: overview().infrastructure.byType,
+ }}
+ workloads={{
+ total: overview().workloads.total,
+ running: overview().workloads.running,
+ stopped: overview().workloads.stopped,
+ byType: overview().workloads.byType,
+ }}
+ storage={{
+ capacityPercent: storageCapacityPercent(),
+ totalUsed: overview().storage.totalUsed,
+ totalCapacity: overview().storage.totalCapacity,
+ warningCount: overview().storage.warningCount,
+ criticalCount: overview().storage.criticalCount,
+ }}
+ alerts={{
+ activeCritical: overview().alerts.activeCritical,
+ activeWarning: overview().alerts.activeWarning,
+ total: overview().alerts.total,
+ }}
+ recovery={recovery()}
+ topCPU={overview().infrastructure.topCPU}
+ />
+ <For each={widgetGroups()}>
+ {(group) =>
+ group.type ==='full'
                   ? renderWidget(group.widget.id)
                   : (
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-start">

@@ -297,7 +297,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                         <button
                                             type="button"
                                             onClick={() => handleUseExample(example)}
-                                            class="text-xs px-2 py-1 rounded-md bg-slate-100 text-slate-600 hover:bg-surface-alt dark:text-slate-400 dark:hover:bg-slate-700 transition-colors"
+                                            class="text-xs px-2 py-1 rounded-md text-slate-600 hover:bg-surface-alt dark:text-slate-400 dark:hover:bg-slate-700 transition-colors"
                                             disabled={loading()}
                                         >
                                             {example}
@@ -606,7 +606,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                             type="button"
                             onClick={handleSubmit}
                             disabled={loading() || !prompt().trim()}
-                            class="inline-flex items-center gap-2 rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-surface-alt dark:text-slate-200 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            class="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-surface-alt dark:text-slate-200 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                             title="Regenerate using the current prompt"
                         >
                             <Lightbulb class="w-4 h-4" />

@@ -53,9 +53,9 @@ function SeverityChip(props: { severity: 'warning' | 'critical' }) {
     return (
         <span
             class={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold border ${isWarning()
-                ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900 dark:text-amber-300 dark:border-amber-800'
-                : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900 dark:text-red-300 dark:border-red-800'
-                }`}
+ ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900 dark:text-amber-300 dark:border-amber-800'
+ : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900 dark:text-red-300 dark:border-red-800'
+ }`}
         >
             <span class={`w-1.5 h-1.5 rounded-full ${isWarning() ? 'bg-amber-500' : 'bg-red-500'}`} />
             {isWarning() ? 'Warning' : 'Critical'}
@@ -140,7 +140,7 @@ export function DashboardHero(props: DashboardHeroProps) {
     const badgeBase =
         'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border';
 
-    const infraColors = ['bg-blue-500 dark:bg-blue-600', 'bg-blue-400 dark:bg-blue-500', 'bg-blue-300 dark:bg-blue-400', 'bg-slate-300 dark:bg-slate-600'];
+    const infraColors = ['bg-blue-500 dark:bg-blue-600', 'bg-blue-400 dark:bg-blue-500', 'bg-blue-300 dark:bg-blue-400', 'bg-surface-hover'];
     const getInfraComposition = createMemo(() => {
         if (!props.infrastructure.byType) return [];
         return Object.entries(props.infrastructure.byType)
@@ -152,7 +152,7 @@ export function DashboardHero(props: DashboardHeroProps) {
             }));
     });
 
-    const workloadColors = ['bg-purple-500 dark:bg-purple-600', 'bg-purple-400 dark:bg-purple-500', 'bg-purple-300 dark:bg-purple-400', 'bg-slate-300 dark:bg-slate-600'];
+    const workloadColors = ['bg-purple-500 dark:bg-purple-600', 'bg-purple-400 dark:bg-purple-500', 'bg-purple-300 dark:bg-purple-400', 'bg-surface-hover'];
     const getWorkloadComposition = createMemo(() => {
         if (!props.workloads.byType) return [];
         return Object.entries(props.workloads.byType)
@@ -172,78 +172,78 @@ export function DashboardHero(props: DashboardHeroProps) {
                         <div class={`relative rounded-md p-1.5 ${statusConfig().bg}`}>
                             <Dynamic component={statusConfig().icon} class={`w-4 h-4 ${statusConfig().color}`} />
                             <Show when={status() === 'critical'}>
-                                <span class="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5">
-                                    <span
-                                        class={`absolute inline-flex h-full w-full rounded-full opacity-50 animate-ping ${statusConfig().pulseColor}`}
-                                    />
-                                    <span
-                                        class={`relative inline-flex h-2.5 w-2.5 rounded-full ${statusConfig().pulseColor}`}
-                                    />
-                                </span>
-                            </Show>
-                        </div>
-                        <span class="text-sm font-semibold text-base-content truncate">
-                            {statusConfig().label}
-                        </span>
-                    </div>
+ <span class="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5">
+ <span
+ class={`absolute inline-flex h-full w-full rounded-full opacity-50 animate-ping ${statusConfig().pulseColor}`}
+ />
+ <span
+ class={`relative inline-flex h-2.5 w-2.5 rounded-full ${statusConfig().pulseColor}`}
+ />
+ </span>
+ </Show>
+ </div>
+ <span class="text-sm font-semibold text-base-content truncate">
+ {statusConfig().label}
+ </span>
+ </div>
 
-                    <div class="flex items-center gap-2 shrink-0">
-                        <Show when={props.alerts.activeCritical > 0}>
-                            <span
-                                class={`${badgeBase} bg-red-50 text-red-700 border-red-100 dark:bg-red-900 dark:text-red-300 dark:border-red-800`}
-                            >
-                                <span class="w-1.5 h-1.5 rounded-full bg-red-500" />
-                                {props.alerts.activeCritical} Critical
-                            </span>
-                        </Show>
+ <div class="flex items-center gap-2 shrink-0">
+ <Show when={props.alerts.activeCritical > 0}>
+ <span
+ class={`${badgeBase} bg-red-50 text-red-700 border-red-100 dark:bg-red-900 dark:text-red-300 dark:border-red-800`}
+ >
+ <span class="w-1.5 h-1.5 rounded-full bg-red-500" />
+ {props.alerts.activeCritical} Critical
+ </span>
+ </Show>
 
-                        <Show when={props.alerts.activeWarning > 0}>
-                            <span
-                                class={`${badgeBase} bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-900 dark:text-amber-300 dark:border-amber-800`}
-                            >
-                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                                {props.alerts.activeWarning} Warning
-                            </span>
-                        </Show>
+ <Show when={props.alerts.activeWarning > 0}>
+ <span
+ class={`${badgeBase} bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-900 dark:text-amber-300 dark:border-amber-800`}
+ >
+ <span class="w-1.5 h-1.5 rounded-full bg-amber-500" />
+ {props.alerts.activeWarning} Warning
+ </span>
+ </Show>
 
-                        <a
-                            href={ALERTS_OVERVIEW_PATH}
-                            class="text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white transition-colors"
-                        >
-                            View Alerts →
-                        </a>
-                    </div>
-                </div>
-            </Card>
+ <a
+ href={ALERTS_OVERVIEW_PATH}
+ class="text-xs font-semibold text-slate-600 hover: dark:hover:text-white transition-colors"
+ >
+ View Alerts →
+ </a>
+ </div>
+ </div>
+ </Card>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <a href={INFRASTRUCTURE_PATH} class="group block h-full">
-                    <Card
-                        padding="none"
-                        tone="default"
-                        class={`h-full p-5 ${CARD_THEMES.blue.hoverBorder} transition-all duration-300 cursor-pointer hover:-translate-y-1 relative overflow-hidden flex flex-col justify-between`}
-                    >
-                        <div>
-                            <div class="flex items-start justify-between gap-2 mb-3">
-                                <div class="flex items-center gap-2 min-w-0">
-                                    <div
-                                        class={`p-2 rounded-md transition-colors ${CARD_THEMES.blue.iconBg} ${CARD_THEMES.blue.iconColor} ${CARD_THEMES.blue.hoverIconBg}`}
-                                    >
-                                        <Server class="w-5 h-5" />
-                                    </div>
-                                    <h3 class="text-sm font-semibold text-base-content truncate">Infrastructure</h3>
-                                    <Show when={infrastructureHasIssue()}>
-                                        <SeverityChip severity="critical" />
-                                    </Show>
-                                </div>
-                                <MiniDonut
-                                    size={28}
-                                    strokeWidth={3}
-                                    data={[
-                                        { value: props.infrastructure.online, color: 'text-blue-500 dark:text-blue-400' },
+ <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+ <a href={INFRASTRUCTURE_PATH} class="group block h-full">
+ <Card
+ padding="none"
+ tone="default"
+ class={`h-full p-5 ${CARD_THEMES.blue.hoverBorder} transition-all duration-300 cursor-pointer hover:-translate-y-1 relative overflow-hidden flex flex-col justify-between`}
+ >
+ <div>
+ <div class="flex items-start justify-between gap-2 mb-3">
+ <div class="flex items-center gap-2 min-w-0">
+ <div
+ class={`p-2 rounded-md transition-colors ${CARD_THEMES.blue.iconBg} ${CARD_THEMES.blue.iconColor} ${CARD_THEMES.blue.hoverIconBg}`}
+ >
+ <Server class="w-5 h-5" />
+ </div>
+ <h3 class="text-sm font-semibold text-base-content truncate">Infrastructure</h3>
+ <Show when={infrastructureHasIssue()}>
+ <SeverityChip severity="critical" />
+ </Show>
+ </div>
+ <MiniDonut
+ size={28}
+ strokeWidth={3}
+ data={[
+ { value: props.infrastructure.online, color:'text-blue-500 dark:text-blue-400' },
                                         {
                                             value: props.infrastructure.total - props.infrastructure.online,
-                                            color: 'text-slate-200 dark:text-slate-700',
+                                            color: 'text-muted',
                                         },
                                     ]}
                                 />
@@ -256,98 +256,98 @@ export function DashboardHero(props: DashboardHeroProps) {
                                 <Show when={props.topCPU[0]}>
                                     <span>
                                         {' '}
-                                        · Top CPU: {props.topCPU[0].name} {Math.round(props.topCPU[0].percent)}%
-                                    </span>
-                                </Show>
-                            </div>
-                        </div>
-                        <Show when={getInfraComposition().length > 0}>
-                            <div class="mt-4">
-                                <StackedBar data={getInfraComposition()} height={6} />
-                                <div class="flex gap-2.5 mt-2 flex-wrap text-[10px] text-muted font-medium">
-                                    <For each={getInfraComposition().slice(0, 3)}>
-                                        {(comp) => (
-                                            <div class="flex items-center gap-1.5"><div class={`w-1.5 h-1.5 rounded-full ${comp.color}`} />{comp.label}</div>
-                                        )}
-                                    </For>
-                                    <Show when={getInfraComposition().length > 3}>
-                                        <div class="flex items-center gap-1.5"><div class="w-1.5 h-1.5 rounded-full bg-surface-hover" />+{getInfraComposition().length - 3} more</div>
-                                    </Show>
-                                </div>
-                            </div>
-                        </Show>
-                    </Card>
-                </a>
+ · Top CPU: {props.topCPU[0].name} {Math.round(props.topCPU[0].percent)}%
+ </span>
+ </Show>
+ </div>
+ </div>
+ <Show when={getInfraComposition().length > 0}>
+ <div class="mt-4">
+ <StackedBar data={getInfraComposition()} height={6} />
+ <div class="flex gap-2.5 mt-2 flex-wrap text-[10px] text-muted font-medium">
+ <For each={getInfraComposition().slice(0, 3)}>
+ {(comp) => (
+ <div class="flex items-center gap-1.5"><div class={`w-1.5 h-1.5 rounded-full ${comp.color}`} />{comp.label}</div>
+ )}
+ </For>
+ <Show when={getInfraComposition().length > 3}>
+ <div class="flex items-center gap-1.5"><div class="w-1.5 h-1.5 rounded-full bg-surface-hover" />+{getInfraComposition().length - 3} more</div>
+ </Show>
+ </div>
+ </div>
+ </Show>
+ </Card>
+ </a>
 
-                <a href={WORKLOADS_PATH} class="group block h-full">
-                    <Card
-                        padding="none"
-                        tone="default"
-                        class={`h-full p-5 ${CARD_THEMES.purple.hoverBorder} transition-all duration-300 cursor-pointer hover:-translate-y-1 relative overflow-hidden flex flex-col justify-between`}
-                    >
-                        <div>
-                            <div class="flex items-start justify-between gap-2 mb-3">
-                                <div class="flex items-center gap-2 min-w-0">
-                                    <div
-                                        class={`p-2 rounded-md transition-colors ${CARD_THEMES.purple.iconBg} ${CARD_THEMES.purple.iconColor} ${CARD_THEMES.purple.hoverIconBg}`}
-                                    >
-                                        <Boxes class="w-5 h-5" />
-                                    </div>
-                                    <h3 class="text-sm font-semibold text-base-content truncate">Workloads</h3>
-                                    <Show when={workloadsHasIssue()}>
-                                        <SeverityChip severity="warning" />
-                                    </Show>
-                                </div>
-                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-slate-50 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400">
-                                    {props.workloads.running} RUNNING
-                                </span>
-                            </div>
+ <a href={WORKLOADS_PATH} class="group block h-full">
+ <Card
+ padding="none"
+ tone="default"
+ class={`h-full p-5 ${CARD_THEMES.purple.hoverBorder} transition-all duration-300 cursor-pointer hover:-translate-y-1 relative overflow-hidden flex flex-col justify-between`}
+ >
+ <div>
+ <div class="flex items-start justify-between gap-2 mb-3">
+ <div class="flex items-center gap-2 min-w-0">
+ <div
+ class={`p-2 rounded-md transition-colors ${CARD_THEMES.purple.iconBg} ${CARD_THEMES.purple.iconColor} ${CARD_THEMES.purple.hoverIconBg}`}
+ >
+ <Boxes class="w-5 h-5" />
+ </div>
+ <h3 class="text-sm font-semibold text-base-content truncate">Workloads</h3>
+ <Show when={workloadsHasIssue()}>
+ <SeverityChip severity="warning" />
+ </Show>
+ </div>
+ <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border border-border ">
+ {props.workloads.running} RUNNING
+ </span>
+ </div>
 
-                            <div class="text-2xl font-bold text-base-content">{props.workloads.total}</div>
-                            <div class="text-xs text-muted mt-1">Total</div>
-                            <div class="text-xs text-muted mt-2">
-                                {props.workloads.running} running · {props.workloads.stopped} stopped
-                            </div>
-                        </div>
-                        <Show when={getWorkloadComposition().length > 0}>
-                            <div class="mt-4">
-                                <StackedBar data={getWorkloadComposition()} height={6} />
-                                <div class="flex gap-2.5 mt-2 flex-wrap text-[10px] text-muted font-medium">
-                                    <For each={getWorkloadComposition().slice(0, 3)}>
-                                        {(comp) => (
-                                            <div class="flex items-center gap-1.5"><div class={`w-1.5 h-1.5 rounded-full ${comp.color}`} />{comp.label}</div>
-                                        )}
-                                    </For>
-                                    <Show when={getWorkloadComposition().length > 3}>
-                                        <div class="flex items-center gap-1.5"><div class="w-1.5 h-1.5 rounded-full bg-surface-hover" />+{getWorkloadComposition().length - 3} more</div>
-                                    </Show>
-                                </div>
-                            </div>
-                        </Show>
-                    </Card>
-                </a>
+ <div class="text-2xl font-bold text-base-content">{props.workloads.total}</div>
+ <div class="text-xs text-muted mt-1">Total</div>
+ <div class="text-xs text-muted mt-2">
+ {props.workloads.running} running · {props.workloads.stopped} stopped
+ </div>
+ </div>
+ <Show when={getWorkloadComposition().length > 0}>
+ <div class="mt-4">
+ <StackedBar data={getWorkloadComposition()} height={6} />
+ <div class="flex gap-2.5 mt-2 flex-wrap text-[10px] text-muted font-medium">
+ <For each={getWorkloadComposition().slice(0, 3)}>
+ {(comp) => (
+ <div class="flex items-center gap-1.5"><div class={`w-1.5 h-1.5 rounded-full ${comp.color}`} />{comp.label}</div>
+ )}
+ </For>
+ <Show when={getWorkloadComposition().length > 3}>
+ <div class="flex items-center gap-1.5"><div class="w-1.5 h-1.5 rounded-full bg-surface-hover" />+{getWorkloadComposition().length - 3} more</div>
+ </Show>
+ </div>
+ </div>
+ </Show>
+ </Card>
+ </a>
 
-                <a href={buildStoragePath()} class="group block h-full">
-                    <Card
-                        padding="none"
-                        tone="default"
-                        class={`h-full p-5 ${CARD_THEMES.cyan.hoverBorder} transition-all duration-300 cursor-pointer hover:-translate-y-1 relative overflow-hidden flex flex-col justify-between`}
-                    >
-                        <div class="flex items-start justify-between gap-2 mb-3">
-                            <div class="flex items-center gap-2 min-w-0">
-                                <div
-                                    class={`p-2 rounded-md transition-colors ${CARD_THEMES.cyan.iconBg} ${CARD_THEMES.cyan.iconColor} ${CARD_THEMES.cyan.hoverIconBg}`}
-                                >
-                                    <HardDrive class="w-5 h-5" />
-                                </div>
-                                <h3 class="text-sm font-semibold text-base-content truncate">Storage</h3>
-                                <Show when={storageSeverity()}>{(severity) => <SeverityChip severity={severity()} />}</Show>
-                            </div>
-                            <MiniGauge
-                                percent={props.storage.capacityPercent}
-                                size={32}
-                                strokeWidth={3.5}
-                                color={props.storage.capacityPercent > 90 ? 'text-red-500' : 'text-cyan-500'}
+ <a href={buildStoragePath()} class="group block h-full">
+ <Card
+ padding="none"
+ tone="default"
+ class={`h-full p-5 ${CARD_THEMES.cyan.hoverBorder} transition-all duration-300 cursor-pointer hover:-translate-y-1 relative overflow-hidden flex flex-col justify-between`}
+ >
+ <div class="flex items-start justify-between gap-2 mb-3">
+ <div class="flex items-center gap-2 min-w-0">
+ <div
+ class={`p-2 rounded-md transition-colors ${CARD_THEMES.cyan.iconBg} ${CARD_THEMES.cyan.iconColor} ${CARD_THEMES.cyan.hoverIconBg}`}
+ >
+ <HardDrive class="w-5 h-5" />
+ </div>
+ <h3 class="text-sm font-semibold text-base-content truncate">Storage</h3>
+ <Show when={storageSeverity()}>{(severity) => <SeverityChip severity={severity()} />}</Show>
+ </div>
+ <MiniGauge
+ percent={props.storage.capacityPercent}
+ size={32}
+ strokeWidth={3.5}
+ color={props.storage.capacityPercent > 90 ?'text-red-500' : 'text-cyan-500'}
                             />
                         </div>
 

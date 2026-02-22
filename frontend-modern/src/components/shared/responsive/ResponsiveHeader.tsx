@@ -69,7 +69,7 @@ export const ResponsiveHeader: Component<ResponsiveHeaderProps> = (props) => {
     ];
 
     if (props.column.sortable) {
-      classes.push('cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600');
+      classes.push('cursor-pointer hover:bg-surface-hover');
     }
 
     if (props.class) {

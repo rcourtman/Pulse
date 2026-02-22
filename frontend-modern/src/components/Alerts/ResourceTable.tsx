@@ -443,11 +443,11 @@ export function ResourceTable(props: ResourceTableProps) {
       >
         <span
           class={`text-sm ${isDisabledMetric
-            ? 'text-muted italic'
-            : metricProps.isOverridden
-              ? 'text-base-content font-bold'
-              : 'text-base-content'
-            }`}
+ ? 'text-muted italic'
+ : metricProps.isOverridden
+ ? 'text-base-content font-bold'
+ : 'text-base-content'
+ }`}
         >
           {displayText}
         </span>
@@ -479,7 +479,7 @@ export function ResourceTable(props: ResourceTableProps) {
     off: {
       label: 'Off',
       className:
-        'bg-slate-200 text-slate-600 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600',
+        'bg-slate-200 text-slate-600 hover:bg-surface-hover dark:text-slate-300 dark:hover:bg-slate-600',
       title: 'Offline alerts disabled for this resource.',
     },
     warning: {
@@ -548,14 +548,14 @@ export function ResourceTable(props: ResourceTableProps) {
                 const val = () => props.globalDefaults?.[metric] ?? 0;
                 const isOff = () => val() === -1;
                 return (
-                  <div class="p-2 bg-surface rounded border border-slate-100 dark:border-slate-700 flex flex-col gap-1">
+                  <div class="p-2 bg-surface rounded border border-border-subtle flex flex-col gap-1">
                     <span class="text-[10px] uppercase text-slate-500 font-medium">{column}</span>
                     <div class="relative">
                       <input type="number" min={bounds.min} max={bounds.max} step={metricStep(metric)}
                         value={isOff() ? '' : val()}
                         placeholder={isOff() ? 'Off' : ''}
                         disabled={isOff()}
-                        class={`w-full text-sm p-1 rounded border text-center ${isOff() ? 'bg-surface-hover' : 'bg-white dark:bg-slate-600 border-slate-200 dark:border-slate-500'}`}
+                        class={`w-full text-sm p-1 rounded border text-center ${isOff() ? 'bg-surface-hover' : ' border-slate-200 dark:border-slate-500'}`}
                         onInput={(e) => {
                           const value = parseFloat(e.currentTarget.value);
                           if (props.setGlobalDefaults) {
@@ -682,45 +682,45 @@ export function ResourceTable(props: ResourceTableProps) {
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
                           </button>
                         </Show>
-                        <Show when={resource.hasOverride || (resource.type === 'node' && resource.disableConnectivity)}>
-                          <button
-                            type="button"
-                            onClick={() => props.onRemoveOverride(resource.id)}
-                            class="p-1.5 bg-surface-alt text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 rounded transition-colors"
-                            aria-label={`Revert to defaults for ${resource.displayName || resource.name}`}
-                            title="Revert to defaults"
-                          >
-                            <RotateCcw class="w-4 h-4" />
-                          </button>
-                        </Show>
-                      </div>
-                    </div>
+                        <Show when={resource.hasOverride || (resource.type === 'node'&& resource.disableConnectivity)}>
+ <button
+ type="button"
+ onClick={() => props.onRemoveOverride(resource.id)}
+ class="p-1.5 bg-surface-alt hover:text-muted dark:hover:text-slate-200 rounded transition-colors"
+ aria-label={`Revert to defaults for ${resource.displayName || resource.name}`}
+ title="Revert to defaults"
+ >
+ <RotateCcw class="w-4 h-4" />
+ </button>
+ </Show>
+ </div>
+ </div>
 
-                    {/* Note editor in mobile */}
-                    <Show when={isEditing()}>
-                      <textarea
-                        class="w-full text-xs p-2 rounded border border-border bg-surface-alt"
-                        rows={2}
-                        placeholder="Add a note..."
-                        value={props.editingNote()}
-                        onInput={(e) => props.setEditingNote(e.currentTarget.value)}
-                      />
-                    </Show>
+ {/* Note editor in mobile */}
+ <Show when={isEditing()}>
+ <textarea
+ class="w-full text-xs p-2 rounded border border-border bg-surface-alt"
+ rows={2}
+ placeholder="Add a note..."
+ value={props.editingNote()}
+ onInput={(e) => props.setEditingNote(e.currentTarget.value)}
+ />
+ </Show>
 
-                    {/* Metrics Grid */}
-                    <div class="grid grid-cols-2 gap-2 text-sm border-t pt-2 dark:border-slate-800">
-                      <For each={props.columns}>
-                        {(column) => {
-                          const metric = normalizeMetricKey(column);
-                          // Check support
-                          if (!resourceSupportsMetric(resource.type, metric)) return null;
+ {/* Metrics Grid */}
+ <div class="grid grid-cols-2 gap-2 text-sm border-t pt-2">
+ <For each={props.columns}>
+ {(column) => {
+ const metric = normalizeMetricKey(column);
+ // Check support
+ if (!resourceSupportsMetric(resource.type, metric)) return null;
 
-                          const isDisabled = () => thresholds()?.[metric] === -1;
-                          const bounds = metricBounds(metric);
+ const isDisabled = () => thresholds()?.[metric] === -1;
+ const bounds = metricBounds(metric);
 
-                          return (
-                            <div class="flex justify-between items-center p-1.5 bg-surface-alt rounded">
-                              <span class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{column.replace(/mb\/s|%|°c/gi, '').trim()}</span>
+ return (
+ <div class="flex justify-between items-center p-1.5 bg-surface-alt rounded">
+ <span class="text-[10px] uppercase font-bold tracking-wider">{column.replace(/mb\/s|%|°c/gi,'').trim()}</span>
 
                               <Show when={isEditing()} fallback={
                                 <button
@@ -766,77 +766,77 @@ export function ResourceTable(props: ResourceTableProps) {
       <Show when={!hasRows()}>
         <div class="text-center p-8 text-slate-500 text-sm italic bg-surface-alt rounded-md">
           {props.emptyMessage || 'No resources available.'}
-        </div>
-      </Show>
-    </div>
-  );
+ </div>
+ </Show>
+ </div>
+ );
 
-  return (<>
-    <Show when={!isMobile()} fallback={renderMobileView()}>
-      <Card
-        padding="none"
-        class="overflow-hidden border border-border"
-        border={false}
-        tone="card"
-      >
-        <div class="px-4 py-3 border-b border-border">
-          <SectionHeader title={props.title} size="sm" />
-        </div>
-        <Table class="w-full whitespace-normal">
-          <TableHeader>
-            <TableRow class="text-muted">
-              <Show when={props.onBulkEdit}>
-                <TableHead class="text-center w-10 px-2 border-r border-border">
-                  <input
-                    type="checkbox"
-                    checked={allSelected()}
-                    ref={(el) => {
-                      createEffect(() => {
-                        el.indeterminate = someSelected();
-                      });
-                    }}
-                    onChange={(e) => toggleAll(e.currentTarget.checked)}
-                    class="rounded border-slate-300 text-sky-600 focus:ring-sky-500 dark:border-slate-600 dark:bg-slate-700 transition-shadow cursor-pointer"
-                    aria-label="Select all resources"
-                  />
-                </TableHead>
-              </Show>
-              <TableHead class="text-center w-16">
-                Alerts
-              </TableHead>
-              <TableHead class="text-left w-1/4">
-                Resource
-              </TableHead>
-              <For each={props.columns}>
-                {(column) => (
-                  <TableHead
-                    class="text-center whitespace-normal break-words"
-                    title={getColumnHeaderTooltip(column)}
-                  >
-                    {column}
-                  </TableHead>
-                )}
-              </For>
-              <Show when={props.showOfflineAlertsColumn}>
-                <TableHead
-                  class="text-center"
-                  title={OFFLINE_ALERTS_TOOLTIP}
-                >
-                  Offline Alerts
-                </TableHead>
-              </Show>
-              <TableHead class="text-center">
-                Actions
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody class="divide-y divide-border">
-            {/* Global Defaults Row */}
-            <Show
-              when={props.globalDefaults && props.setGlobalDefaults && props.setHasUnsavedChanges}
-            >
-              <TableRow
-                class={`bg-surface-alt ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
+ return (<>
+ <Show when={!isMobile()} fallback={renderMobileView()}>
+ <Card
+ padding="none"
+ class="overflow-hidden border border-border"
+ border={false}
+ tone="card"
+ >
+ <div class="px-4 py-3 border-b border-border">
+ <SectionHeader title={props.title} size="sm" />
+ </div>
+ <Table class="w-full whitespace-normal">
+ <TableHeader>
+ <TableRow class="text-muted">
+ <Show when={props.onBulkEdit}>
+ <TableHead class="text-center w-10 px-2 border-r border-border">
+ <input
+ type="checkbox"
+ checked={allSelected()}
+ ref={(el) => {
+ createEffect(() => {
+ el.indeterminate = someSelected();
+ });
+ }}
+ onChange={(e) => toggleAll(e.currentTarget.checked)}
+ class="rounded text-sky-600 focus:ring-sky-500 transition-shadow cursor-pointer"
+ aria-label="Select all resources"
+ />
+ </TableHead>
+ </Show>
+ <TableHead class="text-center w-16">
+ Alerts
+ </TableHead>
+ <TableHead class="text-left w-1/4">
+ Resource
+ </TableHead>
+ <For each={props.columns}>
+ {(column) => (
+ <TableHead
+ class="text-center whitespace-normal break-words"
+ title={getColumnHeaderTooltip(column)}
+ >
+ {column}
+ </TableHead>
+ )}
+ </For>
+ <Show when={props.showOfflineAlertsColumn}>
+ <TableHead
+ class="text-center"
+ title={OFFLINE_ALERTS_TOOLTIP}
+ >
+ Offline Alerts
+ </TableHead>
+ </Show>
+ <TableHead class="text-center">
+ Actions
+ </TableHead>
+ </TableRow>
+ </TableHeader>
+ <TableBody class="divide-y divide-border">
+ {/* Global Defaults Row */}
+ <Show
+ when={props.globalDefaults && props.setGlobalDefaults && props.setHasUnsavedChanges}
+ >
+ <TableRow
+ class={`bg-surface-alt ${props.globalDisableFlag?.() ?'opacity-40' : ''}`}
               >
                 <Show when={props.onBulkEdit}>
                   <TableCell class="p-1 px-2 border-r border-border" />
@@ -904,9 +904,9 @@ export function ResourceTable(props: ResourceTableProps) {
                               }
                             }}
                             class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${isOff()
-                              ? 'border-border bg-surface-alt text-muted italic placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:opacity-60 pointer-events-none'
-                              : 'border-border bg-white dark:bg-slate-700 text-base-content focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
-                              }`}
+ ? 'border-border bg-surface-alt text-muted italic placeholder: dark:placeholder: placeholder:opacity-60 pointer-events-none'
+ : 'border-border text-base-content focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+ }`}
                             title={
                               isOff()
                                 ? 'Click to enable this metric'
@@ -993,7 +993,7 @@ export function ResourceTable(props: ResourceTableProps) {
                       <button
                         type="button"
                         onClick={() => setShowDelayRow(!showDelayRow())}
-                        class="p-1 text-slate-600 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors"
+                        class="p-1 hover:text-muted dark:hover:text-slate-300 transition-colors"
                         title={
                           showDelayRow() ? 'Hide alert delay settings' : 'Show alert delay settings'
                         }
@@ -1050,106 +1050,106 @@ export function ResourceTable(props: ResourceTableProps) {
             >
               <TableRow
                 class={`bg-surface-alt ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
-              >
-                <Show when={props.onBulkEdit}>
-                  <TableCell class="p-1 px-2 border-r border-border" />
-                </Show>
-                <TableCell class="p-1 px-2 text-center align-middle">
-                  <span class="text-sm text-slate-400">-</span>
-                </TableCell>
-                <TableCell class="p-1 px-2 align-middle">
-                  <span class="text-xs font-semibold uppercase tracking-wide text-muted inline-flex items-center gap-1">
-                    Alert Delay (s)
-                    <HelpIcon contentId="alerts.thresholds.delay" size="xs" />
-                  </span>
-                </TableCell>
-                <For each={props.columns}>
-                  {(column) => {
-                    const metric = normalizeMetricKey(column);
-                    const typeDefaultDelay = props.globalDelaySeconds ?? 5;
-                    const overrideDelay = metricDelayOverride(metric);
+ >
+ <Show when={props.onBulkEdit}>
+ <TableCell class="p-1 px-2 border-r border-border" />
+ </Show>
+ <TableCell class="p-1 px-2 text-center align-middle">
+ <span class="text-sm">-</span>
+ </TableCell>
+ <TableCell class="p-1 px-2 align-middle">
+ <span class="text-xs font-semibold uppercase tracking-wide text-muted inline-flex items-center gap-1">
+ Alert Delay (s)
+ <HelpIcon contentId="alerts.thresholds.delay" size="xs" />
+ </span>
+ </TableCell>
+ <For each={props.columns}>
+ {(column) => {
+ const metric = normalizeMetricKey(column);
+ const typeDefaultDelay = props.globalDelaySeconds ?? 5;
+ const overrideDelay = metricDelayOverride(metric);
 
-                    return (
-                      <TableCell class="p-1 px-2 text-center align-middle">
-                        <div class="relative flex justify-center w-full">
-                          <input
-                            type="number"
-                            min="0"
-                            value={(() => {
-                              return overrideDelay !== undefined ? overrideDelay : '';
+ return (
+ <TableCell class="p-1 px-2 text-center align-middle">
+ <div class="relative flex justify-center w-full">
+ <input
+ type="number"
+ min="0"
+ value={(() => {
+ return overrideDelay !== undefined ? overrideDelay :'';
                             })()}
                             placeholder={String(typeDefaultDelay)}
                             class="w-16 rounded border border-border bg-white dark:bg-slate-700 px-2 py-0.5 text-sm text-center text-base-content focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                             onInput={(e) => {
                               const raw = e.currentTarget.value;
                               if (raw === '') {
-                                props.onMetricDelayChange?.(metric, null);
-                                props.setHasUnsavedChanges?.(true);
-                              } else {
-                                const parsed = parseInt(raw, 10);
-                                if (Number.isNaN(parsed)) {
-                                  return;
-                                }
-                                const sanitized = Math.max(0, parsed);
-                                // If the value matches the default, clear the override
-                                if (sanitized === typeDefaultDelay) {
-                                  props.onMetricDelayChange?.(metric, null);
-                                } else {
-                                  props.onMetricDelayChange?.(metric, sanitized);
-                                }
-                                props.setHasUnsavedChanges?.(true);
-                              }
-                            }}
-                          />
-                        </div>
-                      </TableCell>
-                    );
-                  }}
-                </For>
-                <Show when={props.showOfflineAlertsColumn}>
-                  <TableCell class="p-1 px-2 text-center align-middle">
-                    <span class="text-sm text-slate-400">-</span>
-                  </TableCell>
-                </Show>
-                <TableCell class="p-1 px-2 text-center align-middle">
-                  <span class="text-sm text-slate-400">-</span>
-                </TableCell>
-              </TableRow>
-            </Show>
-            <Show when={props.groupedResources}>
-              <For
-                each={Object.entries(props.groupedResources || {}).sort(([a], [b]) =>
-                  a.localeCompare(b),
-                )}
-              >
-                {([nodeName, resources]) => {
-                  const headerMeta = props.groupHeaderMeta?.[nodeName];
+ props.onMetricDelayChange?.(metric, null);
+ props.setHasUnsavedChanges?.(true);
+ } else {
+ const parsed = parseInt(raw, 10);
+ if (Number.isNaN(parsed)) {
+ return;
+ }
+ const sanitized = Math.max(0, parsed);
+ // If the value matches the default, clear the override
+ if (sanitized === typeDefaultDelay) {
+ props.onMetricDelayChange?.(metric, null);
+ } else {
+ props.onMetricDelayChange?.(metric, sanitized);
+ }
+ props.setHasUnsavedChanges?.(true);
+ }
+ }}
+ />
+ </div>
+ </TableCell>
+ );
+ }}
+ </For>
+ <Show when={props.showOfflineAlertsColumn}>
+ <TableCell class="p-1 px-2 text-center align-middle">
+ <span class="text-sm">-</span>
+ </TableCell>
+ </Show>
+ <TableCell class="p-1 px-2 text-center align-middle">
+ <span class="text-sm">-</span>
+ </TableCell>
+ </TableRow>
+ </Show>
+ <Show when={props.groupedResources}>
+ <For
+ each={Object.entries(props.groupedResources || {}).sort(([a], [b]) =>
+ a.localeCompare(b),
+ )}
+ >
+ {([nodeName, resources]) => {
+ const headerMeta = props.groupHeaderMeta?.[nodeName];
 
-                  return (
-                    <>
-                      {/* Node group header */}
-                      <TableRow class="bg-surface-alt">
-                        <TableCell
-                          colspan={totalColumnCount()}
-                          class="p-1 px-2 text-xs font-medium text-muted"
-                        >
-                          {renderGroupHeader(nodeName, headerMeta)}
-                        </TableCell>
-                      </TableRow>
-                      {/* Resources in this group */}
-                      <For each={resources}>
-                        {(resource) => {
-                          const isEditing = () => props.editingId() === resource.id;
-                          const thresholds = (): Record<string, number | undefined> => {
-                            if (isEditing()) {
-                              return props.editingThresholds();
-                            }
-                            return resource.thresholds ?? {};
-                          };
-                          const displayValue = (metric: string): number => {
-                            const parseNumeric = (value: unknown): number | undefined => {
-                              if (value === undefined || value === null) return undefined;
-                              if (typeof value === 'number') return value;
+ return (
+ <>
+ {/* Node group header */}
+ <TableRow class="bg-surface-alt">
+ <TableCell
+ colspan={totalColumnCount()}
+ class="p-1 px-2 text-xs font-medium text-muted"
+ >
+ {renderGroupHeader(nodeName, headerMeta)}
+ </TableCell>
+ </TableRow>
+ {/* Resources in this group */}
+ <For each={resources}>
+ {(resource) => {
+ const isEditing = () => props.editingId() === resource.id;
+ const thresholds = (): Record<string, number | undefined> => {
+ if (isEditing()) {
+ return props.editingThresholds();
+ }
+ return resource.thresholds ?? {};
+ };
+ const displayValue = (metric: string): number => {
+ const parseNumeric = (value: unknown): number | undefined => {
+ if (value === undefined || value === null) return undefined;
+ if (typeof value ==='number') return value;
                               const parsed = Number(value);
                               return Number.isFinite(parsed) ? parsed : undefined;
                             };
@@ -1245,7 +1245,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                     when={resource.type === 'node'}
                                     fallback={
                                       <span
-                                        class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 dark:text-slate-500' : 'text-base-content'}`}
+                                        class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 ' : 'text-base-content'}`}
                                       >
                                         {resource.name}
                                       </span>
@@ -1259,7 +1259,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                         when={resource.host}
                                         fallback={
                                           <span
-                                            class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 dark:text-slate-500' : 'text-base-content'}`}
+                                            class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 ' : 'text-base-content'}`}
                                           >
                                             {resource.type === 'node'
                                               ? resource.name
@@ -1274,9 +1274,9 @@ export function ResourceTable(props: ResourceTableProps) {
                                             rel="noopener noreferrer"
                                             onClick={(e) => e.stopPropagation()}
                                             class={`text-sm font-medium truncate flex-nowrap transition-colors duration-150 ${resource.disabled
-                                              ? 'text-slate-500 dark:text-slate-500'
-                                              : 'text-base-content hover:text-sky-600 dark:hover:text-sky-400'
-                                              }`}
+ ? 'text-slate-500 '
+ : 'text-base-content hover:text-sky-600 dark:hover:text-sky-400'
+ }`}
                                             title={`Open ${resource.displayName || resource.name} web interface`}
                                           >
                                             {resource.type === 'node'
@@ -1290,54 +1290,54 @@ export function ResourceTable(props: ResourceTableProps) {
                                           {resource.clusterName}
                                         </span>
                                       </Show>
-                                      <Show when={resource.type === 'storage' && resource.node}>
-                                        <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
-                                          {resource.node}
-                                        </span>
-                                      </Show>
-                                    </div>
-                                  </Show>
-                                  <Show when={resource.subtitle}>
-                                    <span class="text-xs text-muted">
-                                      {resource.subtitle as string}
-                                    </span>
-                                  </Show>
-                                  <Show when={resource.hasOverride || resource.disableConnectivity}>
-                                    <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                      Custom
-                                    </span>
-                                  </Show>
-                                  <Show when={isEditing()}>
-                                    <div class="mt-2 w-full">
-                                      <label class="sr-only" for={`note-${resource.id}`}>
-                                        Override note
-                                      </label>
-                                      <textarea
-                                        id={`note-${resource.id}`}
-                                        class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
-                                        rows={2}
-                                        placeholder="Add a note about this override (optional)"
-                                        value={props.editingNote()}
-                                        onInput={(e) => props.setEditingNote(e.currentTarget.value)}
-                                      />
-                                    </div>
-                                  </Show>
-                                  <Show when={!isEditing() && resource.note}>
-                                    <p class="mt-2 text-xs italic text-muted break-words">
-                                      {resource.note as string}
-                                    </p>
-                                  </Show>
-                                </div>
-                              </TableCell>
-                              {/* Metric columns - dynamically rendered based on resource type */}
-                              <For each={props.columns}>
-                                {(column) => {
-                                  const metric = normalizeMetricKey(column);
-                                  const showMetric = () =>
-                                    resourceSupportsMetric(resource.type, metric);
-                                  const bounds = metricBounds(metric);
-                                  const isDisabled = () => thresholds()?.[metric] === -1;
-                                  const isSpecialToggle = metric === 'backup' || metric === 'snapshot';
+                                      <Show when={resource.type === 'storage'&& resource.node}>
+ <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+ {resource.node}
+ </span>
+ </Show>
+ </div>
+ </Show>
+ <Show when={resource.subtitle}>
+ <span class="text-xs text-muted">
+ {resource.subtitle as string}
+ </span>
+ </Show>
+ <Show when={resource.hasOverride || resource.disableConnectivity}>
+ <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+ Custom
+ </span>
+ </Show>
+ <Show when={isEditing()}>
+ <div class="mt-2 w-full">
+ <label class="sr-only" for={`note-${resource.id}`}>
+ Override note
+ </label>
+ <textarea
+ id={`note-${resource.id}`}
+ class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800"
+ rows={2}
+ placeholder="Add a note about this override (optional)"
+ value={props.editingNote()}
+ onInput={(e) => props.setEditingNote(e.currentTarget.value)}
+ />
+ </div>
+ </Show>
+ <Show when={!isEditing() && resource.note}>
+ <p class="mt-2 text-xs italic text-muted break-words">
+ {resource.note as string}
+ </p>
+ </Show>
+ </div>
+ </TableCell>
+ {/* Metric columns - dynamically rendered based on resource type */}
+ <For each={props.columns}>
+ {(column) => {
+ const metric = normalizeMetricKey(column);
+ const showMetric = () =>
+ resourceSupportsMetric(resource.type, metric);
+ const bounds = metricBounds(metric);
+ const isDisabled = () => thresholds()?.[metric] === -1;
+ const isSpecialToggle = metric ==='backup' || metric === 'snapshot';
 
                                   if (isSpecialToggle) {
                                     const config = metric === 'backup' ? resource.backup : resource.snapshot;
@@ -1509,9 +1509,9 @@ export function ResourceTable(props: ResourceTableProps) {
                                                   setActiveMetricInput(null);
                                                 }}
                                                 class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${isDisabled()
-                                                  ? 'bg-surface-alt text-slate-400 dark:text-slate-600 border-border'
-                                                  : 'bg-white dark:bg-slate-700 text-base-content border-border'
-                                                  }`}
+ ? 'bg-surface-alt text-slate-400 border-border'
+ : ' text-base-content border-border'
+ }`}
                                               />
                                             </div>
                                           </div>
@@ -1597,7 +1597,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                           props.onCancelEdit();
                                           setActiveMetricInput(null);
                                         }}
-                                        class="p-1 text-slate-600 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"
+                                        class="p-1 hover:text-muted dark:hover:text-slate-300"
                                         title="Cancel editing"
                                         aria-label="Cancel editing"
                                       >
@@ -1658,7 +1658,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       <button
                                         type="button"
                                         onClick={() => props.onRemoveOverride(resource.id)}
-                                        class="p-1 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+                                        class="p-1 hover:text-muted dark:hover:text-slate-200 transition-colors"
                                         title="Revert to defaults"
                                         aria-label={`Revert to defaults for ${resource.displayName || resource.name}`}
                                       >
@@ -1786,7 +1786,7 @@ export function ResourceTable(props: ResourceTableProps) {
                               fallback={
                                 <div class="flex items-center gap-2 min-w-0">
                                   <span
-                                    class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 dark:text-slate-500' : 'text-base-content'}`}
+                                    class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 ' : 'text-base-content'}`}
                                   >
                                     {resource.name}
                                   </span>
@@ -1806,7 +1806,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                   when={resource.host}
                                   fallback={
                                     <span
-                                      class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 dark:text-slate-500' : 'text-base-content'}`}
+                                      class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 ' : 'text-base-content'}`}
                                     >
                                       {resource.type === 'node'
                                         ? resource.name
@@ -1821,9 +1821,9 @@ export function ResourceTable(props: ResourceTableProps) {
                                       rel="noopener noreferrer"
                                       onClick={(e) => e.stopPropagation()}
                                       class={`text-sm font-medium truncate flex-nowrap transition-colors duration-150 ${resource.disabled
-                                        ? 'text-slate-500 dark:text-slate-500'
-                                        : 'text-base-content hover:text-sky-600 dark:hover:text-sky-400'
-                                        }`}
+ ? 'text-slate-500 '
+ : 'text-base-content hover:text-sky-600 dark:hover:text-sky-400'
+ }`}
                                       title={`Open ${resource.displayName || resource.name} web interface`}
                                     >
                                       {resource.type === 'node'
@@ -1965,9 +1965,9 @@ export function ResourceTable(props: ResourceTableProps) {
                                             setActiveMetricInput(null);
                                           }}
                                           class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${isDisabled()
-                                            ? 'bg-surface-alt text-slate-400 dark:text-slate-600 border-border'
-                                            : 'bg-white dark:bg-slate-700 text-base-content border-border'
-                                            }`}
+ ? 'bg-surface-alt text-slate-400 border-border'
+ : ' text-base-content border-border'
+ }`}
                                         />
                                       </div>
                                     </Show>
@@ -2020,7 +2020,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                   resource.editable !== false && typeof props.onEdit === 'function'
                                 }
                                 fallback={
-                                  <span class="text-xs text-slate-400 dark:text-slate-600">—</span>
+                                  <span class="text-xs text-muted">—</span>
                                 }
                               >
                                 <Show
@@ -2032,7 +2032,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                         props.onCancelEdit();
                                         setActiveMetricInput(null);
                                       }}
-                                      class="p-1 text-slate-600 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"
+                                      class="p-1 hover:text-muted dark:hover:text-slate-300"
                                       title="Cancel editing"
                                       aria-label="Cancel editing"
                                     >
@@ -2084,47 +2084,47 @@ export function ResourceTable(props: ResourceTableProps) {
                                     <Show
                                       when={
                                         resource.hasOverride ||
-                                        (resource.type === 'node' && resource.disableConnectivity)
-                                      }
-                                    >
-                                      <button
-                                        type="button"
-                                        onClick={() => props.onRemoveOverride(resource.id)}
-                                        class="p-1 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
-                                        title="Revert to defaults"
-                                        aria-label={`Revert to defaults for ${resource.displayName || resource.name}`}
-                                      >
-                                        <RotateCcw class="w-4 h-4" />
-                                      </button>
-                                    </Show>
-                                  </div>
-                                </Show>
-                              </Show>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    }}
-                  </For>
-                }
-              >
-                <TableRow>
-                  <TableCell
-                    colspan={totalColumnCount()}
-                    class="px-4 py-8 text-center text-sm text-muted"
-                  >
-                    No {props.title.toLowerCase()} found
-                  </TableCell>
-                </TableRow>
-              </Show>
-            </Show>
-            <Show when={!hasRows()}>
-              <TableRow>
-                <TableCell
-                  colspan={totalColumnCount()}
-                  class="px-4 py-6 text-sm text-center text-muted"
-                >
-                  {props.emptyMessage || 'No resources available.'}
+                                        (resource.type === 'node'&& resource.disableConnectivity)
+ }
+ >
+ <button
+ type="button"
+ onClick={() => props.onRemoveOverride(resource.id)}
+ class="p-1 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
+ title="Revert to defaults"
+ aria-label={`Revert to defaults for ${resource.displayName || resource.name}`}
+ >
+ <RotateCcw class="w-4 h-4" />
+ </button>
+ </Show>
+ </div>
+ </Show>
+ </Show>
+ </div>
+ </TableCell>
+ </TableRow>
+ );
+ }}
+ </For>
+ }
+ >
+ <TableRow>
+ <TableCell
+ colspan={totalColumnCount()}
+ class="px-4 py-8 text-center text-sm text-muted"
+ >
+ No {props.title.toLowerCase()} found
+ </TableCell>
+ </TableRow>
+ </Show>
+ </Show>
+ <Show when={!hasRows()}>
+ <TableRow>
+ <TableCell
+ colspan={totalColumnCount()}
+ class="px-4 py-6 text-sm text-center text-muted"
+ >
+ {props.emptyMessage ||'No resources available.'}
                 </TableCell>
               </TableRow>
             </Show>

@@ -168,7 +168,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
 
   return (
     <Show when={shouldShow()}>
-      <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+      <div class="mt-3 pt-3 border-t border-border-subtle">
         {/* Pending approval */}
         <Show when={pendingApproval() && !executionResult()}>
           {(() => {
@@ -190,7 +190,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                     {approval.command}
                   </div>
                 </div>
-                <div class="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
                   <Show when={canAutoFix()}>
                     <button
                       type="button"
@@ -212,7 +212,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                       type="button"
                       onClick={(e) => handleDeny(approval, e)}
                       disabled={actionLoading() === approval.id}
-                      class="px-3 py-1.5 bg-slate-100 hover:bg-surface-hover dark:hover:bg-slate-600 disabled:opacity-50 text-muted text-xs font-medium rounded"
+                      class="px-3 py-1.5 hover:bg-surface-hover disabled:opacity-50 text-muted text-xs font-medium rounded"
                     >
                       Deny
                     </button>
@@ -264,7 +264,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                     <div class="text-xs text-muted">Target: {fix.target_host}</div>
                   </Show>
                 </div>
-                <div class="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
                   <Show when={canAutoFix()}>
                     <button
                       type="button"

@@ -42,7 +42,7 @@ function DistributionItem(props: { type: string; count: number; total: number })
                 </div>
                 <div class="flex items-center gap-1.5">
                     <span class="font-bold text-base-content">{props.count}</span>
-                    <span class="text-slate-400 dark:text-slate-600">({percent()}%)</span>
+                    <span class="text-muted">({percent()}%)</span>
                 </div>
             </div>
             <div class="h-1.5 w-full bg-surface-alt rounded-full overflow-hidden">

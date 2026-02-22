@@ -128,66 +128,66 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
     void loadOrganizationAccess();
 
     const unsubscribe = eventBus.on('org_switched', () => {
-      void loadOrganizationAccess();
-    });
-    onCleanup(unsubscribe);
-  });
+ void loadOrganizationAccess();
+ });
+ onCleanup(unsubscribe);
+ });
 
-  return (
-    <Show when={isMultiTenantEnabled()} fallback={<div class="p-4 text-sm text-slate-500">This feature is not available.</div>}>
-      <div class="space-y-6">
-        <SettingsPanel
-          title="Organization Access"
-          description="Manage organization member roles and ownership transfers."
-          icon={<Users class="w-5 h-5" />}
-          bodyClass="space-y-5"
-        >
-          <Show
-            when={!loading()}
-            fallback={
-              <div class="space-y-5">
-                <div class="rounded-md border border-border p-4 space-y-3">
-                  <div class="h-4 w-24 animate-pulse rounded bg-surface-hover" />
-                  <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-                    <div class="h-10 w-full animate-pulse rounded bg-surface-hover" />
-                    <div class="h-10 w-28 animate-pulse rounded bg-surface-hover" />
-                    <div class="h-10 w-16 animate-pulse rounded bg-surface-hover" />
-                  </div>
-                </div>
+ return (
+ <Show when={isMultiTenantEnabled()} fallback={<div class="p-4 text-sm text-slate-500">This feature is not available.</div>}>
+ <div class="space-y-6">
+ <SettingsPanel
+ title="Organization Access"
+ description="Manage organization member roles and ownership transfers."
+ icon={<Users class="w-5 h-5" />}
+ bodyClass="space-y-5"
+ >
+ <Show
+ when={!loading()}
+ fallback={
+ <div class="space-y-5">
+ <div class="rounded-md border border-border p-4 space-y-3">
+ <div class="h-4 w-24 animate-pulse rounded bg-surface-hover" />
+ <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+ <div class="h-10 w-full animate-pulse rounded bg-surface-hover" />
+ <div class="h-10 w-28 animate-pulse rounded bg-surface-hover" />
+ <div class="h-10 w-16 animate-pulse rounded bg-surface-hover" />
+ </div>
+ </div>
 
-                <div class="overflow-hidden rounded-md border border-border">
-                  <div class="h-10 w-full animate-pulse bg-surface-alt" />
-                  {Array.from({ length: 4 }).map(() => (
-                    <div class="border-t border-border-subtle px-3 py-3">
-                      <div class="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3">
-                        <div class="h-4 w-40 animate-pulse rounded bg-surface-hover" />
-                        <div class="h-7 w-24 animate-pulse rounded bg-surface-hover" />
-                        <div class="h-4 w-20 animate-pulse rounded bg-surface-hover" />
-                        <div class="ml-auto h-6 w-16 animate-pulse rounded bg-surface-hover" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            }
-          >
-            <Show when={org()}>
-              {(currentOrg) => (
-                <>
-                  <Show when={canManageOrg(currentOrg(), props.currentUser)}>
-                    <div class="rounded-md border border-border p-4 space-y-3">
-                      <h4 class="text-sm font-semibold text-base-content">Add Member</h4>
-                      <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-                        <input
-                          type="text"
-                          value={inviteUserID()}
-                          onInput={(event) => setInviteUserID(event.currentTarget.value)}
-                          placeholder="username"
-                          class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                        />
-                        <select
-                          value={inviteRole()}
-                          onChange={(event) => setInviteRole(event.currentTarget.value as Exclude<OrganizationRole, 'member'>)}
+ <div class="overflow-hidden rounded-md border border-border">
+ <div class="h-10 w-full animate-pulse bg-surface-alt" />
+ {Array.from({ length: 4 }).map(() => (
+ <div class="border-t border-border-subtle px-3 py-3">
+ <div class="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3">
+ <div class="h-4 w-40 animate-pulse rounded bg-surface-hover" />
+ <div class="h-7 w-24 animate-pulse rounded bg-surface-hover" />
+ <div class="h-4 w-20 animate-pulse rounded bg-surface-hover" />
+ <div class="ml-auto h-6 w-16 animate-pulse rounded bg-surface-hover" />
+ </div>
+ </div>
+ ))}
+ </div>
+ </div>
+ }
+ >
+ <Show when={org()}>
+ {(currentOrg) => (
+ <>
+ <Show when={canManageOrg(currentOrg(), props.currentUser)}>
+ <div class="rounded-md border border-border p-4 space-y-3">
+ <h4 class="text-sm font-semibold text-base-content">Add Member</h4>
+ <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+ <input
+ type="text"
+ value={inviteUserID()}
+ onInput={(event) => setInviteUserID(event.currentTarget.value)}
+ placeholder="username"
+ class="w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 "
+ />
+ <select
+ value={inviteRole()}
+ onChange={(event) => setInviteRole(event.currentTarget.value as Exclude<OrganizationRole,'member'>)}
                           class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                         >
                           <For each={roleOptions.filter((option) => option.value !== 'owner' || currentOrg().ownerUserId === props.currentUser)}>

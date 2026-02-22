@@ -658,251 +658,251 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                     </Show>
                                 </div>
                                 <Show when={d().category && d().category !== 'unknown'}>
-                                    <span class="inline-block rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-200">
-                                        {getCategoryDisplayName(d().category)}
-                                    </span>
-                                </Show>
-                            </div>
+ <span class="inline-block rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-200">
+ {getCategoryDisplayName(d().category)}
+ </span>
+ </Show>
+ </div>
 
-                            <Show
-                                when={confidenceInfo()}
-                            >
-                                <p class={`text-xs mt-2 ${confidenceInfo()!.color}`}>
-                                    {confidenceInfo()!.label} ({Math.round((d().confidence || 0) * 100)}%)
-                                </p>
-                            </Show>
-                        </div>
+ <Show
+ when={confidenceInfo()}
+ >
+ <p class={`text-xs mt-2 ${confidenceInfo()!.color}`}>
+ {confidenceInfo()!.label} ({Math.round((d().confidence || 0) * 100)}%)
+ </p>
+ </Show>
+ </div>
 
-                        <Show when={d().suggested_url || d().suggested_url_diagnostic}>
-                            <div class="rounded border border-blue-200 bg-blue-50 p-3 shadow-sm dark:border-blue-800 dark:bg-blue-900">
-                                <div class="text-[11px] font-medium uppercase tracking-wide text-blue-800 dark:text-blue-200 mb-1">
-                                    Web Interface Suggestion
-                                </div>
-                                <Show
-                                    when={d().suggested_url}
-                                    fallback={
-                                        <div class="text-xs text-blue-800 dark:text-blue-200">
-                                            <p class="font-medium">No suggested URL found</p>
-                                            <p class="mt-1 text-blue-700 dark:text-blue-300">{d().suggested_url_diagnostic}</p>
-                                        </div>
-                                    }
-                                >
-                                    <Show when={suggestedURLReasonText()}>
-                                        <p
-                                            class="mb-1 text-[10px] text-blue-700 dark:text-blue-300"
-                                            title={suggestedURLReasonTitle()}
-                                        >
-                                            Why this URL: {suggestedURLReasonText()}
-                                        </p>
-                                    </Show>
-                                    <code class="block rounded bg-white px-2 py-1 text-xs text-blue-800 dark:bg-slate-800 dark:text-blue-100 font-mono break-all">
-                                        {d().suggested_url}
-                                    </code>
-                                    <p class="mt-1.5 text-[11px] text-blue-700 dark:text-blue-300">
-                                        Save this URL from the Overview tab in the Web Interface URL field.
-                                    </p>
-                                </Show>
-                            </div>
-                        </Show>
+ <Show when={d().suggested_url || d().suggested_url_diagnostic}>
+ <div class="rounded border border-blue-200 bg-blue-50 p-3 shadow-sm dark:border-blue-800 dark:bg-blue-900">
+ <div class="text-[11px] font-medium uppercase tracking-wide text-blue-800 dark:text-blue-200 mb-1">
+ Web Interface Suggestion
+ </div>
+ <Show
+ when={d().suggested_url}
+ fallback={
+ <div class="text-xs text-blue-800 dark:text-blue-200">
+ <p class="font-medium">No suggested URL found</p>
+ <p class="mt-1 text-blue-700 dark:text-blue-300">{d().suggested_url_diagnostic}</p>
+ </div>
+ }
+ >
+ <Show when={suggestedURLReasonText()}>
+ <p
+ class="mb-1 text-[10px] text-blue-700 dark:text-blue-300"
+ title={suggestedURLReasonTitle()}
+ >
+ Why this URL: {suggestedURLReasonText()}
+ </p>
+ </Show>
+ <code class="block rounded px-2 py-1 text-xs text-blue-800 dark:text-blue-100 font-mono break-all">
+ {d().suggested_url}
+ </code>
+ <p class="mt-1.5 text-[11px] text-blue-700 dark:text-blue-300">
+ Save this URL from the Overview tab in the Web Interface URL field.
+ </p>
+ </Show>
+ </div>
+ </Show>
 
-                        {/* CLI Access */}
-                        <Show when={d().cli_access}>
-                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
-                                    CLI Access
-                                </div>
-                                <code class="block bg-surface-alt rounded px-2 py-1.5 text-xs text-base-content font-mono overflow-x-auto">
-                                    {d().cli_access}
-                                </code>
-                            </div>
-                        </Show>
+ {/* CLI Access */}
+ <Show when={d().cli_access}>
+ <div class="rounded border border-slate-200 p-3 shadow-sm dark:border-slate-600 ">
+ <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+ CLI Access
+ </div>
+ <code class="block bg-surface-alt rounded px-2 py-1.5 text-xs text-base-content font-mono overflow-x-auto">
+ {d().cli_access}
+ </code>
+ </div>
+ </Show>
 
-                        {/* Configuration, Data & Log Paths */}
-                        <Show when={d().config_paths?.length > 0 || d().data_paths?.length > 0 || d().log_paths?.length > 0}>
-                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                                <Show when={d().config_paths?.length > 0}>
-                                    <div class="mb-3">
-                                        <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-1">
-                                            Config Paths
-                                        </div>
-                                        <div class="space-y-1">
-                                            <For each={d().config_paths}>
-                                                {(path) => (
-                                                    <code class="block text-xs text-muted font-mono">
-                                                        {path}
-                                                    </code>
-                                                )}
-                                            </For>
-                                        </div>
-                                    </div>
-                                </Show>
-                                <Show when={d().data_paths?.length > 0}>
-                                    <div class="mb-3">
-                                        <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-1">
-                                            Data Paths
-                                        </div>
-                                        <div class="space-y-1">
-                                            <For each={d().data_paths}>
-                                                {(path) => (
-                                                    <code class="block text-xs text-muted font-mono">
-                                                        {path}
-                                                    </code>
-                                                )}
-                                            </For>
-                                        </div>
-                                    </div>
-                                </Show>
-                                <Show when={d().log_paths?.length > 0}>
-                                    <div>
-                                        <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-1">
-                                            Log Paths
-                                        </div>
-                                        <div class="space-y-1">
-                                            <For each={d().log_paths}>
-                                                {(path) => (
-                                                    <code class="block text-xs text-muted font-mono">
-                                                        {path}
-                                                    </code>
-                                                )}
-                                            </For>
-                                        </div>
-                                    </div>
-                                </Show>
-                            </div>
-                        </Show>
+ {/* Configuration, Data & Log Paths */}
+ <Show when={d().config_paths?.length > 0 || d().data_paths?.length > 0 || d().log_paths?.length > 0}>
+ <div class="rounded border border-slate-200 p-3 shadow-sm dark:border-slate-600 ">
+ <Show when={d().config_paths?.length > 0}>
+ <div class="mb-3">
+ <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-1">
+ Config Paths
+ </div>
+ <div class="space-y-1">
+ <For each={d().config_paths}>
+ {(path) => (
+ <code class="block text-xs text-muted font-mono">
+ {path}
+ </code>
+ )}
+ </For>
+ </div>
+ </div>
+ </Show>
+ <Show when={d().data_paths?.length > 0}>
+ <div class="mb-3">
+ <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-1">
+ Data Paths
+ </div>
+ <div class="space-y-1">
+ <For each={d().data_paths}>
+ {(path) => (
+ <code class="block text-xs text-muted font-mono">
+ {path}
+ </code>
+ )}
+ </For>
+ </div>
+ </div>
+ </Show>
+ <Show when={d().log_paths?.length > 0}>
+ <div>
+ <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-1">
+ Log Paths
+ </div>
+ <div class="space-y-1">
+ <For each={d().log_paths}>
+ {(path) => (
+ <code class="block text-xs text-muted font-mono">
+ {path}
+ </code>
+ )}
+ </For>
+ </div>
+ </div>
+ </Show>
+ </div>
+ </Show>
 
-                        {/* Ports */}
-                        <Show when={d().ports?.length > 0}>
-                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
-                                    Listening Ports
-                                </div>
-                                <div class="flex flex-wrap gap-1">
-                                    <For each={d().ports}>
-                                        {(port) => (
-                                            <span class="inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-700 dark:bg-slate-700 dark:text-slate-200">
-                                                {port.port}/{port.protocol}
-                                                <Show when={port.process}>
-                                                    <span class="text-muted ml-1">({port.process})</span>
-                                                </Show>
-                                            </span>
-                                        )}
-                                    </For>
-                                </div>
-                            </div>
-                        </Show>
+ {/* Ports */}
+ <Show when={d().ports?.length > 0}>
+ <div class="rounded border border-slate-200 p-3 shadow-sm dark:border-slate-600 ">
+ <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+ Listening Ports
+ </div>
+ <div class="flex flex-wrap gap-1">
+ <For each={d().ports}>
+ {(port) => (
+ <span class="inline-block rounded px-1.5 py-0.5 text-[10px] ">
+ {port.port}/{port.protocol}
+ <Show when={port.process}>
+ <span class="text-muted ml-1">({port.process})</span>
+ </Show>
+ </span>
+ )}
+ </For>
+ </div>
+ </div>
+ </Show>
 
-                        {/* Key Facts */}
-                        <Show when={d().facts?.length > 0}>
-                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
-                                    Discovered Facts
-                                </div>
-                                <div class="space-y-1.5">
-                                    <For each={d().facts.slice(0, 8)}>
-                                        {(fact) => (
-                                            <div class="flex items-center justify-between text-xs">
-                                                <span class="text-muted">{fact.key}</span>
-                                                <span class="font-medium text-base-content truncate ml-2 max-w-[60%]" title={fact.value}>
-                                                    {fact.value}
-                                                </span>
-                                            </div>
-                                        )}
-                                    </For>
-                                </div>
-                            </div>
-                        </Show>
+ {/* Key Facts */}
+ <Show when={d().facts?.length > 0}>
+ <div class="rounded border border-slate-200 p-3 shadow-sm dark:border-slate-600 ">
+ <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+ Discovered Facts
+ </div>
+ <div class="space-y-1.5">
+ <For each={d().facts.slice(0, 8)}>
+ {(fact) => (
+ <div class="flex items-center justify-between text-xs">
+ <span class="text-muted">{fact.key}</span>
+ <span class="font-medium text-base-content truncate ml-2 max-w-[60%]" title={fact.value}>
+ {fact.value}
+ </span>
+ </div>
+ )}
+ </For>
+ </div>
+ </div>
+ </Show>
 
-                        {/* User Notes */}
-                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                            <div class="flex items-center justify-between mb-2">
-                                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
-                                    Your Notes
-                                </div>
-                                <Show when={!editingNotes()}>
-                                    <button
-                                        onClick={startEditingNotes}
-                                        class="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                                    >
-                                        {d().user_notes ? 'Edit' : 'Add notes'}
-                                    </button>
-                                </Show>
-                            </div>
+ {/* User Notes */}
+ <div class="rounded border border-slate-200 p-3 shadow-sm dark:border-slate-600 ">
+ <div class="flex items-center justify-between mb-2">
+ <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
+ Your Notes
+ </div>
+ <Show when={!editingNotes()}>
+ <button
+ onClick={startEditingNotes}
+ class="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+ >
+ {d().user_notes ?'Edit' : 'Add notes'}
+ </button>
+ </Show>
+ </div>
 
-                            <Show
-                                when={editingNotes()}
-                                fallback={
-                                    <Show
-                                        when={d().user_notes}
-                                        fallback={
-                                            <p class="text-xs text-muted italic">
-                                                No notes yet. Add notes to document important information.
-                                            </p>
-                                        }
-                                    >
-                                        <p class="text-xs text-muted whitespace-pre-wrap">
-                                            {d().user_notes}
-                                        </p>
-                                    </Show>
-                                }
-                            >
-                                <div class="space-y-2">
-                                    <textarea
-                                        value={notesText()}
-                                        onInput={(e) => setNotesText(e.currentTarget.value)}
-                                        placeholder="Add notes about this resource (API tokens, passwords, important info)..."
-                                        class="w-full h-24 px-2 py-1.5 text-xs border border-border rounded bg-surface text-base-content focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    />
-                                    <Show when={saveError()}>
-                                        <p class="text-xs text-red-600 dark:text-red-400">{saveError()}</p>
-                                    </Show>
-                                    <div class="flex gap-2">
-                                        <button
-                                            onClick={handleSaveNotes}
-                                            class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
-                                        >
-                                            Save
-                                        </button>
-                                        <button
-                                            onClick={() => setEditingNotes(false)}
-                                            class="px-3 py-1 bg-surface-hover text-base-content text-xs rounded hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
-                                        >
-                                            Cancel
-                                        </button>
-                                    </div>
-                                </div>
-                            </Show>
-                        </div>
+ <Show
+ when={editingNotes()}
+ fallback={
+ <Show
+ when={d().user_notes}
+ fallback={
+ <p class="text-xs text-muted italic">
+ No notes yet. Add notes to document important information.
+ </p>
+ }
+ >
+ <p class="text-xs text-muted whitespace-pre-wrap">
+ {d().user_notes}
+ </p>
+ </Show>
+ }
+ >
+ <div class="space-y-2">
+ <textarea
+ value={notesText()}
+ onInput={(e) => setNotesText(e.currentTarget.value)}
+ placeholder="Add notes about this resource (API tokens, passwords, important info)..."
+ class="w-full h-24 px-2 py-1.5 text-xs border border-border rounded bg-surface text-base-content focus:outline-none focus:ring-1 focus:ring-blue-500"
+ />
+ <Show when={saveError()}>
+ <p class="text-xs text-red-600 dark:text-red-400">{saveError()}</p>
+ </Show>
+ <div class="flex gap-2">
+ <button
+ onClick={handleSaveNotes}
+ class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+ >
+ Save
+ </button>
+ <button
+ onClick={() => setEditingNotes(false)}
+ class="px-3 py-1 bg-surface-hover text-base-content text-xs rounded hover:bg-slate-300 transition-colors"
+ >
+ Cancel
+ </button>
+ </div>
+ </div>
+ </Show>
+ </div>
 
-                        {/* AI Reasoning (collapsible) */}
-                        <Show when={d().ai_reasoning}>
-                            <details class="rounded border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                                <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-base-content cursor-pointer hover:bg-surface-hover">
-                                    AI Reasoning
-                                </summary>
-                                <div class="px-3 pb-3">
-                                    <p class="text-xs text-muted">
-                                        {d().ai_reasoning}
-                                    </p>
-                                </div>
-                            </details>
-                        </Show>
+ {/* AI Reasoning (collapsible) */}
+ <Show when={d().ai_reasoning}>
+ <details class="rounded border shadow-sm ">
+ <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-base-content cursor-pointer hover:bg-surface-hover">
+ AI Reasoning
+ </summary>
+ <div class="px-3 pb-3">
+ <p class="text-xs text-muted">
+ {d().ai_reasoning}
+ </p>
+ </div>
+ </details>
+ </Show>
 
-                        {/* Scan Details / Raw Command Outputs (collapsible) */}
-                        <Show when={d().raw_command_output && Object.keys(d().raw_command_output!).length > 0}>
-                            <details class="rounded border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                                <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-base-content cursor-pointer hover:bg-surface-hover">
-                                    Scan Details ({Object.keys(d().raw_command_output!).length} commands)
-                                </summary>
-                                <div class="px-3 pb-3 space-y-3">
-                                    <For each={Object.entries(d().raw_command_output!)}>
-                                        {([cmdName, output]) => (
-                                            <div>
-                                                <div class="text-xs font-medium text-base-content mb-1">
-                                                    {cmdName}
-                                                </div>
-                                                <pre class="text-[10px] bg-surface-alt rounded p-2 overflow-x-auto text-muted max-h-32 overflow-y-auto">
-                                                    {output || '(no output)'}
+ {/* Scan Details / Raw Command Outputs (collapsible) */}
+ <Show when={d().raw_command_output && Object.keys(d().raw_command_output!).length > 0}>
+ <details class="rounded border shadow-sm ">
+ <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-base-content cursor-pointer hover:bg-surface-hover">
+ Scan Details ({Object.keys(d().raw_command_output!).length} commands)
+ </summary>
+ <div class="px-3 pb-3 space-y-3">
+ <For each={Object.entries(d().raw_command_output!)}>
+ {([cmdName, output]) => (
+ <div>
+ <div class="text-xs font-medium text-base-content mb-1">
+ {cmdName}
+ </div>
+ <pre class="text-[10px] bg-surface-alt rounded p-2 overflow-x-auto text-muted max-h-32 overflow-y-auto">
+ {output ||'(no output)'}
                                                 </pre>
                                             </div>
                                         )}
@@ -932,7 +932,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                             <button
                                 onClick={() => handleTriggerDiscovery(true)}
                                 disabled={isScanning()}
-                                class="px-3 py-1.5 bg-surface-hover text-base-content text-xs rounded hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                                class="px-3 py-1.5 bg-surface-hover text-base-content text-xs rounded hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
                             >
                                 <Show
                                     when={isScanning()}

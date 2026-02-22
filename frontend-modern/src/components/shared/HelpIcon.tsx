@@ -194,7 +194,7 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
               <p class="whitespace-pre-line leading-relaxed">{helpContent.description}</p>
 
               <Show when={helpContent.examples && helpContent.examples.length > 0}>
-                <div class="pt-2 border-t border-slate-100 dark:border-slate-700">
+                <div class="pt-2 border-t border-border-subtle">
                   <p class="text-[10px] uppercase tracking-wide text-muted font-medium mb-1.5">
                     Examples
                   </p>
@@ -210,7 +210,7 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
               </Show>
 
               <Show when={helpContent.docUrl}>
-                <div class="pt-2 border-t border-slate-100 dark:border-slate-700">
+                <div class="pt-2 border-t border-border-subtle">
                   <a
                     href={helpContent.docUrl}
                     target="_blank"

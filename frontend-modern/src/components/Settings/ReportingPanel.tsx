@@ -165,9 +165,9 @@ export function ReportingPanel() {
                                     {(r) => (
                                         <button
                                             class={`w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 rounded-md border transition-all ${range() === r
-                                                ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500'
-                                                : 'bg-white border-slate-300 text-slate-700 hover:bg-surface-alt dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
-                                                }`}
+ ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500'
+ : ' border-slate-300 text-slate-700 hover:bg-surface-alt dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
+ }`}
                                             onClick={() => setRange(r)}
                                         >
                                             {r === '24h' ? 'Last 24 Hours' : r === '7d' ? 'Last 7 Days' : 'Last 30 Days'}
@@ -181,9 +181,9 @@ export function ReportingPanel() {
                             <div class="grid grid-cols-1 sm:flex gap-2">
                                 <button
                                     class={`w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border transition-all ${format() === 'pdf'
-                                        ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500'
-                                        : 'bg-white border-slate-300 text-slate-700 hover:bg-surface-alt dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
-                                        }`}
+ ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500'
+ : ' border-slate-300 text-slate-700 hover:bg-surface-alt dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
+ }`}
                                     onClick={() => setFormat('pdf')}
                                 >
                                     <FileText size={16} />
@@ -191,9 +191,9 @@ export function ReportingPanel() {
                                 </button>
                                 <button
                                     class={`w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border transition-all ${format() === 'csv'
-                                        ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500'
-                                        : 'bg-white border-slate-300 text-slate-700 hover:bg-surface-alt dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
-                                        }`}
+ ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500'
+ : ' border-slate-300 text-slate-700 hover:bg-surface-alt dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
+ }`}
                                     onClick={() => setFormat('csv')}
                                 >
                                     <BarChart size={16} />
@@ -208,9 +208,9 @@ export function ReportingPanel() {
                 <div class="flex justify-end p-4 sm:p-6 hover:bg-surface-hover transition-colors">
                     <button
                         class={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-md font-semibold transition-all ${generating()
-                            ? 'bg-slate-300 text-slate-500 cursor-not-allowed dark:bg-slate-700 dark:text-slate-400'
-                            : 'bg-blue-600 hover:bg-blue-700 text-white'
-                            }`}
+ ? 'bg-slate-300 text-slate-500 cursor-not-allowed dark:bg-slate-700 dark:text-slate-400'
+ : 'bg-blue-600 hover:bg-blue-700 text-white'
+ }`}
                         disabled={generating()}
                         onClick={handleGenerate}
                     >

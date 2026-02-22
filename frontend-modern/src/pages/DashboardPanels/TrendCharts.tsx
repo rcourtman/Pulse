@@ -107,7 +107,7 @@ export function TrendCharts(props: TrendChartsProps) {
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <Card padding="none" tone="default" class="px-4 py-3 border-slate-100 dark:border-slate-700">
+        <Card padding="none" tone="default" class="px-4 py-3 border-border-subtle">
           <p class="text-[11px] font-medium text-muted uppercase tracking-wide">CPU</p>
           <div class="h-[240px] mt-1">
             <InteractiveSparkline
@@ -121,7 +121,7 @@ export function TrendCharts(props: TrendChartsProps) {
           </div>
         </Card>
 
-        <Card padding="none" tone="default" class="px-4 py-3 border-slate-100 dark:border-slate-700">
+        <Card padding="none" tone="default" class="px-4 py-3 border-border-subtle">
           <p class="text-[11px] font-medium text-muted uppercase tracking-wide">Memory</p>
           <div class="h-[240px] mt-1">
             <InteractiveSparkline

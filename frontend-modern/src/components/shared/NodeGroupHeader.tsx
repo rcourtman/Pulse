@@ -68,7 +68,7 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
       when={props.renderAs === 'tr'}
       fallback={
         <div class="bg-surface-alt w-full">
-          <div class="py-0.5 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100">
+          <div class="py-0.5 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-base-content">
             <InnerContent />
           </div>
         </div>
@@ -77,7 +77,7 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
       <tr class="bg-surface-alt">
         <td
           colspan={props.colspan}
-          class="py-0.5 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
+          class="py-0.5 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-base-content"
         >
           <InnerContent />
         </td>

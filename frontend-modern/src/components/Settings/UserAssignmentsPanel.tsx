@@ -151,26 +151,26 @@ export const UserAssignmentsPanel: Component = () => {
                                 rel="noopener noreferrer"
                                 class="w-full sm:w-auto min-h-10 text-center sm:min-h-9 px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                                 onClick={() => trackUpgradeClicked('settings_user_assignments_panel', 'rbac')}
-                            >
-                                Upgrade to Pro
-                            </a>
-                        </div>
-                    </div>
-                </Show>
+ >
+ Upgrade to Pro
+ </a>
+ </div>
+ </div>
+ </Show>
 
-                <Show when={loading()}>
-                    <div class="flex items-center justify-center py-8">
-                        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
-                    </div>
-                </Show>
+ <Show when={loading()}>
+ <div class="flex items-center justify-center py-8">
+ <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
+ </div>
+ </Show>
 
-                <Show when={!loading() && filteredAssignments().length === 0}>
-                    <div class="text-center py-12 px-6">
-                        <Users class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4" />
-                        <h4 class="text-base font-medium text-base-content mb-2">No users yet</h4>
-                        <p class="text-sm text-muted max-w-md mx-auto">
-                            Users appear here automatically when they sign in via SSO (OIDC/SAML) or proxy authentication.
-                            Once they've logged in, you can assign roles to control their access.
+ <Show when={!loading() && filteredAssignments().length === 0}>
+ <div class="text-center py-12 px-6">
+ <Users class="w-12 h-12 mx-auto text-slate-300 mb-4" />
+ <h4 class="text-base font-medium text-base-content mb-2">No users yet</h4>
+ <p class="text-sm text-muted max-w-md mx-auto">
+ Users appear here automatically when they sign in via SSO (OIDC/SAML) or proxy authentication.
+ Once they've logged in, you can assign roles to control their access.
                         </p>
                         <div class="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 text-xs text-muted">
                             <span class="flex items-center gap-1.5">
@@ -216,61 +216,61 @@ export const UserAssignmentsPanel: Component = () => {
                                     key: 'actions',
                                     label: 'Actions',
                                     align: 'right',
-                                    render: (assignment) => (
-                                        <button
-                                            type="button"
-                                            onClick={() => handleEditRoles(assignment)}
-                                            class="inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-base-content hover:bg-surface-hover transition-colors"
-                                        >
-                                            <Pencil class="w-4 h-4" />
-                                            Manage Access
-                                        </button>
-                                    )
-                                }
-                            ]}
-                            keyExtractor={(assignment) => assignment.username}
-                            emptyState="No users yet"
-                            desktopMinWidth="620px"
-                            class="border-x-0 sm:border-x border-slate-200 dark:border-slate-800"
-                        />
-                    </div>
-                </Show>
-            </SettingsPanel>
+ render: (assignment) => (
+ <button
+ type="button"
+ onClick={() => handleEditRoles(assignment)}
+ class="inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-base-content hover:bg-surface-hover transition-colors"
+ >
+ <Pencil class="w-4 h-4" />
+ Manage Access
+ </button>
+ )
+ }
+ ]}
+ keyExtractor={(assignment) => assignment.username}
+ emptyState="No users yet"
+ desktopMinWidth="620px"
+ class="border-x-0 sm:border-x "
+ />
+ </div>
+ </Show>
+ </SettingsPanel>
 
-            {/* Assignments Modal */}
-            <Show when={showModal()}>
-                <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
-                    <div class="w-full max-w-2xl bg-surface rounded-md shadow-sm border border-border mx-4 max-h-[92vh] overflow-hidden">
-                        <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
-                            <div>
-                                <h3 class="text-lg font-semibold text-base-content">
-                                    Manage Access: {editingUser()?.username}
-                                </h3>
-                                <p class="text-xs text-muted uppercase tracking-wider font-semibold mt-0.5">Role Assignments</p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setShowModal(false)}
-                                class="p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800"
-                            >
-                                <X class="w-5 h-5" />
-                            </button>
-                        </div>
+ {/* Assignments Modal */}
+ <Show when={showModal()}>
+ <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
+ <div class="w-full max-w-2xl bg-surface rounded-md shadow-sm border border-border mx-4 max-h-[92vh] overflow-hidden">
+ <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
+ <div>
+ <h3 class="text-lg font-semibold text-base-content">
+ Manage Access: {editingUser()?.username}
+ </h3>
+ <p class="text-xs text-muted uppercase tracking-wider font-semibold mt-0.5">Role Assignments</p>
+ </div>
+ <button
+ type="button"
+ onClick={() => setShowModal(false)}
+ class="p-1.5 rounded-md hover: hover: dark:hover:text-slate-300 "
+ >
+ <X class="w-5 h-5" />
+ </button>
+ </div>
 
-                        <div class="px-4 sm:px-6 py-6 space-y-8 max-h-[70vh] overflow-y-auto">
-                            {/* Role Selection */}
-                            <div class="space-y-4">
-                                <h4 class="text-sm font-semibold text-base-content flex items-center gap-2">
-                                    <Shield class="w-4 h-4 text-blue-500" />
-                                    Select Roles
-                                </h4>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <For each={roles()}>
-                                        {(role) => (
-                                            <label class={`flex flex-col p-3 rounded-md border transition-all cursor-pointer ${formRoleIds().includes(role.id)
-                                                ? 'bg-blue-50 border-blue-200 dark:bg-blue-900 dark:border-blue-800'
-                                                : 'bg-white border-slate-200 hover:border-blue-100 dark:bg-slate-800 dark:border-slate-700 dark:hover:border-blue-900'
-                                                }`}>
+ <div class="px-4 sm:px-6 py-6 space-y-8 max-h-[70vh] overflow-y-auto">
+ {/* Role Selection */}
+ <div class="space-y-4">
+ <h4 class="text-sm font-semibold text-base-content flex items-center gap-2">
+ <Shield class="w-4 h-4 text-blue-500" />
+ Select Roles
+ </h4>
+ <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+ <For each={roles()}>
+ {(role) => (
+ <label class={`flex flex-col p-3 rounded-md border transition-all cursor-pointer ${formRoleIds().includes(role.id)
+ ?'bg-blue-50 border-blue-200 dark:bg-blue-900 dark:border-blue-800'
+ : 'bg-white border-slate-200 hover:border-blue-100 dark:bg-slate-800 dark:border-slate-700 dark:hover:border-blue-900'
+ }`}>
                                                 <div class="flex items-start justify-between gap-2 mb-1">
                                                     <div class="flex items-center gap-2 shadow-sm">
                                                         <input

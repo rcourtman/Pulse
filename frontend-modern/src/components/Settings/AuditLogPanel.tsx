@@ -650,55 +650,54 @@ export default function AuditLogPanel() {
                                         if (chip.key === 'user') setUserFilter('');
                                         if (chip.key === 'success') setSuccessFilter('all');
                                         if (chip.key === 'verification') setVerificationFilter('all');
-                                        setPageOffset(0);
-                                        void fetchAuditEvents({ offset: 0 });
-                                    }}
-                                >
-                                    {chip.label}
-                                    <X class="w-3 h-3 text-muted" />
-                                </button>
-                            )}
-                        </For>
-                    </div>
-                </Show>
-            </Show>
+ setPageOffset(0);
+ void fetchAuditEvents({ offset: 0 });
+ }}
+ >
+ {chip.label}
+ <X class="w-3 h-3 text-muted" />
+ </button>
+ )}
+ </For>
+ </div>
+ </Show>
+ </Show>
 
-            {/* Verification Preferences */}
-            <Show when={isPersistent()}>
-                <div class="flex flex-col gap-4 px-1 lg:flex-row lg:items-center lg:justify-between">
-                    <Toggle
-                        label="Auto-verify signatures"
-                        description="Verify signatures after loading audit events."
-                        checked={autoVerifyEnabled()}
-                        onChange={(e) => setAutoVerifyEnabled(e.currentTarget.checked)}
-                    />
-                    <div class="flex flex-col gap-2 text-xs text-muted sm:flex-row sm:flex-wrap sm:items-center">
-                        <label class="flex items-center gap-2">
-                            <span>Auto-verify limit</span>
-                            <input
-                                type="number"
-                                min="0"
-                                value={autoVerifyLimit()}
-                                disabled={!autoVerifyEnabled()}
-                                onInput={(e) => {
-                                    const raw = Number(e.currentTarget.value);
-                                    if (!Number.isFinite(raw)) {
-                                        setAutoVerifyLimit(0);
-                                        return;
-                                    }
-                                    const clamped = Math.max(0, Math.min(500, Math.floor(raw)));
-                                    setAutoVerifyLimit(clamped);
-                                }}
-                                class="min-h-10 sm:min-h-10 w-24 rounded-md border border-border bg-surface px-2.5 py-2 text-sm text-base-content"
-                            />
-                        </label>
-                        <span class="text-muted">0 disables, max 500</span>
-                        <span
-                            class="inline-flex items-center text-slate-400 cursor-help"
-                            onMouseEnter={(e) => {
-                                const rect = e.currentTarget.getBoundingClientRect();
-                                showTooltip(
-                                    'Large verification batches can add load. Use a smaller limit on busy systems.',
+ {/* Verification Preferences */}
+ <Show when={isPersistent()}>
+ <div class="flex flex-col gap-4 px-1 lg:flex-row lg:items-center lg:justify-between">
+ <Toggle
+ label="Auto-verify signatures"
+ description="Verify signatures after loading audit events."
+ checked={autoVerifyEnabled()}
+ onChange={(e) => setAutoVerifyEnabled(e.currentTarget.checked)}
+ />
+ <div class="flex flex-col gap-2 text-xs text-muted sm:flex-row sm:flex-wrap sm:items-center">
+ <label class="flex items-center gap-2">
+ <span>Auto-verify limit</span>
+ <input
+ type="number"
+ min="0"
+ value={autoVerifyLimit()}
+ disabled={!autoVerifyEnabled()}
+ onInput={(e) => {
+ const raw = Number(e.currentTarget.value);
+ if (!Number.isFinite(raw)) {
+ setAutoVerifyLimit(0);
+ return;
+ }
+ const clamped = Math.max(0, Math.min(500, Math.floor(raw)));
+ setAutoVerifyLimit(clamped);
+ }}
+ class="min-h-10 sm:min-h-10 w-24 rounded-md border border-border bg-surface px-2.5 py-2 text-sm text-base-content"
+ />
+ </label>
+ <span class="text-muted">0 disables, max 500</span>
+ <span
+ class="inline-flex items-center cursor-help"
+ onMouseEnter={(e) => {
+ const rect = e.currentTarget.getBoundingClientRect();
+ showTooltip('Large verification batches can add load. Use a smaller limit on busy systems.',
                                     rect.left + rect.width / 2,
                                     rect.top,
                                     { align: 'center', direction: 'up', maxWidth: 260 },
@@ -820,64 +819,64 @@ export default function AuditLogPanel() {
                             {
                                 key: 'verification',
                                 label: 'Verification',
-                                render: (event) => {
-                                    if (!event.signature) {
-                                        return <span class="text-xs text-slate-400">Unsigned</span>;
-                                    }
-                                    const state = verification()[event.id];
-                                    const isVerifying = verifying()[event.id];
-                                    const badge = getVerificationBadge(state);
+ render: (event) => {
+ if (!event.signature) {
+ return <span class="text-xs ">Unsigned</span>;
+ }
+ const state = verification()[event.id];
+ const isVerifying = verifying()[event.id];
+ const badge = getVerificationBadge(state);
 
-                                    return (
-                                        <div class="flex items-center gap-2">
-                                            <Show
-                                                when={isVerifying}
-                                                fallback={
-                                                    <span class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badge.class}`}>
-                                                        {badge.label}
-                                                    </span>
-                                                }
-                                            >
-                                                <span class="text-xs text-muted">Verifying…</span>
-                                            </Show>
-                                            <button
-                                                onClick={() => verifyEvent(event)}
-                                                disabled={isVerifying}
-                                                class="inline-flex min-h-10 sm:min-h-10 items-center rounded-md border border-blue-200 dark:border-blue-700 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 disabled:opacity-50"
-                                            >
-                                                Verify
-                                            </button>
-                                        </div>
-                                    );
-                                }
-                            }
-                        ]}
-                        keyExtractor={(event) => event.id}
-                        desktopMinWidth="900px"
-                    />
-                </div>
-            </Show>
+ return (
+ <div class="flex items-center gap-2">
+ <Show
+ when={isVerifying}
+ fallback={
+ <span class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badge.class}`}>
+ {badge.label}
+ </span>
+ }
+ >
+ <span class="text-xs text-muted">Verifying…</span>
+ </Show>
+ <button
+ onClick={() => verifyEvent(event)}
+ disabled={isVerifying}
+ class="inline-flex min-h-10 sm:min-h-10 items-center rounded-md border border-blue-200 dark:border-blue-700 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 disabled:opacity-50"
+ >
+ Verify
+ </button>
+ </div>
+ );
+ }
+ }
+ ]}
+ keyExtractor={(event) => event.id}
+ desktopMinWidth="900px"
+ />
+ </div>
+ </Show>
 
-            {/* Empty State */}
-            <Show when={!loading() && isPersistent() && filteredEvents().length === 0}>
-                <div class="text-center py-12 px-4 bg-surface-alt rounded-md border border-dashed border-border">
-                    <div class="flex flex-col items-center max-w-sm mx-auto">
-                        <Show
-                            when={activeFilterCount() > 0}
-                            fallback={<Shield class="w-12 h-12 text-slate-300 dark:text-slate-600 mb-4" />}
-                        >
-                            <ShieldAlert class="w-12 h-12 text-blue-300 dark:text-blue-900 mb-4" />
-                        </Show>
-                        <h3 class="text-lg font-medium text-base-content">No audit events found</h3>
-                        <p class="mt-2 text-sm text-muted">
-                            {activeFilterCount() > 0
-                                ? "No events match your current filters. Try adjusting or clearing them."
-                                : "Audit logging is active, but no events have been recorded yet."}
-                        </p>
-                        <Show when={activeFilterCount() > 0}>
-                            <button
-                                onClick={() => {
-                                    setEventFilter('');
+ {/* Empty State */}
+ <Show when={!loading() && isPersistent() && filteredEvents().length === 0}>
+ <div class="text-center py-12 px-4 bg-surface-alt rounded-md border border-dashed border-border">
+ <div class="flex flex-col items-center max-w-sm mx-auto">
+ <Show
+ when={activeFilterCount() > 0}
+ fallback={<Shield class="w-12 h-12 text-slate-300 mb-4" />}
+ >
+ <ShieldAlert class="w-12 h-12 text-blue-300 dark:text-blue-900 mb-4" />
+ </Show>
+ <h3 class="text-lg font-medium text-base-content">No audit events found</h3>
+ <p class="mt-2 text-sm text-muted">
+ {activeFilterCount() > 0
+ ? "No events match your current filters. Try adjusting or clearing them."
+ : "Audit logging is active, but no events have been recorded yet."}
+ </p>
+ <Show when={activeFilterCount() > 0}>
+ <button
+ onClick={() => {
+ setEventFilter('');
                                     setUserFilter('');
                                     setSuccessFilter('all');
                                     setVerificationFilter('all');

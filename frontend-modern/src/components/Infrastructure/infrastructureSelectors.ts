@@ -351,7 +351,7 @@ export const getOutlierEmphasis = (value: number, stats: IODistributionStats): O
   if (stats.mad > 0) {
     const modifiedZ = (0.6745 * (value - stats.median)) / stats.mad;
     if (modifiedZ >= 6.5 && value >= stats.p99) {
-      return { fontWeight: '600', color: 'text-slate-900 dark:text-slate-50', showOutlierHint: true };
+      return { fontWeight: '600', color: 'text-base-content', showOutlierHint: true };
     }
     if (modifiedZ >= 5.5 && value >= stats.p97) {
       return { fontWeight: '500', color: 'text-base-content', showOutlierHint: true };
@@ -359,7 +359,7 @@ export const getOutlierEmphasis = (value: number, stats: IODistributionStats): O
     return { fontWeight: 'normal', color: 'text-muted', showOutlierHint: false };
   }
 
-  if (value >= stats.p99) return { fontWeight: '600', color: 'text-slate-900 dark:text-slate-50', showOutlierHint: true };
+  if (value >= stats.p99) return { fontWeight: '600', color: 'text-base-content', showOutlierHint: true };
   if (value >= stats.p97) return { fontWeight: '500', color: 'text-base-content', showOutlierHint: true };
   if (value > 0) return { fontWeight: 'normal', color: 'text-muted', showOutlierHint: false };
   return { fontWeight: 'normal', color: 'text-muted', showOutlierHint: false };

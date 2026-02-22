@@ -98,9 +98,9 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
             <Show when={zfsPool() && zfsPool()!.state !== 'ONLINE'}>
               <span
                 class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${zfsPool()?.state === 'DEGRADED'
-                  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
-                  : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                  }`}
+ ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+ : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+ }`}
               >
                 {zfsPool()?.state}
               </span>
@@ -122,37 +122,37 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
 
         {/* Node (only when not grouped by node) */}
         <Show when={props.groupBy !== 'node'}>
-          <td class="px-1.5 sm:px-2 py-0.5 text-xs text-muted">
-            {getRecordNodeLabel(props.record)}
-          </td>
-        </Show>
+ <td class="px-1.5 sm:px-2 py-0.5 text-xs text-muted">
+ {getRecordNodeLabel(props.record)}
+ </td>
+ </Show>
 
-        {/* Type badge */}
-        <td class="px-1.5 sm:px-2 py-0.5 hidden md:table-cell">
-          <span class={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${getTypeBadgeClass(type())}`}>
-            {type()}
-          </span>
-        </td>
+ {/* Type badge */}
+ <td class="px-1.5 sm:px-2 py-0.5 hidden md:table-cell">
+ <span class={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${getTypeBadgeClass(type())}`}>
+ {type()}
+ </span>
+ </td>
 
-        {/* Capacity bar */}
-        <td class="px-1.5 sm:px-2 py-0.5 md:min-w-[180px]">
-          <Show
-            when={totalBytes() > 0}
-            fallback={<span class="text-xs text-slate-400">n/a</span>}
-          >
-            <EnhancedStorageBar
-              used={usedBytes()}
-              total={Math.max(totalBytes(), 0)}
-              free={Math.max(freeBytes(), 0)}
-              zfsPool={zfsPool() || undefined}
-            />
-          </Show>
-        </td>
+ {/* Capacity bar */}
+ <td class="px-1.5 sm:px-2 py-0.5 md:min-w-[180px]">
+ <Show
+ when={totalBytes() > 0}
+ fallback={<span class="text-xs ">n/a</span>}
+ >
+ <EnhancedStorageBar
+ used={usedBytes()}
+ total={Math.max(totalBytes(), 0)}
+ free={Math.max(freeBytes(), 0)}
+ zfsPool={zfsPool() || undefined}
+ />
+ </Show>
+ </td>
 
-        {/* Sparkline: 7-day usage trend */}
-        <td class="px-1.5 sm:px-2 py-0.5 w-[120px] hidden md:table-cell">
-          <Show when={sparklineData().length > 0} fallback={<div class="h-4 w-full" />}>
-            <div style={{ width: '100px', height: '20px' }}>
+ {/* Sparkline: 7-day usage trend */}
+ <td class="px-1.5 sm:px-2 py-0.5 w-[120px] hidden md:table-cell">
+ <Show when={sparklineData().length > 0} fallback={<div class="h-4 w-full" />}>
+ <div style={{ width:'100px', height: '20px' }}>
               <InteractiveSparkline
                 series={[{ data: sparklineData(), color: sparklineColor() }]}
                 yMode="percent"
@@ -182,7 +182,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
           >
             <svg
               class={`w-3.5 h-3.5 text-muted transition-transform duration-150 ${props.expanded ? 'rotate-90' : ''
-                }`}
+ }`}
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"

@@ -144,7 +144,7 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
                 type="button"
                 onClick={() => handleDeny(firstApproval()!)}
                 disabled={actionLoading() === firstApproval()!.id}
-                class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 disabled:opacity-50 text-base-content text-xs font-medium rounded-md transition-colors"
+                class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 hover:bg-surface-hover disabled:opacity-50 text-base-content text-xs font-medium rounded-md transition-colors"
               >
                 <XIcon class="w-3.5 h-3.5" />
                 Deny

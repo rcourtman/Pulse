@@ -172,7 +172,7 @@ const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphas
   if (stats.mad > 0) {
     const modifiedZ = (0.6745 * (value - stats.median)) / stats.mad;
     if (modifiedZ >= 6.5 && value >= stats.p99) {
-      return { className: 'text-slate-900 dark:text-slate-50 font-semibold', showOutlierHint: true };
+      return { className: 'text-base-content font-semibold', showOutlierHint: true };
     }
     if (modifiedZ >= 5.5 && value >= stats.p97) {
       return { className: 'text-base-content font-medium', showOutlierHint: true };
@@ -182,7 +182,7 @@ const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphas
 
   // Fallback when values are too uniform for MAD to separate:
   // only near-peak values should get emphasis.
-  if (value >= stats.p99) return { className: 'text-slate-900 dark:text-slate-50 font-semibold', showOutlierHint: true };
+  if (value >= stats.p99) return { className: 'text-base-content font-semibold', showOutlierHint: true };
   if (value >= stats.p97) return { className: 'text-base-content font-medium', showOutlierHint: true };
   if (value > 0) return { className: 'text-muted', showOutlierHint: false };
   return { className: 'text-muted', showOutlierHint: false };
@@ -452,27 +452,27 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                 <For each={visibleHostTableItems()}>
                   {(item) => {
                     if (item.type === 'header') {
-                      const group = item.group;
-                      return (
-                        <TableRow class="bg-surface-alt">
-                          <TableCell
-                            colspan={9}
-                            class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
-                          >
-                            <div class="flex items-center gap-2">
-                              <Show
-                                when={group.cluster}
-                                fallback={
-                                  <span class="text-muted">Standalone</span>
-                                }
-                              >
-                                <span>{group.cluster}</span>
-                                <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-                                  Cluster
-                                </span>
-                              </Show>
-                              <span class="text-[10px] text-muted font-normal">
-                                {group.resources.length} {group.resources.length === 1 ? 'resource' : 'resources'}
+ const group = item.group;
+ return (
+ <TableRow class="bg-surface-alt">
+ <TableCell
+ colspan={9}
+ class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700"
+ >
+ <div class="flex items-center gap-2">
+ <Show
+ when={group.cluster}
+ fallback={
+ <span class="text-muted">Standalone</span>
+ }
+ >
+ <span>{group.cluster}</span>
+ <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+ Cluster
+ </span>
+ </Show>
+ <span class="text-[10px] text-muted font-normal">
+ {group.resources.length} {group.resources.length === 1 ?'resource' : 'resources'}
                               </span>
                             </div>
                           </TableCell>
@@ -561,88 +561,88 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             <div class="flex items-center gap-1.5 min-w-0">
                               <div
                                 class={`shrink-0 transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}
-                              >
-                                <svg class="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                                </svg>
-                              </div>
-                              <StatusDot
-                                variant={statusIndicator().variant}
-                                title={statusIndicator().label}
-                                ariaLabel={statusIndicator().label}
-                                size="xs"
-                              />
-                              <div class="flex min-w-0 flex-1 items-baseline gap-1">
-                                <span
-                                  class="block min-w-0 flex-1 truncate font-medium text-[11px] text-base-content select-text"
-                                  title={displayName()}
-                                >
-                                  {displayName()}
-                                </span>
-                                <Show when={hasAlternateName(resource)}>
-                                  <span class="hidden min-w-0 max-w-[28%] shrink truncate text-[9px] text-muted lg:inline">
-                                    ({resource.name})
-                                  </span>
-                                </Show>
-                              </div>
-                              <Show when={workloadsHref()}>
-                                {(href) => (
-                                  <a
-                                    href={href()}
-                                    class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:text-blue-300 dark:hover:bg-blue-800 dark:hover:text-blue-200"
-                                    title="View related workloads"
-                                    aria-label={`View workloads for ${displayName()}`}
-                                    onClick={(event) => event.stopPropagation()}
-                                  >
-                                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                      <path stroke-linecap="round" stroke-linejoin="round" d="M14 5h5m0 0v5m0-5-8 8" />
-                                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 10v9h9" />
-                                    </svg>
-                                  </a>
-                                )}
-                              </Show>
-                            </div>
-                          </TableCell>
+ >
+ <svg class="w-3.5 h-3.5 group-hover: dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+ </svg>
+ </div>
+ <StatusDot
+ variant={statusIndicator().variant}
+ title={statusIndicator().label}
+ ariaLabel={statusIndicator().label}
+ size="xs"
+ />
+ <div class="flex min-w-0 flex-1 items-baseline gap-1">
+ <span
+ class="block min-w-0 flex-1 truncate font-medium text-[11px] text-base-content select-text"
+ title={displayName()}
+ >
+ {displayName()}
+ </span>
+ <Show when={hasAlternateName(resource)}>
+ <span class="hidden min-w-0 max-w-[28%] shrink truncate text-[9px] text-muted lg:inline">
+ ({resource.name})
+ </span>
+ </Show>
+ </div>
+ <Show when={workloadsHref()}>
+ {(href) => (
+ <a
+ href={href()}
+ class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:text-blue-300 dark:hover:bg-blue-800 dark:hover:text-blue-200"
+ title="View related workloads"
+ aria-label={`View workloads for ${displayName()}`}
+ onClick={(event) => event.stopPropagation()}
+ >
+ <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+ <path stroke-linecap="round" stroke-linejoin="round" d="M14 5h5m0 0v5m0-5-8 8" />
+ <path stroke-linecap="round" stroke-linejoin="round" d="M5 10v9h9" />
+ </svg>
+ </a>
+ )}
+ </Show>
+ </div>
+ </TableCell>
 
-                          <TableCell>
-                            <Show when={cpuPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-slate-400">—</span></div>}>
-                              <ResponsiveMetricCell
-                                class="w-full"
-                                value={cpuPercentValue() ?? 0}
-                                type="cpu"
-                                resourceId={isMobile() ? undefined : metricsKey()}
-                                isRunning={isResourceOnline(resource)}
-                                showMobile={false}
-                              />
-                            </Show>
-                          </TableCell>
+ <TableCell>
+ <Show when={cpuPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs">—</span></div>}>
+ <ResponsiveMetricCell
+ class="w-full"
+ value={cpuPercentValue() ?? 0}
+ type="cpu"
+ resourceId={isMobile() ? undefined : metricsKey()}
+ isRunning={isResourceOnline(resource)}
+ showMobile={false}
+ />
+ </Show>
+ </TableCell>
 
-                          <TableCell>
-                            <Show when={memoryPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-slate-400">—</span></div>}>
-                              <div class="w-full" title={memorySublabel()}>
-                                <StackedMemoryBar
-                                  used={resource.memory?.used ?? 0}
-                                  total={resource.memory?.total ?? 0}
-                                  percentOnly={(!resource.memory?.total && resource.memory?.current != null) ? resource.memory.current : undefined}
-                                  swapUsed={resource.agent?.memory?.swapUsed ?? 0}
-                                  swapTotal={resource.agent?.memory?.swapTotal ?? 0}
-                                />
-                              </div>
-                            </Show>
-                          </TableCell>
+ <TableCell>
+ <Show when={memoryPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs">—</span></div>}>
+ <div class="w-full" title={memorySublabel()}>
+ <StackedMemoryBar
+ used={resource.memory?.used ?? 0}
+ total={resource.memory?.total ?? 0}
+ percentOnly={(!resource.memory?.total && resource.memory?.current != null) ? resource.memory.current : undefined}
+ swapUsed={resource.agent?.memory?.swapUsed ?? 0}
+ swapTotal={resource.agent?.memory?.swapTotal ?? 0}
+ />
+ </div>
+ </Show>
+ </TableCell>
 
-                          <TableCell>
-                            <Show when={diskPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-slate-400">—</span></div>}>
-                              <div class="w-full" title={diskSublabel()}>
-                                <StackedDiskBar
-                                  disks={normalizeDiskArray(resource.agent?.disks)}
-                                  aggregateDisk={resource.disk ? { total: resource.disk.total ?? 0, used: resource.disk.used ?? 0, free: resource.disk.free ?? 0, usage: resource.disk.current ?? 0 } as Disk : undefined}
-                                />
-                              </div>
-                            </Show>
-                          </TableCell>
+ <TableCell>
+ <Show when={diskPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs">—</span></div>}>
+ <div class="w-full" title={diskSublabel()}>
+ <StackedDiskBar
+ disks={normalizeDiskArray(resource.agent?.disks)}
+ aggregateDisk={resource.disk ? { total: resource.disk.total ?? 0, used: resource.disk.used ?? 0, free: resource.disk.free ?? 0, usage: resource.disk.current ?? 0 } as Disk : undefined}
+ />
+ </div>
+ </Show>
+ </TableCell>
 
-                          <TableCell classList={{ hidden: isMobile() || !isVisible('secondary') }}>
+ <TableCell classList={{ hidden: isMobile() || !isVisible('secondary') }}>
                             <Show when={resource.network} fallback={<div class="text-center"><span class="text-xs text-slate-400">—</span></div>}>
                               <div class="grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums">
                                 <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
@@ -733,11 +733,11 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                               <Show when={resource.temperature != null} fallback={<span class="text-xs text-slate-400">—</span>}>
                                 <span
                                   class={`text-xs whitespace-nowrap font-medium ${(resource.temperature ?? 0) >= 80
-                                    ? 'text-red-600 dark:text-red-400'
-                                    : (resource.temperature ?? 0) >= 65
-                                      ? 'text-amber-600 dark:text-amber-400'
-                                      : 'text-emerald-600 dark:text-emerald-400'
-                                    }`}
+ ? 'text-red-600 dark:text-red-400'
+ : (resource.temperature ?? 0) >= 65
+ ? 'text-amber-600 dark:text-amber-400'
+ : 'text-emerald-600 dark:text-emerald-400'
+ }`}
                                 >
                                   {formatTemperature(resource.temperature)}
                                 </span>
@@ -747,7 +747,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                         </TableRow>
                         <Show when={isExpanded()}>
                           <TableRow>
-                            <TableCell colspan={9} class="bg-surface-alt px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
+                            <TableCell colspan={9} class="bg-surface-alt px-4 py-4 border-b border-border-subtle shadow-inner">
                               <ResourceDetailDrawer resource={resource} onClose={() => setExpandedResourceId(null)} />
                             </TableCell>
                           </TableRow>
@@ -868,28 +868,28 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             <TableCell class="pr-1.5 sm:pr-2 py-0.5 align-middle overflow-hidden pl-2 sm:pl-3">
                               <div class="flex items-center gap-1.5 min-w-0">
                                 <div class={`shrink-0 transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}>
-                                  <svg class="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                                  </svg>
-                                </div>
-                                <StatusDot
-                                  variant={statusIndicator().variant}
-                                  title={statusIndicator().label}
-                                  ariaLabel={statusIndicator().label}
-                                  size="xs"
-                                />
-                                <span class="block min-w-0 flex-1 truncate font-medium text-[11px] text-base-content select-text" title={displayName()}>
-                                  {displayName()}
-                                </span>
-                                <Show when={hasAlternateName(resource)}>
-                                  <span class="hidden min-w-0 max-w-[35%] shrink truncate text-[9px] text-muted lg:inline">
-                                    ({resource.name})
-                                  </span>
-                                </Show>
-                              </div>
-                            </TableCell>
+ <svg class="w-3.5 h-3.5 group-hover: dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+ </svg>
+ </div>
+ <StatusDot
+ variant={statusIndicator().variant}
+ title={statusIndicator().label}
+ ariaLabel={statusIndicator().label}
+ size="xs"
+ />
+ <span class="block min-w-0 flex-1 truncate font-medium text-[11px] text-base-content select-text" title={displayName()}>
+ {displayName()}
+ </span>
+ <Show when={hasAlternateName(resource)}>
+ <span class="hidden min-w-0 max-w-[35%] shrink truncate text-[9px] text-muted lg:inline">
+ ({resource.name})
+ </span>
+ </Show>
+ </div>
+ </TableCell>
 
-                            <TableCell classList={{ hidden: !isVisible('primary') && !isMobile() }}>
+ <TableCell classList={{ hidden: !isVisible('primary') && !isMobile() }}>
                               <div class="flex justify-center">
                                 <Show when={pbsRow()?.datastores != null} fallback={<span class="text-xs text-slate-400">—</span>}>
                                   <span class="text-xs text-base-content">{pbsRow()!.datastores}</span>
@@ -948,55 +948,55 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             </TableCell>
 
                             <TableCell classList={{ hidden: !isVisible('supplementary') && !isMobile() }}>
-                              <div class="flex justify-center">
-                                <Show when={resource.uptime} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                  <span class="text-xs text-base-content whitespace-nowrap">
-                                    {formatUptime(resource.uptime ?? 0)}
-                                  </span>
-                                </Show>
-                              </div>
-                            </TableCell>
+ <div class="flex justify-center">
+ <Show when={resource.uptime} fallback={<span class="text-xs text-slate-400">—</span>}>
+ <span class="text-xs text-base-content whitespace-nowrap">
+ {formatUptime(resource.uptime ?? 0)}
+ </span>
+ </Show>
+ </div>
+ </TableCell>
 
-                            <TableCell>
-                              <div class="flex justify-center">
-                                <Show when={serviceLink()} fallback={<span class="text-xs text-slate-400">—</span>}>
-                                  {(link) => (
-                                    <a
-                                      href={link().href}
-                                      class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800"
-                                      title={link().label}
-                                      aria-label={link().ariaLabel}
-                                      onClick={(event) => event.stopPropagation()}
-                                    >
-                                      {link().compactLabel}
-                                    </a>
-                                  )}
-                                </Show>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                          <Show when={isExpanded()}>
-                            <TableRow>
-                              <TableCell colspan={7} class="bg-surface-alt px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
-                                <ResourceDetailDrawer resource={resource} onClose={() => setExpandedResourceId(null)} />
-                              </TableCell>
-                            </TableRow>
-                          </Show>
-                        </>
-                      );
-                    }}
-                  </For>
-                </TableBody>
-              </Table>
-            </div>
-          </Show>
+ <TableCell>
+ <div class="flex justify-center">
+ <Show when={serviceLink()} fallback={<span class="text-xs text-slate-400">—</span>}>
+ {(link) => (
+ <a
+ href={link().href}
+ class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800"
+ title={link().label}
+ aria-label={link().ariaLabel}
+ onClick={(event) => event.stopPropagation()}
+ >
+ {link().compactLabel}
+ </a>
+ )}
+ </Show>
+ </div>
+ </TableCell>
+ </TableRow>
+ <Show when={isExpanded()}>
+ <TableRow>
+ <TableCell colspan={7} class="bg-surface-alt px-4 py-4 border-b border-border-subtle shadow-inner">
+ <ResourceDetailDrawer resource={resource} onClose={() => setExpandedResourceId(null)} />
+ </TableCell>
+ </TableRow>
+ </Show>
+ </>
+ );
+ }}
+ </For>
+ </TableBody>
+ </Table>
+ </div>
+ </Show>
 
-          <Show when={sortedPMGResources().length > 0}>
-            <div class="border-b border-slate-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-300">
-              PMG Services
-            </div>
-            <div class="overflow-x-auto">
-              <Table class="whitespace-nowrap min-w-[max-content]" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : 'max-content' }}>
+ <Show when={sortedPMGResources().length > 0}>
+ <div class="border-b px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 ">
+ PMG Services
+ </div>
+ <div class="overflow-x-auto">
+ <Table class="whitespace-nowrap min-w-[max-content]" style={{'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : 'max-content' }}>
                 <TableHeader>
                   <TableRow class="bg-surface-alt text-muted border-b border-border">
                     <TableHead class="text-left pl-2 sm:pl-3" style={resourceColumnStyle()}>
@@ -1096,28 +1096,28 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             <TableCell class="pr-1.5 sm:pr-2 py-0.5 align-middle overflow-hidden pl-2 sm:pl-3">
                               <div class="flex items-center gap-1.5 min-w-0">
                                 <div class={`shrink-0 transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}>
-                                  <svg class="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                                  </svg>
-                                </div>
-                                <StatusDot
-                                  variant={statusIndicator().variant}
-                                  title={statusIndicator().label}
-                                  ariaLabel={statusIndicator().label}
-                                  size="xs"
-                                />
-                                <span class="block min-w-0 flex-1 truncate font-medium text-[11px] text-base-content select-text" title={displayName()}>
-                                  {displayName()}
-                                </span>
-                                <Show when={hasAlternateName(resource)}>
-                                  <span class="hidden min-w-0 max-w-[35%] shrink truncate text-[9px] text-muted lg:inline">
-                                    ({resource.name})
-                                  </span>
-                                </Show>
-                              </div>
-                            </TableCell>
+ <svg class="w-3.5 h-3.5 group-hover: dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+ </svg>
+ </div>
+ <StatusDot
+ variant={statusIndicator().variant}
+ title={statusIndicator().label}
+ ariaLabel={statusIndicator().label}
+ size="xs"
+ />
+ <span class="block min-w-0 flex-1 truncate font-medium text-[11px] text-base-content select-text" title={displayName()}>
+ {displayName()}
+ </span>
+ <Show when={hasAlternateName(resource)}>
+ <span class="hidden min-w-0 max-w-[35%] shrink truncate text-[9px] text-muted lg:inline">
+ ({resource.name})
+ </span>
+ </Show>
+ </div>
+ </TableCell>
 
-                            <TableCell classList={{ hidden: !isVisible('primary') && !isMobile() }}>
+ <TableCell classList={{ hidden: !isVisible('primary') && !isMobile() }}>
                               <div class="flex justify-center">
                                 <Show when={pmgRow()?.queue != null} fallback={<span class="text-xs text-slate-400">—</span>}>
                                   <span class={`text-xs font-medium ${queueClass()}`}>{pmgRow()!.queue}</span>
@@ -1221,7 +1221,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                           </TableRow>
                           <Show when={isExpanded()}>
                             <TableRow>
-                              <TableCell colspan={9} class="bg-surface-alt px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
+                              <TableCell colspan={9} class="bg-surface-alt px-4 py-4 border-b border-border-subtle shadow-inner">
                                 <ResourceDetailDrawer resource={resource} onClose={() => setExpandedResourceId(null)} />
                               </TableCell>
                             </TableRow>

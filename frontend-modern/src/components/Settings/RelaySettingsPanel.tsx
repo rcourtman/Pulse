@@ -174,58 +174,58 @@ export const RelaySettingsPanel: Component = () => {
 
   // Pro feature gate
   if (!hasFeature('relay')) {
-    return (
-      <SettingsPanel
-        title="Remote Access"
-        description="Configure Pulse relay connectivity for secure remote access."
-        icon={<RadioTower size={20} strokeWidth={2} />}
-      >
-        <Show when={!loading()} fallback={<div class="text-sm text-slate-500">Loading...</div>}>
-          <Card tone="info" padding="md">
-            <div class="flex items-start gap-3">
-              <RadioTower size={20} class="text-blue-500 mt-0.5 flex-shrink-0" strokeWidth={2} />
-              <div>
-                <p class="text-sm font-medium text-base-content">
-                  Pro Required
-                </p>
-                <p class="text-sm text-muted mt-1">
-                  Remote access via Pulse Relay requires a Pro license. Upgrade to access your infrastructure from anywhere.
-                </p>
-              </div>
-            </div>
-          </Card>
-        </Show>
-      </SettingsPanel>
-    );
-  }
+ return (
+ <SettingsPanel
+ title="Remote Access"
+ description="Configure Pulse relay connectivity for secure remote access."
+ icon={<RadioTower size={20} strokeWidth={2} />}
+ >
+ <Show when={!loading()} fallback={<div class="text-sm ">Loading...</div>}>
+ <Card tone="info" padding="md">
+ <div class="flex items-start gap-3">
+ <RadioTower size={20} class="text-blue-500 mt-0.5 flex-shrink-0" strokeWidth={2} />
+ <div>
+ <p class="text-sm font-medium text-base-content">
+ Pro Required
+ </p>
+ <p class="text-sm text-muted mt-1">
+ Remote access via Pulse Relay requires a Pro license. Upgrade to access your infrastructure from anywhere.
+ </p>
+ </div>
+ </div>
+ </Card>
+ </Show>
+ </SettingsPanel>
+ );
+ }
 
-  return (
-    <SettingsPanel
-      title="Remote Access"
-      description="Configure Pulse relay connectivity for secure remote access."
-      icon={<RadioTower size={20} strokeWidth={2} />}
-    >
-      <Show when={!loading()} fallback={<div class="text-sm text-slate-500">Loading configuration...</div>}>
-        {/* Connection Status */}
-        <Card padding="md">
-          <div class="flex items-center gap-3">
-            <StatusDot
-              variant={connectionStatusVariant()}
-              size="md"
-              pulse={config()?.enabled && status()?.connected}
-            />
-            <div class="flex-1">
-              <p class="text-sm font-medium text-base-content">
-                {connectionStatusText()}
-              </p>
-              <Show when={status()?.instance_id}>
-                <p class="text-xs text-muted mt-0.5">
-                  Instance: {status()!.instance_id}
-                </p>
-              </Show>
-              <Show when={status()?.connected && (status()!.active_channels > 0)}>
-                <p class="text-xs text-muted">
-                  {status()!.active_channels} active {status()!.active_channels === 1 ? 'channel' : 'channels'}
+ return (
+ <SettingsPanel
+ title="Remote Access"
+ description="Configure Pulse relay connectivity for secure remote access."
+ icon={<RadioTower size={20} strokeWidth={2} />}
+ >
+ <Show when={!loading()} fallback={<div class="text-sm ">Loading configuration...</div>}>
+ {/* Connection Status */}
+ <Card padding="md">
+ <div class="flex items-center gap-3">
+ <StatusDot
+ variant={connectionStatusVariant()}
+ size="md"
+ pulse={config()?.enabled && status()?.connected}
+ />
+ <div class="flex-1">
+ <p class="text-sm font-medium text-base-content">
+ {connectionStatusText()}
+ </p>
+ <Show when={status()?.instance_id}>
+ <p class="text-xs text-muted mt-0.5">
+ Instance: {status()!.instance_id}
+ </p>
+ </Show>
+ <Show when={status()?.connected && (status()!.active_channels > 0)}>
+ <p class="text-xs text-muted">
+ {status()!.active_channels} active {status()!.active_channels === 1 ?'channel' : 'channels'}
                 </p>
               </Show>
             </div>
@@ -311,58 +311,58 @@ export const RelaySettingsPanel: Component = () => {
                       : showPairing()
                         ? 'Refresh QR Code'
                         : 'Pair New Device'}
-                  </button>
-                  <Show when={showPairing() && pairingPayload()}>
-                    <button
-                      class="min-h-10 sm:min-h-10 px-3 py-2 text-sm font-medium text-base-content bg-surface-hover hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md disabled:opacity-50"
-                      onClick={() => void handleCopyPairingPayload()}
-                      disabled={pairingLoading()}
-                    >
-                      Copy Payload
-                    </button>
-                  </Show>
-                </div>
+ </button>
+ <Show when={showPairing() && pairingPayload()}>
+ <button
+ class="min-h-10 sm:min-h-10 px-3 py-2 text-sm font-medium text-base-content bg-surface-hover hover:bg-surface-hover rounded-md disabled:opacity-50"
+ onClick={() => void handleCopyPairingPayload()}
+ disabled={pairingLoading()}
+ >
+ Copy Payload
+ </button>
+ </Show>
+ </div>
 
-                <p class={formHelpText}>
-                  Generate a QR code and scan it from the Pulse mobile app to pair a new device.
-                </p>
+ <p class={formHelpText}>
+ Generate a QR code and scan it from the Pulse mobile app to pair a new device.
+ </p>
 
-                <Show when={showPairing()}>
-                  <div class="space-y-3">
-                    <Show when={pairingLoading()}>
-                      <p class="text-sm text-muted">
-                        Preparing pairing payload...
-                      </p>
-                    </Show>
+ <Show when={showPairing()}>
+ <div class="space-y-3">
+ <Show when={pairingLoading()}>
+ <p class="text-sm text-muted">
+ Preparing pairing payload...
+ </p>
+ </Show>
 
-                    <Show when={!pairingLoading() && pairingQRCode()}>
-                      <img
-                        src={pairingQRCode()!}
-                        alt="Pulse mobile pairing QR code"
-                        width="256"
-                        height="256"
-                        class="rounded-md border border-border bg-white p-2"
-                      />
-                    </Show>
+ <Show when={!pairingLoading() && pairingQRCode()}>
+ <img
+ src={pairingQRCode()!}
+ alt="Pulse mobile pairing QR code"
+ width="256"
+ height="256"
+ class="rounded-md border border-border p-2"
+ />
+ </Show>
 
-                    <Show when={pairingPayload()?.deep_link}>
-                      <code class="block text-xs font-mono text-base-content bg-surface-alt rounded px-3 py-2 select-all break-all">
-                        {pairingPayload()!.deep_link}
-                      </code>
-                    </Show>
+ <Show when={pairingPayload()?.deep_link}>
+ <code class="block text-xs font-mono text-base-content bg-surface-alt rounded px-3 py-2 select-all break-all">
+ {pairingPayload()!.deep_link}
+ </code>
+ </Show>
 
-                    <Show when={(pairingPayload()?.diagnostics?.length ?? 0) > 0}>
-                      <div class="space-y-2">
-                        <p class="text-xs font-semibold text-base-content">
-                          Diagnostics
-                        </p>
-                        {(pairingPayload()?.diagnostics ?? []).map((diagnostic) => (
-                          <div
-                            class={`rounded px-2 py-1 text-xs ${
-                              diagnostic.severity === 'error'
-                                ? 'bg-red-50 dark:bg-red-900 text-red-700 dark:text-red-300'
-                                : 'bg-amber-50 dark:bg-amber-900 text-amber-700 dark:text-amber-300'
-                            }`}
+ <Show when={(pairingPayload()?.diagnostics?.length ?? 0) > 0}>
+ <div class="space-y-2">
+ <p class="text-xs font-semibold text-base-content">
+ Diagnostics
+ </p>
+ {(pairingPayload()?.diagnostics ?? []).map((diagnostic) => (
+ <div
+ class={`rounded px-2 py-1 text-xs ${
+ diagnostic.severity ==='error'
+ ? 'bg-red-50 dark:bg-red-900 text-red-700 dark:text-red-300'
+ : 'bg-amber-50 dark:bg-amber-900 text-amber-700 dark:text-amber-300'
+ }`}
                           >
                             <p class="font-medium">{diagnostic.message}</p>
                             <p class="mt-0.5 font-mono">

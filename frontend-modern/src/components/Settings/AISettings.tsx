@@ -1665,13 +1665,13 @@ export const AISettings: Component = () => {
                     <Show when={form.discoveryEnabled}>
                       <span class="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded">
                         {form.discoveryIntervalHours > 0 ? `${form.discoveryIntervalHours}h` : 'Manual'}
-                      </span>
-                    </Show>
-                    <Show when={!form.discoveryEnabled}>
-                      <span class="px-1.5 py-0.5 text-[10px] font-medium bg-surface-hover text-muted rounded">Off</span>
-                    </Show>
-                  </div>
-                  <svg class={`w-4 h-4 text-slate-500 transition-transform ${showDiscoverySettings() ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ </span>
+ </Show>
+ <Show when={!form.discoveryEnabled}>
+ <span class="px-1.5 py-0.5 text-[10px] font-medium bg-surface-hover text-muted rounded">Off</span>
+ </Show>
+ </div>
+ <svg class={`w-4 h-4 transition-transform ${showDiscoverySettings() ?'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
@@ -1737,53 +1737,53 @@ export const AISettings: Component = () => {
                     class="w-24 min-h-10 sm:min-h-9 pl-5 pr-2 py-2 text-sm border border-border rounded bg-surface"
                     value={form.costBudgetUSD30d}
                     onInput={(e) => setForm('costBudgetUSD30d', e.currentTarget.value)}
-                    min={0}
-                    step={1}
-                    placeholder="0"
-                    disabled={saving()}
-                  />
-                </div>
-                <Show when={parseFloat(form.costBudgetUSD30d) > 0}>
-                  <span class="text-xs text-slate-500">≈ ${(parseFloat(form.costBudgetUSD30d) / 30).toFixed(2)}/day</span>
-                </Show>
-                <Show when={!form.costBudgetUSD30d || parseFloat(form.costBudgetUSD30d) === 0}>
-                  <span class="text-[10px] text-muted">Set a budget to receive usage alerts</span>
-                </Show>
-              </div>
+ min={0}
+ step={1}
+ placeholder="0"
+ disabled={saving()}
+ />
+ </div>
+ <Show when={parseFloat(form.costBudgetUSD30d) > 0}>
+ <span class="text-xs ">≈ ${(parseFloat(form.costBudgetUSD30d) / 30).toFixed(2)}/day</span>
+ </Show>
+ <Show when={!form.costBudgetUSD30d || parseFloat(form.costBudgetUSD30d) === 0}>
+ <span class="text-[10px] text-muted">Set a budget to receive usage alerts</span>
+ </Show>
+ </div>
 
-              {/* Request Timeout - For slow Ollama hardware */}
-              <div class="flex items-center gap-3 p-3 rounded-md border border-border bg-surface-alt">
-                <svg class="w-4 h-4 text-muted flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <label class="text-xs font-medium text-base-content">Request Timeout</label>
-                <input
-                  type="number"
-                  class="w-20 min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded bg-surface"
-                  value={form.requestTimeoutSeconds}
-                  onInput={(e) => {
-                    const value = parseInt(e.currentTarget.value, 10);
-                    if (!isNaN(value) && value > 0) setForm('requestTimeoutSeconds', value);
-                  }}
-                  min={30}
-                  max={3600}
-                  step={30}
-                  disabled={saving()}
-                />
-                <span class="text-xs text-slate-500">seconds</span>
-                <Show when={form.requestTimeoutSeconds !== 300}>
-                  <span class="text-[10px] text-blue-600 dark:text-blue-400">Custom</span>
-                </Show>
-                <Show when={form.requestTimeoutSeconds === 300}>
-                  <span class="text-[10px] text-muted">default</span>
-                </Show>
-              </div>
-              <p class="text-[10px] text-muted -mt-4 ml-1">
-                Increase for slower Ollama hardware (default: 300s / 5 min)
-              </p>
+ {/* Request Timeout - For slow Ollama hardware */}
+ <div class="flex items-center gap-3 p-3 rounded-md border border-border bg-surface-alt">
+ <svg class="w-4 h-4 text-muted flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+ </svg>
+ <label class="text-xs font-medium text-base-content">Request Timeout</label>
+ <input
+ type="number"
+ class="w-20 min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded bg-surface"
+ value={form.requestTimeoutSeconds}
+ onInput={(e) => {
+ const value = parseInt(e.currentTarget.value, 10);
+ if (!isNaN(value) && value > 0) setForm('requestTimeoutSeconds', value);
+ }}
+ min={30}
+ max={3600}
+ step={30}
+ disabled={saving()}
+ />
+ <span class="text-xs ">seconds</span>
+ <Show when={form.requestTimeoutSeconds !== 300}>
+ <span class="text-[10px] text-blue-600 dark:text-blue-400">Custom</span>
+ </Show>
+ <Show when={form.requestTimeoutSeconds === 300}>
+ <span class="text-[10px] text-muted">default</span>
+ </Show>
+ </div>
+ <p class="text-[10px] text-muted -mt-4 ml-1">
+ Increase for slower Ollama hardware (default: 300s / 5 min)
+ </p>
 
-              {/* Pulse Permission Level */}
-              <div class={`space-y-3 p-4 rounded-md border ${form.controlLevel === 'autonomous' ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900' : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900'}`}>
+ {/* Pulse Permission Level */}
+ <div class={`space-y-3 p-4 rounded-md border ${form.controlLevel ==='autonomous' ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900' : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900'}`}>
                 <div class="flex items-center gap-2">
                   <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -1791,11 +1791,11 @@ export const AISettings: Component = () => {
                   <span class="text-sm font-medium text-base-content">Pulse Permission Level</span>
                   <Show when={form.controlLevel !== 'read_only'}>
                     <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${form.controlLevel === 'autonomous'
-                      ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
-                      : form.controlLevel === 'controlled'
-                        ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300'
-                        : 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-                      }`}>
+ ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
+ : form.controlLevel === 'controlled'
+ ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300'
+ : 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+ }`}>
                       {form.controlLevel}
                     </span>
                   </Show>
@@ -1849,38 +1849,38 @@ export const AISettings: Component = () => {
                         type="text"
                         value={form.protectedGuests}
                         onInput={(e) => setForm('protectedGuests', e.currentTarget.value)}
-                        placeholder="e.g., 100, 101, prod-db"
-                        class="w-full min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded bg-white dark:bg-slate-700"
-                        disabled={saving()}
-                      />
-                      <p class="text-[10px] text-muted mt-1">
-                        Comma-separated VMIDs or names that Pulse Assistant cannot control
-                      </p>
-                    </div>
-                  </div>
-                </Show>
-              </div>
+ placeholder="e.g., 100, 101, prod-db"
+ class="w-full min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded "
+ disabled={saving()}
+ />
+ <p class="text-[10px] text-muted mt-1">
+ Comma-separated VMIDs or names that Pulse Assistant cannot control
+ </p>
+ </div>
+ </div>
+ </Show>
+ </div>
 
-              {/* Chat session maintenance */}
-              <div class="border border-border rounded-md overflow-hidden">
-                <button
-                  type="button"
-                  class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-surface-alt hover:bg-surface-hover transition-colors text-left"
-                  onClick={() => {
-                    const next = !showChatMaintenance();
-                    setShowChatMaintenance(next);
-                    if (next) {
-                      loadChatSessions();
-                    }
-                  }}
-                >
-                  <div class="flex items-center gap-2">
-                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                    </svg>
-                    <span class="text-sm font-medium text-base-content">Chat Session Maintenance</span>
-                  </div>
-                  <svg class={`w-4 h-4 text-slate-500 transition-transform ${showChatMaintenance() ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ {/* Chat session maintenance */}
+ <div class="border border-border rounded-md overflow-hidden">
+ <button
+ type="button"
+ class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-surface-alt hover:bg-surface-hover transition-colors text-left"
+ onClick={() => {
+ const next = !showChatMaintenance();
+ setShowChatMaintenance(next);
+ if (next) {
+ loadChatSessions();
+ }
+ }}
+ >
+ <div class="flex items-center gap-2">
+ <svg class="w-4 h-4 " fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+ </svg>
+ <span class="text-sm font-medium text-base-content">Chat Session Maintenance</span>
+ </div>
+ <svg class={`w-4 h-4 transition-transform ${showChatMaintenance() ?'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
@@ -1898,56 +1898,56 @@ export const AISettings: Component = () => {
                         class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:opacity-50"
                       >
                         {chatSessionsLoading() ? 'Refreshing...' : 'Refresh'}
-                      </button>
-                    </div>
+ </button>
+ </div>
 
-                    <Show when={chatSessionsLoading()}>
-                      <div class="text-xs text-muted">Loading chat sessions...</div>
-                    </Show>
-                    <Show when={!chatSessionsLoading()}>
-                      <Show when={chatSessionsError()}>
-                        <div class="text-xs text-red-500">{chatSessionsError()}</div>
-                      </Show>
-                      <Show when={!chatSessionsError()}>
-                        <Show
-                          when={chatSessions().length > 0}
-                          fallback={
-                            <div class="text-xs text-muted">
-                              No chat sessions yet. Start a chat to create one.
-                            </div>
-                          }
-                        >
-                          <select
-                            value={selectedSessionId()}
-                            onChange={(e) => setSelectedSessionId(e.currentTarget.value)}
-                            class="w-full min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded bg-white dark:bg-slate-700"
-                            disabled={saving()}
-                          >
-                            <For each={chatSessions()}>
-                              {(session) => (
-                                <option value={session.id}>
-                                  {formatSessionLabel(session)}
-                                </option>
-                              )}
-                            </For>
-                          </select>
-                          <Show when={selectedChatSession()}>
-                            <p class="text-[10px] text-muted mt-1">
-                              Last updated {new Date(selectedChatSession()!.updated_at).toLocaleString()}
-                            </p>
-                          </Show>
-                        </Show>
-                      </Show>
-                    </Show>
+ <Show when={chatSessionsLoading()}>
+ <div class="text-xs text-muted">Loading chat sessions...</div>
+ </Show>
+ <Show when={!chatSessionsLoading()}>
+ <Show when={chatSessionsError()}>
+ <div class="text-xs text-red-500">{chatSessionsError()}</div>
+ </Show>
+ <Show when={!chatSessionsError()}>
+ <Show
+ when={chatSessions().length > 0}
+ fallback={
+ <div class="text-xs text-muted">
+ No chat sessions yet. Start a chat to create one.
+ </div>
+ }
+ >
+ <select
+ value={selectedSessionId()}
+ onChange={(e) => setSelectedSessionId(e.currentTarget.value)}
+ class="w-full min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded "
+ disabled={saving()}
+ >
+ <For each={chatSessions()}>
+ {(session) => (
+ <option value={session.id}>
+ {formatSessionLabel(session)}
+ </option>
+ )}
+ </For>
+ </select>
+ <Show when={selectedChatSession()}>
+ <p class="text-[10px] text-muted mt-1">
+ Last updated {new Date(selectedChatSession()!.updated_at).toLocaleString()}
+ </p>
+ </Show>
+ </Show>
+ </Show>
+ </Show>
 
-                    <div class="flex flex-wrap gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={handleSessionSummarize}
-                        disabled={!selectedSessionId() || sessionActionLoading() !== null}
-                        class="w-full sm:w-auto min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded border border-border bg-surface text-base-content hover:bg-surface-hover disabled:opacity-50"
-                      >
-                        {sessionActionLoading() === 'summarize' ? 'Summarizing...' : 'Summarize context'}
+ <div class="flex flex-wrap gap-2 pt-1">
+ <button
+ type="button"
+ onClick={handleSessionSummarize}
+ disabled={!selectedSessionId() || sessionActionLoading() !== null}
+ class="w-full sm:w-auto min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded border border-border bg-surface text-base-content hover:bg-surface-hover disabled:opacity-50"
+ >
+ {sessionActionLoading() ==='summarize' ? 'Summarizing...' : 'Summarize context'}
                       </button>
                       <button
                         type="button"
@@ -1980,13 +1980,13 @@ export const AISettings: Component = () => {
               <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
                 <div
                   class={`flex items-center gap-2 p-3 rounded-md ${settings()?.configured
-                    ? 'bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-200'
-                    : 'bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200'
-                    }`}
+ ? 'bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-200'
+ : 'bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200'
+ }`}
                 >
                   <div
                     class={`w-2 h-2 rounded-full ${settings()?.configured ? 'bg-emerald-400' : 'bg-amber-400'
-                      }`}
+ }`}
                   />
                   <div class="flex-1 min-w-0">
                     <span class="text-xs font-medium">
@@ -2109,9 +2109,9 @@ export const AISettings: Component = () => {
                   type="button"
                   onClick={() => setSetupProvider('anthropic')}
                   class={`p-3 rounded-md border-2 transition-all text-center ${setupProvider() === 'anthropic'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
-                    : 'border-border hover:border-blue-300'
-                    }`}
+ ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
+ : 'border-border hover:border-blue-300'
+ }`}
                 >
                   <div class="text-sm font-medium">Anthropic</div>
                   <div class="text-xs text-slate-500 mt-0.5">Claude</div>
@@ -2120,9 +2120,9 @@ export const AISettings: Component = () => {
                   type="button"
                   onClick={() => setSetupProvider('openai')}
                   class={`p-3 rounded-md border-2 transition-all text-center ${setupProvider() === 'openai'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
-                    : 'border-border hover:border-blue-300'
-                    }`}
+ ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
+ : 'border-border hover:border-blue-300'
+ }`}
                 >
                   <div class="text-sm font-medium">OpenAI</div>
                   <div class="text-xs text-slate-500 mt-0.5">ChatGPT</div>
@@ -2131,9 +2131,9 @@ export const AISettings: Component = () => {
                   type="button"
                   onClick={() => setSetupProvider('openrouter')}
                   class={`p-3 rounded-md border-2 transition-all text-center ${setupProvider() === 'openrouter'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
-                    : 'border-border hover:border-blue-300'
-                    }`}
+ ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
+ : 'border-border hover:border-blue-300'
+ }`}
                 >
                   <div class="text-sm font-medium">OpenRouter</div>
                   <div class="text-xs text-slate-500 mt-0.5">Gateway</div>
@@ -2142,9 +2142,9 @@ export const AISettings: Component = () => {
                   type="button"
                   onClick={() => setSetupProvider('deepseek')}
                   class={`p-3 rounded-md border-2 transition-all text-center ${setupProvider() === 'deepseek'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
-                    : 'border-border hover:border-blue-300'
-                    }`}
+ ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
+ : 'border-border hover:border-blue-300'
+ }`}
                 >
                   <div class="text-sm font-medium">DeepSeek</div>
                   <div class="text-xs text-slate-500 mt-0.5">V3</div>
@@ -2153,9 +2153,9 @@ export const AISettings: Component = () => {
                   type="button"
                   onClick={() => setSetupProvider('gemini')}
                   class={`p-3 rounded-md border-2 transition-all text-center ${setupProvider() === 'gemini'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
-                    : 'border-border hover:border-blue-300'
-                    }`}
+ ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
+ : 'border-border hover:border-blue-300'
+ }`}
                 >
                   <div class="text-sm font-medium">Gemini</div>
                   <div class="text-xs text-slate-500 mt-0.5">Google</div>
@@ -2164,9 +2164,9 @@ export const AISettings: Component = () => {
                   type="button"
                   onClick={() => setSetupProvider('ollama')}
                   class={`p-3 rounded-md border-2 transition-all text-center ${setupProvider() === 'ollama'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
-                    : 'border-border hover:border-blue-300'
-                    }`}
+ ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
+ : 'border-border hover:border-blue-300'
+ }`}
                 >
                   <div class="text-sm font-medium">Ollama</div>
                   <div class="text-xs text-slate-500 mt-0.5">Local</div>
@@ -2204,42 +2204,41 @@ export const AISettings: Component = () => {
                             ? 'https://openrouter.ai/keys'
                             : setupProvider() === 'gemini'
                               ? 'https://aistudio.google.com/app/apikey'
-                              : 'https://platform.deepseek.com/api_keys'
-                      }
-                      target="_blank"
-                      rel="noopener"
-                      class="text-blue-600 hover:underline"
-                    >
-                      Get your API key →
-                    </a>
-                  </p>
-                </div>
-              }>
-                <div>
-                  <label class="block text-sm font-medium text-base-content mb-1.5">
-                    Ollama Server URL
-                  </label>
-                  <input
-                    type="url"
-                    value={setupOllamaUrl()}
-                    onInput={(e) => setSetupOllamaUrl(e.currentTarget.value)}
-                    placeholder="http://localhost:11434"
-                    class="w-full px-3 py-2 border border-border rounded-md bg-white dark:bg-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <p class="text-xs text-slate-500 mt-1.5">
-                    Ollama runs locally - no API key needed
-                  </p>
-                </div>
-              </Show>
-            </div>
+                              : 'https://platform.deepseek.com/api_keys'}
+ target="_blank"
+ rel="noopener"
+ class="text-blue-600 hover:underline"
+ >
+ Get your API key →
+ </a>
+ </p>
+ </div>
+ }>
+ <div>
+ <label class="block text-sm font-medium text-base-content mb-1.5">
+ Ollama Server URL
+ </label>
+ <input
+ type="url"
+ value={setupOllamaUrl()}
+ onInput={(e) => setSetupOllamaUrl(e.currentTarget.value)}
+ placeholder="http://localhost:11434"
+ class="w-full px-3 py-2 border border-border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+ />
+ <p class="text-xs text-slate-500 mt-1.5">
+ Ollama runs locally - no API key needed
+ </p>
+ </div>
+ </Show>
+ </div>
 
-            {/* Footer */}
-            <div class="px-6 py-4 bg-surface-alt border-t border-border flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSetupModal(false);
-                  setSetupApiKey('');
+ {/* Footer */}
+ <div class="px-6 py-4 bg-surface-alt border-t border-border flex justify-end gap-3">
+ <button
+ type="button"
+ onClick={() => {
+ setShowSetupModal(false);
+ setSetupApiKey('');
                 }}
                 class="px-4 py-2 text-base-content hover:bg-surface-hover rounded-md"
                 disabled={setupSaving()}

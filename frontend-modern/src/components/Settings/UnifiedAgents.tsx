@@ -1013,9 +1013,9 @@ export const UnifiedAgents: Component = () => {
                                 onClick={acknowledgeNoToken}
                                 disabled={confirmedNoToken()}
                                 class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${confirmedNoToken()
-                                    ? 'bg-green-600 text-white cursor-default'
-                                    : 'bg-slate-900 text-white hover:bg-black dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white'
-                                    }`}
+ ? 'bg-green-600 text-white cursor-default'
+ : 'bg-slate-900 text-white hover:bg-black dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white'
+ }`}
                             >
                                 {confirmedNoToken() ? 'No token confirmed' : 'Confirm without token'}
                             </button>
@@ -1055,82 +1055,82 @@ export const UnifiedAgents: Component = () => {
                                             Installation commands
                                         </h4>
                                         <p class={`text-xs text-muted mt-0.5 ${requiresToken() ? 'ml-6' : ''}`}>The installer auto-detects Docker, Kubernetes, and Proxmox on the target machine.</p>
-                                    </div>
-                                </div>
+ </div>
+ </div>
 
-                                <div class="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
-                                    <label class="block text-xs font-medium text-base-content mb-1.5">
-                                        Connection URL (Agent → Pulse)
-                                    </label>
-                                    <div class="flex gap-2">
-                                        <input
-                                            type="text"
-                                            value={customAgentUrl()}
-                                            onInput={(e) => setCustomAgentUrl(e.currentTarget.value)}
-                                            placeholder={agentUrl()}
-                                            class="flex-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                                        />
-                                    </div>
-                                    <p class="mt-1.5 text-xs text-muted">
-                                        Override the address agents use to connect to this server (e.g., use IP address <code>http://192.168.1.50:7655</code> if DNS fails).
-                                        <Show when={!customAgentUrl()}>
-                                            <span class="ml-1 opacity-75">Currently using auto-detected: {agentUrl()}</span>
-                                        </Show>
-                                    </p>
-                                </div>
-                                <Show when={insecureMode()}>
-                                    <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
-                                        <span class="font-medium">TLS verification disabled</span> — skip cert checks for self-signed setups. Not recommended for production.
-                                    </div>
-                                </Show>
-                                <label class="inline-flex items-center gap-2 text-sm text-base-content cursor-pointer" title="Skip TLS certificate verification (for self-signed certificates)">
-                                    <input
-                                        type="checkbox"
-                                        checked={insecureMode()}
-                                        onChange={(e) => setInsecureMode(e.currentTarget.checked)}
-                                        class="rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700"
-                                    />
-                                    Skip TLS certificate verification (self-signed certs; not recommended)
-                                </label>
-                                <label class="inline-flex items-center gap-2 text-sm text-base-content cursor-pointer" title="Allow Pulse Patrol to execute diagnostic and fix commands on this agent (auto-fix requires Pulse Pro)">
-                                    <input
-                                        type="checkbox"
-                                        checked={enableCommands()}
-                                        onChange={(e) => setEnableCommands(e.currentTarget.checked)}
-                                        class="rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700"
-                                    />
-                                    Enable Pulse command execution (for Patrol auto-fix)
-                                </label>
-                                <Show when={enableCommands()}>
-                                    <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200">
-                                        <span class="font-medium">Pulse commands enabled</span> — The agent will accept diagnostic and fix commands from Pulse Patrol features.
-                                    </div>
-                                </Show>
-                                <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-100">
-                                    <span class="font-medium">Config signing (optional)</span> — Require signed remote config payloads with <code>PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>. Provide keys via <code>PULSE_AGENT_CONFIG_SIGNING_KEY</code> (Pulse) and <code>PULSE_AGENT_CONFIG_PUBLIC_KEYS</code> (agents).
-                                </div>
-                                <div class="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
-                                    <label for="install-profile-select" class="block text-xs font-medium text-base-content mb-1.5">
-                                        Target profile (optional)
-                                    </label>
-                                    <select
-                                        id="install-profile-select"
-                                        value={installProfile()}
-                                        onChange={(event) => handleInstallProfileChange(event.currentTarget.value as InstallProfile)}
-                                        class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                                    >
-                                        <For each={INSTALL_PROFILE_OPTIONS}>
-                                            {(option) => (
-                                                <option value={option.value}>{option.label}</option>
-                                            )}
-                                        </For>
-                                    </select>
-                                    <p class="mt-1.5 text-xs text-muted">
-                                        {getSelectedInstallProfile().description}
-                                    </p>
-                                    <Show when={getInstallProfileFlags().length > 0}>
-                                        <p class="mt-1.5 text-xs text-muted">
-                                            Adds flags to shell-based install commands: <code>{getInstallProfileFlags().join(' ')}</code>
+ <div class="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+ <label class="block text-xs font-medium text-base-content mb-1.5">
+ Connection URL (Agent → Pulse)
+ </label>
+ <div class="flex gap-2">
+ <input
+ type="text"
+ value={customAgentUrl()}
+ onInput={(e) => setCustomAgentUrl(e.currentTarget.value)}
+ placeholder={agentUrl()}
+ class="flex-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+ />
+ </div>
+ <p class="mt-1.5 text-xs text-muted">
+ Override the address agents use to connect to this server (e.g., use IP address <code>http://192.168.1.50:7655</code> if DNS fails).
+ <Show when={!customAgentUrl()}>
+ <span class="ml-1 opacity-75">Currently using auto-detected: {agentUrl()}</span>
+ </Show>
+ </p>
+ </div>
+ <Show when={insecureMode()}>
+ <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
+ <span class="font-medium">TLS verification disabled</span> — skip cert checks for self-signed setups. Not recommended for production.
+ </div>
+ </Show>
+ <label class="inline-flex items-center gap-2 text-sm text-base-content cursor-pointer" title="Skip TLS certificate verification (for self-signed certificates)">
+ <input
+ type="checkbox"
+ checked={insecureMode()}
+ onChange={(e) => setInsecureMode(e.currentTarget.checked)}
+ class="rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700"
+ />
+ Skip TLS certificate verification (self-signed certs; not recommended)
+ </label>
+ <label class="inline-flex items-center gap-2 text-sm text-base-content cursor-pointer" title="Allow Pulse Patrol to execute diagnostic and fix commands on this agent (auto-fix requires Pulse Pro)">
+ <input
+ type="checkbox"
+ checked={enableCommands()}
+ onChange={(e) => setEnableCommands(e.currentTarget.checked)}
+ class="rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700"
+ />
+ Enable Pulse command execution (for Patrol auto-fix)
+ </label>
+ <Show when={enableCommands()}>
+ <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200">
+ <span class="font-medium">Pulse commands enabled</span> — The agent will accept diagnostic and fix commands from Pulse Patrol features.
+ </div>
+ </Show>
+ <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-100">
+ <span class="font-medium">Config signing (optional)</span> — Require signed remote config payloads with <code>PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>. Provide keys via <code>PULSE_AGENT_CONFIG_SIGNING_KEY</code> (Pulse) and <code>PULSE_AGENT_CONFIG_PUBLIC_KEYS</code> (agents).
+ </div>
+ <div class="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+ <label for="install-profile-select" class="block text-xs font-medium text-base-content mb-1.5">
+ Target profile (optional)
+ </label>
+ <select
+ id="install-profile-select"
+ value={installProfile()}
+ onChange={(event) => handleInstallProfileChange(event.currentTarget.value as InstallProfile)}
+ class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+ >
+ <For each={INSTALL_PROFILE_OPTIONS}>
+ {(option) => (
+ <option value={option.value}>{option.label}</option>
+ )}
+ </For>
+ </select>
+ <p class="mt-1.5 text-xs text-muted">
+ {getSelectedInstallProfile().description}
+ </p>
+ <Show when={getInstallProfileFlags().length > 0}>
+ <p class="mt-1.5 text-xs text-muted">
+ Adds flags to shell-based install commands: <code>{getInstallProfileFlags().join(' ')}</code>
                                         </p>
                                     </Show>
                                 </div>
@@ -1193,43 +1193,43 @@ export const UnifiedAgents: Component = () => {
                                                                                 notificationStore.success('Copied to clipboard');
                                                                             } else {
                                                                                 notificationStore.error('Failed to copy');
-                                                                            }
-                                                                        }}
-                                                                        class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-slate-700 p-2 text-slate-400 transition-colors hover:text-slate-200"
-                                                                        title="Copy command"
-                                                                    >
-                                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                                                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                                                                        </svg>
-                                                                    </button>
-                                                                    <pre class="overflow-x-auto rounded-md bg-slate-900 p-3 pr-12 text-xs text-slate-100">
-                                                                        <code>{copyCommand()}</code>
-                                                                    </pre>
-                                                                </div>
-                                                                <Show when={snippet.note}>
-                                                                    <p class="text-xs text-muted">{snippet.note}</p>
-                                                                </Show>
-                                                            </div>
-                                                        );
-                                                    }}
-                                                </For>
-                                            </div>
-                                        </div>
-                                    )}
-                                </For>
-                            </div>
+ }
+ }}
+ class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-slate-700 p-2 transition-colors hover:text-slate-200"
+ title="Copy command"
+ >
+ <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+ <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+ <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+ </svg>
+ </button>
+ <pre class="overflow-x-auto rounded-md bg-slate-900 p-3 pr-12 text-xs text-slate-100">
+ <code>{copyCommand()}</code>
+ </pre>
+ </div>
+ <Show when={snippet.note}>
+ <p class="text-xs text-muted">{snippet.note}</p>
+ </Show>
+ </div>
+ );
+ }}
+ </For>
+ </div>
+ </div>
+ )}
+ </For>
+ </div>
 
-                            <div class="space-y-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-100">
-                                <div class="flex items-center justify-between gap-3">
-                                    <h5 class="text-sm font-semibold">Check installation status</h5>
-                                    <button
-                                        type="button"
-                                        onClick={handleLookup}
-                                        disabled={lookupLoading()}
-                                        class="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                        {lookupLoading() ? 'Checking…' : 'Check status'}
+ <div class="space-y-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-100">
+ <div class="flex items-center justify-between gap-3">
+ <h5 class="text-sm font-semibold">Check installation status</h5>
+ <button
+ type="button"
+ onClick={handleLookup}
+ disabled={lookupLoading()}
+ class="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+ >
+ {lookupLoading() ?'Checking…' : 'Check status'}
                                     </button>
                                 </div>
                                 <p class="text-xs text-blue-800 dark:text-blue-200">
@@ -1276,31 +1276,31 @@ export const UnifiedAgents: Component = () => {
                                                         </span>
                                                         <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-200">
                                                             {host().status || 'unknown'}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    Last seen {formatRelativeTime(host().lastSeen)} ({formatAbsoluteTime(host().lastSeen)})
-                                                </div>
-                                                <Show when={host().agentVersion}>
-                                                    <div class="text-xs text-blue-700 dark:text-blue-200">
-                                                        Agent version {host().agentVersion}
-                                                    </div>
-                                                </Show>
-                                            </div>
-                                        );
-                                    }}
-                                </Show>
-                            </div>
-                            <details class="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                                <summary class="cursor-pointer text-sm font-medium text-base-content">
-                                    Troubleshooting
-                                </summary>
-                                <div class="mt-3 space-y-4">
-                                    <div>
-                                        <p class="text-xs uppercase tracking-wide text-muted">Auto-detection not working?</p>
-                                        <p class="mt-1 text-xs text-muted">
-                                            If Docker, Kubernetes, or Proxmox isn't detected automatically, add these flags to the install command:
+ </span>
+ </div>
+ </div>
+ <div>
+ Last seen {formatRelativeTime(host().lastSeen)} ({formatAbsoluteTime(host().lastSeen)})
+ </div>
+ <Show when={host().agentVersion}>
+ <div class="text-xs text-blue-700 dark:text-blue-200">
+ Agent version {host().agentVersion}
+ </div>
+ </Show>
+ </div>
+ );
+ }}
+ </Show>
+ </div>
+ <details class="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-800">
+ <summary class="cursor-pointer text-sm font-medium text-base-content">
+ Troubleshooting
+ </summary>
+ <div class="mt-3 space-y-4">
+ <div>
+ <p class="text-xs uppercase tracking-wide text-muted">Auto-detection not working?</p>
+ <p class="mt-1 text-xs text-muted">
+ If Docker, Kubernetes, or Proxmox isn't detected automatically, add these flags to the install command:
                                         </p>
                                         <ul class="mt-2 text-xs text-muted list-disc list-inside space-y-1">
                                             <li><code class="bg-surface-hover px-1 rounded">--enable-docker</code> — Force enable Docker/Podman monitoring</li>
@@ -1423,61 +1423,61 @@ export const UnifiedAgents: Component = () => {
                         <select
                             id="agent-filter-type"
                             value={filterType()}
-                            onChange={(event) => setFilterType(event.currentTarget.value as 'all' | UnifiedAgentType)}
-                            class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-2 sm:py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                        >
-                            <option value="all">All types</option>
-                            <option value="host">Host</option>
-                            <option value="docker">Docker</option>
-                            <option value="kubernetes">Kubernetes</option>
-                        </select>
-                    </div>
-                    <div class="space-y-1">
-                        <label for="agent-filter-status" class="text-xs font-medium text-muted">Status</label>
-                        <select
-                            id="agent-filter-status"
-                            value={filterStatus()}
-                            onChange={(event) => setFilterStatus(event.currentTarget.value as 'all' | UnifiedAgentStatus)}
-                            class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-2 sm:py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                        >
-                            <option value="all">All statuses</option>
-                            <option value="active">Active</option>
-                            <option value="removed">Removed/Blocked</option>
-                        </select>
-                    </div>
-                    <div class="space-y-1">
-                        <label for="agent-filter-scope" class="text-xs font-medium text-muted">Scope</label>
-                        <select
-                            id="agent-filter-scope"
-                            value={filterScope()}
-                            onChange={(event) => setFilterScope(event.currentTarget.value as 'all' | Exclude<ScopeCategory, 'na'>)}
-                            class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-2 sm:py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                        >
-                            <option value="all">All scopes</option>
-                            <option value="default">Default</option>
-                            <option value="profile">Profile assigned</option>
-                            <option value="ai-managed">Patrol-managed</option>
-                        </select>
-                    </div>
-                    <div class="min-w-[220px] flex-1 space-y-1">
-                        <label for="agent-filter-search" class="text-xs font-medium text-muted">Search</label>
-                        <input
-                            id="agent-filter-search"
-                            type="text"
-                            value={filterSearch()}
-                            onInput={(event) => setFilterSearch(event.currentTarget.value)}
-                            placeholder="Search name, hostname, or ID"
-                            class="w-full min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-2 sm:py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                        />
-                    </div>
-                    <button
-                        type="button"
-                        onClick={resetFilters}
-                        disabled={!hasFilters()}
-                        class={`min-h-10 sm:min-h-9 rounded-md px-3 py-2 text-sm font-medium transition-colors ${hasFilters()
-                            ? 'bg-slate-100 text-slate-700 hover:bg-surface-alt dark:text-slate-200 dark:hover:bg-slate-700'
-                            : 'bg-slate-50 text-slate-400 cursor-not-allowed dark:bg-slate-900 dark:text-slate-500'
-                            }`}
+                            onChange={(event) => setFilterType(event.currentTarget.value as 'all'| UnifiedAgentType)}
+ class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-2 sm:py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+ >
+ <option value="all">All types</option>
+ <option value="host">Host</option>
+ <option value="docker">Docker</option>
+ <option value="kubernetes">Kubernetes</option>
+ </select>
+ </div>
+ <div class="space-y-1">
+ <label for="agent-filter-status" class="text-xs font-medium text-muted">Status</label>
+ <select
+ id="agent-filter-status"
+ value={filterStatus()}
+ onChange={(event) => setFilterStatus(event.currentTarget.value as'all'| UnifiedAgentStatus)}
+ class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-2 sm:py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+ >
+ <option value="all">All statuses</option>
+ <option value="active">Active</option>
+ <option value="removed">Removed/Blocked</option>
+ </select>
+ </div>
+ <div class="space-y-1">
+ <label for="agent-filter-scope" class="text-xs font-medium text-muted">Scope</label>
+ <select
+ id="agent-filter-scope"
+ value={filterScope()}
+ onChange={(event) => setFilterScope(event.currentTarget.value as'all' | Exclude<ScopeCategory, 'na'>)}
+ class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-2 sm:py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+ >
+ <option value="all">All scopes</option>
+ <option value="default">Default</option>
+ <option value="profile">Profile assigned</option>
+ <option value="ai-managed">Patrol-managed</option>
+ </select>
+ </div>
+ <div class="min-w-[220px] flex-1 space-y-1">
+ <label for="agent-filter-search" class="text-xs font-medium text-muted">Search</label>
+ <input
+ id="agent-filter-search"
+ type="text"
+ value={filterSearch()}
+ onInput={(event) => setFilterSearch(event.currentTarget.value)}
+ placeholder="Search name, hostname, or ID"
+ class="w-full min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-2 sm:py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+ />
+ </div>
+ <button
+ type="button"
+ onClick={resetFilters}
+ disabled={!hasFilters()}
+ class={`min-h-10 sm:min-h-9 rounded-md px-3 py-2 text-sm font-medium transition-colors ${hasFilters()
+ ?' text-slate-700 hover:bg-surface-alt dark:text-slate-200 dark:hover:bg-slate-700'
+ : ' text-slate-400 cursor-not-allowed dark:text-slate-500'
+ }`}
                     >
                         Clear
                     </button>
@@ -1497,32 +1497,32 @@ export const UnifiedAgents: Component = () => {
                         {
                             key: 'name',
                             label: 'Name',
-                            render: (row: UnifiedAgentRow) => {
-                                const expanded = () => expandedRowKey() === row.rowKey;
-                                const agentName = row.displayName || row.hostname || row.name;
-                                return (
-                                    <div class="flex items-start justify-between gap-3">
-                                        <button
-                                            class="text-left"
-                                            onClick={() => toggleAgentDetails(row.rowKey)}
-                                        >
-                                            <div class="text-sm font-medium text-base-content">
-                                                {row.name}
-                                            </div>
-                                            <Show when={row.displayName && row.hostname && row.displayName !== row.hostname}>
-                                                <div class="text-xs text-muted">
-                                                    {row.hostname}
-                                                </div>
-                                            </Show>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                toggleAgentDetails(row.rowKey)
-                                            }}
-                                            class="inline-flex min-h-10 min-w-10 sm:min-h-9 sm:min-w-9 items-center justify-center rounded-md p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-                                            aria-label={`${expanded() ? 'Hide' : 'Show'} details for ${agentName}`}
+ render: (row: UnifiedAgentRow) => {
+ const expanded = () => expandedRowKey() === row.rowKey;
+ const agentName = row.displayName || row.hostname || row.name;
+ return (
+ <div class="flex items-start justify-between gap-3">
+ <button
+ class="text-left"
+ onClick={() => toggleAgentDetails(row.rowKey)}
+ >
+ <div class="text-sm font-medium text-base-content">
+ {row.name}
+ </div>
+ <Show when={row.displayName && row.hostname && row.displayName !== row.hostname}>
+ <div class="text-xs text-muted">
+ {row.hostname}
+ </div>
+ </Show>
+ </button>
+ <button
+ type="button"
+ onClick={(e) => {
+ e.stopPropagation();
+ toggleAgentDetails(row.rowKey)
+ }}
+ class="inline-flex min-h-10 min-w-10 sm:min-h-9 sm:min-w-9 items-center justify-center rounded-md p-2 hover: dark:hover:text-slate-200"
+ aria-label={`${expanded() ?'Hide' : 'Show'} details for ${agentName}`}
                                             aria-expanded={expanded()}
                                             aria-controls={`agent-details-${row.rowKey}`}
                                         >
@@ -1608,32 +1608,32 @@ export const UnifiedAgents: Component = () => {
                                                     onChange={(event) => {
                                                         const nextValue = event.currentTarget.value;
                                                         const currentValue = assignment()?.profile_id || '';
-                                                        if (nextValue === currentValue) {
-                                                            return;
-                                                        }
-                                                        void updateScopeAssignment(resolvedAgentId, nextValue || null, agentName);
-                                                    }}
-                                                    disabled={isScopeUpdating()}
-                                                    class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                                                >
-                                                    <option value="">Default (Auto-detect)</option>
-                                                    <For each={profiles()}>
-                                                        {(profile) => (
-                                                            <option value={profile.id}>{profile.name || profile.id}</option>
-                                                        )}
-                                                    </For>
-                                                </select>
-                                                <Show when={isScopeUpdating()}>
-                                                    <span class="text-[10px] text-muted">Updating…</span>
-                                                </Show>
-                                            </div>
-                                        </Show>
-                                    </Show>
-                                );
-                            }
-                        },
-                        {
-                            key: 'commandsEnabled',
+ if (nextValue === currentValue) {
+ return;
+ }
+ void updateScopeAssignment(resolvedAgentId, nextValue || null, agentName);
+ }}
+ disabled={isScopeUpdating()}
+ class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+ >
+ <option value="">Default (Auto-detect)</option>
+ <For each={profiles()}>
+ {(profile) => (
+ <option value={profile.id}>{profile.name || profile.id}</option>
+ )}
+ </For>
+ </select>
+ <Show when={isScopeUpdating()}>
+ <span class="text-[10px] text-muted">Updating…</span>
+ </Show>
+ </div>
+ </Show>
+ </Show>
+ );
+ }
+ },
+ {
+ key:'commandsEnabled',
                             label: 'Pulse Cmds',
                             render: (row: UnifiedAgentRow) => {
                                 const isActive = () => row.status === 'active';
@@ -1653,10 +1653,10 @@ export const UnifiedAgents: Component = () => {
                                                         onClick={() => handleToggleCommands(row.id, !effectiveEnabled)}
                                                         disabled={isPending}
                                                         class={`relative inline-flex h-8 w-12 sm:h-7 sm:w-12 flex-shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${isPending ? 'opacity-60 cursor-wait' : ''
-                                                            } ${effectiveEnabled
-                                                                ? 'bg-blue-600'
-                                                                : 'bg-surface-hover'
-                                                            }`}
+ } ${effectiveEnabled
+ ? 'bg-blue-600'
+ : 'bg-surface-hover'
+ }`}
                                                         title={isPending
                                                             ? 'Syncing with agent...'
                                                             : effectiveEnabled
@@ -1666,7 +1666,7 @@ export const UnifiedAgents: Component = () => {
                                                     >
                                                         <span
                                                             class={`pointer-events-none inline-block h-6 w-6 sm:h-5 sm:w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${effectiveEnabled ? 'translate-x-4 sm:translate-x-5' : 'translate-x-0'
-                                                                }`}
+ }`}
                                                         />
                                                     </button>
                                                     <Show when={isPending}>
@@ -1861,7 +1861,7 @@ export const UnifiedAgents: Component = () => {
                                                             notificationStore.error('Failed to copy');
                                                         }
                                                     }}
-                                                    class="text-xs text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100 text-left"
+                                                    class="text-xs text-slate-600 hover:text-base-content text-left"
                                                 >
                                                     Copy uninstall command
                                                 </button>

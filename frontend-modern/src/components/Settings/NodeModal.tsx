@@ -684,9 +684,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   type="button"
                                   onClick={() => updateField('setupMode', 'agent')}
                                   class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'agent'
-                                    ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
-                                    : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                    }`}
+ ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
+ : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
+ }`}
                                 >
                                   Agent Install
                                   <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
@@ -701,9 +701,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     }
                                   }}
                                   class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${isAdvancedSetupMode()
-                                    ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
-                                    : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                    }`}
+ ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
+ : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
+ }`}
                                 >
                                   Advanced
                                 </button>
@@ -715,9 +715,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     type="button"
                                     onClick={() => updateField('setupMode', 'auto')}
                                     class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'auto'
-                                      ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
-                                      : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                      }`}
+ ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
+ : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
+ }`}
                                   >
                                     API Only
                                   </button>
@@ -725,9 +725,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     type="button"
                                     onClick={() => updateField('setupMode', 'manual')}
                                     class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'manual'
-                                      ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
-                                      : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                      }`}
+ ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
+ : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
+ }`}
                                   >
                                     Manual
                                   </button>
@@ -775,46 +775,46 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         } catch (error) {
                                           logger.error('[Agent Install] Error:', error);
                                           notificationStore.error('Failed to generate install command');
-                                        } finally {
-                                          setLoadingAgentCommand(false);
-                                        }
-                                      }}
-                                      class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-200 bg-slate-700 rounded-md transition-colors disabled:opacity-50"
-                                      title="Copy command"
-                                    >
-                                      <Show when={loadingAgentCommand()} fallback={
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                                        </svg>
-                                      }>
-                                        <svg class="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
-                                          <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"></path>
-                                        </svg>
-                                      </Show>
-                                    </button>
-                                    <Show
-                                      when={agentInstallCommand().length > 0}
-                                      fallback={
-                                        <code class="text-blue-400">
-                                          Click the copy button to generate the install command
-                                        </code>
-                                      }
-                                    >
-                                      <code class="block text-blue-100 whitespace-pre-wrap break-words">
-                                        {agentInstallCommand()}
-                                      </code>
-                                    </Show>
-                                  </div>
-                                  <p class="text-[11px] text-muted italic">
-                                    The node will appear in Pulse automatically after the agent starts.
-                                  </p>
-                                </div>
-                              </Show>
+ } finally {
+ setLoadingAgentCommand(false);
+ }
+ }}
+ class="absolute top-2 right-2 p-1.5 hover:text-slate-200 bg-slate-700 rounded-md transition-colors disabled:opacity-50"
+ title="Copy command"
+ >
+ <Show when={loadingAgentCommand()} fallback={
+ <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+ <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+ <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+ </svg>
+ }>
+ <svg class="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+ <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
+ <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"></path>
+ </svg>
+ </Show>
+ </button>
+ <Show
+ when={agentInstallCommand().length > 0}
+ fallback={
+ <code class="text-blue-400">
+ Click the copy button to generate the install command
+ </code>
+ }
+ >
+ <code class="block text-blue-100 whitespace-pre-wrap break-words">
+ {agentInstallCommand()}
+ </code>
+ </Show>
+ </div>
+ <p class="text-[11px] text-muted italic">
+ The node will appear in Pulse automatically after the agent starts.
+ </p>
+ </div>
+ </Show>
 
-                              {/* API Only Tab (formerly Quick Setup) */}
-                              <Show when={formData().setupMode === 'auto'}>
+ {/* API Only Tab (formerly Quick Setup) */}
+ <Show when={formData().setupMode ==='auto'}>
                                 <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 mb-3 dark:border-amber-700 dark:bg-amber-900">
                                   <p class="text-xs text-amber-800 dark:text-amber-200">
                                     <strong>Limited functionality:</strong> API-only mode does not include temperature monitoring or Pulse Patrol automation.
@@ -1092,81 +1092,80 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             'pveum user add pulse-monitor@pam --comment "Pulse monitoring service"';
                                           if (await copyToClipboard(cmd)) {
                                             notificationStore.success('Command copied!');
-                                          }
-                                        }}
-                                        class="absolute top-1 right-1 p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
-                                        title="Copy command"
-                                      >
-                                        <svg
-                                          width="14"
-                                          height="14"
-                                          viewBox="0 0 24 24"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          stroke-width="2"
-                                        >
-                                          <rect
-                                            x="9"
-                                            y="9"
-                                            width="13"
-                                            height="13"
-                                            rx="2"
-                                            ry="2"
-                                          ></rect>
-                                          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                                        </svg>
-                                      </button>
-                                      <code class="text-base-content">
-                                        pveum user add pulse-monitor@pam --comment "Pulse monitoring
-                                        service"
-                                      </code>
-                                    </div>
-                                  </div>
+ }
+ }}
+ class="absolute top-1 right-1 p-1 text-slate-500 hover: dark:hover:text-slate-200 transition-colors"
+ title="Copy command"
+ >
+ <svg
+ width="14"
+ height="14"
+ viewBox="0 0 24 24"
+ fill="none"
+ stroke="currentColor"
+ stroke-width="2"
+ >
+ <rect
+ x="9"
+ y="9"
+ width="13"
+ height="13"
+ rx="2"
+ ry="2"
+ ></rect>
+ <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+ </svg>
+ </button>
+ <code class="text-base-content">
+ pveum user add pulse-monitor@pam --comment "Pulse monitoring
+ service"
+ </code>
+ </div>
+ </div>
 
-                                  {/* Step 2: Generate token */}
-                                  <div>
-                                    <p class="text-sm font-medium text-base-content mb-1">
-                                      2. Generate API token (save the output!):
-                                    </p>
-                                    <div class="relative bg-surface rounded-md p-2 font-mono text-xs">
-                                      <button
-                                        type="button"
-                                        onClick={async () => {
-                                          const cmd =
-                                            'pveum user token add pulse-monitor@pam pulse-token --privsep 0';
+ {/* Step 2: Generate token */}
+ <div>
+ <p class="text-sm font-medium text-base-content mb-1">
+ 2. Generate API token (save the output!):
+ </p>
+ <div class="relative bg-surface rounded-md p-2 font-mono text-xs">
+ <button
+ type="button"
+ onClick={async () => {
+ const cmd ='pveum user token add pulse-monitor@pam pulse-token --privsep 0';
                                           if (await copyToClipboard(cmd)) {
                                             notificationStore.success('Command copied!');
-                                          }
-                                        }}
-                                        class="absolute top-1 right-1 p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
-                                        title="Copy command"
-                                      >
-                                        <svg
-                                          width="14"
-                                          height="14"
-                                          viewBox="0 0 24 24"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          stroke-width="2"
-                                        >
-                                          <rect
-                                            x="9"
-                                            y="9"
-                                            width="13"
-                                            height="13"
-                                            rx="2"
-                                            ry="2"
-                                          ></rect>
-                                          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                                        </svg>
-                                      </button>
-                                      <code class="text-base-content">
-                                        pveum user token add pulse-monitor@pam pulse-token --privsep
-                                        0
-                                      </code>
-                                    </div>
-                                    <p class="text-amber-600 dark:text-amber-400 text-xs mt-1">
-                                      Important: Copy the token value immediately - it won't be shown again!
+ }
+ }}
+ class="absolute top-1 right-1 p-1 text-slate-500 hover: dark:hover:text-slate-200 transition-colors"
+ title="Copy command"
+ >
+ <svg
+ width="14"
+ height="14"
+ viewBox="0 0 24 24"
+ fill="none"
+ stroke="currentColor"
+ stroke-width="2"
+ >
+ <rect
+ x="9"
+ y="9"
+ width="13"
+ height="13"
+ rx="2"
+ ry="2"
+ ></rect>
+ <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+ </svg>
+ </button>
+ <code class="text-base-content">
+ pveum user token add pulse-monitor@pam pulse-token --privsep
+ 0
+ </code>
+ </div>
+ <p class="text-amber-600 dark:text-amber-400 text-xs mt-1">
+ Important: Copy the token value immediately - it won't be shown again!
                                     </p>
                                   </div>
 
@@ -1185,7 +1184,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             notificationStore.success('Command copied!');
                                           }
                                         }}
-                                        class="absolute top-1 right-1 p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+                                        class="absolute top-1 right-1 p-1 hover:text-muted dark:hover:text-slate-200 transition-colors"
                                         title="Copy command"
                                       >
                                         <svg
@@ -1223,7 +1222,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             notificationStore.success('Command copied!');
                                           }
                                         }}
-                                        class="absolute top-1 right-1 p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+                                        class="absolute top-1 right-1 p-1 hover:text-muted dark:hover:text-slate-200 transition-colors"
                                         title="Copy command"
                                       >
                                         <svg
@@ -1289,9 +1288,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   type="button"
                                   onClick={() => updateField('setupMode', 'agent')}
                                   class={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'agent'
-                                    ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
-                                    : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                    }`}
+ ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
+ : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
+ }`}
                                 >
                                   Agent Install
                                   <span class="text-[10px] px-1.5 py-0.5 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Recommended</span>
@@ -1304,9 +1303,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     }
                                   }}
                                   class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${isAdvancedSetupMode()
-                                    ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
-                                    : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                    }`}
+ ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
+ : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
+ }`}
                                 >
                                   Advanced
                                 </button>
@@ -1318,9 +1317,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     type="button"
                                     onClick={() => updateField('setupMode', 'auto')}
                                     class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'auto'
-                                      ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
-                                      : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                      }`}
+ ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
+ : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
+ }`}
                                   >
                                     API Only
                                   </button>
@@ -1328,9 +1327,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     type="button"
                                     onClick={() => updateField('setupMode', 'manual')}
                                     class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'manual'
-                                      ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
-                                      : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                      }`}
+ ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
+ : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
+ }`}
                                   >
                                     Manual Setup
                                   </button>
@@ -1406,7 +1405,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   <Show when={agentCommandError()}>
                                     <p class="text-xs text-red-500">{agentCommandError()}</p>
                                   </Show>
-                                  <p class="text-xs text-slate-500 dark:text-slate-500">
+                                  <p class="text-xs text-muted">
                                     The node will automatically appear in Pulse once the agent connects.
                                   </p>
                                 </div>
@@ -1665,80 +1664,79 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             'proxmox-backup-manager user create pulse-monitor@pbs';
                                           if (await copyToClipboard(cmd)) {
                                             notificationStore.success('Command copied!');
-                                          }
-                                        }}
-                                        class="absolute top-1 right-1 p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
-                                        title="Copy command"
-                                      >
-                                        <svg
-                                          width="14"
-                                          height="14"
-                                          viewBox="0 0 24 24"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          stroke-width="2"
-                                        >
-                                          <rect
-                                            x="9"
-                                            y="9"
-                                            width="13"
-                                            height="13"
-                                            rx="2"
-                                            ry="2"
-                                          ></rect>
-                                          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                                        </svg>
-                                      </button>
-                                      <code class="text-base-content">
-                                        proxmox-backup-manager user create pulse-monitor@pbs
-                                      </code>
-                                    </div>
-                                  </div>
+ }
+ }}
+ class="absolute top-1 right-1 p-1 text-slate-500 hover: dark:hover:text-slate-200 transition-colors"
+ title="Copy command"
+ >
+ <svg
+ width="14"
+ height="14"
+ viewBox="0 0 24 24"
+ fill="none"
+ stroke="currentColor"
+ stroke-width="2"
+ >
+ <rect
+ x="9"
+ y="9"
+ width="13"
+ height="13"
+ rx="2"
+ ry="2"
+ ></rect>
+ <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+ </svg>
+ </button>
+ <code class="text-base-content">
+ proxmox-backup-manager user create pulse-monitor@pbs
+ </code>
+ </div>
+ </div>
 
-                                  {/* Step 2: Generate token */}
-                                  <div>
-                                    <p class="text-sm font-medium text-base-content mb-1">
-                                      2. Generate API token (save the output!):
-                                    </p>
-                                    <div class="relative bg-surface rounded-md p-2 font-mono text-xs">
-                                      <button
-                                        type="button"
-                                        onClick={async () => {
-                                          const cmd =
-                                            'proxmox-backup-manager user generate-token pulse-monitor@pbs pulse-token';
+ {/* Step 2: Generate token */}
+ <div>
+ <p class="text-sm font-medium text-base-content mb-1">
+ 2. Generate API token (save the output!):
+ </p>
+ <div class="relative bg-surface rounded-md p-2 font-mono text-xs">
+ <button
+ type="button"
+ onClick={async () => {
+ const cmd ='proxmox-backup-manager user generate-token pulse-monitor@pbs pulse-token';
                                           if (await copyToClipboard(cmd)) {
                                             notificationStore.success('Command copied!');
-                                          }
-                                        }}
-                                        class="absolute top-1 right-1 p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
-                                        title="Copy command"
-                                      >
-                                        <svg
-                                          width="14"
-                                          height="14"
-                                          viewBox="0 0 24 24"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          stroke-width="2"
-                                        >
-                                          <rect
-                                            x="9"
-                                            y="9"
-                                            width="13"
-                                            height="13"
-                                            rx="2"
-                                            ry="2"
-                                          ></rect>
-                                          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                                        </svg>
-                                      </button>
-                                      <code class="text-base-content">
-                                        proxmox-backup-manager user generate-token pulse-monitor@pbs
-                                        pulse-token
-                                      </code>
-                                    </div>
-                                    <p class="text-amber-600 dark:text-amber-400 text-xs mt-1">
-                                      ⚠️ Copy the token value immediately - it won't be shown again!
+ }
+ }}
+ class="absolute top-1 right-1 p-1 text-slate-500 hover: dark:hover:text-slate-200 transition-colors"
+ title="Copy command"
+ >
+ <svg
+ width="14"
+ height="14"
+ viewBox="0 0 24 24"
+ fill="none"
+ stroke="currentColor"
+ stroke-width="2"
+ >
+ <rect
+ x="9"
+ y="9"
+ width="13"
+ height="13"
+ rx="2"
+ ry="2"
+ ></rect>
+ <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+ </svg>
+ </button>
+ <code class="text-base-content">
+ proxmox-backup-manager user generate-token pulse-monitor@pbs
+ pulse-token
+ </code>
+ </div>
+ <p class="text-amber-600 dark:text-amber-400 text-xs mt-1">
+ ⚠️ Copy the token value immediately - it won't be shown again!
                                     </p>
                                   </div>
 
@@ -1757,7 +1755,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             notificationStore.success('Command copied!');
                                           }
                                         }}
-                                        class="absolute top-1 right-1 p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+                                        class="absolute top-1 right-1 p-1 hover:text-muted dark:hover:text-slate-200 transition-colors"
                                         title="Copy command"
                                       >
                                         <svg
@@ -1794,7 +1792,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             notificationStore.success('Command copied!');
                                           }
                                         }}
-                                        class="absolute top-1 right-1 p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+                                        class="absolute top-1 right-1 p-1 hover:text-muted dark:hover:text-slate-200 transition-colors"
                                         title="Copy command"
                                       >
                                         <svg
@@ -1986,55 +1984,54 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
                   {/* Physical Disk Monitoring - PVE only */}
                   <Show when={props.nodeType === 'pve'}>
-                    <div class="space-y-4">
-                      <SectionHeader
-                        title="Advanced monitoring"
-                        size="sm"
-                        class="mb-3"
-                        titleClass="text-base-content"
-                      />
-                      <div class="rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                        <div class="flex items-start justify-between gap-3">
-                          <div>
-                            <p class="font-medium text-base-content">Monitor physical disk health (SMART)</p>
-                            <p class="mt-1 text-xs text-muted">
-                              This will spin up idle HDDs; leave disabled if you rely on drive standby.
-                            </p>
-                          </div>
-                          <TogglePrimitive
-                            checked={formData().monitorPhysicalDisks}
-                            onChange={(event) => updateField('monitorPhysicalDisks', event.currentTarget.checked)}
+ <div class="space-y-4">
+ <SectionHeader
+ title="Advanced monitoring"
+ size="sm"
+ class="mb-3"
+ titleClass="text-base-content"
+ />
+ <div class="rounded-md border border-slate-200 bg-white p-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800">
+ <div class="flex items-start justify-between gap-3">
+ <div>
+ <p class="font-medium text-base-content">Monitor physical disk health (SMART)</p>
+ <p class="mt-1 text-xs text-muted">
+ This will spin up idle HDDs; leave disabled if you rely on drive standby.
+ </p>
+ </div>
+ <TogglePrimitive
+ checked={formData().monitorPhysicalDisks}
+ onChange={(event) => updateField('monitorPhysicalDisks', event.currentTarget.checked)}
                             ariaLabel={
                               formData().monitorPhysicalDisks
                                 ? 'Disable physical disk monitoring'
-                                : 'Enable physical disk monitoring'
-                            }
-                          />
-                        </div>
-                        <Show when={formData().monitorPhysicalDisks}>
-                          <div class="mt-3 flex items-center gap-2 border-t border-slate-200 pt-3 dark:border-slate-700">
-                            <label class="text-xs text-muted">Poll every</label>
-                            <select
-                              class="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
-                              value={formData().physicalDiskPollingMinutes}
-                              onChange={(e) => updateField('physicalDiskPollingMinutes', parseInt(e.currentTarget.value, 10))}
-                            >
-                              <option value={5}>5 minutes</option>
-                              <option value={15}>15 minutes</option>
-                              <option value={30}>30 minutes</option>
-                              <option value={60}>1 hour</option>
-                            </select>
-                          </div>
-                        </Show>
-                      </div>
+                                : 'Enable physical disk monitoring'}
+ />
+ </div>
+ <Show when={formData().monitorPhysicalDisks}>
+ <div class="mt-3 flex items-center gap-2 border-t border-slate-200 pt-3 dark:border-slate-700">
+ <label class="text-xs text-muted">Poll every</label>
+ <select
+ class="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-700"
+ value={formData().physicalDiskPollingMinutes}
+ onChange={(e) => updateField('physicalDiskPollingMinutes', parseInt(e.currentTarget.value, 10))}
+ >
+ <option value={5}>5 minutes</option>
+ <option value={15}>15 minutes</option>
+ <option value={30}>30 minutes</option>
+ <option value={60}>1 hour</option>
+ </select>
+ </div>
+ </Show>
+ </div>
 
-                      <Show when={showTemperatureMonitoringSection()}>
-                        <div class="rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                          <div class="flex items-start justify-between gap-3">
-                            <div>
-                              <p class="font-medium text-base-content">Temperature monitoring</p>
-                              <p class="mt-1 text-xs text-muted">
-                                Uses the Pulse sensors key or proxy to read CPU/NVMe temperatures for this node. Disable if you don't need temperature data or haven't deployed the proxy yet.
+ <Show when={showTemperatureMonitoringSection()}>
+ <div class="rounded-md border border-slate-200 bg-white p-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800">
+ <div class="flex items-start justify-between gap-3">
+ <div>
+ <p class="font-medium text-base-content">Temperature monitoring</p>
+ <p class="mt-1 text-xs text-muted">
+ Uses the Pulse sensors key or proxy to read CPU/NVMe temperatures for this node. Disable if you don't need temperature data or haven't deployed the proxy yet.
                               </p>
                             </div>
                             <TogglePrimitive
@@ -2151,11 +2148,11 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                   })()}
                   <div
                     class={`mx-6 p-3 rounded-md text-sm ${testResult()?.status === 'success'
-                      ? 'bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
-                      : testResult()?.status === 'warning'
-                        ? 'bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200'
-                        : 'bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
-                      }`}
+ ? 'bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
+ : testResult()?.status === 'warning'
+ ? 'bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200'
+ : 'bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
+ }`}
                   >
                     <div class="flex items-start gap-2">
                       <Show when={testResult()?.status === 'success'}>

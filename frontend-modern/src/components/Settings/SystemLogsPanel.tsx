@@ -128,9 +128,9 @@ export const SystemLogsPanel: Component = () => {
                             <button
                                 onClick={() => setIsPaused(!isPaused())}
                                 class={`min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 rounded transition-colors ${isPaused()
-                                    ? 'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400'
-                                    : 'hover:bg-surface-hover text-muted'
-                                    }`}
+ ? 'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400'
+ : 'hover:bg-surface-hover text-muted'
+ }`}
                                 title={isPaused() ? "Resume Stream" : "Pause Stream"}
                             >
                                 {isPaused() ? <Play size={18} /> : <Pause size={18} />}
@@ -168,25 +168,25 @@ export const SystemLogsPanel: Component = () => {
                                 ) : log.includes('"level":"warn"') || log.includes('WRN') || log.includes('[WARN]') ? (
                                     <span class="text-amber-400">{log}</span>
                                 ) : log.includes('"level":"debug"') || log.includes('DBG') || log.includes('[DEBUG]') ? (
-                                    <span class="text-blue-400">{log}</span>
-                                ) : (
-                                    <span class="text-slate-300">{log}</span>
-                                )}
-                            </div>
-                        }</For>
+ <span class="text-blue-400">{log}</span>
+ ) : (
+ <span class="text-slate-300">{log}</span>
+ )}
+ </div>
+ }</For>
 
-                        {logs().length === 0 && !isLoading() && (
-                            <div class="h-full flex flex-col items-center justify-center text-slate-600">
-                                <Terminal size={48} class="mb-4 opacity-50" />
-                                <p>Waiting for logs...</p>
-                            </div>
-                        )}
-                    </div>
+ {logs().length === 0 && !isLoading() && (
+ <div class="h-full flex flex-col items-center justify-center ">
+ <Terminal size={48} class="mb-4 opacity-50" />
+ <p>Waiting for logs...</p>
+ </div>
+ )}
+ </div>
 
-                    <div class="text-xs text-muted flex justify-between px-1 pt-4">
-                        <span>Buffer: {logs().length} / {MAX_LOGS} lines</span>
-                        <span class="flex items-center gap-2">
-                            <div class={`w-2 h-2 rounded-full ${isPaused() ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`}></div>
+ <div class="text-xs text-muted flex justify-between px-1 pt-4">
+ <span>Buffer: {logs().length} / {MAX_LOGS} lines</span>
+ <span class="flex items-center gap-2">
+ <div class={`w-2 h-2 rounded-full ${isPaused() ?'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`}></div>
                             {isPaused() ? "Stream Paused" : "Live"}
                         </span>
                     </div>

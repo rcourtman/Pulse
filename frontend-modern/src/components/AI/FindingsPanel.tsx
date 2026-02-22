@@ -479,11 +479,11 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     <div
       id={`finding-${finding.id}`}
       class={`p-3 cursor-pointer transition-colors ${finding.status === 'active'
-        ? finding.acknowledgedAt
-          ? 'opacity-60 hover:opacity-80 bg-surface-alt'
-          : 'hover:bg-surface-hover'
-        : 'opacity-60 bg-surface-alt hover:opacity-80'
-        }`}
+ ? finding.acknowledgedAt
+ ? 'opacity-60 hover:opacity-80 bg-surface-alt'
+ : 'hover:bg-surface-hover'
+ : 'opacity-60 bg-surface-alt hover:opacity-80'
+ }`}
       onClick={() => {
         if (expandedId() === finding.id) {
           setExpandedId(null);
@@ -500,11 +500,11 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             {/* Status badge for non-active findings */}
             <Show when={finding.status !== 'active'}>
               <span class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${finding.status === 'resolved'
-                ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900 dark:text-green-300'
-                : finding.status === 'snoozed'
-                  ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300'
-                  : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                }`}>
+ ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900 dark:text-green-300'
+ : finding.status === 'snoozed'
+ ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300'
+ : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+ }`}>
                 {finding.status === 'resolved' ? 'Resolved' : finding.status === 'snoozed' ? 'Snoozed' : 'Dismissed'}
               </span>
             </Show>
@@ -568,9 +568,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </Show>
             {/* Title */}
             <span class={`font-medium text-sm truncate ${finding.status === 'active'
-              ? 'text-base-content'
-              : 'text-muted'
-              }`}>
+ ? 'text-base-content'
+ : 'text-muted'
+ }`}>
               {finding.title}
             </span>
           </div>
@@ -664,7 +664,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
   // Render expanded content for a finding
   const renderExpandedContent = (finding: UnifiedFinding) => (
-    <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+    <div class="mt-3 pt-3 border-t border-border-subtle">
       <Show when={finding.alertId}>
         <div class="text-xs text-amber-700 dark:text-amber-300 mb-2">
           Triggered by alert{finding.alertType ? ` (${finding.alertType})` : ''} • ID {finding.alertId}
@@ -723,72 +723,72 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             value={noteText()}
             onInput={(e) => setNoteText(e.currentTarget.value)}
             placeholder="Add context for Patrol (e.g., 'PBS server was decommissioned last week')"
-          />
-          <div class="flex gap-2 mt-2">
-            <button
-              type="button"
-              onClick={(e) => handleSaveNote(finding, e)}
-              class="px-3 py-1 text-xs font-medium rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
-              disabled={actionLoading() === finding.id}
-            >
-              Save
-            </button>
-            <button
-              type="button"
-              onClick={handleCancelNote}
-              class="px-3 py-1 text-xs font-medium rounded border border-border hover:bg-surface-hover"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </Show>
-      <Show when={editingNoteId() !== finding.id && finding.userNote}>
-        <div class="mt-3 p-2 rounded border border-border bg-surface-alt flex items-start gap-2">
-          <svg class="w-4 h-4 text-muted mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-          </svg>
-          <p class="text-sm text-muted flex-1">{finding.userNote}</p>
-          <button
-            type="button"
-            onClick={(e) => handleStartEditNote(finding, e)}
-            class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 flex-shrink-0"
-            title="Edit note"
-          >
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-            </svg>
-          </button>
-        </div>
-      </Show>
+ />
+ <div class="flex gap-2 mt-2">
+ <button
+ type="button"
+ onClick={(e) => handleSaveNote(finding, e)}
+ class="px-3 py-1 text-xs font-medium rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+ disabled={actionLoading() === finding.id}
+ >
+ Save
+ </button>
+ <button
+ type="button"
+ onClick={handleCancelNote}
+ class="px-3 py-1 text-xs font-medium rounded border border-border hover:bg-surface-hover"
+ >
+ Cancel
+ </button>
+ </div>
+ </div>
+ </Show>
+ <Show when={editingNoteId() !== finding.id && finding.userNote}>
+ <div class="mt-3 p-2 rounded border border-border bg-surface-alt flex items-start gap-2">
+ <svg class="w-4 h-4 text-muted mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+ </svg>
+ <p class="text-sm text-muted flex-1">{finding.userNote}</p>
+ <button
+ type="button"
+ onClick={(e) => handleStartEditNote(finding, e)}
+ class="p-1 hover: dark:hover:text-slate-300 flex-shrink-0"
+ title="Edit note"
+ >
+ <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+ </svg>
+ </button>
+ </div>
+ </Show>
 
-      {/* Add Note / Discuss with Assistant buttons */}
-      <div class="mt-3 flex flex-wrap gap-2 text-xs">
-        <Show when={editingNoteId() !== finding.id && !finding.userNote}>
-          <button
-            type="button"
-            onClick={(e) => handleStartEditNote(finding, e)}
-            class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
-          >
-            <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-            </svg>
-            Add Note
-          </button>
-        </Show>
-        <button
-          type="button"
-          onClick={(e) => handleDiscussWithAssistant(finding, e)}
-          class="px-2 py-1 rounded bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900 flex items-center gap-1 transition-colors"
-        >
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-          </svg>
-          Discuss with Assistant
-        </button>
-      </div>
+ {/* Add Note / Discuss with Assistant buttons */}
+ <div class="mt-3 flex flex-wrap gap-2 text-xs">
+ <Show when={editingNoteId() !== finding.id && !finding.userNote}>
+ <button
+ type="button"
+ onClick={(e) => handleStartEditNote(finding, e)}
+ class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
+ >
+ <svg class="w-3 h-3 " fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+ </svg>
+ Add Note
+ </button>
+ </Show>
+ <button
+ type="button"
+ onClick={(e) => handleDiscussWithAssistant(finding, e)}
+ class="px-2 py-1 rounded bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900 flex items-center gap-1 transition-colors"
+ >
+ <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+ </svg>
+ Discuss with Assistant
+ </button>
+ </div>
 
-      <Show when={finding.status === 'active'}>
+ <Show when={finding.status ==='active'}>
         <div class="mt-3 flex flex-wrap gap-2 text-xs">
           <Show when={!finding.acknowledgedAt}>
             <button
@@ -923,16 +923,16 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       {/* Remediation Plan artifact (generated by Patrol and/or an investigation) */}
       <Show when={finding.status === 'active' && plansByFindingId().get(finding.id)}>
         {(plan) => (
-          <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+          <div class="mt-3 pt-3 border-t border-border-subtle">
             <div class="flex items-center gap-2 mb-2">
               <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
               </svg>
               <span class="text-sm font-medium text-base-content">Remediation Plan</span>
               <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${plan().risk_level === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' :
-                plan().risk_level === 'medium' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300' :
-                  'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                }`}>
+ plan().risk_level === 'medium' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300' :
+ 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+ }`}>
                 {plan().risk_level} risk
               </span>
             </div>
@@ -956,7 +956,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </For>
             </div>
 
-            <div class="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+            <div class="flex items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
               <button
                 type="button"
                 onClick={(e) => handleOpenPlanInAssistant(finding, plan(), e)}
@@ -970,7 +970,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               <button
                 type="button"
                 onClick={(e) => handleDismissPlan(plan(), e)}
-                class="px-3 py-1.5 bg-slate-100 hover:bg-surface-hover dark:hover:bg-slate-600 text-muted text-xs font-medium rounded"
+                class="px-3 py-1.5 hover:bg-surface-hover text-muted text-xs font-medium rounded"
               >
                 Dismiss
               </button>
@@ -991,9 +991,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               type="button"
               onClick={() => setFilter('active')}
               class={`px-2 py-1 rounded-l border ${filter() === 'active'
-                ? 'bg-surface-alt text-base-content border-border shadow-sm'
-                : 'border-transparent text-muted hover:text-base-content'
-                }`}
+ ? 'bg-surface-alt text-base-content border-border shadow-sm'
+ : 'border-transparent text-muted hover:text-base-content'
+ }`}
             >
               Active
             </button>
@@ -1001,9 +1001,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               type="button"
               onClick={() => setFilter('all')}
               class={`px-2 py-1 border-y border-x ${filter() === 'all'
-                ? 'bg-surface-alt text-base-content border-border shadow-sm'
-                : 'border-transparent text-muted hover:text-base-content'
-                }`}
+ ? 'bg-surface-alt text-base-content border-border shadow-sm'
+ : 'border-transparent text-muted hover:text-base-content'
+ }`}
             >
               All
             </button>
@@ -1011,9 +1011,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               type="button"
               onClick={() => setFilter('resolved')}
               class={`px-2 py-1 border-y border-r ${filter() === 'resolved'
-                ? 'bg-surface-alt text-base-content border-border shadow-sm'
-                : 'border-transparent text-muted hover:text-base-content'
-                } ${aiIntelligenceStore.needsAttentionCount > 0 || aiIntelligenceStore.pendingApprovalCount > 0 ? '' : 'rounded-r border-r'}`}
+ ? 'bg-surface-alt text-base-content border-border shadow-sm'
+ : 'border-transparent text-muted hover:text-base-content'
+ } ${aiIntelligenceStore.needsAttentionCount > 0 || aiIntelligenceStore.pendingApprovalCount > 0 ? '' : 'rounded-r border-r'}`}
             >
               Resolved
             </button>
@@ -1022,9 +1022,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 type="button"
                 onClick={() => setFilter('attention')}
                 class={`px-2 py-1 border-y border-r ${filter() === 'attention'
-                  ? 'bg-amber-50 dark:bg-amber-900 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-sm'
-                  : 'border-transparent text-muted hover:text-base-content'
-                  } ${aiIntelligenceStore.pendingApprovalCount > 0 ? '' : 'rounded-r border-r'}`}
+ ? 'bg-amber-50 dark:bg-amber-900 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-sm'
+ : 'border-transparent text-muted hover:text-base-content'
+ } ${aiIntelligenceStore.pendingApprovalCount > 0 ? '' : 'rounded-r border-r'}`}
               >
                 Needs Attention ({aiIntelligenceStore.needsAttentionCount})
               </button>
@@ -1034,9 +1034,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 type="button"
                 onClick={() => setFilter('approvals')}
                 class={`px-2 py-1 rounded-r border-y border-r ${filter() === 'approvals'
-                  ? 'bg-amber-50 dark:bg-amber-900 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-sm'
-                  : 'border-transparent text-muted hover:text-base-content'
-                  }`}
+ ? 'bg-amber-50 dark:bg-amber-900 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-sm'
+ : 'border-transparent text-muted hover:text-base-content'
+ }`}
               >
                 Approvals ({aiIntelligenceStore.pendingApprovalCount})
               </button>
@@ -1092,47 +1092,47 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <Show when={patrolFindings().length === 0}>
               <div class="p-6 text-sm text-muted text-center">
                 <Show when={filter() === 'active'}>
-                  <div class="flex flex-col items-center gap-3">
-                    <svg class="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <div>
-                      <p class="font-medium text-base-content">No active findings</p>
-                      <p class="text-xs mt-1">Your infrastructure looks healthy!</p>
-                    </div>
-                    <Show when={props.nextPatrolAt || props.lastPatrolAt || props.patrolIntervalMs}>
-                      <div class="mt-2 pt-3 border-t border-border w-full max-w-xs">
-                        <div class="flex items-center justify-center gap-4 text-xs">
-                          <Show when={props.lastPatrolAt}>
-                            <div class="flex items-center gap-1.5">
-                              <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              <span>Last: {formatTime(props.lastPatrolAt!)}</span>
-                            </div>
-                          </Show>
-                          <Show when={props.nextPatrolAt}>
-                            <div class="flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
-                              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                              </svg>
-                              <span>Next: {formatTime(props.nextPatrolAt!)}</span>
-                            </div>
-                          </Show>
-                          <Show when={!props.nextPatrolAt && !props.lastPatrolAt && props.patrolIntervalMs}>
-                            <div class="flex items-center gap-1.5 text-muted">
-                              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                              </svg>
-                              <span>Runs every {formatInterval(props.patrolIntervalMs!)}</span>
-                            </div>
-                          </Show>
-                        </div>
-                      </div>
-                    </Show>
-                  </div>
-                </Show>
-                <Show when={filter() === 'attention'}>
+ <div class="flex flex-col items-center gap-3">
+ <svg class="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+ </svg>
+ <div>
+ <p class="font-medium text-base-content">No active findings</p>
+ <p class="text-xs mt-1">Your infrastructure looks healthy!</p>
+ </div>
+ <Show when={props.nextPatrolAt || props.lastPatrolAt || props.patrolIntervalMs}>
+ <div class="mt-2 pt-3 border-t border-border w-full max-w-xs">
+ <div class="flex items-center justify-center gap-4 text-xs">
+ <Show when={props.lastPatrolAt}>
+ <div class="flex items-center gap-1.5">
+ <svg class="w-3.5 h-3.5 " fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+ </svg>
+ <span>Last: {formatTime(props.lastPatrolAt!)}</span>
+ </div>
+ </Show>
+ <Show when={props.nextPatrolAt}>
+ <div class="flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
+ <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+ </svg>
+ <span>Next: {formatTime(props.nextPatrolAt!)}</span>
+ </div>
+ </Show>
+ <Show when={!props.nextPatrolAt && !props.lastPatrolAt && props.patrolIntervalMs}>
+ <div class="flex items-center gap-1.5 text-muted">
+ <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+ </svg>
+ <span>Runs every {formatInterval(props.patrolIntervalMs!)}</span>
+ </div>
+ </Show>
+ </div>
+ </div>
+ </Show>
+ </div>
+ </Show>
+ <Show when={filter() ==='attention'}>
                   No findings need attention right now.
                 </Show>
                 <Show when={filter() === 'approvals'}>

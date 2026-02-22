@@ -63,7 +63,7 @@ export const ZFSHealthMap: Component<ZFSHealthMapProps> = (props) => {
                             transform: 'translate(-50%, -100%)',
                         }}
                     >
-                        <div class="bg-slate-900 dark:bg-slate-800 text-white text-[10px] rounded-md shadow-sm px-2 py-1.5 min-w-[120px] border border-slate-700">
+                        <div class="bg-base text-white text-[10px] rounded-md shadow-sm px-2 py-1.5 min-w-[120px] border border-slate-700">
                             <div class="font-medium mb-0.5 text-slate-200">
                                 {hoveredDevice()?.name}
                             </div>

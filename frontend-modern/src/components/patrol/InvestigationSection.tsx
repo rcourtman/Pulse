@@ -94,7 +94,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
   };
 
   return (
-    <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+    <div class="mt-3 pt-3 border-t border-border-subtle">
       {/* Header */}
       <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-2">
@@ -156,33 +156,33 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
           <div class="space-y-2">
             {/* Error message for failed investigations */}
             <Show when={inv().error && (inv().status === 'failed' || inv().outcome === 'timed_out' || inv().outcome === 'fix_failed' || inv().outcome === 'fix_verification_failed' || inv().outcome === 'fix_verification_unknown' || inv().outcome === 'needs_attention' || inv().outcome === 'cannot_fix')}>
-              <div class="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded p-2">
-                {inv().error}
-              </div>
-            </Show>
+ <div class="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded p-2">
+ {inv().error}
+ </div>
+ </Show>
 
-            {/* Summary */}
-            <Show when={inv().summary}>
-              <div class="text-sm text-muted bg-surface-alt rounded p-2">
-                {inv().summary}
-              </div>
-            </Show>
+ {/* Summary */}
+ <Show when={inv().summary}>
+ <div class="text-sm text-muted bg-surface-alt rounded p-2">
+ {inv().summary}
+ </div>
+ </Show>
 
-            {/* Tools used + turn count */}
-            <div class="flex items-center gap-2 flex-wrap">
-              <Show when={inv().tools_used && inv().tools_used!.length > 0}>
-                <div class="flex items-center gap-1 flex-wrap">
-                  <For each={inv().tools_used}>
-                    {(tool) => (
-                      <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 text-[10px] font-medium">
-                        {tool}
-                      </span>
-                    )}
-                  </For>
-                </div>
-              </Show>
-              <span class="text-[10px] text-muted">
-                {inv().turn_count} turn{inv().turn_count === 1 ? '' : 's'}
+ {/* Tools used + turn count */}
+ <div class="flex items-center gap-2 flex-wrap">
+ <Show when={inv().tools_used && inv().tools_used!.length > 0}>
+ <div class="flex items-center gap-1 flex-wrap">
+ <For each={inv().tools_used}>
+ {(tool) => (
+ <span class="px-1.5 py-0.5 rounded text-slate-700 text-[10px] font-medium">
+ {tool}
+ </span>
+ )}
+ </For>
+ </div>
+ </Show>
+ <span class="text-[10px] text-muted">
+ {inv().turn_count} turn{inv().turn_count === 1 ?'' : 's'}
               </span>
               <Show when={inv().started_at}>
                 <span class="text-[10px] text-muted">

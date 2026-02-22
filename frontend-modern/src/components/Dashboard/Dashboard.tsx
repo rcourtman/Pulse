@@ -1616,7 +1616,7 @@ export function Dashboard(props: DashboardProps) {
                           <TableHead
                             class={`py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
                                   ${isFirst() ? 'pl-2 sm:pl-3 pr-1.5 sm:pr-2 text-left' : 'px-1.5 sm:px-2 text-center'}
-                                  ${isSortable ? 'cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600' : ''}`}
+                                  ${isSortable ? 'cursor-pointer hover:bg-surface-hover' : ''}`}
                             style={{
                               ...((['cpu', 'memory', 'disk'].includes(col.id))
                                 ? { "width": isMobile() ? "70px" : "140px" }
@@ -1665,7 +1665,7 @@ export function Dashboard(props: DashboardProps) {
                                 <TableRow class="bg-surface-alt">
                                   <TableCell
                                     colspan={totalColumns()}
-                                    class="py-0.5 pr-1.5 sm:pr-2 pl-2 sm:pl-3 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
+                                    class="py-0.5 pr-1.5 sm:pr-2 pl-2 sm:pl-3 text-[12px] sm:text-sm font-semibold text-base-content"
                                   >
                                     {(() => {
                                       const label = getGroupLabel(groupKey, fullGroupGuests());

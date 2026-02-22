@@ -41,29 +41,28 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
     return props.physicalDisks.filter((disk) => {
       const pd = (disk.platformData as Record<string, unknown>)?.physicalDisk as Record<string, unknown> | undefined;
       const devPath = (pd?.devPath as string) || '';
-      return pool.devices.some((d) => devPath.endsWith(d.name));
-    });
-  });
+ return pool.devices.some((d) => devPath.endsWith(d.name));
+ });
+ });
 
-  // Build resource ID for history chart
-  const chartResourceId = createMemo(() => {
-    return props.record.refs?.resourceId || props.record.id;
-  });
+ // Build resource ID for history chart
+ const chartResourceId = createMemo(() => {
+ return props.record.refs?.resourceId || props.record.id;
+ });
 
-  return (
-    <tr class="border-t border-border">
-      <td colSpan={99} class="bg-surface-alt px-4 py-4">
-        <div class="grid gap-4 md:grid-cols-2">
-          {/* Left: Capacity trend chart */}
-          <div class="rounded-md border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-            <div class="flex items-center justify-between mb-2">
-              <h4 class="text-xs font-semibold text-base-content">Capacity Trend</h4>
-              <select
-                value={chartRange()}
-                onChange={(e) => setChartRange(e.currentTarget.value as HistoryTimeRange)}
-                class="text-[11px] font-medium pl-2 pr-5 py-0.5 rounded border border-border bg-surface text-base-content cursor-pointer appearance-none"
-                style={{
-                  'background-image': "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
+ return (
+ <tr class="border-t border-border">
+ <td colSpan={99} class="bg-surface-alt px-4 py-4">
+ <div class="grid gap-4 md:grid-cols-2">
+ {/* Left: Capacity trend chart */}
+ <div class="rounded-md border p-3 shadow-sm ">
+ <div class="flex items-center justify-between mb-2">
+ <h4 class="text-xs font-semibold text-base-content">Capacity Trend</h4>
+ <select
+ value={chartRange()}
+ onChange={(e) => setChartRange(e.currentTarget.value as HistoryTimeRange)}
+ class="text-[11px] font-medium pl-2 pr-5 py-0.5 rounded border border-border bg-surface text-base-content cursor-pointer appearance-none"
+ style={{'background-image': "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
                   'background-repeat': 'no-repeat',
                   'background-position': 'right 4px center',
                 }}
@@ -147,17 +146,17 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                             {pd()?.devPath as string || disk.name}
                           </span>
                           <span class={`w-2 h-2 rounded-full flex-shrink-0 ${
-                            health() != null && (health() as number) > 0
-                              ? 'bg-yellow-500'
-                              : 'bg-green-500'
-                          }`} />
+ health() != null && (health() as number) > 0
+ ? 'bg-yellow-500'
+ : 'bg-green-500'
+ }`} />
                           <span class="text-base-content truncate flex-1">
                             {pd()?.model as string || 'Unknown'}
                           </span>
                           <Show when={temp() > 0}>
                             <span class={`font-medium ${
-                              temp() > 60 ? 'text-red-500' : temp() > 50 ? 'text-yellow-500' : 'text-muted'
-                            }`}>
+ temp() > 60 ? 'text-red-500' : temp() > 50 ? 'text-yellow-500' : 'text-muted'
+ }`}>
                               {temp()}°C
                             </span>
                           </Show>

@@ -418,91 +418,91 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       record,
       source: 'security',
       note: 'Copy this token now. Close the dialog once you have stored it safely.',
-    });
-  };
+ });
+ };
 
-  return (
-    <div class="space-y-5">
-      <Card
-        padding="none"
-        class="border border-slate-200 bg-slate-50 shadow-sm dark:border-slate-700 dark:bg-slate-800"
-      >
-        <div class="flex flex-col gap-6 p-4 sm:p-6 lg:p-8 hover:bg-surface-hover transition-colors">
-          <div class="flex flex-wrap items-center justify-between gap-4">
-            <div class="flex flex-wrap items-center gap-3">
-              <div class="flex h-10 w-10 items-center justify-center rounded-md bg-blue-600 text-blue-600 dark:bg-blue-500 dark:text-blue-200">
-                <BadgeCheck class="h-5 w-5" />
-              </div>
-              <SectionHeader
-                label="Token inventory"
-                title="API tokens"
-                description="Monitor usage, rotate credentials, and issue scoped access for automation."
-                size="sm"
-                class="flex-1"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={focusCreateSection}
-              class="inline-flex min-h-10 sm:min-h-10 items-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
-            >
-              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              New token
-            </button>
-          </div>
+ return (
+ <div class="space-y-5">
+ <Card
+ padding="none"
+ class="border border-slate-200 shadow-sm dark:border-slate-700 "
+ >
+ <div class="flex flex-col gap-6 p-4 sm:p-6 lg:p-8 hover:bg-surface-hover transition-colors">
+ <div class="flex flex-wrap items-center justify-between gap-4">
+ <div class="flex flex-wrap items-center gap-3">
+ <div class="flex h-10 w-10 items-center justify-center rounded-md bg-blue-600 text-blue-600 dark:bg-blue-500 dark:text-blue-200">
+ <BadgeCheck class="h-5 w-5" />
+ </div>
+ <SectionHeader
+ label="Token inventory"
+ title="API tokens"
+ description="Monitor usage, rotate credentials, and issue scoped access for automation."
+ size="sm"
+ class="flex-1"
+ />
+ </div>
+ <button
+ type="button"
+ onClick={focusCreateSection}
+ class="inline-flex min-h-10 sm:min-h-10 items-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
+ >
+ <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+ <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+ </svg>
+ New token
+ </button>
+ </div>
 
-          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <div class="rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-              <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-muted">
-                Total tokens
-              </div>
-              <div class="mt-1 text-2xl font-semibold text-base-content">
-                {totalTokens()}
-              </div>
-              <p class="mt-1 text-xs text-muted">
-                Stored credentials across all agents
-              </p>
-            </div>
-            <div class="rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-              <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-muted">
-                Scoped tokens
-              </div>
-              <div class="mt-1 text-2xl font-semibold text-base-content">
-                {scopedTokenCount()}
-              </div>
-              <p class="mt-1 text-xs text-muted">
-                Limited access tokens with defined scopes
-              </p>
-            </div>
-            <div
-              class={`rounded-md border p-4 text-sm shadow-sm ${hasWildcardTokens()
-                ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100'
-                : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                }`}
+ <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+ <div class="rounded-md border border-slate-200 p-4 text-sm shadow-sm dark:border-slate-700 ">
+ <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-muted">
+ Total tokens
+ </div>
+ <div class="mt-1 text-2xl font-semibold text-base-content">
+ {totalTokens()}
+ </div>
+ <p class="mt-1 text-xs text-muted">
+ Stored credentials across all agents
+ </p>
+ </div>
+ <div class="rounded-md border border-slate-200 p-4 text-sm shadow-sm dark:border-slate-700 ">
+ <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-muted">
+ Scoped tokens
+ </div>
+ <div class="mt-1 text-2xl font-semibold text-base-content">
+ {scopedTokenCount()}
+ </div>
+ <p class="mt-1 text-xs text-muted">
+ Limited access tokens with defined scopes
+ </p>
+ </div>
+ <div
+ class={`rounded-md border p-4 text-sm shadow-sm ${hasWildcardTokens()
+ ?'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100'
+ : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+ }`}
             >
               <div
                 class={`text-[0.7rem] font-semibold uppercase tracking-wide ${hasWildcardTokens()
-                  ? 'text-amber-700 dark:text-amber-300'
-                  : 'text-muted'
-                  }`}
+ ? 'text-amber-700 dark:text-amber-300'
+ : 'text-muted'
+ }`}
               >
                 Full access tokens
               </div>
               <div
                 class={`mt-1 text-2xl font-semibold ${hasWildcardTokens()
-                  ? 'text-amber-800 dark:text-amber-100'
-                  : 'text-base-content'
-                  }`}
+ ? 'text-amber-800 dark:text-amber-100'
+ : 'text-base-content'
+ }`}
               >
                 {wildcardCount()}
               </div>
               <p
                 class={`mt-1 text-xs ${hasWildcardTokens()
-                  ? 'text-amber-700 dark:text-amber-200'
-                  : 'text-muted'
-                  }`}
+ ? 'text-amber-700 dark:text-amber-200'
+ : 'text-muted'
+ }`}
               >
                 {hasWildcardTokens()
                   ? 'Legacy wildcard tokens – rotate into scoped presets when possible.'
@@ -646,9 +646,9 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                             return (
                               <span
                                 class={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${isWildcard
-                                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
-                                  : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                                  }`}
+ ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+ : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+ }`}
                                 title={scope.value}
                               >
                                 {scope.label}
@@ -731,28 +731,28 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                   key: 'action',
                   label: 'Action',
                   align: 'right',
-                  render: (token) => (
-                    <button
-                      onClick={() => handleDelete(token)}
-                      class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
-                    >
-                      Revoke
-                    </button>
-                  )
-                }
-              ]}
-              keyExtractor={(token) => token.id}
-              desktopMinWidth="1000px"
-              class="border-x-0 sm:border-x border-slate-200 dark:border-slate-800 border-t-0 rounded-t-none"
-            />
-          </div>
-        </Card>
-      </Show>
+ render: (token) => (
+ <button
+ onClick={() => handleDelete(token)}
+ class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
+ >
+ Revoke
+ </button>
+ )
+ }
+ ]}
+ keyExtractor={(token) => token.id}
+ desktopMinWidth="1000px"
+ class="border-x-0 sm:border-x border-t-0 rounded-t-none"
+ />
+ </div>
+ </Card>
+ </Show>
 
-      <Card
-        padding="none"
-        class={`border border-border transition-shadow ${createHighlight() ? 'ring-2 ring-blue-500 shadow-sm' : ''
-          }`}
+ <Card
+ padding="none"
+ class={`border border-border transition-shadow ${createHighlight() ?'ring-2 ring-blue-500 shadow-sm' : ''
+ }`}
         ref={(el: HTMLDivElement) => {
           createSectionRef = el;
         }}
@@ -771,45 +771,45 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               class="inline-flex min-h-10 sm:min-h-10 items-center justify-center rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:hover:bg-blue-400"
             >
               {isGenerating() ? 'Generating…' : 'Generate'}
-            </button>
-          </div>
+ </button>
+ </div>
 
-          <div class="space-y-4">
-            <div class="space-y-2">
-              <label class="text-xs font-semibold uppercase tracking-wide text-muted">
-                Token name
-              </label>
-              <input
-                type="text"
-                value={nameInput()}
-                onInput={(e) => setNameInput(e.currentTarget.value)}
-                placeholder="e.g. Container pipeline"
-                class="w-full min-h-10 sm:min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-500"
-              />
-            </div>
+ <div class="space-y-4">
+ <div class="space-y-2">
+ <label class="text-xs font-semibold uppercase tracking-wide text-muted">
+ Token name
+ </label>
+ <input
+ type="text"
+ value={nameInput()}
+ onInput={(e) => setNameInput(e.currentTarget.value)}
+ placeholder="e.g. Container pipeline"
+ class="w-full min-h-10 sm:min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:focus:border-blue-400 dark:focus:ring-blue-500"
+ />
+ </div>
 
-            <div class="space-y-3">
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <span class="text-xs font-semibold uppercase tracking-wide text-muted">
-                  Quick presets
-                </span>
-                <button
-                  type="button"
-                  class="inline-flex min-h-10 sm:min-h-10 items-center rounded-md px-2.5 py-2 text-sm font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-300"
-                  onClick={clearScopes}
-                  title="Legacy wildcard – all permissions"
-                >
-                  Clear selection
-                </button>
-              </div>
+ <div class="space-y-3">
+ <div class="flex flex-wrap items-center justify-between gap-2">
+ <span class="text-xs font-semibold uppercase tracking-wide text-muted">
+ Quick presets
+ </span>
+ <button
+ type="button"
+ class="inline-flex min-h-10 sm:min-h-10 items-center rounded-md px-2.5 py-2 text-sm font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-300"
+ onClick={clearScopes}
+ title="Legacy wildcard – all permissions"
+ >
+ Clear selection
+ </button>
+ </div>
 
-              <div class="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  class={`inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition ${isFullAccessSelected()
-                    ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
-                    : 'border-slate-300 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
-                    }`}
+ <div class="flex flex-wrap gap-2">
+ <button
+ type="button"
+ class={`inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition ${isFullAccessSelected()
+ ?'border-blue-500 bg-blue-600 text-white shadow-sm'
+ : 'border-slate-300 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
+ }`}
                   onClick={clearScopes}
                   title="Legacy wildcard – all permissions"
                 >
@@ -821,9 +821,9 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                     <button
                       type="button"
                       class={`inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition ${presetMatchesSelection(preset.scopes)
-                        ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
-                        : 'border-slate-300 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
-                        }`}
+ ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
+ : 'border-slate-300 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
+ }`}
                       onClick={() => applyScopePreset(preset.scopes)}
                       title={preset.description}
                     >
@@ -853,9 +853,9 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                               <button
                                 type="button"
                                 class={`min-h-10 sm:min-h-10 rounded-full border px-3 py-2 text-sm font-semibold transition ${isActive()
-                                  ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
-                                  : 'border-slate-300 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
-                                  }`}
+ ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
+ : 'border-slate-300 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
+ }`}
                                 onClick={() => {
                                   setSelectedScopes((prev) => {
                                     if (prev.includes(option.value)) {

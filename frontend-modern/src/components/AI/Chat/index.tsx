@@ -693,7 +693,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   return (
     <div
       class={`relative flex-shrink-0 h-full bg-surface border-l border-border flex flex-col transition-all duration-300 ${isOpen() ? 'w-full sm:w-[480px] overflow-visible' : 'w-0 border-l-0 overflow-hidden'
-        }`}
+ }`}
     >
       <Show when={isOpen()}>
         {/* Floating Close Handle (Desktop only) */}
@@ -730,7 +730,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
             {/* New chat */}
             <button
               onClick={handleNewConversation}
-              class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-muted hover:text-base-content rounded-md border border-border hover:border-slate-300 dark:hover:border-slate-600 bg-surface transition-colors"
+              class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-muted hover:text-base-content rounded-md border border-border hover: dark:hover:border-slate-600 bg-surface transition-colors"
               title="New chat"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -789,107 +789,107 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   <button
                     class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'autonomous' ? 'bg-red-50 dark:bg-red-900' : ''}`}
                     onClick={() => updateControlLevel('autonomous')}
-                  >
-                    <div class="font-medium text-base-content">Autonomous</div>
-                    <div class="text-[11px] text-muted">Executes without approval (Pro)</div>
-                  </button>
-                </div>
-              </Show>
-            </div>
+ >
+ <div class="font-medium text-base-content">Autonomous</div>
+ <div class="text-[11px] text-muted">Executes without approval (Pro)</div>
+ </button>
+ </div>
+ </Show>
+ </div>
 
-            {/* Session picker */}
-            <div class="relative" data-dropdown>
-              <button
-                ref={sessionButtonRef}
-                onClick={() => {
-                  const next = !showSessions();
-                  if (next && sessionButtonRef) {
-                    const rect = sessionButtonRef.getBoundingClientRect();
-                    setSessionDropdownPosition({
-                      top: rect.bottom + 4,
-                      right: window.innerWidth - rect.right,
-                    });
-                  }
-                  setShowSessions(next);
-                }}
-                class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md hover:bg-surface-hover transition-colors"
-                title="Chat sessions"
-              >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-              </button>
+ {/* Session picker */}
+ <div class="relative" data-dropdown>
+ <button
+ ref={sessionButtonRef}
+ onClick={() => {
+ const next = !showSessions();
+ if (next && sessionButtonRef) {
+ const rect = sessionButtonRef.getBoundingClientRect();
+ setSessionDropdownPosition({
+ top: rect.bottom + 4,
+ right: window.innerWidth - rect.right,
+ });
+ }
+ setShowSessions(next);
+ }}
+ class="p-2 hover: dark:hover:text-slate-300 rounded-md hover:bg-surface-hover transition-colors"
+ title="Chat sessions"
+ >
+ <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+ </svg>
+ </button>
 
-              <Show when={showSessions()}>
-                <div
-                  class="fixed w-72 max-h-96 bg-surface rounded-md shadow-sm border border-border z-[9999] overflow-hidden"
-                  style={{ top: `${sessionDropdownPosition().top}px`, right: `${sessionDropdownPosition().right}px` }}
-                >
-                  <button
-                    onClick={handleNewConversation}
-                    class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 border-b border-border"
-                  >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                    </svg>
-                    <span class="font-medium">New conversation</span>
-                  </button>
+ <Show when={showSessions()}>
+ <div
+ class="fixed w-72 max-h-96 bg-surface rounded-md shadow-sm border border-border z-[9999] overflow-hidden"
+ style={{ top: `${sessionDropdownPosition().top}px`, right: `${sessionDropdownPosition().right}px` }}
+ >
+ <button
+ onClick={handleNewConversation}
+ class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 border-b border-border"
+ >
+ <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+ </svg>
+ <span class="font-medium">New conversation</span>
+ </button>
 
-                  <div class="max-h-64 overflow-y-auto">
-                    <Show when={sessions().length > 0} fallback={
-                      <div class="px-3 py-6 text-center text-xs text-muted">
-                        No previous conversations
-                      </div>
-                    }>
-                      <For each={sessions()}>
-                        {(session) => (
-                          <div
-                            class={`group relative px-3 py-2.5 flex items-start gap-2 hover:bg-surface-hover cursor-pointer ${chat.sessionId() === session.id ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
+ <div class="max-h-64 overflow-y-auto">
+ <Show when={sessions().length > 0} fallback={
+ <div class="px-3 py-6 text-center text-xs text-muted">
+ No previous conversations
+ </div>
+ }>
+ <For each={sessions()}>
+ {(session) => (
+ <div
+ class={`group relative px-3 py-2.5 flex items-start gap-2 hover:bg-surface-hover cursor-pointer ${chat.sessionId() === session.id ?'bg-blue-50 dark:bg-blue-900' : ''}`}
                             onClick={() => handleLoadSession(session.id)}
                           >
                             <div class="flex-1 min-w-0">
                               <div class="text-sm font-medium truncate text-base-content">
                                 {session.title || 'Untitled'}
-                              </div>
-                              <div class="text-xs text-muted">
-                                {session.message_count} messages
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              class="flex-shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900 text-slate-400 hover:text-red-500 transition-opacity"
-                              onClick={(e) => handleDeleteSession(session.id, e)}
-                            >
-                              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          </div>
-                        )}
-                      </For>
-                    </Show>
-                  </div>
-                </div>
-              </Show>
-            </div>
+ </div>
+ <div class="text-xs text-muted">
+ {session.message_count} messages
+ </div>
+ </div>
+ <button
+ type="button"
+ class="flex-shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900 hover:text-red-500 transition-opacity"
+ onClick={(e) => handleDeleteSession(session.id, e)}
+ >
+ <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+ </svg>
+ </button>
+ </div>
+ )}
+ </For>
+ </Show>
+ </div>
+ </div>
+ </Show>
+ </div>
 
-            {/* Close button (Always visible as fallback) */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                props.onClose();
-              }}
-              class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md hover:bg-surface-hover transition-colors"
-              title="Close panel"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
+ {/* Close button (Always visible as fallback) */}
+ <button
+ onClick={(e) => {
+ e.stopPropagation();
+ props.onClose();
+ }}
+ class="p-2 hover: dark:hover:text-slate-300 rounded-md hover:bg-surface-hover transition-colors"
+ title="Close panel"
+ >
+ <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+ </svg>
+ </button>
+ </div>
+ </div>
 
-        <Show when={controlLevel() === 'autonomous' && !autonomousBannerDismissed()}>
+ <Show when={controlLevel() ==='autonomous' && !autonomousBannerDismissed()}>
           <div class="px-4 py-2 border-b border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 flex items-center justify-between gap-3 text-[11px] text-red-700 dark:text-red-200">
             <div class="flex items-center gap-2">
               <span class="inline-flex h-2 w-2 rounded-full bg-red-500" />
@@ -1037,7 +1037,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   <button
                     type="button"
                     onClick={chat.stop}
-                    class="px-4 flex items-center justify-center border border-border bg-white hover:bg-surface-alt dark:hover:bg-slate-700 text-base-content rounded-md transition-colors shadow-sm"
+                    class="px-4 flex items-center justify-center border border-border hover:bg-surface-alt dark:hover:bg-slate-700 text-base-content rounded-md transition-colors shadow-sm"
                     title="Stop"
                   >
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -1061,7 +1061,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           </form>
           <div class="flex items-center justify-center gap-3 mt-2 text-[10px] text-muted">
             <span><kbd class="font-sans px-1 rounded bg-surface-alt border border-border">Enter</kbd> to send</span>
-            <span class="text-slate-300 dark:text-slate-600">&middot;</span>
+            <span class="text-muted">&middot;</span>
             <span><span class="font-semibold text-muted">@</span> to mention resources</span>
           </div>
         </div>

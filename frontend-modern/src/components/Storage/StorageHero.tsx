@@ -28,7 +28,7 @@ export const StorageHero: Component<StorageHeroProps> = (props) => {
     { value: props.healthBreakdown.healthy, color: 'text-emerald-500 dark:text-emerald-400' },
     { value: props.healthBreakdown.warning, color: 'text-amber-500 dark:text-amber-400' },
     { value: props.healthBreakdown.critical, color: 'text-red-500 dark:text-red-400' },
-    { value: props.healthBreakdown.offline + props.healthBreakdown.unknown, color: 'text-slate-300 dark:text-slate-600' },
+    { value: props.healthBreakdown.offline + props.healthBreakdown.unknown, color: 'text-muted' },
   ]);
 
   return (

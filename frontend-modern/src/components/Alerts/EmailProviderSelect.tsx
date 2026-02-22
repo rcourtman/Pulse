@@ -245,7 +245,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
         <button
           type="button"
           onClick={() => setShowAdvanced(!showAdvanced())}
-          class="text-xs font-semibold uppercase tracking-wide text-slate-600 transition-colors hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+          class="text-xs font-semibold uppercase tracking-wide transition-colors hover:text-muted dark:hover:text-slate-200"
         >
           {showAdvanced() ? 'Hide advanced options' : 'Show advanced options'}
         </button>

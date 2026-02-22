@@ -686,7 +686,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                 <Show when={hoveredPoint()}>
                     {(point) => (
                         <div
-                            class="fixed pointer-events-none bg-slate-900 dark:bg-slate-800 text-white text-xs rounded px-2 py-1 shadow-sm border border-slate-700 z-[9999]"
+                            class="fixed pointer-events-none bg-base text-white text-xs rounded px-2 py-1 shadow-sm border border-slate-700 z-[9999]"
                             style={{
                                 left: `${point().x}px`,
                                 top: `${point().y}px`,

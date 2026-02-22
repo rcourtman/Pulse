@@ -46,7 +46,7 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
         class={`inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-xs font-medium rounded-md transition-all
           ${isOpen()
             ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-            : 'bg-surface-hover text-muted hover:bg-slate-200 dark:hover:bg-slate-600'
+            : 'bg-surface-hover text-muted hover:bg-surface-hover'
           }`}
         title="Choose which columns to display"
       >
@@ -66,7 +66,7 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
         <div
           class="absolute right-0 mt-1 w-56 rounded-md border border-slate-200 bg-white shadow-sm z-50 dark:border-slate-700 dark:bg-slate-800"
         >
-          <div class="px-3 py-2 border-b border-slate-100 dark:border-slate-700">
+          <div class="px-3 py-2 border-b border-border-subtle">
             <div class="flex items-center justify-between">
               <span class="text-xs font-medium text-base-content">Show Columns</span>
               <Show when={props.onReset && hiddenCount() > 0}>

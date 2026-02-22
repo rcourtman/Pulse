@@ -150,68 +150,68 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
                   onClick={() => props.setGroupBy!('status')}
                   aria-pressed={props.groupBy!() === 'status'}
                   class={segmentedButtonClass(props.groupBy!() === 'status')}
-                >
-                  By Status
-                </button>
-              </div>
-              </div>
-              <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
-            </Show>
+ >
+ By Status
+ </button>
+ </div>
+ </div>
+ <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
+ </Show>
 
-            {/* Source Filter */}
-            <Show when={props.sourceFilter && props.setSourceFilter}>
-              <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                <label for="storage-source-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Source</label>
-                <select
-                  id="storage-source-filter"
-                  value={props.sourceFilter!()}
-                  onChange={(e) => props.setSourceFilter!(e.currentTarget.value)}
-                  class="min-w-[8rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                >
-                  {sourceOptions().map((option) => (
-                    <option value={option.key}>{option.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
-            </Show>
+ {/* Source Filter */}
+ <Show when={props.sourceFilter && props.setSourceFilter}>
+ <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
+ <label for="storage-source-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Source</label>
+ <select
+ id="storage-source-filter"
+ value={props.sourceFilter!()}
+ onChange={(e) => props.setSourceFilter!(e.currentTarget.value)}
+ class="min-w-[8rem] rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 "
+ >
+ {sourceOptions().map((option) => (
+ <option value={option.key}>{option.label}</option>
+ ))}
+ </select>
+ </div>
+ <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
+ </Show>
 
-            {/* Status Filter */}
-            <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-              <label for="storage-status-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Status</label>
-              <select
-                id="storage-status-filter"
-                value={props.statusFilter?.() ?? 'all'}
-                onChange={(e) => props.setStatusFilter?.(e.currentTarget.value as StorageStatusFilter)}
-                class="min-w-[8rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-              >
-                <option value="all">All</option>
-                <option value="available">Healthy</option>
-                <option value="warning">Warning</option>
-                <option value="critical">Critical</option>
-                <option value="offline">Offline</option>
-                <option value="unknown">Unknown</option>
-              </select>
-            </div>
+ {/* Status Filter */}
+ <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
+ <label for="storage-status-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Status</label>
+ <select
+ id="storage-status-filter"
+ value={props.statusFilter?.() ??'all'}
+ onChange={(e) => props.setStatusFilter?.(e.currentTarget.value as StorageStatusFilter)}
+ class="min-w-[8rem] rounded-md border px-2 py-1 text-xs font-medium shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 "
+ >
+ <option value="all">All</option>
+ <option value="available">Healthy</option>
+ <option value="warning">Warning</option>
+ <option value="critical">Critical</option>
+ <option value="offline">Offline</option>
+ <option value="unknown">Unknown</option>
+ </select>
+ </div>
 
-          <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
+ <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
 
-          {/* Sort controls */}
-          <div class="flex items-center gap-1.5">
-            <select
-              value={props.sortKey()}
-              onChange={(e) => props.setSortKey(e.currentTarget.value)}
-              disabled={props.sortDisabled}
-              aria-label="Sort By"
-              class="px-2 py-1 text-xs border border-border rounded-md bg-surface text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              {sortOptions.map((option) => (
-                <option value={option.value}>{option.label}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              title={`Sort ${props.sortDirection() === 'asc' ? 'descending' : 'ascending'}`}
+ {/* Sort controls */}
+ <div class="flex items-center gap-1.5">
+ <select
+ value={props.sortKey()}
+ onChange={(e) => props.setSortKey(e.currentTarget.value)}
+ disabled={props.sortDisabled}
+ aria-label="Sort By"
+ class="px-2 py-1 text-xs border border-border rounded-md bg-surface text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+ >
+ {sortOptions.map((option) => (
+ <option value={option.value}>{option.label}</option>
+ ))}
+ </select>
+ <button
+ type="button"
+ title={`Sort ${props.sortDirection() ==='asc' ? 'descending' : 'ascending'}`}
               onClick={() => props.setSortDirection(props.sortDirection() === 'asc' ? 'desc' : 'asc')}
               disabled={props.sortDisabled}
               aria-label="Sort Direction"

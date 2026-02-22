@@ -78,79 +78,79 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
 
     const getTokenCommand = () => {
         const path = tokenPath() || '/etc/pulse/.bootstrap_token';
-        if (isDocker()) {
-            return `docker exec <container> cat ${path}`;
-        }
-        if (inContainer() && lxcCtid()) {
-            return `pct exec ${lxcCtid()} -- cat ${path}`;
-        }
-        if (inContainer()) {
-            return `pct exec <ctid> -- cat ${path}`;
-        }
-        return `cat ${path}`;
-    };
+ if (isDocker()) {
+ return `docker exec <container> cat ${path}`;
+ }
+ if (inContainer() && lxcCtid()) {
+ return `pct exec ${lxcCtid()} -- cat ${path}`;
+ }
+ if (inContainer()) {
+ return `pct exec <ctid> -- cat ${path}`;
+ }
+ return `cat ${path}`;
+ };
 
-    return (
-        <div class="text-center relative">
-            {/* Logo */}
-            <div class="mb-10 relative z-10">
-                <img
-                    src="/logo.svg"
-                    alt="Pulse Logo"
-                    class="w-24 h-24 rounded-md mb-8 mx-auto dark:shadow-none"
-                />
-                <h1 class="text-4xl sm:text-5xl font-bold tracking-tight text-base-content mb-4 animate-fade-in delay-100">
-                    Welcome to Pulse
-                </h1>
-                <p class="text-xl text-slate-500 dark:text-blue-200 font-light animate-fade-in delay-200 max-w-md mx-auto">
-                    Unified infrastructure intelligence
-                </p>
-            </div>
+ return (
+ <div class="text-center relative">
+ {/* Logo */}
+ <div class="mb-10 relative z-10">
+ <img
+ src="/logo.svg"
+ alt="Pulse Logo"
+ class="w-24 h-24 rounded-md mb-8 mx-auto dark:shadow-none"
+ />
+ <h1 class="text-4xl sm:text-5xl font-bold tracking-tight text-base-content mb-4 animate-fade-in delay-100">
+ Welcome to Pulse
+ </h1>
+ <p class="text-xl dark:text-blue-200 font-light animate-fade-in delay-200 max-w-md mx-auto">
+ Unified infrastructure intelligence
+ </p>
+ </div>
 
-            {/* Bootstrap token unlock */}
-            <Show when={!props.isUnlocked}>
-                <div class="p-8 max-w-lg mx-auto bg-surface border border-border rounded-md text-left animate-slide-up delay-300 relative group">
-                    <div class="relative z-10">
-                        <h3 class="text-xl font-semibold text-base-content mb-2 tracking-tight">Unlock Setup</h3>
-                        <p class="text-sm text-muted mb-6">
-                            Run the following command on your host to retrieve the secure bootstrap token:
-                        </p>
+ {/* Bootstrap token unlock */}
+ <Show when={!props.isUnlocked}>
+ <div class="p-8 max-w-lg mx-auto bg-surface border border-border rounded-md text-left animate-slide-up delay-300 relative group">
+ <div class="relative z-10">
+ <h3 class="text-xl font-semibold text-base-content mb-2 tracking-tight">Unlock Setup</h3>
+ <p class="text-sm text-muted mb-6">
+ Run the following command on your host to retrieve the secure bootstrap token:
+ </p>
 
-                        <div class="mb-8">
-                            <div class="bg-slate-900 rounded-md p-4 font-mono text-sm text-emerald-400 border border-slate-800 flex items-center justify-between">
-                                <div class="flex items-center space-x-3 overflow-x-auto scrollbar-hide">
-                                    <Terminal class="w-4 h-4 text-slate-500 flex-shrink-0" />
-                                    <code class="whitespace-nowrap select-all">{getTokenCommand()}</code>
-                                </div>
-                                <button
-                                    onClick={copyCommand}
-                                    class="ml-4 flex-shrink-0 p-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors focus:outline-none focus:ring-0"
-                                    title="Copy command"
-                                >
-                                    <Show when={copied()} fallback={<Copy class="w-4 h-4" />}>
-                                        <Check class="w-4 h-4 text-emerald-400" />
-                                    </Show>
-                                </button>
-                            </div>
-                        </div>
+ <div class="mb-8">
+ <div class="bg-slate-900 rounded-md p-4 font-mono text-sm text-emerald-400 border border-slate-800 flex items-center justify-between">
+ <div class="flex items-center space-x-3 overflow-x-auto scrollbar-hide">
+ <Terminal class="w-4 h-4 flex-shrink-0" />
+ <code class="whitespace-nowrap select-all">{getTokenCommand()}</code>
+ </div>
+ <button
+ onClick={copyCommand}
+ class="ml-4 flex-shrink-0 p-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors focus:outline-none focus:ring-0"
+ title="Copy command"
+ >
+ <Show when={copied()} fallback={<Copy class="w-4 h-4" />}>
+ <Check class="w-4 h-4 text-emerald-400" />
+ </Show>
+ </button>
+ </div>
+ </div>
 
-                        <div class="space-y-4">
-                            <input
-                                type="text"
-                                value={props.bootstrapToken}
-                                onInput={(e) => {
-                                    const val = e.currentTarget.value;
-                                    props.setBootstrapToken(val);
-                                    // Premium UX: Auto-submit if we detect a pasted token (length heuristic)
-                                    if (val.length > 20) {
-                                        setTimeout(() => {
-                                            if (props.bootstrapToken === val && !isValidating()) {
-                                                handleUnlock();
-                                            }
-                                        }, 400);
-                                    }
-                                }}
-                                onKeyPress={(e) => e.key === 'Enter' && handleUnlock()}
+ <div class="space-y-4">
+ <input
+ type="text"
+ value={props.bootstrapToken}
+ onInput={(e) => {
+ const val = e.currentTarget.value;
+ props.setBootstrapToken(val);
+ // Premium UX: Auto-submit if we detect a pasted token (length heuristic)
+ if (val.length > 20) {
+ setTimeout(() => {
+ if (props.bootstrapToken === val && !isValidating()) {
+ handleUnlock();
+ }
+ }, 400);
+ }
+ }}
+ onKeyPress={(e) => e.key ==='Enter' && handleUnlock()}
                                 class="w-full px-5 py-3.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
                                 placeholder="Paste your bootstrap token"
                                 autofocus

@@ -126,9 +126,9 @@ const QueueIndicator: Component<{ queue?: { total: number; active?: number; defe
           <span class="text-xs text-slate-400">Empty</span>
         }>
           <span class={`text-xs font-medium ${queueSeverity() === 'high' ? 'text-red-600 dark:text-red-400' :
-            queueSeverity() === 'medium' ? 'text-yellow-600 dark:text-yellow-400' :
-              'text-green-600 dark:text-green-400'
-            }`}>
+ queueSeverity() === 'medium' ? 'text-yellow-600 dark:text-yellow-400' :
+ 'text-green-600 dark:text-green-400'
+ }`}>
             {formatNum(queueTotal())} msgs
           </span>
         </Show>
@@ -408,9 +408,9 @@ const MailGateway: Component = () => {
                 <div>
                   <div class="text-xs font-medium text-muted uppercase tracking-wide">Queue</div>
                   <div class={`text-2xl font-bold mt-1 ${aggregateStats().totalQueue > 100 ? 'text-red-600 dark:text-red-400' :
-                    aggregateStats().totalQueue > 20 ? 'text-yellow-600 dark:text-yellow-400' :
-                      'text-green-600 dark:text-green-400'
-                    }`}>
+ aggregateStats().totalQueue > 20 ? 'text-yellow-600 dark:text-yellow-400' :
+ 'text-green-600 dark:text-green-400'
+ }`}>
                     {formatNum(aggregateStats().totalQueue)}
                   </div>
                   <div class="text-xs text-muted">
@@ -418,9 +418,9 @@ const MailGateway: Component = () => {
                   </div>
                 </div>
                 <div class={`p-2 rounded-md ${aggregateStats().totalQueue > 50 ? 'bg-yellow-100 dark:bg-yellow-900' : 'bg-green-100 dark:bg-green-900'
-                  }`}>
+ }`}>
                   <svg class={`w-5 h-5 ${aggregateStats().totalQueue > 50 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'
-                    }`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+ }`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
                   </svg>
                 </div>
@@ -446,29 +446,29 @@ const MailGateway: Component = () => {
                 <Show when={searchTerm()}>
                   <button
                     onClick={() => setSearchTerm('')}
-                    class="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                  >
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </Show>
-              </div>
-            </Card>
-          </Show>
+ class="absolute right-2.5 top-2 hover: dark:hover:text-slate-300"
+ >
+ <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+ <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+ </svg>
+ </button>
+ </Show>
+ </div>
+ </Card>
+ </Show>
 
-          {/* Instance Cards */}
-          <Show
-            when={filteredInstances().length > 0}
-            fallback={
-              <Card padding="lg">
-                <div class="text-center py-4">
-                  <svg class="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-                  </svg>
-                  <div class="text-muted text-sm">No gateways match "{searchTerm()}"</div>
-                  <button
-                    onClick={() => setSearchTerm('')}
+ {/* Instance Cards */}
+ <Show
+ when={filteredInstances().length > 0}
+ fallback={
+ <Card padding="lg">
+ <div class="text-center py-4">
+ <svg class="w-10 h-10 text-slate-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+ <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+ </svg>
+ <div class="text-muted text-sm">No gateways match "{searchTerm()}"</div>
+ <button
+ onClick={() => setSearchTerm('')}
                     class="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline"
                   >
                     Clear search
@@ -551,129 +551,129 @@ const MailGateway: Component = () => {
                             {pmg.name}
                           </a>
                           <StatusBadge status={pmg.status || ''} health={pmg.connectionHealth} />
-                          <Show when={pmg.version}>
-                            <span class="text-xs text-muted bg-surface-hover px-1.5 py-0.5 rounded">
-                              v{pmg.version}
-                            </span>
-                          </Show>
-                        </div>
-                        <div class="flex items-center gap-4 text-xs text-muted">
-                          <QueueIndicator queue={instanceQueue()} />
-                          <span>Updated {lastUpdated()}</span>
-                        </div>
-                      </div>
+ <Show when={pmg.version}>
+ <span class="text-xs text-muted bg-surface-hover px-1.5 py-0.5 rounded">
+ v{pmg.version}
+ </span>
+ </Show>
+ </div>
+ <div class="flex items-center gap-4 text-xs text-muted">
+ <QueueIndicator queue={instanceQueue()} />
+ <span>Updated {lastUpdated()}</span>
+ </div>
+ </div>
 
-                      {/* Main Content */}
-                      <div class="p-4">
-                        {/* Threat Rate Bars */}
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-                          <ThreatBar
-                            percent={stats().spamPct}
-                            color="spam"
-                            label="Spam Rate"
-                            count={stats().spam}
-                          />
-                          <ThreatBar
-                            percent={stats().virusPct}
-                            color="virus"
-                            label="Virus Rate"
-                            count={stats().virus}
-                          />
-                          <ThreatBar
-                            percent={stats().quarantinePct}
-                            color="quarantine"
-                            label="Quarantine Rate"
-                            count={stats().qTotal}
-                          />
-                        </div>
+ {/* Main Content */}
+ <div class="p-4">
+ {/* Threat Rate Bars */}
+ <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+ <ThreatBar
+ percent={stats().spamPct}
+ color="spam"
+ label="Spam Rate"
+ count={stats().spam}
+ />
+ <ThreatBar
+ percent={stats().virusPct}
+ color="virus"
+ label="Virus Rate"
+ count={stats().virus}
+ />
+ <ThreatBar
+ percent={stats().quarantinePct}
+ color="quarantine"
+ label="Quarantine Rate"
+ count={stats().qTotal}
+ />
+ </div>
 
-                        {/* Stats Grid */}
-                        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-                          {/* Mail Flow */}
-                          <div class="bg-surface-alt rounded-md p-3">
-                            <div class="text-xs text-muted mb-1">Total (24h)</div>
-                            <div class="text-lg font-bold text-base-content">{formatCompact(stats().total)}</div>
-                            <div class="text-[10px] text-slate-400">{formatNum(Math.round(stats().total / 24))}/hr</div>
-                          </div>
-                          <div class="bg-surface-alt rounded-md p-3">
-                            <div class="text-xs text-muted mb-1">Inbound</div>
-                            <div class="text-lg font-bold text-base-content">{formatCompact(stats().inbound)}</div>
-                            <div class="text-[10px] text-slate-400">{formatBytes(stats().bytesIn)}</div>
-                          </div>
-                          <div class="bg-surface-alt rounded-md p-3">
-                            <div class="text-xs text-muted mb-1">Outbound</div>
-                            <div class="text-lg font-bold text-base-content">{formatCompact(stats().outbound)}</div>
-                            <div class="text-[10px] text-slate-400">{formatBytes(stats().bytesOut)}</div>
-                          </div>
+ {/* Stats Grid */}
+ <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+ {/* Mail Flow */}
+ <div class="bg-surface-alt rounded-md p-3">
+ <div class="text-xs text-muted mb-1">Total (24h)</div>
+ <div class="text-lg font-bold text-base-content">{formatCompact(stats().total)}</div>
+ <div class="text-[10px] ">{formatNum(Math.round(stats().total / 24))}/hr</div>
+ </div>
+ <div class="bg-surface-alt rounded-md p-3">
+ <div class="text-xs text-muted mb-1">Inbound</div>
+ <div class="text-lg font-bold text-base-content">{formatCompact(stats().inbound)}</div>
+ <div class="text-[10px] ">{formatBytes(stats().bytesIn)}</div>
+ </div>
+ <div class="bg-surface-alt rounded-md p-3">
+ <div class="text-xs text-muted mb-1">Outbound</div>
+ <div class="text-lg font-bold text-base-content">{formatCompact(stats().outbound)}</div>
+ <div class="text-[10px] ">{formatBytes(stats().bytesOut)}</div>
+ </div>
 
-                          {/* Threats */}
-                          <div class="bg-orange-50 dark:bg-orange-900 rounded-md p-3">
-                            <div class="text-xs text-orange-600 dark:text-orange-400 mb-1">Spam</div>
-                            <div class="text-lg font-bold text-orange-600 dark:text-orange-400">{formatCompact(stats().spam)}</div>
-                            <div class="text-[10px] text-orange-500">{formatPct(stats().spamPct)} rate</div>
-                          </div>
-                          <div class="bg-red-50 dark:bg-red-900 rounded-md p-3">
-                            <div class="text-xs text-red-600 dark:text-red-400 mb-1">Viruses</div>
-                            <div class="text-lg font-bold text-red-600 dark:text-red-400">{formatCompact(stats().virus)}</div>
-                            <div class="text-[10px] text-red-500">{formatPct(stats().virusPct)} rate</div>
-                          </div>
-                          <div class="bg-yellow-50 dark:bg-yellow-900 rounded-md p-3">
-                            <div class="text-xs text-yellow-600 dark:text-yellow-400 mb-1">Quarantine</div>
-                            <div class="text-lg font-bold text-yellow-600 dark:text-yellow-400">{formatCompact(stats().qTotal)}</div>
-                            <div class="text-[10px] text-yellow-500">{formatPct(stats().quarantinePct)} of inbound</div>
-                          </div>
-                        </div>
+ {/* Threats */}
+ <div class="bg-orange-50 dark:bg-orange-900 rounded-md p-3">
+ <div class="text-xs text-orange-600 dark:text-orange-400 mb-1">Spam</div>
+ <div class="text-lg font-bold text-orange-600 dark:text-orange-400">{formatCompact(stats().spam)}</div>
+ <div class="text-[10px] text-orange-500">{formatPct(stats().spamPct)} rate</div>
+ </div>
+ <div class="bg-red-50 dark:bg-red-900 rounded-md p-3">
+ <div class="text-xs text-red-600 dark:text-red-400 mb-1">Viruses</div>
+ <div class="text-lg font-bold text-red-600 dark:text-red-400">{formatCompact(stats().virus)}</div>
+ <div class="text-[10px] text-red-500">{formatPct(stats().virusPct)} rate</div>
+ </div>
+ <div class="bg-yellow-50 dark:bg-yellow-900 rounded-md p-3">
+ <div class="text-xs text-yellow-600 dark:text-yellow-400 mb-1">Quarantine</div>
+ <div class="text-lg font-bold text-yellow-600 dark:text-yellow-400">{formatCompact(stats().qTotal)}</div>
+ <div class="text-[10px] text-yellow-500">{formatPct(stats().quarantinePct)} of inbound</div>
+ </div>
+ </div>
 
-                        {/* Delivery Health Row */}
-                        <div class="mt-3 pt-3 border-t border-border">
-                          <div class="text-xs font-medium text-muted uppercase tracking-wide mb-2">Delivery Health</div>
-                          <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs">
-                            <div class="flex items-center gap-2">
-                              <span class="text-muted">RBL Rejects:</span>
-                              <span class="font-medium text-base-content">{formatNum(stats().rbl)}</span>
-                            </div>
-                            <div class="flex items-center gap-2">
-                              <span class="text-muted">Pregreet:</span>
-                              <span class="font-medium text-base-content">{formatNum(stats().pregreet)}</span>
-                            </div>
-                            <div class="flex items-center gap-2">
-                              <span class="text-muted">Greylisted:</span>
-                              <span class="font-medium text-base-content">{formatNum(stats().greylist)}</span>
-                            </div>
-                            <div class="flex items-center gap-2">
-                              <span class="text-muted">Bounces In/Out:</span>
-                              <span class="font-medium text-base-content">{formatNum(stats().bouncesIn)}/{formatNum(stats().bouncesOut)}</span>
-                            </div>
-                            <Show when={pmg.mailStats?.averageProcessTimeMs}>
-                              <div class="flex items-center gap-2">
-                                <span class="text-muted">Avg Process:</span>
-                                <span class="font-medium text-base-content">{formatDec((pmg.mailStats?.averageProcessTimeMs || 0) / 1000, 2)}s</span>
-                              </div>
-                            </Show>
-                          </div>
-                        </div>
+ {/* Delivery Health Row */}
+ <div class="mt-3 pt-3 border-t border-border">
+ <div class="text-xs font-medium text-muted uppercase tracking-wide mb-2">Delivery Health</div>
+ <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs">
+ <div class="flex items-center gap-2">
+ <span class="text-muted">RBL Rejects:</span>
+ <span class="font-medium text-base-content">{formatNum(stats().rbl)}</span>
+ </div>
+ <div class="flex items-center gap-2">
+ <span class="text-muted">Pregreet:</span>
+ <span class="font-medium text-base-content">{formatNum(stats().pregreet)}</span>
+ </div>
+ <div class="flex items-center gap-2">
+ <span class="text-muted">Greylisted:</span>
+ <span class="font-medium text-base-content">{formatNum(stats().greylist)}</span>
+ </div>
+ <div class="flex items-center gap-2">
+ <span class="text-muted">Bounces In/Out:</span>
+ <span class="font-medium text-base-content">{formatNum(stats().bouncesIn)}/{formatNum(stats().bouncesOut)}</span>
+ </div>
+ <Show when={pmg.mailStats?.averageProcessTimeMs}>
+ <div class="flex items-center gap-2">
+ <span class="text-muted">Avg Process:</span>
+ <span class="font-medium text-base-content">{formatDec((pmg.mailStats?.averageProcessTimeMs || 0) / 1000, 2)}s</span>
+ </div>
+ </Show>
+ </div>
+ </div>
 
-                        {/* Cluster Nodes */}
-                        <Show when={(pmg.nodes?.length ?? 0) > 0}>
-                          <div class="mt-3 pt-3 border-t border-border">
-                            <div class="text-xs font-medium text-muted uppercase tracking-wide mb-2">
-                              Cluster Nodes ({pmg.nodes?.length})
-                            </div>
-                            <div class="overflow-x-auto -mx-4 px-4">
-                              <Table class="w-full min-w-[600px] text-xs">
-                                <TableHeader>
-                                  <TableRow class="text-left text-[10px] uppercase tracking-wide text-muted border-b border-border">
-                                    <TableHead class="pb-1.5 font-medium">Node</TableHead>
-                                    <TableHead class="pb-1.5 font-medium">Status</TableHead>
-                                    <TableHead class="pb-1.5 font-medium">Uptime</TableHead>
-                                    <TableHead class="pb-1.5 font-medium">Load</TableHead>
-                                    <TableHead class="pb-1.5 font-medium">Queue</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody class="divide-y divide-gray-100 dark:divide-gray-700">
-                                  <For each={pmg.nodes}>
-                                    {(node) => {
-                                      const isOnline = (node.status || '').toLowerCase() === 'online';
+ {/* Cluster Nodes */}
+ <Show when={(pmg.nodes?.length ?? 0) > 0}>
+ <div class="mt-3 pt-3 border-t border-border">
+ <div class="text-xs font-medium text-muted uppercase tracking-wide mb-2">
+ Cluster Nodes ({pmg.nodes?.length})
+ </div>
+ <div class="overflow-x-auto -mx-4 px-4">
+ <Table class="w-full min-w-[600px] text-xs">
+ <TableHeader>
+ <TableRow class="text-left text-[10px] uppercase tracking-wide text-muted border-b border-border">
+ <TableHead class="pb-1.5 font-medium">Node</TableHead>
+ <TableHead class="pb-1.5 font-medium">Status</TableHead>
+ <TableHead class="pb-1.5 font-medium">Uptime</TableHead>
+ <TableHead class="pb-1.5 font-medium">Load</TableHead>
+ <TableHead class="pb-1.5 font-medium">Queue</TableHead>
+ </TableRow>
+ </TableHeader>
+ <TableBody class="divide-y divide-gray-100 dark:divide-gray-700">
+ <For each={pmg.nodes}>
+ {(node) => {
+ const isOnline = (node.status ||'').toLowerCase() === 'online';
 
                                       return (
                                         <TableRow class="hover:bg-surface-hover">

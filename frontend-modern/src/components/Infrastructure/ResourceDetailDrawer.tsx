@@ -465,119 +465,119 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         document.body.appendChild(textarea);
         textarea.select();
         document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-    }
-  };
+ document.body.removeChild(textarea);
+ }
+ setCopied(true);
+ setTimeout(() => setCopied(false), 2000);
+ } catch {
+ setCopied(false);
+ }
+ };
 
-  return (
-    <div class="space-y-3">
-      <div class="flex items-start justify-between gap-4">
-        <div class="space-y-1 min-w-0">
-          <div class="flex items-center gap-2">
-            <StatusDot
-              variant={statusIndicator().variant}
-              title={statusIndicator().label}
-              ariaLabel={statusIndicator().label}
-              size="sm"
-            />
-            <div class="text-sm font-semibold text-base-content truncate" title={displayName()}>
-              {displayName()}
-            </div>
-          </div>
-          <div class="text-[11px] text-muted truncate" title={props.resource.id}>
-            {props.resource.id}
-          </div>
-          <div class="flex flex-wrap gap-1.5">
-            <Show when={typeBadge()}>
-              {(badge) => (
-                <span class={badge().classes} title={badge().title}>
-                  {badge().label}
-                </span>
-              )}
-            </Show>
-            <Show
-              when={hasUnifiedSources()}
-              fallback={
-                <>
-                  <Show when={platformBadge()}>
-                    {(badge) => (
-                      <span class={badge().classes} title={badge().title}>
-                        {badge().label}
-                      </span>
-                    )}
-                  </Show>
-                  <Show when={sourceBadge()}>
-                    {(badge) => (
-                      <span class={badge().classes} title={badge().title}>
-                        {badge().label}
-                      </span>
-                    )}
-                  </Show>
-                </>
-              }
-            >
-              <For each={unifiedSourceBadges()}>
-                {(badge) => (
-                  <span class={badge.classes} title={badge.title}>
-                    {badge.label}
-                  </span>
-                )}
-              </For>
-            </Show>
-            <For each={kubernetesCapabilityBadges()}>
-              {(badge) => (
-                <span class={badge.classes} title={badge.title}>
-                  {badge.label}
-                </span>
-              )}
-            </For>
-          </div>
-        </div>
+ return (
+ <div class="space-y-3">
+ <div class="flex items-start justify-between gap-4">
+ <div class="space-y-1 min-w-0">
+ <div class="flex items-center gap-2">
+ <StatusDot
+ variant={statusIndicator().variant}
+ title={statusIndicator().label}
+ ariaLabel={statusIndicator().label}
+ size="sm"
+ />
+ <div class="text-sm font-semibold text-base-content truncate" title={displayName()}>
+ {displayName()}
+ </div>
+ </div>
+ <div class="text-[11px] text-muted truncate" title={props.resource.id}>
+ {props.resource.id}
+ </div>
+ <div class="flex flex-wrap gap-1.5">
+ <Show when={typeBadge()}>
+ {(badge) => (
+ <span class={badge().classes} title={badge().title}>
+ {badge().label}
+ </span>
+ )}
+ </Show>
+ <Show
+ when={hasUnifiedSources()}
+ fallback={
+ <>
+ <Show when={platformBadge()}>
+ {(badge) => (
+ <span class={badge().classes} title={badge().title}>
+ {badge().label}
+ </span>
+ )}
+ </Show>
+ <Show when={sourceBadge()}>
+ {(badge) => (
+ <span class={badge().classes} title={badge().title}>
+ {badge().label}
+ </span>
+ )}
+ </Show>
+ </>
+ }
+ >
+ <For each={unifiedSourceBadges()}>
+ {(badge) => (
+ <span class={badge.classes} title={badge.title}>
+ {badge.label}
+ </span>
+ )}
+ </For>
+ </Show>
+ <For each={kubernetesCapabilityBadges()}>
+ {(badge) => (
+ <span class={badge.classes} title={badge.title}>
+ {badge.label}
+ </span>
+ )}
+ </For>
+ </div>
+ </div>
 
-        <Show when={props.onClose}>
-          <button
-            type="button"
-            onClick={() => props.onClose?.()}
-            class="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
-            aria-label="Close"
-          >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </Show>
-      </div>
+ <Show when={props.onClose}>
+ <button
+ type="button"
+ onClick={() => props.onClose?.()}
+ class="rounded-md p-1 hover:bg-slate-100 hover: dark:hover:bg-slate-700 dark:hover:text-slate-300"
+ aria-label="Close"
+ >
+ <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+ </svg>
+ </button>
+ </Show>
+ </div>
 
-      <Show when={relatedLinks().length > 0}>
-        <div class="flex items-center justify-end gap-2">
-          <For each={relatedLinks()}>
-            {(link) => (
-              <a
-                href={link.href}
-                aria-label={link.ariaLabel}
-                class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
-              >
-                {link.label}
-              </a>
-            )}
-          </For>
-        </div>
-      </Show>
+ <Show when={relatedLinks().length > 0}>
+ <div class="flex items-center justify-end gap-2">
+ <For each={relatedLinks()}>
+ {(link) => (
+ <a
+ href={link.href}
+ aria-label={link.ariaLabel}
+ class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
+ >
+ {link.label}
+ </a>
+ )}
+ </For>
+ </div>
+ </Show>
 
-      <div class="flex items-center gap-6 border-b border-border px-1 mb-1">
-        <For each={tabs()}>
-          {(tab) => (
-            <button
-              onClick={() => setActiveTab(tab.id)}
-              class={`pb-2 text-sm font-medium transition-colors relative ${activeTab() === tab.id
-                ? 'text-blue-600 dark:text-blue-400'
-                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-                }`}
+ <div class="flex items-center gap-6 border-b border-border px-1 mb-1">
+ <For each={tabs()}>
+ {(tab) => (
+ <button
+ onClick={() => setActiveTab(tab.id)}
+ class={`pb-2 text-sm font-medium transition-colors relative ${activeTab() === tab.id
+ ?'text-blue-600 dark:text-blue-400'
+ : ' hover:text-muted dark:hover:text-slate-200'
+ }`}
             >
               {tab.label}
               <Show when={activeTab() === tab.id}>
@@ -638,120 +638,120 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     title={lastSeenAbsolute()}
                   >
                     {lastSeen() || '—'}
-                  </span>
-                </div>
-              </Show>
-              <Show when={sourceSummary()}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Sources</span>
-                  <span class={`font-medium ${sourceSummary()!.className}`} title={sourceSummary()!.title}>
-                    {sourceSummary()!.label}
-                  </span>
-                </div>
-              </Show>
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-muted">Mode</span>
-                <span class="font-medium text-base-content">{formatSourceType(props.resource.sourceType)}</span>
-              </div>
-              <Show when={(props.resource.alerts?.length || 0) > 0}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Alerts</span>
-                  <span class="font-medium text-amber-600 dark:text-amber-400">
-                    {formatInteger(props.resource.alerts?.length)}
-                  </span>
-                </div>
-              </Show>
-              <Show when={props.resource.platformId}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Platform ID</span>
-                  <span class="font-medium text-base-content truncate" title={props.resource.platformId}>
-                    {props.resource.platformId}
-                  </span>
-                </div>
-              </Show>
-            </div>
-          </div>
+ </span>
+ </div>
+ </Show>
+ <Show when={sourceSummary()}>
+ <div class="flex items-center justify-between gap-2">
+ <span class="text-muted">Sources</span>
+ <span class={`font-medium ${sourceSummary()!.className}`} title={sourceSummary()!.title}>
+ {sourceSummary()!.label}
+ </span>
+ </div>
+ </Show>
+ <div class="flex items-center justify-between gap-2">
+ <span class="text-muted">Mode</span>
+ <span class="font-medium text-base-content">{formatSourceType(props.resource.sourceType)}</span>
+ </div>
+ <Show when={(props.resource.alerts?.length || 0) > 0}>
+ <div class="flex items-center justify-between gap-2">
+ <span class="text-muted">Alerts</span>
+ <span class="font-medium text-amber-600 dark:text-amber-400">
+ {formatInteger(props.resource.alerts?.length)}
+ </span>
+ </div>
+ </Show>
+ <Show when={props.resource.platformId}>
+ <div class="flex items-center justify-between gap-2">
+ <span class="text-muted">Platform ID</span>
+ <span class="font-medium text-base-content truncate" title={props.resource.platformId}>
+ {props.resource.platformId}
+ </span>
+ </div>
+ </Show>
+ </div>
+ </div>
 
-          <div class="rounded border border-slate-200 bg-white p-3 dark:border-slate-600 dark:bg-slate-800">
-            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Identity</div>
-            <div class="space-y-1.5 text-[11px]">
-              <For each={primaryIdentityRows()}>
-                {(row) => (
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">{row.label}</span>
-                    <span class="font-medium text-base-content truncate" title={row.value}>
-                      {row.value}
-                    </span>
-                  </div>
-                )}
-              </For>
-              <Show when={props.resource.identity?.ips && props.resource.identity.ips.length > 0}>
-                <div class="flex flex-col gap-1">
-                  <span class="text-muted">IP Addresses</span>
-                  <div class="flex flex-wrap gap-1">
-                    <For each={props.resource.identity?.ips ?? []}>
-                      {(ip) => (
-                        <span
-                          class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200"
-                          title={ip}
-                        >
-                          {ip}
-                        </span>
-                      )}
-                    </For>
-                  </div>
-                </div>
-              </Show>
-              <Show when={props.resource.tags && props.resource.tags.length > 0}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Tags</span>
-                  <TagBadges tags={props.resource.tags} maxVisible={6} />
-                </div>
-              </Show>
-              <Show when={identityAliasValues().length > 0}>
-                <Show
-                  when={hasAliasOverflow()}
-                  fallback={
-                    <div class="flex flex-col gap-1">
-                      <span class="text-muted">Aliases</span>
-                      <div class="flex flex-wrap gap-1">
-                        <For each={aliasPreviewValues()}>
-                          {(value) => (
-                            <span class="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-700 dark:bg-slate-800 dark:text-slate-200" title={value}>
-                              {value}
-                            </span>
-                          )}
-                        </For>
-                      </div>
-                    </div>
-                  }
-                >
-                  <details class="rounded border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-600 dark:bg-slate-800">
-                    <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
-                      <span>Aliases</span>
-                      <span class="text-muted">{identityAliasValues().length}</span>
-                    </summary>
-                    <div class="mt-2 flex flex-wrap gap-1 border-t border-slate-200 pt-2 dark:border-slate-600">
-                      <For each={identityAliasValues()}>
-                        {(value) => (
-                          <span class="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-700 dark:bg-slate-800 dark:text-slate-200" title={value}>
-                            {value}
-                          </span>
-                        )}
-                      </For>
-                    </div>
-                  </details>
-                </Show>
-              </Show>
-              <Show when={!identityCardHasRichData()}>
-                <div class="rounded border border-dashed border-slate-300 bg-slate-50 px-2 py-1.5 text-[10px] text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                  No enriched identity metadata yet.
-                </div>
-              </Show>
-            </div>
-          </div>
+ <div class="rounded border border-slate-200 bg-white p-3 dark:border-slate-600 dark:bg-slate-800">
+ <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Identity</div>
+ <div class="space-y-1.5 text-[11px]">
+ <For each={primaryIdentityRows()}>
+ {(row) => (
+ <div class="flex items-center justify-between gap-2">
+ <span class="text-muted">{row.label}</span>
+ <span class="font-medium text-base-content truncate" title={row.value}>
+ {row.value}
+ </span>
+ </div>
+ )}
+ </For>
+ <Show when={props.resource.identity?.ips && props.resource.identity.ips.length > 0}>
+ <div class="flex flex-col gap-1">
+ <span class="text-muted">IP Addresses</span>
+ <div class="flex flex-wrap gap-1">
+ <For each={props.resource.identity?.ips ?? []}>
+ {(ip) => (
+ <span
+ class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+ title={ip}
+ >
+ {ip}
+ </span>
+ )}
+ </For>
+ </div>
+ </div>
+ </Show>
+ <Show when={props.resource.tags && props.resource.tags.length > 0}>
+ <div class="flex items-center justify-between gap-2">
+ <span class="text-muted">Tags</span>
+ <TagBadges tags={props.resource.tags} maxVisible={6} />
+ </div>
+ </Show>
+ <Show when={identityAliasValues().length > 0}>
+ <Show
+ when={hasAliasOverflow()}
+ fallback={
+ <div class="flex flex-col gap-1">
+ <span class="text-muted">Aliases</span>
+ <div class="flex flex-wrap gap-1">
+ <For each={aliasPreviewValues()}>
+ {(value) => (
+ <span class="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[10px] dark:bg-slate-800" title={value}>
+ {value}
+ </span>
+ )}
+ </For>
+ </div>
+ </div>
+ }
+ >
+ <details class="rounded border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-600 dark:bg-slate-800">
+ <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
+ <span>Aliases</span>
+ <span class="text-muted">{identityAliasValues().length}</span>
+ </summary>
+ <div class="mt-2 flex flex-wrap gap-1 border-t border-slate-200 pt-2 dark:border-slate-600">
+ <For each={identityAliasValues()}>
+ {(value) => (
+ <span class="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[10px] dark:bg-slate-800" title={value}>
+ {value}
+ </span>
+ )}
+ </For>
+ </div>
+ </details>
+ </Show>
+ </Show>
+ <Show when={!identityCardHasRichData()}>
+ <div class="rounded border border-dashed border-slate-300 bg-slate-50 px-2 py-1.5 text-[10px] dark:border-slate-600 dark:bg-slate-800">
+ No enriched identity metadata yet.
+ </div>
+ </Show>
+ </div>
+ </div>
 
-          <Show when={props.resource.type === 'docker-host'}>
+ <Show when={props.resource.type ==='docker-host'}>
             <div class="rounded border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-sky-900">
               <div class="mb-2 flex items-center justify-between gap-2">
                 <div class="text-[11px] font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300">Container Updates</div>
@@ -792,43 +792,43 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                       <span class="text-muted">Status</span>
                       <span class={`font-medium ${dockerHostCommandActive() ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'}`}>
                         {(dockerHostCommand()?.status || 'unknown').replace(/_/g, ' ')}
-                      </span>
-                    </div>
-                    <Show when={dockerHostCommand()?.message}>
-                      <div class="mt-1 text-muted truncate" title={dockerHostCommand()?.message}>
-                        {dockerHostCommand()?.message}
-                      </div>
-                    </Show>
-                    <Show when={dockerHostCommand()?.failureReason}>
-                      <div class="mt-1 text-red-700 dark:text-red-300 truncate" title={dockerHostCommand()?.failureReason}>
-                        {dockerHostCommand()?.failureReason}
-                      </div>
-                    </Show>
-                  </div>
-                </Show>
+ </span>
+ </div>
+ <Show when={dockerHostCommand()?.message}>
+ <div class="mt-1 text-muted truncate" title={dockerHostCommand()?.message}>
+ {dockerHostCommand()?.message}
+ </div>
+ </Show>
+ <Show when={dockerHostCommand()?.failureReason}>
+ <div class="mt-1 text-red-700 dark:text-red-300 truncate" title={dockerHostCommand()?.failureReason}>
+ {dockerHostCommand()?.failureReason}
+ </div>
+ </Show>
+ </div>
+ </Show>
 
-                <Show when={dockerActionError()}>
-                  <div class="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900 dark:text-red-200">
-                    {dockerActionError()}
-                  </div>
-                </Show>
-                <Show when={dockerActionNote()}>
-                  <div class="rounded border border-sky-200 bg-white px-2 py-1.5 text-[10px] text-slate-700 dark:border-sky-700 dark:bg-slate-800 dark:text-slate-200">
-                    {dockerActionNote()}
-                  </div>
-                </Show>
+ <Show when={dockerActionError()}>
+ <div class="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900 dark:text-red-200">
+ {dockerActionError()}
+ </div>
+ </Show>
+ <Show when={dockerActionNote()}>
+ <div class="rounded border border-sky-200 bg-white px-2 py-1.5 text-[10px] text-slate-700 dark:border-sky-700 dark:bg-slate-800">
+ {dockerActionNote()}
+ </div>
+ </Show>
 
-                <div class="flex flex-wrap items-center gap-2 pt-1">
-                  <button
-                    type="button"
-                    disabled={
-                      dockerActionBusy() ||
-                      dockerUpdateActionsLoading() ||
-                      dockerHostCommandActive() ||
-                      dockerHostSourceId() === null
-                    }
-                    onClick={async () => {
-                      setDockerActionError('');
+ <div class="flex flex-wrap items-center gap-2 pt-1">
+ <button
+ type="button"
+ disabled={
+ dockerActionBusy() ||
+ dockerUpdateActionsLoading() ||
+ dockerHostCommandActive() ||
+ dockerHostSourceId() === null
+ }
+ onClick={async () => {
+ setDockerActionError('');
                       setDockerActionNote('');
                       setConfirmUpdateAll(false);
                       const hostId = dockerHostSourceId();
@@ -1066,36 +1066,36 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
       {/* Discovery Tab */}
       <div class={activeTab() === 'discovery' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
-        <Show
-          when={discoveryConfig()}
-          fallback={
-            <div class="rounded border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
-              Discovery is not available for this resource type yet.
-            </div>
-          }
-        >
-          {(config) => (
-            <Suspense
-              fallback={
-                <div class="flex items-center justify-center py-8">
-                  <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                  <span class="ml-2 text-sm text-muted">Loading discovery...</span>
-                </div>
-              }
-            >
-              <DiscoveryTab
-                resourceType={config().resourceType}
-                hostId={config().hostId}
-                resourceId={config().resourceId}
-                hostname={config().hostname}
-              />
-            </Suspense>
-          )}
-        </Show>
-      </div>
+ <Show
+ when={discoveryConfig()}
+ fallback={
+ <div class="rounded border border-dashed border-slate-300 bg-slate-50 p-4 text-sm dark:border-slate-600 dark:bg-slate-800">
+ Discovery is not available for this resource type yet.
+ </div>
+ }
+ >
+ {(config) => (
+ <Suspense
+ fallback={
+ <div class="flex items-center justify-center py-8">
+ <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+ <span class="ml-2 text-sm text-muted">Loading discovery...</span>
+ </div>
+ }
+ >
+ <DiscoveryTab
+ resourceType={config().resourceType}
+ hostId={config().hostId}
+ resourceId={config().resourceId}
+ hostname={config().hostname}
+ />
+ </Suspense>
+ )}
+ </Show>
+ </div>
 
-      {/* PMG Mail Tab */}
-      <div class={activeTab() === 'mail' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
+ {/* PMG Mail Tab */}
+ <div class={activeTab() ==='mail' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
         {/* Mount on-demand to avoid background fetching when the tab isn't open. */}
         <Show when={activeTab() === 'mail'}>
           <Show
@@ -1177,16 +1177,16 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       {/* Debug Tab */}
       <Show when={debugEnabled()}>
         <div class={activeTab() === 'debug' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
-          <div class="flex items-center justify-between gap-3">
-            <div class="text-xs text-muted">
-              Debug mode is enabled via localStorage (<code>pulse_debug_mode</code>).
-            </div>
-            <button
-              type="button"
-              onClick={handleCopyJson}
-              class="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              {copied() ? 'Copied' : 'Copy JSON'}
+ <div class="flex items-center justify-between gap-3">
+ <div class="text-xs text-muted">
+ Debug mode is enabled via localStorage (<code>pulse_debug_mode</code>).
+ </div>
+ <button
+ type="button"
+ onClick={handleCopyJson}
+ class="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800"
+ >
+ {copied() ?'Copied' : 'Copy JSON'}
             </button>
           </div>
 
@@ -1251,7 +1251,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           <button
             type="button"
             onClick={() => setShowReportModal(true)}
-            class="text-xs font-medium text-slate-500 transition-colors hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+            class="text-xs font-medium transition-colors hover:text-muted dark:hover:text-slate-200"
           >
             Split merged resource
           </button>

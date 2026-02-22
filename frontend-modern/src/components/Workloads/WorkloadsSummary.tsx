@@ -666,36 +666,36 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
     if (!hasCurrentRangeData()) return '';
     if (fetchFailed()) return 'Trend data unavailable';
     return 'No history yet';
-  };
+ };
 
-  return (
-    <div
-      data-testid="workloads-summary"
-      class="overflow-hidden rounded-md border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-3"
-    >
-      <div class="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-1 pb-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400">
-        <div class="flex items-center gap-3">
-          <span class="font-medium text-base-content">
-            {guestCounts().total} workloads
-          </span>
-          <Show when={guestCounts().running > 0}>
-            <span class="text-emerald-600 dark:text-emerald-400">{guestCounts().running} running</span>
-          </Show>
-          <Show when={guestCounts().stopped > 0}>
-            <span class="text-muted">{guestCounts().stopped} stopped</span>
-          </Show>
-        </div>
-        <Show when={props.onTimeRangeChange}>
-          <div class="inline-flex shrink-0 rounded border border-slate-300 bg-white p-0.5 text-xs dark:border-slate-700 dark:bg-slate-900">
-            <For each={SUMMARY_TIME_RANGES}>
-              {(range) => (
-                <button
-                  type="button"
-                  onClick={() => props.onTimeRangeChange?.(range)}
-                  class={`rounded px-2 py-1 ${selectedRange() === range
-                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                    : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
-                    }`}
+ return (
+ <div
+ data-testid="workloads-summary"
+ class="overflow-hidden rounded-md border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-3"
+ >
+ <div class="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-1 pb-2 text-[11px] dark:border-slate-700 ">
+ <div class="flex items-center gap-3">
+ <span class="font-medium text-base-content">
+ {guestCounts().total} workloads
+ </span>
+ <Show when={guestCounts().running > 0}>
+ <span class="text-emerald-600 dark:text-emerald-400">{guestCounts().running} running</span>
+ </Show>
+ <Show when={guestCounts().stopped > 0}>
+ <span class="text-muted">{guestCounts().stopped} stopped</span>
+ </Show>
+ </div>
+ <Show when={props.onTimeRangeChange}>
+ <div class="inline-flex shrink-0 rounded border border-slate-300 bg-white p-0.5 text-xs dark:border-slate-700 dark:bg-slate-900">
+ <For each={SUMMARY_TIME_RANGES}>
+ {(range) => (
+ <button
+ type="button"
+ onClick={() => props.onTimeRangeChange?.(range)}
+ class={`rounded px-2 py-1 ${selectedRange() === range
+ ?'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+ : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+ }`}
                 >
                   {SUMMARY_TIME_RANGE_LABEL[range]}
                 </button>

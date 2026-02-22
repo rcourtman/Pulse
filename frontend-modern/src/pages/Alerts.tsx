@@ -1299,7 +1299,7 @@ export function Alerts() {
             <div class="flex items-center gap-3">
               <span
                 class={`text-sm font-medium ${isAlertsActive() ? 'text-green-600 dark:text-green-400' : 'text-muted'
-                  }`}
+ }`}
               >
                 {isAlertsActive() ? 'Alerts enabled' : 'Alerts disabled'}
               </span>
@@ -1320,11 +1320,11 @@ export function Alerts() {
                 />
                 <div
                   class={`relative w-11 h-6 rounded-full transition ${isAlertsActive() ? 'bg-blue-600' : 'bg-surface-hover'
-                    } ${alertsActivation.isLoading() || isSwitchingActivation() ? 'opacity-50' : ''}`}
+ } ${alertsActivation.isLoading() || isSwitchingActivation() ? 'opacity-50' : ''}`}
                 >
                   <span
                     class={`absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white transition-all shadow ${isAlertsActive() ? 'translate-x-5' : 'translate-x-0'
-                      }`}
+ }`}
                   />
                 </div>
               </label>
@@ -1604,78 +1604,78 @@ export function Alerts() {
       <div>
         <Card padding="none" class="relative lg:flex overflow-hidden">
           <div
-            class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-border lg:border-b-0 lg:border-r lg:border-slate-200 dark:lg:border-slate-700 lg:align-top flex-shrink-0 transition-all duration-200`}
+            class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-border lg:border-b-0 lg:border-r lg: dark:lg:border-slate-700 lg:align-top flex-shrink-0 transition-all duration-200`}
             aria-label="Alerts navigation"
             aria-expanded={!sidebarCollapsed()}
           >
             <div
               class={`sticky top-0 ${sidebarCollapsed() ? 'px-2' : 'px-4'} py-5 space-y-5 transition-all duration-200`}
-            >
-              <Show when={!sidebarCollapsed()}>
-                <div class="flex items-center justify-between pb-2 border-b border-border">
-                  <h2 class="text-sm font-semibold text-base-content">Alerts</h2>
-                  <button
-                    type="button"
-                    onClick={() => setSidebarCollapsed(true)}
-                    class="p-1 rounded-md text-slate-500 hover:bg-surface-hover transition-colors"
-                    aria-label="Collapse sidebar"
-                  >
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </Show>
-              <Show when={sidebarCollapsed()}>
-                <button
-                  type="button"
-                  onClick={() => setSidebarCollapsed(false)}
-                  class="w-full p-2 rounded-md text-slate-500 hover:bg-surface-hover transition-colors"
-                  aria-label="Expand sidebar"
-                >
-                  <svg
-                    class="w-5 h-5 mx-auto"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M13 5l7 7-7 7M5 5l7 7-7 7"
-                    />
-                  </svg>
-                </button>
-              </Show>
-              <div id="alerts-sidebar-menu" class="space-y-5">
-                <For each={tabGroups}>
-                  {(group) => (
-                    <div class="space-y-2">
-                      <Show when={!sidebarCollapsed()}>
-                        <p class="text-xs font-semibold uppercase tracking-wide text-muted">
-                          {group.label}
-                        </p>
-                      </Show>
-                      <div class="space-y-1.5">
-                        <For each={group.items}>
-                          {(item) => (
-                            <button
-                              type="button"
-                              aria-current={activeTab() === item.id ? 'page' : undefined}
+ >
+ <Show when={!sidebarCollapsed()}>
+ <div class="flex items-center justify-between pb-2 border-b border-border">
+ <h2 class="text-sm font-semibold text-base-content">Alerts</h2>
+ <button
+ type="button"
+ onClick={() => setSidebarCollapsed(true)}
+ class="p-1 rounded-md hover:bg-surface-hover transition-colors"
+ aria-label="Collapse sidebar"
+ >
+ <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+ <path
+ stroke-linecap="round"
+ stroke-linejoin="round"
+ stroke-width="2"
+ d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+ />
+ </svg>
+ </button>
+ </div>
+ </Show>
+ <Show when={sidebarCollapsed()}>
+ <button
+ type="button"
+ onClick={() => setSidebarCollapsed(false)}
+ class="w-full p-2 rounded-md hover:bg-surface-hover transition-colors"
+ aria-label="Expand sidebar"
+ >
+ <svg
+ class="w-5 h-5 mx-auto"
+ fill="none"
+ viewBox="0 0 24 24"
+ stroke="currentColor"
+ >
+ <path
+ stroke-linecap="round"
+ stroke-linejoin="round"
+ stroke-width="2"
+ d="M13 5l7 7-7 7M5 5l7 7-7 7"
+ />
+ </svg>
+ </button>
+ </Show>
+ <div id="alerts-sidebar-menu" class="space-y-5">
+ <For each={tabGroups}>
+ {(group) => (
+ <div class="space-y-2">
+ <Show when={!sidebarCollapsed()}>
+ <p class="text-xs font-semibold uppercase tracking-wide text-muted">
+ {group.label}
+ </p>
+ </Show>
+ <div class="space-y-1.5">
+ <For each={group.items}>
+ {(item) => (
+ <button
+ type="button"
+ aria-current={activeTab() === item.id ?'page' : undefined}
                               aria-disabled={areAlertsDisabled()}
                               disabled={areAlertsDisabled()}
                               class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${areAlertsDisabled()
-                                ? 'cursor-not-allowed text-muted bg-surface-alt'
-                                : activeTab() === item.id
-                                  ? 'bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-200'
-                                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-slate-100'
-                                }`}
+ ? 'cursor-not-allowed text-muted bg-surface-alt'
+ : activeTab() === item.id
+ ? 'bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-200'
+ : ' hover: hover:text-slate-900 dark:hover:bg-slate-700 dark:hover:text-slate-100'
+ }`}
                               onClick={() => handleTabChange(item.id)}
                               title={sidebarCollapsed() ? item.label : undefined}
                             >
@@ -1709,11 +1709,11 @@ export function Alerts() {
                           aria-disabled={areAlertsDisabled()}
                           disabled={areAlertsDisabled()}
                           class={`flex-1 min-w-0 px-2 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-medium rounded-md transition-all ${areAlertsDisabled()
-                            ? 'cursor-not-allowed text-muted bg-surface-alt'
-                            : activeTab() === tab.id
-                              ? 'bg-surface text-base-content shadow-sm'
-                              : 'text-muted hover:text-base-content'
-                            }`}
+ ? 'cursor-not-allowed text-muted bg-surface-alt'
+ : activeTab() === tab.id
+ ? 'bg-surface text-base-content shadow-sm'
+ : 'text-muted hover:text-base-content'
+ }`}
                           onClick={() => handleTabChange(tab.id)}
                         >
                           <span class="w-full text-center truncate block">{tab.label}</span>
@@ -2720,59 +2720,59 @@ function ScheduleTab(props: ScheduleTabProps) {
     { id: 'thursday', label: 'T', fullLabel: 'Thursday' },
     { id: 'friday', label: 'F', fullLabel: 'Friday' },
     { id: 'saturday', label: 'S', fullLabel: 'Saturday' },
-    { id: 'sunday', label: 'S', fullLabel: 'Sunday' },
-  ];
+    { id: 'sunday', label: 'S', fullLabel: 'Sunday'},
+ ];
 
-  return (
-    <div class="space-y-6">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h3 class="text-base font-semibold text-base-content">
-            Alert scheduling
-          </h3>
-          <p class="mt-1 text-sm text-muted">
-            Configure when and how alerts are delivered
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={resetToDefaults}
-          class="inline-flex items-center gap-2 self-start rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-          title="Restore quiet hours, cooldown, grouping, and escalation settings to their defaults"
-        >
-          <svg
-            class="h-4 w-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-          Reset to defaults
-        </button>
-      </div>
+ return (
+ <div class="space-y-6">
+ <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+ <div>
+ <h3 class="text-base font-semibold text-base-content">
+ Alert scheduling
+ </h3>
+ <p class="mt-1 text-sm text-muted">
+ Configure when and how alerts are delivered
+ </p>
+ </div>
+ <button
+ type="button"
+ onClick={resetToDefaults}
+ class="inline-flex items-center gap-2 self-start rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700"
+ title="Restore quiet hours, cooldown, grouping, and escalation settings to their defaults"
+ >
+ <svg
+ class="h-4 w-4"
+ viewBox="0 0 24 24"
+ fill="none"
+ stroke="currentColor"
+ stroke-width="2"
+ >
+ <path
+ stroke-linecap="round"
+ stroke-linejoin="round"
+ d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+ />
+ </svg>
+ Reset to defaults
+ </button>
+ </div>
 
-      <div class="grid gap-6 xl:grid-cols-2">
-        {/* Quiet Hours */}
-        <SettingsPanel
-          title="Quiet hours"
-          description="Pause non-critical alerts during specific times."
-          action={
-            <Toggle
-              checked={quietHours().enabled}
-              onChange={(e) => {
-                setQuietHours({ ...quietHours(), enabled: e.currentTarget.checked });
-                props.setHasUnsavedChanges(true);
-              }}
-              containerClass="sm:self-start"
-              label={
-                <span class="text-xs font-medium text-muted">
-                  {quietHours().enabled ? 'Enabled' : 'Disabled'}
+ <div class="grid gap-6 xl:grid-cols-2">
+ {/* Quiet Hours */}
+ <SettingsPanel
+ title="Quiet hours"
+ description="Pause non-critical alerts during specific times."
+ action={
+ <Toggle
+ checked={quietHours().enabled}
+ onChange={(e) => {
+ setQuietHours({ ...quietHours(), enabled: e.currentTarget.checked });
+ props.setHasUnsavedChanges(true);
+ }}
+ containerClass="sm:self-start"
+ label={
+ <span class="text-xs font-medium text-muted">
+ {quietHours().enabled ?'Enabled' : 'Disabled'}
                 </span>
               }
             />
@@ -2842,9 +2842,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                         }}
                         title={day.fullLabel}
                         class={`px-2 py-2 text-xs font-medium transition-all duration-200 ${quietHours().days[day.id]
-                          ? 'rounded-md bg-blue-500 text-white shadow-sm'
-                          : 'rounded-md bg-slate-100 text-slate-600 hover:bg-surface-hover dark:text-slate-400 dark:hover:bg-slate-600'
-                          }`}
+ ? 'rounded-md bg-blue-500 text-white shadow-sm'
+ : 'rounded-md text-slate-600 hover:bg-surface-hover dark:text-slate-400 '
+ }`}
                       >
                         {day.label}
                       </button>
@@ -2893,9 +2893,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                     {(option) => (
                       <label
                         class={`flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2 transition-colors ${quietHours().suppress[option.key]
-                          ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-500'
-                          : 'border-slate-200 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700'
-                          }`}
+ ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-500'
+ : 'border-slate-200 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700'
+ }`}
                       >
                         <input
                           type="checkbox"
@@ -2914,9 +2914,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                         />
                         <div
                           class={`mt-1 flex h-4 w-4 items-center justify-center rounded border-2 ${quietHours().suppress[option.key]
-                            ? 'border-blue-500 bg-blue-500'
-                            : 'border-border'
-                            }`}
+ ? 'border-blue-500 bg-blue-500'
+ : 'border-border'
+ }`}
                         >
                           <Show when={quietHours().suppress[option.key]}>
                             <svg
@@ -3096,9 +3096,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                 <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <label
                     class={`relative flex items-center gap-2 rounded-md border-2 p-3 transition-all ${grouping().byNode
-                      ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900'
-                      : 'border-slate-200 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700'
-                      }`}
+ ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900'
+ : 'border-slate-200 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700'
+ }`}
                   >
                     <input
                       type="checkbox"
@@ -3111,9 +3111,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                     />
                     <div
                       class={`flex h-4 w-4 items-center justify-center rounded border-2 ${grouping().byNode
-                        ? 'border-blue-500 bg-blue-500'
-                        : 'border-border'
-                        }`}
+ ? 'border-blue-500 bg-blue-500'
+ : 'border-border'
+ }`}
                     >
                       <Show when={grouping().byNode}>
                         <svg
@@ -3134,9 +3134,9 @@ function ScheduleTab(props: ScheduleTabProps) {
 
                   <label
                     class={`relative flex items-center gap-2 rounded-md border-2 p-3 transition-all ${grouping().byGuest
-                      ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900'
-                      : 'border-slate-200 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700'
-                      }`}
+ ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900'
+ : 'border-slate-200 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700'
+ }`}
                   >
                     <input
                       type="checkbox"
@@ -3149,9 +3149,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                     />
                     <div
                       class={`flex h-4 w-4 items-center justify-center rounded border-2 ${grouping().byGuest
-                        ? 'border-blue-500 bg-blue-500'
-                        : 'border-border'
-                        }`}
+ ? 'border-blue-500 bg-blue-500'
+ : 'border-border'
+ }`}
                     >
                       <Show when={grouping().byGuest}>
                         <svg
@@ -3441,9 +3441,9 @@ export function IncidentEventFilters(props: {
             <button
               type="button"
               class={`px-2 py-0.5 rounded border text-[10px] ${selected()
-                ? 'border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300'
-                : 'border-slate-300 text-slate-500 dark:border-slate-600 dark:text-slate-300'
-                }`}
+ ? 'border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300'
+ : 'border-slate-300 text-slate-500 dark:border-slate-600 dark:text-slate-300'
+ }`}
               onClick={() => toggleFilter(type)}
             >
               {INCIDENT_EVENT_LABELS[type]}
@@ -4446,32 +4446,31 @@ function HistoryTab(props: {
                           showTooltip(tooltipContent, rect.left + rect.width / 2, rect.top, {
                             align: 'center',
                             direction: 'up',
-                          });
-                        }}
-                        onMouseLeave={() => hideTooltip()}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })()}
+ });
+ }}
+ onMouseLeave={() => hideTooltip()}
+ />
+ </div>
+ );
+ })}
+ </div>
+ </div>
+ );
+ })()}
 
-        <Show when={axisTicks().length > 0}>
-          <div class="relative mt-3 h-10">
-            <div class="absolute inset-x-0 top-0 h-px bg-surface-hover"></div>
-            <For each={axisTicks()}>
-              {(tick) => (
-                <div
-                  class="pointer-events-none absolute top-0 flex h-full flex-col items-center"
-                  style={{ left: `${tick.position * 100}%` }}
-                >
-                  <div class="h-3 w-px bg-slate-300 dark:bg-slate-600"></div>
-                  <div
-                    class="mt-1 whitespace-nowrap text-[10px] text-muted transform"
-                    classList={{
-                      '-translate-x-1/2': tick.align === 'center',
+ <Show when={axisTicks().length > 0}>
+ <div class="relative mt-3 h-10">
+ <div class="absolute inset-x-0 top-0 h-px bg-surface-hover"></div>
+ <For each={axisTicks()}>
+ {(tick) => (
+ <div
+ class="pointer-events-none absolute top-0 flex h-full flex-col items-center"
+ style={{ left: `${tick.position * 100}%` }}
+ >
+ <div class="h-3 w-px bg-slate-300 "></div>
+ <div
+ class="mt-1 whitespace-nowrap text-[10px] text-muted transform"
+ classList={{'-translate-x-1/2': tick.align === 'center',
                       '-translate-x-full': tick.align === 'end',
                     }}
                   >
@@ -4520,46 +4519,46 @@ function HistoryTab(props: {
                   id="alert-time-filter"
                   value={timeFilter()}
                   onChange={(e) => setTimeFilter(e.currentTarget.value as '24h' | '7d' | '30d' | 'all')}
-                  class="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                >
-                  <option value="24h">Last 24h</option>
-                  <option value="7d">Last 7d</option>
-                  <option value="30d">Last 30d</option>
-                  <option value="all">All Time</option>
-                </select>
-              </div>
-              <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                <label for="alert-severity-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Severity</label>
-                <select
-                  id="alert-severity-filter"
-                  value={severityFilter()}
-                  onChange={(e) => setSeverityFilter(e.currentTarget.value as 'warning' | 'critical' | 'all')}
-                  class="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                >
-                  <option value="all">All</option>
-                  <option value="critical">Critical</option>
-                  <option value="warning">Warning</option>
-                </select>
-              </div>
-            </div>
-          </Show>
-        </div>
-      </Card>
+ class="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 "
+ >
+ <option value="24h">Last 24h</option>
+ <option value="7d">Last 7d</option>
+ <option value="30d">Last 30d</option>
+ <option value="all">All Time</option>
+ </select>
+ </div>
+ <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
+ <label for="alert-severity-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Severity</label>
+ <select
+ id="alert-severity-filter"
+ value={severityFilter()}
+ onChange={(e) => setSeverityFilter(e.currentTarget.value as'warning' | 'critical' | 'all')}
+ class="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 "
+ >
+ <option value="all">All</option>
+ <option value="critical">Critical</option>
+ <option value="warning">Warning</option>
+ </select>
+ </div>
+ </div>
+ </Show>
+ </div>
+ </Card>
 
-      <Show when={resourceIncidentPanel()}>
-        {(selection) => {
-          const resourceId = selection().resourceId;
-          const incidents = () => resourceIncidents()[resourceId] || [];
-          const isLoading = () => resourceIncidentLoading()[resourceId];
-          return (
-            <Card padding="md">
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h3 class="text-sm font-semibold text-base-content">Resource incidents</h3>
-                  <p class="text-xs text-muted">
-                    {selection().resourceName}
-                    <Show when={incidents().length > 0}>
-                      <span> · {incidents().length} incident{incidents().length === 1 ? '' : 's'}</span>
+ <Show when={resourceIncidentPanel()}>
+ {(selection) => {
+ const resourceId = selection().resourceId;
+ const incidents = () => resourceIncidents()[resourceId] || [];
+ const isLoading = () => resourceIncidentLoading()[resourceId];
+ return (
+ <Card padding="md">
+ <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+ <div>
+ <h3 class="text-sm font-semibold text-base-content">Resource incidents</h3>
+ <p class="text-xs text-muted">
+ {selection().resourceName}
+ <Show when={incidents().length > 0}>
+ <span> · {incidents().length} incident{incidents().length === 1 ?'' : 's'}</span>
                     </Show>
                   </p>
                 </div>
@@ -4669,135 +4668,135 @@ function HistoryTab(props: {
                                   class="px-2 py-1 text-[10px] border rounded-md border-border text-muted hover:bg-surface-hover"
                                   onClick={() => toggleResourceIncidentDetails(incident.id)}
                                 >
-                                  {isExpanded ? 'Hide events' : `Events (${filteredLabel})`}
-                                </button>
-                              </div>
-                            </Show>
-                            <Show when={isExpanded}>
-                              <div class="mt-2 space-y-2">
-                                <Show
-                                  when={filteredEvents.length > 0}
-                                  fallback={
-                                    <p class="text-[10px] text-muted">
-                                      No events match the selected filters.
-                                    </p>
-                                  }
-                                >
-                                  <For each={recentEvents}>
-                                    {(event) => (
-                                      <div class="rounded border border-border bg-surface-alt p-2">
-                                        <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
-                                          <span class="font-medium text-base-content">
-                                            {event.summary}
-                                          </span>
-                                          <span>{new Date(event.timestamp).toLocaleString()}</span>
-                                        </div>
-                                        <Show when={event.details && (event.details as { note?: string }).note}>
-                                          <p class="text-xs text-base-content mt-1">
-                                            {(event.details as { note?: string }).note}
-                                          </p>
-                                        </Show>
-                                        <Show when={event.details && (event.details as { command?: string }).command}>
-                                          <p class="text-xs text-base-content mt-1 font-mono">
-                                            {(event.details as { command?: string }).command}
-                                          </p>
-                                        </Show>
-                                        <Show when={event.details && (event.details as { output_excerpt?: string }).output_excerpt}>
-                                          <p class="text-xs text-muted mt-1">
-                                            {(event.details as { output_excerpt?: string }).output_excerpt}
-                                          </p>
-                                        </Show>
-                                      </div>
-                                    )}
-                                  </For>
-                                  <Show when={filteredEvents.length > recentEvents.length}>
-                                    <p class="text-[10px] text-muted">
-                                      Showing last {recentEvents.length} events
-                                    </p>
-                                  </Show>
-                                </Show>
-                              </div>
-                            </Show>
-                          </div>
-                        );
-                      }}
-                    </For>
-                  </div>
-                </Show>
-              </Show>
-            </Card>
-          );
-        }}
-      </Show>
+                                  {isExpanded ? 'Hide events': `Events (${filteredLabel})`}
+ </button>
+ </div>
+ </Show>
+ <Show when={isExpanded}>
+ <div class="mt-2 space-y-2">
+ <Show
+ when={filteredEvents.length > 0}
+ fallback={
+ <p class="text-[10px] text-muted">
+ No events match the selected filters.
+ </p>
+ }
+ >
+ <For each={recentEvents}>
+ {(event) => (
+ <div class="rounded border border-border bg-surface-alt p-2">
+ <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
+ <span class="font-medium text-base-content">
+ {event.summary}
+ </span>
+ <span>{new Date(event.timestamp).toLocaleString()}</span>
+ </div>
+ <Show when={event.details && (event.details as { note?: string }).note}>
+ <p class="text-xs text-base-content mt-1">
+ {(event.details as { note?: string }).note}
+ </p>
+ </Show>
+ <Show when={event.details && (event.details as { command?: string }).command}>
+ <p class="text-xs text-base-content mt-1 font-mono">
+ {(event.details as { command?: string }).command}
+ </p>
+ </Show>
+ <Show when={event.details && (event.details as { output_excerpt?: string }).output_excerpt}>
+ <p class="text-xs text-muted mt-1">
+ {(event.details as { output_excerpt?: string }).output_excerpt}
+ </p>
+ </Show>
+ </div>
+ )}
+ </For>
+ <Show when={filteredEvents.length > recentEvents.length}>
+ <p class="text-[10px] text-muted">
+ Showing last {recentEvents.length} events
+ </p>
+ </Show>
+ </Show>
+ </div>
+ </Show>
+ </div>
+ );
+ }}
+ </For>
+ </div>
+ </Show>
+ </Show>
+ </Card>
+ );
+ }}
+ </Show>
 
-      {/* Alert History Table */}
-      <Show
-        when={loading()}
-        fallback={
-          <Show
-            when={alertData().length > 0}
-            fallback={
-              <div class="text-center py-12 text-muted">
-                <p class="text-sm">No alerts found</p>
-                <p class="text-xs mt-1">Try adjusting your filters or check back later</p>
-              </div>
-            }
-          >
-            {/* Table */}
-            <div class="mb-2 border border-border rounded overflow-hidden">
-              <div class="overflow-x-auto">
-                <Table class="w-full min-w-[max-content] text-[11px] sm:text-sm">
-                  <TableHeader>
-                    <TableRow class="bg-surface-hover text-muted border-b border-border">
-                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
-                        Timestamp
-                      </TableHead>
-                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
-                        Source
-                      </TableHead>
-                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
-                        Resource
-                      </TableHead>
-                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
-                        Type
-                      </TableHead>
-                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
-                        Severity
-                      </TableHead>
-                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
-                        Message
-                      </TableHead>
-                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
-                        Duration
-                      </TableHead>
-                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
-                        Status
-                      </TableHead>
-                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
-                        Node
-                      </TableHead>
-                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
-                        Actions
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <For each={groupedAlerts()}>
-                      {(group) => (
-                        <>
-                          {/* Date divider */}
-                          <TableRow class="bg-surface-alt">
-                            <TableCell
-                              colspan={10}
-                              class="py-1.5 pr-3 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
-                            >
-                              <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                                <span class="truncate" title={group.fullLabel}>
-                                  {group.label}
-                                </span>
-                                <span class="text-[10px] font-medium text-muted">
-                                  {(() => {
-                                    const alertCount = group.alerts.filter(a => a.source === 'alert').length;
+ {/* Alert History Table */}
+ <Show
+ when={loading()}
+ fallback={
+ <Show
+ when={alertData().length > 0}
+ fallback={
+ <div class="text-center py-12 text-muted">
+ <p class="text-sm">No alerts found</p>
+ <p class="text-xs mt-1">Try adjusting your filters or check back later</p>
+ </div>
+ }
+ >
+ {/* Table */}
+ <div class="mb-2 border border-border rounded overflow-hidden">
+ <div class="overflow-x-auto">
+ <Table class="w-full min-w-[max-content] text-[11px] sm:text-sm">
+ <TableHeader>
+ <TableRow class="bg-surface-hover text-muted border-b border-border">
+ <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+ Timestamp
+ </TableHead>
+ <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+ Source
+ </TableHead>
+ <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+ Resource
+ </TableHead>
+ <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+ Type
+ </TableHead>
+ <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+ Severity
+ </TableHead>
+ <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+ Message
+ </TableHead>
+ <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+ Duration
+ </TableHead>
+ <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+ Status
+ </TableHead>
+ <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+ Node
+ </TableHead>
+ <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+ Actions
+ </TableHead>
+ </TableRow>
+ </TableHeader>
+ <TableBody>
+ <For each={groupedAlerts()}>
+ {(group) => (
+ <>
+ {/* Date divider */}
+ <TableRow class="bg-surface-alt">
+ <TableCell
+ colspan={10}
+ class="py-1.5 pr-3 pl-4 text-[12px] sm:text-sm font-semibold "
+ >
+ <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+ <span class="truncate" title={group.fullLabel}>
+ {group.label}
+ </span>
+ <span class="text-[10px] font-medium text-muted">
+ {(() => {
+ const alertCount = group.alerts.filter(a => a.source ==='alert').length;
                                     const aiCount = group.alerts.filter(a => a.source === 'ai').length;
                                     const parts = [];
                                     if (alertCount > 0) parts.push(`${alertCount} alert${alertCount === 1 ? '' : 's'}`);
@@ -4817,7 +4816,7 @@ function HistoryTab(props: {
                                 <>
                                   <TableRow
                                     class={`border-b border-border hover:bg-surface-hover ${alert.status === 'active' ? 'bg-red-50 dark:bg-red-900' : ''
-                                      }`}
+ }`}
                                   >
                                     {/* Timestamp */}
                                     <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-muted font-mono whitespace-nowrap">
@@ -4831,9 +4830,9 @@ function HistoryTab(props: {
                                     <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
                                       <span
                                         class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${alert.source === 'ai'
-                                          ? 'bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300'
-                                          : 'bg-sky-100 dark:bg-sky-900 text-sky-700 dark:text-sky-300'
-                                          }`}
+ ? 'bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300'
+ : 'bg-sky-100 dark:bg-sky-900 text-sky-700 dark:text-sky-300'
+ }`}
                                       >
                                         {alert.source === 'ai' ? 'Patrol' : 'Alert'}
                                       </span>
@@ -4848,15 +4847,15 @@ function HistoryTab(props: {
                                     <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2">
                                       <span
                                         class={`text-xs px-1 py-0.5 rounded ${alert.resourceType === 'VM'
-                                          ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-                                          : alert.resourceType === 'CT'
-                                            ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
-                                            : alert.resourceType === 'Node'
-                                              ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-                                              : alert.resourceType === 'Storage'
-                                                ? 'bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300'
-                                                : 'bg-surface-hover text-base-content'
-                                          }`}
+ ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+ : alert.resourceType === 'CT'
+ ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
+ : alert.resourceType === 'Node'
+ ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+ : alert.resourceType === 'Storage'
+ ? 'bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300'
+ : 'bg-surface-hover text-base-content'
+ }`}
                                       >
                                         {alert.type}
                                       </span>
@@ -4866,9 +4865,9 @@ function HistoryTab(props: {
                                     <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
                                       <span
                                         class={`text-xs px-2 py-0.5 rounded font-medium ${alert.level === 'critical'
-                                          ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
-                                          : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
-                                          }`}
+ ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
+ : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
+ }`}
                                       >
                                         {alert.level}
                                       </span>
@@ -4891,11 +4890,11 @@ function HistoryTab(props: {
                                     <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
                                       <span
                                         class={`text-xs px-2 py-0.5 rounded ${alert.status === 'active'
-                                          ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 font-medium'
-                                          : alert.status === 'acknowledged'
-                                            ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
-                                            : 'bg-surface-hover text-base-content'
-                                          }`}
+ ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 font-medium'
+ : alert.status === 'acknowledged'
+ ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
+ : 'bg-surface-hover text-base-content'
+ }`}
                                       >
                                         {alert.status}
                                       </span>

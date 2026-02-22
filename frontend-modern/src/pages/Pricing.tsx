@@ -156,103 +156,103 @@ export default function Pricing() {
         <a
           class="w-full inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
           href={getUpgradeActionUrlOrFallback('upgrade')}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Upgrade to Pro
-        </a>
-      );
-    }
+ target="_blank"
+ rel="noopener noreferrer"
+ >
+ Upgrade to Pro
+ </a>
+ );
+ }
 
-    return (
-      <TierCtaButton disabled={startingTrial()} onClick={startTrial}>
-        Start Free 14-day Trial
-      </TierCtaButton>
-    );
-  });
+ return (
+ <TierCtaButton disabled={startingTrial()} onClick={startTrial}>
+ Start Free 14-day Trial
+ </TierCtaButton>
+ );
+ });
 
-  return (
-    <div class="space-y-6">
-      <div class="space-y-1">
-        <h1 class="text-2xl font-semibold text-base-content">Pricing</h1>
-        <p class="text-sm text-muted">
-          Compare tiers and choose what fits.
-        </p>
-      </div>
+ return (
+ <div class="space-y-6">
+ <div class="space-y-1">
+ <h1 class="text-2xl font-semibold text-base-content">Pricing</h1>
+ <p class="text-sm text-muted">
+ Compare tiers and choose what fits.
+ </p>
+ </div>
 
-      <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card padding="lg" class="relative">
-          <h2 class="text-lg font-semibold text-base-content">Community</h2>
-          <div class="mt-2 text-3xl font-semibold tracking-tight text-base-content">
-            Free forever
-          </div>
-          <ul class="mt-4 space-y-2 text-sm text-base-content">
-            <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Real-time monitoring</span></li>
-            <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Update alerts</span></li>
-            <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Basic SSO (OIDC)</span></li>
-            <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>AI Patrol (monitor only)</span></li>
-            <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Community support</span></li>
-          </ul>
-          <div class="mt-6">
-            {communityCta()}
-          </div>
-        </Card>
+ <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+ <Card padding="lg" class="relative">
+ <h2 class="text-lg font-semibold text-base-content">Community</h2>
+ <div class="mt-2 text-3xl font-semibold tracking-tight text-base-content">
+ Free forever
+ </div>
+ <ul class="mt-4 space-y-2 text-sm text-base-content">
+ <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Real-time monitoring</span></li>
+ <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Update alerts</span></li>
+ <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Basic SSO (OIDC)</span></li>
+ <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>AI Patrol (monitor only)</span></li>
+ <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Community support</span></li>
+ </ul>
+ <div class="mt-6">
+ {communityCta()}
+ </div>
+ </Card>
 
-        <Card
-          padding="lg"
-          class="relative overflow-hidden ring-2 ring-blue-600 dark:ring-blue-500 border-blue-200 dark:border-blue-900"
-        >
-          <div class="absolute right-4 top-4">
-            <span class="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">
-              Most Popular
-            </span>
-          </div>
+ <Card
+ padding="lg"
+ class="relative overflow-hidden ring-2 ring-blue-600 dark:ring-blue-500 border-blue-200 dark:border-blue-900"
+ >
+ <div class="absolute right-4 top-4">
+ <span class="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">
+ Most Popular
+ </span>
+ </div>
 
-          <h2 class="text-lg font-semibold text-base-content">Pro</h2>
-          <div class="mt-2 text-3xl font-semibold tracking-tight text-base-content">
-            $15/month
-          </div>
-          <div class="mt-1 text-sm text-muted">
-            or $129/year (save 28%)
-          </div>
+ <h2 class="text-lg font-semibold text-base-content">Pro</h2>
+ <div class="mt-2 text-3xl font-semibold tracking-tight text-base-content">
+ $15/month
+ </div>
+ <div class="mt-1 text-sm text-muted">
+ or $129/year (save 28%)
+ </div>
 
-          <ul class="mt-4 space-y-2 text-sm text-base-content">
-            <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Everything in Community</span></li>
-            <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>AI Auto-Fix &amp; Investigation</span></li>
-            <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Pulse Relay (mobile)</span></li>
-            <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>90-day metric history</span></li>
-            <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>RBAC &amp; guest access</span></li>
-            <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Audit logging</span></li>
-            <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Advanced SSO</span></li>
-            <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Agent profiles</span></li>
-          </ul>
+ <ul class="mt-4 space-y-2 text-sm text-base-content">
+ <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Everything in Community</span></li>
+ <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>AI Auto-Fix &amp; Investigation</span></li>
+ <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Pulse Relay (mobile)</span></li>
+ <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>90-day metric history</span></li>
+ <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>RBAC &amp; guest access</span></li>
+ <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Audit logging</span></li>
+ <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Advanced SSO</span></li>
+ <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Agent profiles</span></li>
+ </ul>
 
-          <div class="mt-6 space-y-2">
-            {proCta()}
-            <Show when={trialMessage()}>
-              <div class="text-xs text-amber-700 dark:text-amber-300">{trialMessage()}</div>
-            </Show>
-          </div>
-        </Card>
+ <div class="mt-6 space-y-2">
+ {proCta()}
+ <Show when={trialMessage()}>
+ <div class="text-xs text-amber-700 dark:text-amber-300">{trialMessage()}</div>
+ </Show>
+ </div>
+ </Card>
 
-        <Card padding="lg" class="relative">
-          <h2 class="text-lg font-semibold text-base-content">Cloud</h2>
-          <div class="mt-2 text-3xl font-semibold tracking-tight text-base-content">
-            $29/month
-          </div>
-          <div class="mt-1 text-sm text-muted">
-            Founding price: $19/mo for first 100 signups
-          </div>
-          <ul class="mt-4 space-y-2 text-sm text-base-content">
-            <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Everything in Pro</span></li>
-            <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Managed hosting</span></li>
-            <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Automatic backups</span></li>
-            <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Priority support</span></li>
-          </ul>
-          <div class="mt-6">
-            <a
-              class="w-full inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
-              href={getUpgradeActionUrlOrFallback('cloud')}
+ <Card padding="lg" class="relative">
+ <h2 class="text-lg font-semibold text-base-content">Cloud</h2>
+ <div class="mt-2 text-3xl font-semibold tracking-tight text-base-content">
+ $29/month
+ </div>
+ <div class="mt-1 text-sm text-muted">
+ Founding price: $19/mo for first 100 signups
+ </div>
+ <ul class="mt-4 space-y-2 text-sm text-base-content">
+ <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Everything in Pro</span></li>
+ <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Managed hosting</span></li>
+ <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Automatic backups</span></li>
+ <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Priority support</span></li>
+ </ul>
+ <div class="mt-6">
+ <a
+ class="w-full inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
+ href={getUpgradeActionUrlOrFallback('cloud')}
               target="_blank"
               rel="noopener noreferrer"
             >

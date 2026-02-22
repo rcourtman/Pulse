@@ -372,107 +372,107 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
             {props.pmg.name}
           </a>
           <StatusBadge status={props.pmg.status || ''} health={props.pmg.connectionHealth} />
-          <Show when={props.pmg.version}>
-            <span class="text-xs text-muted bg-surface-hover px-1.5 py-0.5 rounded">
-              v{props.pmg.version}
-            </span>
-          </Show>
-        </div>
-        <div class="flex items-center gap-4 text-xs text-muted">
-          <QueueIndicator queue={instanceQueue()} />
-          <span>Updated {lastUpdated()}</span>
-        </div>
-      </div>
+ <Show when={props.pmg.version}>
+ <span class="text-xs text-muted bg-surface-hover px-1.5 py-0.5 rounded">
+ v{props.pmg.version}
+ </span>
+ </Show>
+ </div>
+ <div class="flex items-center gap-4 text-xs text-muted">
+ <QueueIndicator queue={instanceQueue()} />
+ <span>Updated {lastUpdated()}</span>
+ </div>
+ </div>
 
-      <div class="p-4">
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-          <ThreatBar percent={stats().spamPct} color="spam" label="Spam Rate" count={stats().spam} />
-          <ThreatBar percent={stats().virusPct} color="virus" label="Virus Rate" count={stats().virus} />
-          <ThreatBar percent={stats().quarantinePct} color="quarantine" label="Quarantine Rate" count={stats().qTotal} />
-        </div>
+ <div class="p-4">
+ <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+ <ThreatBar percent={stats().spamPct} color="spam" label="Spam Rate" count={stats().spam} />
+ <ThreatBar percent={stats().virusPct} color="virus" label="Virus Rate" count={stats().virus} />
+ <ThreatBar percent={stats().quarantinePct} color="quarantine" label="Quarantine Rate" count={stats().qTotal} />
+ </div>
 
-        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-          <div class="bg-surface-alt rounded-md p-3">
-            <div class="text-xs text-muted mb-1">Total (24h)</div>
-            <div class="text-lg font-bold text-base-content">{formatCompact(stats().total)}</div>
-            <div class="text-[10px] text-slate-400">{formatNum(Math.round(stats().total / 24))}/hr</div>
-          </div>
-          <div class="bg-surface-alt rounded-md p-3">
-            <div class="text-xs text-muted mb-1">Inbound</div>
-            <div class="text-lg font-bold text-base-content">{formatCompact(stats().inbound)}</div>
-            <div class="text-[10px] text-slate-400">{formatBytes(stats().bytesIn)}</div>
-          </div>
-          <div class="bg-surface-alt rounded-md p-3">
-            <div class="text-xs text-muted mb-1">Outbound</div>
-            <div class="text-lg font-bold text-base-content">{formatCompact(stats().outbound)}</div>
-            <div class="text-[10px] text-slate-400">{formatBytes(stats().bytesOut)}</div>
-          </div>
+ <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+ <div class="bg-surface-alt rounded-md p-3">
+ <div class="text-xs text-muted mb-1">Total (24h)</div>
+ <div class="text-lg font-bold text-base-content">{formatCompact(stats().total)}</div>
+ <div class="text-[10px] ">{formatNum(Math.round(stats().total / 24))}/hr</div>
+ </div>
+ <div class="bg-surface-alt rounded-md p-3">
+ <div class="text-xs text-muted mb-1">Inbound</div>
+ <div class="text-lg font-bold text-base-content">{formatCompact(stats().inbound)}</div>
+ <div class="text-[10px] ">{formatBytes(stats().bytesIn)}</div>
+ </div>
+ <div class="bg-surface-alt rounded-md p-3">
+ <div class="text-xs text-muted mb-1">Outbound</div>
+ <div class="text-lg font-bold text-base-content">{formatCompact(stats().outbound)}</div>
+ <div class="text-[10px] ">{formatBytes(stats().bytesOut)}</div>
+ </div>
 
-          <div class="bg-orange-50 dark:bg-orange-900 rounded-md p-3">
-            <div class="text-xs text-orange-600 dark:text-orange-400 mb-1">Spam</div>
-            <div class="text-lg font-bold text-orange-600 dark:text-orange-400">{formatCompact(stats().spam)}</div>
-            <div class="text-[10px] text-orange-500">{formatPct(stats().spamPct)} rate</div>
-          </div>
-          <div class="bg-red-50 dark:bg-red-900 rounded-md p-3">
-            <div class="text-xs text-red-600 dark:text-red-400 mb-1">Viruses</div>
-            <div class="text-lg font-bold text-red-600 dark:text-red-400">{formatCompact(stats().virus)}</div>
-            <div class="text-[10px] text-red-500">{formatPct(stats().virusPct)} rate</div>
-          </div>
-          <div class="bg-yellow-50 dark:bg-yellow-900 rounded-md p-3">
-            <div class="text-xs text-yellow-600 dark:text-yellow-400 mb-1">Quarantine</div>
-            <div class="text-lg font-bold text-yellow-600 dark:text-yellow-400">{formatCompact(stats().qTotal)}</div>
-            <div class="text-[10px] text-yellow-500">{formatPct(stats().quarantinePct)} of inbound</div>
-          </div>
-        </div>
+ <div class="bg-orange-50 dark:bg-orange-900 rounded-md p-3">
+ <div class="text-xs text-orange-600 dark:text-orange-400 mb-1">Spam</div>
+ <div class="text-lg font-bold text-orange-600 dark:text-orange-400">{formatCompact(stats().spam)}</div>
+ <div class="text-[10px] text-orange-500">{formatPct(stats().spamPct)} rate</div>
+ </div>
+ <div class="bg-red-50 dark:bg-red-900 rounded-md p-3">
+ <div class="text-xs text-red-600 dark:text-red-400 mb-1">Viruses</div>
+ <div class="text-lg font-bold text-red-600 dark:text-red-400">{formatCompact(stats().virus)}</div>
+ <div class="text-[10px] text-red-500">{formatPct(stats().virusPct)} rate</div>
+ </div>
+ <div class="bg-yellow-50 dark:bg-yellow-900 rounded-md p-3">
+ <div class="text-xs text-yellow-600 dark:text-yellow-400 mb-1">Quarantine</div>
+ <div class="text-lg font-bold text-yellow-600 dark:text-yellow-400">{formatCompact(stats().qTotal)}</div>
+ <div class="text-[10px] text-yellow-500">{formatPct(stats().quarantinePct)} of inbound</div>
+ </div>
+ </div>
 
-        <div class="mt-3 pt-3 border-t border-border">
-          <div class="text-xs font-medium text-muted uppercase tracking-wide mb-2">Delivery Health</div>
-          <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs">
-            <div class="flex items-center gap-2">
-              <span class="text-muted">RBL Rejects:</span>
-              <span class="font-medium text-base-content">{formatNum(stats().rbl)}</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <span class="text-muted">Pregreet:</span>
-              <span class="font-medium text-base-content">{formatNum(stats().pregreet)}</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <span class="text-muted">Greylisted:</span>
-              <span class="font-medium text-base-content">{formatNum(stats().greylist)}</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <span class="text-muted">Bounces In/Out:</span>
-              <span class="font-medium text-base-content">{formatNum(stats().bouncesIn)}/{formatNum(stats().bouncesOut)}</span>
-            </div>
-            <Show when={props.pmg.mailStats?.averageProcessTimeMs}>
-              <div class="flex items-center gap-2">
-                <span class="text-muted">Avg Process:</span>
-                <span class="font-medium text-base-content">{formatDec((props.pmg.mailStats?.averageProcessTimeMs || 0) / 1000, 2)}s</span>
-              </div>
-            </Show>
-          </div>
-        </div>
+ <div class="mt-3 pt-3 border-t border-border">
+ <div class="text-xs font-medium text-muted uppercase tracking-wide mb-2">Delivery Health</div>
+ <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs">
+ <div class="flex items-center gap-2">
+ <span class="text-muted">RBL Rejects:</span>
+ <span class="font-medium text-base-content">{formatNum(stats().rbl)}</span>
+ </div>
+ <div class="flex items-center gap-2">
+ <span class="text-muted">Pregreet:</span>
+ <span class="font-medium text-base-content">{formatNum(stats().pregreet)}</span>
+ </div>
+ <div class="flex items-center gap-2">
+ <span class="text-muted">Greylisted:</span>
+ <span class="font-medium text-base-content">{formatNum(stats().greylist)}</span>
+ </div>
+ <div class="flex items-center gap-2">
+ <span class="text-muted">Bounces In/Out:</span>
+ <span class="font-medium text-base-content">{formatNum(stats().bouncesIn)}/{formatNum(stats().bouncesOut)}</span>
+ </div>
+ <Show when={props.pmg.mailStats?.averageProcessTimeMs}>
+ <div class="flex items-center gap-2">
+ <span class="text-muted">Avg Process:</span>
+ <span class="font-medium text-base-content">{formatDec((props.pmg.mailStats?.averageProcessTimeMs || 0) / 1000, 2)}s</span>
+ </div>
+ </Show>
+ </div>
+ </div>
 
-        <Show when={(props.pmg.nodes?.length ?? 0) > 0}>
-          <div class="mt-3 pt-3 border-t border-border">
-            <div class="text-xs font-medium text-muted uppercase tracking-wide mb-2">
-              Cluster Nodes ({props.pmg.nodes?.length})
-            </div>
-            <div class="overflow-x-auto -mx-4 px-4">
-              <Table class="w-full min-w-[600px] text-xs">
-                <TableHeader>
-                  <TableRow class="text-left text-[10px] uppercase tracking-wide text-muted border-b border-border">
-                    <TableHead class="pb-1.5 font-medium">Node</TableHead>
-                    <TableHead class="pb-1.5 font-medium">Status</TableHead>
-                    <TableHead class="pb-1.5 font-medium">Uptime</TableHead>
-                    <TableHead class="pb-1.5 font-medium">Load</TableHead>
-                    <TableHead class="pb-1.5 font-medium">Queue</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody class="divide-y divide-gray-100 dark:divide-gray-700">
-                  <For each={props.pmg.nodes}>
-                    {(node) => {
-                      const isOnline = (node.status || '').toLowerCase() === 'online';
+ <Show when={(props.pmg.nodes?.length ?? 0) > 0}>
+ <div class="mt-3 pt-3 border-t border-border">
+ <div class="text-xs font-medium text-muted uppercase tracking-wide mb-2">
+ Cluster Nodes ({props.pmg.nodes?.length})
+ </div>
+ <div class="overflow-x-auto -mx-4 px-4">
+ <Table class="w-full min-w-[600px] text-xs">
+ <TableHeader>
+ <TableRow class="text-left text-[10px] uppercase tracking-wide text-muted border-b border-border">
+ <TableHead class="pb-1.5 font-medium">Node</TableHead>
+ <TableHead class="pb-1.5 font-medium">Status</TableHead>
+ <TableHead class="pb-1.5 font-medium">Uptime</TableHead>
+ <TableHead class="pb-1.5 font-medium">Load</TableHead>
+ <TableHead class="pb-1.5 font-medium">Queue</TableHead>
+ </TableRow>
+ </TableHeader>
+ <TableBody class="divide-y divide-gray-100 dark:divide-gray-700">
+ <For each={props.pmg.nodes}>
+ {(node) => {
+ const isOnline = (node.status ||'').toLowerCase() === 'online';
 
                       return (
                         <TableRow class="hover:bg-surface-hover">
@@ -489,73 +489,73 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
                             </Show>
                           </TableCell>
                           <TableCell class="py-1.5 text-muted">{node.loadAvg || '—'}</TableCell>
-                          <TableCell class="py-1.5">
-                            <QueueIndicator queue={node.queueStatus} />
-                          </TableCell>
-                        </TableRow>
-                      );
-                    }}
-                  </For>
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-        </Show>
+ <TableCell class="py-1.5">
+ <QueueIndicator queue={node.queueStatus} />
+ </TableCell>
+ </TableRow>
+ );
+ }}
+ </For>
+ </TableBody>
+ </Table>
+ </div>
+ </div>
+ </Show>
 
-        <Show when={(props.pmg.spamDistribution?.length ?? 0) > 0}>
-          <div class="mt-3 pt-3 border-t border-border">
-            <div class="text-xs font-medium text-muted uppercase tracking-wide mb-2">Spam Score Distribution</div>
-            <div class="flex gap-1 overflow-x-auto pb-1">
-              <For each={props.pmg.spamDistribution}>
-                {(bucket) => {
-                  const totalScored = props.pmg.spamDistribution?.reduce((sum, b) => sum + b.count, 0) || 1;
-                  const pct = (bucket.count / totalScored) * 100;
-                  return (
-                    <div class="flex-shrink-0 text-center bg-surface-alt rounded px-2 py-1.5 min-w-[50px]">
-                      <div class="text-[10px] text-muted">{bucket.score}</div>
-                      <div class="text-xs font-semibold text-base-content">{formatCompact(bucket.count)}</div>
-                      <div class="text-[10px] text-slate-400">{formatDec(pct)}%</div>
-                    </div>
-                  );
-                }}
-              </For>
-            </div>
-          </div>
-        </Show>
+ <Show when={(props.pmg.spamDistribution?.length ?? 0) > 0}>
+ <div class="mt-3 pt-3 border-t border-border">
+ <div class="text-xs font-medium text-muted uppercase tracking-wide mb-2">Spam Score Distribution</div>
+ <div class="flex gap-1 overflow-x-auto pb-1">
+ <For each={props.pmg.spamDistribution}>
+ {(bucket) => {
+ const totalScored = props.pmg.spamDistribution?.reduce((sum, b) => sum + b.count, 0) || 1;
+ const pct = (bucket.count / totalScored) * 100;
+ return (
+ <div class="flex-shrink-0 text-center bg-surface-alt rounded px-2 py-1.5 min-w-[50px]">
+ <div class="text-[10px] text-muted">{bucket.score}</div>
+ <div class="text-xs font-semibold text-base-content">{formatCompact(bucket.count)}</div>
+ <div class="text-[10px] ">{formatDec(pct)}%</div>
+ </div>
+ );
+ }}
+ </For>
+ </div>
+ </div>
+ </Show>
 
-        <Show when={(props.pmg.relayDomains?.length ?? 0) > 0}>
-          <div class="mt-3 pt-3 border-t border-border">
-            <div class="flex items-center justify-between gap-3 mb-2">
-              <div class="text-xs font-medium text-muted uppercase tracking-wide">
-                Relay Domains (24h)
-              </div>
-              <div class="flex items-center gap-3 text-xs text-muted">
-                <Show when={domainStatsAsOfRelative()}>
-                  <span>As of {domainStatsAsOfRelative()}</span>
-                </Show>
-                <span>{formatNum(props.pmg.relayDomains?.length ?? 0)}</span>
-              </div>
-            </div>
+ <Show when={(props.pmg.relayDomains?.length ?? 0) > 0}>
+ <div class="mt-3 pt-3 border-t border-border">
+ <div class="flex items-center justify-between gap-3 mb-2">
+ <div class="text-xs font-medium text-muted uppercase tracking-wide">
+ Relay Domains (24h)
+ </div>
+ <div class="flex items-center gap-3 text-xs text-muted">
+ <Show when={domainStatsAsOfRelative()}>
+ <span>As of {domainStatsAsOfRelative()}</span>
+ </Show>
+ <span>{formatNum(props.pmg.relayDomains?.length ?? 0)}</span>
+ </div>
+ </div>
 
-            <div class="overflow-auto max-h-[240px] rounded-md border border-border">
-              <Table class="w-full min-w-[780px] text-xs">
-                <TableHeader class="bg-surface-alt">
-                  <TableRow class="text-left text-[10px] uppercase tracking-wide text-muted border-b border-border">
-                    <TableHead class="px-3 py-2 font-medium">Domain</TableHead>
-                    <TableHead class="px-3 py-2 font-medium">Mail</TableHead>
-                    <TableHead class="px-3 py-2 font-medium">Spam</TableHead>
-                    <TableHead class="px-3 py-2 font-medium">Virus</TableHead>
-                    <TableHead class="px-3 py-2 font-medium">Spam Rate</TableHead>
-                    <TableHead class="px-3 py-2 font-medium">Bytes</TableHead>
-                    <TableHead class="px-3 py-2 font-medium">Comment</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody class="divide-y divide-gray-100 dark:divide-gray-700">
-                  <For each={relayDomainsWithStats()}>
-                    {(row) => (
-                      <TableRow class="hover:bg-surface-hover">
-                        <TableCell class="px-3 py-2 font-medium text-base-content">{row.domain}</TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">{row.hasStats ? fmtMaybe(row.mail) : '—'}</TableCell>
+ <div class="overflow-auto max-h-[240px] rounded-md border border-border">
+ <Table class="w-full min-w-[780px] text-xs">
+ <TableHeader class="bg-surface-alt">
+ <TableRow class="text-left text-[10px] uppercase tracking-wide text-muted border-b border-border">
+ <TableHead class="px-3 py-2 font-medium">Domain</TableHead>
+ <TableHead class="px-3 py-2 font-medium">Mail</TableHead>
+ <TableHead class="px-3 py-2 font-medium">Spam</TableHead>
+ <TableHead class="px-3 py-2 font-medium">Virus</TableHead>
+ <TableHead class="px-3 py-2 font-medium">Spam Rate</TableHead>
+ <TableHead class="px-3 py-2 font-medium">Bytes</TableHead>
+ <TableHead class="px-3 py-2 font-medium">Comment</TableHead>
+ </TableRow>
+ </TableHeader>
+ <TableBody class="divide-y divide-gray-100 dark:divide-gray-700">
+ <For each={relayDomainsWithStats()}>
+ {(row) => (
+ <TableRow class="hover:bg-surface-hover">
+ <TableCell class="px-3 py-2 font-medium text-base-content">{row.domain}</TableCell>
+ <TableCell class="px-3 py-2 text-base-content">{row.hasStats ? fmtMaybe(row.mail) :'—'}</TableCell>
                         <TableCell class="px-3 py-2 text-orange-700 dark:text-orange-300">{row.hasStats ? fmtMaybe(row.spam) : '—'}</TableCell>
                         <TableCell class="px-3 py-2 text-red-700 dark:text-red-300">{row.hasStats ? fmtMaybe(row.virus) : '—'}</TableCell>
                         <TableCell class="px-3 py-2 text-base-content">

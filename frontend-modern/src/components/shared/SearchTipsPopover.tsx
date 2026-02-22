@@ -70,23 +70,22 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
   const triggerClasses =
     triggerVariant === 'button'
       ? `rounded-md border border-slate-200 px-2.5 py-1 text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700 ${triggerBaseClasses}`
-      : triggerVariant === 'link'
-      ? `rounded px-1 py-0.5 text-slate-500 underline decoration-dotted underline-offset-4 transition-colors hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 ${triggerBaseClasses}`
-      : `flex h-5 w-5 items-center justify-center rounded-full text-slate-400 transition-colors hover:text-muted dark:hover:text-slate-100 ${triggerBaseClasses}`;
+      : triggerVariant === 'link'? `rounded px-1 py-0.5 underline decoration-dotted underline-offset-4 transition-colors hover:text-base-content ${triggerBaseClasses}`
+ : `flex h-5 w-5 items-center justify-center rounded-full transition-colors hover:text-muted ${triggerBaseClasses}`;
 
-  const handleMouseEnter = () => {
-    pointerInside = true;
-    setOpen(true);
-  };
+ const handleMouseEnter = () => {
+ pointerInside = true;
+ setOpen(true);
+ };
 
-  const handleMouseLeave = () => {
-    pointerInside = false;
-    setOpen(false);
-  };
+ const handleMouseLeave = () => {
+ pointerInside = false;
+ setOpen(false);
+ };
 
-  return (
-    <div
-      class={`relative ${props.class ?? ''}`}
+ return (
+ <div
+ class={`relative ${props.class ??''}`}
       onMouseEnter={openOnHover ? handleMouseEnter : undefined}
       onMouseLeave={openOnHover ? handleMouseLeave : undefined}
     >
@@ -136,7 +135,7 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
             </span>
             <button
               type="button"
-              class="rounded p-1 text-slate-400 transition-colors hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+              class="rounded p-1 transition-colors hover:text-muted dark:hover:text-slate-300"
               onClick={close}
               aria-label="Close search tips"
             >

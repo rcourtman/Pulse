@@ -113,7 +113,7 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                       </div>
                     </Show>
 
-                    <div class="text-[10px] text-slate-500 dark:text-slate-500 mt-1">
+                    <div class="text-[10px] text-muted mt-1">
                       {formatTimestamp(msg.timestamp)}
                     </div>
                   </div>

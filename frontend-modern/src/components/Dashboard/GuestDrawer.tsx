@@ -119,9 +119,9 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                 <button
                     onClick={() => switchTab('overview')}
                     class={`pb-2 text-sm font-medium transition-colors relative ${activeTab() === 'overview'
-                        ? 'text-blue-600 dark:text-blue-400'
-                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-                        }`}
+ ? 'text-blue-600 dark:text-blue-400'
+ : ' hover:text-muted dark:hover:text-slate-200'
+ }`}
                 >
                     Overview
                     {activeTab() === 'overview' && (
@@ -131,9 +131,9 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                 <button
                     onClick={() => switchTab('discovery')}
                     class={`pb-2 text-sm font-medium transition-colors relative ${activeTab() === 'discovery'
-                        ? 'text-blue-600 dark:text-blue-400'
-                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-                        }`}
+ ? 'text-blue-600 dark:text-blue-400'
+ : ' hover:text-muted dark:hover:text-slate-200'
+ }`}
                 >
                     Discovery
                     {activeTab() === 'discovery' && (
@@ -267,42 +267,42 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                             <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Tags</div>
                             <div class="flex flex-wrap gap-1">
                                 <For each={Array.isArray(props.guest.tags) ? props.guest.tags : (props.guest.tags?.split(',') || [])}>
-                                    {(tag) => (
-                                        <span class="inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-700 dark:bg-slate-700 dark:text-slate-200">
-                                            {tag.trim()}
-                                        </span>
-                                    )}
-                                </For>
-                            </div>
-                        </div>
-                    </Show>
+ {(tag) => (
+ <span class="inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] dark:bg-slate-700">
+ {tag.trim()}
+ </span>
+ )}
+ </For>
+ </div>
+ </div>
+ </Show>
 
-                    {/* Filesystems */}
-                    <Show when={hasFilesystemDetails() && props.guest.disks && props.guest.disks.length > 0}>
-                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Filesystems</div>
-                            <div class="text-[11px] text-muted">
-                                <DiskList
-                                    disks={props.guest.disks || []}
-                                    diskStatusReason={isVM(props.guest) ? (props.guest as any).diskStatusReason : undefined}
-                                />
-                            </div>
-                        </div>
-                    </Show>
+ {/* Filesystems */}
+ <Show when={hasFilesystemDetails() && props.guest.disks && props.guest.disks.length > 0}>
+ <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+ <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Filesystems</div>
+ <div class="text-[11px] text-muted">
+ <DiskList
+ disks={props.guest.disks || []}
+ diskStatusReason={isVM(props.guest) ? (props.guest as any).diskStatusReason : undefined}
+ />
+ </div>
+ </div>
+ </Show>
 
-                    {/* Network Interfaces */}
-                    <Show when={hasNetworkInterfaces()}>
-                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Network</div>
-                            <div class="space-y-2">
-                                <For each={networkInterfaces().slice(0, 4)}>
-                                    {(iface) => {
-                                        const addresses = iface.addresses ?? [];
-                                        const hasTraffic = (iface.rxBytes ?? 0) > 0 || (iface.txBytes ?? 0) > 0;
-                                        return (
-                                            <div class="rounded border border-dashed border-slate-200 p-2 dark:border-slate-700 overflow-hidden">
-                                                <div class="flex items-center gap-2 text-[11px] font-medium text-base-content min-w-0">
-                                                    <span class="truncate min-w-0">{iface.name || 'interface'}</span>
+ {/* Network Interfaces */}
+ <Show when={hasNetworkInterfaces()}>
+ <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+ <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Network</div>
+ <div class="space-y-2">
+ <For each={networkInterfaces().slice(0, 4)}>
+ {(iface) => {
+ const addresses = iface.addresses ?? [];
+ const hasTraffic = (iface.rxBytes ?? 0) > 0 || (iface.txBytes ?? 0) > 0;
+ return (
+ <div class="rounded border border-dashed border-slate-200 p-2 dark:border-slate-700 overflow-hidden">
+ <div class="flex items-center gap-2 text-[11px] font-medium text-base-content min-w-0">
+ <span class="truncate min-w-0">{iface.name ||'interface'}</span>
                                                     <Show when={iface.mac}>
                                                         <span class="text-[9px] text-muted font-normal truncate shrink-0 max-w-[100px]" title={iface.mac}>{iface.mac}</span>
                                                     </Show>

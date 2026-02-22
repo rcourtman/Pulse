@@ -398,89 +398,89 @@ Keep these credentials secure!
                     <button
                         onClick={() => {
                             void generateNewToken('manual');
-                        }}
-                        disabled={generatingToken()}
-                        class="text-xs bg-surface-alt text-muted hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-base-content px-2.5 py-1.5 rounded-md flex items-center gap-1.5 disabled:opacity-50 transition-colors border border-transparent dark:border-slate-700"
-                        title="Generate a new token for the next host"
-                    >
-                        {generatingToken() ? (
-                            <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                            </svg>
-                        ) : (
-                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                            </svg>
-                        )}
-                        New Token
-                    </button>
-                </div>
-                <p class="text-muted text-xs mb-3">
-                    Copy and run on each host you want monitored. <span class="text-emerald-600 dark:text-emerald-400 font-medium">A new token is generated automatically after each copy.</span>
-                </p>
+ }}
+ disabled={generatingToken()}
+ class="text-xs bg-surface-alt text-muted hover:bg-slate-200 hover:text-base-content px-2.5 py-1.5 rounded-md flex items-center gap-1.5 disabled:opacity-50 transition-colors border border-transparent "
+ title="Generate a new token for the next host"
+ >
+ {generatingToken() ? (
+ <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+ <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+ <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+ </svg>
+ ) : (
+ <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+ </svg>
+ )}
+ New Token
+ </button>
+ </div>
+ <p class="text-muted text-xs mb-3">
+ Copy and run on each host you want monitored. <span class="text-emerald-600 dark:text-emerald-400 font-medium">A new token is generated automatically after each copy.</span>
+ </p>
 
-                <div class="bg-slate-50 dark:bg-slate-950 rounded-md p-4 font-mono text-xs mb-3 relative group border border-border">
-                    <code class="text-emerald-600 dark:text-emerald-400 break-all block leading-relaxed pr-8">{getInstallCommand()}</code>
-                    <button
-                        onClick={handleCopyInstall}
-                        class="absolute top-2.5 right-2.5 p-2 bg-surface border border-border hover:bg-surface-hover rounded-md transition-colors group-hover:opacity-100 sm:opacity-0 focus:opacity-100"
-                        title="Copy command"
-                    >
-                        {copied() === 'install' ? (
-                            <svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                            </svg>
-                        ) : (
-                            <svg class="w-4 h-4 text-muted group-hover:text-slate-600 dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
-                        )}
-                    </button>
-                </div>
+ <div class=" rounded-md p-4 font-mono text-xs mb-3 relative group border border-border">
+ <code class="text-emerald-600 dark:text-emerald-400 break-all block leading-relaxed pr-8">{getInstallCommand()}</code>
+ <button
+ onClick={handleCopyInstall}
+ class="absolute top-2.5 right-2.5 p-2 bg-surface border border-border hover:bg-surface-hover rounded-md transition-colors group-hover:opacity-100 sm:opacity-0 focus:opacity-100"
+ title="Copy command"
+ >
+ {copied() ==='install'? (
+ <svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+ </svg>
+ ) : (
+ <svg class="w-4 h-4 text-muted group-hover: dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+ </svg>
+ )}
+ </button>
+ </div>
 
-                <p class="text-[11px] text-muted">
-                    Agents auto-register with Pulse. Install on as many hosts as you like.
-                </p>
-            </div>
+ <p class="text-[11px] text-muted">
+ Agents auto-register with Pulse. Install on as many hosts as you like.
+ </p>
+ </div>
 
-            {/* Credentials section (collapsible) */}
-            <div class="bg-surface rounded-md border border-border mb-8 overflow-hidden">
-                <button
-                    onClick={() => setShowCredentials(!showCredentials())}
-                    class="w-full p-4 flex items-center justify-between text-left hover:bg-surface-hover transition-colors group"
-                >
-                    <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-md bg-amber-50 dark:bg-amber-900 flex items-center justify-center border border-amber-100 dark:border-amber-800">
-                            <svg class="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                            </svg>
-                        </div>
-                        <div>
-                            <span class="text-base-content font-semibold text-sm flex items-center gap-2">
-                                Your Credentials
-                                <span class="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full">Save these</span>
-                            </span>
-                        </div>
-                    </div>
-                    <svg class={`w-5 h-5 text-slate-400 transition-transform duration-200 group-hover:text-slate-600 dark:group-hover:text-slate-300 ${showCredentials() ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                </button>
+ {/* Credentials section (collapsible) */}
+ <div class="bg-surface rounded-md border border-border mb-8 overflow-hidden">
+ <button
+ onClick={() => setShowCredentials(!showCredentials())}
+ class="w-full p-4 flex items-center justify-between text-left hover:bg-surface-hover transition-colors group"
+ >
+ <div class="flex items-center gap-3">
+ <div class="w-8 h-8 rounded-md bg-amber-50 dark:bg-amber-900 flex items-center justify-center border border-amber-100 dark:border-amber-800">
+ <svg class="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+ </svg>
+ </div>
+ <div>
+ <span class="text-base-content font-semibold text-sm flex items-center gap-2">
+ Your Credentials
+ <span class="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full">Save these</span>
+ </span>
+ </div>
+ </div>
+ <svg class={`w-5 h-5 transition-transform duration-200 group-hover: dark:group-hover:text-slate-300 ${showCredentials() ?'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+ </svg>
+ </button>
 
-                <Show when={showCredentials()}>
-                    <div class="p-4 pt-0 space-y-3 border-t border-border-subtle mt-2">
-                        <div class="bg-slate-50 dark:bg-black border border-slate-200 dark:border-slate-800 rounded-md p-3">
-                            <div class="text-[11px] font-medium text-muted mb-1 uppercase tracking-wider">Username</div>
-                            <div class="text-base-content font-mono text-sm">{props.state.username}</div>
-                        </div>
+ <Show when={showCredentials()}>
+ <div class="p-4 pt-0 space-y-3 border-t border-border-subtle mt-2">
+ <div class="bg-slate-50 dark:bg-black border rounded-md p-3">
+ <div class="text-[11px] font-medium text-muted mb-1 uppercase tracking-wider">Username</div>
+ <div class="text-base-content font-mono text-sm">{props.state.username}</div>
+ </div>
 
-                        <div class="bg-slate-50 dark:bg-black border border-slate-200 dark:border-slate-800 rounded-md p-3">
-                            <div class="text-[11px] font-medium text-muted mb-1 uppercase tracking-wider">Password</div>
-                            <div class="flex items-center justify-between">
-                                <code class="text-base-content font-mono text-sm break-all">{props.state.password}</code>
-                                <button
-                                    onClick={() => handleCopy('password')}
+ <div class="bg-slate-50 dark:bg-black border rounded-md p-3">
+ <div class="text-[11px] font-medium text-muted mb-1 uppercase tracking-wider">Password</div>
+ <div class="flex items-center justify-between">
+ <code class="text-base-content font-mono text-sm break-all">{props.state.password}</code>
+ <button
+ onClick={() => handleCopy('password')}
                                     class="ml-3 p-1.5 bg-surface border border-border hover:bg-surface-hover rounded-md transition-colors shrink-0"
                                 >
                                     {copied() === 'password' ? (
@@ -496,7 +496,7 @@ Keep these credentials secure!
                             </div>
                         </div>
 
-                        <div class="bg-slate-50 dark:bg-black border border-slate-200 dark:border-slate-800 rounded-md p-3">
+                        <div class="bg-slate-50 dark:bg-black border border-border rounded-md p-3">
                             <div class="text-[11px] font-medium text-muted mb-1 uppercase tracking-wider">API Token (for web login)</div>
                             <div class="flex items-center justify-between">
                                 <code class="text-base-content font-mono text-xs break-all pr-4">{props.state.apiToken}</code>
@@ -531,7 +531,7 @@ Keep these credentials secure!
             </div>
 
             {/* Launch button */}
-            <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
+            <div class="pt-4 border-t border-border">
                 <button
                     onClick={props.onComplete}
                     class="w-full py-4 px-6 bg-blue-600 hover:bg-blue-700 text-white text-base font-semibold rounded-md transition-all duration-200"

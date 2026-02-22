@@ -81,47 +81,47 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
             </div>
           </Show>
           <Show when={circuitBreaker()?.state === 'half-open'}>
-            <div class="flex items-center gap-1.5 mb-1.5 pb-1.5 border-b border-amber-200 dark:border-amber-800">
-              <AlertCircleIcon class="w-3.5 h-3.5 text-amber-500" />
-              <span class="text-amber-600 dark:text-amber-400 font-medium text-xs">
-                AI circuit breaker recovering — testing with next patrol run
-              </span>
-            </div>
-          </Show>
-          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-            {/* Status */}
-            <div class="flex items-center gap-1.5">
-              <Show
-                when={s().isHealthy}
-                fallback={
-                  <>
-                    <AlertCircleIcon class="w-3.5 h-3.5 text-amber-500" />
-                    <span class="text-amber-600 dark:text-amber-400 font-medium text-xs">Issues detected</span>
-                  </>
-                }
-              >
-                <CheckCircleIcon class="w-3.5 h-3.5 text-green-500" />
-                <span class="text-green-600 dark:text-green-400 font-medium text-xs">Running normally</span>
-              </Show>
-            </div>
+ <div class="flex items-center gap-1.5 mb-1.5 pb-1.5 border-b border-amber-200 dark:border-amber-800">
+ <AlertCircleIcon class="w-3.5 h-3.5 text-amber-500" />
+ <span class="text-amber-600 dark:text-amber-400 font-medium text-xs">
+ AI circuit breaker recovering — testing with next patrol run
+ </span>
+ </div>
+ </Show>
+ <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+ {/* Status */}
+ <div class="flex items-center gap-1.5">
+ <Show
+ when={s().isHealthy}
+ fallback={
+ <>
+ <AlertCircleIcon class="w-3.5 h-3.5 text-amber-500" />
+ <span class="text-amber-600 dark:text-amber-400 font-medium text-xs">Issues detected</span>
+ </>
+ }
+ >
+ <CheckCircleIcon class="w-3.5 h-3.5 text-green-500" />
+ <span class="text-green-600 dark:text-green-400 font-medium text-xs">Running normally</span>
+ </Show>
+ </div>
 
-            <span class="hidden sm:inline text-slate-300 dark:text-slate-600">|</span>
+ <span class="hidden sm:inline text-slate-300 ">|</span>
 
-            {/* Last run */}
-            <Show when={s().lastRunTime}>
-              <span class="text-xs text-muted">
-                Last run: {s().lastRunTime}
-                <Show when={s().lastRunTrigger}>
-                  <span class="text-slate-500 dark:text-slate-500"> ({s().lastRunTrigger})</span>
-                </Show>
-              </span>
-            </Show>
+ {/* Last run */}
+ <Show when={s().lastRunTime}>
+ <span class="text-xs text-muted">
+ Last run: {s().lastRunTime}
+ <Show when={s().lastRunTrigger}>
+ <span class=" "> ({s().lastRunTrigger})</span>
+ </Show>
+ </span>
+ </Show>
 
-            <span class="hidden sm:inline text-slate-300 dark:text-slate-600">|</span>
+ <span class="hidden sm:inline text-slate-300 ">|</span>
 
-            {/* Today */}
-            <span class="text-xs text-muted">
-              Today: {s().runsToday} run{s().runsToday === 1 ? '' : 's'}
+ {/* Today */}
+ <span class="text-xs text-muted">
+ Today: {s().runsToday} run{s().runsToday === 1 ?'' : 's'}
               <Show when={s().newFindingsToday > 0}>
                 <span class="text-amber-600 dark:text-amber-400">
                   , {s().newFindingsToday} new finding{s().newFindingsToday === 1 ? '' : 's'}

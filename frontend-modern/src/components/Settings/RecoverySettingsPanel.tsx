@@ -10,95 +10,95 @@ const BACKUP_INTERVAL_OPTIONS = [
   { value: 1800, label: '30 minutes' },
   { value: 3600, label: '1 hour' },
   { value: 21600, label: '6 hours' },
-  { value: 86400, label: '24 hours' },
+  { value: 86400, label: '24 hours'},
 ];
 
 const BACKUP_INTERVAL_MAX_MINUTES = 7 * 24 * 60; // 7 days
 
 export interface RecoverySettingsPanelProps {
-  backupPollingEnabled: Accessor<boolean>;
-  setBackupPollingEnabled: Setter<boolean>;
-  backupPollingInterval: Accessor<number>;
-  setBackupPollingInterval: Setter<number>;
-  backupPollingCustomMinutes: Accessor<number>;
-  setBackupPollingCustomMinutes: Setter<number>;
-  backupPollingUseCustom: Accessor<boolean>;
-  setBackupPollingUseCustom: Setter<boolean>;
-  backupPollingEnvLocked: () => boolean;
-  backupIntervalSelectValue: () => string;
-  backupIntervalSummary: () => string;
-  setHasUnsavedChanges: Setter<boolean>;
+ backupPollingEnabled: Accessor<boolean>;
+ setBackupPollingEnabled: Setter<boolean>;
+ backupPollingInterval: Accessor<number>;
+ setBackupPollingInterval: Setter<number>;
+ backupPollingCustomMinutes: Accessor<number>;
+ setBackupPollingCustomMinutes: Setter<number>;
+ backupPollingUseCustom: Accessor<boolean>;
+ setBackupPollingUseCustom: Setter<boolean>;
+ backupPollingEnvLocked: () => boolean;
+ backupIntervalSelectValue: () => string;
+ backupIntervalSummary: () => string;
+ setHasUnsavedChanges: Setter<boolean>;
 
-  // Export/Import handlers
-  showExportDialog: Accessor<boolean>;
-  setShowExportDialog: Setter<boolean>;
-  showImportDialog: Accessor<boolean>;
-  setShowImportDialog: Setter<boolean>;
-  setUseCustomPassphrase: Setter<boolean>;
-  securityStatus: Accessor<{ hasAuthentication: boolean } | null>;
+ // Export/Import handlers
+ showExportDialog: Accessor<boolean>;
+ setShowExportDialog: Setter<boolean>;
+ showImportDialog: Accessor<boolean>;
+ setShowImportDialog: Setter<boolean>;
+ setUseCustomPassphrase: Setter<boolean>;
+ securityStatus: Accessor<{ hasAuthentication: boolean } | null>;
 }
 
 export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (props) => {
-  return (
-    <div class="space-y-6">
-      <SettingsPanel
-        title="Recovery"
-        description="Manage backup/snapshot polling and configuration export/import."
-        icon={<Clock class="w-5 h-5" strokeWidth={2} />}
-        noPadding
-        bodyClass="divide-y divide-border"
-      >
-        {/* Backup Polling Section */}
-        <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
-          <section class="space-y-3">
-            <h4 class="flex items-center gap-2 text-sm font-medium text-base-content">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-              >
-                <circle cx="12" cy="12" r="9" stroke-width="2" />
-                <path
-                  d="M12 7v5l3 3"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-              Backup polling
-            </h4>
-            <p class="text-xs text-muted">
-              Control how often Pulse queries Proxmox backup tasks, datastore contents, and guest
-              snapshots. Longer intervals reduce disk activity and API load.
-            </p>
+ return (
+ <div class="space-y-6">
+ <SettingsPanel
+ title="Recovery"
+ description="Manage backup/snapshot polling and configuration export/import."
+ icon={<Clock class="w-5 h-5" strokeWidth={2} />}
+ noPadding
+ bodyClass="divide-y divide-border"
+ >
+ {/* Backup Polling Section */}
+ <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+ <section class="space-y-3">
+ <h4 class="flex items-center gap-2 text-sm font-medium text-base-content">
+ <svg
+ width="16"
+ height="16"
+ viewBox="0 0 24 24"
+ fill="none"
+ stroke="currentColor"
+ >
+ <circle cx="12" cy="12" r="9" stroke-width="2" />
+ <path
+ d="M12 7v5l3 3"
+ stroke-width="2"
+ stroke-linecap="round"
+ stroke-linejoin="round"
+ />
+ </svg>
+ Backup polling
+ </h4>
+ <p class="text-xs text-muted">
+ Control how often Pulse queries Proxmox backup tasks, datastore contents, and guest
+ snapshots. Longer intervals reduce disk activity and API load.
+ </p>
 
-            <div class="space-y-3">
-              {/* Enable toggle */}
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p class="text-sm font-medium text-base-content">
-                    Enable backup polling
-                  </p>
-                  <p class="text-xs text-muted">
-                    Required for dashboard backup status, storage snapshots, and alerting.
-                  </p>
-                </div>
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    class="sr-only peer"
-                    checked={props.backupPollingEnabled()}
-                    disabled={props.backupPollingEnvLocked()}
-                    onChange={(e) => {
-                      props.setBackupPollingEnabled(e.currentTarget.checked);
-                      if (!props.backupPollingEnvLocked()) {
-                        props.setHasUnsavedChanges(true);
-                      }
-                    }}
-                  />
-                  <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
+ <div class="space-y-3">
+ {/* Enable toggle */}
+ <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+ <div>
+ <p class="text-sm font-medium text-base-content">
+ Enable backup polling
+ </p>
+ <p class="text-xs text-muted">
+ Required for dashboard backup status, storage snapshots, and alerting.
+ </p>
+ </div>
+ <label class="relative inline-flex items-center cursor-pointer">
+ <input
+ type="checkbox"
+ class="sr-only peer"
+ checked={props.backupPollingEnabled()}
+ disabled={props.backupPollingEnvLocked()}
+ onChange={(e) => {
+ props.setBackupPollingEnabled(e.currentTarget.checked);
+ if (!props.backupPollingEnvLocked()) {
+ props.setHasUnsavedChanges(true);
+ }
+ }}
+ />
+ <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
                 </label>
               </div>
 

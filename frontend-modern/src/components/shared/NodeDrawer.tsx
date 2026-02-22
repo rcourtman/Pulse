@@ -30,9 +30,9 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
                 <button
                     onClick={() => switchTab('overview')}
                     class={`pb-2 text-sm font-medium transition-colors relative ${activeTab() === 'overview'
-                        ? 'text-blue-600 dark:text-blue-400'
-                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-                        }`}
+ ? 'text-blue-600 dark:text-blue-400'
+ : ' hover:text-muted dark:hover:text-slate-200'
+ }`}
                 >
                     Overview
                     {activeTab() === 'overview' && (
@@ -42,9 +42,9 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
                 <button
                     onClick={() => switchTab('discovery')}
                     class={`pb-2 text-sm font-medium transition-colors relative ${activeTab() === 'discovery'
-                        ? 'text-blue-600 dark:text-blue-400'
-                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-                        }`}
+ ? 'text-blue-600 dark:text-blue-400'
+ : ' hover:text-muted dark:hover:text-slate-200'
+ }`}
                 >
                     Discovery
                     {activeTab() === 'discovery' && (

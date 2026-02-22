@@ -220,7 +220,7 @@ const MetricRow: Component<{
     value: string | number | undefined;
     mono?: boolean;
 }> = (props) => (
-    <div class="flex items-center justify-between py-1.5 border-b border-slate-100 dark:border-slate-700 last:border-0">
+    <div class="flex items-center justify-between py-1.5 border-b border-border-subtle last:border-0">
         <span class="text-muted">{props.label}</span>
         <span class={`text-base-content ${props.mono ? 'font-mono text-[11px]' : 'font-medium'}`}>
             {props.value ?? 'Unknown'}
@@ -465,7 +465,7 @@ export const DiagnosticsPanel: Component = () => {
             subtitle: 'text-muted',
             meta: 'text-muted',
             button:
-                'border border-border bg-surface-hover text-base-content hover:bg-slate-200 dark:hover:bg-slate-600',
+                'border border-border bg-surface-hover text-base-content hover:bg-surface-hover',
         };
     };
 
@@ -545,7 +545,7 @@ export const DiagnosticsPanel: Component = () => {
             <Show when={diagnosticsData()} fallback={
                 <Card padding="lg" class="text-center">
                     <div class="py-12">
-                        <Activity class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4" />
+                        <Activity class="w-12 h-12 mx-auto text-muted mb-4" />
                         <h3 class="text-lg font-medium text-base-content mb-2">
                             No diagnostics data yet
                         </h3>
@@ -594,7 +594,7 @@ export const DiagnosticsPanel: Component = () => {
                         <div class="space-y-1">
                             <For each={diagnosticsData()?.nodes || []}>
                                 {(node) => (
-                                    <div class="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700 last:border-0">
+                                    <div class="flex items-center justify-between py-1 border-b border-border-subtle last:border-0">
                                         <span class="truncate max-w-[120px]" title={node.host}>{node.name}</span>
                                         <StatusBadge status={node.connected ? 'online' : 'offline'} />
                                     </div>
@@ -623,7 +623,7 @@ export const DiagnosticsPanel: Component = () => {
                             <div class="space-y-1">
                                 <For each={diagnosticsData()?.pbs || []}>
                                     {(pbs) => (
-                                        <div class="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700 last:border-0">
+                                        <div class="flex items-center justify-between py-1 border-b border-border-subtle last:border-0">
                                             <span class="truncate max-w-[120px]" title={pbs.host}>{pbs.name}</span>
                                             <StatusBadge status={pbs.connected ? 'online' : 'offline'} />
                                         </div>
@@ -736,109 +736,109 @@ export const DiagnosticsPanel: Component = () => {
                                     <StatusBadge
                                         status={diagnosticsData()?.apiTokens?.enabled ? 'online' : 'warning'}
                                         label={diagnosticsData()?.apiTokens?.enabled ? 'Enabled' : 'Disabled'}
-                                    />
-                                </div>
-                            </div>
-                            <div class="space-y-2 text-xs">
-                                <MetricRow label="Configured Tokens" value={diagnosticsData()?.apiTokens?.tokenCount} />
-                                <MetricRow label="Unused Tokens" value={diagnosticsData()?.apiTokens?.unusedTokenCount ?? 0} />
-                                <MetricRow label="Legacy Docker Hosts" value={diagnosticsData()?.apiTokens?.legacyDockerHostCount ?? 0} />
-                            </div>
-                            <Show when={diagnosticsData()?.apiTokens?.hasLegacyToken}>
-                                <div class="mt-3 p-2 bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-700 dark:text-amber-300">
-                                    Legacy token detected. Consider migrating to scoped tokens.
-                                </div>
-                            </Show>
-                        </Card>
-                    </Show>
+ />
+ </div>
+ </div>
+ <div class="space-y-2 text-xs">
+ <MetricRow label="Configured Tokens" value={diagnosticsData()?.apiTokens?.tokenCount} />
+ <MetricRow label="Unused Tokens" value={diagnosticsData()?.apiTokens?.unusedTokenCount ?? 0} />
+ <MetricRow label="Legacy Docker Hosts" value={diagnosticsData()?.apiTokens?.legacyDockerHostCount ?? 0} />
+ </div>
+ <Show when={diagnosticsData()?.apiTokens?.hasLegacyToken}>
+ <div class="mt-3 p-2 bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-700 dark:text-amber-300">
+ Legacy token detected. Consider migrating to scoped tokens.
+ </div>
+ </Show>
+ </Card>
+ </Show>
 
-                    {/* Docker Agents */}
-                    <Show when={diagnosticsData()?.dockerAgents}>
-                        <Card padding="md">
-                            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-border">
-                                <div class="p-2 rounded-md bg-blue-100 dark:bg-blue-900">
-                                    <Database class="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                                </div>
-                                <div>
-                                    <h4 class="text-sm font-semibold text-base-content">Docker Agents</h4>
-                                    <p class="text-xs text-muted">Container monitoring</p>
-                                </div>
-                                <div class="ml-auto text-right">
-                                    <div class="text-lg font-bold text-base-content">
-                                        {diagnosticsData()?.dockerAgents?.hostsOnline}/{diagnosticsData()?.dockerAgents?.hostsTotal}
-                                    </div>
-                                    <div class="text-[10px] text-muted">online</div>
-                                </div>
-                            </div>
-                            <div class="space-y-2 text-xs">
-                                <MetricRow label="With Token Binding" value={diagnosticsData()?.dockerAgents?.hostsWithTokenBinding} />
-                                <MetricRow label="Need Attention" value={diagnosticsData()?.dockerAgents?.hostsNeedingAttention} />
-                                <MetricRow label="Outdated Version" value={diagnosticsData()?.dockerAgents?.hostsOutdatedVersion ?? 0} />
-                            </div>
-                            <Show when={diagnosticsData()?.dockerAgents?.recommendedAgentVersion}>
-                                <div class="mt-3 pt-2 border-t border-slate-100 dark:border-slate-700 text-xs text-muted">
-                                    Recommended version: {diagnosticsData()?.dockerAgents?.recommendedAgentVersion}
-                                </div>
-                            </Show>
-                        </Card>
-                    </Show>
+ {/* Docker Agents */}
+ <Show when={diagnosticsData()?.dockerAgents}>
+ <Card padding="md">
+ <div class="flex items-center gap-3 mb-4 pb-3 border-b border-border">
+ <div class="p-2 rounded-md bg-blue-100 dark:bg-blue-900">
+ <Database class="w-4 h-4 text-blue-600 dark:text-blue-400" />
+ </div>
+ <div>
+ <h4 class="text-sm font-semibold text-base-content">Docker Agents</h4>
+ <p class="text-xs text-muted">Container monitoring</p>
+ </div>
+ <div class="ml-auto text-right">
+ <div class="text-lg font-bold text-base-content">
+ {diagnosticsData()?.dockerAgents?.hostsOnline}/{diagnosticsData()?.dockerAgents?.hostsTotal}
+ </div>
+ <div class="text-[10px] text-muted">online</div>
+ </div>
+ </div>
+ <div class="space-y-2 text-xs">
+ <MetricRow label="With Token Binding" value={diagnosticsData()?.dockerAgents?.hostsWithTokenBinding} />
+ <MetricRow label="Need Attention" value={diagnosticsData()?.dockerAgents?.hostsNeedingAttention} />
+ <MetricRow label="Outdated Version" value={diagnosticsData()?.dockerAgents?.hostsOutdatedVersion ?? 0} />
+ </div>
+ <Show when={diagnosticsData()?.dockerAgents?.recommendedAgentVersion}>
+ <div class="mt-3 pt-2 border-t border-slate-100 text-xs text-muted">
+ Recommended version: {diagnosticsData()?.dockerAgents?.recommendedAgentVersion}
+ </div>
+ </Show>
+ </Card>
+ </Show>
 
-                    {/* Alerts Configuration */}
-                    <Show when={diagnosticsData()?.alerts}>
-                        <Card padding="md">
-                            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-border">
-                                <div class="p-2 rounded-md bg-rose-100 dark:bg-rose-900">
-                                    <AlertTriangle class="w-4 h-4 text-rose-600 dark:text-rose-400" />
-                                </div>
-                                <div>
-                                    <h4 class="text-sm font-semibold text-base-content">Alerts Configuration</h4>
-                                    <p class="text-xs text-muted">Alert system status</p>
-                                </div>
-                            </div>
-                            <div class="flex flex-wrap gap-2">
-                                <span class={`px-2 py-1 rounded text-xs font-medium ${diagnosticsData()?.alerts?.legacyThresholdsDetected
-                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
-                                    : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                                    }`}>
+ {/* Alerts Configuration */}
+ <Show when={diagnosticsData()?.alerts}>
+ <Card padding="md">
+ <div class="flex items-center gap-3 mb-4 pb-3 border-b border-border">
+ <div class="p-2 rounded-md bg-rose-100 dark:bg-rose-900">
+ <AlertTriangle class="w-4 h-4 text-rose-600 dark:text-rose-400" />
+ </div>
+ <div>
+ <h4 class="text-sm font-semibold text-base-content">Alerts Configuration</h4>
+ <p class="text-xs text-muted">Alert system status</p>
+ </div>
+ </div>
+ <div class="flex flex-wrap gap-2">
+ <span class={`px-2 py-1 rounded text-xs font-medium ${diagnosticsData()?.alerts?.legacyThresholdsDetected
+ ?'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
+ : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+ }`}>
                                     Legacy thresholds: {diagnosticsData()?.alerts?.legacyThresholdsDetected ? 'Detected' : 'Migrated'}
                                 </span>
                                 <span class={`px-2 py-1 rounded text-xs font-medium ${diagnosticsData()?.alerts?.missingCooldown
-                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
-                                    : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                                    }`}>
+ ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
+ : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+ }`}>
                                     Cooldown: {diagnosticsData()?.alerts?.missingCooldown ? 'Missing' : 'Configured'}
                                 </span>
                                 <span class={`px-2 py-1 rounded text-xs font-medium ${diagnosticsData()?.alerts?.missingGroupingWindow
-                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
-                                    : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                                    }`}>
+ ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
+ : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+ }`}>
                                     Grouping: {diagnosticsData()?.alerts?.missingGroupingWindow ? 'Disabled' : 'Enabled'}
-                                </span>
-                            </div>
-                            <Show when={(diagnosticsData()?.alerts?.notes?.length || 0) > 0}>
-                                <ul class="mt-3 pt-2 border-t border-slate-100 dark:border-slate-700 space-y-1 text-xs text-muted list-disc pl-4">
-                                    <For each={diagnosticsData()?.alerts?.notes || []}>
-                                        {(note) => <li>{note}</li>}
-                                    </For>
-                                </ul>
-                            </Show>
-                        </Card>
-                    </Show>
+ </span>
+ </div>
+ <Show when={(diagnosticsData()?.alerts?.notes?.length || 0) > 0}>
+ <ul class="mt-3 pt-2 border-t border-slate-100 space-y-1 text-xs text-muted list-disc pl-4">
+ <For each={diagnosticsData()?.alerts?.notes || []}>
+ {(note) => <li>{note}</li>}
+ </For>
+ </ul>
+ </Show>
+ </Card>
+ </Show>
 
-                    {/* AI Chat Status */}
-                    <Show when={diagnosticsData()?.aiChat}>
-                        <Card padding="md">
-                            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-border">
-                                <div class="p-2 rounded-md bg-blue-100 dark:bg-blue-900">
-                                    <Sparkles class="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                                </div>
-                                <div>
-                                    <h4 class="text-sm font-semibold text-base-content">Pulse Assistant</h4>
-                                    <p class="text-xs text-muted">Pulse Assistant Service</p>
-                                </div>
-                                <div class="ml-auto">
-                                    <StatusBadge
-                                        status={diagnosticsData()?.aiChat?.running ? 'online' : (diagnosticsData()?.aiChat?.enabled ? 'offline' : 'unknown')}
+ {/* AI Chat Status */}
+ <Show when={diagnosticsData()?.aiChat}>
+ <Card padding="md">
+ <div class="flex items-center gap-3 mb-4 pb-3 border-b border-border">
+ <div class="p-2 rounded-md bg-blue-100 dark:bg-blue-900">
+ <Sparkles class="w-4 h-4 text-blue-600 dark:text-blue-400" />
+ </div>
+ <div>
+ <h4 class="text-sm font-semibold text-base-content">Pulse Assistant</h4>
+ <p class="text-xs text-muted">Pulse Assistant Service</p>
+ </div>
+ <div class="ml-auto">
+ <StatusBadge
+ status={diagnosticsData()?.aiChat?.running ?'online' : (diagnosticsData()?.aiChat?.enabled ? 'offline' : 'unknown')}
                                         label={diagnosticsData()?.aiChat?.running ? 'Running' : (diagnosticsData()?.aiChat?.enabled ? 'Stopped' : 'Disabled')}
                                     />
                                 </div>
@@ -848,7 +848,7 @@ export const DiagnosticsPanel: Component = () => {
                                 <MetricRow label="Port" value={diagnosticsData()?.aiChat?.port} mono />
                                 <MetricRow label="Status" value={diagnosticsData()?.aiChat?.healthy ? 'Healthy' : 'Unhealthy'} />
                             </div>
-                            <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between text-xs">
+                            <div class="mt-3 pt-3 border-t border-border-subtle flex items-center justify-between text-xs">
                                 <span class="text-muted">MCP Connection</span>
                                 <div class="flex items-center gap-1.5">
                                     {diagnosticsData()?.aiChat?.mcpConnected ?

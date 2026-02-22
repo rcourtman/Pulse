@@ -67,7 +67,7 @@ const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphas
   if (stats.mad > 0) {
     const modifiedZ = (0.6745 * (value - stats.median)) / stats.mad;
     if (modifiedZ >= 6.5 && value >= stats.p99) {
-      return { className: 'text-slate-900 dark:text-slate-50 font-semibold', showOutlierHint: true };
+      return { className: 'text-base-content font-semibold', showOutlierHint: true };
     }
     if (modifiedZ >= 5.5 && value >= stats.p97) {
       return { className: 'text-base-content font-medium', showOutlierHint: true };
@@ -75,7 +75,7 @@ const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphas
     return { className: 'text-muted', showOutlierHint: false };
   }
 
-  if (value >= stats.p99) return { className: 'text-slate-900 dark:text-slate-50 font-semibold', showOutlierHint: true };
+  if (value >= stats.p99) return { className: 'text-base-content font-semibold', showOutlierHint: true };
   if (value >= stats.p97) return { className: 'text-base-content font-medium', showOutlierHint: true };
   if (value > 0) return { className: 'text-muted', showOutlierHint: false };
   return { className: 'text-muted', showOutlierHint: false };
@@ -781,26 +781,26 @@ export function GuestRow(props: GuestRowProps) {
         >
           <div class="flex items-center gap-2 min-w-0">
             <div class={`transition-transform duration-200 ${props.isExpanded ? 'rotate-90' : ''}`}>
-              <svg class="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-              </svg>
-            </div>
-            <div class="flex items-center gap-1.5 min-w-0">
-              <StatusDot
-                variant={guestStatus().variant}
-                title={guestStatus().label}
-                ariaLabel={guestStatus().label}
-                size="xs"
-              />
-              <div class="flex items-center gap-1.5 min-w-0 group/name">
-                <span
-                  class="text-[11px] font-medium text-base-content select-none truncate"
-                  title={props.guest.name}
-                >
-                  {props.guest.name}
-                </span>
-                {/* Show backup indicator in name cell only if backup column is hidden */}
-                <Show when={!isColVisible('backup') && supportsBackup()}>
+ <svg class="w-3.5 h-3.5 text-slate-500 group-hover: dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+ </svg>
+ </div>
+ <div class="flex items-center gap-1.5 min-w-0">
+ <StatusDot
+ variant={guestStatus().variant}
+ title={guestStatus().label}
+ ariaLabel={guestStatus().label}
+ size="xs"
+ />
+ <div class="flex items-center gap-1.5 min-w-0 group/name">
+ <span
+ class="text-[11px] font-medium text-base-content select-none truncate"
+ title={props.guest.name}
+ >
+ {props.guest.name}
+ </span>
+ {/* Show backup indicator in name cell only if backup column is hidden */}
+ <Show when={!isColVisible('backup') && supportsBackup()}>
                   <BackupIndicator lastBackup={props.guest.lastBackup} isTemplate={props.guest.template} />
                 </Show>
 
@@ -836,28 +836,28 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Info - merged identifier (VMID / image / namespace) for mixed-type views */}
         <Show when={isColVisible('info')}>
-          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
-            <div class="flex justify-center text-xs text-muted whitespace-nowrap">
-              <Show when={infoValue()} fallback={<span class="text-slate-400">—</span>}>
-                <InfoTooltipCell value={infoValue()} tooltip={infoTooltip()} type={workloadType()} />
-              </Show>
-            </div>
-          </td>
-        </Show>
+ <td class="px-1.5 sm:px-2 py-0.5 align-middle">
+ <div class="flex justify-center text-xs text-muted whitespace-nowrap">
+ <Show when={infoValue()} fallback={<span class="">—</span>}>
+ <InfoTooltipCell value={infoValue()} tooltip={infoTooltip()} type={workloadType()} />
+ </Show>
+ </div>
+ </td>
+ </Show>
 
-        {/* VMID */}
-        <Show when={isColVisible('vmid')}>
-          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
-            <div class="flex justify-center text-xs text-muted whitespace-nowrap">
-              <Show when={displayId()} fallback={<span class="text-slate-400">—</span>}>
-                {displayId()}
-              </Show>
-            </div>
-          </td>
-        </Show>
+ {/* VMID */}
+ <Show when={isColVisible('vmid')}>
+ <td class="px-1.5 sm:px-2 py-0.5 align-middle">
+ <div class="flex justify-center text-xs text-muted whitespace-nowrap">
+ <Show when={displayId()} fallback={<span class="">—</span>}>
+ {displayId()}
+ </Show>
+ </div>
+ </td>
+ </Show>
 
-        {/* CPU */}
-        <Show when={isColVisible('cpu')}>
+ {/* CPU */}
+ <Show when={isColVisible('cpu')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle" style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}>
             <div class="h-4">
               <EnhancedCPUBar
@@ -965,60 +965,60 @@ export function GuestRow(props: GuestRowProps) {
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show
-                when={workloadType() === 'docker' && dockerImage()}
-                fallback={<span class="text-xs text-slate-400">—</span>}
-              >
-                <span
-                  class="text-xs text-muted truncate max-w-[140px]"
-                  title={dockerImage()}
-                >
-                  {getShortImageName(dockerImage())}
-                </span>
-              </Show>
-            </div>
-          </td>
-        </Show>
+                when={workloadType() === 'docker'&& dockerImage()}
+ fallback={<span class="text-xs ">—</span>}
+ >
+ <span
+ class="text-xs text-muted truncate max-w-[140px]"
+ title={dockerImage()}
+ >
+ {getShortImageName(dockerImage())}
+ </span>
+ </Show>
+ </div>
+ </td>
+ </Show>
 
-        {/* Namespace */}
-        <Show when={isColVisible('namespace')}>
+ {/* Namespace */}
+ <Show when={isColVisible('namespace')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show
-                when={workloadType() === 'k8s' && namespace()}
-                fallback={<span class="text-xs text-slate-400">—</span>}
-              >
-                <span
-                  class="text-xs text-muted truncate max-w-[120px]"
-                  title={namespace()}
-                >
-                  {namespace()}
-                </span>
-              </Show>
-            </div>
-          </td>
-        </Show>
+                when={workloadType() === 'k8s'&& namespace()}
+ fallback={<span class="text-xs ">—</span>}
+ >
+ <span
+ class="text-xs text-muted truncate max-w-[120px]"
+ title={namespace()}
+ >
+ {namespace()}
+ </span>
+ </Show>
+ </div>
+ </td>
+ </Show>
 
-        {/* Context */}
-        <Show when={isColVisible('context')}>
-          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
-            <div class="flex justify-center">
-              <Show
-                when={contextLabel()}
-                fallback={<span class="text-xs text-slate-400">—</span>}
-              >
-                <span
-                  class="text-xs text-muted truncate max-w-[140px]"
-                  title={contextLabel()}
-                >
-                  {contextLabel()}
-                </span>
-              </Show>
-            </div>
-          </td>
-        </Show>
+ {/* Context */}
+ <Show when={isColVisible('context')}>
+ <td class="px-1.5 sm:px-2 py-0.5 align-middle">
+ <div class="flex justify-center">
+ <Show
+ when={contextLabel()}
+ fallback={<span class="text-xs ">—</span>}
+ >
+ <span
+ class="text-xs text-muted truncate max-w-[140px]"
+ title={contextLabel()}
+ >
+ {contextLabel()}
+ </span>
+ </Show>
+ </div>
+ </td>
+ </Show>
 
-        {/* Backup Status */}
-        <Show when={isColVisible('backup')}>
+ {/* Backup Status */}
+ <Show when={isColVisible('backup')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show when={supportsBackup()} fallback={<span class="text-xs text-slate-400">—</span>}>

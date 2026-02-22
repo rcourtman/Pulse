@@ -127,55 +127,55 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
         };
         document.addEventListener('click', handleClickOutside);
         onCleanup(() => document.removeEventListener('click', handleClickOutside));
-    });
+ });
 
-    return (
-        <div class="relative" data-dropdown>
-            <button
-                ref={buttonRef}
-                onClick={handleToggle}
-                class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-muted hover:text-base-content rounded-md border border-border hover:border-slate-300 dark:hover:border-slate-600 bg-surface transition-colors"
-                title="Select model for this chat"
-            >
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-                <span class="max-w-[120px] truncate font-medium">{selectedLabel()}</span>
-                <Show when={props.isLoading}>
-                    <svg class="w-3 h-3 text-slate-400 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                </Show>
-                <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
-            </button>
+ return (
+ <div class="relative" data-dropdown>
+ <button
+ ref={buttonRef}
+ onClick={handleToggle}
+ class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-muted hover:text-base-content rounded-md border border-border hover: dark:hover:border-slate-600 bg-surface transition-colors"
+ title="Select model for this chat"
+ >
+ <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+ </svg>
+ <span class="max-w-[120px] truncate font-medium">{selectedLabel()}</span>
+ <Show when={props.isLoading}>
+ <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+ <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
+ <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+ </svg>
+ </Show>
+ <svg class="w-3 h-3 " fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+ </svg>
+ </button>
 
-            <Show when={isOpen()}>
-                <div
-                    class="fixed w-80 max-h-96 overflow-hidden bg-surface rounded-md shadow-sm border border-border z-[9999]"
-                    style={{ top: `${dropdownPosition().top}px`, right: `${dropdownPosition().right}px` }}
-                >
-                    {/* Search bar */}
-                    <div class="flex items-center gap-2 px-3 py-2 border-b border-border">
-                        <input
-                            type="text"
-                            value={searchQuery()}
-                            onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Search or enter model ID"
-                            class="flex-1 text-xs px-2 py-1.5 rounded-md border border-border bg-surface text-base-content focus:outline-none focus:ring-2 focus:ring-purple-400"
-                        />
-                        <Show when={props.onRefresh}>
-                            <button
-                                type="button"
-                                onClick={() => props.onRefresh?.()}
-                                disabled={props.isLoading}
-                                class="p-1.5 rounded-md text-slate-500 hover:text-base-content hover:bg-surface-hover disabled:opacity-50"
-                                title="Refresh models"
-                            >
-                                <svg class={`w-3.5 h-3.5 ${props.isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <Show when={isOpen()}>
+ <div
+ class="fixed w-80 max-h-96 overflow-hidden bg-surface rounded-md shadow-sm border border-border z-[9999]"
+ style={{ top: `${dropdownPosition().top}px`, right: `${dropdownPosition().right}px` }}
+ >
+ {/* Search bar */}
+ <div class="flex items-center gap-2 px-3 py-2 border-b border-border">
+ <input
+ type="text"
+ value={searchQuery()}
+ onInput={(e) => setSearchQuery(e.currentTarget.value)}
+ onKeyDown={handleKeyDown}
+ placeholder="Search or enter model ID"
+ class="flex-1 text-xs px-2 py-1.5 rounded-md border border-border bg-surface text-base-content focus:outline-none focus:ring-2 focus:ring-purple-400"
+ />
+ <Show when={props.onRefresh}>
+ <button
+ type="button"
+ onClick={() => props.onRefresh?.()}
+ disabled={props.isLoading}
+ class="p-1.5 rounded-md hover:text-base-content hover:bg-surface-hover disabled:opacity-50"
+ title="Refresh models"
+ >
+ <svg class={`w-3.5 h-3.5 ${props.isLoading ?'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v6h6M20 20v-6h-6M5.32 9A7.5 7.5 0 0119 12.5M18.68 15A7.5 7.5 0 015 11.5" />
                                 </svg>
                             </button>

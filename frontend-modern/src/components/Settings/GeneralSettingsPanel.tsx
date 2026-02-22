@@ -82,9 +82,9 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <button
               type="button"
               class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${props.themePreference() === 'light'
-                  ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
-                  : 'text-muted hover:text-slate-900 dark:hover:text-slate-200'
-                }`}
+ ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
+ : 'text-muted hover: dark:hover:text-slate-200'
+ }`}
               onClick={() => props.setThemePreference('light')}
             >
               <Sun class="w-4 h-4" strokeWidth={2.5} />
@@ -93,9 +93,9 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <button
               type="button"
               class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${props.themePreference() === 'dark'
-                  ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
-                  : 'text-muted hover:text-slate-900 dark:hover:text-slate-200'
-                }`}
+ ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
+ : 'text-muted hover: dark:hover:text-slate-200'
+ }`}
               onClick={() => props.setThemePreference('dark')}
             >
               <Moon class="w-4 h-4" strokeWidth={2.5} />
@@ -104,39 +104,39 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <button
               type="button"
               class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${props.themePreference() === 'system'
-                  ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
-                  : 'text-muted hover:text-slate-900 dark:hover:text-slate-200'
-                }`}
+ ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
+ : 'text-muted hover: dark:hover:text-slate-200'
+ }`}
               onClick={() => props.setThemePreference('system')}
-            >
-              <Laptop class="w-4 h-4" strokeWidth={2.5} />
-              <span class="hidden lg:inline">System</span>
-            </button>
-          </div>
-        </div>
+ >
+ <Laptop class="w-4 h-4" strokeWidth={2.5} />
+ <span class="hidden lg:inline">System</span>
+ </button>
+ </div>
+ </div>
 
-        {/* Temperature Unit Selector */}
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
-          <div class="flex items-center gap-3 min-w-0">
-            <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
-              <Thermometer class="w-5 h-5 text-slate-500" strokeWidth={2} />
-            </div>
-            <div class="text-sm text-muted min-w-0">
-              <p class="font-medium text-base-content truncate">
-                Temperature unit
-              </p>
-              <p class="text-xs text-muted line-clamp-2">
-                Display temperatures in Celsius or Fahrenheit
-              </p>
-            </div>
-          </div>
-          <div class="shrink-0 flex items-center gap-1 bg-surface-alt rounded-md p-1">
-            <button
-              type="button"
-              class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 text-sm rounded-md transition-all ${temperatureStore.unit() === 'celsius'
-                ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
-                : 'text-muted hover:text-slate-900 dark:hover:text-slate-200'
-                }`}
+ {/* Temperature Unit Selector */}
+ <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+ <div class="flex items-center gap-3 min-w-0">
+ <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
+ <Thermometer class="w-5 h-5 " strokeWidth={2} />
+ </div>
+ <div class="text-sm text-muted min-w-0">
+ <p class="font-medium text-base-content truncate">
+ Temperature unit
+ </p>
+ <p class="text-xs text-muted line-clamp-2">
+ Display temperatures in Celsius or Fahrenheit
+ </p>
+ </div>
+ </div>
+ <div class="shrink-0 flex items-center gap-1 bg-surface-alt rounded-md p-1">
+ <button
+ type="button"
+ class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 text-sm rounded-md transition-all ${temperatureStore.unit() ==='celsius'
+ ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
+ : 'text-muted hover: dark:hover:text-slate-200'
+ }`}
               onClick={() => temperatureStore.setUnit('celsius')}
             >
               °C
@@ -144,9 +144,9 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <button
               type="button"
               class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 text-sm rounded-md transition-all ${temperatureStore.unit() === 'fahrenheit'
-                ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
-                : 'text-muted hover:text-slate-900 dark:hover:text-slate-200'
-                }`}
+ ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
+ : 'text-muted hover: dark:hover:text-slate-200'
+ }`}
               onClick={() => temperatureStore.setUnit('fahrenheit')}
             >
               °F
@@ -291,9 +291,9 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                     <button
                       type="button"
                       class={`min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-center text-sm font-medium transition-colors ${props.pvePollingSelection() === option.value
-                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900 dark:text-blue-200'
-                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700'
-                        } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
+ ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900 dark:text-blue-200'
+ : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700'
+ } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
                       disabled={props.pvePollingEnvLocked()}
                       onClick={() => {
                         if (props.pvePollingEnvLocked()) return;
@@ -309,9 +309,9 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                 <button
                   type="button"
                   class={`min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-center text-sm font-medium transition-colors ${props.pvePollingSelection() === 'custom'
-                    ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900 dark:text-blue-200'
-                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700'
-                    } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
+ ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900 dark:text-blue-200'
+ : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700'
+ } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
                   disabled={props.pvePollingEnvLocked()}
                   onClick={() => {
                     if (props.pvePollingEnvLocked()) return;

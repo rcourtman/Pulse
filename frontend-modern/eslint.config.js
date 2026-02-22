@@ -118,14 +118,17 @@ export default tseslint.config(
                     selector: "CallExpression[callee.name='createSignal'] > ArrayExpression > Identifier[name=/^(showTooltip|tooltipVisible|tooltipPos|tooltipPosition)$/]",
                     message: "Use the useTooltip() hook from @/hooks/useTooltip instead of reimplementing tooltip state.",
                 },
-                // Block hardcoded legacy colors in favor of semantic design system
+                // Block hardcoded legacy colors in favor of semantic design system.
+                // Only flags light-mode base classes — dark: and hover:/focus: variants
+                // are excluded because they're either paired with tokens already or are
+                // intentional interactive-state overrides.
                 {
                     selector: "Literal[value=/(?:^|\\s)(?:bg|text|border|ring)-(?:slate|gray|zinc|neutral)-(?:100|200|300|400|500|600|700|800|900)(?:$|\\s)/]",
-                    message: "Use semantic design system classes (e.g. bg-surface, text-base-content, border-border) instead of hardcoded tailwind grays.",
+                    message: "Use semantic design system classes (e.g. bg-surface, text-base-content, border-border) instead of hardcoded tailwind grays. See DESIGN_SYSTEM.md for the token reference.",
                 },
                 {
                     selector: "TemplateElement[value.raw=/(?:^|\\s)(?:bg|text|border|ring)-(?:slate|gray|zinc|neutral)-(?:100|200|300|400|500|600|700|800|900)(?:$|\\s)/]",
-                    message: "Use semantic design system classes (e.g. bg-surface, text-base-content, border-border) instead of hardcoded tailwind grays.",
+                    message: "Use semantic design system classes (e.g. bg-surface, text-base-content, border-border) instead of hardcoded tailwind grays. See DESIGN_SYSTEM.md for the token reference.",
                 },
             ],
         },
