@@ -535,7 +535,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
  <button
  type="button"
  onClick={() => setShowSamlUpsell(false)}
- class="p-1.5 rounded-md hover: hover:bg-surface-hover dark:hover:text-slate-300"
+ class="p-1.5 rounded-md hover:text-base-content hover:bg-surface-hover"
  aria-label="Close"
  >
  <X class="w-5 h-5" />
@@ -549,7 +549,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
  <button
  type="button"
  onClick={() => setShowSamlUpsell(false)}
- class="px-4 py-2 text-sm font-medium text-base-content border border-border rounded-md hover: "
+ class="px-4 py-2 text-sm font-medium text-base-content border border-border rounded-md"
  >
  Not now
  </button>

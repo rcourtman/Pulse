@@ -251,7 +251,7 @@ export const UserAssignmentsPanel: Component = () => {
  <button
  type="button"
  onClick={() => setShowModal(false)}
- class="p-1.5 rounded-md hover: hover: dark:hover:text-slate-300"
+ class="p-1.5 rounded-md hover:text-base-content hover:bg-surface-hover"
  >
  <X class="w-5 h-5" />
  </button>

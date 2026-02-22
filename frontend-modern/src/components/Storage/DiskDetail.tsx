@@ -159,7 +159,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
  <select
  value={chartRange()}
  onChange={(e) => setChartRange(e.currentTarget.value as HistoryTimeRange)}
- class="text-[11px] font-medium pl-2 pr-6 py-1 rounded-md border border-border bg-surface text-base-content cursor-pointer focus:ring-1 focus:ring-blue-500 focus:border-blue-500 appearance-none shadow-sm hover: dark:hover:border-slate-500 transition-colors"
+ class="text-[11px] font-medium pl-2 pr-6 py-1 rounded-md border border-border bg-surface text-base-content cursor-pointer focus:ring-1 focus:ring-blue-500 focus:border-blue-500 appearance-none shadow-sm hover:border-border transition-colors"
  style={{ "background-image": "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")", "background-repeat": "no-repeat", "background-position": "right 6px center" }}
             >
               <option value="1h">Last 1 hour</option>

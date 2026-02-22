@@ -730,7 +730,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
             {/* New chat */}
             <button
               onClick={handleNewConversation}
-              class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-muted hover:text-base-content rounded-md border border-border hover: dark:hover:border-slate-600 bg-surface transition-colors"
+              class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-muted hover:text-base-content rounded-md border border-border hover:border-border bg-surface transition-colors"
               title="New chat"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -812,7 +812,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
  }
  setShowSessions(next);
  }}
- class="p-2 hover: dark:hover:text-slate-300 rounded-md hover:bg-surface-hover transition-colors"
+ class="p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors"
  title="Chat sessions"
  >
  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -879,7 +879,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
  e.stopPropagation();
  props.onClose();
  }}
- class="p-2 hover: dark:hover:text-slate-300 rounded-md hover:bg-surface-hover transition-colors"
+ class="p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors"
  title="Close panel"
  >
  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -899,7 +899,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
             <div class="flex items-center gap-2">
               <button
                 onClick={() => updateControlLevel('controlled')}
-                class="px-2 py-1 rounded-md border border-red-200 dark:border-red-800 bg-surface dark:bg-red-900 text-[10px] font-medium text-red-700 dark:text-red-200 hover: dark:hover:bg-red-900"
+                class="px-2 py-1 rounded-md border border-red-200 dark:border-red-800 bg-surface dark:bg-red-900 text-[10px] font-medium text-red-700 dark:text-red-200 hover:bg-red-100 dark:hover:bg-red-900"
               >
                 Switch to Approval
               </button>

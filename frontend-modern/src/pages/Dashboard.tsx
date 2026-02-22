@@ -196,7 +196,7 @@ export default function Dashboard() {
  <button
  type="button"
  onClick={() => reconnect()}
- class="mt-4 inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-medium hover: dark:hover:bg-slate-700"
+ class="mt-4 inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-surface-hover"
  >
  Reconnect
  </button>

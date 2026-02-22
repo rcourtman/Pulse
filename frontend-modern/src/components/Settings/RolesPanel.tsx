@@ -268,7 +268,7 @@ export const RolesPanel: Component = () => {
  <button
  type="button"
  onClick={() => setShowModal(false)}
- class="p-1.5 rounded-md text-slate-500 hover: hover:bg-surface-hover dark:hover:text-slate-300"
+ class="p-1.5 rounded-md text-slate-500 hover:text-base-content hover:bg-surface-hover"
  >
  <X class="w-5 h-5" />
  </button>

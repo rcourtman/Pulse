@@ -83,7 +83,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               type="button"
               class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${props.themePreference() === 'light'
  ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
- : 'text-muted hover: dark:hover:text-slate-200'
+ : 'text-muted hover:text-base-content'
  }`}
               onClick={() => props.setThemePreference('light')}
             >
@@ -94,7 +94,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               type="button"
               class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${props.themePreference() === 'dark'
  ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
- : 'text-muted hover: dark:hover:text-slate-200'
+ : 'text-muted hover:text-base-content'
  }`}
               onClick={() => props.setThemePreference('dark')}
             >
@@ -105,7 +105,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               type="button"
               class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${props.themePreference() === 'system'
  ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
- : 'text-muted hover: dark:hover:text-slate-200'
+ : 'text-muted hover:text-base-content'
  }`}
               onClick={() => props.setThemePreference('system')}
  >
@@ -135,7 +135,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
  type="button"
  class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 text-sm rounded-md transition-all ${temperatureStore.unit() ==='celsius'
  ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
- : 'text-muted hover: dark:hover:text-slate-200'
+ : 'text-muted hover:text-base-content'
  }`}
               onClick={() => temperatureStore.setUnit('celsius')}
             >
@@ -145,7 +145,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               type="button"
               class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 text-sm rounded-md transition-all ${temperatureStore.unit() === 'fahrenheit'
  ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
- : 'text-muted hover: dark:hover:text-slate-200'
+ : 'text-muted hover:text-base-content'
  }`}
               onClick={() => temperatureStore.setUnit('fahrenheit')}
             >

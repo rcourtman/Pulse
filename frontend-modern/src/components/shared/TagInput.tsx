@@ -54,7 +54,7 @@ export function TagInput(props: TagInputProps) {
  {tag}
  <button
  type="button"
- class="rounded-full p-0.5 text-slate-400 hover:bg-slate-300 hover: dark:hover:bg-slate-600 dark:hover:text-slate-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500"
+ class="rounded-full p-0.5 text-slate-400 hover:bg-slate-300 hover:bg-surface-hover dark:hover:text-slate-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500"
  onClick={(e) => {
  e.stopPropagation();
  removeTag(index());

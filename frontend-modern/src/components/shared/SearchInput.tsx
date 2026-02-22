@@ -239,7 +239,7 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
               class={`flex h-7 w-7 items-center justify-center rounded-md transition-colors
  ${isHistoryOpen()
  ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400'
- : 'text-muted hover:bg-surface-hover hover: dark:hover:text-slate-300'
+ : 'text-muted hover:bg-surface-hover hover:text-base-content'
  }`}
               onClick={() =>
                 setIsHistoryOpen((prev) => {

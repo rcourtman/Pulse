@@ -528,7 +528,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                 disabled={props.versionInfo()?.isSourceBuild}
                 class={`p-4 rounded-md border-2 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed ${props.updateChannel() === 'stable'
  ? 'border-green-500 bg-green-50 dark:bg-green-900'
- : 'border-border hover: dark:hover:border-slate-600'
+ : 'border-border hover:border-border'
  }`}
               >
                 <div class="flex items-center gap-3">
@@ -564,7 +564,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                 disabled={props.versionInfo()?.isSourceBuild}
                 class={`p-4 rounded-md border-2 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed ${props.updateChannel() === 'rc'
  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
- : 'border-border hover: dark:hover:border-slate-600'
+ : 'border-border hover:border-border'
  }`}
               >
                 <div class="flex items-center gap-3">

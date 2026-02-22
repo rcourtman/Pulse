@@ -208,7 +208,7 @@ export function DashboardHero(props: DashboardHeroProps) {
 
  <a
  href={ALERTS_OVERVIEW_PATH}
- class="text-xs font-semibold text-slate-600 hover: dark:hover:text-white transition-colors"
+ class="text-xs font-semibold text-slate-600 hover:text-base-content transition-colors"
  >
  View Alerts →
  </a>

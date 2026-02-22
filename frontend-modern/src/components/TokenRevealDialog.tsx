@@ -80,7 +80,7 @@ export const TokenRevealDialog: Component = () => {
  <Card padding="lg" class="shadow-sm relative">
  <button
  type="button"
- class="absolute top-3 right-3 rounded-md px-2 py-1 text-xs font-medium hover: dark:hover:text-slate-200 transition-colors"
+ class="absolute top-3 right-3 rounded-md px-2 py-1 text-xs font-medium hover:text-base-content transition-colors"
  onClick={handleDismiss}
  aria-label="Close token dialog"
  >

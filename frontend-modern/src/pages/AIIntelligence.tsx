@@ -764,7 +764,7 @@ export function AIIntelligence() {
  <h4 class="text-base font-semibold tracking-tight text-base-content">Patrol Configuration</h4>
  <button
  onClick={() => setShowAdvancedSettings(false)}
- class="p-1 rounded-md hover: hover: dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+ class="p-1 rounded-md hover:text-base-content hover:bg-surface-hover transition-colors"
  >
  <XIcon class="w-4 h-4" />
  </button>
@@ -1134,7 +1134,7 @@ export function AIIntelligence() {
               onClick={() => setActiveTab('findings')}
               class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab() === 'findings'
  ? 'border-blue-500 text-base-content'
- : 'border-transparent text-muted hover: dark:hover:text-slate-300 hover:border-border'
+ : 'border-transparent text-muted hover:text-base-content hover:border-border'
  }`}
             >
               Findings
@@ -1152,7 +1152,7 @@ export function AIIntelligence() {
               onClick={() => { setActiveTab('history'); setFindingsFilterOverride(undefined); }}
               class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab() === 'history'
  ? 'border-blue-500 text-base-content'
- : 'border-transparent text-muted hover: dark:hover:text-slate-300 hover:border-border'
+ : 'border-transparent text-muted hover:text-base-content hover:border-border'
  }`}
             >
               Run History

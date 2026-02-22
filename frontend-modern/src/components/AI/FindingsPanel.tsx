@@ -747,7 +747,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
  <button
  type="button"
  onClick={(e) => handleStartEditNote(finding, e)}
- class="p-1 hover: dark:hover:text-slate-300 flex-shrink-0"
+ class="p-1 hover:text-base-content flex-shrink-0"
  title="Edit note"
  >
  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

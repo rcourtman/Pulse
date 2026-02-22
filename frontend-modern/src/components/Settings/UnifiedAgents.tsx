@@ -1518,7 +1518,7 @@ export const UnifiedAgents: Component = () => {
  e.stopPropagation();
  toggleAgentDetails(row.rowKey)
  }}
- class="inline-flex min-h-10 min-w-10 sm:min-h-9 sm:min-w-9 items-center justify-center rounded-md p-2 hover: dark:hover:text-slate-200"
+ class="inline-flex min-h-10 min-w-10 sm:min-h-9 sm:min-w-9 items-center justify-center rounded-md p-2 hover:text-base-content"
  aria-label={`${expanded() ?'Hide' : 'Show'} details for ${agentName}`}
                                             aria-expanded={expanded()}
                                             aria-controls={`agent-details-${row.rowKey}`}

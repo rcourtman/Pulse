@@ -168,7 +168,7 @@ export const RelayOnboardingCard: Component = () => {
 
  <button
  type="button"
- class="absolute right-3 top-3 inline-flex items-center justify-center rounded-md p-1 hover: hover:bg-surface-hover dark:hover:text-slate-200"
+ class="absolute right-3 top-3 inline-flex items-center justify-center rounded-md p-1 hover:text-base-content hover:bg-surface-hover"
  onClick={dismiss}
  aria-label="Dismiss relay onboarding"
  >

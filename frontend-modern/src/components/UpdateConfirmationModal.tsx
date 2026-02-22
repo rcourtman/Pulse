@@ -38,7 +38,7 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
  </h2>
  <button
  onClick={props.onClose}
- class=" hover: dark:hover:text-slate-300"
+ class=" hover:text-base-content"
  disabled={props.isApplying}
  >
  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -109,7 +109,7 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
  <button
  type="button"
  onClick={props.onClose}
- class="rounded-md p-1.5 transition-colors hover: hover: dark:hover:bg-slate-700 dark:hover:text-slate-300"
+ class="rounded-md p-1.5 transition-colors hover:text-base-content hover:bg-surface-hover"
  aria-label="Close"
  >
  <XIcon class="h-5 w-5" />
@@ -164,7 +164,7 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
  <button
  type="button"
  onClick={props.onClose}
- class="rounded-md px-3 py-2 text-xs font-medium transition-colors hover: dark:hover:text-slate-100"
+ class="rounded-md px-3 py-2 text-xs font-medium transition-colors hover:text-base-content"
  disabled={isSubmitting()}
  >
  Cancel

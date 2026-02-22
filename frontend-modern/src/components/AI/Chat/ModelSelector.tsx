@@ -134,7 +134,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
  <button
  ref={buttonRef}
  onClick={handleToggle}
- class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-muted hover:text-base-content rounded-md border border-border hover: dark:hover:border-slate-600 bg-surface transition-colors"
+ class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-muted hover:text-base-content rounded-md border border-border hover:border-border bg-surface transition-colors"
  title="Select model for this chat"
  >
  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

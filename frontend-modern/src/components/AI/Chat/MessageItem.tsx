@@ -120,7 +120,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
  {/* Assistant message - card style */}
  <Show when={!isUser()}>
  <div class="w-full pl-2 pr-2">
- <div class="group relative bg-surface-alt rounded-md border border-border p-5 shadow-sm transition-all hover: dark:hover:border-slate-600">
+ <div class="group relative bg-surface-alt rounded-md border border-border p-5 shadow-sm transition-all hover:border-border">
  {/* Assistant indicator */}
  <div class="flex items-center gap-2.5 mb-3">
  <div class="w-6 h-6 rounded-md border border-border-subtle shadow-sm flex items-center justify-center shrink-0">

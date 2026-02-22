@@ -2034,7 +2034,7 @@ const Recovery: Component = () => {
  <button
  type="button"
  onClick={(e) => { e.stopPropagation(); setSelectedPoint(null); }}
- class="rounded-md p-1 hover: hover: dark:hover:bg-slate-700 dark:hover:text-slate-300"
+ class="rounded-md p-1 hover:text-base-content hover:bg-surface-hover"
  aria-label="Close details"
  >
  <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
