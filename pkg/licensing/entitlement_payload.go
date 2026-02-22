@@ -1,0 +1,199 @@
+package licensing
+
+import (
+	"math"
+	"time"
+)
+
+// EntitlementPayload is the normalized entitlement response for frontend consumption.
+// Frontend should use this instead of inferring capabilities from tier names.
+type EntitlementPayload struct {
+	// Capabilities lists all granted capability keys.
+	Capabilities []string `json:"capabilities"`
+
+	// Limits lists quantitative limits with current usage.
+	Limits []LimitStatus `json:"limits"`
+
+	// SubscriptionState is the current subscription lifecycle state.
+	SubscriptionState string `json:"subscription_state"`
+
+	// UpgradeReasons provides user-actionable upgrade prompts.
+	UpgradeReasons []UpgradeReason `json:"upgrade_reasons"`
+
+	// PlanVersion preserves grandfathered terms.
+	PlanVersion string `json:"plan_version,omitempty"`
+
+	// Tier is the marketing tier name (for display only, never gate on this).
+	Tier string `json:"tier"`
+
+	// TrialExpiresAt is the trial expiration Unix timestamp when in trial state.
+	TrialExpiresAt *int64 `json:"trial_expires_at,omitempty"`
+
+	// TrialDaysRemaining is the number of whole or partial days remaining in trial.
+	TrialDaysRemaining *int `json:"trial_days_remaining,omitempty"`
+
+	// HostedMode indicates that this server is running in Pulse hosted mode.
+	// It is used by the frontend to gate hosted-control-plane-only UI.
+	HostedMode bool `json:"hosted_mode"`
+}
+
+// LimitStatus represents a quantitative limit with current usage state.
+type LimitStatus struct {
+	// Key is the limit identifier (e.g., "max_nodes").
+	Key string `json:"key"`
+
+	// Limit is the maximum allowed value (0 = unlimited).
+	Limit int64 `json:"limit"`
+
+	// Current is the observed current usage.
+	Current int64 `json:"current"`
+
+	// State describes the over-limit UX state.
+	// Values: "ok", "warning", "enforced"
+	State string `json:"state"`
+}
+
+// UpgradeReason provides context for why a user should upgrade.
+type UpgradeReason struct {
+	// Key is the capability or limit this reason relates to.
+	Key string `json:"key"`
+
+	// Reason is a user-facing description of why upgrading helps.
+	Reason string `json:"reason"`
+
+	// ActionURL is where the user can go to upgrade.
+	ActionURL string `json:"action_url,omitempty"`
+}
+
+type EntitlementUsageSnapshot struct {
+	Nodes  int64
+	Guests int64
+}
+
+// BuildEntitlementPayload constructs the normalized payload from LicenseStatus.
+func BuildEntitlementPayload(status *LicenseStatus, subscriptionState string) EntitlementPayload {
+	return BuildEntitlementPayloadWithUsage(status, subscriptionState, EntitlementUsageSnapshot{}, nil)
+}
+
+// BuildEntitlementPayloadWithUsage constructs the normalized payload from LicenseStatus and observed usage.
+func BuildEntitlementPayloadWithUsage(
+	status *LicenseStatus,
+	subscriptionState string,
+	usage EntitlementUsageSnapshot,
+	trialEndsAtUnix *int64,
+) EntitlementPayload {
+	if status == nil {
+		return EntitlementPayload{
+			Capabilities:      []string{},
+			Limits:            []LimitStatus{},
+			SubscriptionState: string(SubStateExpired),
+			UpgradeReasons:    []UpgradeReason{},
+			Tier:              string(TierFree),
+		}
+	}
+
+	payload := EntitlementPayload{
+		Capabilities:   append([]string(nil), status.Features...),
+		Limits:         []LimitStatus{},
+		Tier:           string(status.Tier),
+		UpgradeReasons: []UpgradeReason{},
+	}
+
+	if payload.Capabilities == nil {
+		payload.Capabilities = []string{}
+	}
+
+	// Use provided subscription state when present; otherwise derive from status.
+	if subscriptionState == "" {
+		subState := SubStateActive
+		if !status.Valid {
+			subState = SubStateExpired
+		} else if status.InGracePeriod {
+			subState = SubStateGrace
+		}
+		subscriptionState = string(subState)
+	}
+	payload.SubscriptionState = string(GetBehavior(SubscriptionState(subscriptionState)).State)
+
+	if payload.SubscriptionState == string(SubStateTrial) {
+		applyTrialWindow(&payload, status, trialEndsAtUnix, time.Now().Unix())
+	}
+
+	// Build limits.
+	if status.MaxNodes > 0 {
+		payload.Limits = append(payload.Limits, LimitStatus{
+			Key:     MaxNodesLicenseGateKey,
+			Limit:   int64(status.MaxNodes),
+			Current: usage.Nodes,
+			State:   LimitState(usage.Nodes, int64(status.MaxNodes)),
+		})
+	}
+	if status.MaxGuests > 0 {
+		payload.Limits = append(payload.Limits, LimitStatus{
+			Key:     "max_guests",
+			Limit:   int64(status.MaxGuests),
+			Current: usage.Guests,
+			State:   LimitState(usage.Guests, int64(status.MaxGuests)),
+		})
+	}
+
+	reasons := GenerateUpgradeReasons(payload.Capabilities)
+	payload.UpgradeReasons = make([]UpgradeReason, 0, len(reasons))
+	for _, reason := range reasons {
+		payload.UpgradeReasons = append(payload.UpgradeReasons, UpgradeReason{
+			Key:       reason.Feature,
+			Reason:    reason.Reason,
+			ActionURL: reason.ActionURL,
+		})
+	}
+
+	return payload
+}
+
+func applyTrialWindow(payload *EntitlementPayload, status *LicenseStatus, trialEndsAtUnix *int64, nowUnix int64) {
+	if payload == nil || status == nil {
+		return
+	}
+	// Prefer billing-state trial timestamps (hosted/self-hosted trial) over license ExpiresAt.
+	if trialEndsAtUnix != nil {
+		expiresAtUnix := *trialEndsAtUnix
+		payload.TrialExpiresAt = &expiresAtUnix
+		daysRemaining := remainingTrialDays(expiresAtUnix, nowUnix)
+		payload.TrialDaysRemaining = &daysRemaining
+		return
+	}
+	if status.ExpiresAt == nil {
+		return
+	}
+	expiresAt, err := time.Parse(time.RFC3339, *status.ExpiresAt)
+	if err != nil {
+		return
+	}
+	expiresAtUnix := expiresAt.Unix()
+	payload.TrialExpiresAt = &expiresAtUnix
+	daysRemaining := remainingTrialDays(expiresAtUnix, nowUnix)
+	payload.TrialDaysRemaining = &daysRemaining
+}
+
+func remainingTrialDays(expiresAtUnix, nowUnix int64) int {
+	daysRemaining := int(math.Ceil(float64(expiresAtUnix-nowUnix) / 86400.0))
+	if daysRemaining < 0 {
+		daysRemaining = 0
+	}
+	return daysRemaining
+}
+
+// LimitState returns the over-limit UX state string.
+func LimitState(current, limit int64) string {
+	if limit <= 0 {
+		return "ok" // unlimited
+	}
+	if current >= limit {
+		return "enforced"
+	}
+	// 90% threshold for warning.
+	if current*10 >= limit*9 {
+		return "warning"
+	}
+	return "ok"
+}

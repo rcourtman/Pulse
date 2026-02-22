@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -193,7 +193,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	// Config Profile Routes - Protected by Admin Auth, Settings Scope, and Pro License
 	// SECURITY: Require settings:write scope to prevent low-privilege tokens from modifying agent profiles
 	// r.configProfileHandler.ServeHTTP implements http.Handler, so we wrap it
-	r.mux.Handle("/api/admin/profiles/", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, RequireLicenseFeature(r.licenseHandlers, license.FeatureAgentProfiles, func(w http.ResponseWriter, req *http.Request) {
+	r.mux.Handle("/api/admin/profiles/", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, RequireLicenseFeature(r.licenseHandlers, pkglicensing.FeatureAgentProfiles, func(w http.ResponseWriter, req *http.Request) {
 		http.StripPrefix("/api/admin/profiles", r.configProfileHandler).ServeHTTP(w, req)
 	}))))
 

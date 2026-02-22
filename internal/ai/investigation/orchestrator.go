@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -690,7 +690,7 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 		}
 
 		// Defense-in-depth: clamp autonomy if no auto-fix license
-		if o.licenseChecker != nil && !o.licenseChecker.HasFeature(license.FeatureAIAutoFix) {
+		if o.licenseChecker != nil && !o.licenseChecker.HasFeature(pkglicensing.FeatureAIAutoFix) {
 			if currentLevel == "assisted" || currentLevel == "full" {
 				currentLevel = "approval"
 				log.Warn().Str("finding_id", finding.ID).Msg("auto-fix requires Pro license - clamping to approval mode")

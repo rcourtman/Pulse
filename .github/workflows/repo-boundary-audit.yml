@@ -1,0 +1,31 @@
+name: Repo Boundary Audit
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Boundary Audit (report mode)
+        run: |
+          ./scripts/audit-private-boundary.sh | tee repo-boundary-audit.txt
+
+      - name: Enforce API Import Boundary
+        run: ./scripts/audit-private-boundary.sh --enforce-api-imports
+
+      - name: Enforce API Root Import Boundary
+        run: ./scripts/audit-private-boundary.sh --enforce-api-root-imports
+
+      - name: Enforce Non-API Import Boundary
+        run: ./scripts/audit-private-boundary.sh --enforce-nonapi-imports
+
+      - name: Upload Audit Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: repo-boundary-audit
+          path: repo-boundary-audit.txt

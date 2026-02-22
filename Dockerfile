@@ -57,7 +57,7 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown") && \
     LICENSE_LDFLAGS="" && \
     if [ -n "${PULSE_LICENSE_PUBLIC_KEY}" ]; then \
-      LICENSE_LDFLAGS="-X github.com/rcourtman/pulse-go-rewrite/internal/license.EmbeddedPublicKey=${PULSE_LICENSE_PUBLIC_KEY}"; \
+      LICENSE_LDFLAGS="-X github.com/rcourtman/pulse-go-rewrite/pkg/licensing.EmbeddedPublicKey=${PULSE_LICENSE_PUBLIC_KEY} -X github.com/rcourtman/pulse-go-rewrite/internal/license.EmbeddedPublicKey=${PULSE_LICENSE_PUBLIC_KEY}"; \
     fi && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
       -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT} -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION} ${LICENSE_LDFLAGS}" \

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -80,7 +80,7 @@ func (g *GraceEnforcer) enforce(ctx context.Context) {
 		}
 
 		// Only enforce on tenants in past_due/grace state.
-		if sa.SubscriptionState != "past_due" && sa.SubscriptionState != string(entitlements.SubStateGrace) {
+		if sa.SubscriptionState != "past_due" && sa.SubscriptionState != string(pkglicensing.SubStateGrace) {
 			continue
 		}
 
@@ -93,7 +93,7 @@ func (g *GraceEnforcer) enforce(ctx context.Context) {
 			Str("tenant_id", tenant.ID).
 			Str("account_id", tenant.AccountID).
 			Str("stripe_customer_id", tenant.StripeCustomerID).
-			Str("subscription_state", string(entitlements.SubStateGrace)).
+			Str("subscription_state", string(pkglicensing.SubStateGrace)).
 			Int("grace_days_exceeded", maxGraceDays).
 			Msg("Grace period expired, transitioning tenant to canceled")
 

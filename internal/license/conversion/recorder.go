@@ -2,77 +2,100 @@ package conversion
 
 import (
 	"errors"
-	"fmt"
-	"strings"
-	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/metering"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 // Recorder records conversion events through the metering aggregator.
 type Recorder struct {
-	agg   *metering.WindowedAggregator
-	store *ConversionStore
+	inner *pkglicensing.Recorder
 }
 
 func NewRecorder(agg *metering.WindowedAggregator, store *ConversionStore) *Recorder {
-	return &Recorder{agg: agg, store: store}
+	var wrapped pkglicensing.ConversionAggregator
+	if agg != nil {
+		wrapped = &meteringAggregatorAdapter{agg: agg}
+	}
+
+	return &Recorder{
+		inner: pkglicensing.NewRecorder(
+			wrapped,
+			store,
+			func(err error) bool { return errors.Is(err, metering.ErrDuplicateEvent) },
+		),
+	}
 }
 
 // Record validates and records a conversion event as a metering event.
 func (r *Recorder) Record(event ConversionEvent) error {
-	if err := event.Validate(); err != nil {
-		return fmt.Errorf("validate conversion event: %w", err)
-	}
 	if r == nil {
+		var inner *pkglicensing.Recorder
+		return inner.Record(event)
+	}
+	if r.inner == nil {
 		return nil
 	}
-	if r.agg == nil && r.store == nil {
-		return nil
-	}
-
-	orgID := strings.TrimSpace(event.OrgID)
-	if orgID == "" {
-		return fmt.Errorf("org_id is required")
-	}
-
-	if r.store != nil {
-		if err := r.store.Record(StoredConversionEvent{
-			OrgID:          orgID,
-			EventType:      event.Type,
-			Surface:        event.Surface,
-			Capability:     event.Capability,
-			IdempotencyKey: event.IdempotencyKey,
-			CreatedAt:      time.UnixMilli(event.Timestamp).UTC(),
-		}); err != nil {
-			return fmt.Errorf("persist conversion event: %w", err)
-		}
-	}
-
-	if r.agg != nil {
-		err := r.agg.Record(metering.Event{
-			Type:           metering.EventType(event.Type),
-			TenantID:       orgID,
-			Key:            event.Surface + ":" + event.Capability,
-			Value:          1,
-			Timestamp:      time.UnixMilli(event.Timestamp),
-			IdempotencyKey: event.IdempotencyKey,
-		})
-		if errors.Is(err, metering.ErrDuplicateEvent) {
-			return nil
-		}
-		if err != nil {
-			return fmt.Errorf("record metering conversion event: %w", err)
-		}
-	}
-
-	return nil
+	return r.inner.Record(event)
 }
 
 // Snapshot returns a non-destructive copy of the current aggregation window buckets.
 func (r *Recorder) Snapshot() []metering.AggregatedBucket {
-	if r == nil || r.agg == nil {
+	if r == nil || r.inner == nil {
 		return []metering.AggregatedBucket{}
 	}
-	return r.agg.Snapshot()
+
+	snapshot := r.inner.Snapshot()
+	out := make([]metering.AggregatedBucket, 0, len(snapshot))
+	for _, bucket := range snapshot {
+		out = append(out, metering.AggregatedBucket{
+			TenantID:    bucket.TenantID,
+			Type:        metering.EventType(bucket.Type),
+			Key:         bucket.Key,
+			Count:       bucket.Count,
+			TotalValue:  bucket.TotalValue,
+			WindowStart: bucket.WindowStart,
+			WindowEnd:   bucket.WindowEnd,
+		})
+	}
+	return out
+}
+
+type meteringAggregatorAdapter struct {
+	agg *metering.WindowedAggregator
+}
+
+func (a *meteringAggregatorAdapter) Record(event pkglicensing.MeteringEvent) error {
+	if a == nil || a.agg == nil {
+		return nil
+	}
+	return a.agg.Record(metering.Event{
+		Type:           metering.EventType(event.Type),
+		TenantID:       event.TenantID,
+		Key:            event.Key,
+		Value:          event.Value,
+		Timestamp:      event.Timestamp,
+		IdempotencyKey: event.IdempotencyKey,
+	})
+}
+
+func (a *meteringAggregatorAdapter) Snapshot() []pkglicensing.MeteringBucket {
+	if a == nil || a.agg == nil {
+		return []pkglicensing.MeteringBucket{}
+	}
+
+	buckets := a.agg.Snapshot()
+	out := make([]pkglicensing.MeteringBucket, 0, len(buckets))
+	for _, bucket := range buckets {
+		out = append(out, pkglicensing.MeteringBucket{
+			TenantID:    bucket.TenantID,
+			Type:        string(bucket.Type),
+			Key:         bucket.Key,
+			Count:       bucket.Count,
+			TotalValue:  bucket.TotalValue,
+			WindowStart: bucket.WindowStart,
+			WindowEnd:   bucket.WindowEnd,
+		})
+	}
+	return out
 }

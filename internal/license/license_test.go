@@ -107,8 +107,7 @@ func TestServiceStatus_UsesEffectiveClaimsEntitlements(t *testing.T) {
 	t.Setenv("PULSE_MOCK_MODE", "false")
 
 	svc := NewService()
-	svc.mu.Lock()
-	svc.license = &License{
+	svc.SetCurrentForTesting(&License{
 		Claims: Claims{
 			LicenseID:    "explicit-entitlements",
 			Email:        "entitlements@example.com",
@@ -121,8 +120,7 @@ func TestServiceStatus_UsesEffectiveClaimsEntitlements(t *testing.T) {
 			MaxNodes:  1,
 			MaxGuests: 2,
 		},
-	}
-	svc.mu.Unlock()
+	})
 
 	if got := svc.HasFeature(FeatureAIAutoFix); !got {
 		t.Fatalf("HasFeature(%q)=%v, want true", FeatureAIAutoFix, got)
@@ -222,9 +220,7 @@ func TestLicenseExpiration(t *testing.T) {
 
 		// Service should recognize grace period
 		service := NewService()
-		service.mu.Lock()
-		service.license = license
-		service.mu.Unlock()
+		service.SetCurrentForTesting(license)
 
 		// Should still have features during grace period
 		if !service.HasFeature(FeatureAIPatrol) {
@@ -525,9 +521,7 @@ func TestStatusSetsGracePeriodDynamically(t *testing.T) {
 	}
 
 	// Manually set the license without grace period
-	service.mu.Lock()
-	service.license = lic
-	service.mu.Unlock()
+	service.SetCurrentForTesting(lic)
 
 	// Verify GracePeriodEnd is nil initially
 	if lic.GracePeriodEnd != nil {
@@ -701,9 +695,7 @@ func TestServiceGetLicenseState(t *testing.T) {
 			ValidatedAt: time.Now().Add(-33 * 24 * time.Hour),
 		}
 
-		service.mu.Lock()
-		service.license = lic
-		service.mu.Unlock()
+		service.SetCurrentForTesting(lic)
 
 		state, returnedLic := service.GetLicenseState()
 		if state != LicenseStateGracePeriod {
@@ -736,9 +728,7 @@ func TestServiceGetLicenseState(t *testing.T) {
 			GracePeriodEnd: &gracePeriodEnd,
 		}
 
-		service.mu.Lock()
-		service.license = lic
-		service.mu.Unlock()
+		service.SetCurrentForTesting(lic)
 
 		state, returnedLic := service.GetLicenseState()
 		if state != LicenseStateExpired {
@@ -792,9 +782,7 @@ func TestServiceGetLicenseStateString(t *testing.T) {
 			},
 		}
 
-		service.mu.Lock()
-		service.license = lic
-		service.mu.Unlock()
+		service.SetCurrentForTesting(lic)
 
 		stateStr, hasFeatures := service.GetLicenseStateString()
 		if stateStr != "grace_period" {
@@ -1497,9 +1485,7 @@ func TestServiceHasFeature_WithEvaluator_FreeTier(t *testing.T) {
 		Email:     "free@example.com",
 		Tier:      TierFree,
 	}
-	svc.mu.Lock()
-	svc.license = &License{Claims: *freeClaims}
-	svc.mu.Unlock()
+	svc.SetCurrentForTesting(&License{Claims: *freeClaims})
 	svc.SetEvaluator(entitlements.NewEvaluator(entitlements.NewTokenSource(freeClaims)))
 
 	withEvaluator := captureFeatureResults(svc, allFeatures)
@@ -1577,10 +1563,9 @@ func TestServiceSubscriptionState_NoStateMachine(t *testing.T) {
 
 	t.Run("expired license => expired", func(t *testing.T) {
 		svc := setupTestServiceWithTier(t, TierPro)
-		svc.mu.Lock()
-		svc.license.Claims.ExpiresAt = time.Now().Add(-10 * 24 * time.Hour).Unix()
-		svc.license.GracePeriodEnd = nil
-		svc.mu.Unlock()
+		current := svc.CurrentUnsafeForTesting()
+		current.Claims.ExpiresAt = time.Now().Add(-10 * 24 * time.Hour).Unix()
+		current.GracePeriodEnd = nil
 
 		if got := svc.SubscriptionState(); got != string(SubStateExpired) {
 			t.Fatalf("SubscriptionState() = %q, want %q", got, SubStateExpired)
@@ -1590,10 +1575,9 @@ func TestServiceSubscriptionState_NoStateMachine(t *testing.T) {
 	t.Run("expired in grace => grace", func(t *testing.T) {
 		svc := setupTestServiceWithTier(t, TierPro)
 		graceEnd := time.Now().Add(24 * time.Hour)
-		svc.mu.Lock()
-		svc.license.Claims.ExpiresAt = time.Now().Add(-48 * time.Hour).Unix()
-		svc.license.GracePeriodEnd = &graceEnd
-		svc.mu.Unlock()
+		current := svc.CurrentUnsafeForTesting()
+		current.Claims.ExpiresAt = time.Now().Add(-48 * time.Hour).Unix()
+		current.GracePeriodEnd = &graceEnd
 
 		if got := svc.SubscriptionState(); got != string(SubStateGrace) {
 			t.Fatalf("SubscriptionState() = %q, want %q", got, SubStateGrace)
@@ -1602,9 +1586,7 @@ func TestServiceSubscriptionState_NoStateMachine(t *testing.T) {
 
 	t.Run("suspended claim => suspended and paid features revoked", func(t *testing.T) {
 		svc := setupTestServiceWithTier(t, TierPro)
-		svc.mu.Lock()
-		svc.license.Claims.SubState = SubStateSuspended
-		svc.mu.Unlock()
+		svc.CurrentUnsafeForTesting().Claims.SubState = SubStateSuspended
 
 		if got := svc.SubscriptionState(); got != string(SubStateSuspended) {
 			t.Fatalf("SubscriptionState() = %q, want %q", got, SubStateSuspended)
@@ -1633,9 +1615,7 @@ func TestServiceSubscriptionState_NoStateMachine(t *testing.T) {
 
 	t.Run("canceled claim => canceled and paid features revoked", func(t *testing.T) {
 		svc := setupTestServiceWithTier(t, TierPro)
-		svc.mu.Lock()
-		svc.license.Claims.SubState = SubStateCanceled
-		svc.mu.Unlock()
+		svc.CurrentUnsafeForTesting().Claims.SubState = SubStateCanceled
 
 		if got := svc.SubscriptionState(); got != string(SubStateCanceled) {
 			t.Fatalf("SubscriptionState() = %q, want %q", got, SubStateCanceled)
@@ -1651,9 +1631,7 @@ func TestServiceSubscriptionState_NoStateMachine(t *testing.T) {
 
 func TestServiceSubscriptionState_WithStateMachine(t *testing.T) {
 	svc := setupTestServiceWithTier(t, TierPro)
-	svc.mu.Lock()
-	svc.license.Claims.SubState = SubStateTrial
-	svc.mu.Unlock()
+	svc.CurrentUnsafeForTesting().Claims.SubState = SubStateTrial
 
 	svc.SetStateMachine(struct{}{})
 	if got := svc.SubscriptionState(); got != string(SubStateTrial) {
@@ -1719,10 +1697,9 @@ func TestServiceHasFeature_EvaluatorExpiredPastGrace(t *testing.T) {
 	svc := setupTestServiceWithTier(t, TierPro)
 
 	// Expire the license 10 days ago (past the 7-day grace period)
-	svc.mu.Lock()
-	svc.license.Claims.ExpiresAt = time.Now().Add(-10 * 24 * time.Hour).Unix()
-	svc.license.GracePeriodEnd = nil // Force re-calculation
-	svc.mu.Unlock()
+	current := svc.CurrentUnsafeForTesting()
+	current.Claims.ExpiresAt = time.Now().Add(-10 * 24 * time.Hour).Unix()
+	current.GracePeriodEnd = nil // Force re-calculation
 
 	// Evaluator is auto-set by Activate, verify it's present
 	if svc.Evaluator() == nil {
@@ -1750,10 +1727,9 @@ func TestServiceHasFeature_EvaluatorExpiredWithinGrace(t *testing.T) {
 	svc := setupTestServiceWithTier(t, TierPro)
 
 	// Expire the license 3 days ago (within the 7-day grace period)
-	svc.mu.Lock()
-	svc.license.Claims.ExpiresAt = time.Now().Add(-3 * 24 * time.Hour).Unix()
-	svc.license.GracePeriodEnd = nil // Force re-calculation via ensureGracePeriodEnd
-	svc.mu.Unlock()
+	current := svc.CurrentUnsafeForTesting()
+	current.Claims.ExpiresAt = time.Now().Add(-3 * 24 * time.Hour).Unix()
+	current.GracePeriodEnd = nil // Force re-calculation via ensureGracePeriodEnd
 
 	// Evaluator is auto-set by Activate, verify it's present
 	if svc.Evaluator() == nil {

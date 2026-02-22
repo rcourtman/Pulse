@@ -42,8 +42,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license/conversion"
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -58,6 +56,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -127,7 +126,7 @@ type Router struct {
 	lifecycleCtx         context.Context
 	lifecycleCancel      context.CancelFunc
 	hostedMode           bool
-	conversionStore      *conversion.ConversionStore
+	conversionStore      *pkglicensing.ConversionStore
 }
 
 func pulseBinDir() string {
@@ -158,8 +157,8 @@ func isDirectLoopbackRequest(req *http.Request) bool {
 }
 
 // NewRouter creates a new router instance
-func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monitoring.MultiTenantMonitor, wsHub *websocket.Hub, reloadFunc func() error, serverVersion string, conversionStore ...*conversion.ConversionStore) *Router {
-	var store *conversion.ConversionStore
+func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monitoring.MultiTenantMonitor, wsHub *websocket.Hub, reloadFunc func() error, serverVersion string, conversionStore ...*pkglicensing.ConversionStore) *Router {
+	var store *pkglicensing.ConversionStore
 	if len(conversionStore) > 0 {
 		store = conversionStore[0]
 	}
@@ -2246,7 +2245,7 @@ func (r *Router) StartRelay(ctx context.Context) {
 	if r.licenseHandlers != nil {
 		svc := r.licenseHandlers.Service(ctx)
 		if svc != nil {
-			if err := svc.RequireFeature(license.FeatureRelay); err != nil {
+			if err := svc.RequireFeature(pkglicensing.FeatureRelay); err != nil {
 				log.Warn().Msg("Relay feature not licensed, skipping")
 				return
 			}
@@ -6499,8 +6498,8 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 
 	// Enforce license limits: 7d free, longer ranges require Pro
 	maxFreeDuration := 7 * 24 * time.Hour
-	if duration > maxFreeDuration && !r.licenseHandlers.Service(req.Context()).HasFeature(license.FeatureLongTermMetrics) {
-		WriteLicenseRequired(w, license.FeatureLongTermMetrics, "Long-term metrics history requires a Pulse Pro license")
+	if duration > maxFreeDuration && !r.licenseHandlers.Service(req.Context()).HasFeature(pkglicensing.FeatureLongTermMetrics) {
+		WriteLicenseRequired(w, pkglicensing.FeatureLongTermMetrics, "Long-term metrics history requires a Pulse Pro license")
 		return
 	}
 

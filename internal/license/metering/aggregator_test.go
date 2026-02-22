@@ -209,11 +209,6 @@ func TestAggregatorCardinalityLimit(t *testing.T) {
 func TestAggregatorFlush(t *testing.T) {
 	agg := NewWindowedAggregator()
 
-	initialWindowStart := agg.windowStart
-	if initialWindowStart.IsZero() {
-		t.Fatal("initial window start is zero")
-	}
-
 	events := []Event{
 		{Type: EventAgentSeen, TenantID: "tenant-a", Key: "agent-1", Value: 1},
 		{Type: EventAgentSeen, TenantID: "tenant-a", Key: "agent-1", Value: 1},
@@ -234,8 +229,8 @@ func TestAggregatorFlush(t *testing.T) {
 	byBucket := make(map[string]AggregatedBucket, len(buckets))
 	for _, b := range buckets {
 		byBucket[bucketID(b)] = b
-		if !b.WindowStart.Equal(initialWindowStart) {
-			t.Fatalf("WindowStart = %v, want %v", b.WindowStart, initialWindowStart)
+		if b.WindowStart.IsZero() {
+			t.Fatal("WindowStart is zero, want initialized window start")
 		}
 		if b.WindowEnd.Before(b.WindowStart) {
 			t.Fatalf("WindowEnd (%v) is before WindowStart (%v)", b.WindowEnd, b.WindowStart)

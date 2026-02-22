@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 // Multi-tenant feature flag (default: disabled)
@@ -72,7 +72,7 @@ func (c *DefaultMultiTenantChecker) CheckMultiTenant(ctx context.Context, orgID 
 
 	// Feature is enabled, check license using the provider
 	service := getLicenseServiceForContext(ctx)
-	if !service.HasFeature(license.FeatureMultiTenant) {
+	if !service.HasFeature(pkglicensing.FeatureMultiTenant) {
 		return websocket.MultiTenantCheckResult{
 			Allowed:        false,
 			FeatureEnabled: true,
@@ -101,7 +101,7 @@ func SetMultiTenantEnabled(enabled bool) {
 // LicenseServiceProvider provides license service for a given context.
 // This allows the middleware to use the properly initialized per-tenant services.
 type LicenseServiceProvider interface {
-	Service(ctx context.Context) *license.Service
+	Service(ctx context.Context) *pkglicensing.Service
 }
 
 var (
@@ -119,7 +119,7 @@ func SetLicenseServiceProvider(provider LicenseServiceProvider) {
 
 // getLicenseServiceForContext returns the license service for the given context.
 // Falls back to a new service if no provider is set (shouldn't happen in production).
-func getLicenseServiceForContext(ctx context.Context) *license.Service {
+func getLicenseServiceForContext(ctx context.Context) *pkglicensing.Service {
 	licenseServiceMu.RLock()
 	provider := licenseServiceProvider
 	licenseServiceMu.RUnlock()
@@ -128,13 +128,13 @@ func getLicenseServiceForContext(ctx context.Context) *license.Service {
 		return provider.Service(ctx)
 	}
 	// Fallback: create a new service (won't have persisted license)
-	return license.NewService()
+	return pkglicensing.NewService()
 }
 
 // hasMultiTenantFeatureForContext checks if the multi-tenant feature is licensed for the context.
 func hasMultiTenantFeatureForContext(ctx context.Context) bool {
 	service := getLicenseServiceForContext(ctx)
-	return service.HasFeature(license.FeatureMultiTenant)
+	return service.HasFeature(pkglicensing.FeatureMultiTenant)
 }
 
 // RequireMultiTenant returns a middleware that checks if the multi-tenant feature is licensed.
@@ -199,7 +199,7 @@ func writeMultiTenantRequiredError(w http.ResponseWriter) {
 	writePaymentRequired(w, map[string]interface{}{
 		"error":   "license_required",
 		"message": "Multi-tenant access requires an Enterprise license",
-		"feature": license.FeatureMultiTenant,
+		"feature": pkglicensing.FeatureMultiTenant,
 		"tier":    "enterprise",
 	})
 }

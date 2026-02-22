@@ -1,6 +1,7 @@
 package conversion
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	_ "modernc.org/sqlite"
 )
 
 func TestConversionStoreRecordAndQueryRoundTrip(t *testing.T) {
@@ -91,14 +94,21 @@ func TestConversionStoreIdempotency(t *testing.T) {
 
 func TestConversionStoreSchemaHasCreatedAtIndex(t *testing.T) {
 	tmp := t.TempDir()
-	store, err := NewConversionStore(filepath.Join(tmp, "conversion.db"))
+	dbPath := filepath.Join(tmp, "conversion.db")
+	store, err := NewConversionStore(dbPath)
 	if err != nil {
 		t.Fatalf("NewConversionStore() error = %v", err)
 	}
 	defer store.Close()
 
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open sqlite db directly: %v", err)
+	}
+	defer db.Close()
+
 	var count int
-	err = store.db.QueryRow(
+	err = db.QueryRow(
 		`SELECT COUNT(1)
 		 FROM sqlite_master
 		 WHERE type = 'index' AND name = 'idx_conversion_events_time'`,

@@ -30,10 +30,13 @@ func TestPipelineHealthHealthy(t *testing.T) {
 }
 
 func TestPipelineHealthStaleNoEvents(t *testing.T) {
-	health := NewPipelineHealth()
-	health.mu.Lock()
-	health.startedAt = time.Now().Add(-6 * time.Minute)
-	health.mu.Unlock()
+	baseNow := time.Now()
+	currentNow := baseNow
+	health := NewPipelineHealth(
+		WithPipelineHealthNow(func() time.Time { return currentNow }),
+		WithPipelineHealthStaleThreshold(5*time.Minute),
+	)
+	currentNow = baseNow.Add(6 * time.Minute)
 
 	status := health.CheckHealth()
 

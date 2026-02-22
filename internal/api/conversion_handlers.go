@@ -2,27 +2,25 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/license/conversion"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
 type ConversionHandlers struct {
-	recorder *conversion.Recorder
-	health   *conversion.PipelineHealth
-	config   *conversion.CollectionConfig
-	store    *conversion.ConversionStore
+	recorder *pkglicensing.Recorder
+	health   *pkglicensing.PipelineHealth
+	config   *pkglicensing.CollectionConfig
+	store    *pkglicensing.ConversionStore
 	// disableAll, when true, forces all event ingestion to be skipped for privacy.
 	// This is a hard override; runtime collection config remains mutable but is ignored.
 	disableAll func() bool
 }
 
-func NewConversionHandlers(recorder *conversion.Recorder, health *conversion.PipelineHealth, config *conversion.CollectionConfig, store *conversion.ConversionStore, disableAll func() bool) *ConversionHandlers {
+func NewConversionHandlers(recorder *pkglicensing.Recorder, health *pkglicensing.PipelineHealth, config *pkglicensing.CollectionConfig, store *pkglicensing.ConversionStore, disableAll func() bool) *ConversionHandlers {
 	return &ConversionHandlers{
 		recorder:   recorder,
 		health:     health,
@@ -38,15 +36,15 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	var event conversion.ConversionEvent
+	var event pkglicensing.ConversionEvent
 	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
-		conversion.GetConversionMetrics().RecordInvalid("invalid_request_body")
+		pkglicensing.GetConversionMetrics().RecordInvalid("invalid_request_body")
 		writeConversionValidationError(w, "invalid request body")
 		return
 	}
 
 	if err := event.Validate(); err != nil {
-		conversion.GetConversionMetrics().RecordInvalid(conversionValidationReason(err))
+		pkglicensing.GetConversionMetrics().RecordInvalid(conversionValidationReason(err))
 		writeConversionValidationError(w, err.Error())
 		return
 	}
@@ -56,7 +54,7 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 		contextOrgID = "default"
 	}
 	if !isValidOrganizationID(contextOrgID) {
-		conversion.GetConversionMetrics().RecordInvalid("invalid_context_org_id")
+		pkglicensing.GetConversionMetrics().RecordInvalid("invalid_context_org_id")
 		writeConversionValidationError(w, "invalid tenant context")
 		return
 	}
@@ -66,12 +64,12 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 		event.OrgID = contextOrgID
 	} else {
 		if !isValidOrganizationID(event.OrgID) {
-			conversion.GetConversionMetrics().RecordInvalid("invalid_event_org_id")
+			pkglicensing.GetConversionMetrics().RecordInvalid("invalid_event_org_id")
 			writeConversionValidationError(w, "invalid org_id")
 			return
 		}
 		if event.OrgID != contextOrgID {
-			conversion.GetConversionMetrics().RecordInvalid("org_id_mismatch")
+			pkglicensing.GetConversionMetrics().RecordInvalid("org_id_mismatch")
 			writeConversionJSONResponse(w, http.StatusForbidden, map[string]string{
 				"error":   "org_mismatch",
 				"message": "org_id does not match authenticated tenant",
@@ -81,7 +79,7 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 	}
 
 	if h != nil && h.disableAll != nil && h.disableAll() {
-		conversion.GetConversionMetrics().RecordSkipped("system_disabled")
+		pkglicensing.GetConversionMetrics().RecordSkipped("system_disabled")
 		writeConversionAccepted(w)
 		return
 	}
@@ -91,7 +89,7 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 		if !h.config.IsEnabled() {
 			reason = "collection_disabled"
 		}
-		conversion.GetConversionMetrics().RecordSkipped(reason)
+		pkglicensing.GetConversionMetrics().RecordSkipped(reason)
 		writeConversionAccepted(w)
 		return
 	}
@@ -101,7 +99,7 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 			// Analytics ingestion is fire-and-forget; do not fail UX if recording fails.
 			log.Warn().Err(err).Str("event_type", event.Type).Msg("Failed to record conversion event")
 		} else {
-			conversion.GetConversionMetrics().RecordEvent(event.Type, event.Surface)
+			pkglicensing.GetConversionMetrics().RecordEvent(event.Type, event.Surface)
 			if h.health != nil {
 				h.health.RecordEvent(event.Type)
 			}
@@ -170,7 +168,7 @@ func (h *ConversionHandlers) HandleGetHealth(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	status := conversion.HealthStatus{
+	status := pkglicensing.HealthStatus{
 		Status:              "healthy",
 		LastEventAgeSeconds: 0,
 		EventsTotal:         0,
@@ -243,7 +241,7 @@ func (h *ConversionHandlers) HandleGetConfig(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	snapshot := conversion.CollectionConfigSnapshot{
+	snapshot := pkglicensing.CollectionConfigSnapshot{
 		Enabled:          true,
 		DisabledSurfaces: []string{},
 	}
@@ -261,7 +259,7 @@ func (h *ConversionHandlers) HandleUpdateConfig(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	var snapshot conversion.CollectionConfigSnapshot
+	var snapshot pkglicensing.CollectionConfigSnapshot
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&snapshot); err != nil {
@@ -271,12 +269,12 @@ func (h *ConversionHandlers) HandleUpdateConfig(w http.ResponseWriter, r *http.R
 
 	if h != nil {
 		if h.config == nil {
-			h.config = conversion.NewCollectionConfig()
+			h.config = pkglicensing.NewCollectionConfig()
 		}
 		h.config.UpdateConfig(snapshot)
 		snapshot = h.config.GetConfig()
 	} else {
-		cfg := conversion.NewCollectionConfig()
+		cfg := pkglicensing.NewCollectionConfig()
 		cfg.UpdateConfig(snapshot)
 		snapshot = cfg.GetConfig()
 	}
@@ -285,31 +283,7 @@ func (h *ConversionHandlers) HandleUpdateConfig(w http.ResponseWriter, r *http.R
 }
 
 func conversionValidationReason(err error) string {
-	if err == nil {
-		return "unknown"
-	}
-
-	msg := strings.ToLower(err.Error())
-	switch {
-	case strings.Contains(msg, "type is required"):
-		return "missing_type"
-	case strings.Contains(msg, "is not supported"):
-		return "unsupported_type"
-	case strings.Contains(msg, "surface is required"):
-		return "missing_surface"
-	case strings.Contains(msg, "timestamp is required"):
-		return "missing_timestamp"
-	case strings.Contains(msg, "idempotency_key is required"):
-		return "missing_idempotency_key"
-	case strings.Contains(msg, "tenant_mode must be"):
-		return "invalid_tenant_mode"
-	case strings.Contains(msg, "capability is required"):
-		return "missing_capability"
-	case strings.Contains(msg, "limit_key is required"):
-		return "missing_limit_key"
-	default:
-		return "validation_error"
-	}
+	return pkglicensing.ConversionValidationReason(err)
 }
 
 func writeConversionValidationError(w http.ResponseWriter, message string) {
@@ -335,32 +309,5 @@ func writeConversionJSONResponse(w http.ResponseWriter, status int, payload inte
 }
 
 func parseOptionalTimeParam(raw string, defaultValue time.Time) (time.Time, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return defaultValue.UTC(), nil
-	}
-
-	// RFC3339 / RFC3339Nano
-	if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
-		return t.UTC(), nil
-	}
-	if t, err := time.Parse(time.RFC3339, raw); err == nil {
-		return t.UTC(), nil
-	}
-
-	// Date-only (local midnight is ambiguous; use UTC midnight).
-	if t, err := time.ParseInLocation("2006-01-02", raw, time.UTC); err == nil {
-		return t.UTC(), nil
-	}
-
-	// Unix seconds or milliseconds.
-	if i, err := strconv.ParseInt(raw, 10, 64); err == nil {
-		// Heuristic: >= 10^12 is likely ms.
-		if i >= 1_000_000_000_000 {
-			return time.UnixMilli(i).UTC(), nil
-		}
-		return time.Unix(i, 0).UTC(), nil
-	}
-
-	return time.Time{}, fmt.Errorf("unsupported time format")
+	return pkglicensing.ParseOptionalTimeParam(raw, defaultValue)
 }

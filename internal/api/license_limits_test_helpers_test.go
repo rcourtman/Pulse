@@ -5,14 +5,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 type staticLicenseProvider struct {
-	service *license.Service
+	service *pkglicensing.Service
 }
 
-func (p *staticLicenseProvider) Service(context.Context) *license.Service {
+func (p *staticLicenseProvider) Service(context.Context) *pkglicensing.Service {
 	return p.service
 }
 
@@ -21,8 +21,8 @@ func setMaxNodesLicenseForTests(t *testing.T, maxNodes int) {
 
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
-	service := license.NewService()
-	licenseKey, err := license.GenerateLicenseForTesting("limits@example.com", license.TierPro, 24*time.Hour)
+	service := pkglicensing.NewService()
+	licenseKey, err := pkglicensing.GenerateLicenseForTesting("limits@example.com", pkglicensing.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}

@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,12 +22,12 @@ type mockLicenseProvider struct {
 	hasFeatures bool
 }
 
-func (p *mockLicenseProvider) Service(ctx context.Context) *license.Service {
+func (p *mockLicenseProvider) Service(ctx context.Context) *pkglicensing.Service {
 	// In a real scenario, we'd return a mocked service control structure.
 	// Since license.Service is concrete, we rely on its default state (no features)
 	// or we'd need a way to inject state.
 	// For now, testing the negative case (no license) is most important for security.
-	return license.NewService()
+	return pkglicensing.NewService()
 }
 
 func TestTenantMiddleware_Enforcement_Permanent(t *testing.T) {

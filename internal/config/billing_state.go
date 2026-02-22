@@ -14,12 +14,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
 // Ensure FileBillingStore satisfies the hosted entitlement BillingStore interface.
-var _ entitlements.BillingStore = (*FileBillingStore)(nil)
+var _ pkglicensing.BillingStore = (*FileBillingStore)(nil)
 
 // FileBillingStore persists billing state in per-org files under the data directory.
 type FileBillingStore struct {
@@ -35,7 +35,7 @@ func NewFileBillingStore(baseDataDir string) *FileBillingStore {
 // GetBillingState returns the current billing state for an org.
 // Missing billing files are treated as "no state yet" and return (nil, nil).
 // If the state has been tampered with (invalid HMAC), it is treated as nonexistent.
-func (s *FileBillingStore) GetBillingState(orgID string) (*entitlements.BillingState, error) {
+func (s *FileBillingStore) GetBillingState(orgID string) (*pkglicensing.BillingState, error) {
 	billingPath, err := s.billingStatePath(orgID)
 	if err != nil {
 		return nil, err
@@ -56,7 +56,7 @@ func (s *FileBillingStore) GetBillingState(orgID string) (*entitlements.BillingS
 		return nil, nil
 	}
 
-	var state entitlements.BillingState
+	var state pkglicensing.BillingState
 	if err := json.Unmarshal(data, &state); err != nil {
 		return nil, fmt.Errorf("decode billing state for org %q: %w", orgID, err)
 	}
@@ -84,7 +84,7 @@ func (s *FileBillingStore) GetBillingState(orgID string) (*entitlements.BillingS
 }
 
 // SaveBillingState persists billing state for an org to billing.json.
-func (s *FileBillingStore) SaveBillingState(orgID string, state *entitlements.BillingState) error {
+func (s *FileBillingStore) SaveBillingState(orgID string, state *pkglicensing.BillingState) error {
 	if state == nil {
 		return errors.New("billing state is required")
 	}
@@ -180,14 +180,14 @@ func (s *FileBillingStore) loadHMACKey() ([]byte, error) {
 type billingIntegrityPayload struct {
 	Capabilities      []string                       `json:"capabilities"`
 	PlanVersion       string                         `json:"plan_version"`
-	SubscriptionState entitlements.SubscriptionState `json:"subscription_state"`
+	SubscriptionState pkglicensing.SubscriptionState `json:"subscription_state"`
 	TrialStartedAt    *int64                         `json:"trial_started_at"`
 	TrialEndsAt       *int64                         `json:"trial_ends_at"`
 	TrialExtendedAt   *int64                         `json:"trial_extended_at"`
 }
 
 // billingIntegrity computes the HMAC-SHA256 over the critical billing fields.
-func billingIntegrity(state *entitlements.BillingState, key []byte) string {
+func billingIntegrity(state *pkglicensing.BillingState, key []byte) string {
 	caps := make([]string, len(state.Capabilities))
 	copy(caps, state.Capabilities)
 	sort.Strings(caps)
@@ -208,7 +208,7 @@ func billingIntegrity(state *entitlements.BillingState, key []byte) string {
 }
 
 // verifyBillingIntegrity checks whether the stored HMAC matches the computed one.
-func verifyBillingIntegrity(state *entitlements.BillingState, key []byte) bool {
+func verifyBillingIntegrity(state *pkglicensing.BillingState, key []byte) bool {
 	expected := billingIntegrity(state, key)
 	return hmac.Equal([]byte(expected), []byte(state.Integrity))
 }

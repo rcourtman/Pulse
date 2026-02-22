@@ -9,8 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 func TestNewTenantMiddlewareWithConfig(t *testing.T) {
@@ -142,10 +141,10 @@ func TestTenantMiddleware_MultiTenantLicenseRequired(t *testing.T) {
 	}
 }
 
-// hostedTestSource implements entitlements.EntitlementSource for testing hosted subscription gating.
+// hostedTestSource implements licensing.EntitlementSource for testing hosted subscription gating.
 type hostedTestSource struct {
 	capabilities      []string
-	subscriptionState entitlements.SubscriptionState
+	subscriptionState pkglicensing.SubscriptionState
 	trialStartedAt    *int64
 	trialEndsAt       *int64
 }
@@ -154,7 +153,7 @@ func (s hostedTestSource) Capabilities() []string   { return s.capabilities }
 func (s hostedTestSource) Limits() map[string]int64 { return nil }
 func (s hostedTestSource) MetersEnabled() []string  { return nil }
 func (s hostedTestSource) PlanVersion() string      { return "cloud_trial" }
-func (s hostedTestSource) SubscriptionState() entitlements.SubscriptionState {
+func (s hostedTestSource) SubscriptionState() pkglicensing.SubscriptionState {
 	return s.subscriptionState
 }
 func (s hostedTestSource) TrialStartedAt() *int64 { return s.trialStartedAt }
@@ -162,24 +161,24 @@ func (s hostedTestSource) TrialEndsAt() *int64    { return s.trialEndsAt }
 
 // setupHostedLicenseProvider configures a LicenseServiceProvider backed by an evaluator
 // with the given subscription state and trial timestamps (no JWT license).
-func setupHostedLicenseProvider(t *testing.T, subState entitlements.SubscriptionState, trialEndsAt *int64) {
+func setupHostedLicenseProvider(t *testing.T, subState pkglicensing.SubscriptionState, trialEndsAt *int64) {
 	t.Helper()
 	now := time.Now().Unix()
 	source := hostedTestSource{
-		capabilities:      license.DeriveCapabilitiesFromTier(license.TierCloud, nil),
+		capabilities:      pkglicensing.DeriveCapabilitiesFromTier(pkglicensing.TierCloud, nil),
 		subscriptionState: subState,
 		trialStartedAt:    &now,
 		trialEndsAt:       trialEndsAt,
 	}
-	eval := entitlements.NewEvaluator(source)
-	svc := license.NewService()
+	eval := pkglicensing.NewEvaluator(source)
+	svc := pkglicensing.NewService()
 	svc.SetEvaluator(eval)
 	SetLicenseServiceProvider(&staticLicenseProvider{service: svc})
 	t.Cleanup(func() { SetLicenseServiceProvider(nil) })
 }
 
 func TestTenantMiddleware_HostedMode_ActiveSubscription_Allowed(t *testing.T) {
-	setupHostedLicenseProvider(t, entitlements.SubStateActive, nil)
+	setupHostedLicenseProvider(t, pkglicensing.SubStateActive, nil)
 
 	mw := NewTenantMiddlewareWithConfig(TenantMiddlewareConfig{
 		HostedMode: true,
@@ -205,7 +204,7 @@ func TestTenantMiddleware_HostedMode_ActiveSubscription_Allowed(t *testing.T) {
 
 func TestTenantMiddleware_HostedMode_BoundedTrial_Allowed(t *testing.T) {
 	trialEnd := time.Now().Add(14 * 24 * time.Hour).Unix()
-	setupHostedLicenseProvider(t, entitlements.SubStateTrial, &trialEnd)
+	setupHostedLicenseProvider(t, pkglicensing.SubStateTrial, &trialEnd)
 
 	mw := NewTenantMiddlewareWithConfig(TenantMiddlewareConfig{
 		HostedMode: true,
@@ -231,7 +230,7 @@ func TestTenantMiddleware_HostedMode_BoundedTrial_Allowed(t *testing.T) {
 
 func TestTenantMiddleware_HostedMode_UnboundedTrial_Blocked(t *testing.T) {
 	// Trial with no TrialEndsAt should be blocked to prevent infinite free Cloud.
-	setupHostedLicenseProvider(t, entitlements.SubStateTrial, nil)
+	setupHostedLicenseProvider(t, pkglicensing.SubStateTrial, nil)
 
 	mw := NewTenantMiddlewareWithConfig(TenantMiddlewareConfig{
 		HostedMode: true,
@@ -259,7 +258,7 @@ func TestTenantMiddleware_HostedMode_UnboundedTrial_Blocked(t *testing.T) {
 }
 
 func TestTenantMiddleware_HostedMode_ExpiredSubscription_Blocked(t *testing.T) {
-	setupHostedLicenseProvider(t, entitlements.SubStateExpired, nil)
+	setupHostedLicenseProvider(t, pkglicensing.SubStateExpired, nil)
 
 	mw := NewTenantMiddlewareWithConfig(TenantMiddlewareConfig{
 		HostedMode: true,
@@ -285,7 +284,7 @@ func TestTenantMiddleware_HostedMode_BypassesMultiTenantFlag(t *testing.T) {
 	SetMultiTenantEnabled(false)
 	t.Cleanup(func() { SetMultiTenantEnabled(orig) })
 
-	setupHostedLicenseProvider(t, entitlements.SubStateActive, nil)
+	setupHostedLicenseProvider(t, pkglicensing.SubStateActive, nil)
 
 	mw := NewTenantMiddlewareWithConfig(TenantMiddlewareConfig{
 		HostedMode: true,
@@ -337,7 +336,7 @@ func TestTenantMiddleware_HostedMode_DefaultOrg_AlwaysAllowed(t *testing.T) {
 }
 
 func TestWebSocketChecker_HostedMode_ActiveSubscription_Allowed(t *testing.T) {
-	setupHostedLicenseProvider(t, entitlements.SubStateActive, nil)
+	setupHostedLicenseProvider(t, pkglicensing.SubStateActive, nil)
 
 	checker := NewMultiTenantChecker(true) // hosted mode
 	result := checker.CheckMultiTenant(context.Background(), "cloud-ws-tenant")
@@ -351,7 +350,7 @@ func TestWebSocketChecker_HostedMode_ActiveSubscription_Allowed(t *testing.T) {
 }
 
 func TestWebSocketChecker_HostedMode_ExpiredSubscription_Blocked(t *testing.T) {
-	setupHostedLicenseProvider(t, entitlements.SubStateExpired, nil)
+	setupHostedLicenseProvider(t, pkglicensing.SubStateExpired, nil)
 
 	checker := NewMultiTenantChecker(true) // hosted mode
 	result := checker.CheckMultiTenant(context.Background(), "cloud-ws-expired")

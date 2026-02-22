@@ -66,7 +66,7 @@ else
         echo "Verified license public key fingerprint: SHA256:${actual_fingerprint}"
     fi
 
-    LICENSE_LDFLAGS="-X github.com/rcourtman/pulse-go-rewrite/internal/license.EmbeddedPublicKey=${PULSE_LICENSE_PUBLIC_KEY}"
+    LICENSE_LDFLAGS="-X github.com/rcourtman/pulse-go-rewrite/pkg/licensing.EmbeddedPublicKey=${PULSE_LICENSE_PUBLIC_KEY} -X github.com/rcourtman/pulse-go-rewrite/internal/license.EmbeddedPublicKey=${PULSE_LICENSE_PUBLIC_KEY}"
 fi
 
 # Clean previous builds

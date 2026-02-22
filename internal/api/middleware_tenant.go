@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -247,17 +247,10 @@ func GetOrganization(ctx context.Context) *models.Organization {
 // tenant routing is infrastructure rather than a paid feature.
 func isHostedSubscriptionValid(ctx context.Context) bool {
 	svc := getLicenseServiceForContext(ctx)
-	subState := entitlements.SubscriptionState(svc.SubscriptionState())
-	switch subState {
-	case entitlements.SubStateActive, entitlements.SubStateGrace:
-		return true
-	case entitlements.SubStateTrial:
-		// Only allow trials with an explicit end date to prevent "infinite free Cloud".
-		eval := svc.Evaluator()
-		return eval != nil && eval.TrialEndsAt() != nil
-	default:
-		return false
-	}
+	subState := pkglicensing.SubscriptionState(svc.SubscriptionState())
+	eval := svc.Evaluator()
+	hasTrialEnd := eval != nil && eval.TrialEndsAt() != nil
+	return pkglicensing.IsHostedSubscriptionValid(subState, hasTrialEnd)
 }
 
 // writeHostedSubscriptionRequiredError writes a 402 response for Cloud tenants

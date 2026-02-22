@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -802,7 +802,7 @@ func (h *OrgHandlers) requireMultiTenantGate(w http.ResponseWriter, r *http.Requ
 		return false
 	}
 	if !hasMultiTenantFeatureForContext(r.Context()) {
-		WriteLicenseRequired(w, license.FeatureMultiTenant, "Multi-tenant access requires an Enterprise license")
+		WriteLicenseRequired(w, pkglicensing.FeatureMultiTenant, "Multi-tenant access requires an Enterprise license")
 		return false
 	}
 	return true

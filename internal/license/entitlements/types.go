@@ -1,24 +1,24 @@
 package entitlements
 
+import pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+
 // SubscriptionState represents the subscription lifecycle state.
-type SubscriptionState string
+type SubscriptionState = pkglicensing.SubscriptionState
 
 const (
-	SubStateTrial     SubscriptionState = "trial"
-	SubStateActive    SubscriptionState = "active"
-	SubStateGrace     SubscriptionState = "grace"
-	SubStateExpired   SubscriptionState = "expired"
-	SubStateSuspended SubscriptionState = "suspended"
-	// SubStateCanceled represents an explicit user-initiated cancellation.
-	// For Cloud, this should revoke paid capabilities immediately (no grace).
-	SubStateCanceled SubscriptionState = "canceled"
+	SubStateTrial     = pkglicensing.SubStateTrial
+	SubStateActive    = pkglicensing.SubStateActive
+	SubStateGrace     = pkglicensing.SubStateGrace
+	SubStateExpired   = pkglicensing.SubStateExpired
+	SubStateSuspended = pkglicensing.SubStateSuspended
+	SubStateCanceled  = pkglicensing.SubStateCanceled
 )
 
 // LimitCheckResult represents the result of evaluating a limit.
-type LimitCheckResult string
+type LimitCheckResult = pkglicensing.LimitCheckResult
 
 const (
-	LimitAllowed   LimitCheckResult = "allowed"
-	LimitSoftBlock LimitCheckResult = "soft_block"
-	LimitHardBlock LimitCheckResult = "hard_block"
+	LimitAllowed   = pkglicensing.LimitAllowed
+	LimitSoftBlock = pkglicensing.LimitSoftBlock
+	LimitHardBlock = pkglicensing.LimitHardBlock
 )

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -76,7 +76,7 @@ func (h *BillingStateHandlers) HandlePutBillingState(w http.ResponseWriter, r *h
 
 	r.Body = http.MaxBytesReader(w, r.Body, orgRequestBodyLimit)
 
-	var incoming entitlements.BillingState
+	var incoming pkglicensing.BillingState
 	if err := json.NewDecoder(r.Body).Decode(&incoming); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
 		return
@@ -108,64 +108,14 @@ func (h *BillingStateHandlers) HandlePutBillingState(w http.ResponseWriter, r *h
 	writeJSON(w, http.StatusOK, state)
 }
 
-func defaultBillingState() *entitlements.BillingState {
-	return &entitlements.BillingState{
-		Capabilities:      []string{},
-		Limits:            map[string]int64{},
-		MetersEnabled:     []string{},
-		PlanVersion:       string(entitlements.SubStateTrial),
-		SubscriptionState: entitlements.SubStateTrial,
-	}
+func defaultBillingState() *pkglicensing.BillingState {
+	return pkglicensing.DefaultBillingState()
 }
 
-func normalizeBillingState(state *entitlements.BillingState) *entitlements.BillingState {
-	if state == nil {
-		return defaultBillingState()
-	}
-
-	normalized := &entitlements.BillingState{
-		Capabilities:      append([]string(nil), state.Capabilities...),
-		Limits:            make(map[string]int64, len(state.Limits)),
-		MetersEnabled:     append([]string(nil), state.MetersEnabled...),
-		PlanVersion:       strings.TrimSpace(state.PlanVersion),
-		SubscriptionState: entitlements.SubscriptionState(strings.ToLower(strings.TrimSpace(string(state.SubscriptionState)))),
-		TrialStartedAt:    state.TrialStartedAt,
-		TrialEndsAt:       state.TrialEndsAt,
-
-		StripeCustomerID:     strings.TrimSpace(state.StripeCustomerID),
-		StripeSubscriptionID: strings.TrimSpace(state.StripeSubscriptionID),
-		StripePriceID:        strings.TrimSpace(state.StripePriceID),
-	}
-	for key, value := range state.Limits {
-		normalized.Limits[key] = value
-	}
-
-	if normalized.Capabilities == nil {
-		normalized.Capabilities = []string{}
-	}
-	if normalized.Limits == nil {
-		normalized.Limits = map[string]int64{}
-	}
-	if normalized.MetersEnabled == nil {
-		normalized.MetersEnabled = []string{}
-	}
-	if normalized.PlanVersion == "" && normalized.SubscriptionState != "" {
-		normalized.PlanVersion = string(normalized.SubscriptionState)
-	}
-
-	return normalized
+func normalizeBillingState(state *pkglicensing.BillingState) *pkglicensing.BillingState {
+	return pkglicensing.NormalizeBillingState(state)
 }
 
-func isValidBillingSubscriptionState(state entitlements.SubscriptionState) bool {
-	switch state {
-	case entitlements.SubStateTrial,
-		entitlements.SubStateActive,
-		entitlements.SubStateGrace,
-		entitlements.SubStateExpired,
-		entitlements.SubStateSuspended,
-		entitlements.SubStateCanceled:
-		return true
-	default:
-		return false
-	}
+func isValidBillingSubscriptionState(state pkglicensing.SubscriptionState) bool {
+	return pkglicensing.IsValidBillingSubscriptionState(state)
 }

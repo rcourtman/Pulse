@@ -19,8 +19,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hosted"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license/conversion"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -29,6 +27,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog/log"
@@ -93,7 +92,7 @@ func Run(ctx context.Context, version string) error {
 	})
 
 	// Initialize license public key for Pro feature validation
-	license.InitPublicKey()
+	pkglicensing.InitEmbeddedPublicKey()
 
 	// Multi-tenant persistence is the canonical way to resolve the base data directory.
 	// It uses cfg.DataPath, which already includes PULSE_DATA_DIR overrides.
@@ -142,7 +141,7 @@ func Run(ctx context.Context, version string) error {
 		}
 	}
 
-	conversionStore, err := conversion.NewConversionStore(upgradeMetricsDB)
+	conversionStore, err := pkglicensing.NewConversionStore(upgradeMetricsDB)
 	if err != nil {
 		return fmt.Errorf("failed to initialize local upgrade metrics store: %w", err)
 	}

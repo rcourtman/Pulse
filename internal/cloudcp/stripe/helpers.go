@@ -1,58 +1,25 @@
 package stripe
 
 import (
-	"strings"
-
-	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 // MapSubscriptionStatus converts a Stripe subscription status string to the
 // internal SubscriptionState. Unknown statuses fail closed (expired).
-func MapSubscriptionStatus(status string) entitlements.SubscriptionState {
-	switch strings.ToLower(strings.TrimSpace(status)) {
-	case "active":
-		return entitlements.SubStateActive
-	case "trialing":
-		return entitlements.SubStateTrial
-	case "past_due", "unpaid":
-		return entitlements.SubStateGrace
-	case "canceled":
-		return entitlements.SubStateCanceled
-	case "paused":
-		return entitlements.SubStateSuspended
-	case "incomplete", "incomplete_expired":
-		return entitlements.SubStateExpired
-	default:
-		return entitlements.SubStateExpired
-	}
+func MapSubscriptionStatus(status string) pkglicensing.SubscriptionState {
+	return pkglicensing.MapStripeSubscriptionStatusToState(status)
 }
 
 // ShouldGrantCapabilities returns true if the subscription state warrants
 // granting paid capabilities.
-func ShouldGrantCapabilities(state entitlements.SubscriptionState) bool {
-	switch state {
-	case entitlements.SubStateActive, entitlements.SubStateTrial, entitlements.SubStateGrace:
-		return true
-	default:
-		return false
-	}
+func ShouldGrantCapabilities(state pkglicensing.SubscriptionState) bool {
+	return pkglicensing.ShouldGrantPaidCapabilities(state)
 }
 
 // DerivePlanVersion extracts a plan version from event metadata, falling back
 // to a Stripe price ID prefix or a generic "stripe" string.
 func DerivePlanVersion(metadata map[string]string, priceID string) string {
-	if metadata != nil {
-		if v := strings.TrimSpace(metadata["plan_version"]); v != "" {
-			return v
-		}
-		if v := strings.TrimSpace(metadata["plan"]); v != "" {
-			return v
-		}
-	}
-	if strings.TrimSpace(priceID) != "" {
-		return "stripe_price:" + strings.TrimSpace(priceID)
-	}
-	return "stripe"
+	return pkglicensing.DeriveStripePlanVersion(metadata, priceID)
 }
 
 // IsSafeStripeID validates that a Stripe ID (cus_..., sub_...) is safe for

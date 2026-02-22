@@ -15,9 +15,8 @@ import (
 	cpemail "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -180,7 +179,7 @@ func (p *Provisioner) generateAndLogMagicLink(email, tenantID string) {
 		Msg("Magic link generated for new tenant")
 }
 
-func (p *Provisioner) writeBillingState(tenantDataDir string, state *entitlements.BillingState) error {
+func (p *Provisioner) writeBillingState(tenantDataDir string, state *pkglicensing.BillingState) error {
 	billingStore := config.NewFileBillingStore(tenantDataDir)
 	if err := billingStore.SaveBillingState("default", state); err != nil {
 		return fmt.Errorf("write billing state: %w", err)
@@ -456,12 +455,12 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 		return fmt.Errorf("write cloud handoff key for tenant %s: %w", tenantID, err)
 	}
 
-	state := &entitlements.BillingState{
-		Capabilities:         license.DeriveCapabilitiesFromTier(license.TierCloud, nil),
+	state := &pkglicensing.BillingState{
+		Capabilities:         pkglicensing.DeriveCapabilitiesFromTier(pkglicensing.TierCloud, nil),
 		Limits:               map[string]int64{},
 		MetersEnabled:        []string{},
 		PlanVersion:          planVersion,
-		SubscriptionState:    entitlements.SubStateActive,
+		SubscriptionState:    pkglicensing.SubStateActive,
 		StripeCustomerID:     customerID,
 		StripeSubscriptionID: strings.TrimSpace(session.Subscription),
 	}
@@ -599,12 +598,12 @@ func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, display
 	}
 
 	planVersion := "msp_hosted_v1"
-	state := &entitlements.BillingState{
-		Capabilities:      license.DeriveCapabilitiesFromTier(license.TierCloud, nil),
+	state := &pkglicensing.BillingState{
+		Capabilities:      pkglicensing.DeriveCapabilitiesFromTier(pkglicensing.TierCloud, nil),
 		Limits:            map[string]int64{},
 		MetersEnabled:     []string{},
 		PlanVersion:       planVersion,
-		SubscriptionState: entitlements.SubStateActive,
+		SubscriptionState: pkglicensing.SubStateActive,
 	}
 	if err := p.writeBillingState(tenantDataDir, state); err != nil {
 		return nil, fmt.Errorf("write initial billing state for tenant %s: %w", tenantID, err)
@@ -690,11 +689,11 @@ func (p *Provisioner) HandleSubscriptionUpdated(ctx context.Context, sub Subscri
 	// Update billing.json
 	var caps []string
 	if ShouldGrantCapabilities(subState) {
-		caps = license.DeriveCapabilitiesFromTier(license.TierCloud, nil)
+		caps = pkglicensing.DeriveCapabilitiesFromTier(pkglicensing.TierCloud, nil)
 	}
 
 	tenantDataDir := p.tenantDataDir(tenant.ID)
-	state := &entitlements.BillingState{
+	state := &pkglicensing.BillingState{
 		Capabilities:         caps,
 		Limits:               map[string]int64{},
 		MetersEnabled:        []string{},
@@ -712,11 +711,11 @@ func (p *Provisioner) HandleSubscriptionUpdated(ctx context.Context, sub Subscri
 	tenant.StripeSubscriptionID = strings.TrimSpace(sub.ID)
 	tenant.StripePriceID = priceID
 	tenant.PlanVersion = planVersion
-	if subState == entitlements.SubStateSuspended {
+	if subState == pkglicensing.SubStateSuspended {
 		tenant.State = registry.TenantStateSuspended
-	} else if subState == entitlements.SubStateActive || subState == entitlements.SubStateTrial || subState == entitlements.SubStateGrace {
+	} else if subState == pkglicensing.SubStateActive || subState == pkglicensing.SubStateTrial || subState == pkglicensing.SubStateGrace {
 		tenant.State = registry.TenantStateActive
-	} else if subState == entitlements.SubStateCanceled || subState == entitlements.SubStateExpired {
+	} else if subState == pkglicensing.SubStateCanceled || subState == pkglicensing.SubStateExpired {
 		tenant.State = registry.TenantStateCanceled
 	}
 	if err := p.registry.Update(tenant); err != nil {
@@ -763,12 +762,12 @@ func (p *Provisioner) HandleSubscriptionDeleted(ctx context.Context, sub Subscri
 
 	// Revoke capabilities immediately
 	tenantDataDir := p.tenantDataDir(tenant.ID)
-	state := &entitlements.BillingState{
+	state := &pkglicensing.BillingState{
 		Capabilities:         []string{},
 		Limits:               map[string]int64{},
 		MetersEnabled:        []string{},
 		PlanVersion:          tenant.PlanVersion,
-		SubscriptionState:    entitlements.SubStateCanceled,
+		SubscriptionState:    pkglicensing.SubStateCanceled,
 		StripeCustomerID:     customerID,
 		StripeSubscriptionID: strings.TrimSpace(sub.ID),
 	}
@@ -869,7 +868,7 @@ func (p *Provisioner) HandleMSPSubscriptionUpdated(ctx context.Context, sub Subs
 
 	var caps []string
 	if ShouldGrantCapabilities(subState) {
-		caps = license.DeriveCapabilitiesFromTier(license.TierCloud, nil)
+		caps = pkglicensing.DeriveCapabilitiesFromTier(pkglicensing.TierCloud, nil)
 	}
 
 	for _, tenant := range tenants {
@@ -877,7 +876,7 @@ func (p *Provisioner) HandleMSPSubscriptionUpdated(ctx context.Context, sub Subs
 			continue
 		}
 		tenantDataDir := p.tenantDataDir(tenant.ID)
-		state := &entitlements.BillingState{
+		state := &pkglicensing.BillingState{
 			Capabilities:         caps,
 			Limits:               map[string]int64{},
 			MetersEnabled:        []string{},
@@ -893,9 +892,9 @@ func (p *Provisioner) HandleMSPSubscriptionUpdated(ctx context.Context, sub Subs
 
 		tenant.PlanVersion = planVersion
 		switch subState {
-		case entitlements.SubStateSuspended:
+		case pkglicensing.SubStateSuspended:
 			tenant.State = registry.TenantStateSuspended
-		case entitlements.SubStateCanceled, entitlements.SubStateExpired:
+		case pkglicensing.SubStateCanceled, pkglicensing.SubStateExpired:
 			tenant.State = registry.TenantStateCanceled
 		default:
 			tenant.State = registry.TenantStateActive
@@ -963,12 +962,12 @@ func (p *Provisioner) HandleMSPSubscriptionDeleted(ctx context.Context, sub Subs
 			continue
 		}
 		tenantDataDir := p.tenantDataDir(tenant.ID)
-		state := &entitlements.BillingState{
+		state := &pkglicensing.BillingState{
 			Capabilities:         []string{},
 			Limits:               map[string]int64{},
 			MetersEnabled:        []string{},
 			PlanVersion:          tenant.PlanVersion,
-			SubscriptionState:    entitlements.SubStateCanceled,
+			SubscriptionState:    pkglicensing.SubStateCanceled,
 			StripeCustomerID:     customerID,
 			StripeSubscriptionID: strings.TrimSpace(sub.ID),
 		}

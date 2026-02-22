@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 func setMaxUsersLimitForTests(t *testing.T, limits map[string]int64) {
@@ -19,8 +19,8 @@ func setMaxUsersLimitForTests(t *testing.T, limits map[string]int64) {
 
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
-	service := license.NewService()
-	licenseKey, err := license.GenerateLicenseForTesting("users-limit@example.com", license.TierPro, 24*time.Hour)
+	service := pkglicensing.NewService()
+	licenseKey, err := pkglicensing.GenerateLicenseForTesting("users-limit@example.com", pkglicensing.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestMaxUsersLimitForContext_NoService(t *testing.T) {
 }
 
 func TestMaxUsersLimitForContext_NoLicense(t *testing.T) {
-	service := license.NewService()
+	service := pkglicensing.NewService()
 	SetLicenseServiceProvider(&staticLicenseProvider{service: service})
 	t.Cleanup(func() {
 		SetLicenseServiceProvider(nil)

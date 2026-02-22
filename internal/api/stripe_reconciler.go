@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -74,12 +74,12 @@ func (sr *StripeReconciler) reconcile(ctx context.Context) {
 	}
 
 	// Check for drift between stored subscription state and expected capabilities.
-	if state.StripeSubscriptionID != "" && state.SubscriptionState == entitlements.SubStateActive {
+	if state.StripeSubscriptionID != "" && state.SubscriptionState == pkglicensing.SubStateActive {
 		// Active subscription: expected to have capabilities; nothing to warn about.
 		return
 	}
 
-	if state.StripeSubscriptionID != "" && state.SubscriptionState == entitlements.SubStateGrace {
+	if state.StripeSubscriptionID != "" && state.SubscriptionState == pkglicensing.SubStateGrace {
 		log.Warn().
 			Str("stripe_subscription_id", state.StripeSubscriptionID).
 			Str("stripe_customer_id", state.StripeCustomerID).
@@ -87,7 +87,7 @@ func (sr *StripeReconciler) reconcile(ctx context.Context) {
 			Msg("Stripe reconciler: tenant in grace period; verify Stripe dashboard for payment status")
 	}
 
-	if state.StripeSubscriptionID != "" && state.SubscriptionState == entitlements.SubStateCanceled {
+	if state.StripeSubscriptionID != "" && state.SubscriptionState == pkglicensing.SubStateCanceled {
 		if len(state.Capabilities) > 0 {
 			log.Warn().
 				Str("stripe_subscription_id", state.StripeSubscriptionID).

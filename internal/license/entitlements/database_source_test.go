@@ -27,7 +27,7 @@ func (m *mockBillingStore) GetBillingState(_ string) (*BillingState, error) {
 		return nil, nil
 	}
 
-	state := cloneBillingState(*m.state)
+	state := cloneBillingStateForTest(*m.state)
 	return &state, nil
 }
 
@@ -109,7 +109,7 @@ func TestDatabaseSourceCacheMissRefresh(t *testing.T) {
 		},
 	}
 
-	source := NewDatabaseSource(store, "org-1", time.Hour)
+	source := NewDatabaseSource(store, "org-1", 5*time.Millisecond)
 
 	if got := source.PlanVersion(); got != "pro-v1" {
 		t.Fatalf("expected initial plan_version %q, got %q", "pro-v1", got)
@@ -120,9 +120,7 @@ func TestDatabaseSourceCacheMissRefresh(t *testing.T) {
 		SubscriptionState: SubStateActive,
 	})
 
-	source.mu.Lock()
-	source.cacheTime = time.Now().Add(-2 * time.Hour)
-	source.mu.Unlock()
+	time.Sleep(10 * time.Millisecond)
 
 	if got := source.PlanVersion(); got != "pro-v2" {
 		t.Fatalf("expected refreshed plan_version %q, got %q", "pro-v2", got)
@@ -142,15 +140,13 @@ func TestDatabaseSourceFailOpenWithStaleCache(t *testing.T) {
 		},
 	}
 
-	source := NewDatabaseSource(store, "org-1", time.Hour)
+	source := NewDatabaseSource(store, "org-1", 5*time.Millisecond)
 
 	if got := source.Capabilities(); !reflect.DeepEqual(got, []string{"rbac"}) {
 		t.Fatalf("expected initial capabilities %v, got %v", []string{"rbac"}, got)
 	}
 
-	source.mu.Lock()
-	source.cacheTime = time.Now().Add(-2 * time.Hour)
-	source.mu.Unlock()
+	time.Sleep(10 * time.Millisecond)
 
 	store.setError(errors.New("store unavailable"))
 	store.setState(&BillingState{
@@ -229,4 +225,49 @@ func TestDatabaseSourceImplementsEntitlementSource(t *testing.T) {
 
 func ptrInt64(v int64) *int64 {
 	return &v
+}
+
+func cloneBillingStateForTest(state BillingState) BillingState {
+	return BillingState{
+		Capabilities:         cloneStringSliceForTest(state.Capabilities),
+		Limits:               cloneInt64MapForTest(state.Limits),
+		MetersEnabled:        cloneStringSliceForTest(state.MetersEnabled),
+		PlanVersion:          state.PlanVersion,
+		SubscriptionState:    state.SubscriptionState,
+		TrialStartedAt:       cloneInt64PtrForTest(state.TrialStartedAt),
+		TrialEndsAt:          cloneInt64PtrForTest(state.TrialEndsAt),
+		TrialExtendedAt:      cloneInt64PtrForTest(state.TrialExtendedAt),
+		Integrity:            state.Integrity,
+		StripeCustomerID:     state.StripeCustomerID,
+		StripeSubscriptionID: state.StripeSubscriptionID,
+		StripePriceID:        state.StripePriceID,
+	}
+}
+
+func cloneStringSliceForTest(values []string) []string {
+	if values == nil {
+		return nil
+	}
+	out := make([]string, len(values))
+	copy(out, values)
+	return out
+}
+
+func cloneInt64MapForTest(values map[string]int64) map[string]int64 {
+	if values == nil {
+		return nil
+	}
+	out := make(map[string]int64, len(values))
+	for k, v := range values {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneInt64PtrForTest(v *int64) *int64 {
+	if v == nil {
+		return nil
+	}
+	c := *v
+	return &c
 }

@@ -4,17 +4,16 @@ import (
 	"net/http"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license/conversion"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license/metering"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/licensing/metering"
 )
 
 func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHandlers *RBACHandlers, auditHandlers *AuditHandlers) {
-	conversionConfig := conversion.NewCollectionConfig()
+	conversionConfig := pkglicensing.NewCollectionConfig()
 	conversionHandlers := NewConversionHandlers(
-		conversion.NewRecorder(metering.NewWindowedAggregator(), r.conversionStore),
-		conversion.NewPipelineHealth(),
+		pkglicensing.NewRecorderFromWindowedAggregator(metering.NewWindowedAggregator(), r.conversionStore),
+		pkglicensing.NewPipelineHealth(),
 		conversionConfig,
 		r.conversionStore,
 		func() bool { return r != nil && r.config != nil && r.config.DisableLocalUpgradeMetrics },
@@ -84,31 +83,31 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, pkglicensing.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents))(w, req)
 	}))
 	r.mux.HandleFunc("GET /api/audit/", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, pkglicensing.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents))(w, req)
 	}))
 	r.mux.HandleFunc("GET /api/audit/{id}/verify", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleVerifyAuditEvent))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, pkglicensing.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleVerifyAuditEvent))(w, req)
 	}))
 	r.mux.HandleFunc("GET /api/audit/export", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleExportAuditEvents))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, pkglicensing.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleExportAuditEvents))(w, req)
 	}))
 	r.mux.HandleFunc("GET /api/audit/summary", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleAuditSummary))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, pkglicensing.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleAuditSummary))(w, req)
 	}))
 
 	// RBAC routes (Phase 2 - Enterprise feature)
@@ -116,38 +115,38 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, license.FeatureRBAC, rbacHandlers.HandleRoles)(w, req)
+		RequireLicenseFeature(r.licenseHandlers, pkglicensing.FeatureRBAC, rbacHandlers.HandleRoles)(w, req)
 	}))
 	r.mux.HandleFunc("/api/admin/roles/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, license.FeatureRBAC, rbacHandlers.HandleRoles)(w, req)
+		RequireLicenseFeature(r.licenseHandlers, pkglicensing.FeatureRBAC, rbacHandlers.HandleRoles)(w, req)
 	}))
 	r.mux.HandleFunc("/api/admin/users", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, license.FeatureRBAC, rbacHandlers.HandleGetUsers)(w, req)
+		RequireLicenseFeature(r.licenseHandlers, pkglicensing.FeatureRBAC, rbacHandlers.HandleGetUsers)(w, req)
 	}))
 	r.mux.HandleFunc("/api/admin/users/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, license.FeatureRBAC, rbacHandlers.HandleUserRoleActions)(w, req)
+		RequireLicenseFeature(r.licenseHandlers, pkglicensing.FeatureRBAC, rbacHandlers.HandleUserRoleActions)(w, req)
 	}))
 	// RBAC admin operations (Enterprise feature)
 	r.mux.HandleFunc("GET /api/admin/rbac/integrity", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, license.FeatureRBAC, rbacHandlers.HandleRBACIntegrityCheck)(w, req)
+		RequireLicenseFeature(r.licenseHandlers, pkglicensing.FeatureRBAC, rbacHandlers.HandleRBACIntegrityCheck)(w, req)
 	}))
 	r.mux.HandleFunc("POST /api/admin/rbac/reset-admin", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, license.FeatureRBAC, rbacHandlers.HandleRBACAdminReset)(w, req)
+		RequireLicenseFeature(r.licenseHandlers, pkglicensing.FeatureRBAC, rbacHandlers.HandleRBACAdminReset)(w, req)
 	}))
 
 	// Advanced Reporting routes
@@ -155,13 +154,13 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, license.FeatureAdvancedReporting, RequireScope(config.ScopeSettingsRead, r.reportingHandlers.HandleGenerateReport))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, pkglicensing.FeatureAdvancedReporting, RequireScope(config.ScopeSettingsRead, r.reportingHandlers.HandleGenerateReport))(w, req)
 	}))
 	r.mux.HandleFunc("/api/admin/reports/generate-multi", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, license.FeatureAdvancedReporting, RequireScope(config.ScopeSettingsRead, r.reportingHandlers.HandleGenerateMultiReport))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, pkglicensing.FeatureAdvancedReporting, RequireScope(config.ScopeSettingsRead, r.reportingHandlers.HandleGenerateMultiReport))(w, req)
 	}))
 
 	// Audit Webhook routes
@@ -169,7 +168,7 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, license.FeatureAuditLogging, func(w http.ResponseWriter, req *http.Request) {
+		RequireLicenseFeature(r.licenseHandlers, pkglicensing.FeatureAuditLogging, func(w http.ResponseWriter, req *http.Request) {
 			if req.Method == http.MethodGet {
 				RequireScope(config.ScopeSettingsRead, auditHandlers.HandleGetWebhooks)(w, req)
 			} else {

@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/license/conversion"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license/metering"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/licensing/metering"
 )
 
 func TestConversionHandleRecordEventValidPOST(t *testing.T) {
@@ -109,12 +109,12 @@ func TestConversionHandleRecordEventNonPOST(t *testing.T) {
 
 func TestConversionHandleGetStats(t *testing.T) {
 	agg := metering.NewWindowedAggregator()
-	recorder := conversion.NewRecorder(agg, nil)
+	recorder := pkglicensing.NewRecorderFromWindowedAggregator(agg, nil)
 	handlers := NewConversionHandlers(recorder, nil, nil, nil, nil)
 
-	events := []conversion.ConversionEvent{
+	events := []pkglicensing.ConversionEvent{
 		{
-			Type:           conversion.EventPaywallViewed,
+			Type:           pkglicensing.EventPaywallViewed,
 			OrgID:          "default",
 			Capability:     "long_term_metrics",
 			Surface:        "history_chart",
@@ -122,7 +122,7 @@ func TestConversionHandleGetStats(t *testing.T) {
 			IdempotencyKey: "paywall_viewed:history_chart:long_term_metrics:1",
 		},
 		{
-			Type:           conversion.EventPaywallViewed,
+			Type:           pkglicensing.EventPaywallViewed,
 			OrgID:          "default",
 			Capability:     "long_term_metrics",
 			Surface:        "history_chart",
@@ -130,7 +130,7 @@ func TestConversionHandleGetStats(t *testing.T) {
 			IdempotencyKey: "paywall_viewed:history_chart:long_term_metrics:2",
 		},
 		{
-			Type:           conversion.EventTrialStarted,
+			Type:           pkglicensing.EventTrialStarted,
 			OrgID:          "default",
 			Surface:        "license_panel",
 			Timestamp:      time.Now().UnixMilli(),
@@ -201,8 +201,8 @@ func TestConversionHandleGetStats(t *testing.T) {
 	if !ok {
 		t.Fatal("missing history_chart:long_term_metrics bucket")
 	}
-	if paywallBucket.Type != conversion.EventPaywallViewed {
-		t.Fatalf("paywall bucket type = %q, want %q", paywallBucket.Type, conversion.EventPaywallViewed)
+	if paywallBucket.Type != pkglicensing.EventPaywallViewed {
+		t.Fatalf("paywall bucket type = %q, want %q", paywallBucket.Type, pkglicensing.EventPaywallViewed)
 	}
 	if paywallBucket.Count != 2 {
 		t.Fatalf("paywall bucket count = %d, want 2", paywallBucket.Count)
@@ -215,8 +215,8 @@ func TestConversionHandleGetStats(t *testing.T) {
 	if !ok {
 		t.Fatal("missing license_panel: bucket")
 	}
-	if trialBucket.Type != conversion.EventTrialStarted {
-		t.Fatalf("trial bucket type = %q, want %q", trialBucket.Type, conversion.EventTrialStarted)
+	if trialBucket.Type != pkglicensing.EventTrialStarted {
+		t.Fatalf("trial bucket type = %q, want %q", trialBucket.Type, pkglicensing.EventTrialStarted)
 	}
 	if trialBucket.Count != 1 {
 		t.Fatalf("trial bucket count = %d, want 1", trialBucket.Count)
@@ -240,7 +240,7 @@ func TestConversionHandleGetStatsNonGET(t *testing.T) {
 }
 
 func TestConversionHandleGetHealth(t *testing.T) {
-	health := conversion.NewPipelineHealth()
+	health := pkglicensing.NewPipelineHealth()
 	handlers := NewConversionHandlers(nil, health, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/conversion/health", nil)
@@ -252,7 +252,7 @@ func TestConversionHandleGetHealth(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 
-	var resp conversion.HealthStatus
+	var resp pkglicensing.HealthStatus
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed decoding response: %v", err)
 	}
@@ -283,8 +283,8 @@ func TestConversionHandleGetHealthNonGET(t *testing.T) {
 
 func TestConversionHandleRecordEventUpdatesHealth(t *testing.T) {
 	agg := metering.NewWindowedAggregator()
-	recorder := conversion.NewRecorder(agg, nil)
-	health := conversion.NewPipelineHealth()
+	recorder := pkglicensing.NewRecorderFromWindowedAggregator(agg, nil)
+	health := pkglicensing.NewPipelineHealth()
 	handlers := NewConversionHandlers(recorder, health, nil, nil, nil)
 
 	body := []byte(fmt.Sprintf(`{
@@ -312,20 +312,20 @@ func TestConversionHandleRecordEventUpdatesHealth(t *testing.T) {
 		t.Fatalf("health status = %d, want %d", healthRec.Code, http.StatusOK)
 	}
 
-	var healthResp conversion.HealthStatus
+	var healthResp pkglicensing.HealthStatus
 	if err := json.NewDecoder(healthRec.Body).Decode(&healthResp); err != nil {
 		t.Fatalf("failed decoding health response: %v", err)
 	}
 	if healthResp.EventsTotal != 1 {
 		t.Fatalf("health events_total = %d, want 1", healthResp.EventsTotal)
 	}
-	if healthResp.EventsByType[conversion.EventPaywallViewed] != 1 {
-		t.Fatalf("health events_by_type[%q] = %d, want 1", conversion.EventPaywallViewed, healthResp.EventsByType[conversion.EventPaywallViewed])
+	if healthResp.EventsByType[pkglicensing.EventPaywallViewed] != 1 {
+		t.Fatalf("health events_by_type[%q] = %d, want 1", pkglicensing.EventPaywallViewed, healthResp.EventsByType[pkglicensing.EventPaywallViewed])
 	}
 }
 
 func TestConversionHandleGetConfigDefaults(t *testing.T) {
-	handlers := NewConversionHandlers(nil, nil, conversion.NewCollectionConfig(), nil, nil)
+	handlers := NewConversionHandlers(nil, nil, pkglicensing.NewCollectionConfig(), nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/conversion/config", nil)
 	rec := httptest.NewRecorder()
@@ -336,7 +336,7 @@ func TestConversionHandleGetConfigDefaults(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 
-	var snapshot conversion.CollectionConfigSnapshot
+	var snapshot pkglicensing.CollectionConfigSnapshot
 	if err := json.NewDecoder(rec.Body).Decode(&snapshot); err != nil {
 		t.Fatalf("failed decoding response: %v", err)
 	}
@@ -349,7 +349,7 @@ func TestConversionHandleGetConfigDefaults(t *testing.T) {
 }
 
 func TestConversionHandleUpdateConfigDisablesCollection(t *testing.T) {
-	config := conversion.NewCollectionConfig()
+	config := pkglicensing.NewCollectionConfig()
 	handlers := NewConversionHandlers(nil, nil, config, nil, nil)
 
 	body := []byte(`{"enabled":false,"disabled_surfaces":["history_chart"]}`)
@@ -362,7 +362,7 @@ func TestConversionHandleUpdateConfigDisablesCollection(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 
-	var snapshot conversion.CollectionConfigSnapshot
+	var snapshot pkglicensing.CollectionConfigSnapshot
 	if err := json.NewDecoder(rec.Body).Decode(&snapshot); err != nil {
 		t.Fatalf("failed decoding response: %v", err)
 	}
@@ -376,9 +376,9 @@ func TestConversionHandleUpdateConfigDisablesCollection(t *testing.T) {
 
 func TestConversionHandleRecordEventReturnsAcceptedWhenCollectionDisabled(t *testing.T) {
 	agg := metering.NewWindowedAggregator()
-	recorder := conversion.NewRecorder(agg, nil)
-	config := conversion.NewCollectionConfig()
-	config.UpdateConfig(conversion.CollectionConfigSnapshot{Enabled: false})
+	recorder := pkglicensing.NewRecorderFromWindowedAggregator(agg, nil)
+	config := pkglicensing.NewCollectionConfig()
+	config.UpdateConfig(pkglicensing.CollectionConfigSnapshot{Enabled: false})
 	handlers := NewConversionHandlers(recorder, nil, config, nil, nil)
 
 	body := []byte(fmt.Sprintf(`{
@@ -407,13 +407,13 @@ func TestConversionHandleRecordEventReturnsAcceptedWhenCollectionDisabled(t *tes
 
 func TestConversionHandleRecordEventRejectsCrossTenantOrgIDSpoof(t *testing.T) {
 	tmp := t.TempDir()
-	store, err := conversion.NewConversionStore(filepath.Join(tmp, "conversion.db"))
+	store, err := pkglicensing.NewConversionStore(filepath.Join(tmp, "conversion.db"))
 	if err != nil {
 		t.Fatalf("NewConversionStore() error = %v", err)
 	}
 	defer store.Close()
 
-	recorder := conversion.NewRecorder(nil, store)
+	recorder := pkglicensing.NewRecorder(nil, store, nil)
 	handlers := NewConversionHandlers(recorder, nil, nil, store, nil)
 
 	body := []byte(fmt.Sprintf(`{
@@ -463,13 +463,13 @@ func TestConversionHandleRecordEventRejectsCrossTenantOrgIDSpoof(t *testing.T) {
 
 func TestConversionHandleRecordEventAllowsMatchingOrgID(t *testing.T) {
 	tmp := t.TempDir()
-	store, err := conversion.NewConversionStore(filepath.Join(tmp, "conversion.db"))
+	store, err := pkglicensing.NewConversionStore(filepath.Join(tmp, "conversion.db"))
 	if err != nil {
 		t.Fatalf("NewConversionStore() error = %v", err)
 	}
 	defer store.Close()
 
-	recorder := conversion.NewRecorder(nil, store)
+	recorder := pkglicensing.NewRecorder(nil, store, nil)
 	handlers := NewConversionHandlers(recorder, nil, nil, store, nil)
 
 	body := []byte(fmt.Sprintf(`{
@@ -502,7 +502,7 @@ func TestConversionHandleRecordEventAllowsMatchingOrgID(t *testing.T) {
 }
 
 func TestConversionHandleConfigMethodNotAllowed(t *testing.T) {
-	handlers := NewConversionHandlers(nil, nil, conversion.NewCollectionConfig(), nil, nil)
+	handlers := NewConversionHandlers(nil, nil, pkglicensing.NewCollectionConfig(), nil, nil)
 
 	getReq := httptest.NewRequest(http.MethodPost, "/api/conversion/config", nil)
 	getRec := httptest.NewRecorder()
@@ -521,13 +521,13 @@ func TestConversionHandleConfigMethodNotAllowed(t *testing.T) {
 
 func TestConversionHandleConversionFunnelAggregatesPerOrg(t *testing.T) {
 	tmp := t.TempDir()
-	store, err := conversion.NewConversionStore(filepath.Join(tmp, "conversion.db"))
+	store, err := pkglicensing.NewConversionStore(filepath.Join(tmp, "conversion.db"))
 	if err != nil {
 		t.Fatalf("NewConversionStore() error = %v", err)
 	}
 	defer store.Close()
 
-	recorder := conversion.NewRecorder(nil, store)
+	recorder := pkglicensing.NewRecorder(nil, store, nil)
 	handlers := NewConversionHandlers(recorder, nil, nil, store, nil)
 
 	now := time.Now().UTC()
@@ -564,7 +564,7 @@ func TestConversionHandleConversionFunnelAggregatesPerOrg(t *testing.T) {
 		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusOK, rec.Body.String())
 	}
 
-	var summary conversion.FunnelSummary
+	var summary pkglicensing.FunnelSummary
 	if err := json.NewDecoder(rec.Body).Decode(&summary); err != nil {
 		t.Fatalf("failed decoding response: %v", err)
 	}
@@ -592,7 +592,7 @@ func TestConversionHandleConversionFunnelAggregatesPerOrg(t *testing.T) {
 	if recAll.Code != http.StatusOK {
 		t.Fatalf("status(all) = %d, want %d (%s)", recAll.Code, http.StatusOK, recAll.Body.String())
 	}
-	var summaryAll conversion.FunnelSummary
+	var summaryAll pkglicensing.FunnelSummary
 	if err := json.NewDecoder(recAll.Body).Decode(&summaryAll); err != nil {
 		t.Fatalf("failed decoding all-org response: %v", err)
 	}
@@ -603,7 +603,7 @@ func TestConversionHandleConversionFunnelAggregatesPerOrg(t *testing.T) {
 
 func TestConversionHandleConversionFunnelRejectsCrossTenantOrgOverride(t *testing.T) {
 	tmp := t.TempDir()
-	store, err := conversion.NewConversionStore(filepath.Join(tmp, "conversion.db"))
+	store, err := pkglicensing.NewConversionStore(filepath.Join(tmp, "conversion.db"))
 	if err != nil {
 		t.Fatalf("NewConversionStore() error = %v", err)
 	}

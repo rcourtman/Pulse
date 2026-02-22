@@ -7,7 +7,19 @@ import (
 )
 
 func TestCanTransition_ValidTransitions(t *testing.T) {
-	for transition := range validTransitions {
+	transitions := []Transition{
+		{From: license.SubStateTrial, To: license.SubStateActive},
+		{From: license.SubStateTrial, To: license.SubStateExpired},
+		{From: license.SubStateActive, To: license.SubStateGrace},
+		{From: license.SubStateActive, To: license.SubStateSuspended},
+		{From: license.SubStateGrace, To: license.SubStateActive},
+		{From: license.SubStateGrace, To: license.SubStateExpired},
+		{From: license.SubStateExpired, To: license.SubStateActive},
+		{From: license.SubStateSuspended, To: license.SubStateActive},
+		{From: license.SubStateSuspended, To: license.SubStateExpired},
+	}
+
+	for _, transition := range transitions {
 		transition := transition
 		t.Run(string(transition.From)+"_to_"+string(transition.To), func(t *testing.T) {
 			if !CanTransition(transition.From, transition.To) {
