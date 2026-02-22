@@ -38,7 +38,7 @@ export interface ResponsiveMetricCellProps {
 const METRIC_TEXT_STYLES: Record<MetricSeverity, string> = {
   critical: 'text-red-600 dark:text-red-400 font-bold',
   warning:  'text-orange-600 dark:text-orange-400 font-medium',
-  normal:   'text-slate-600 dark:text-slate-400',
+  normal:   'text-muted',
 };
 
 function metricTextClass(value: number, type: 'cpu' | 'memory' | 'disk'): string {
@@ -110,7 +110,7 @@ export const ResponsiveMetricCell: Component<ResponsiveMetricCellProps> = (props
 
   const defaultFallback = (
     <div class="h-4 flex items-center justify-center">
-      <span class="text-xs text-slate-400 dark:text-slate-500">—</span>
+      <span class="text-xs text-muted">—</span>
     </div>
   );
 
@@ -183,7 +183,7 @@ export const DualMetricCell: Component<{
 
   const defaultFallback = (
     <div class="h-4 flex items-center justify-center">
-      <span class="text-xs text-slate-400 dark:text-slate-500">—</span>
+      <span class="text-xs text-muted">—</span>
     </div>
   );
 

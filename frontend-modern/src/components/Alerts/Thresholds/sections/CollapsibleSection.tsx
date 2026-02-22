@@ -82,9 +82,9 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
                 class={`
           w-full flex items-center justify-between gap-3 px-4 py-3
           text-left cursor-pointer select-none
-          hover:bg-slate-50 dark:hover:bg-slate-700
+          hover:bg-surface-hover
           transition-colors duration-150
-          ${isCollapsed() ? 'rounded-md' : 'rounded-t-lg border-b border-slate-200 dark:border-slate-700'}
+          ${isCollapsed() ? 'rounded-md' : 'rounded-t-lg border-b border-border'}
         `}
                 aria-expanded={!isCollapsed()}
                 aria-controls={`section-content-${props.id}`}
@@ -92,7 +92,7 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
                 {/* Left side: Chevron + Icon + Title + Count */}
                 <div class="flex items-center gap-3 min-w-0">
                     {/* Expand/Collapse chevron */}
-                    <div class="flex-shrink-0 text-slate-400 dark:text-slate-500 transition-transform duration-200">
+                    <div class="flex-shrink-0 text-muted transition-transform duration-200">
                         <Show when={isCollapsed()} fallback={<ChevronDown class="w-5 h-5" />}>
                             <ChevronRight class="w-5 h-5" />
                         </Show>
@@ -100,7 +100,7 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
 
                     {/* Optional icon */}
                     <Show when={props.icon}>
-                        <div class="flex-shrink-0 text-slate-500 dark:text-slate-400">
+                        <div class="flex-shrink-0 text-muted">
                             {props.icon}
                         </div>
                     </Show>
@@ -108,7 +108,7 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
                     {/* Title and count */}
                     <div class="min-w-0">
                         <div class="flex items-center gap-2">
-                            <h3 class="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                            <h3 class="font-semibold text-base-content truncate">
                                 {props.title}
                             </h3>
                             <Show when={props.resourceCount !== undefined}>
@@ -126,7 +126,7 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
                             </Show>
                         </div>
                         <Show when={props.subtitle}>
-                            <p class="text-sm text-slate-500 dark:text-slate-400 truncate">
+                            <p class="text-sm text-muted truncate">
                                 {props.subtitle}
                             </p>
                         </Show>
@@ -152,7 +152,7 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
             >
                 <div class="p-4">
                     <Show when={showEmpty()}>
-                        <div class="text-center py-8 text-slate-500 dark:text-slate-400">
+                        <div class="text-center py-8 text-muted">
                             <p>{props.emptyMessage}</p>
                         </div>
                     </Show>
@@ -233,7 +233,7 @@ export const NestedGroupHeader: Component<NestedGroupHeaderProps> = (props) => {
         <div
             class={`
         flex items-center justify-between gap-3 px-3 py-2 -mx-3 rounded-md
-        ${props.onToggle ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700' : ''}
+        ${props.onToggle ? 'cursor-pointer hover:bg-surface-hover' : ''}
         transition-colors duration-150
       `}
             onClick={props.onToggle}
@@ -259,7 +259,7 @@ export const NestedGroupHeader: Component<NestedGroupHeaderProps> = (props) => {
                         <Show
                             when={props.href}
                             fallback={
-                                <span class="font-medium text-slate-800 dark:text-slate-200 truncate">
+                                <span class="font-medium text-base-content truncate">
                                     {props.title}
                                 </span>
                             }
@@ -275,13 +275,13 @@ export const NestedGroupHeader: Component<NestedGroupHeaderProps> = (props) => {
                             </a>
                         </Show>
                         <Show when={props.count !== undefined}>
-                            <span class="text-xs text-slate-500 dark:text-slate-400">
+                            <span class="text-xs text-muted">
                                 ({props.count})
                             </span>
                         </Show>
                     </div>
                     <Show when={props.subtitle}>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 truncate">
+                        <p class="text-xs text-muted truncate">
                             {props.subtitle}
                         </p>
                     </Show>

@@ -378,7 +378,7 @@ const Storage: Component = () => {
         <Card padding="md" tone="card">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="space-y-0.5">
-              <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <div class="text-xs font-semibold uppercase tracking-wide text-muted">
                 Ceph Summary
               </div>
               <div class="text-sm text-slate-600 dark:text-slate-300">
@@ -387,10 +387,10 @@ const Storage: Component = () => {
               </div>
             </div>
             <div class="text-right">
-              <div class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <div class="text-sm font-semibold text-base-content">
                 {formatBytes(cephSummaryStats().totalBytes)}
               </div>
-              <div class="text-[11px] text-slate-500 dark:text-slate-400">
+              <div class="text-[11px] text-muted">
                 {formatPercent(cephSummaryStats().usagePercent)} used
               </div>
             </div>
@@ -398,15 +398,15 @@ const Storage: Component = () => {
           <div class="mt-3 grid gap-3 sm:grid-cols-2">
             <For each={cephSummaryStats().clusters}>
               {(cluster) => (
-                <div class="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3">
+                <div class="rounded-md border border-border bg-surface p-3">
                   <div class="flex items-start justify-between gap-2">
                     <div class="min-w-0">
-                      <div class="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
+                      <div class="text-sm font-semibold text-base-content truncate">
                         {cluster.name || 'Ceph Cluster'}
                       </div>
                       <Show when={cluster.healthMessage}>
                         <div
-                          class="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[240px]"
+                          class="text-[11px] text-muted truncate max-w-[240px]"
                           title={cluster.healthMessage}
                         >
                           {cluster.healthMessage}
@@ -476,7 +476,7 @@ const Storage: Component = () => {
               <select
                 value={selectedNodeId()}
                 onChange={(event) => setSelectedNodeId(event.currentTarget.value)}
-                class="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                class="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-surface text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 aria-label="Node"
               >
                 <option value="all">All Nodes</option>
@@ -565,7 +565,7 @@ const Storage: Component = () => {
                 <div class="overflow-x-auto">
                   <Table class="w-full text-xs">
                     <TableHeader>
-                      <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                      <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
                         <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Name</TableHead>
                         <Show when={groupBy() !== 'node'}>
                           <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Node</TableHead>
@@ -577,7 +577,7 @@ const Storage: Component = () => {
                         <TableHead class="px-1.5 sm:px-2 py-0.5 w-10" />
                       </TableRow>
                     </TableHeader>
-                    <TableBody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    <TableBody class="divide-y divide-border">
                       {/* Outer <For> uses string keys — strings compare by value so DOM is stable across data updates */}
                       <For each={groupedRecords().map((g) => g.key)}>
                         {(groupKey) => {

@@ -10,8 +10,8 @@ interface ErrorBoundaryProps {
 
 const DefaultErrorFallback: Component<{ error: Error; reset: () => void }> = (props) => {
   return (
-    <div class="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900 p-4">
-      <div class="max-w-md w-full bg-white dark:bg-slate-800 rounded-md shadow-sm p-6">
+    <div class="min-h-screen flex items-center justify-center bg-base p-4">
+      <div class="max-w-md w-full bg-surface rounded-md shadow-sm p-6">
         <div class="flex items-center mb-4">
           <svg
             class="w-12 h-12 text-red-500 mr-3"
@@ -31,8 +31,8 @@ const DefaultErrorFallback: Component<{ error: Error; reset: () => void }> = (pr
               title="Something went wrong"
               description="An unexpected error occurred"
               size="md"
-              titleClass="text-slate-900 dark:text-slate-100"
-              descriptionClass="text-sm text-slate-600 dark:text-slate-400"
+              titleClass="text-base-content"
+              descriptionClass="text-sm text-muted"
             />
           </div>
         </div>
@@ -60,7 +60,7 @@ const DefaultErrorFallback: Component<{ error: Error; reset: () => void }> = (pr
           </button>
         </div>
 
-        <div class="mt-4 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+        <div class="mt-4 text-xs text-muted leading-relaxed">
           Technical details are suppressed in this view. Check server logs for full context.
         </div>
       </div>

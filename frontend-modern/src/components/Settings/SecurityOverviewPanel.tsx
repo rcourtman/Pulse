@@ -35,7 +35,7 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
       <Show when={props.securityStatusLoading()}>
         <Card
           padding="none"
-          class="overflow-hidden border border-slate-200 dark:border-slate-700"
+          class="overflow-hidden border border-border"
           border={false}
         >
           <div class="bg-slate-100 dark:bg-slate-800 px-6 py-5 animate-pulse">
@@ -54,7 +54,7 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
           <div class="p-6">
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {[1, 2, 3, 4].map(() => (
-                <div class="rounded-md border border-slate-200 dark:border-slate-700 p-4 animate-pulse">
+                <div class="rounded-md border border-border p-4 animate-pulse">
                   <div class="h-4 bg-slate-200 dark:bg-slate-700 rounded w-2/3 mb-2"></div>
                   <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/2"></div>
                 </div>
@@ -133,14 +133,14 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
       <Show when={!props.securityStatusLoading() && props.securityStatus()}>
         <Card
           padding="md"
-          class="border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+          class="border border-border bg-slate-50 dark:bg-slate-800"
           border={false}
         >
           <div class="flex items-start gap-3">
             <div class="p-1.5 bg-slate-100 dark:bg-slate-700 rounded-md flex-shrink-0">
-              <Info class="w-4 h-4 text-slate-500 dark:text-slate-400" />
+              <Info class="w-4 h-4 text-muted" />
             </div>
-            <div class="text-xs text-slate-600 dark:text-slate-400">
+            <div class="text-xs text-muted">
               <p class="font-medium text-slate-700 dark:text-slate-300 mb-1">Security Best Practices</p>
               <ul class="space-y-0.5 list-disc list-inside">
                 <li>Enable HTTPS via a reverse proxy for encrypted connections</li>

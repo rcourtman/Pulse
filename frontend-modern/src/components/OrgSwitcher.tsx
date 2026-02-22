@@ -16,7 +16,7 @@ export function OrgSwitcher(props: OrgSwitcherProps) {
 
   return (
     <div class="flex items-center gap-2">
-      <span class="hidden lg:inline text-xs text-slate-600 dark:text-slate-400">Org</span>
+      <span class="hidden lg:inline text-xs text-muted">Org</span>
       <Show
         when={props.orgs.length > 1}
         fallback={

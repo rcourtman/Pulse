@@ -18,7 +18,7 @@ export const NetworkInterfacesCard: Component<NetworkInterfacesCardProps> = (pro
               <div class="flex items-center gap-2 text-[11px] font-medium text-slate-700 dark:text-slate-200 min-w-0">
                 <span class="truncate min-w-0">{iface.name}</span>
                 <Show when={iface.mac}>
-                  <span class="text-[9px] text-slate-400 dark:text-slate-500 font-normal truncate shrink-0 max-w-[100px]" title={iface.mac}>{iface.mac}</span>
+                  <span class="text-[9px] text-muted font-normal truncate shrink-0 max-w-[100px]" title={iface.mac}>{iface.mac}</span>
                 </Show>
               </div>
               <Show when={iface.addresses && iface.addresses.length > 0}>

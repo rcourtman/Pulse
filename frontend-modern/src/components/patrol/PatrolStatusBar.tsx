@@ -70,7 +70,7 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
   return (
     <Show when={!runs.loading && stats()}>
       {(s) => (
-        <div class="bg-white dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700 px-4 py-2">
+        <div class="bg-surface rounded-md border border-border px-4 py-2">
           {/* Circuit breaker warning */}
           <Show when={circuitBreaker()?.state === 'open'}>
             <div class="flex items-center gap-1.5 mb-1.5 pb-1.5 border-b border-red-200 dark:border-red-800">
@@ -109,7 +109,7 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
 
             {/* Last run */}
             <Show when={s().lastRunTime}>
-              <span class="text-xs text-slate-600 dark:text-slate-400">
+              <span class="text-xs text-muted">
                 Last run: {s().lastRunTime}
                 <Show when={s().lastRunTrigger}>
                   <span class="text-slate-500 dark:text-slate-500"> ({s().lastRunTrigger})</span>
@@ -120,7 +120,7 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
             <span class="hidden sm:inline text-slate-300 dark:text-slate-600">|</span>
 
             {/* Today */}
-            <span class="text-xs text-slate-600 dark:text-slate-400">
+            <span class="text-xs text-muted">
               Today: {s().runsToday} run{s().runsToday === 1 ? '' : 's'}
               <Show when={s().newFindingsToday > 0}>
                 <span class="text-amber-600 dark:text-amber-400">

@@ -38,7 +38,7 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
         {displayName()}
       </a>
       <Show when={showActualName()}>
-        <span class="text-[10px] text-slate-500 dark:text-slate-400">({props.node.name})</span>
+        <span class="text-[10px] text-muted">({props.node.name})</span>
       </Show>
 
       <Show when={props.node.isClusterMember !== undefined}>

@@ -455,24 +455,24 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div class="rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-              <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-muted">
                 Total tokens
               </div>
-              <div class="mt-1 text-2xl font-semibold text-slate-900 dark:text-slate-100">
+              <div class="mt-1 text-2xl font-semibold text-base-content">
                 {totalTokens()}
               </div>
-              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              <p class="mt-1 text-xs text-muted">
                 Stored credentials across all agents
               </p>
             </div>
             <div class="rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-              <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-muted">
                 Scoped tokens
               </div>
-              <div class="mt-1 text-2xl font-semibold text-slate-900 dark:text-slate-100">
+              <div class="mt-1 text-2xl font-semibold text-base-content">
                 {scopedTokenCount()}
               </div>
-              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              <p class="mt-1 text-xs text-muted">
                 Limited access tokens with defined scopes
               </p>
             </div>
@@ -485,7 +485,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               <div
                 class={`text-[0.7rem] font-semibold uppercase tracking-wide ${hasWildcardTokens()
                   ? 'text-amber-700 dark:text-amber-300'
-                  : 'text-slate-500 dark:text-slate-400'
+                  : 'text-muted'
                   }`}
               >
                 Full access tokens
@@ -493,7 +493,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               <div
                 class={`mt-1 text-2xl font-semibold ${hasWildcardTokens()
                   ? 'text-amber-800 dark:text-amber-100'
-                  : 'text-slate-900 dark:text-slate-100'
+                  : 'text-base-content'
                   }`}
               >
                 {wildcardCount()}
@@ -501,7 +501,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               <p
                 class={`mt-1 text-xs ${hasWildcardTokens()
                   ? 'text-amber-700 dark:text-amber-200'
-                  : 'text-slate-500 dark:text-slate-400'
+                  : 'text-muted'
                   }`}
               >
                 {hasWildcardTokens()
@@ -600,7 +600,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
           <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-700 dark:bg-slate-800">
             <div>
               <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Token inventory</h4>
-              <p class="text-xs text-slate-600 dark:text-slate-400">
+              <p class="text-xs text-muted">
                 Active credentials sorted by most recent creation date.
               </p>
             </div>
@@ -620,12 +620,12 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 {
                   key: 'name',
                   label: 'Name',
-                  render: (token) => <span class="font-medium text-slate-900 dark:text-slate-100">{token.name || 'Untitled'}</span>
+                  render: (token) => <span class="font-medium text-base-content">{token.name || 'Untitled'}</span>
                 },
                 {
                   key: 'hint',
                   label: 'Hint',
-                  render: (token) => <span class="font-mono text-xs text-slate-600 dark:text-slate-400">{tokenHint(token)}</span>
+                  render: (token) => <span class="font-mono text-xs text-muted">{tokenHint(token)}</span>
                 },
                 {
                   key: 'scopes',
@@ -694,7 +694,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                         class="flex flex-wrap items-center gap-2"
                         title={usageTitleSegments.length > 0 ? usageTitleSegments.join('\n') : undefined}
                       >
-                        <span class="text-slate-600 dark:text-slate-400">{hostSummary}</span>
+                        <span class="text-muted">{hostSummary}</span>
                         <Show when={hostUsageEntry && hostUsageEntry.count > 1}>
                           <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
                             <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
@@ -714,13 +714,13 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 {
                   key: 'createdAt',
                   label: 'Created',
-                  render: (token) => <span class="text-slate-600 dark:text-slate-400">{formatRelativeTime(new Date(token.createdAt).getTime())}</span>
+                  render: (token) => <span class="text-muted">{formatRelativeTime(new Date(token.createdAt).getTime())}</span>
                 },
                 {
                   key: 'lastUsedAt',
                   label: 'Last used',
                   render: (token) => (
-                    <span class="text-slate-600 dark:text-slate-400">
+                    <span class="text-muted">
                       {token.lastUsedAt
                         ? formatRelativeTime(new Date(token.lastUsedAt).getTime())
                         : 'Never'}
@@ -751,7 +751,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
       <Card
         padding="none"
-        class={`border border-slate-200 dark:border-slate-700 transition-shadow ${createHighlight() ? 'ring-2 ring-blue-500 shadow-sm' : ''
+        class={`border border-border transition-shadow ${createHighlight() ? 'ring-2 ring-blue-500 shadow-sm' : ''
           }`}
         ref={(el: HTMLDivElement) => {
           createSectionRef = el;
@@ -776,7 +776,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
           <div class="space-y-4">
             <div class="space-y-2">
-              <label class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+              <label class="text-xs font-semibold uppercase tracking-wide text-muted">
                 Token name
               </label>
               <input
@@ -790,7 +790,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
             <div class="space-y-3">
               <div class="flex flex-wrap items-center justify-between gap-2">
-                <span class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+                <span class="text-xs font-semibold uppercase tracking-wide text-muted">
                   Quick presets
                 </span>
                 <button
@@ -842,7 +842,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 <For each={scopeGroups()}>
                   {([group, options]) => (
                     <div class="space-y-2">
-                      <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-muted">
                         {group}
                       </div>
                       <div class="flex flex-wrap gap-2">
@@ -891,7 +891,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         </Card>
       </Show>
 
-      <Card tone="muted" padding="sm" class="text-xs text-slate-600 dark:text-slate-400">
+      <Card tone="muted" padding="sm" class="text-xs text-muted">
         Separate tokens per integration • Rotate regularly •{' '}
         <a
           class="inline-flex min-h-10 sm:min-h-10 items-center rounded-md px-2 py-1.5 text-sm font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"

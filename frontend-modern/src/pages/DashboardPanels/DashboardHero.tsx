@@ -231,7 +231,7 @@ export function DashboardHero(props: DashboardHeroProps) {
                                     >
                                         <Server class="w-5 h-5" />
                                     </div>
-                                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white truncate">Infrastructure</h3>
+                                    <h3 class="text-sm font-semibold text-base-content truncate">Infrastructure</h3>
                                     <Show when={infrastructureHasIssue()}>
                                         <SeverityChip severity="critical" />
                                     </Show>
@@ -249,9 +249,9 @@ export function DashboardHero(props: DashboardHeroProps) {
                                 />
                             </div>
 
-                            <div class="text-2xl font-bold text-slate-900 dark:text-white">{props.infrastructure.total}</div>
-                            <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Total Nodes</div>
-                            <div class="text-xs text-slate-500 dark:text-slate-400 mt-2 truncate">
+                            <div class="text-2xl font-bold text-base-content">{props.infrastructure.total}</div>
+                            <div class="text-xs text-muted mt-1">Total Nodes</div>
+                            <div class="text-xs text-muted mt-2 truncate">
                                 {props.infrastructure.online} online
                                 <Show when={props.topCPU[0]}>
                                     <span>
@@ -264,7 +264,7 @@ export function DashboardHero(props: DashboardHeroProps) {
                         <Show when={getInfraComposition().length > 0}>
                             <div class="mt-4">
                                 <StackedBar data={getInfraComposition()} height={6} />
-                                <div class="flex gap-2.5 mt-2 flex-wrap text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                <div class="flex gap-2.5 mt-2 flex-wrap text-[10px] text-muted font-medium">
                                     <For each={getInfraComposition().slice(0, 3)}>
                                         {(comp) => (
                                             <div class="flex items-center gap-1.5"><div class={`w-1.5 h-1.5 rounded-full ${comp.color}`} />{comp.label}</div>
@@ -293,7 +293,7 @@ export function DashboardHero(props: DashboardHeroProps) {
                                     >
                                         <Boxes class="w-5 h-5" />
                                     </div>
-                                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white truncate">Workloads</h3>
+                                    <h3 class="text-sm font-semibold text-base-content truncate">Workloads</h3>
                                     <Show when={workloadsHasIssue()}>
                                         <SeverityChip severity="warning" />
                                     </Show>
@@ -303,16 +303,16 @@ export function DashboardHero(props: DashboardHeroProps) {
                                 </span>
                             </div>
 
-                            <div class="text-2xl font-bold text-slate-900 dark:text-white">{props.workloads.total}</div>
-                            <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Total</div>
-                            <div class="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                            <div class="text-2xl font-bold text-base-content">{props.workloads.total}</div>
+                            <div class="text-xs text-muted mt-1">Total</div>
+                            <div class="text-xs text-muted mt-2">
                                 {props.workloads.running} running · {props.workloads.stopped} stopped
                             </div>
                         </div>
                         <Show when={getWorkloadComposition().length > 0}>
                             <div class="mt-4">
                                 <StackedBar data={getWorkloadComposition()} height={6} />
-                                <div class="flex gap-2.5 mt-2 flex-wrap text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                <div class="flex gap-2.5 mt-2 flex-wrap text-[10px] text-muted font-medium">
                                     <For each={getWorkloadComposition().slice(0, 3)}>
                                         {(comp) => (
                                             <div class="flex items-center gap-1.5"><div class={`w-1.5 h-1.5 rounded-full ${comp.color}`} />{comp.label}</div>
@@ -340,7 +340,7 @@ export function DashboardHero(props: DashboardHeroProps) {
                                 >
                                     <HardDrive class="w-5 h-5" />
                                 </div>
-                                <h3 class="text-sm font-semibold text-slate-900 dark:text-white truncate">Storage</h3>
+                                <h3 class="text-sm font-semibold text-base-content truncate">Storage</h3>
                                 <Show when={storageSeverity()}>{(severity) => <SeverityChip severity={severity()} />}</Show>
                             </div>
                             <MiniGauge
@@ -351,12 +351,12 @@ export function DashboardHero(props: DashboardHeroProps) {
                             />
                         </div>
 
-                        <div class="text-2xl font-bold text-slate-900 dark:text-white flex items-baseline gap-0.5">
+                        <div class="text-2xl font-bold text-base-content flex items-baseline gap-0.5">
                             {Math.round(props.storage.capacityPercent)}
                             <span class="text-sm font-normal text-slate-400">%</span>
                         </div>
-                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Capacity Used</div>
-                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                        <div class="text-xs text-muted mt-1">Capacity Used</div>
+                        <div class="text-xs text-muted mt-2">
                             {formatBytes(props.storage.totalUsed)} / {formatBytes(props.storage.totalCapacity)}
                         </div>
                     </Card>
@@ -375,7 +375,7 @@ export function DashboardHero(props: DashboardHeroProps) {
                                 >
                                     <Archive class="w-5 h-5" />
                                 </div>
-                                <h3 class="text-sm font-semibold text-slate-900 dark:text-white truncate">Recovery</h3>
+                                <h3 class="text-sm font-semibold text-base-content truncate">Recovery</h3>
                                 <Show when={recoverySeverity()}>{(severity) => <SeverityChip severity={severity()} />}</Show>
                             </div>
 
@@ -400,17 +400,17 @@ export function DashboardHero(props: DashboardHeroProps) {
 
                         <Show
                             when={props.recovery.hasData}
-                            fallback={<div class="text-2xl font-bold text-slate-900 dark:text-white">—</div>}
+                            fallback={<div class="text-2xl font-bold text-base-content">—</div>}
                         >
-                            <div class="text-2xl font-bold text-slate-900 dark:text-white">{props.recovery.totalProtected}</div>
+                            <div class="text-2xl font-bold text-base-content">{props.recovery.totalProtected}</div>
                         </Show>
-                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Protected</div>
+                        <div class="text-xs text-muted mt-1">Protected</div>
 
                         <Show
                             when={props.recovery.hasData}
-                            fallback={<div class="text-xs text-slate-500 dark:text-slate-400 mt-2">No data</div>}
+                            fallback={<div class="text-xs text-muted mt-2">No data</div>}
                         >
-                            <div class="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                            <div class="text-xs text-muted mt-2">
                                 {(props.recovery.byOutcome.success ?? 0)} ok · {(props.recovery.byOutcome.failed ?? 0)} failed
                                 {' · Last '}
                                 {formatRelativeTime(props.recovery.latestEventTimestamp ?? undefined, {

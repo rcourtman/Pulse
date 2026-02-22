@@ -74,7 +74,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
         <span class={`${statusColor()} font-bold`}>{statusIcon()}</span>
 
         {/* Tool label */}
-        <span class="text-slate-500 dark:text-slate-400 uppercase text-[9px] font-medium tracking-wider min-w-[50px]">
+        <span class="text-muted uppercase text-[9px] font-medium tracking-wider min-w-[50px]">
           {toolLabel()}
         </span>
 
@@ -98,8 +98,8 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
 
       {/* Output - always show last few lines, expandable for full output */}
       <Show when={hasOutput()}>
-        <div class="ml-4 mt-1 mb-2 pl-2 border-l-2 border-slate-200 dark:border-slate-700 overflow-hidden">
-          <pre class={`text-[10px] text-slate-600 dark:text-slate-400 whitespace-pre-wrap break-all leading-relaxed overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-slate-800 rounded p-2 ${showOutput() ? 'max-h-64' : 'max-h-20'}`}>
+        <div class="ml-4 mt-1 mb-2 pl-2 border-l-2 border-border overflow-hidden">
+          <pre class={`text-[10px] text-muted whitespace-pre-wrap break-all leading-relaxed overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-slate-800 rounded p-2 ${showOutput() ? 'max-h-64' : 'max-h-20'}`}>
             {displayOutput()}
           </pre>
           <Show when={hasMoreOutput()}>
@@ -231,7 +231,7 @@ export const ToolExecutionsList: Component<ToolExecutionsListProps> = (props) =>
       <Show when={shouldCollapse() && !showAll()}>
         <button
           onClick={() => setShowAll(true)}
-          class="w-full mt-0.5 py-1 text-[10px] text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-center font-medium"
+          class="w-full mt-0.5 py-1 text-[10px] text-muted hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-center font-medium"
         >
           + {hiddenCount()} more tools ({stats().success} ✓ / {stats().failed} ✗)
         </button>

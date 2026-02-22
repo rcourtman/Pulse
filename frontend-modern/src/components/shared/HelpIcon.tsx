@@ -166,7 +166,7 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
             ref={popoverRef}
             role="dialog"
             aria-labelledby="help-popover-title"
-            class="fixed z-[9999] bg-white dark:bg-slate-800 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden animate-in fade-in-0 zoom-in-95 duration-150"
+            class="fixed z-[9999] bg-surface rounded-md shadow-sm border border-border overflow-hidden animate-in fade-in-0 zoom-in-95 duration-150"
             style={{
               top: `${popoverPosition().top}px`,
               left: `${popoverPosition().left}px`,
@@ -175,8 +175,8 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
             }}
           >
             {/* Header */}
-            <div class="px-3 py-2 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2">
-              <span id="help-popover-title" class="text-sm font-medium text-slate-900 dark:text-slate-100">
+            <div class="px-3 py-2 bg-slate-50 dark:bg-slate-800 border-b border-border flex items-center justify-between gap-2">
+              <span id="help-popover-title" class="text-sm font-medium text-base-content">
                 {helpContent.title}
               </span>
               <button
@@ -195,14 +195,14 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
 
               <Show when={helpContent.examples && helpContent.examples.length > 0}>
                 <div class="pt-2 border-t border-slate-100 dark:border-slate-700">
-                  <p class="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500 font-medium mb-1.5">
+                  <p class="text-[10px] uppercase tracking-wide text-muted font-medium mb-1.5">
                     Examples
                   </p>
                   <ul class="space-y-1 text-[11px]">
                     {helpContent.examples!.map((example) => (
                       <li class="flex items-start gap-1.5">
-                        <span class="text-slate-400 dark:text-slate-500 mt-0.5 select-none">-</span>
-                        <span class="text-slate-600 dark:text-slate-400">{example}</span>
+                        <span class="text-muted mt-0.5 select-none">-</span>
+                        <span class="text-muted">{example}</span>
                       </li>
                     ))}
                   </ul>

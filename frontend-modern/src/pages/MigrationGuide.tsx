@@ -54,13 +54,13 @@ export function MigrationGuide() {
   return (
     <div class="space-y-4">
       <Card class="p-5">
-        <h1 class="text-base font-semibold text-slate-900 dark:text-slate-100">Navigation Migration Guide</h1>
+        <h1 class="text-base font-semibold text-base-content">Navigation Migration Guide</h1>
         <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">
           Pulse now uses a resource-first layout: Infrastructure, Workloads, Storage, and Recovery.
           Legacy URLs still redirect for compatibility, but this guide shows the canonical destinations.
         </p>
         <div class="mt-3 text-xs text-slate-600 dark:text-slate-300 space-y-1">
-          <div class="font-medium text-slate-900 dark:text-slate-100">Why change?</div>
+          <div class="font-medium text-base-content">Why change?</div>
           <div>
             Unified resources enable one inventory, one search, and consistent filters across Proxmox, agents, Docker, Kubernetes, and new sources.
             The goal is fewer duplicated pages and a navigation model that scales as integrations expand.
@@ -75,14 +75,14 @@ export function MigrationGuide() {
       <Card padding="none" class="overflow-hidden">
         <Table class="w-full border-collapse">
           <TableHeader>
-            <TableRow class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+            <TableRow class="bg-slate-50 dark:bg-slate-800 border-b border-border">
               <TableHead class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Legacy route</TableHead>
               <TableHead class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">New destination</TableHead>
               <TableHead class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Reason</TableHead>
               <TableHead class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Status</TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody class="bg-white dark:bg-slate-800 divide-y divide-gray-100 dark:divide-gray-700">
+          <TableBody class="bg-surface divide-y divide-gray-100 dark:divide-gray-700">
             <For each={ROUTE_MAPPINGS}>
               {(item) => (
                 <TableRow>

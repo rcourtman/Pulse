@@ -108,7 +108,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
           <button
             type="button"
             onClick={() => setFiltersOpen((o) => !o)}
-            class="flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400"
+            class="flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-muted"
           >
             <ListFilterIcon class="w-3.5 h-3.5" />
             Filters
@@ -161,7 +161,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
             {/* Source Filter */}
             <Show when={props.sourceFilter && props.setSourceFilter}>
               <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
-                <label for="storage-source-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Source</label>
+                <label for="storage-source-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Source</label>
                 <select
                   id="storage-source-filter"
                   value={props.sourceFilter!()}
@@ -178,7 +178,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
 
             {/* Status Filter */}
             <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
-              <label for="storage-status-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Status</label>
+              <label for="storage-status-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Status</label>
               <select
                 id="storage-status-filter"
                 value={props.statusFilter?.() ?? 'all'}
@@ -203,7 +203,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
               onChange={(e) => props.setSortKey(e.currentTarget.value)}
               disabled={props.sortDisabled}
               aria-label="Sort By"
-              class="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              class="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-surface text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {sortOptions.map((option) => (
                 <option value={option.value}>{option.label}</option>
@@ -215,7 +215,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
               onClick={() => props.setSortDirection(props.sortDirection() === 'asc' ? 'desc' : 'asc')}
               disabled={props.sortDisabled}
               aria-label="Sort Direction"
-              class="inline-flex items-center justify-center h-7 w-7 rounded-md border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              class="inline-flex items-center justify-center h-7 w-7 rounded-md border border-slate-300 dark:border-slate-600 text-muted hover:bg-surface-hover transition-colors"
             >
               <svg
                 class={`h-4 w-4 transition-transform ${props.sortDirection() === 'asc' ? 'rotate-180' : ''}`}

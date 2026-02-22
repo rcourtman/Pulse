@@ -98,7 +98,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
               <div class="space-y-5 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                 <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {Array.from({ length: 4 }).map(() => (
-                    <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+                    <div class="rounded-md border border-border p-3 space-y-2">
                       <div class="h-3 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                       <div class="h-5 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                     </div>
@@ -115,10 +115,10 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
 
                 <div class="space-y-2">
                   <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                  <div class="overflow-hidden rounded-md border border-slate-200 dark:border-slate-700">
+                  <div class="overflow-hidden rounded-md border border-border">
                     <div class="h-10 w-full animate-pulse bg-slate-100 dark:bg-slate-800" />
                     {Array.from({ length: 3 }).map(() => (
-                      <div class="border-t border-slate-100 dark:border-slate-800 px-3 py-3">
+                      <div class="border-t border-border-subtle px-3 py-3">
                         <div class="flex items-center gap-3">
                           <div class="h-4 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                           <div class="h-4 w-14 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
@@ -136,21 +136,21 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
                 <>
                   <div class="space-y-6 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                      <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
-                        <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Organization</p>
-                        <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{currentOrg().displayName || currentOrg().id}</p>
+                      <div class="rounded-md border border-border p-3">
+                        <p class="text-xs uppercase tracking-wide text-muted">Organization</p>
+                        <p class="mt-1 text-sm font-medium text-base-content">{currentOrg().displayName || currentOrg().id}</p>
                       </div>
-                      <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
-                        <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Org ID</p>
-                        <p class="mt-1 text-sm font-mono break-all text-slate-900 dark:text-slate-100">{currentOrg().id}</p>
+                      <div class="rounded-md border border-border p-3">
+                        <p class="text-xs uppercase tracking-wide text-muted">Org ID</p>
+                        <p class="mt-1 text-sm font-mono break-all text-base-content">{currentOrg().id}</p>
                       </div>
-                      <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
-                        <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Created</p>
-                        <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{formatOrgDate(currentOrg().createdAt)}</p>
+                      <div class="rounded-md border border-border p-3">
+                        <p class="text-xs uppercase tracking-wide text-muted">Created</p>
+                        <p class="mt-1 text-sm font-medium text-base-content">{formatOrgDate(currentOrg().createdAt)}</p>
                       </div>
-                      <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
-                        <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Members</p>
-                        <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{members().length}</p>
+                      <div class="rounded-md border border-border p-3">
+                        <p class="text-xs uppercase tracking-wide text-muted">Members</p>
+                        <p class="mt-1 text-sm font-medium text-base-content">{members().length}</p>
                       </div>
                     </div>
 
@@ -177,14 +177,14 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
                         </button>
                       </div>
                       <Show when={!canManageOrg(currentOrg(), props.currentUser)}>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">Admin or owner role required to update organization details.</p>
+                        <p class="text-xs text-muted">Admin or owner role required to update organization details.</p>
                       </Show>
                     </div>
 
                   </div>
 
                   <div class="space-y-2 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                    <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Membership</h4>
+                    <h4 class="text-sm font-semibold text-base-content">Membership</h4>
                     <div class="mt-4 -mx-4 sm:mx-0 overflow-x-auto w-full">
                       <PulseDataGrid
                         data={members()}
@@ -192,7 +192,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
                           {
                             key: 'userId',
                             label: 'User',
-                            render: (member) => <span class="text-slate-900 dark:text-slate-100">{member.userId}</span>
+                            render: (member) => <span class="text-base-content">{member.userId}</span>
                           },
                           {
                             key: 'role',
@@ -209,7 +209,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
                           {
                             key: 'addedAt',
                             label: 'Added',
-                            render: (member) => <span class="text-slate-600 dark:text-slate-400">{formatOrgDate(member.addedAt)}</span>
+                            render: (member) => <span class="text-muted">{formatOrgDate(member.addedAt)}</span>
                           }
                         ]}
                         keyExtractor={(member) => member.userId}

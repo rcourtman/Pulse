@@ -272,7 +272,7 @@ export function getConfidenceLevel(confidence: number): {
     if (confidence >= 0.7) {
         return { label: 'Medium confidence', color: 'text-amber-600 dark:text-amber-400' };
     }
-    return { label: 'Low confidence', color: 'text-slate-500 dark:text-slate-400' };
+    return { label: 'Low confidence', color: 'text-muted' };
 }
 
 /**

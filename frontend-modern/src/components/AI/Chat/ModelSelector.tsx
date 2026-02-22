@@ -134,7 +134,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
             <button
                 ref={buttonRef}
                 onClick={handleToggle}
-                class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 rounded-md border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800 transition-colors"
+                class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 rounded-md border border-border hover:border-slate-300 dark:hover:border-slate-600 bg-surface transition-colors"
                 title="Select model for this chat"
             >
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -154,25 +154,25 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
 
             <Show when={isOpen()}>
                 <div
-                    class="fixed w-80 max-h-96 overflow-hidden bg-white dark:bg-slate-800 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 z-[9999]"
+                    class="fixed w-80 max-h-96 overflow-hidden bg-surface rounded-md shadow-sm border border-border z-[9999]"
                     style={{ top: `${dropdownPosition().top}px`, right: `${dropdownPosition().right}px` }}
                 >
                     {/* Search bar */}
-                    <div class="flex items-center gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-700">
+                    <div class="flex items-center gap-2 px-3 py-2 border-b border-border">
                         <input
                             type="text"
                             value={searchQuery()}
                             onInput={(e) => setSearchQuery(e.currentTarget.value)}
                             onKeyDown={handleKeyDown}
                             placeholder="Search or enter model ID"
-                            class="flex-1 text-xs px-2 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                            class="flex-1 text-xs px-2 py-1.5 rounded-md border border-border bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-400"
                         />
                         <Show when={props.onRefresh}>
                             <button
                                 type="button"
                                 onClick={() => props.onRefresh?.()}
                                 disabled={props.isLoading}
-                                class="p-1.5 rounded-md text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50"
+                                class="p-1.5 rounded-md text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-surface-hover disabled:opacity-50"
                                 title="Refresh models"
                             >
                                 <svg class={`w-3.5 h-3.5 ${props.isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -184,7 +184,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
 
                     {/* Error message */}
                     <Show when={props.error}>
-                        <div class="px-3 py-2 text-[11px] text-red-500 border-b border-slate-200 dark:border-slate-700">
+                        <div class="px-3 py-2 text-[11px] text-red-500 border-b border-border">
                             {props.error}
                         </div>
                     </Show>
@@ -194,10 +194,10 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
                         {/* Default option */}
                         <button
                             onClick={() => handleSelect('')}
-                            class={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 ${!props.selectedModel ? 'bg-purple-50 dark:bg-purple-900' : ''}`}
+                            class={`w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${!props.selectedModel ? 'bg-purple-50 dark:bg-purple-900' : ''}`}
                         >
-                            <div class="font-medium text-slate-900 dark:text-slate-100">Default</div>
-                            <div class="text-[11px] text-slate-500 dark:text-slate-400">
+                            <div class="font-medium text-base-content">Default</div>
+                            <div class="text-[11px] text-muted">
                                 {props.defaultModelLabel ? `Use configured default model (${props.defaultModelLabel})` : 'Use configured default model'}
                             </div>
                         </button>
@@ -206,10 +206,10 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
                         <Show when={props.chatOverrideModel}>
                             <button
                                 onClick={() => handleSelect(props.chatOverrideModel!)}
-                                class={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 ${props.selectedModel === props.chatOverrideModel ? 'bg-purple-50 dark:bg-purple-900' : ''}`}
+                                class={`w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${props.selectedModel === props.chatOverrideModel ? 'bg-purple-50 dark:bg-purple-900' : ''}`}
                             >
-                                <div class="font-medium text-slate-900 dark:text-slate-100">Chat override</div>
-                                <div class="text-[11px] text-slate-500 dark:text-slate-400">
+                                <div class="font-medium text-base-content">Chat override</div>
+                                <div class="text-[11px] text-muted">
                                     {props.chatOverrideLabel || props.chatOverrideModel}
                                 </div>
                             </button>
@@ -219,18 +219,18 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
                         <Show when={showCustomModelOption()}>
                             <button
                                 onClick={() => handleSelect(customModelCandidate())}
-                                class="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                                class="w-full px-3 py-2 text-left text-sm hover:bg-surface-hover"
                             >
-                                <div class="font-medium text-slate-900 dark:text-slate-100">
+                                <div class="font-medium text-base-content">
                                     Use "{customModelCandidate()}"
                                 </div>
-                                <div class="text-[11px] text-slate-500 dark:text-slate-400">Custom model ID</div>
+                                <div class="text-[11px] text-muted">Custom model ID</div>
                             </button>
                         </Show>
 
                         {/* No results */}
                         <Show when={!props.isLoading && filteredModels().length === 0}>
-                            <div class="px-3 py-4 text-center text-[11px] text-slate-500 dark:text-slate-400">
+                            <div class="px-3 py-4 text-center text-[11px] text-muted">
                                 No matching models.
                             </div>
                         </Show>
@@ -239,27 +239,27 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
                         <For each={Array.from(groupModelsByProvider(filteredModels()).entries())}>
                             {([provider, providerModels]) => (
                                 <>
-                                    <div class="px-3 py-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 sticky top-0">
+                                    <div class="px-3 py-1.5 text-[11px] font-semibold text-muted bg-slate-50 dark:bg-slate-800 sticky top-0">
                                         {PROVIDER_DISPLAY_NAMES[provider] || provider}
                                     </div>
                                     <For each={providerModels}>
                                         {(model) => (
                                             <button
                                                 onClick={() => handleSelect(model.id)}
-                                                class={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 ${props.selectedModel === model.id ? 'bg-purple-50 dark:bg-purple-900' : ''}`}
+                                                class={`w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${props.selectedModel === model.id ? 'bg-purple-50 dark:bg-purple-900' : ''}`}
                                             >
                                                 <div class="flex items-center gap-1.5">
-                                                    <span class="font-medium text-slate-900 dark:text-slate-100">
+                                                    <span class="font-medium text-base-content">
                                                         {model.name || model.id.split(':').pop() || model.id}
                                                     </span>
                                                 </div>
                                                 <Show when={model.description}>
-                                                    <div class="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2">
+                                                    <div class="text-[11px] text-muted line-clamp-2">
                                                         {model.description}
                                                     </div>
                                                 </Show>
                                                 <Show when={model.name && model.name !== model.id}>
-                                                    <div class="text-[10px] text-slate-400 dark:text-slate-500">
+                                                    <div class="text-[10px] text-muted">
                                                         {model.id}
                                                     </div>
                                                 </Show>
@@ -272,10 +272,10 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
 
                         {/* Toggle to show older models */}
                         <Show when={hiddenModelCount() > 0 && !searchQuery().trim()}>
-                            <div class="border-t border-slate-200 dark:border-slate-700 mt-1 pt-1">
+                            <div class="border-t border-border mt-1 pt-1">
                                 <button
                                     onClick={() => setShowAllModels(!showAllModels())}
-                                    class="w-full px-3 py-2 text-left text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-1.5"
+                                    class="w-full px-3 py-2 text-left text-xs text-muted hover:text-slate-700 dark:hover:text-slate-300 hover:bg-surface-hover flex items-center gap-1.5"
                                 >
                                     <svg class={`w-3 h-3 transition-transform ${showAllModels() ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />

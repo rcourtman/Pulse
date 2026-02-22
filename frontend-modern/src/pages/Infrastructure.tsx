@@ -339,7 +339,7 @@ export function Infrastructure() {
     <div data-testid="infrastructure-page" class="space-y-4">
       <Show when={!loading() || initialLoadComplete()} fallback={
         <div class="space-y-3 animate-pulse pointer-events-none select-none">
-          <div class="hidden lg:block h-[124px] w-full bg-slate-100 dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700"></div>
+          <div class="hidden lg:block h-[124px] w-full bg-slate-100 dark:bg-slate-800 rounded-md border border-border"></div>
           <Card padding="sm" class="h-[52px] bg-slate-100 dark:bg-slate-800"></Card>
           <Card padding="none" tone="card" class="h-[600px] overflow-hidden">
             <div class="h-8 border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800"></div>
@@ -396,7 +396,7 @@ export function Infrastructure() {
               </Show>
 
               <Show when={!summaryCollapsed()}>
-                <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-white dark:bg-slate-800">
+                <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-surface">
                   <InfrastructureSummary
                     hosts={filteredResources()}
                     timeRange={infrastructureSummaryRange()}
@@ -426,7 +426,7 @@ export function Infrastructure() {
                       <button
                         type="button"
                         onClick={() => setFiltersOpen((o) => !o)}
-                        class="flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400"
+                        class="flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-muted"
                       >
                         <ListFilterIcon class="w-3.5 h-3.5" />
                         Filters
@@ -439,9 +439,9 @@ export function Infrastructure() {
                     </Show>
 
                     <Show when={!isMobile() || filtersOpen()}>
-                      <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400 lg:flex-nowrap">
+                      <div class="flex flex-wrap items-center gap-2 text-xs text-muted lg:flex-nowrap">
                         <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
-                          <label for="infra-source-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Source</label>
+                          <label for="infra-source-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Source</label>
                           <select
                             id="infra-source-filter"
                             value={selectedSource()}
@@ -456,7 +456,7 @@ export function Infrastructure() {
                         </div>
 
                         <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
-                          <label for="infra-status-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Status</label>
+                          <label for="infra-status-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Status</label>
                           <select
                             id="infra-status-filter"
                             value={selectedStatus()}

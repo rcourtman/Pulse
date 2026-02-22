@@ -62,7 +62,7 @@ const ThreatBar: Component<{
   return (
     <div class="space-y-1">
       <div class="flex items-center justify-between text-xs">
-        <span class="text-slate-600 dark:text-slate-400">{props.label}</span>
+        <span class="text-muted">{props.label}</span>
         <span class={`font-medium ${textColor()}`}>
           {formatCompact(props.count)} ({formatPct(props.percent)})
         </span>
@@ -90,7 +90,7 @@ const StatusBadge: Component<{ status: string; health?: string }> = (props) => {
     if (status.includes('error') || status === 'offline') {
       return { bg: 'bg-red-100 dark:bg-red-900', text: 'text-red-700 dark:text-red-400', dot: 'bg-red-500', label: 'Offline' };
     }
-    return { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-600 dark:text-slate-400', dot: 'bg-slate-400', label: status || 'Unknown' };
+    return { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-muted', dot: 'bg-slate-400', label: status || 'Unknown' };
   });
 
   return (
@@ -326,11 +326,11 @@ const MailGateway: Component = () => {
             <Card padding="sm" tone="card">
               <div class="flex items-center justify-between">
                 <div>
-                  <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Mail (24h)</div>
-                  <div class="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1">
+                  <div class="text-xs font-medium text-muted uppercase tracking-wide">Mail (24h)</div>
+                  <div class="text-2xl font-bold text-base-content mt-1">
                     {formatCompact(aggregateStats().totalMail)}
                   </div>
-                  <div class="text-xs text-slate-500 dark:text-slate-400">
+                  <div class="text-xs text-muted">
                     ~{formatNum(Math.round(aggregateStats().totalMail / 24))}/hr
                   </div>
                 </div>
@@ -346,11 +346,11 @@ const MailGateway: Component = () => {
             <Card padding="sm" tone={aggregateStats().spamRate > 50 ? 'warning' : 'card'}>
               <div class="flex items-center justify-between">
                 <div>
-                  <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Spam</div>
-                  <div class={`text-2xl font-bold mt-1 ${aggregateStats().spamRate > 50 ? 'text-orange-600 dark:text-orange-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                  <div class="text-xs font-medium text-muted uppercase tracking-wide">Spam</div>
+                  <div class={`text-2xl font-bold mt-1 ${aggregateStats().spamRate > 50 ? 'text-orange-600 dark:text-orange-400' : 'text-base-content'}`}>
                     {formatPct(aggregateStats().spamRate)}
                   </div>
-                  <div class="text-xs text-slate-500 dark:text-slate-400">
+                  <div class="text-xs text-muted">
                     {formatCompact(aggregateStats().totalSpam)} caught
                   </div>
                 </div>
@@ -366,11 +366,11 @@ const MailGateway: Component = () => {
             <Card padding="sm" tone={aggregateStats().totalVirus > 0 ? 'danger' : 'card'}>
               <div class="flex items-center justify-between">
                 <div>
-                  <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Viruses</div>
-                  <div class={`text-2xl font-bold mt-1 ${aggregateStats().totalVirus > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                  <div class="text-xs font-medium text-muted uppercase tracking-wide">Viruses</div>
+                  <div class={`text-2xl font-bold mt-1 ${aggregateStats().totalVirus > 0 ? 'text-red-600 dark:text-red-400' : 'text-base-content'}`}>
                     {formatCompact(aggregateStats().totalVirus)}
                   </div>
-                  <div class="text-xs text-slate-500 dark:text-slate-400">
+                  <div class="text-xs text-muted">
                     blocked today
                   </div>
                 </div>
@@ -386,11 +386,11 @@ const MailGateway: Component = () => {
             <Card padding="sm" tone="card">
               <div class="flex items-center justify-between">
                 <div>
-                  <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Quarantine</div>
-                  <div class="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1">
+                  <div class="text-xs font-medium text-muted uppercase tracking-wide">Quarantine</div>
+                  <div class="text-2xl font-bold text-base-content mt-1">
                     {formatCompact(aggregateStats().totalQuarantine)}
                   </div>
-                  <div class="text-xs text-slate-500 dark:text-slate-400">
+                  <div class="text-xs text-muted">
                     items held
                   </div>
                 </div>
@@ -406,14 +406,14 @@ const MailGateway: Component = () => {
             <Card padding="sm" tone={aggregateStats().totalQueue > 50 ? 'warning' : 'card'}>
               <div class="flex items-center justify-between">
                 <div>
-                  <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Queue</div>
+                  <div class="text-xs font-medium text-muted uppercase tracking-wide">Queue</div>
                   <div class={`text-2xl font-bold mt-1 ${aggregateStats().totalQueue > 100 ? 'text-red-600 dark:text-red-400' :
                     aggregateStats().totalQueue > 20 ? 'text-yellow-600 dark:text-yellow-400' :
                       'text-green-600 dark:text-green-400'
                     }`}>
                     {formatNum(aggregateStats().totalQueue)}
                   </div>
-                  <div class="text-xs text-slate-500 dark:text-slate-400">
+                  <div class="text-xs text-muted">
                     {aggregateStats().totalQueue === 0 ? 'all clear' : 'pending'}
                   </div>
                 </div>
@@ -438,7 +438,7 @@ const MailGateway: Component = () => {
                   placeholder="Search gateways..."
                   value={searchTerm()}
                   onInput={(e) => setSearchTerm(e.currentTarget.value)}
-                  class="w-full pl-9 pr-8 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
+                  class="w-full pl-9 pr-8 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-base-content placeholder-muted focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
                 />
                 <svg class="absolute left-3 top-2 h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -466,7 +466,7 @@ const MailGateway: Component = () => {
                   <svg class="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
                   </svg>
-                  <div class="text-slate-500 dark:text-slate-400 text-sm">No gateways match "{searchTerm()}"</div>
+                  <div class="text-muted text-sm">No gateways match "{searchTerm()}"</div>
                   <button
                     onClick={() => setSearchTerm('')}
                     class="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline"
@@ -540,24 +540,24 @@ const MailGateway: Component = () => {
                   return (
                     <Card padding="none" tone="card" class="overflow-hidden">
                       {/* Instance Header */}
-                      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-slate-50 dark:bg-slate-800 border-b border-border">
                         <div class="flex items-center gap-3">
                           <a
                             href={pmg.host || `https://${pmg.name}:8006`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            class="text-base font-semibold text-slate-900 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                            class="text-base font-semibold text-base-content hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                           >
                             {pmg.name}
                           </a>
                           <StatusBadge status={pmg.status || ''} health={pmg.connectionHealth} />
                           <Show when={pmg.version}>
-                            <span class="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">
+                            <span class="text-xs text-muted bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">
                               v{pmg.version}
                             </span>
                           </Show>
                         </div>
-                        <div class="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+                        <div class="flex items-center gap-4 text-xs text-muted">
                           <QueueIndicator queue={instanceQueue()} />
                           <span>Updated {lastUpdated()}</span>
                         </div>
@@ -591,18 +591,18 @@ const MailGateway: Component = () => {
                         <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
                           {/* Mail Flow */}
                           <div class="bg-slate-50 dark:bg-slate-800 rounded-md p-3">
-                            <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">Total (24h)</div>
-                            <div class="text-lg font-bold text-slate-900 dark:text-slate-100">{formatCompact(stats().total)}</div>
+                            <div class="text-xs text-muted mb-1">Total (24h)</div>
+                            <div class="text-lg font-bold text-base-content">{formatCompact(stats().total)}</div>
                             <div class="text-[10px] text-slate-400">{formatNum(Math.round(stats().total / 24))}/hr</div>
                           </div>
                           <div class="bg-slate-50 dark:bg-slate-800 rounded-md p-3">
-                            <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">Inbound</div>
-                            <div class="text-lg font-bold text-slate-900 dark:text-slate-100">{formatCompact(stats().inbound)}</div>
+                            <div class="text-xs text-muted mb-1">Inbound</div>
+                            <div class="text-lg font-bold text-base-content">{formatCompact(stats().inbound)}</div>
                             <div class="text-[10px] text-slate-400">{formatBytes(stats().bytesIn)}</div>
                           </div>
                           <div class="bg-slate-50 dark:bg-slate-800 rounded-md p-3">
-                            <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">Outbound</div>
-                            <div class="text-lg font-bold text-slate-900 dark:text-slate-100">{formatCompact(stats().outbound)}</div>
+                            <div class="text-xs text-muted mb-1">Outbound</div>
+                            <div class="text-lg font-bold text-base-content">{formatCompact(stats().outbound)}</div>
                             <div class="text-[10px] text-slate-400">{formatBytes(stats().bytesOut)}</div>
                           </div>
 
@@ -625,28 +625,28 @@ const MailGateway: Component = () => {
                         </div>
 
                         {/* Delivery Health Row */}
-                        <div class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                          <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Delivery Health</div>
+                        <div class="mt-3 pt-3 border-t border-border">
+                          <div class="text-xs font-medium text-muted uppercase tracking-wide mb-2">Delivery Health</div>
                           <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs">
                             <div class="flex items-center gap-2">
-                              <span class="text-slate-500 dark:text-slate-400">RBL Rejects:</span>
+                              <span class="text-muted">RBL Rejects:</span>
                               <span class="font-medium text-slate-700 dark:text-slate-300">{formatNum(stats().rbl)}</span>
                             </div>
                             <div class="flex items-center gap-2">
-                              <span class="text-slate-500 dark:text-slate-400">Pregreet:</span>
+                              <span class="text-muted">Pregreet:</span>
                               <span class="font-medium text-slate-700 dark:text-slate-300">{formatNum(stats().pregreet)}</span>
                             </div>
                             <div class="flex items-center gap-2">
-                              <span class="text-slate-500 dark:text-slate-400">Greylisted:</span>
+                              <span class="text-muted">Greylisted:</span>
                               <span class="font-medium text-slate-700 dark:text-slate-300">{formatNum(stats().greylist)}</span>
                             </div>
                             <div class="flex items-center gap-2">
-                              <span class="text-slate-500 dark:text-slate-400">Bounces In/Out:</span>
+                              <span class="text-muted">Bounces In/Out:</span>
                               <span class="font-medium text-slate-700 dark:text-slate-300">{formatNum(stats().bouncesIn)}/{formatNum(stats().bouncesOut)}</span>
                             </div>
                             <Show when={pmg.mailStats?.averageProcessTimeMs}>
                               <div class="flex items-center gap-2">
-                                <span class="text-slate-500 dark:text-slate-400">Avg Process:</span>
+                                <span class="text-muted">Avg Process:</span>
                                 <span class="font-medium text-slate-700 dark:text-slate-300">{formatDec((pmg.mailStats?.averageProcessTimeMs || 0) / 1000, 2)}s</span>
                               </div>
                             </Show>
@@ -655,14 +655,14 @@ const MailGateway: Component = () => {
 
                         {/* Cluster Nodes */}
                         <Show when={(pmg.nodes?.length ?? 0) > 0}>
-                          <div class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                            <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
+                          <div class="mt-3 pt-3 border-t border-border">
+                            <div class="text-xs font-medium text-muted uppercase tracking-wide mb-2">
                               Cluster Nodes ({pmg.nodes?.length})
                             </div>
                             <div class="overflow-x-auto -mx-4 px-4">
                               <Table class="w-full min-w-[600px] text-xs">
                                 <TableHeader>
-                                  <TableRow class="text-left text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                                  <TableRow class="text-left text-[10px] uppercase tracking-wide text-muted border-b border-border">
                                     <TableHead class="pb-1.5 font-medium">Node</TableHead>
                                     <TableHead class="pb-1.5 font-medium">Status</TableHead>
                                     <TableHead class="pb-1.5 font-medium">Uptime</TableHead>
@@ -677,19 +677,19 @@ const MailGateway: Component = () => {
 
                                       return (
                                         <TableRow class="hover:bg-slate-50 dark:hover:bg-slate-800">
-                                          <TableCell class="py-1.5 font-medium text-slate-900 dark:text-slate-100">{node.name}</TableCell>
+                                          <TableCell class="py-1.5 font-medium text-base-content">{node.name}</TableCell>
                                           <TableCell class="py-1.5">
                                             <span class={`inline-flex items-center gap-1 ${isOnline ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                                               <span class={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`} />
                                               {node.status || 'unknown'}
                                             </span>
                                           </TableCell>
-                                          <TableCell class="py-1.5 text-slate-600 dark:text-slate-400">
+                                          <TableCell class="py-1.5 text-muted">
                                             <Show when={node.uptime} fallback="—">
                                               {Math.floor((node.uptime ?? 0) / 86400)}d {Math.floor(((node.uptime ?? 0) % 86400) / 3600)}h
                                             </Show>
                                           </TableCell>
-                                          <TableCell class="py-1.5 text-slate-600 dark:text-slate-400">{node.loadAvg || '—'}</TableCell>
+                                          <TableCell class="py-1.5 text-muted">{node.loadAvg || '—'}</TableCell>
                                           <TableCell class="py-1.5">
                                             <QueueIndicator queue={node.queueStatus} />
                                           </TableCell>
@@ -705,8 +705,8 @@ const MailGateway: Component = () => {
 
                         {/* Spam Distribution */}
                         <Show when={(pmg.spamDistribution?.length ?? 0) > 0}>
-                          <div class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                            <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Spam Score Distribution</div>
+                          <div class="mt-3 pt-3 border-t border-border">
+                            <div class="text-xs font-medium text-muted uppercase tracking-wide mb-2">Spam Score Distribution</div>
                             <div class="flex gap-1 overflow-x-auto pb-1">
                               <For each={pmg.spamDistribution}>
                                 {(bucket) => {
@@ -714,8 +714,8 @@ const MailGateway: Component = () => {
                                   const pct = (bucket.count / totalScored) * 100;
                                   return (
                                     <div class="flex-shrink-0 text-center bg-slate-50 dark:bg-slate-800 rounded px-2 py-1.5 min-w-[50px]">
-                                      <div class="text-[10px] text-slate-500 dark:text-slate-400">{bucket.score}</div>
-                                      <div class="text-xs font-semibold text-slate-900 dark:text-slate-100">{formatCompact(bucket.count)}</div>
+                                      <div class="text-[10px] text-muted">{bucket.score}</div>
+                                      <div class="text-xs font-semibold text-base-content">{formatCompact(bucket.count)}</div>
                                       <div class="text-[10px] text-slate-400">{formatDec(pct)}%</div>
                                     </div>
                                   );

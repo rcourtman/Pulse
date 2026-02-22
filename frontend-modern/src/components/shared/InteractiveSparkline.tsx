@@ -781,7 +781,7 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
           <For each={axisTicks()}>
             {(tick) => (
               <span
-                class="absolute left-0 text-[8px] leading-none text-slate-400 dark:text-slate-500 transition-all duration-300 ease-out"
+                class="absolute left-0 text-[8px] leading-none text-muted transition-all duration-300 ease-out"
                 style={{
                   top: tick.top,
                   transform:
@@ -923,7 +923,7 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
         <For each={xAxisTicks()}>
           {(tick) => (
             <span
-              class="absolute top-[2px] text-[9px] font-medium leading-none text-slate-500 dark:text-slate-400 transition-all duration-300 ease-out"
+              class="absolute top-[2px] text-[9px] font-medium leading-none text-muted transition-all duration-300 ease-out"
               style={{
                 left: `${tick.left}%`,
                 transform:

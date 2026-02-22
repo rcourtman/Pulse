@@ -29,11 +29,11 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
   return (
     <Show when={props.isOpen}>
       <div class="fixed inset-0 bg-black flex items-center justify-center z-50 p-4">
-        <div class="bg-white dark:bg-slate-800 rounded-md shadow-sm max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="bg-surface rounded-md shadow-sm max-w-2xl w-full max-h-[90vh] overflow-y-auto">
           {/* Header */}
-          <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+          <div class="px-6 py-4 border-b border-border">
             <div class="flex items-center justify-between">
-              <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-100">
+              <h2 class="text-xl font-semibold text-base-content">
                 Confirm Update
               </h2>
               <button
@@ -66,7 +66,7 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
 
             {/* Estimated Time */}
             <Show when={props.plan.estimatedTime}>
-              <div class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+              <div class="flex items-center gap-2 text-sm text-muted">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -77,7 +77,7 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
             {/* Prerequisites */}
             <Show when={props.plan.prerequisites && props.plan.prerequisites.length > 0}>
               <div>
-                <div class="text-sm font-medium text-slate-900 dark:text-slate-100 mb-2">
+                <div class="text-sm font-medium text-base-content mb-2">
                   Prerequisites
                 </div>
                 <ul class="space-y-2">
@@ -123,7 +123,7 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
             </Show>
 
             {/* Acknowledgement Checkbox */}
-            <div class="pt-4 border-t border-slate-200 dark:border-slate-700">
+            <div class="pt-4 border-t border-border">
               <label class="flex items-start gap-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -141,7 +141,7 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
           </div>
 
           {/* Footer */}
-          <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-3">
+          <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800 border-t border-border flex items-center justify-end gap-3">
             <button
               onClick={props.onClose}
               disabled={props.isApplying}

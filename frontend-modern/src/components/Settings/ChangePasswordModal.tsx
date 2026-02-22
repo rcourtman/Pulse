@@ -102,8 +102,8 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
           class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4"
           style="z-index: 9999"
         >
-          <div class="bg-white dark:bg-slate-800 rounded-md shadow-sm max-w-md w-full">
-            <div class="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
+          <div class="bg-surface rounded-md shadow-sm max-w-md w-full">
+            <div class="flex items-center justify-between p-6 border-b border-border">
               <SectionHeader title="Change password" size="lg" class="flex-1" />
               <button
                 type="button"

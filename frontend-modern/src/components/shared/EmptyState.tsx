@@ -12,7 +12,7 @@ type EmptyStateProps = {
 } & JSX.HTMLAttributes<HTMLDivElement>;
 
 const iconBgClass: Record<EmptyStateTone, string> = {
-  default: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400',
+  default: 'bg-slate-100 dark:bg-slate-800 text-muted',
   info: 'bg-blue-50 dark:bg-blue-900 text-blue-500',
   success: 'bg-green-50 dark:bg-green-900 text-green-500',
   warning: 'bg-amber-50 dark:bg-amber-900 text-amber-500',
@@ -20,7 +20,7 @@ const iconBgClass: Record<EmptyStateTone, string> = {
 };
 
 const titleToneClass: Record<EmptyStateTone, string> = {
-  default: 'text-slate-900 dark:text-white',
+  default: 'text-base-content',
   info: 'text-blue-700 dark:text-blue-300',
   success: 'text-green-700 dark:text-green-300',
   warning: 'text-amber-700 dark:text-amber-300',
@@ -28,7 +28,7 @@ const titleToneClass: Record<EmptyStateTone, string> = {
 };
 
 const descriptionToneClass: Record<EmptyStateTone, string> = {
-  default: 'text-slate-500 dark:text-slate-400',
+  default: 'text-muted',
   info: 'text-blue-600 dark:text-blue-300',
   success: 'text-green-600 dark:text-green-300',
   warning: 'text-amber-600 dark:text-amber-300',
@@ -51,7 +51,7 @@ export function EmptyState(props: EmptyStateProps) {
   const tone = local.tone;
   const containerClass = [
     'flex flex-col py-10 px-6 sm:py-16 sm:px-8 w-full animate-fade-in',
-    'bg-slate-50 dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-800 rounded-md',
+    'bg-base border border-dashed border-slate-300 dark:border-slate-800 rounded-md',
     alignment === 'center' ? 'items-center text-center' : 'items-start text-left',
     local.class ?? '',
   ]

@@ -246,7 +246,7 @@ const rollupAgeTextClass = (r: ProtectionRollup, nowMs: number): string => {
   const ageMs = nowMs - ts;
   if (ageMs >= STALE_ISSUE_THRESHOLD_MS) return 'text-rose-700 dark:text-rose-300';
   if (ageMs >= AGING_THRESHOLD_MS) return 'text-amber-700 dark:text-amber-300';
-  return 'text-slate-600 dark:text-slate-400';
+  return 'text-muted';
 };
 
 
@@ -933,7 +933,7 @@ const Recovery: Component = () => {
                   <button
                     type="button"
                     onClick={() => setProtectedFiltersOpen((o) => !o)}
-                    class="flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400"
+                    class="flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-muted"
                   >
                     <ListFilterIcon class="w-3.5 h-3.5" />
                     Filters
@@ -947,7 +947,7 @@ const Recovery: Component = () => {
               </div>
 
               <Show when={!isMobile() || protectedFiltersOpen()}>
-                <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
                   {/* Toggle — desktop only, first in filter row */}
                   <div class="hidden sm:inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5" role="group" aria-label="View">
                     <button
@@ -972,7 +972,7 @@ const Recovery: Component = () => {
                   <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                     <label
                       for="recovery-provider-filter"
-                      class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
+                      class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
                     >
                       Provider
                     </label>
@@ -991,7 +991,7 @@ const Recovery: Component = () => {
                   <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                     <label
                       for="recovery-protected-status-filter"
-                      class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
+                      class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
                     >
                       Status
                     </label>
@@ -1049,7 +1049,7 @@ const Recovery: Component = () => {
             Protected Items
           </div>
           <Show when={recoveryRollups.rollups.loading && (filteredRollups()?.length ?? 0) === 0}>
-            <div class="px-6 py-6 text-sm text-slate-500 dark:text-slate-400">Loading protected items...</div>
+            <div class="px-6 py-6 text-sm text-muted">Loading protected items...</div>
           </Show>
 
           <Show when={!recoveryRollups.rollups.loading && recoveryRollups.rollups.error}>
@@ -1074,7 +1074,7 @@ const Recovery: Component = () => {
             <div class="overflow-x-auto">
               <Table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : '500px' }}>
                 <TableHeader>
-                  <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                  <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
                     {([['subject', 'Subject'], ['source', 'Source'], ['lastBackup', 'Last Backup'], ['outcome', 'Outcome']] as const).map(([col, label]) => (
                       <TableHead
                         class={`py-0.5 px-3 whitespace-nowrap text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200 transition-colors${col === 'source' ? ' hidden md:table-cell w-[110px]' : col === 'lastBackup' ? ' w-[120px]' : col === 'outcome' ? ' w-[70px]' : ''}`}
@@ -1094,7 +1094,7 @@ const Recovery: Component = () => {
                     ))}
                   </TableRow>
                 </TableHeader>
-                <TableBody class="divide-y divide-slate-200 dark:divide-slate-700">
+                <TableBody class="divide-y divide-border">
                   <For each={sortedRollups()}>
                     {(r) => {
                       const resIndex = resourcesById();
@@ -1181,7 +1181,7 @@ const Recovery: Component = () => {
       <Show when={view() === 'events'}>
         <Show when={recoveryPoints.response.loading && (sortedPoints()?.length ?? 0) === 0}>
           <Card padding="sm">
-            <div class="px-3 py-6 text-sm text-slate-500 dark:text-slate-400">Loading recovery points...</div>
+            <div class="px-3 py-6 text-sm text-muted">Loading recovery points...</div>
           </Card>
         </Show>
 
@@ -1327,7 +1327,7 @@ const Recovery: Component = () => {
               </div>
 
               <div class="relative h-32 overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
-                <div class="absolute bottom-8 left-0 top-2 w-6 text-[10px] text-slate-500 dark:text-slate-400">
+                <div class="absolute bottom-8 left-0 top-2 w-6 text-[10px] text-muted">
                   <div class="flex h-full flex-col justify-between pr-1 text-right">
                     <For each={[...timeline().axisTicks].reverse()}>{(tick) => <span>{tick}</span>}</For>
                   </div>
@@ -1343,7 +1343,7 @@ const Recovery: Component = () => {
                           const bottom = timeline().axisMax > 0 ? (tick / timeline().axisMax) * 100 : 0;
                           return (
                             <div
-                              class="pointer-events-none absolute inset-x-0 border-t border-slate-200 dark:border-slate-700"
+                              class="pointer-events-none absolute inset-x-0 border-t border-border"
                               style={{ bottom: `${bottom}%` }}
                             />
                           );
@@ -1453,7 +1453,7 @@ const Recovery: Component = () => {
                             <div class={`relative flex-1 ${isMobile() ? '' : 'shrink-0'} ${barMinWidth}`}>
                               <Show when={showLabel}>
                                 <span
-                                  class={`absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] ${isSelected ? 'font-semibold text-blue-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'
+                                  class={`absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] ${isSelected ? 'font-semibold text-blue-700 dark:text-blue-300' : 'text-muted'
                                     }`}
                                 >
                                   {compactAxisLabel(point.key, chartRangeDays())}
@@ -1499,8 +1499,8 @@ const Recovery: Component = () => {
                         >
                           Protected
                         </button>
-                        <span class="text-slate-400 dark:text-slate-500 text-sm">›</span>
-                        <span class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate max-w-[12rem]">
+                        <span class="text-muted text-sm">›</span>
+                        <span class="text-sm font-medium text-base-content truncate max-w-[12rem]">
                           <Show when={selectedRollup()}>
                             {rollupSubjectLabel(selectedRollup()!, resourcesById())}
                           </Show>
@@ -1531,7 +1531,7 @@ const Recovery: Component = () => {
                     <button
                       type="button"
                       onClick={() => setEventsFiltersOpen((o) => !o)}
-                      class="flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400"
+                      class="flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-muted"
                     >
                       <ListFilterIcon class="w-3.5 h-3.5" />
                       Filters
@@ -1545,7 +1545,7 @@ const Recovery: Component = () => {
                 </div>
 
                 <Show when={!isMobile() || eventsFiltersOpen()}>
-                  <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                  <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
                     {/* Toggle/breadcrumb — desktop only, first in filter row */}
                     <Show
                       when={!rollupId().trim()}
@@ -1558,8 +1558,8 @@ const Recovery: Component = () => {
                           >
                             Protected
                           </button>
-                          <span class="text-slate-400 dark:text-slate-500 text-sm">›</span>
-                          <span class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate max-w-[12rem]">
+                          <span class="text-muted text-sm">›</span>
+                          <span class="text-sm font-medium text-base-content truncate max-w-[12rem]">
                             <Show when={selectedRollup()}>
                               {rollupSubjectLabel(selectedRollup()!, resourcesById())}
                             </Show>
@@ -1591,7 +1591,7 @@ const Recovery: Component = () => {
                     <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                       <label
                         for="recovery-provider-filter-events"
-                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
+                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
                       >
                         Provider
                       </label>
@@ -1613,7 +1613,7 @@ const Recovery: Component = () => {
                     <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                       <label
                         for="recovery-status-filter"
-                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
+                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
                       >
                         Status
                       </label>
@@ -1639,7 +1639,7 @@ const Recovery: Component = () => {
                     </div>
 
                     <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
-                      <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Scope</span>
+                      <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Scope</span>
                       <button
                         type="button"
                         onClick={() => {
@@ -1698,9 +1698,9 @@ const Recovery: Component = () => {
                   </div>
 
                   <Show when={moreFiltersOpen()}>
-                    <div id="recovery-more-filters" class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <div id="recovery-more-filters" class="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
                       <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
-                        <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Method</span>
+                        <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Method</span>
                         <For each={(['all', 'snapshot', 'local', 'remote'] as const)}>
                           {(mode) => (
                             <button
@@ -1722,7 +1722,7 @@ const Recovery: Component = () => {
                         <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                           <label
                             for="recovery-verification-filter"
-                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
                           >
                             Verification
                           </label>
@@ -1748,7 +1748,7 @@ const Recovery: Component = () => {
                         <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                           <label
                             for="recovery-cluster-filter"
-                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
                           >
                             Cluster
                           </label>
@@ -1773,7 +1773,7 @@ const Recovery: Component = () => {
                         <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                           <label
                             for="recovery-node-filter"
-                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
                           >
                             Node/Host
                           </label>
@@ -1798,7 +1798,7 @@ const Recovery: Component = () => {
                         <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                           <label
                             for="recovery-namespace-filter"
-                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
                           >
                             Namespace
                           </label>
@@ -1854,11 +1854,11 @@ const Recovery: Component = () => {
               <div class="overflow-x-auto">
                 <Table class="w-full border-collapse text-xs whitespace-nowrap" style={{ 'min-width': tableMinWidth() }}>
                   <TableHeader>
-                    <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                    <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
                       <For each={mobileVisibleArtifactColumns()}>{(col) => <TableHead class="py-0.5 px-3 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap">{col.label}</TableHead>}</For>
                     </TableRow>
                   </TableHeader>
-                  <TableBody class="divide-y divide-slate-200 dark:divide-slate-700">
+                  <TableBody class="divide-y divide-border">
                     <For each={groupedByDay()}>
                       {(group) => (
                         <>
@@ -1905,14 +1905,14 @@ const Recovery: Component = () => {
                                         switch (col.id) {
                                           case 'time':
                                             return (
-                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-slate-500 dark:text-slate-400">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted">
                                                 {timeOnly}
                                               </TableCell>
                                             );
                                           case 'subject':
                                             return (
                                               <TableCell
-                                                class="max-w-[420px] whitespace-nowrap px-3 py-0.5 text-slate-900 dark:text-slate-100"
+                                                class="max-w-[420px] whitespace-nowrap px-3 py-0.5 text-base-content"
                                                 title={subject}
                                               >
                                                 <span class="inline-flex min-w-0 max-w-full items-center gap-1">
@@ -1933,25 +1933,25 @@ const Recovery: Component = () => {
                                             );
                                           case 'entityId':
                                             return (
-                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-slate-600 dark:text-slate-400 font-mono">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted font-mono">
                                                 {entityId || '—'}
                                               </TableCell>
                                             );
                                           case 'cluster':
                                             return (
-                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-slate-600 dark:text-slate-400 font-mono">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted font-mono">
                                                 {cluster || '—'}
                                               </TableCell>
                                             );
                                           case 'nodeHost':
                                             return (
-                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-slate-600 dark:text-slate-400 font-mono">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted font-mono">
                                                 {nodeHost || '—'}
                                               </TableCell>
                                             );
                                           case 'namespace':
                                             return (
-                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-slate-600 dark:text-slate-400 font-mono">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted font-mono">
                                                 {namespace || '—'}
                                               </TableCell>
                                             );
@@ -1987,7 +1987,7 @@ const Recovery: Component = () => {
                                             );
                                           case 'size':
                                             return (
-                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-slate-500 dark:text-slate-400">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted">
                                                 {p.sizeBytes && p.sizeBytes > 0 ? formatBytes(p.sizeBytes) : '—'}
                                               </TableCell>
                                             );
@@ -2004,7 +2004,7 @@ const Recovery: Component = () => {
                                           case 'repository':
                                             return (
                                               <TableCell
-                                                class="max-w-[220px] truncate whitespace-nowrap px-3 py-0.5 text-[11px] leading-4 text-slate-600 dark:text-slate-400"
+                                                class="max-w-[220px] truncate whitespace-nowrap px-3 py-0.5 text-[11px] leading-4 text-muted"
                                                 title={repoLabel}
                                               >
                                                 {repoLabel || '—'}
@@ -2023,7 +2023,7 @@ const Recovery: Component = () => {
                                             );
                                           default:
                                             return (
-                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-slate-500 dark:text-slate-400">-</TableCell>
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted">-</TableCell>
                                             );
                                         }
                                       }}
@@ -2031,9 +2031,9 @@ const Recovery: Component = () => {
                                   </TableRow>
                                   <Show when={selectedPoint()?.id === p.id}>
                                     <TableRow>
-                                      <TableCell colSpan={tableColumnCount()} class="bg-slate-50 dark:bg-slate-800 px-0 sm:px-4 py-4 border-b border-slate-200 dark:border-slate-700 relative">
-                                        <div class="flex items-center justify-between px-4 pb-2 mb-2 border-b border-slate-200 dark:border-slate-700">
-                                          <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Recovery Point Details</h2>
+                                      <TableCell colSpan={tableColumnCount()} class="bg-slate-50 dark:bg-slate-800 px-0 sm:px-4 py-4 border-b border-border relative">
+                                        <div class="flex items-center justify-between px-4 pb-2 mb-2 border-b border-border">
+                                          <h2 class="text-sm font-semibold text-base-content">Recovery Point Details</h2>
                                           <button
                                             type="button"
                                             onClick={(e) => { e.stopPropagation(); setSelectedPoint(null); }}
@@ -2062,7 +2062,7 @@ const Recovery: Component = () => {
                 </Table>
               </div>
 
-              <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-700">
+              <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted border-t border-border">
                 <div>
                   <Show when={(recoveryPoints.meta().total || 0) > 0} fallback={<span>Showing 0 of 0 events</span>}>
                     <span>

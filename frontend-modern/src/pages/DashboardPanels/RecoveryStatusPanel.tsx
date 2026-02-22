@@ -39,7 +39,7 @@ export function RecoveryStatusPanel(props: RecoveryStatusPanelProps) {
   return (
     <Card padding="none" class="px-4 py-3.5">
       <div class="flex items-center justify-between gap-3">
-        <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Recovery Status</h2>
+        <h2 class="text-sm font-semibold text-base-content">Recovery Status</h2>
         <a
           href={buildRecoveryPath()}
           aria-label="View all recovery"
@@ -50,14 +50,14 @@ export function RecoveryStatusPanel(props: RecoveryStatusPanelProps) {
       </div>
       <Show
         when={props.recovery.hasData}
-        fallback={<p class="text-xs text-slate-500 dark:text-slate-400 mt-1">No recovery data available</p>}
+        fallback={<p class="text-xs text-muted mt-1">No recovery data available</p>}
       >
         <div class="space-y-1.5">
           <div class="flex items-baseline justify-between gap-4">
-            <p class="text-xs text-slate-500 dark:text-slate-400">
-              <span class="font-mono font-semibold text-base text-slate-900 dark:text-slate-100">{props.recovery.totalProtected}</span> total
+            <p class="text-xs text-muted">
+              <span class="font-mono font-semibold text-base text-base-content">{props.recovery.totalProtected}</span> total
             </p>
-            <p class="text-xs text-slate-500 dark:text-slate-400">
+            <p class="text-xs text-muted">
               Last: <span class="font-mono font-medium text-slate-700 dark:text-slate-200">{formatRelativeTime(props.recovery.latestEventTimestamp ?? undefined, { compact: true }) || '—'}</span>
             </p>
           </div>

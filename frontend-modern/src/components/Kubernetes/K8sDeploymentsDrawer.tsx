@@ -161,7 +161,7 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
         <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div class="min-w-0">
             <div class="text-sm font-semibold text-slate-800 dark:text-slate-100">Deployments</div>
-            <div class="text-xs text-slate-500 dark:text-slate-400">Desired state controllers (not Pods)</div>
+            <div class="text-xs text-muted">Desired state controllers (not Pods)</div>
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
@@ -176,7 +176,7 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
               <div class="inline-flex items-center rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                 <label
                   for="k8s-deployments-namespace"
-                  class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
+                  class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
                 >
                   Namespace
                 </label>
@@ -226,7 +226,7 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
             <Card padding="none" tone="card" class="overflow-hidden">
               <div class="overflow-x-auto">
                 <Table class="w-full min-w-[760px] border-collapse text-xs">
-                  <TableHeader class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                  <TableHeader class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
                     <TableRow class="text-left text-[10px] uppercase tracking-wide">
                       <TableHead class="px-3 py-2 font-medium">Deployment</TableHead>
                       <TableHead class="px-3 py-2 font-medium">Namespace</TableHead>
@@ -252,7 +252,7 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
                             <TableCell class="px-3 py-2">
                               <div class="flex items-center gap-2 min-w-0">
                                 <span class={`h-2 w-2 rounded-full ${statusTone(dep.status)}`} title={dep.status || 'unknown'} />
-                                <span class="font-semibold text-slate-900 dark:text-slate-100 truncate" title={name()}>
+                                <span class="font-semibold text-base-content truncate" title={name()}>
                                   {name()}
                                 </span>
                               </div>

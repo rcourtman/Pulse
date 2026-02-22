@@ -69,7 +69,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
               </svg>
               Backup polling
             </h4>
-            <p class="text-xs text-slate-600 dark:text-slate-400">
+            <p class="text-xs text-muted">
               Control how often Pulse queries Proxmox backup tasks, datastore contents, and guest
               snapshots. Longer intervals reduce disk activity and API load.
             </p>
@@ -78,10 +78,10 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
               {/* Enable toggle */}
               <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
+                  <p class="text-sm font-medium text-base-content">
                     Enable backup polling
                   </p>
-                  <p class="text-xs text-slate-600 dark:text-slate-400">
+                  <p class="text-xs text-muted">
                     Required for dashboard backup status, storage snapshots, and alerting.
                   </p>
                 </div>
@@ -104,13 +104,13 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
 
               {/* Polling interval options */}
               <Show when={props.backupPollingEnabled()}>
-                <div class="space-y-3 rounded-md border border-slate-200 dark:border-slate-600 p-3">
+                <div class="space-y-3 rounded-md border border-border p-3">
                   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <label class="text-sm font-medium text-slate-900 dark:text-slate-100">
+                      <label class="text-sm font-medium text-base-content">
                         Polling interval
                       </label>
-                      <p class="text-xs text-slate-600 dark:text-slate-400">
+                      <p class="text-xs text-muted">
                         {props.backupIntervalSummary()}
                       </p>
                     </div>
@@ -139,7 +139,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                           props.setHasUnsavedChanges(true);
                         }
                       }}
-                      class="w-full sm:w-auto min-h-10 sm:min-h-9 px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 disabled:opacity-50"
+                      class="w-full sm:w-auto min-h-10 sm:min-h-9 px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-surface disabled:opacity-50"
                     >
                       <For each={BACKUP_INTERVAL_OPTIONS}>
                         {(option) => <option value={String(option.value)}>{option.label}</option>}
@@ -176,9 +176,9 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                               props.setHasUnsavedChanges(true);
                             }
                           }}
-                          class="w-full sm:w-24 min-h-10 sm:min-h-9 px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 disabled:opacity-50"
+                          class="w-full sm:w-24 min-h-10 sm:min-h-9 px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-surface disabled:opacity-50"
                         />
-                        <span class="text-xs text-slate-500 dark:text-slate-400">
+                        <span class="text-xs text-muted">
                           1 - {BACKUP_INTERVAL_MAX_MINUTES} minutes (~7 days max)
                         </span>
                       </div>
@@ -228,7 +228,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Export Section */}
-            <div class="group border border-slate-200 dark:border-slate-700 rounded-md p-5 bg-blue-50 dark:bg-blue-900 hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-200">
+            <div class="group border border-border rounded-md p-5 bg-blue-50 dark:bg-blue-900 hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-200">
               <div class="flex items-start gap-4">
                 <div class="flex-shrink-0 w-12 h-12 bg-blue-500 rounded-md flex items-center justify-center shadow-sm shadow-blue-500">
                   {/* Archive/Download Box Icon */}
@@ -247,28 +247,28 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                   </svg>
                 </div>
                 <div class="flex-1 min-w-0">
-                  <h4 class="text-base font-semibold text-slate-900 dark:text-slate-100 mb-1">
+                  <h4 class="text-base font-semibold text-base-content mb-1">
                     Export Configuration
                   </h4>
-                  <p class="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                  <p class="text-sm text-muted mb-3">
                     Create an encrypted backup package
                   </p>
 
                   {/* Feature list */}
                   <ul class="space-y-1 mb-4">
-                    <li class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <li class="flex items-center gap-2 text-xs text-muted">
                       <svg class="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                       </svg>
                       <span>All node connections & credentials</span>
                     </li>
-                    <li class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <li class="flex items-center gap-2 text-xs text-muted">
                       <svg class="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                       </svg>
                       <span>Alert thresholds & overrides</span>
                     </li>
-                    <li class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <li class="flex items-center gap-2 text-xs text-muted">
                       <svg class="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                       </svg>
@@ -300,7 +300,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
             </div>
 
             {/* Import Section */}
-            <div class="group border border-slate-200 dark:border-slate-700 rounded-md p-5 bg-slate-50 dark:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600 transition-all duration-200">
+            <div class="group border border-border rounded-md p-5 bg-slate-50 dark:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600 transition-all duration-200">
               <div class="flex items-start gap-4">
                 <div class="flex-shrink-0 w-12 h-12 bg-slate-500 rounded-md flex items-center justify-center shadow-sm shadow-gray-500">
                   {/* Upload/Restore Icon */}
@@ -319,28 +319,28 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                   </svg>
                 </div>
                 <div class="flex-1 min-w-0">
-                  <h4 class="text-base font-semibold text-slate-900 dark:text-slate-100 mb-1">
+                  <h4 class="text-base font-semibold text-base-content mb-1">
                     Restore Configuration
                   </h4>
-                  <p class="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                  <p class="text-sm text-muted mb-3">
                     Import from an encrypted backup file
                   </p>
 
                   {/* Feature list */}
                   <ul class="space-y-1 mb-4">
-                    <li class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <li class="flex items-center gap-2 text-xs text-muted">
                       <svg class="w-3.5 h-3.5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                       </svg>
                       <span>Merge or replace existing config</span>
                     </li>
-                    <li class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <li class="flex items-center gap-2 text-xs text-muted">
                       <svg class="w-3.5 h-3.5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                       </svg>
                       <span>Validates backup before applying</span>
                     </li>
-                    <li class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <li class="flex items-center gap-2 text-xs text-muted">
                       <svg class="w-3.5 h-3.5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                       </svg>

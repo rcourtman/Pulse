@@ -103,8 +103,8 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
     };
 
     return (
-        <div class="max-w-lg mx-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden animate-fade-in relative rounded-md">            <div class="p-8 border-b border-slate-200 dark:border-slate-700 relative z-10 text-center">
-            <h2 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Secure Your Dashboard</h2>
+        <div class="max-w-lg mx-auto bg-surface border border-border overflow-hidden animate-fade-in relative rounded-md">            <div class="p-8 border-b border-border relative z-10 text-center">
+            <h2 class="text-3xl font-bold tracking-tight text-base-content">Secure Your Dashboard</h2>
             <p class="text-slate-500 dark:text-blue-200 mt-2 font-light">Create your root administrator account</p>
         </div>
 
@@ -116,7 +116,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                         type="text"
                         value={username()}
                         onInput={(e) => setUsername(e.currentTarget.value)}
-                        class="w-full px-5 py-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
+                        class="w-full px-5 py-3.5 bg-white dark:bg-slate-900 border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
                         placeholder="admin"
                     />
                 </div>
@@ -130,7 +130,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                             onClick={() => setUseCustomPassword(false)}
                             class={`py-3 px-4 rounded-md text-sm font-medium transition-colors border ${!useCustomPassword()
                                 ? 'bg-blue-600 border-blue-600 text-white'
-                                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                                : 'bg-surface border-border text-slate-600 dark:text-slate-300 hover:bg-surface-hover'
                                 }`}
                         >
                             Generate Secure
@@ -140,7 +140,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                             onClick={() => setUseCustomPassword(true)}
                             class={`py-3 px-4 rounded-md text-sm font-medium transition-colors border ${useCustomPassword()
                                 ? 'bg-blue-600 border-blue-600 text-white'
-                                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                                : 'bg-surface border-border text-slate-600 dark:text-slate-300 hover:bg-surface-hover'
                                 }`}
                         >
                             Custom Password
@@ -153,14 +153,14 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                                 type="password"
                                 value={password()}
                                 onInput={(e) => setPassword(e.currentTarget.value)}
-                                class="w-full px-5 py-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
+                                class="w-full px-5 py-3.5 bg-white dark:bg-slate-900 border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
                                 placeholder="Password"
                             />
                             <input
                                 type="password"
                                 value={confirmPassword()}
                                 onInput={(e) => setConfirmPassword(e.currentTarget.value)}
-                                class="w-full px-5 py-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
+                                class="w-full px-5 py-3.5 bg-white dark:bg-slate-900 border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
                                 placeholder="Confirm password"
                             />
                         </div>
@@ -176,7 +176,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                 </div>
 
                 {/* Info */}
-                <div class="bg-slate-50 dark:bg-slate-900 rounded-md p-4 border border-slate-200 dark:border-slate-700">
+                <div class="bg-base rounded-md p-4 border border-border">
                     <p class="text-sm text-slate-600 dark:text-slate-300">
                         This creates your admin account and an API token for automation.
                         Credentials will be displayed once - save them securely!
@@ -185,10 +185,10 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
             </div>
 
             {/* Actions */}
-            <div class="p-8 bg-slate-50 dark:bg-slate-900 flex gap-4 border-t border-slate-200 dark:border-slate-700 relative z-10">
+            <div class="p-8 bg-base flex gap-4 border-t border-border relative z-10">
                 <button
                     onClick={props.onBack}
-                    class="px-6 py-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-md transition-colors"
+                    class="px-6 py-3.5 bg-surface border border-border hover:bg-surface-hover text-slate-700 dark:text-slate-300 font-medium rounded-md transition-colors"
                 >
                     ← Back
                 </button>

@@ -169,7 +169,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
         <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div class="min-w-0">
             <div class="text-sm font-semibold text-slate-800 dark:text-slate-100">Swarm</div>
-            <div class="text-xs text-slate-500 dark:text-slate-400 truncate" title={clusterName()}>
+            <div class="text-xs text-muted truncate" title={clusterName()}>
               {clusterName() ? `Cluster: ${clusterName()}` : 'No Swarm cluster detected'}
             </div>
           </div>
@@ -185,7 +185,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
         </div>
 
         <Show when={clusterId()}>
-          <div class="mt-2 text-[10px] text-slate-500 dark:text-slate-400 truncate" title={clusterId()}>
+          <div class="mt-2 text-[10px] text-muted truncate" title={clusterId()}>
             Cluster ID: {clusterId()}
           </div>
         </Show>
@@ -238,7 +238,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
             <Card padding="none" tone="card" class="overflow-hidden">
               <div class="overflow-x-auto">
                 <Table class="w-full min-w-[900px] border-collapse text-xs">
-                  <TableHeader class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                  <TableHeader class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
                     <TableRow class="text-left text-[10px] uppercase tracking-wide">
                       <TableHead class="px-3 py-2 font-medium">Service</TableHead>
                       <TableHead class="px-3 py-2 font-medium">Stack</TableHead>
@@ -267,7 +267,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
                             <TableCell class="px-3 py-2">
                               <div class="flex items-center gap-2 min-w-0">
                                 <span class={`h-2 w-2 rounded-full ${statusTone(svc.status)}`} title={svc.status || 'unknown'} />
-                                <span class="font-semibold text-slate-900 dark:text-slate-100 truncate" title={name()}>
+                                <span class="font-semibold text-base-content truncate" title={name()}>
                                   {name()}
                                 </span>
                               </div>
@@ -297,7 +297,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
         }
       >
         <Card padding="lg">
-          <div class="text-xs text-slate-500 dark:text-slate-400">Loading Swarm services...</div>
+          <div class="text-xs text-muted">Loading Swarm services...</div>
         </Card>
       </Show>
     </div>

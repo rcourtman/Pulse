@@ -1,6 +1,6 @@
 const baseField = 'flex flex-col gap-1';
 const baseLabel = 'text-sm font-medium text-slate-700 dark:text-slate-300';
-const baseHelp = 'text-xs text-slate-500 dark:text-slate-400';
+const baseHelp = 'text-xs text-muted';
 const baseControl = [
   'w-full min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900',
   'focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors',
@@ -25,7 +25,7 @@ export const formControlMono = join(baseControl, 'font-mono');
 export const formSelect = join(baseControl, 'pr-8 appearance-none');
 export const formTextarea = join(baseControl, 'min-h-[120px] resize-vertical');
 
-export const formLabelMuted = join(baseLabel, 'text-slate-500 dark:text-slate-400 font-normal');
+export const formLabelMuted = join(baseLabel, 'text-muted font-normal');
 
 export function labelClass(extra?: string) {
   return join(baseLabel, extra);

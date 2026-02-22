@@ -32,8 +32,8 @@ export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
 
       {/* Command */}
       <div class="px-3 py-3 bg-amber-50 dark:bg-amber-900">
-        <div class="mb-3 p-2 bg-white dark:bg-slate-800 rounded border border-amber-200 dark:border-amber-700">
-          <code class="text-xs font-mono text-slate-800 dark:text-slate-200 break-all">
+        <div class="mb-3 p-2 bg-surface rounded border border-amber-200 dark:border-amber-700">
+          <code class="text-xs font-mono text-base-content break-all">
             {props.approval.command}
           </code>
         </div>

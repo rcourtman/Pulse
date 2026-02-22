@@ -128,7 +128,7 @@ export const UserAssignmentsPanel: Component = () => {
                             placeholder="Search users..."
                             value={searchQuery()}
                             onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                            class="min-h-10 sm:min-h-9 pl-9 pr-3 py-2.5 text-sm rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
+                            class="min-h-10 sm:min-h-9 pl-9 pr-3 py-2.5 text-sm rounded-md border border-slate-300 dark:border-slate-600 bg-surface text-base-content focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
                         />
                     </div>
                 }
@@ -137,11 +137,11 @@ export const UserAssignmentsPanel: Component = () => {
             >
 
                 <Show when={licenseLoaded() && !hasFeature('rbac') && !loading()}>
-                    <div class="bg-slate-50 dark:bg-slate-800 p-4 sm:p-6 transition-colors border-b border-slate-100 dark:border-slate-800">
+                    <div class="bg-slate-50 dark:bg-slate-800 p-4 sm:p-6 transition-colors border-b border-border-subtle">
                         <div class="flex flex-col sm:flex-row items-center gap-4">
                             <div class="flex-1 text-center sm:text-left">
-                                <h4 class="text-base font-semibold text-slate-900 dark:text-white">Centralized Access Control (Pro)</h4>
-                                <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                                <h4 class="text-base font-semibold text-base-content">Centralized Access Control (Pro)</h4>
+                                <p class="text-sm text-muted mt-1">
                                     Assign multi-tier roles to users and manage infrastructure-wide security policies.
                                 </p>
                             </div>
@@ -167,12 +167,12 @@ export const UserAssignmentsPanel: Component = () => {
                 <Show when={!loading() && filteredAssignments().length === 0}>
                     <div class="text-center py-12 px-6">
                         <Users class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4" />
-                        <h4 class="text-base font-medium text-slate-900 dark:text-slate-100 mb-2">No users yet</h4>
-                        <p class="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                        <h4 class="text-base font-medium text-base-content mb-2">No users yet</h4>
+                        <p class="text-sm text-muted max-w-md mx-auto">
                             Users appear here automatically when they sign in via SSO (OIDC/SAML) or proxy authentication.
                             Once they've logged in, you can assign roles to control their access.
                         </p>
-                        <div class="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 text-xs text-slate-400 dark:text-slate-500">
+                        <div class="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 text-xs text-muted">
                             <span class="flex items-center gap-1.5">
                                 <Shield class="w-3.5 h-3.5" />
                                 Configure SSO in Security settings
@@ -191,7 +191,7 @@ export const UserAssignmentsPanel: Component = () => {
                                 {
                                     key: 'username',
                                     label: 'Username',
-                                    render: (assignment) => <span class="font-medium text-slate-900 dark:text-slate-100">{assignment.username}</span>
+                                    render: (assignment) => <span class="font-medium text-base-content">{assignment.username}</span>
                                 },
                                 {
                                     key: 'assignedRoles',
@@ -203,7 +203,7 @@ export const UserAssignmentsPanel: Component = () => {
                                             </Show>
                                             <For each={assignment.roleIds}>
                                                 {(roleId) => (
-                                                    <span class="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                                    <span class="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-border">
                                                         <Shield class="w-3 h-3" />
                                                         {getRoleName(roleId)}
                                                     </span>
@@ -240,13 +240,13 @@ export const UserAssignmentsPanel: Component = () => {
             {/* Assignments Modal */}
             <Show when={showModal()}>
                 <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
-                    <div class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 mx-4 max-h-[92vh] overflow-hidden">
-                        <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                    <div class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-md shadow-sm border border-border mx-4 max-h-[92vh] overflow-hidden">
+                        <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
                             <div>
-                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                                <h3 class="text-lg font-semibold text-base-content">
                                     Manage Access: {editingUser()?.username}
                                 </h3>
-                                <p class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold mt-0.5">Role Assignments</p>
+                                <p class="text-xs text-muted uppercase tracking-wider font-semibold mt-0.5">Role Assignments</p>
                             </div>
                             <button
                                 type="button"
@@ -260,7 +260,7 @@ export const UserAssignmentsPanel: Component = () => {
                         <div class="px-4 sm:px-6 py-6 space-y-8 max-h-[70vh] overflow-y-auto">
                             {/* Role Selection */}
                             <div class="space-y-4">
-                                <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                                <h4 class="text-sm font-semibold text-base-content flex items-center gap-2">
                                     <Shield class="w-4 h-4 text-blue-500" />
                                     Select Roles
                                 </h4>
@@ -279,7 +279,7 @@ export const UserAssignmentsPanel: Component = () => {
                                                             onChange={() => toggleRole(role.id)}
                                                             class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 dark:border-slate-600"
                                                         />
-                                                        <span class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                                        <span class="text-sm font-semibold text-base-content">
                                                             {role.name}
                                                         </span>
                                                     </div>
@@ -287,7 +287,7 @@ export const UserAssignmentsPanel: Component = () => {
                                                         <BadgeCheck class="w-4 h-4 text-blue-500" />
                                                     </Show>
                                                 </div>
-                                                <p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed pl-6">
+                                                <p class="text-xs text-muted line-clamp-2 leading-relaxed pl-6">
                                                     {role.description}
                                                 </p>
                                             </label>
@@ -297,9 +297,9 @@ export const UserAssignmentsPanel: Component = () => {
                             </div>
 
                             {/* Effective Permissions Preview */}
-                            <div class="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                            <div class="space-y-4 pt-4 border-t border-border-subtle">
                                 <div class="flex items-center justify-between">
-                                    <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                                    <h4 class="text-sm font-semibold text-base-content flex items-center gap-2">
                                         <BadgeCheck class="w-4 h-4 text-blue-500" />
                                         Effective Permissions Preview
                                     </h4>
@@ -307,16 +307,16 @@ export const UserAssignmentsPanel: Component = () => {
                                         <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
                                     </Show>
                                 </div>
-                                <div class="bg-slate-50 dark:bg-slate-950 rounded-md p-4 border border-slate-100 dark:border-slate-800">
+                                <div class="bg-slate-50 dark:bg-slate-950 rounded-md p-4 border border-border-subtle">
                                     <Show when={!loadingPermissions() && userPermissions().length === 0}>
-                                        <p class="text-xs text-slate-500 dark:text-slate-400 italic text-center py-2">
+                                        <p class="text-xs text-muted italic text-center py-2">
                                             No effective permissions. This user will have no access.
                                         </p>
                                     </Show>
                                     <div class="flex flex-wrap gap-2">
                                         <For each={userPermissions()}>
                                             {(perm) => (
-                                                <span class="inline-flex items-center rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-900 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm">
+                                                <span class="inline-flex items-center rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-900 dark:text-slate-300 border border-border shadow-sm">
                                                     <span class="text-blue-600 dark:text-blue-400">{perm.action}</span>
                                                     <span class="mx-1 text-slate-400">:</span>
                                                     <span class="text-blue-600 dark:text-blue-400">{perm.resource}</span>
@@ -324,14 +324,14 @@ export const UserAssignmentsPanel: Component = () => {
                                             )}
                                         </For>
                                     </div>
-                                    <p class="mt-4 text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-bold">
+                                    <p class="mt-4 text-[10px] text-muted uppercase tracking-widest font-bold">
                                         Note: Permissions are recalculated on save. This preview shows current server-side state.
                                     </p>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 sm:flex sm:items-center sm:justify-end gap-3 px-4 sm:px-6 py-5 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 rounded-b-xl">
+                        <div class="grid grid-cols-1 sm:flex sm:items-center sm:justify-end gap-3 px-4 sm:px-6 py-5 border-t border-border bg-slate-50 dark:bg-slate-800 rounded-b-xl">
                             <button
                                 type="button"
                                 onClick={() => setShowModal(false)}

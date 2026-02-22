@@ -336,7 +336,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     <Card padding="none" tone="card" class="mb-4 overflow-hidden">
       <Table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": "800px" }}>
         <TableHeader>
-          <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+          <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
 
             <TableHead
               class={`${thClassBase} text-left pl-3`}
@@ -389,7 +389,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
             </TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody class="divide-y divide-gray-200 dark:divide-gray-700">
+        <TableBody class="divide-y divide-border">
           <For each={sortedItems()}>
             {(item) => {
               const isPVEItem = isPVE(item);
@@ -513,13 +513,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                           size="xs"
                         />
                         <span
-                          class="font-medium text-[11px] text-slate-900 dark:text-slate-100 whitespace-nowrap select-text"
+                          class="font-medium text-[11px] text-base-content whitespace-nowrap select-text"
                           title={displayName()}
                         >
                           {displayName()}
                         </span>
                         <Show when={showActualName()}>
-                          <span class="text-[9px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                          <span class="text-[9px] text-muted whitespace-nowrap">
                             ({(node as Node).name})
                           </span>
                         </Show>
@@ -530,7 +530,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                             </span>
                           </Show>
                           <Show when={isPVEItem && node!.pveVersion}>
-                            <span class="text-[9px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                            <span class="text-[9px] text-muted whitespace-nowrap">
                               v{node!.pveVersion.split('/')[1] || node!.pveVersion}
                             </span>
                           </Show>
@@ -569,7 +569,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                             </span>
                           </Show>
                           <Show when={isPBSItem && pbs!.version}>
-                            <span class="text-[9px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                            <span class="text-[9px] text-muted whitespace-nowrap">
                               v{pbs!.version}
                             </span>
                           </Show>
@@ -585,7 +585,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         <span
                           class={`text-xs whitespace-nowrap ${isPVEItem && (node?.uptime ?? 0) < 3600
                             ? 'text-orange-500'
-                            : 'text-slate-600 dark:text-slate-400'
+                            : 'text-muted'
                             }`}
                         >
                           <Show when={online && uptimeValue} fallback="-">
@@ -672,7 +672,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                               (node!.temperature?.hasCPU ?? node!.temperature?.hasGPU ?? node!.temperature?.available) &&
                               isTemperatureMonitoringEnabled(node!)
                             }
-                            fallback={<span class="text-xs text-slate-400 dark:text-slate-500">-</span>}
+                            fallback={<span class="text-xs text-muted">-</span>}
                           >
                             {(() => {
                               const value = cpuTemperatureValue as number;
@@ -722,14 +722,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     <Show when={props.currentTab === 'dashboard'}>
                       <TableCell class={tdClass}>
                         <div class="flex justify-center">
-                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
+                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-muted'}>
                             {online ? getCountValue(item, 'vmCount') ?? '-' : '-'}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell class={tdClass}>
                         <div class="flex justify-center">
-                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
+                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-muted'}>
                             {online ? getCountValue(item, 'containerCount') ?? '-' : '-'}
                           </span>
                         </div>
@@ -740,14 +740,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     <Show when={props.currentTab === 'storage'}>
                       <TableCell class={tdClass}>
                         <div class="flex justify-center">
-                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
+                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-muted'}>
                             {online ? getCountValue(item, 'storageCount') ?? '-' : '-'}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell class={tdClass}>
                         <div class="flex justify-center">
-                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
+                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-muted'}>
                             {online ? getCountValue(item, 'diskCount') ?? '-' : '-'}
                           </span>
                         </div>
@@ -758,7 +758,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     <Show when={props.currentTab === 'recovery'}>
                       <TableCell class={tdClass}>
                         <div class="flex justify-center">
-                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
+                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-muted'}>
                             {online ? getCountValue(item, 'backupCount') ?? '-' : '-'}
                           </span>
                         </div>

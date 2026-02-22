@@ -63,17 +63,17 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <div class="flex items-center gap-3 min-w-0">
             {/* Animated theme icon */}
-            <div class={`shrink-0 relative p-2.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 transition-all duration-300`}>
+            <div class={`shrink-0 relative p-2.5 rounded-md border border-border bg-surface transition-all duration-300`}>
               <div class="relative w-5 h-5">
                 <Sun class={`absolute inset-0 w-5 h-5 text-slate-500 transition-all duration-300 ${props.darkMode() ? 'opacity-0 rotate-90 scale-50' : 'opacity-100 rotate-0 scale-100'}`} strokeWidth={2} />
                 <Moon class={`absolute inset-0 w-5 h-5 text-slate-500 transition-all duration-300 ${props.darkMode() ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-50'}`} strokeWidth={2} />
               </div>
             </div>
-            <div class="text-sm text-slate-600 dark:text-slate-400 min-w-0">
-              <p class="font-medium text-slate-900 dark:text-slate-100 truncate">
+            <div class="text-sm text-muted min-w-0">
+              <p class="font-medium text-base-content truncate">
                 Theme preference
               </p>
-              <p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
+              <p class="text-xs text-muted line-clamp-2">
                 Choose light, dark, or sync with your system theme.
               </p>
             </div>
@@ -82,8 +82,8 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <button
               type="button"
               class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${props.themePreference() === 'light'
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
+                  : 'text-muted hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               onClick={() => props.setThemePreference('light')}
             >
@@ -93,8 +93,8 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <button
               type="button"
               class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${props.themePreference() === 'dark'
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
+                  : 'text-muted hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               onClick={() => props.setThemePreference('dark')}
             >
@@ -104,8 +104,8 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <button
               type="button"
               class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${props.themePreference() === 'system'
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
+                  : 'text-muted hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               onClick={() => props.setThemePreference('system')}
             >
@@ -118,14 +118,14 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         {/* Temperature Unit Selector */}
         <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <div class="flex items-center gap-3 min-w-0">
-            <div class="shrink-0 p-2.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+            <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
               <Thermometer class="w-5 h-5 text-slate-500" strokeWidth={2} />
             </div>
-            <div class="text-sm text-slate-600 dark:text-slate-400 min-w-0">
-              <p class="font-medium text-slate-900 dark:text-slate-100 truncate">
+            <div class="text-sm text-muted min-w-0">
+              <p class="font-medium text-base-content truncate">
                 Temperature unit
               </p>
-              <p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
+              <p class="text-xs text-muted line-clamp-2">
                 Display temperatures in Celsius or Fahrenheit
               </p>
             </div>
@@ -134,8 +134,8 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <button
               type="button"
               class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 text-sm rounded-md transition-all ${temperatureStore.unit() === 'celsius'
-                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
+                : 'text-muted hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               onClick={() => temperatureStore.setUnit('celsius')}
             >
@@ -144,8 +144,8 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <button
               type="button"
               class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 text-sm rounded-md transition-all ${temperatureStore.unit() === 'fahrenheit'
-                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
+                : 'text-muted hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               onClick={() => temperatureStore.setUnit('fahrenheit')}
             >
@@ -157,14 +157,14 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         {/* Full-width Mode Toggle */}
         <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <div class="flex items-center gap-3 min-w-0">
-            <div class="shrink-0 p-2.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+            <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
               <Maximize2 class="w-5 h-5 text-slate-500" strokeWidth={2} />
             </div>
-            <div class="text-sm text-slate-600 dark:text-slate-400 min-w-0">
-              <p class="font-medium text-slate-900 dark:text-slate-100 truncate">
+            <div class="text-sm text-muted min-w-0">
+              <p class="font-medium text-base-content truncate">
                 Full-width mode
               </p>
-              <p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
+              <p class="text-xs text-muted line-clamp-2">
                 Expand content to use all available screen width on large monitors
               </p>
             </div>
@@ -188,7 +188,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <div class="flex-1 min-w-0 space-y-1">
             <div class="flex items-center gap-2">
-              <span class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+              <span class="text-sm font-medium text-base-content truncate">
                 Disable legacy URL redirects
               </span>
               <Show when={props.disableLegacyRouteRedirectsLocked()}>
@@ -200,7 +200,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                 </span>
               </Show>
             </div>
-            <p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
+            <p class="text-xs text-muted line-clamp-2">
               When enabled, Pulse will not redirect old bookmarks like <code class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700">/services</code>.
             </p>
           </div>
@@ -214,10 +214,10 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
 
         <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <div class="flex-1 min-w-0 space-y-1">
-            <div class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+            <div class="text-sm font-medium text-base-content truncate">
               Reduce Pro prompts
             </div>
-            <p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
+            <p class="text-xs text-muted line-clamp-2">
               Hides proactive upgrade prompts (for example, the relay onboarding card). Paywalls still appear if you try to use a gated feature.
             </p>
           </div>
@@ -232,7 +232,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <div class="flex-1 min-w-0 space-y-1">
             <div class="flex items-center gap-2">
-              <span class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+              <span class="text-sm font-medium text-base-content truncate">
                 Disable local upgrade metrics
               </span>
               <Show when={props.disableLocalUpgradeMetricsLocked()}>
@@ -244,7 +244,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                 </span>
               </Show>
             </div>
-            <p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
+            <p class="text-xs text-muted line-clamp-2">
               Records local-only events like "paywall viewed" and "trial started" to help debug and improve upgrade flows. These events are stored locally and are not exported to third parties.
             </p>
           </div>
@@ -268,7 +268,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <div class="space-y-4">
             <div class="space-y-2">
-              <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              <p class="text-[10px] font-bold uppercase tracking-wider text-muted">
                 Current cadence: {props.pvePollingInterval()} seconds (
                 {props.pvePollingInterval() >= 60
                   ? `${(props.pvePollingInterval() / 60).toFixed(
@@ -277,7 +277,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                   : 'under a minute'}
                 )
               </p>
-              <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-3xl">
+              <p class="text-xs text-muted leading-relaxed max-w-3xl">
                 Shorter intervals provide near-real-time updates at the cost of higher API and CPU
                 usage on each node. Set a longer interval to reduce load on busy clusters.
               </p>
@@ -328,10 +328,10 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               <Show when={props.pvePollingSelection() === 'custom'}>
                 <div class="mt-4 flex flex-col sm:flex-row sm:items-center gap-4 rounded-md border border-dashed border-slate-300 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800 transition-all animate-in fade-in slide-in-from-top-1">
                   <div class="flex-1 min-w-0">
-                    <label class="block text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                    <label class="block text-sm font-medium text-base-content truncate">
                       Custom polling interval
                     </label>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
+                    <p class="text-xs text-muted mt-0.5 line-clamp-2">
                       Enter seconds ({PVE_POLLING_MIN_SECONDS}-{PVE_POLLING_MAX_SECONDS}). Applies to all clusters.
                     </p>
                   </div>

@@ -100,7 +100,7 @@ export const TokenRevealDialog: Component = () => {
                   </div>
                   <div class="space-y-2 flex-1">
                     <div class="flex flex-wrap items-center gap-2">
-                      <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                      <h2 class="text-lg font-semibold text-base-content">
                         API token ready
                       </h2>
                       <Show when={sourceLabel}>
@@ -114,11 +114,11 @@ export const TokenRevealDialog: Component = () => {
                 </div>
 
                 <div class="mt-5 space-y-3">
-                  <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  <div class="text-xs font-semibold uppercase tracking-wide text-muted">
                     Token value
                   </div>
                   <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-                    <code class="flex-1 rounded-md border border-green-300 dark:border-green-700 bg-white dark:bg-slate-900 px-4 py-3 font-mono text-base font-semibold text-slate-900 dark:text-slate-100 break-all">
+                    <code class="flex-1 rounded-md border border-green-300 dark:border-green-700 bg-white dark:bg-slate-900 px-4 py-3 font-mono text-base font-semibold text-base-content break-all">
                       {info.token}
                     </code>
                     <button
@@ -129,13 +129,13 @@ export const TokenRevealDialog: Component = () => {
                       {copied() ? 'Copied!' : 'Copy token'}
                     </button>
                   </div>
-                  <div class="text-xs text-slate-600 dark:text-slate-400">
-                    Label: <span class="font-semibold text-slate-800 dark:text-slate-200">{recordName}</span>
+                  <div class="text-xs text-muted">
+                    Label: <span class="font-semibold text-base-content">{recordName}</span>
                     <Show when={tokenHint}>
                       <span>
                         {' '}
                         · Hint:{' '}
-                        <code class="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 font-mono text-[11px] text-slate-600 dark:text-slate-400">
+                        <code class="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 font-mono text-[11px] text-muted">
                           {tokenHint as string}
                         </code>
                       </span>
@@ -147,7 +147,7 @@ export const TokenRevealDialog: Component = () => {
                   <button
                     type="button"
                     onClick={handleDismiss}
-                    class="rounded-md border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                    class="rounded-md border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-surface-hover transition-colors"
                   >
                     Dismiss
                   </button>

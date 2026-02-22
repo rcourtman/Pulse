@@ -59,7 +59,7 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
                     <div class="text-[11px] font-semibold text-slate-700 dark:text-slate-200 truncate" title={label()}>
                       {label()}
                     </div>
-                    <div class="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400 truncate" title={levelText()}>
+                    <div class="mt-0.5 text-[10px] text-muted truncate" title={levelText()}>
                       {levelText()}
                     </div>
                   </div>
@@ -73,10 +73,10 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
                 </div>
 
                 <Show when={rebuilding()}>
-                  <div class="mt-2 text-[10px] text-slate-500 dark:text-slate-400">
+                  <div class="mt-2 text-[10px] text-muted">
                     Rebuild: <span class="font-medium text-slate-700 dark:text-slate-200">{Math.round(array.rebuildPercent)}%</span>
                     <Show when={array.rebuildSpeed}>
-                      <span class="text-slate-400 dark:text-slate-500"> · </span>
+                      <span class="text-muted"> · </span>
                       <span class="font-medium text-slate-700 dark:text-slate-200">{array.rebuildSpeed}</span>
                     </Show>
                   </div>

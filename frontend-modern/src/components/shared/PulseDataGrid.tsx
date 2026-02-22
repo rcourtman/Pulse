@@ -97,7 +97,7 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
 
     return (
         <div
-            class={`overflow-hidden rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 ${local.class || ''}`}
+            class={`overflow-hidden rounded-md border border-border bg-white dark:bg-slate-900 ${local.class || ''}`}
         >
             <div
                 class="overflow-x-auto"
@@ -115,14 +115,14 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                     class="w-full border-collapse"
                     style={{ 'min-width': effectiveMinWidth() }}
                 >
-                    <TableHeader class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                    <TableHeader class="bg-slate-50 dark:bg-slate-800 border-b border-border">
                         <TableRow>
                             <For each={local.columns}>
                                 {(col) => (
                                     <TableHead
                                         class={`
                                             px-3 sm:px-4 py-2.5 
-                                            text-[11px] sm:text-xs font-semibold uppercase tracking-wider whitespace-nowrap text-slate-500 dark:text-slate-400
+                                            text-[11px] sm:text-xs font-semibold uppercase tracking-wider whitespace-nowrap text-muted
                                             ${getAlignClass(col.align)}
                                             ${col.hiddenOnMobile ? 'hidden sm:table-cell' : ''}
                                         `}

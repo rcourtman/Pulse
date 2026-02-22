@@ -239,9 +239,9 @@ export const ProLicensePanel: Component = () => {
         </div>
 
         <Show when={showTrialStart()}>
-          <div class="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3">
-            <p class="text-sm font-medium text-slate-900 dark:text-slate-100">Try Pro for free</p>
-            <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">
+          <div class="rounded-md border border-border bg-slate-50 dark:bg-slate-800 p-3">
+            <p class="text-sm font-medium text-base-content">Try Pro for free</p>
+            <p class="text-xs text-muted mt-1">
               Start a 14-day Pro trial for this organization.
             </p>
             <button
@@ -290,34 +290,34 @@ export const ProLicensePanel: Component = () => {
           </div>
 
           <Show when={hasLicenseDetails()} fallback={
-            <div class="text-sm text-slate-500 dark:text-slate-400">
+            <div class="text-sm text-muted">
               No Pro license is active.
             </div>
           }>
             <div class="grid gap-4 sm:grid-cols-2">
               <div>
-                <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Tier</p>
-                <p class="text-sm font-medium text-slate-900 dark:text-slate-100">{formattedTier()}</p>
+                <p class="text-xs uppercase tracking-wide text-muted">Tier</p>
+                <p class="text-sm font-medium text-base-content">{formattedTier()}</p>
               </div>
               <div>
-                <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Licensed Email</p>
-                <p class="text-sm font-medium text-slate-900 dark:text-slate-100">{status()?.email || 'Not available'}</p>
+                <p class="text-xs uppercase tracking-wide text-muted">Licensed Email</p>
+                <p class="text-sm font-medium text-base-content">{status()?.email || 'Not available'}</p>
               </div>
               <div>
-                <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Expires</p>
-                <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
+                <p class="text-xs uppercase tracking-wide text-muted">Expires</p>
+                <p class="text-sm font-medium text-base-content">
                   {status()?.is_lifetime ? 'Never (Lifetime)' : formatDate(status()?.expires_at)}
                 </p>
               </div>
               <div>
-                <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Days Remaining</p>
-                <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
+                <p class="text-xs uppercase tracking-wide text-muted">Days Remaining</p>
+                <p class="text-sm font-medium text-base-content">
                   {status()?.is_lifetime ? 'Unlimited' : status()?.days_remaining ?? 'Unknown'}
                 </p>
               </div>
               <div>
-                <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Max Nodes</p>
-                <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
+                <p class="text-xs uppercase tracking-wide text-muted">Max Nodes</p>
+                <p class="text-sm font-medium text-base-content">
                   {(() => {
                     const maxNodes = status()?.max_nodes;
                     return typeof maxNodes === 'number' && maxNodes > 0 ? maxNodes : 'Unlimited';
@@ -325,8 +325,8 @@ export const ProLicensePanel: Component = () => {
                 </p>
               </div>
               <div>
-                <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Max Guests</p>
-                <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
+                <p class="text-xs uppercase tracking-wide text-muted">Max Guests</p>
+                <p class="text-sm font-medium text-base-content">
                   {(() => {
                     const maxGuests = status()?.max_guests;
                     return typeof maxGuests === 'number' && maxGuests > 0 ? maxGuests : 'Unlimited';
@@ -337,7 +337,7 @@ export const ProLicensePanel: Component = () => {
 
             <Show when={formattedFeatures().length > 0}>
               <div>
-                <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">Features</p>
+                <p class="text-xs uppercase tracking-wide text-muted mb-2">Features</p>
                 <ul class="grid gap-2 sm:grid-cols-2">
                   <For each={formattedFeatures()}>
                     {(feature) => (

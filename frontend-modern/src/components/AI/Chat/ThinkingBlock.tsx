@@ -54,13 +54,13 @@ export const ThinkingBlock: Component<ThinkingBlockProps> = (props) => {
 
         {/* Preview (when collapsed) */}
         <Show when={!expanded() && preview()}>
-          <span class="text-slate-500 dark:text-slate-400 truncate flex-1">
+          <span class="text-muted truncate flex-1">
             {preview()}
           </span>
         </Show>
 
         {/* Stats */}
-        <span class="text-slate-400 dark:text-slate-500 text-[10px] ml-auto">
+        <span class="text-muted text-[10px] ml-auto">
           {stats().lines} lines · {stats().words} words
         </span>
 
@@ -78,7 +78,7 @@ export const ThinkingBlock: Component<ThinkingBlockProps> = (props) => {
       {/* Expanded content */}
       <Show when={expanded()}>
         <div class="mt-1 ml-4 pl-3 border-l-2 border-blue-200 dark:border-blue-800">
-          <pre class="text-[11px] text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">
+          <pre class="text-[11px] text-muted whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">
             {sanitizeThinking(props.content)}
           </pre>
         </div>

@@ -485,11 +485,11 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               ariaLabel={statusIndicator().label}
               size="sm"
             />
-            <div class="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate" title={displayName()}>
+            <div class="text-sm font-semibold text-base-content truncate" title={displayName()}>
               {displayName()}
             </div>
           </div>
-          <div class="text-[11px] text-slate-500 dark:text-slate-400 truncate" title={props.resource.id}>
+          <div class="text-[11px] text-muted truncate" title={props.resource.id}>
             {props.resource.id}
           </div>
           <div class="flex flex-wrap gap-1.5">
@@ -569,7 +569,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         </div>
       </Show>
 
-      <div class="flex items-center gap-6 border-b border-slate-200 dark:border-slate-700 px-1 mb-1">
+      <div class="flex items-center gap-6 border-b border-border px-1 mb-1">
         <For each={tabs()}>
           {(tab) => (
             <button
@@ -621,18 +621,18 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Runtime</div>
             <div class="space-y-1.5 text-[11px]">
               <div class="flex items-center justify-between gap-2">
-                <span class="text-slate-500 dark:text-slate-400">State</span>
+                <span class="text-muted">State</span>
                 <span class="font-medium text-slate-700 dark:text-slate-200 capitalize">{props.resource.status || 'unknown'}</span>
               </div>
               <Show when={props.resource.uptime}>
                 <div class="flex items-center justify-between gap-2">
-                  <span class="text-slate-500 dark:text-slate-400">Uptime</span>
+                  <span class="text-muted">Uptime</span>
                   <span class="font-medium text-slate-700 dark:text-slate-200">{formatUptime(props.resource.uptime ?? 0)}</span>
                 </div>
               </Show>
               <Show when={props.resource.lastSeen}>
                 <div class="flex items-center justify-between gap-2">
-                  <span class="text-slate-500 dark:text-slate-400">Last Seen</span>
+                  <span class="text-muted">Last Seen</span>
                   <span
                     class="font-medium text-slate-700 dark:text-slate-200"
                     title={lastSeenAbsolute()}
@@ -643,19 +643,19 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               </Show>
               <Show when={sourceSummary()}>
                 <div class="flex items-center justify-between gap-2">
-                  <span class="text-slate-500 dark:text-slate-400">Sources</span>
+                  <span class="text-muted">Sources</span>
                   <span class={`font-medium ${sourceSummary()!.className}`} title={sourceSummary()!.title}>
                     {sourceSummary()!.label}
                   </span>
                 </div>
               </Show>
               <div class="flex items-center justify-between gap-2">
-                <span class="text-slate-500 dark:text-slate-400">Mode</span>
+                <span class="text-muted">Mode</span>
                 <span class="font-medium text-slate-700 dark:text-slate-200">{formatSourceType(props.resource.sourceType)}</span>
               </div>
               <Show when={(props.resource.alerts?.length || 0) > 0}>
                 <div class="flex items-center justify-between gap-2">
-                  <span class="text-slate-500 dark:text-slate-400">Alerts</span>
+                  <span class="text-muted">Alerts</span>
                   <span class="font-medium text-amber-600 dark:text-amber-400">
                     {formatInteger(props.resource.alerts?.length)}
                   </span>
@@ -663,7 +663,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               </Show>
               <Show when={props.resource.platformId}>
                 <div class="flex items-center justify-between gap-2">
-                  <span class="text-slate-500 dark:text-slate-400">Platform ID</span>
+                  <span class="text-muted">Platform ID</span>
                   <span class="font-medium text-slate-700 dark:text-slate-200 truncate" title={props.resource.platformId}>
                     {props.resource.platformId}
                   </span>
@@ -678,7 +678,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               <For each={primaryIdentityRows()}>
                 {(row) => (
                   <div class="flex items-center justify-between gap-2">
-                    <span class="text-slate-500 dark:text-slate-400">{row.label}</span>
+                    <span class="text-muted">{row.label}</span>
                     <span class="font-medium text-slate-700 dark:text-slate-200 truncate" title={row.value}>
                       {row.value}
                     </span>
@@ -687,7 +687,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               </For>
               <Show when={props.resource.identity?.ips && props.resource.identity.ips.length > 0}>
                 <div class="flex flex-col gap-1">
-                  <span class="text-slate-500 dark:text-slate-400">IP Addresses</span>
+                  <span class="text-muted">IP Addresses</span>
                   <div class="flex flex-wrap gap-1">
                     <For each={props.resource.identity?.ips ?? []}>
                       {(ip) => (
@@ -704,7 +704,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               </Show>
               <Show when={props.resource.tags && props.resource.tags.length > 0}>
                 <div class="flex items-center justify-between gap-2">
-                  <span class="text-slate-500 dark:text-slate-400">Tags</span>
+                  <span class="text-muted">Tags</span>
                   <TagBadges tags={props.resource.tags} maxVisible={6} />
                 </div>
               </Show>
@@ -713,7 +713,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   when={hasAliasOverflow()}
                   fallback={
                     <div class="flex flex-col gap-1">
-                      <span class="text-slate-500 dark:text-slate-400">Aliases</span>
+                      <span class="text-muted">Aliases</span>
                       <div class="flex flex-wrap gap-1">
                         <For each={aliasPreviewValues()}>
                           {(value) => (
@@ -729,7 +729,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   <details class="rounded border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-600 dark:bg-slate-800">
                     <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-slate-600 dark:text-slate-300">
                       <span>Aliases</span>
-                      <span class="text-slate-500 dark:text-slate-400">{identityAliasValues().length}</span>
+                      <span class="text-muted">{identityAliasValues().length}</span>
                     </summary>
                     <div class="mt-2 flex flex-wrap gap-1 border-t border-slate-200 pt-2 dark:border-slate-600">
                       <For each={identityAliasValues()}>
@@ -764,18 +764,18 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
               <div class="space-y-1.5 text-[11px]">
                 <div class="flex items-center justify-between gap-2">
-                  <span class="text-slate-500 dark:text-slate-400">Containers</span>
+                  <span class="text-muted">Containers</span>
                   <span class="font-medium text-slate-700 dark:text-slate-200">{formatInteger(dockerContainerCount())}</span>
                 </div>
                 <div class="flex items-center justify-between gap-2">
-                  <span class="text-slate-500 dark:text-slate-400">Updates Available</span>
+                  <span class="text-muted">Updates Available</span>
                   <span class={`font-medium ${dockerUpdatesAvailable() > 0 ? 'text-sky-700 dark:text-sky-300' : 'text-slate-700 dark:text-slate-200'}`}>
                     {formatInteger(dockerUpdatesAvailable())}
                   </span>
                 </div>
                 <Show when={dockerUpdatesCheckedRelative()}>
                   <div class="flex items-center justify-between gap-2">
-                    <span class="text-slate-500 dark:text-slate-400">Last Check</span>
+                    <span class="text-muted">Last Check</span>
                     <span class="font-medium text-slate-700 dark:text-slate-200">{dockerUpdatesCheckedRelative()}</span>
                   </div>
                 </Show>
@@ -783,13 +783,13 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 <Show when={dockerHostCommand()?.type || dockerHostCommand()?.status}>
                   <div class="rounded border border-sky-200 bg-white px-2 py-1.5 text-[10px] dark:border-sky-700 dark:bg-slate-800">
                     <div class="flex items-center justify-between gap-2">
-                      <span class="text-slate-500 dark:text-slate-400">Command</span>
+                      <span class="text-muted">Command</span>
                       <span class="font-medium text-slate-700 dark:text-slate-200">
                         {(dockerHostCommand()?.type || 'command').replace(/_/g, ' ')}
                       </span>
                     </div>
                     <div class="mt-1 flex items-center justify-between gap-2">
-                      <span class="text-slate-500 dark:text-slate-400">Status</span>
+                      <span class="text-muted">Status</span>
                       <span class={`font-medium ${dockerHostCommandActive() ? 'text-sky-700 dark:text-sky-300' : 'text-slate-700 dark:text-slate-200'}`}>
                         {(dockerHostCommand()?.status || 'unknown').replace(/_/g, ' ')}
                       </span>
@@ -905,20 +905,20 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 </div>
                 <div class="space-y-1.5 text-[11px]">
                   <div class="flex items-center justify-between gap-2">
-                    <span class="text-slate-500 dark:text-slate-400">Connection</span>
+                    <span class="text-muted">Connection</span>
                     <span class={`font-medium ${healthToneClass(pbs().connectionHealth)}`}>
                       {normalizeHealthLabel(pbs().connectionHealth)}
                     </span>
                   </div>
                   <Show when={pbs().version}>
                     <div class="flex items-center justify-between gap-2">
-                      <span class="text-slate-500 dark:text-slate-400">Version</span>
+                      <span class="text-muted">Version</span>
                       <span class="font-medium text-slate-700 dark:text-slate-200">{pbs().version}</span>
                     </div>
                   </Show>
                   <Show when={pbs().uptimeSeconds || props.resource.uptime}>
                     <div class="flex items-center justify-between gap-2">
-                      <span class="text-slate-500 dark:text-slate-400">Uptime</span>
+                      <span class="text-muted">Uptime</span>
                       <span class="font-medium text-slate-700 dark:text-slate-200">
                         {formatUptime(pbs().uptimeSeconds ?? props.resource.uptime ?? 0)}
                       </span>
@@ -926,23 +926,23 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   </Show>
                   <div class="grid grid-cols-2 gap-2 pt-1">
                     <div class="rounded border border-indigo-200 bg-white px-2 py-1.5 dark:border-indigo-700 dark:bg-slate-800">
-                      <div class="text-[10px] text-slate-500 dark:text-slate-400">Datastores</div>
+                      <div class="text-[10px] text-muted">Datastores</div>
                       <div class="text-sm font-semibold text-slate-700 dark:text-slate-200">{formatInteger(pbs().datastoreCount)}</div>
                     </div>
                     <div class="rounded border border-indigo-200 bg-white px-2 py-1.5 dark:border-indigo-700 dark:bg-slate-800">
-                      <div class="text-[10px] text-slate-500 dark:text-slate-400">Total Jobs</div>
+                      <div class="text-[10px] text-muted">Total Jobs</div>
                       <div class="text-sm font-semibold text-slate-700 dark:text-slate-200">{formatInteger(pbsJobTotal())}</div>
                     </div>
                   </div>
                   <details class="rounded border border-indigo-200 bg-white px-2 py-1.5 dark:border-indigo-700 dark:bg-slate-800">
                     <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-slate-600 dark:text-slate-300">
                       <span>Job breakdown</span>
-                      <span class="text-slate-500 dark:text-slate-400">{pbsVisibleJobBreakdown().length} types</span>
+                      <span class="text-muted">{pbsVisibleJobBreakdown().length} types</span>
                     </summary>
                     <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-indigo-200 pt-2 text-[10px] dark:border-indigo-700">
                       <For each={pbsVisibleJobBreakdown()}>
                         {(entry) => (
-                          <span class="text-slate-500 dark:text-slate-400">
+                          <span class="text-muted">
                             {entry.label}:{' '}
                             <span class="font-medium text-slate-700 dark:text-slate-200">{formatInteger(entry.value)}</span>
                           </span>
@@ -968,20 +968,20 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 </div>
                 <div class="space-y-1.5 text-[11px]">
                   <div class="flex items-center justify-between gap-2">
-                    <span class="text-slate-500 dark:text-slate-400">Connection</span>
+                    <span class="text-muted">Connection</span>
                     <span class={`font-medium ${healthToneClass(pmg().connectionHealth)}`}>
                       {normalizeHealthLabel(pmg().connectionHealth)}
                     </span>
                   </div>
                   <Show when={pmg().version}>
                     <div class="flex items-center justify-between gap-2">
-                      <span class="text-slate-500 dark:text-slate-400">Version</span>
+                      <span class="text-muted">Version</span>
                       <span class="font-medium text-slate-700 dark:text-slate-200">{pmg().version}</span>
                     </div>
                   </Show>
                   <Show when={pmg().uptimeSeconds || props.resource.uptime}>
                     <div class="flex items-center justify-between gap-2">
-                      <span class="text-slate-500 dark:text-slate-400">Uptime</span>
+                      <span class="text-muted">Uptime</span>
                       <span class="font-medium text-slate-700 dark:text-slate-200">
                         {formatUptime(pmg().uptimeSeconds ?? props.resource.uptime ?? 0)}
                       </span>
@@ -989,17 +989,17 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   </Show>
                   <div class="grid grid-cols-3 gap-2 pt-1">
                     <div class="rounded border border-rose-200 bg-white px-2 py-1.5 dark:border-rose-700 dark:bg-slate-800">
-                      <div class="text-[10px] text-slate-500 dark:text-slate-400">Nodes</div>
+                      <div class="text-[10px] text-muted">Nodes</div>
                       <div class="text-sm font-semibold text-slate-700 dark:text-slate-200">{formatInteger(pmg().nodeCount)}</div>
                     </div>
                     <div class="rounded border border-rose-200 bg-white px-2 py-1.5 dark:border-rose-700 dark:bg-slate-800">
-                      <div class="text-[10px] text-slate-500 dark:text-slate-400">Queue Total</div>
+                      <div class="text-[10px] text-muted">Queue Total</div>
                       <div class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'}`}>
                         {formatInteger(pmg().queueTotal)}
                       </div>
                     </div>
                     <div class="rounded border border-rose-200 bg-white px-2 py-1.5 dark:border-rose-700 dark:bg-slate-800">
-                      <div class="text-[10px] text-slate-500 dark:text-slate-400">Backlog</div>
+                      <div class="text-[10px] text-muted">Backlog</div>
                       <div class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'}`}>
                         {formatInteger(pmgQueueBacklog())}
                       </div>
@@ -1008,12 +1008,12 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   <details class="rounded border border-rose-200 bg-white px-2 py-1.5 dark:border-rose-700 dark:bg-slate-800">
                     <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-slate-600 dark:text-slate-300">
                       <span>Queue breakdown</span>
-                      <span class="text-slate-500 dark:text-slate-400">{pmgVisibleQueueBreakdown().length} signals</span>
+                      <span class="text-muted">{pmgVisibleQueueBreakdown().length} signals</span>
                     </summary>
                     <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
                       <For each={pmgVisibleQueueBreakdown()}>
                         {(entry) => (
-                          <span class="text-slate-500 dark:text-slate-400">
+                          <span class="text-muted">
                             {entry.label}:{' '}
                             <span class={`font-medium ${entry.warn ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'}`}>
                               {formatInteger(entry.value)}
@@ -1026,12 +1026,12 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   <details class="rounded border border-rose-200 bg-white px-2 py-1.5 dark:border-rose-700 dark:bg-slate-800">
                     <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-slate-600 dark:text-slate-300">
                       <span>Mail processing</span>
-                      <span class="text-slate-500 dark:text-slate-400">{pmgVisibleMailBreakdown().length} signals</span>
+                      <span class="text-muted">{pmgVisibleMailBreakdown().length} signals</span>
                     </summary>
                     <div class="mt-2 grid grid-cols-3 gap-x-3 gap-y-1 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
                       <For each={pmgVisibleMailBreakdown()}>
                         {(entry) => (
-                          <span class="text-slate-500 dark:text-slate-400">
+                          <span class="text-muted">
                             {entry.label}:{' '}
                             <span class="font-medium text-slate-700 dark:text-slate-200">{formatInteger(entry.value)}</span>
                           </span>
@@ -1040,7 +1040,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     </div>
                     <Show when={pmgUpdatedRelative()}>
                       <div class="mt-2 flex items-center justify-between gap-2 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
-                        <span class="text-slate-500 dark:text-slate-400">Updated</span>
+                        <span class="text-muted">Updated</span>
                         <span class="font-medium text-slate-700 dark:text-slate-200">{pmgUpdatedRelative()}</span>
                       </div>
                     </Show>
@@ -1079,7 +1079,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               fallback={
                 <div class="flex items-center justify-center py-8">
                   <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                  <span class="ml-2 text-sm text-slate-500 dark:text-slate-400">Loading discovery...</span>
+                  <span class="ml-2 text-sm text-muted">Loading discovery...</span>
                 </div>
               }
             >
@@ -1178,7 +1178,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       <Show when={debugEnabled()}>
         <div class={activeTab() === 'debug' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
           <div class="flex items-center justify-between gap-3">
-            <div class="text-xs text-slate-500 dark:text-slate-400">
+            <div class="text-xs text-muted">
               Debug mode is enabled via localStorage (<code>pulse_debug_mode</code>).
             </div>
             <button
@@ -1223,7 +1223,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                       <details class="rounded-md border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
                         <summary class="flex cursor-pointer list-none items-center justify-between text-sm font-medium text-slate-700 dark:text-slate-200">
                           <span>{section.label}</span>
-                          <span class="text-[11px] text-slate-500 dark:text-slate-400">
+                          <span class="text-[11px] text-muted">
                             {status?.status ?? 'unknown'}
                             {lastSeenText ? ` • ${lastSeenText}` : ''}
                           </span>

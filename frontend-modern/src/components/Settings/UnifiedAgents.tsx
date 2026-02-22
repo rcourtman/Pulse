@@ -957,11 +957,11 @@ export const UnifiedAgents: Component = () => {
                     <Show when={requiresToken()}>
                         <div class="space-y-3">
                             <div class="space-y-1">
-                                <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                <p class="text-sm font-semibold text-base-content">
                                     <span class="inline-flex items-center justify-center w-5 h-5 mr-1.5 rounded-full bg-blue-600 text-white text-xs font-bold">1</span>
                                     Generate API token
                                 </p>
-                                <p class="text-sm text-slate-600 dark:text-slate-400 ml-6">
+                                <p class="text-sm text-muted ml-6">
                                     Create a fresh token scoped for Host, Docker, and Kubernetes monitoring.
                                 </p>
                             </div>
@@ -1027,18 +1027,18 @@ export const UnifiedAgents: Component = () => {
                         <div class="space-y-3 opacity-60 pointer-events-none select-none">
                             <div class="flex items-center justify-between">
                                 <div>
-                                    <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                    <h4 class="text-sm font-semibold text-base-content">
                                         <span class="inline-flex items-center justify-center w-5 h-5 mr-1.5 rounded-full bg-slate-400 text-white text-xs font-bold">2</span>
                                         Installation commands
                                     </h4>
-                                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 ml-6">Generate a token above to unlock installation commands.</p>
+                                    <p class="text-xs text-muted mt-0.5 ml-6">Generate a token above to unlock installation commands.</p>
                                 </div>
                             </div>
                             <div class="rounded-md border border-slate-200 bg-slate-50 px-4 py-6 dark:border-slate-700 dark:bg-slate-800 text-center">
-                                <svg class="w-8 h-8 mx-auto text-slate-400 dark:text-slate-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                <svg class="w-8 h-8 mx-auto text-muted mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
                                 </svg>
-                                <p class="text-sm text-slate-500 dark:text-slate-400">Click "Generate token" above to see installation commands</p>
+                                <p class="text-sm text-muted">Click "Generate token" above to see installation commands</p>
                             </div>
                         </div>
                     </Show>
@@ -1048,13 +1048,13 @@ export const UnifiedAgents: Component = () => {
                             <div class="space-y-3">
                                 <div class="flex items-center justify-between">
                                     <div>
-                                        <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                        <h4 class="text-sm font-semibold text-base-content">
                                             <Show when={requiresToken()}>
                                                 <span class="inline-flex items-center justify-center w-5 h-5 mr-1.5 rounded-full bg-green-600 text-white text-xs font-bold">2</span>
                                             </Show>
                                             Installation commands
                                         </h4>
-                                        <p class={`text-xs text-slate-500 dark:text-slate-400 mt-0.5 ${requiresToken() ? 'ml-6' : ''}`}>The installer auto-detects Docker, Kubernetes, and Proxmox on the target machine.</p>
+                                        <p class={`text-xs text-muted mt-0.5 ${requiresToken() ? 'ml-6' : ''}`}>The installer auto-detects Docker, Kubernetes, and Proxmox on the target machine.</p>
                                     </div>
                                 </div>
 
@@ -1071,7 +1071,7 @@ export const UnifiedAgents: Component = () => {
                                             class="flex-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
                                         />
                                     </div>
-                                    <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+                                    <p class="mt-1.5 text-xs text-muted">
                                         Override the address agents use to connect to this server (e.g., use IP address <code>http://192.168.1.50:7655</code> if DNS fails).
                                         <Show when={!customAgentUrl()}>
                                             <span class="ml-1 opacity-75">Currently using auto-detected: {agentUrl()}</span>
@@ -1125,7 +1125,7 @@ export const UnifiedAgents: Component = () => {
                                             )}
                                         </For>
                                     </select>
-                                    <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+                                    <p class="mt-1.5 text-xs text-muted">
                                         {getSelectedInstallProfile().description}
                                     </p>
                                     <Show when={getInstallProfileFlags().length > 0}>
@@ -1139,10 +1139,10 @@ export const UnifiedAgents: Component = () => {
                             <div class="space-y-4">
                                 <For each={commandSections()}>
                                     {(section) => (
-                                        <div class="space-y-3 rounded-md border border-slate-200 dark:border-slate-700 p-4">
+                                        <div class="space-y-3 rounded-md border border-border p-4">
                                             <div class="space-y-1">
-                                                <h5 class="text-sm font-semibold text-slate-900 dark:text-slate-100">{section.title}</h5>
-                                                <p class="text-xs text-slate-500 dark:text-slate-400">{section.description}</p>
+                                                <h5 class="text-sm font-semibold text-base-content">{section.title}</h5>
+                                                <p class="text-xs text-muted">{section.description}</p>
                                             </div>
                                             <div class="space-y-3">
                                                 <For each={section.snippets}>
@@ -1177,7 +1177,7 @@ export const UnifiedAgents: Component = () => {
 
                                                         return (
                                                             <div class="space-y-2">
-                                                                <h6 class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                                                <h6 class="text-xs font-semibold uppercase tracking-wide text-muted">
                                                                     {snippet.label}
                                                                 </h6>
                                                                 <div class="relative">
@@ -1208,7 +1208,7 @@ export const UnifiedAgents: Component = () => {
                                                                     </pre>
                                                                 </div>
                                                                 <Show when={snippet.note}>
-                                                                    <p class="text-xs text-slate-500 dark:text-slate-400">{snippet.note}</p>
+                                                                    <p class="text-xs text-muted">{snippet.note}</p>
                                                                 </Show>
                                                             </div>
                                                         );
@@ -1293,16 +1293,16 @@ export const UnifiedAgents: Component = () => {
                                 </Show>
                             </div>
                             <details class="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                                <summary class="cursor-pointer text-sm font-medium text-slate-900 dark:text-slate-100">
+                                <summary class="cursor-pointer text-sm font-medium text-base-content">
                                     Troubleshooting
                                 </summary>
                                 <div class="mt-3 space-y-4">
                                     <div>
-                                        <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Auto-detection not working?</p>
-                                        <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                                        <p class="text-xs uppercase tracking-wide text-muted">Auto-detection not working?</p>
+                                        <p class="mt-1 text-xs text-muted">
                                             If Docker, Kubernetes, or Proxmox isn't detected automatically, add these flags to the install command:
                                         </p>
-                                        <ul class="mt-2 text-xs text-slate-600 dark:text-slate-400 list-disc list-inside space-y-1">
+                                        <ul class="mt-2 text-xs text-muted list-disc list-inside space-y-1">
                                             <li><code class="bg-slate-200 dark:bg-slate-700 px-1 rounded">--enable-docker</code> — Force enable Docker/Podman monitoring</li>
                                             <li><code class="bg-slate-200 dark:bg-slate-700 px-1 rounded">--enable-kubernetes</code> — Force enable Kubernetes monitoring</li>
                                             <li><code class="bg-slate-200 dark:bg-slate-700 px-1 rounded">--enable-proxmox</code> — Force enable Proxmox integration (creates API token)</li>
@@ -1316,15 +1316,15 @@ export const UnifiedAgents: Component = () => {
                     </Show>
 
                     {/* Uninstall section - always visible */}
-                    <div class="border-t border-slate-200 dark:border-slate-700 pt-4 mt-4">
+                    <div class="border-t border-border pt-4 mt-4">
                         <div class="space-y-3">
-                            <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Uninstall agent</h4>
-                            <p class="text-xs text-slate-600 dark:text-slate-400">
+                            <h4 class="text-sm font-semibold text-base-content">Uninstall agent</h4>
+                            <p class="text-xs text-muted">
                                 Run the appropriate command on your host to remove the Pulse agent:
                             </p>
                             {/* Linux/macOS uninstall */}
                             <div class="space-y-1">
-                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Linux / macOS / FreeBSD</span>
+                                <span class="text-xs font-medium text-muted">Linux / macOS / FreeBSD</span>
                                 <div class="relative">
                                     <button
                                         type="button"
@@ -1351,7 +1351,7 @@ export const UnifiedAgents: Component = () => {
                             </div>
                             {/* Windows uninstall */}
                             <div class="space-y-1">
-                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Windows (PowerShell as Administrator)</span>
+                                <span class="text-xs font-medium text-muted">Windows (PowerShell as Administrator)</span>
                                 <div class="relative">
                                     <button
                                         type="button"
@@ -1419,7 +1419,7 @@ export const UnifiedAgents: Component = () => {
 
                 <div class="flex flex-wrap items-end gap-3">
                     <div class="space-y-1">
-                        <label for="agent-filter-type" class="text-xs font-medium text-slate-600 dark:text-slate-400">Type</label>
+                        <label for="agent-filter-type" class="text-xs font-medium text-muted">Type</label>
                         <select
                             id="agent-filter-type"
                             value={filterType()}
@@ -1433,7 +1433,7 @@ export const UnifiedAgents: Component = () => {
                         </select>
                     </div>
                     <div class="space-y-1">
-                        <label for="agent-filter-status" class="text-xs font-medium text-slate-600 dark:text-slate-400">Status</label>
+                        <label for="agent-filter-status" class="text-xs font-medium text-muted">Status</label>
                         <select
                             id="agent-filter-status"
                             value={filterStatus()}
@@ -1446,7 +1446,7 @@ export const UnifiedAgents: Component = () => {
                         </select>
                     </div>
                     <div class="space-y-1">
-                        <label for="agent-filter-scope" class="text-xs font-medium text-slate-600 dark:text-slate-400">Scope</label>
+                        <label for="agent-filter-scope" class="text-xs font-medium text-muted">Scope</label>
                         <select
                             id="agent-filter-scope"
                             value={filterScope()}
@@ -1460,7 +1460,7 @@ export const UnifiedAgents: Component = () => {
                         </select>
                     </div>
                     <div class="min-w-[220px] flex-1 space-y-1">
-                        <label for="agent-filter-search" class="text-xs font-medium text-slate-600 dark:text-slate-400">Search</label>
+                        <label for="agent-filter-search" class="text-xs font-medium text-muted">Search</label>
                         <input
                             id="agent-filter-search"
                             type="text"
@@ -1483,7 +1483,7 @@ export const UnifiedAgents: Component = () => {
                     </button>
                 </div>
 
-                <div class="text-xs text-slate-500 dark:text-slate-400">
+                <div class="text-xs text-muted">
                     Showing {filteredRows().length} of {unifiedRows().length} records.
                 </div>
 
@@ -1506,11 +1506,11 @@ export const UnifiedAgents: Component = () => {
                                             class="text-left"
                                             onClick={() => toggleAgentDetails(row.rowKey)}
                                         >
-                                            <div class="text-sm font-medium text-slate-900 dark:text-slate-100">
+                                            <div class="text-sm font-medium text-base-content">
                                                 {row.name}
                                             </div>
                                             <Show when={row.displayName && row.hostname && row.displayName !== row.hostname}>
-                                                <div class="text-xs text-slate-500 dark:text-slate-400">
+                                                <div class="text-xs text-muted">
                                                     {row.hostname}
                                                 </div>
                                             </Show>
@@ -1595,7 +1595,7 @@ export const UnifiedAgents: Component = () => {
 
                                 return (
                                     <Show when={isActive() && !isKubernetes() && resolvedAgentId} fallback={
-                                        <span class="text-xs text-slate-400 dark:text-slate-500">N/A</span>
+                                        <span class="text-xs text-muted">N/A</span>
                                     }>
                                         <Show when={profiles().length > 0} fallback={
                                             <span class="text-slate-700 dark:text-slate-300" title={row.scope.detail}>
@@ -1624,7 +1624,7 @@ export const UnifiedAgents: Component = () => {
                                                     </For>
                                                 </select>
                                                 <Show when={isScopeUpdating()}>
-                                                    <span class="text-[10px] text-slate-400 dark:text-slate-500">Updating…</span>
+                                                    <span class="text-[10px] text-muted">Updating…</span>
                                                 </Show>
                                             </div>
                                         </Show>
@@ -1640,7 +1640,7 @@ export const UnifiedAgents: Component = () => {
 
                                 return (
                                     <Show when={isActive() && row.types.includes('host')} fallback={
-                                        <span class="text-xs text-slate-400 dark:text-slate-500">N/A</span>
+                                        <span class="text-xs text-muted">N/A</span>
                                     }>
                                         {(() => {
                                             const pending = pendingCommandConfig();
@@ -1693,14 +1693,14 @@ export const UnifiedAgents: Component = () => {
                                     }
                                     return row.lastSeen ? formatRelativeTime(row.lastSeen) : '—';
                                 };
-                                return <span class="text-xs text-slate-500 dark:text-slate-400">{lastSeenLabel()}</span>;
+                                return <span class="text-xs text-muted">{lastSeenLabel()}</span>;
                             }
                         },
                         {
                             key: 'version',
                             label: 'Version',
                             render: (row: UnifiedAgentRow) => (
-                                <span class="text-xs text-slate-500 dark:text-slate-400">{row.version || '—'}</span>
+                                <span class="text-xs text-muted">{row.version || '—'}</span>
                             )
                         },
                         {
@@ -1787,31 +1787,31 @@ export const UnifiedAgents: Component = () => {
                                                 </span>
                                             </Show>
                                         </div>
-                                        <div class="text-xs text-slate-500 dark:text-slate-400">
+                                        <div class="text-xs text-muted">
                                             ID: <span class="font-mono text-slate-700 dark:text-slate-200">{row.id}</span>
                                         </div>
                                         <Show when={row.agentId && row.agentId !== row.id}>
-                                            <div class="text-xs text-slate-500 dark:text-slate-400">
+                                            <div class="text-xs text-muted">
                                                 Agent ID: <span class="font-mono text-slate-700 dark:text-slate-200">{row.agentId}</span>
                                             </div>
                                         </Show>
                                         <Show when={row.linkedNodeId}>
-                                            <div class="text-xs text-slate-500 dark:text-slate-400">
+                                            <div class="text-xs text-muted">
                                                 Linked node ID: <span class="font-mono text-slate-700 dark:text-slate-200">{row.linkedNodeId}</span>
                                             </div>
                                         </Show>
                                         <Show when={row.status === 'active' && row.lastSeen}>
-                                            <div class="text-xs text-slate-500 dark:text-slate-400">
+                                            <div class="text-xs text-muted">
                                                 Last seen {formatRelativeTime(row.lastSeen)} ({formatAbsoluteTime(row.lastSeen)})
                                             </div>
                                         </Show>
                                         <Show when={row.status === 'removed' && row.removedAt}>
-                                            <div class="text-xs text-slate-500 dark:text-slate-400">
+                                            <div class="text-xs text-muted">
                                                 Removed {formatRelativeTime(row.removedAt)} ({formatAbsoluteTime(row.removedAt)})
                                             </div>
                                         </Show>
                                         <Show when={row.kubernetesInfo && (row.kubernetesInfo.server || row.kubernetesInfo.context || row.kubernetesInfo.tokenName)}>
-                                            <div class="space-y-1 text-xs text-slate-500 dark:text-slate-400">
+                                            <div class="space-y-1 text-xs text-muted">
                                                 <Show when={row.kubernetesInfo?.server}>
                                                     <div>Server: <span class="text-slate-700 dark:text-slate-200">{row.kubernetesInfo?.server}</span></div>
                                                 </Show>
@@ -1824,10 +1824,10 @@ export const UnifiedAgents: Component = () => {
                                             </div>
                                         </Show>
                                         <Show when={row.scope.category !== 'na'}>
-                                            <div class="text-xs text-slate-500 dark:text-slate-400">
+                                            <div class="text-xs text-muted">
                                                 Scope profile: <span class="text-slate-700 dark:text-slate-200">{row.scope.label}</span>
                                                 <Show when={row.scope.detail}>
-                                                    <span class="ml-1 text-slate-400 dark:text-slate-500">{row.scope.detail}</span>
+                                                    <span class="ml-1 text-muted">{row.scope.detail}</span>
                                                 </Show>
                                             </div>
                                             <Show when={assignment()}>
@@ -1845,7 +1845,7 @@ export const UnifiedAgents: Component = () => {
                                         </Show>
                                     </div>
                                     <div class="space-y-2 md:justify-self-end">
-                                        <div class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                        <div class="text-xs uppercase tracking-wide text-muted">
                                             Utilities
                                         </div>
                                         <div class="flex flex-col gap-2">

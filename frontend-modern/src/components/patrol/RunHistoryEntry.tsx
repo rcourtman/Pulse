@@ -134,15 +134,15 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
   return (
     <div class={`rounded-md border transition-colors ${props.selected
       ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900'
-      : 'border-slate-200 dark:border-slate-700'
+      : 'border-border'
       }`}>
       <button
         type="button"
         onClick={() => props.onSelect(props.selected ? null : run)}
-        class={`w-full text-left px-3 py-2 rounded-md transition-colors ${!props.selected ? 'hover:bg-slate-50 dark:hover:bg-slate-700' : ''}`}
+        class={`w-full text-left px-3 py-2 rounded-md transition-colors ${!props.selected ? 'hover:bg-surface-hover' : ''}`}
       >
-        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-          <span class="text-slate-900 dark:text-slate-100 font-medium">
+        <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
+          <span class="text-base-content font-medium">
             {formatRelativeTime(run.started_at, { compact: true })}
           </span>
           <span class={`px-1.5 py-0.5 rounded ${run.status === 'critical'
@@ -169,7 +169,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
             <span>• {run.new_findings} new</span>
           </Show>
           <Show when={run.rejected_findings}>
-            <span class="text-slate-400 dark:text-slate-500">• {run.rejected_findings} rejected</span>
+            <span class="text-muted">• {run.rejected_findings} rejected</span>
           </Show>
         </div>
       </button>
@@ -200,8 +200,8 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           <Show when={run.resources_checked > 0}>
             <div class="mt-3">
               <div class="flex items-center gap-1.5 mb-2">
-                <SearchIcon class="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
-                <span class="text-[10px] font-semibold tracking-wider uppercase text-slate-500 dark:text-slate-400">
+                <SearchIcon class="w-3.5 h-3.5 text-muted" />
+                <span class="text-[10px] font-semibold tracking-wider uppercase text-muted">
                   Resources Scanned ({run.resources_checked})
                 </span>
               </div>
@@ -253,8 +253,8 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           {/* Section 3: Outcomes */}
           <div class="mt-3">
             <div class="flex items-center gap-1.5 mb-2">
-              <ShieldAlertIcon class="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
-              <span class="text-[10px] font-semibold tracking-wider uppercase text-slate-500 dark:text-slate-400">
+              <ShieldAlertIcon class="w-3.5 h-3.5 text-muted" />
+              <span class="text-[10px] font-semibold tracking-wider uppercase text-muted">
                 Outcomes
               </span>
             </div>
@@ -293,7 +293,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           </div>
 
           {/* Section 4: AI Effort Bar */}
-          <div class="mt-3 flex flex-wrap items-center gap-3 px-3 py-2 rounded-md bg-slate-50 dark:bg-slate-800 text-xs text-slate-500 dark:text-slate-400">
+          <div class="mt-3 flex flex-wrap items-center gap-3 px-3 py-2 rounded-md bg-slate-50 dark:bg-slate-800 text-xs text-muted">
             <Show when={formatDurationMs(run.duration_ms)}>
               <span class="inline-flex items-center gap-1">
                 <ClockIcon class="w-3.5 h-3.5" /> {formatDurationMs(run.duration_ms)}
@@ -321,8 +321,8 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
             <div class="mt-3">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1.5">
-                  <BrainCircuitIcon class="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
-                  <span class="text-[10px] font-semibold tracking-wider uppercase text-slate-500 dark:text-slate-400">
+                  <BrainCircuitIcon class="w-3.5 h-3.5 text-muted" />
+                  <span class="text-[10px] font-semibold tracking-wider uppercase text-muted">
                     Patrol Analysis
                   </span>
                 </div>

@@ -1099,8 +1099,8 @@ function App() {
       <Show
         when={!isLoading()}
         fallback={
-          <div class="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900">
-            <div class="text-slate-600 dark:text-slate-400">Loading...</div>
+          <div class="min-h-screen flex items-center justify-center bg-base">
+            <div class="text-muted">Loading...</div>
           </div>
         }
       >
@@ -1110,8 +1110,8 @@ function App() {
             <Show when={!needsAuth()} fallback={<Login onLogin={handleLogin} hasAuth={hasAuth()} securityStatus={securityStatus() ?? undefined} />}>
               <ErrorBoundary>
                 <Show when={enhancedStore()} fallback={
-                  <div class="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900">
-                    <div class="text-slate-600 dark:text-slate-400">Initializing...</div>
+                  <div class="min-h-screen flex items-center justify-center bg-base">
+                    <div class="text-muted">Initializing...</div>
                   </div>
                 }>
                   <WebSocketContext.Provider value={enhancedStore()!}>
@@ -1129,7 +1129,7 @@ function App() {
                       <div class="flex h-screen overflow-hidden">
                         {/* Main content area - shrinks when AI panel is open, scrolls independently */}
                         <div
-                          class={`app-scroll-shell flex-1 min-w-0 overflow-y-scroll bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans py-4 sm:py-6 transition-all duration-300`}
+                          class={`app-scroll-shell flex-1 min-w-0 overflow-y-scroll bg-base text-base-content font-sans py-4 sm:py-6 transition-all duration-300`}
                         >
                           <AppLayout
                             connected={connected}
@@ -1172,7 +1172,7 @@ function App() {
             </Show>
           }
         >
-          <div class="min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans">
+          <div class="min-h-screen bg-base text-base-content font-sans">
             <div class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
               {props.children}
             </div>
@@ -2053,10 +2053,10 @@ function AppLayout(props: {
       {/* Main Content */}
       <main
         id="main"
-        class="tab-content block bg-white dark:bg-slate-800 rounded-b rounded-tr rounded-tl shadow mb-2"
+        class="tab-content block bg-surface rounded-b rounded-tr rounded-tl shadow mb-2"
       >
         <div class="pulse-panel">
-          <Suspense fallback={<div class="p-6 text-sm text-slate-500 dark:text-slate-400">Loading view...</div>}>
+          <Suspense fallback={<div class="p-6 text-sm text-muted">Loading view...</div>}>
             {props.children}
           </Suspense>
         </div>
@@ -2074,7 +2074,7 @@ function AppLayout(props: {
 
       {/* Footer - hidden in kiosk mode */}
       <Show when={!kioskMode()}>
-        <footer class="px-4 py-4 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+        <footer class="px-4 py-4 text-xs leading-relaxed text-muted">
           <div class="text-center">
             <span>Pulse | Version: </span>
             <a

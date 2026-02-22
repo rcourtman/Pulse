@@ -344,7 +344,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
         <div class="space-y-3 w-full">
           {/* Quick Actions Bar */}
           <div class="flex flex-col gap-2 rounded border border-slate-200 px-3 py-3 text-xs dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
-            <div class="text-slate-600 dark:text-slate-400 sm:text-sm">
+            <div class="text-muted sm:text-sm">
               {props.webhooks.filter((w) => w.enabled).length} of {props.webhooks.length} webhooks
               enabled
             </div>
@@ -369,7 +369,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
             {(webhook) => (
               <div class="w-full px-3 py-3 border border-slate-200 text-xs dark:border-slate-700 sm:text-sm">
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                  <span class="font-medium text-slate-800 dark:text-slate-200">{webhook.name}</span>
+                  <span class="font-medium text-base-content">{webhook.name}</span>
                   <button
                     onClick={() => props.onUpdate({ ...webhook, enabled: !webhook.enabled })}
                     class={`rounded border px-3 py-1 text-xs font-medium transition-colors ${webhook.enabled
@@ -380,7 +380,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                     {webhook.enabled ? 'Enabled' : 'Disabled'}
                   </button>
                 </div>
-                <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-600 dark:text-slate-400 sm:text-xs">
+                <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-muted sm:text-xs">
                   <span class="rounded bg-slate-200 px-2 py-0.5 text-slate-700 dark:bg-slate-600 dark:text-slate-200">
                     {serviceName(webhook.service || 'generic')}
                   </span>
@@ -391,7 +391,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                     ID: {webhook.id || '—'}
                   </span>
                 </div>
-                <p class="mt-2 break-all text-[11px] font-mono text-slate-500 dark:text-slate-400 sm:text-xs">
+                <p class="mt-2 break-all text-[11px] font-mono text-muted sm:text-xs">
                   {webhook.url}
                 </p>
                 <div class="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-2 dark:border-slate-700 sm:justify-end w-full">
@@ -440,7 +440,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
             </div>
 
             <Show when={showServiceDropdown()}>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-2 border border-slate-200 dark:border-slate-700 px-3 py-2 mb-3 text-xs">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2 border border-border px-3 py-2 mb-3 text-xs">
                 <For
                   each={[
                     'generic',
@@ -462,13 +462,13 @@ export function WebhookConfig(props: WebhookConfigProps) {
                       onClick={() => selectService(service)}
                       class={`px-2 py-1.5 text-left border transition-colors text-xs ${formData().service === service
                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
-                        : 'border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'
+                        : 'border-slate-300 dark:border-slate-600 hover:bg-surface-hover'
                         }`}
                     >
-                      <div class="font-medium text-xs text-slate-800 dark:text-slate-200">
+                      <div class="font-medium text-xs text-base-content">
                         {serviceName(service)}
                       </div>
-                      <div class="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
+                      <div class="text-[11px] text-muted mt-1">
                         {service === 'generic'
                           ? 'Custom webhook endpoint'
                           : service === 'discord'
@@ -565,7 +565,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
             <div class={formField}>
               <label class={labelClass('flex items-center gap-2')}>
                 Mention
-                <span class="text-xs text-slate-500 dark:text-slate-400">
+                <span class="text-xs text-muted">
                   Optional — tag users or groups
                 </span>
               </label>
@@ -596,7 +596,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
             <div class={formField}>
               <label class={labelClass('flex items-center gap-2')}>
                 Custom payload template (JSON)
-                <span class="text-xs text-slate-500 dark:text-slate-400">
+                <span class="text-xs text-muted">
                   Optional — leave empty to use default
                 </span>
               </label>
@@ -628,7 +628,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
             <div class={formField}>
               <label class={labelClass('flex items-center gap-2')}>
                 Custom fields
-                <span class="text-xs text-slate-500 dark:text-slate-400">
+                <span class="text-xs text-muted">
                   Available as{' '}
                   <code class="font-mono text-[11px] text-slate-600 dark:text-slate-300">
                     {'{{.CustomFields.<name>}}'}
@@ -642,7 +642,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                     <div class="flex gap-2 text-xs">
                       <div class="flex flex-1 flex-col gap-1">
                         <Show when={field().label}>
-                          <span class="text-[11px] text-slate-500 dark:text-slate-400">
+                          <span class="text-[11px] text-muted">
                             {field().label}
                           </span>
                         </Show>
@@ -710,7 +710,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                   + Add custom field
                 </button>
               </div>
-              <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              <p class="mt-2 text-xs text-muted">
                 Need Pushover? Provide your Application Token and User Key here.
               </p>
             </div>
@@ -720,7 +720,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
           <div class={formField}>
             <label class={labelClass('flex items-center gap-2')}>
               Custom headers
-              <span class="text-xs text-slate-500 dark:text-slate-400">
+              <span class="text-xs text-muted">
                 Add authentication tokens or custom headers
               </span>
             </label>
@@ -786,7 +786,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                 + Add header
               </button>
             </div>
-            <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            <p class="mt-2 text-xs text-muted">
               Common headers: Authorization (Bearer token), X-API-Key, X-Auth-Token
             </p>
           </div>

@@ -65,7 +65,7 @@ export function getMetricColorHex(value: number, metric: MetricType): string {
 const TEXT_CLASSES: Record<MetricSeverity, string> = {
   critical: 'text-red-600 dark:text-red-400',
   warning: 'text-yellow-600 dark:text-yellow-400',
-  normal: 'text-slate-500 dark:text-slate-400',
+  normal: 'text-muted',
 };
 
 export function getMetricTextColorClass(value: number, metric: MetricType): string {

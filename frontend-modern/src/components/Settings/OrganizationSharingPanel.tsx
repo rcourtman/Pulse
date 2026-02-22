@@ -308,7 +308,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
             when={!loading()}
             fallback={
               <div class="space-y-5 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                <div class="rounded-md border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                <div class="rounded-md border border-border p-4 space-y-3">
                   <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
 
                   <div class="grid gap-3 lg:grid-cols-2">
@@ -322,7 +322,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                     </div>
                   </div>
 
-                  <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+                  <div class="rounded-md border border-border p-3 space-y-2">
                     <div class="h-3 w-32 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                     <div class="h-10 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                   </div>
@@ -343,10 +343,10 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
 
                 <div class="space-y-2">
                   <div class="h-4 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                  <div class="overflow-hidden rounded-md border border-slate-200 dark:border-slate-700">
+                  <div class="overflow-hidden rounded-md border border-border">
                     <div class="h-10 w-full animate-pulse bg-slate-100 dark:bg-slate-800" />
                     {Array.from({ length: 3 }).map(() => (
-                      <div class="border-t border-slate-100 dark:border-slate-800 px-3 py-3">
+                      <div class="border-t border-border-subtle px-3 py-3">
                         <div class="flex items-center gap-3">
                           <div class="h-4 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                           <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
@@ -360,10 +360,10 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
 
                 <div class="space-y-2">
                   <div class="h-4 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                  <div class="overflow-hidden rounded-md border border-slate-200 dark:border-slate-700">
+                  <div class="overflow-hidden rounded-md border border-border">
                     <div class="h-10 w-full animate-pulse bg-slate-100 dark:bg-slate-800" />
                     {Array.from({ length: 3 }).map(() => (
-                      <div class="border-t border-slate-100 dark:border-slate-800 px-3 py-3">
+                      <div class="border-t border-border-subtle px-3 py-3">
                         <div class="flex items-center gap-3">
                           <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                           <div class="h-4 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
@@ -379,12 +379,12 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
           >
             <Show when={canManageOrg(org(), props.currentUser)}>
               <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                <div class="rounded-md border border-slate-200 dark:border-slate-700 p-4 space-y-3">
-                  <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Create Share</h4>
+                <div class="rounded-md border border-border p-4 space-y-3">
+                  <h4 class="text-sm font-semibold text-base-content">Create Share</h4>
 
                   <div class="grid gap-3 lg:grid-cols-2">
                     <label class="space-y-1">
-                      <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      <span class="text-xs font-medium uppercase tracking-wide text-muted">
                         Target Organization
                       </span>
                       <select
@@ -404,7 +404,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                     </label>
 
                     <label class="space-y-1">
-                      <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      <span class="text-xs font-medium uppercase tracking-wide text-muted">
                         Access Role
                       </span>
                       <select
@@ -458,14 +458,14 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                   <Show
                     when={unifiedResourceOptions().length === 0 || manualEntryExpanded()}
                     fallback={
-                      <p class="text-xs text-slate-500 dark:text-slate-400">
+                      <p class="text-xs text-muted">
                         Manual entry is hidden while quick pick is active.
                       </p>
                     }
                   >
                     <div class="grid gap-3 lg:grid-cols-3">
                       <label class="space-y-1">
-                        <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        <span class="text-xs font-medium uppercase tracking-wide text-muted">
                           Resource Type
                         </span>
                         <input
@@ -482,7 +482,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                       </label>
 
                       <label class="space-y-1">
-                        <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        <span class="text-xs font-medium uppercase tracking-wide text-muted">
                           Resource ID
                         </span>
                         <input
@@ -499,7 +499,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                       </label>
 
                       <label class="space-y-1">
-                        <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        <span class="text-xs font-medium uppercase tracking-wide text-muted">
                           Resource Name
                         </span>
                         <input
@@ -536,7 +536,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
             </Show>
 
             <div class="space-y-2 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-              <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Outgoing Shares</h4>
+              <h4 class="text-sm font-semibold text-base-content">Outgoing Shares</h4>
               <div class="mt-4 -mx-4 sm:mx-0 overflow-x-auto w-full">
                 <PulseDataGrid
                   data={outgoingShares()}
@@ -546,8 +546,8 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                       label: 'Resource',
                       render: (share) => (
                         <div class="flex flex-col">
-                          <span class="text-slate-900 dark:text-slate-100">{share.resourceName || share.resourceId}</span>
-                          <span class="text-xs text-slate-500 dark:text-slate-400">
+                          <span class="text-base-content">{share.resourceName || share.resourceId}</span>
+                          <span class="text-xs text-muted">
                             {share.resourceType}:{share.resourceId}
                           </span>
                         </div>
@@ -573,7 +573,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                     {
                       key: 'createdAt',
                       label: 'Created',
-                      render: (share) => <span class="text-slate-600 dark:text-slate-400">{formatOrgDate(share.createdAt)}</span>
+                      render: (share) => <span class="text-muted">{formatOrgDate(share.createdAt)}</span>
                     },
                     {
                       key: 'actions',
@@ -605,7 +605,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
             </div>
 
             <div class="space-y-2 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-              <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Incoming Shares</h4>
+              <h4 class="text-sm font-semibold text-base-content">Incoming Shares</h4>
               <div class="mt-4 -mx-4 sm:mx-0 overflow-x-auto w-full">
                 <PulseDataGrid
                   data={incomingShares()}
@@ -620,8 +620,8 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                       label: 'Resource',
                       render: (share) => (
                         <div class="flex flex-col">
-                          <span class="text-slate-900 dark:text-slate-100">{share.resourceName || share.resourceId}</span>
-                          <span class="text-xs text-slate-500 dark:text-slate-400">
+                          <span class="text-base-content">{share.resourceName || share.resourceId}</span>
+                          <span class="text-xs text-muted">
                             {share.resourceType}:{share.resourceId}
                           </span>
                         </div>
@@ -642,7 +642,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                     {
                       key: 'createdAt',
                       label: 'Shared',
-                      render: (share) => <span class="text-slate-600 dark:text-slate-400">{formatOrgDate(share.createdAt)}</span>
+                      render: (share) => <span class="text-muted">{formatOrgDate(share.createdAt)}</span>
                     }
                   ]}
                   keyExtractor={(share) => share.id}

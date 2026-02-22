@@ -88,7 +88,7 @@ export const TagBadges: Component<TagBadgesProps> = (props) => {
               hideTooltip();
             }}
           >
-            <div class="inline-flex items-center text-[10px] text-slate-500 dark:text-slate-400 whitespace-nowrap leading-none cursor-pointer hover:text-slate-700 dark:hover:text-slate-300 hover:scale-125 transition-transform duration-200 ease-out">
+            <div class="inline-flex items-center text-[10px] text-muted whitespace-nowrap leading-none cursor-pointer hover:text-slate-700 dark:hover:text-slate-300 hover:scale-125 transition-transform duration-200 ease-out">
               +{hiddenTags().length}
             </div>
           </div>

@@ -22,9 +22,9 @@ export const SparklineSkeleton: Component<SparklineSkeletonProps> = (props) => {
                 {/* Center line / chart placeholder */}
                 <div class="h-full w-full relative flex items-center justify-center border-l border-b border-transparent">
                     {/* Subtle grid lines */}
-                    <div class="absolute w-full top-[25%] border-t border-slate-100 dark:border-slate-800" />
-                    <div class="absolute w-full top-[50%] border-t border-slate-200 dark:border-slate-700" />
-                    <div class="absolute w-full top-[75%] border-t border-slate-100 dark:border-slate-800" />
+                    <div class="absolute w-full top-[25%] border-t border-border-subtle" />
+                    <div class="absolute w-full top-[50%] border-t border-border" />
+                    <div class="absolute w-full top-[75%] border-t border-border-subtle" />
 
                     {/* Animated line representing the graph */}
                     <svg

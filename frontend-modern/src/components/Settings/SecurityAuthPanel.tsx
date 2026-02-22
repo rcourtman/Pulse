@@ -164,8 +164,8 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
                 </button>
               </Show>
             </div>
-            <div class="text-xs text-slate-600 dark:text-slate-400">
-              <span class="font-medium text-slate-800 dark:text-slate-200">User:</span>{' '}
+            <div class="text-xs text-muted">
+              <span class="font-medium text-base-content">User:</span>{' '}
               {props.securityStatus()?.authUsername || 'Not configured'}
             </div>
           </div>
@@ -230,8 +230,8 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
                 After restarting, you'll need to log in with your saved credentials.
               </p>
 
-              <div class="mt-4 bg-white dark:bg-slate-800 rounded-md p-3 border border-amber-200 dark:border-amber-700">
-                <p class="text-xs font-semibold text-slate-900 dark:text-slate-100 mb-2">
+              <div class="mt-4 bg-surface rounded-md p-3 border border-amber-200 dark:border-amber-700">
+                <p class="text-xs font-semibold text-base-content mb-2">
                   How to restart Pulse:
                 </p>
 
@@ -242,7 +242,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
                       <code class="px-1 py-0.5 bg-slate-100 dark:bg-slate-700 rounded">update</code>{' '}
                       in your ProxmoxVE console
                     </p>
-                    <p class="text-xs text-slate-600 dark:text-slate-400 italic">
+                    <p class="text-xs text-muted italic">
                       Or restart manually with: <code class="text-xs">systemctl restart pulse</code>
                     </p>
                   </div>

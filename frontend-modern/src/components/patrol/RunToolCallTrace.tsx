@@ -42,7 +42,7 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
 
   return (
     <Show when={props.toolCallCount > 0}>
-      <div class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+      <div class="mt-3 pt-3 border-t border-border">
         <button
           type="button"
           onClick={() => setExpanded(!expanded())}
@@ -61,7 +61,7 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
 
         <Show when={expanded()}>
           <Show when={toolCalls.loading}>
-            <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 py-2 mt-2">
+            <div class="flex items-center gap-2 text-xs text-muted py-2 mt-2">
               <span class="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
               Loading tool calls...
             </div>
@@ -71,17 +71,17 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
             <div class="mt-2 space-y-1">
               <For each={toolCalls()}>
                 {(call: ToolCallRecord, index) => (
-                  <div class="border border-slate-200 dark:border-slate-700 rounded">
+                  <div class="border border-border rounded">
                     <button
                       type="button"
                       onClick={() => setExpandedCall(expandedCall() === call.id ? null : call.id)}
                       class="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-800"
                     >
                       <div class="flex items-center gap-2 min-w-0">
-                        <span class="text-slate-400 dark:text-slate-500 font-mono w-5 text-right flex-shrink-0">
+                        <span class="text-muted font-mono w-5 text-right flex-shrink-0">
                           {index() + 1}.
                         </span>
-                        <span class="font-medium text-slate-800 dark:text-slate-200 font-mono truncate">
+                        <span class="font-medium text-base-content font-mono truncate">
                           {call.tool_name}
                         </span>
                       </div>
@@ -93,26 +93,26 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
                         }`}>
                           {call.success ? 'success' : 'failed'}
                         </span>
-                        <span class="text-slate-400 dark:text-slate-500 font-mono">
+                        <span class="text-muted font-mono">
                           {call.duration_ms}ms
                         </span>
                       </div>
                     </button>
 
                     <Show when={expandedCall() === call.id}>
-                      <div class="border-t border-slate-200 dark:border-slate-700 p-2 space-y-2">
+                      <div class="border-t border-border p-2 space-y-2">
                         <Show when={call.input}>
                           <div>
-                            <div class="text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-1">Input</div>
-                            <pre class="text-[11px] font-mono bg-slate-50 dark:bg-slate-900 rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap text-slate-700 dark:text-slate-300">
+                            <div class="text-[10px] font-medium text-muted mb-1">Input</div>
+                            <pre class="text-[11px] font-mono bg-base rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap text-slate-700 dark:text-slate-300">
                               {truncate(call.input, 500)}
                             </pre>
                           </div>
                         </Show>
                         <Show when={call.output}>
                           <div>
-                            <div class="text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-1">Output</div>
-                            <pre class="text-[11px] font-mono bg-slate-50 dark:bg-slate-900 rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap text-slate-700 dark:text-slate-300">
+                            <div class="text-[10px] font-medium text-muted mb-1">Output</div>
+                            <pre class="text-[11px] font-mono bg-base rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap text-slate-700 dark:text-slate-300">
                               {truncate(call.output, 500)}
                             </pre>
                           </div>
@@ -126,7 +126,7 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
           </Show>
 
           <Show when={!toolCalls.loading && (!toolCalls() || toolCalls()!.length === 0)}>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">
+            <p class="text-xs text-muted mt-2">
               Tool call details not available for this run.
             </p>
           </Show>

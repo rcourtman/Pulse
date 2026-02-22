@@ -2127,10 +2127,10 @@ const Settings: Component<SettingsProps> = (props) => {
       <div class="space-y-6">
         {/* Page header - no card wrapper for cleaner hierarchy */}
         <div class="px-1">
-          <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+          <h1 class="text-2xl font-bold text-base-content mb-2">
             {headerMeta().title}
           </h1>
-          <p class="text-base text-gray-600 dark:text-gray-400">{headerMeta().description}</p>
+          <p class="text-base text-muted">{headerMeta().description}</p>
         </div>
 
         {/* Save notification bar - only show when there are unsaved changes */}
@@ -2192,7 +2192,7 @@ const Settings: Component<SettingsProps> = (props) => {
         <Card padding="none" class="relative flex lg:flex-row overflow-hidden min-h-[600px]">
           {/* Settings Sidebar / Mobile Drill-Down Menu */}
           <div
-            class={`${isMobileMenuOpen() ? 'flex flex-col w-full' : 'hidden lg:flex lg:flex-col'} ${sidebarCollapsed() ? 'lg:w-16 lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-200 bg-white dark:bg-gray-900 lg:bg-transparent z-10`}
+            class={`${isMobileMenuOpen() ? 'flex flex-col w-full' : 'hidden lg:flex lg:flex-col'} ${sidebarCollapsed() ? 'lg:w-16 lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-border lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-200 bg-white dark:bg-gray-900 lg:bg-transparent z-10`}
             aria-label="Settings navigation"
             aria-expanded={!sidebarCollapsed()}
           >
@@ -2200,8 +2200,8 @@ const Settings: Component<SettingsProps> = (props) => {
               class={`sticky top-0 ${sidebarCollapsed() ? 'px-2' : 'px-4'} py-5 space-y-5 transition-all duration-200`}
             >
               <Show when={!sidebarCollapsed()}>
-                <div class="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-gray-700">
-                  <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Settings</h2>
+                <div class="flex items-center justify-between pb-2 border-b border-border">
+                  <h2 class="text-sm font-semibold text-base-content">Settings</h2>
                   <button
                     type="button"
                     onClick={() => setSidebarCollapsed(true)}
@@ -2252,11 +2252,11 @@ const Settings: Component<SettingsProps> = (props) => {
                         placeholder="Search settings..."
                         value={searchQuery()}
                         onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                        class="w-full pl-9 pr-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                        class="w-full pl-9 pr-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm text-base-content placeholder-gray-400"
                       />
                       <Show when={!searchQuery()}>
                         <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:flex items-center">
-                          <kbd class="px-1.5 py-0.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">Any key</kbd>
+                          <kbd class="px-1.5 py-0.5 text-[10px] font-semibold text-muted bg-gray-100 dark:bg-gray-800 rounded border border-border">Any key</kbd>
                         </div>
                       </Show>
                     </div>
@@ -2264,7 +2264,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 </Show>
 
                 <Show when={searchQuery().trim().length > 0 && filteredTabGroups().length === 0}>
-                  <div class="py-4 px-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                  <div class="py-4 px-4 text-center text-sm text-muted">
                     No settings found for "{searchQuery()}"
                   </div>
                 </Show>
@@ -2274,7 +2274,7 @@ const Settings: Component<SettingsProps> = (props) => {
                     return (
                       <div class="mb-6 lg:mb-2 lg:space-y-2">
                         <Show when={!sidebarCollapsed()}>
-                          <p class="px-4 lg:px-0 mb-2 lg:mb-0 text-[13px] lg:text-xs font-[500] uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                          <p class="px-4 lg:px-0 mb-2 lg:mb-0 text-[13px] lg:text-xs font-[500] uppercase tracking-wider text-muted">
                             {group.label}
                           </p>
                         </Show>
@@ -2290,7 +2290,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   class={`group flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'justify-between'
                                     } lg:rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-4 py-3.5 lg:px-3 lg:py-2'
                                     } text-[15px] lg:text-sm font-medium transition-colors ${item.disabled
-                                      ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-500'
+                                      ? 'opacity-60 cursor-not-allowed text-muted'
                                       : isActive()
                                         ? 'lg:bg-blue-50 text-blue-600 dark:lg:bg-blue-900 dark:text-blue-300 lg:dark:text-blue-200 bg-white dark:bg-gray-900'
                                         : 'text-gray-700 lg:hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-gray-100 active:bg-gray-50 dark:active:bg-gray-800 lg:active:bg-transparent'
@@ -2303,7 +2303,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   title={sidebarCollapsed() ? item.label : undefined}
                                 >
                                   <div class="flex items-center gap-3.5 lg:gap-2.5 w-full">
-                                    <div class={`flex items-center justify-center rounded-md lg:rounded-none w-8 h-8 lg:w-auto lg:h-auto ${isActive() ? 'bg-blue-100 dark:bg-blue-900 lg:bg-transparent lg:dark:bg-transparent text-blue-600 dark:text-blue-400' : 'bg-gray-100 dark:bg-gray-800 lg:bg-transparent lg:dark:bg-transparent text-gray-500 dark:text-gray-400 lg:text-inherit'}`}>
+                                    <div class={`flex items-center justify-center rounded-md lg:rounded-none w-8 h-8 lg:w-auto lg:h-auto ${isActive() ? 'bg-blue-100 dark:bg-blue-900 lg:bg-transparent lg:dark:bg-transparent text-blue-600 dark:text-blue-400' : 'bg-gray-100 dark:bg-gray-800 lg:bg-transparent lg:dark:bg-transparent text-muted lg:text-inherit'}`}>
                                       <item.icon class="w-5 h-5 lg:w-4 lg:h-4" {...(item.iconProps || {})} />
                                     </div>
                                     <Show when={!sidebarCollapsed()}>
@@ -2332,7 +2332,7 @@ const Settings: Component<SettingsProps> = (props) => {
           {/* Settings Content Area */}
           <div class={`flex-1 overflow-hidden ${isMobileMenuOpen() ? 'hidden lg:block' : 'block animate-slideInRight lg:animate-none'}`}>
             <Show when={flatTabs.length > 0}>
-              <div class="lg:hidden sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95  border-b border-gray-100 dark:border-gray-800 px-3 py-2.5 flex items-center shadow-none">
+              <div class="lg:hidden sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95  border-b border-border-subtle px-3 py-2.5 flex items-center shadow-none">
                 <button
                   type="button"
                   onClick={() => setIsMobileMenuOpen(true)}
@@ -2343,7 +2343,7 @@ const Settings: Component<SettingsProps> = (props) => {
                   </svg>
                   Settings
                 </button>
-                <div class="ml-auto font-semibold text-gray-900 dark:text-gray-100 pr-3">
+                <div class="ml-auto font-semibold text-base-content pr-3">
                   <Show when={flatTabs.find(t => t.id === activeTab())}>
                     {(tab) => tab().label}
                   </Show>
@@ -2401,7 +2401,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 <div class="space-y-6 mt-6">
                   <div class="space-y-4">
                     <Show when={!initialLoadComplete()}>
-                      <div class="flex items-center justify-center rounded-md border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 py-12 text-sm text-gray-500 dark:text-gray-400">
+                      <div class="flex items-center justify-center rounded-md border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 py-12 text-sm text-muted">
                         Loading configuration...
                       </div>
                     </Show>
@@ -2409,7 +2409,7 @@ const Settings: Component<SettingsProps> = (props) => {
                       <Card padding="none" tone="glass">
                         <div class="px-3 py-4 sm:px-6 sm:py-6 space-y-4">
                           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                            <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+                            <h4 class="text-base font-semibold text-base-content">
                               Proxmox VE nodes
                             </h4>
                             <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
@@ -2418,7 +2418,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                 class="flex items-center gap-2 sm:gap-3"
                                 title="Enable automatic discovery of Proxmox servers on your network"
                               >
-                                <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                                <span class="text-xs sm:text-sm text-muted">
                                   Discovery
                                 </span>
                                 <Toggle
@@ -2443,7 +2443,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   }
                                   containerClass="gap-2"
                                   label={
-                                    <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                    <span class="text-xs font-medium text-muted">
                                       {discoveryEnabled() ? 'On' : 'Off'}
                                     </span>
                                   }
@@ -2532,12 +2532,12 @@ const Settings: Component<SettingsProps> = (props) => {
                           >
                             <div class="flex flex-col items-center justify-center py-12 px-4 text-center">
                               <div class="rounded-full bg-gray-100 dark:bg-gray-800 p-4 mb-4">
-                                <Server class="h-8 w-8 text-gray-400 dark:text-gray-500" />
+                                <Server class="h-8 w-8 text-muted" />
                               </div>
-                              <p class="text-base font-medium text-gray-900 dark:text-gray-100 mb-1">
+                              <p class="text-base font-medium text-base-content mb-1">
                                 No PVE nodes configured
                               </p>
-                              <p class="text-sm text-gray-500 dark:text-gray-400">
+                              <p class="text-sm text-muted">
                                 Add a Proxmox VE node to start monitoring your infrastructure
                               </p>
                             </div>
@@ -2549,7 +2549,7 @@ const Settings: Component<SettingsProps> = (props) => {
                     {/* Discovered PVE nodes - only show when discovery is enabled */}
                     <Show when={discoveryEnabled()}>
                       <div class="space-y-3">
-                        <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                        <div class="flex items-center gap-2 text-xs text-muted">
                           <Show when={discoveryScanStatus().scanning}>
                             <span class="flex items-center gap-2">
                               <Loader class="h-4 w-4 animate-spin" />
@@ -2606,7 +2606,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             discoveredNodes().filter((n) => n.type === 'pve').length === 0
                           }
                         >
-                          <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                          <div class="flex items-center gap-2 text-xs text-muted">
                             <Loader class="h-4 w-4 animate-spin" />
                             <span>
                               Waiting for responses… this can take up to a minute depending on your
@@ -2617,7 +2617,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         <For each={discoveredNodes().filter((n) => n.type === 'pve')}>
                           {(server) => (
                             <div
-                              class="bg-gray-50 dark:bg-gray-700 rounded-md p-4 border border-gray-200 dark:border-gray-600 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
+                              class="bg-surface-hover rounded-md p-4 border border-border opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
                               onClick={() => {
                                 // Pre-fill the modal with discovered server info
                                 setEditingNode({
@@ -2655,7 +2655,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                         <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400 rounded">
                                           Discovered
                                         </span>
-                                        <span class="text-xs text-gray-500 dark:text-gray-400">
+                                        <span class="text-xs text-muted">
                                           Click to configure
                                         </span>
                                       </div>
@@ -2691,7 +2691,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 <div class="space-y-6 mt-6">
                   <div class="space-y-4">
                     <Show when={!initialLoadComplete()}>
-                      <div class="flex items-center justify-center rounded-md border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 py-12 text-sm text-gray-500 dark:text-gray-400">
+                      <div class="flex items-center justify-center rounded-md border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 py-12 text-sm text-muted">
                         Loading configuration...
                       </div>
                     </Show>
@@ -2699,7 +2699,7 @@ const Settings: Component<SettingsProps> = (props) => {
                       <Card padding="none" tone="glass">
                         <div class="px-3 py-4 sm:px-6 sm:py-6 space-y-4">
                           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                            <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+                            <h4 class="text-base font-semibold text-base-content">
                               Proxmox Backup Server nodes
                             </h4>
                             <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
@@ -2708,7 +2708,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                 class="flex items-center gap-2 sm:gap-3"
                                 title="Enable automatic discovery of PBS servers on your network"
                               >
-                                <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                                <span class="text-xs sm:text-sm text-muted">
                                   Discovery
                                 </span>
                                 <Toggle
@@ -2733,7 +2733,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   }
                                   containerClass="gap-2"
                                   label={
-                                    <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                    <span class="text-xs font-medium text-muted">
                                       {discoveryEnabled() ? 'On' : 'Off'}
                                     </span>
                                   }
@@ -2820,12 +2820,12 @@ const Settings: Component<SettingsProps> = (props) => {
                           >
                             <div class="flex flex-col items-center justify-center py-12 px-4 text-center">
                               <div class="rounded-full bg-gray-100 dark:bg-gray-800 p-4 mb-4">
-                                <HardDrive class="h-8 w-8 text-gray-400 dark:text-gray-500" />
+                                <HardDrive class="h-8 w-8 text-muted" />
                               </div>
-                              <p class="text-base font-medium text-gray-900 dark:text-gray-100 mb-1">
+                              <p class="text-base font-medium text-base-content mb-1">
                                 No PBS nodes configured
                               </p>
-                              <p class="text-sm text-gray-500 dark:text-gray-400">
+                              <p class="text-sm text-muted">
                                 Add a Proxmox Backup Server to monitor your backups
                               </p>
                             </div>
@@ -2837,7 +2837,7 @@ const Settings: Component<SettingsProps> = (props) => {
                     {/* Discovered PBS nodes - only show when discovery is enabled */}
                     <Show when={discoveryEnabled()}>
                       <div class="space-y-3">
-                        <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                        <div class="flex items-center gap-2 text-xs text-muted">
                           <Show when={discoveryScanStatus().scanning}>
                             <span class="flex items-center gap-2">
                               <Loader class="h-4 w-4 animate-spin" />
@@ -2894,7 +2894,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             discoveredNodes().filter((n) => n.type === 'pbs').length === 0
                           }
                         >
-                          <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                          <div class="flex items-center gap-2 text-xs text-muted">
                             <Loader class="h-4 w-4 animate-spin" />
                             <span>
                               Waiting for responses… this can take up to a minute depending on your
@@ -2905,7 +2905,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         <For each={discoveredNodes().filter((n) => n.type === 'pbs')}>
                           {(server) => (
                             <div
-                              class="bg-gray-50 dark:bg-gray-700 rounded-md p-4 border border-gray-200 dark:border-gray-600 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
+                              class="bg-surface-hover rounded-md p-4 border border-border opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
                               onClick={() => {
                                 // Pre-fill the modal with discovered server info
                                 setEditingNode({
@@ -2943,7 +2943,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                         <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400 rounded">
                                           Discovered
                                         </span>
-                                        <span class="text-xs text-gray-500 dark:text-gray-400">
+                                        <span class="text-xs text-muted">
                                           Click to configure
                                         </span>
                                       </div>
@@ -2978,7 +2978,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 <div class="space-y-6 mt-6">
                   <div class="space-y-4">
                     <Show when={!initialLoadComplete()}>
-                      <div class="flex items-center justify-center rounded-md border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 py-12 text-sm text-gray-500 dark:text-gray-400">
+                      <div class="flex items-center justify-center rounded-md border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 py-12 text-sm text-muted">
                         Loading configuration...
                       </div>
                     </Show>
@@ -2987,7 +2987,7 @@ const Settings: Component<SettingsProps> = (props) => {
                       <Card padding="none" tone="glass">
                         <div class="px-3 py-4 sm:px-6 sm:py-6 space-y-4">
                           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                            <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+                            <h4 class="text-base font-semibold text-base-content">
                               Proxmox Mail Gateway nodes
                             </h4>
                             <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
@@ -2996,7 +2996,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                 class="flex items-center gap-2 sm:gap-3"
                                 title="Enable automatic discovery of PMG servers on your network"
                               >
-                                <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                                <span class="text-xs sm:text-sm text-muted">
                                   Discovery
                                 </span>
                                 <Toggle
@@ -3021,7 +3021,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   }
                                   containerClass="gap-2"
                                   label={
-                                    <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                    <span class="text-xs font-medium text-muted">
                                       {discoveryEnabled() ? 'On' : 'Off'}
                                     </span>
                                   }
@@ -3104,12 +3104,12 @@ const Settings: Component<SettingsProps> = (props) => {
                           <Show when={pmgNodes().length === 0}>
                             <div class="flex flex-col items-center justify-center py-12 px-4 text-center">
                               <div class="rounded-full bg-gray-100 dark:bg-gray-800 p-4 mb-4">
-                                <Mail class="h-8 w-8 text-gray-400 dark:text-gray-500" />
+                                <Mail class="h-8 w-8 text-muted" />
                               </div>
-                              <p class="text-base font-medium text-gray-900 dark:text-gray-100 mb-1">
+                              <p class="text-base font-medium text-base-content mb-1">
                                 No PMG nodes configured
                               </p>
-                              <p class="text-sm text-gray-500 dark:text-gray-400">
+                              <p class="text-sm text-muted">
                                 Add a Proxmox Mail Gateway node to start monitoring
                               </p>
                             </div>
@@ -3121,7 +3121,7 @@ const Settings: Component<SettingsProps> = (props) => {
                     {/* Discovered PMG nodes - only show when discovery is enabled */}
                     <Show when={discoveryEnabled()}>
                       <div class="space-y-3">
-                        <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                        <div class="flex items-center gap-2 text-xs text-muted">
                           <Show when={discoveryScanStatus().scanning}>
                             <span class="flex items-center gap-2">
                               <Loader class="h-4 w-4 animate-spin" />
@@ -3178,7 +3178,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             discoveredNodes().filter((n) => n.type === 'pmg').length === 0
                           }
                         >
-                          <div class="text-center py-6 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-md border-2 border-dashed border-gray-300 dark:border-gray-600">
+                          <div class="text-center py-6 text-muted bg-gray-50 dark:bg-gray-800 rounded-md border-2 border-dashed border-gray-300 dark:border-gray-600">
                             <svg
                               class="h-8 w-8 mx-auto mb-2 animate-pulse text-purple-500"
                               viewBox="0 0 24 24"
@@ -3227,7 +3227,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                     <polyline points="22,6 12,13 2,6"></polyline>
                                   </svg>
                                   <div class="flex-1 min-w-0">
-                                    <h4 class="font-medium text-gray-900 dark:text-gray-100 truncate">
+                                    <h4 class="font-medium text-base-content truncate">
                                       {server.hostname || `PMG at ${server.ip}`}
                                     </h4>
                                     <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
@@ -3237,7 +3237,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                       <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400 rounded">
                                         Discovered
                                       </span>
-                                      <span class="text-xs text-gray-500 dark:text-gray-400">
+                                      <span class="text-xs text-muted">
                                         Click to configure
                                       </span>
                                     </div>
@@ -3280,8 +3280,8 @@ const Settings: Component<SettingsProps> = (props) => {
                 <Card padding="lg" class="mb-6">
                   <div class="space-y-4">
                     <div class="space-y-1">
-                      <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Docker Settings</h3>
-                      <p class="text-sm text-gray-600 dark:text-gray-400">
+                      <h3 class="text-base font-semibold text-base-content">Docker Settings</h3>
+                      <p class="text-sm text-muted">
                         Server-wide settings for Docker container management.
                       </p>
                     </div>
@@ -3290,7 +3290,7 @@ const Settings: Component<SettingsProps> = (props) => {
                     <div class="flex items-start justify-between gap-4 p-4 rounded-md border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800">
                       <div class="flex-1 space-y-1">
                         <div class="flex items-center gap-2">
-                          <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          <span class="text-sm font-medium text-base-content">
                             Hide Docker Update Buttons
                           </span>
                           <Show when={disableDockerUpdateActionsLocked()}>
@@ -3302,12 +3302,12 @@ const Settings: Component<SettingsProps> = (props) => {
                             </span>
                           </Show>
                         </div>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                        <p class="text-xs text-muted">
                           When enabled, the "Update" button on Docker containers will be hidden across all views.
                           Update detection will still work, allowing you to see which containers have updates available.
                           Use this in production environments where you prefer Pulse to be read-only.
                         </p>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <p class="text-xs text-muted mt-1">
                           Can also be set via environment variable: <code class="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true</code>
                         </p>
                       </div>
@@ -3829,7 +3829,7 @@ const Settings: Component<SettingsProps> = (props) => {
             <div class="space-y-4">
               {/* Password Choice Section - Only show if auth is enabled */}
               <Show when={securityStatus()?.hasAuthentication}>
-                <div class="bg-gray-50 dark:bg-gray-900 rounded-md p-4 border border-gray-200 dark:border-gray-700">
+                <div class="bg-base rounded-md p-4 border border-border">
                   <div class="space-y-3">
                     <label class="flex items-start gap-3 cursor-pointer">
                       <input
@@ -3845,7 +3845,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
                           Use your login password
                         </div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        <div class="text-xs text-muted mt-0.5">
                           Use the same password you use to log into Pulse (recommended)
                         </div>
                       </div>
@@ -3862,7 +3862,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
                           Use a custom passphrase
                         </div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        <div class="text-xs text-muted mt-0.5">
                           Create a different passphrase for this backup
                         </div>
                       </div>
@@ -3940,7 +3940,7 @@ const Settings: Component<SettingsProps> = (props) => {
                     setExportPassphrase('');
                     setUseCustomPassphrase(false);
                   }}
-                  class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                  class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-surface-hover"
                 >
                   Cancel
                 </button>
@@ -3967,7 +3967,7 @@ const Settings: Component<SettingsProps> = (props) => {
             <SectionHeader title="API token required" size="md" class="mb-4" />
 
             <div class="space-y-4">
-              <p class="text-sm text-gray-600 dark:text-gray-400">
+              <p class="text-sm text-muted">
                 This Pulse instance requires an API token for export/import operations. Please enter
                 the API token configured on the server.
               </p>
@@ -3983,7 +3983,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 />
               </div>
 
-              <div class="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded p-2">
+              <div class="text-xs text-muted bg-gray-100 dark:bg-gray-700 rounded p-2">
                 <p class="font-semibold mb-1">The API token is set as an environment variable:</p>
                 <code class="block">API_TOKENS=token-for-export,token-for-automation</code>
               </div>
@@ -3996,7 +3996,7 @@ const Settings: Component<SettingsProps> = (props) => {
                   setShowApiTokenModal(false);
                   setApiTokenInput('');
                 }}
-                class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-surface-hover"
               >
                 Cancel
               </button>
@@ -4079,7 +4079,7 @@ const Settings: Component<SettingsProps> = (props) => {
                     setImportPassphrase('');
                     setImportFile(null);
                   }}
-                  class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                  class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-surface-hover"
                 >
                   Cancel
                 </button>

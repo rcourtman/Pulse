@@ -57,7 +57,7 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
                   {q.header}
                 </p>
               </Show>
-              <p class="text-sm font-medium text-slate-800 dark:text-slate-200">
+              <p class="text-sm font-medium text-base-content">
                 {q.question}
               </p>
 
@@ -66,7 +66,7 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
                   type="text"
                   value={answers()[q.id] || ''}
                   onInput={(e) => handleInputChange(q.id, e.currentTarget.value)}
-                  class="w-full px-3 py-2 text-sm border border-blue-200 dark:border-blue-700 rounded-md bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  class="w-full px-3 py-2 text-sm border border-blue-200 dark:border-blue-700 rounded-md bg-surface text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Type your answer..."
                   disabled={props.question.isAnswering}
                 />
@@ -83,13 +83,13 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
                         class={`w-full px-3 py-2 text-sm text-left rounded-md border transition-colors ${
                           answers()[q.id] === option.value
                             ? 'bg-blue-100 dark:bg-blue-800 border-blue-400 dark:border-blue-600 text-blue-800 dark:text-blue-200'
-                            : 'bg-white dark:bg-slate-800 border-blue-200 dark:border-blue-700 text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900'
+                            : 'bg-surface border-blue-200 dark:border-blue-700 text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900'
                         } ${props.question.isAnswering ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         <div class="flex flex-col gap-0.5">
                           <span>{option.label}</span>
                           <Show when={option.description}>
-                            <span class="text-[11px] text-slate-500 dark:text-slate-400">
+                            <span class="text-[11px] text-muted">
                               {option.description}
                             </span>
                           </Show>
@@ -113,7 +113,7 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
               props.question.isAnswering
                 ? 'bg-blue-400 text-white cursor-wait'
                 : !isValid()
-                ? 'bg-slate-300 dark:bg-slate-600 text-slate-500 dark:text-slate-400 cursor-not-allowed'
+                ? 'bg-slate-300 dark:bg-slate-600 text-muted cursor-not-allowed'
                 : 'bg-blue-500 hover:bg-blue-600 text-white shadow-sm hover:shadow-sm'
             }`}
           >

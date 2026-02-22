@@ -102,14 +102,14 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
               <div class="space-y-5">
                 <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {Array.from({ length: 4 }).map(() => (
-                    <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+                    <div class="rounded-md border border-border p-3 space-y-2">
                       <div class="h-3 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                       <div class="h-5 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                     </div>
                   ))}
                 </div>
 
-                <div class="space-y-3 rounded-md border border-slate-200 dark:border-slate-700 p-4">
+                <div class="space-y-3 rounded-md border border-border p-4">
                   <div class="h-4 w-36 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                   {Array.from({ length: 2 }).map(() => (
                     <div class="space-y-2">
@@ -124,7 +124,7 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
 
                 <div class="grid gap-3 sm:grid-cols-2">
                   {Array.from({ length: 2 }).map(() => (
-                    <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+                    <div class="rounded-md border border-border p-3 space-y-2">
                       <div class="h-3 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                       <div class="h-5 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                     </div>
@@ -139,33 +139,33 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
             }
           >
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
-              <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Plan Tier</p>
-              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
+            <div class="rounded-md border border-border p-3">
+              <p class="text-xs uppercase tracking-wide text-muted">Plan Tier</p>
+              <p class="mt-1 text-sm font-medium text-base-content">
                 {tierLabel[status()?.tier || 'free'] || status()?.tier || 'Free'}
               </p>
             </div>
-            <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
-              <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">License Status</p>
-              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
+            <div class="rounded-md border border-border p-3">
+              <p class="text-xs uppercase tracking-wide text-muted">License Status</p>
+              <p class="mt-1 text-sm font-medium text-base-content">
                 {status()?.valid ? (status()?.in_grace_period ? 'Grace Period' : 'Active') : 'No License'}
               </p>
             </div>
-            <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
-              <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Organizations</p>
-              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{orgCount()}</p>
+            <div class="rounded-md border border-border p-3">
+              <p class="text-xs uppercase tracking-wide text-muted">Organizations</p>
+              <p class="mt-1 text-sm font-medium text-base-content">{orgCount()}</p>
             </div>
-            <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
-              <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Members (Current Org)</p>
-              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{memberCount()}</p>
+            <div class="rounded-md border border-border p-3">
+              <p class="text-xs uppercase tracking-wide text-muted">Members (Current Org)</p>
+              <p class="mt-1 text-sm font-medium text-base-content">{memberCount()}</p>
             </div>
           </div>
 
-          <div class="space-y-3 rounded-md border border-slate-200 dark:border-slate-700 p-4">
-            <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Usage vs Plan Limits</h4>
+          <div class="space-y-3 rounded-md border border-border p-4">
+            <h4 class="text-sm font-semibold text-base-content">Usage vs Plan Limits</h4>
 
             <div class="space-y-1">
-              <div class="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
+              <div class="flex items-center justify-between text-xs text-muted">
                 <span>Nodes</span>
                 <span>
                   {props.nodeUsage}
@@ -183,7 +183,7 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
             </div>
 
             <div class="space-y-1">
-              <div class="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
+              <div class="flex items-center justify-between text-xs text-muted">
                 <span>Guests</span>
                 <span>
                   {props.guestUsage}
@@ -202,13 +202,13 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
           </div>
 
           <div class="grid gap-3 sm:grid-cols-2">
-            <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
-              <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Licensed Email</p>
-              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{status()?.email || 'Not configured'}</p>
+            <div class="rounded-md border border-border p-3">
+              <p class="text-xs uppercase tracking-wide text-muted">Licensed Email</p>
+              <p class="mt-1 text-sm font-medium text-base-content">{status()?.email || 'Not configured'}</p>
             </div>
-            <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
-              <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Renews / Expires</p>
-              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
+            <div class="rounded-md border border-border p-3">
+              <p class="text-xs uppercase tracking-wide text-muted">Renews / Expires</p>
+              <p class="mt-1 text-sm font-medium text-base-content">
                 {status()?.is_lifetime ? 'Never (Lifetime)' : formatDate(status()?.expires_at)}
               </p>
             </div>

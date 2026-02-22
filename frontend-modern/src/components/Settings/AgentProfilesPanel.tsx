@@ -255,7 +255,7 @@ export const AgentProfilesPanel: Component = () => {
                 <Card padding="lg">
                     <div class="flex items-center justify-center py-8">
                         <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
-                        <span class="ml-3 text-slate-600 dark:text-slate-400">Checking license...</span>
+                        <span class="ml-3 text-muted">Checking license...</span>
                     </div>
                 </Card>
             }
@@ -269,11 +269,11 @@ export const AgentProfilesPanel: Component = () => {
                                 <Crown class="w-5 h-5 text-amber-600 dark:text-amber-400" />
                             </div>
                             <div>
-                                <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100">Agent Profiles</h3>
-                                <p class="text-sm text-slate-600 dark:text-slate-400">Pro feature</p>
+                                <h3 class="text-base font-semibold text-base-content">Agent Profiles</h3>
+                                <p class="text-sm text-muted">Pro feature</p>
                             </div>
                         </div>
-                        <p class="text-sm text-slate-600 dark:text-slate-400">
+                        <p class="text-sm text-muted">
                             Create reusable configuration profiles for your agents. Manage settings like Docker monitoring,
                             logging levels, and reporting intervals from a central location.
                         </p>
@@ -313,7 +313,7 @@ export const AgentProfilesPanel: Component = () => {
                                         type="button"
                                         onClick={handleSuggest}
                                         title="Get AI-powered profile suggestions"
-                                        class="inline-flex min-h-10 sm:min-h-9 min-w-10 items-center gap-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700 sm:px-3 sm:py-2 sm:text-sm"
+                                        class="inline-flex min-h-10 sm:min-h-9 min-w-10 items-center gap-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-surface px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 transition-colors hover:bg-surface-hover sm:px-3 sm:py-2 sm:text-sm"
                                     >
                                         <Lightbulb class="w-3.5 h-3.5" />
                                         <span class="hidden sm:inline">Ideas</span>
@@ -331,7 +331,7 @@ export const AgentProfilesPanel: Component = () => {
                         </Show>
 
                         <Show when={!loading() && profiles().length === 0}>
-                            <div class="text-center py-8 text-slate-500 dark:text-slate-400">
+                            <div class="text-center py-8 text-muted">
                                 <Settings class="w-12 h-12 mx-auto mb-3 opacity-50" />
                                 <p class="text-sm">No profiles yet. Create one to get started.</p>
                             </div>
@@ -345,18 +345,18 @@ export const AgentProfilesPanel: Component = () => {
                                         {
                                             key: 'name',
                                             label: 'Name',
-                                            render: (profile) => <span class="font-medium text-slate-900 dark:text-slate-100">{profile.name}</span>
+                                            render: (profile) => <span class="font-medium text-base-content">{profile.name}</span>
                                         },
                                         {
                                             key: 'settings',
                                             label: 'Settings',
-                                            render: (profile) => <span class="text-slate-600 dark:text-slate-400">{getSettingsCount(profile)}</span>
+                                            render: (profile) => <span class="text-muted">{getSettingsCount(profile)}</span>
                                         },
                                         {
                                             key: 'agents',
                                             label: 'Agents',
                                             render: (profile) => (
-                                                <span class="inline-flex items-center gap-1 text-slate-600 dark:text-slate-400">
+                                                <span class="inline-flex items-center gap-1 text-muted">
                                                     <Users class="w-4 h-4" />
                                                     {getAssignmentCount(profile.id)}
                                                 </span>
@@ -406,7 +406,7 @@ export const AgentProfilesPanel: Component = () => {
                         bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
                     >
                         <Show when={connectedAgents().length === 0}>
-                            <div class="text-center py-8 text-slate-500 dark:text-slate-400">
+                            <div class="text-center py-8 text-muted">
                                 <Users class="w-12 h-12 mx-auto mb-3 opacity-50" />
                                 <p class="text-sm">No agents connected. Install an agent to assign profiles.</p>
                             </div>
@@ -422,11 +422,11 @@ export const AgentProfilesPanel: Component = () => {
                                             label: 'Agent',
                                             render: (agent) => (
                                                 <div>
-                                                    <span class="font-medium text-slate-900 dark:text-slate-100">
+                                                    <span class="font-medium text-base-content">
                                                         {agent.displayName || agent.hostname}
                                                     </span>
                                                     <Show when={agent.displayName && agent.hostname !== agent.displayName}>
-                                                        <span class="ml-2 text-xs text-slate-500 dark:text-slate-400">
+                                                        <span class="ml-2 text-xs text-muted">
                                                             ({agent.hostname})
                                                         </span>
                                                     </Show>
@@ -474,7 +474,7 @@ export const AgentProfilesPanel: Component = () => {
                                             label: 'Last Seen',
                                             hiddenOnMobile: true,
                                             render: (agent) => (
-                                                <span class="text-slate-600 dark:text-slate-400">
+                                                <span class="text-muted">
                                                     {agent.lastSeen ? formatRelativeTime(agent.lastSeen) : 'Never'}
                                                 </span>
                                             )
@@ -492,9 +492,9 @@ export const AgentProfilesPanel: Component = () => {
                     {/* Profile Modal */}
                     <Show when={showModal()}>
                         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
-                            <div class="w-full max-w-lg bg-white dark:bg-slate-900 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 mx-4">
-                                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                                    <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                            <div class="w-full max-w-lg bg-white dark:bg-slate-900 rounded-md shadow-sm border border-border mx-4">
+                                <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+                                    <h3 class="text-lg font-semibold text-base-content">
                                         {editingProfile() ? 'Edit Profile' : 'New Profile'}
                                     </h3>
                                     <button
@@ -545,7 +545,7 @@ export const AgentProfilesPanel: Component = () => {
 
                                         <For each={KNOWN_SETTINGS}>
                                             {(setting) => (
-                                                <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3 space-y-1">
+                                                <div class="rounded-md border border-border p-3 space-y-1">
                                                     <div class="flex items-center justify-between">
                                                         <label class="text-sm font-medium text-slate-700 dark:text-slate-300">
                                                             {setting.label}
@@ -611,14 +611,14 @@ export const AgentProfilesPanel: Component = () => {
                                                             />
                                                         </Show>
                                                     </div>
-                                                    <p class="text-xs text-slate-500 dark:text-slate-400">{setting.description}</p>
+                                                    <p class="text-xs text-muted">{setting.description}</p>
                                                 </div>
                                             )}
                                         </For>
 
                                         {/* Unknown Keys Section */}
                                         <Show when={unknownKeys().length > 0}>
-                                            <div class="pt-3 mt-3 border-t border-slate-200 dark:border-slate-700">
+                                            <div class="pt-3 mt-3 border-t border-border">
                                                 <p class="text-xs text-amber-600 dark:text-amber-400 mb-2">
                                                     Additional settings (not in standard list):
                                                 </p>
@@ -664,7 +664,7 @@ export const AgentProfilesPanel: Component = () => {
                                     </div>
                                 </div>
 
-                                <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 dark:border-slate-700">
+                                <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
                                     <button
                                         type="button"
                                         onClick={() => setShowModal(false)}

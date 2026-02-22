@@ -72,7 +72,7 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
       ? `rounded-md border border-slate-200 px-2.5 py-1 text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700 ${triggerBaseClasses}`
       : triggerVariant === 'link'
       ? `rounded px-1 py-0.5 text-slate-500 underline decoration-dotted underline-offset-4 transition-colors hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 ${triggerBaseClasses}`
-      : `flex h-5 w-5 items-center justify-center rounded-full text-slate-400 transition-colors hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-100 ${triggerBaseClasses}`;
+      : `flex h-5 w-5 items-center justify-center rounded-full text-slate-400 transition-colors hover:text-muted dark:hover:text-slate-100 ${triggerBaseClasses}`;
 
   const handleMouseEnter = () => {
     pointerInside = true;
@@ -131,7 +131,7 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
           class={`absolute ${popoverPositionClass} z-50 mt-2 w-72 overflow-hidden rounded-md border border-slate-200 bg-white text-left shadow-sm dark:border-slate-600 dark:bg-slate-800`}
         >
           <div class="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-700">
-            <span class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <span class="text-sm font-semibold text-base-content">
               {props.title ?? 'Search tips'}
             </span>
             <button
@@ -147,7 +147,7 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
           </div>
           <div class="px-3 py-3 text-xs text-slate-600 dark:text-slate-300">
             <Show when={props.intro}>
-              <p class="mb-3 text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
+              <p class="mb-3 text-[11px] uppercase tracking-wide text-muted">
                 {props.intro}
               </p>
             </Show>
@@ -158,7 +158,7 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
                     <code class="rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-700 dark:bg-slate-700 dark:text-slate-100">
                       {tip.code}
                     </code>
-                    <span class="text-[12px] leading-snug text-slate-500 dark:text-slate-400">
+                    <span class="text-[12px] leading-snug text-muted">
                       {tip.description}
                     </span>
                   </div>

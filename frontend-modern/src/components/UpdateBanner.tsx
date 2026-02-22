@@ -232,7 +232,7 @@ export function UpdateBanner() {
                         {(instruction, index) => (
                           <div class="bg-slate-50 dark:bg-slate-800 rounded border border-blue-200 dark:border-blue-700 p-2">
                             <div class="flex items-start justify-between gap-2">
-                              <code class="text-xs text-slate-800 dark:text-slate-200 font-mono flex-1 break-all">
+                              <code class="text-xs text-base-content font-mono flex-1 break-all">
                                 {instruction}
                               </code>
                               <button

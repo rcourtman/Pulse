@@ -21,7 +21,7 @@ export const TemperaturesCard: Component<TemperaturesCardProps> = (props) => {
         <For each={props.rows}>
           {(row) => (
             <div class="flex items-center justify-between gap-2 min-w-0">
-              <span class="text-slate-500 dark:text-slate-400 shrink-0">{row.label}</span>
+              <span class="text-muted shrink-0">{row.label}</span>
               <span class="font-medium text-slate-700 dark:text-slate-200 truncate" title={row.valueTitle || row.value}>{row.value}</span>
             </div>
           )}

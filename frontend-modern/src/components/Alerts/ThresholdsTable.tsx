@@ -2400,9 +2400,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           placeholder="Search resources... (Ctrl+F)"
           value={searchTerm()}
           onInput={(e) => setSearchTerm(e.currentTarget.value)}
-          class="w-full pl-10 pr-20 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          class="w-full pl-10 pr-20 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-surface text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         />
-        <kbd class="absolute right-10 top-2 hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700 rounded border border-slate-200 dark:border-slate-600">
+        <kbd class="absolute right-10 top-2 hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-muted bg-slate-100 dark:bg-slate-700 rounded border border-border">
           ⌘F
         </kbd>
         <svg
@@ -2481,7 +2481,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       </Show>
 
       {/* Tab Navigation */}
-      <div class="border-b border-slate-200 dark:border-slate-700">
+      <div class="border-b border-border">
         <nav class="-mb-px flex gap-4 sm:gap-6" aria-label="Tabs">
           <button
             type="button"
@@ -2751,8 +2751,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               <div class="grid grid-cols-1 gap-6 p-4 xl:grid-cols-3">
                 <Card padding="md" tone="card">
                   <div class="mb-2">
-                    <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Ignored Prefixes</h3>
-                    <p class="text-xs text-slate-600 dark:text-slate-400">Skip metrics for guests starting with:</p>
+                    <h3 class="text-sm font-semibold text-base-content">Ignored Prefixes</h3>
+                    <p class="text-xs text-muted">Skip metrics for guests starting with:</p>
                   </div>
                   <TagInput
                     tags={props.ignoredGuestPrefixes()}
@@ -2765,8 +2765,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 </Card>
                 <Card padding="md" tone="card">
                   <div class="mb-2">
-                    <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Tag Whitelist</h3>
-                    <p class="text-xs text-slate-600 dark:text-slate-400">Only monitor guests with at least one of these tags (leave empty to disable whitelist):</p>
+                    <h3 class="text-sm font-semibold text-base-content">Tag Whitelist</h3>
+                    <p class="text-xs text-muted">Only monitor guests with at least one of these tags (leave empty to disable whitelist):</p>
                   </div>
                   <TagInput
                     tags={props.guestTagWhitelist()}
@@ -2779,8 +2779,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 </Card>
                 <Card padding="md" tone="card">
                   <div class="mb-2">
-                    <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Tag Blacklist</h3>
-                    <p class="text-xs text-slate-600 dark:text-slate-400">Ignore guests with any of these tags:</p>
+                    <h3 class="text-sm font-semibold text-base-content">Tag Blacklist</h3>
+                    <p class="text-xs text-muted">Ignore guests with any of these tags:</p>
                   </div>
                   <TagInput
                     tags={props.guestTagBlacklist()}
@@ -2896,8 +2896,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 <Card padding="md" tone="card" class="mt-6">
                   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Orphaned backups</h3>
-                      <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                      <h3 class="text-sm font-semibold text-base-content">Orphaned backups</h3>
+                      <p class="mt-1 text-xs text-muted">
                         Alert when backups exist for VMIDs that are no longer in inventory.
                       </p>
                     </div>
@@ -2909,9 +2909,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                           alertOrphaned: !(prev.alertOrphaned ?? true),
                         }))
                       }
-                      label={<span class="text-sm font-medium text-slate-900 dark:text-slate-100">Alerts</span>}
+                      label={<span class="text-sm font-medium text-base-content">Alerts</span>}
                       description={
-                        <span class="text-xs text-slate-500 dark:text-slate-400">
+                        <span class="text-xs text-muted">
                           Toggle orphaned VM/CT backup alerts
                         </span>
                       }
@@ -2919,10 +2919,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     />
                   </div>
                   <div class="mt-4">
-                    <label class="text-xs font-medium uppercase tracking-wide text-slate-600 dark:text-slate-400">
+                    <label class="text-xs font-medium uppercase tracking-wide text-muted">
                       Ignore VMIDs
                     </label>
-                    <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                    <p class="mt-1 text-xs text-muted">
                       One per line. Use a trailing * to match a prefix (example: 10*).
                     </p>
                     <TagInput
@@ -3254,10 +3254,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Card padding="md" tone="card" class="mb-6">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                <h3 class="text-sm font-semibold text-base-content">
                   Ignored container prefixes
                 </h3>
-                <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                <p class="mt-1 text-xs text-muted">
                   Containers whose name or ID starts with any prefix below are skipped for container
                   alerts. Enter one prefix per line; matching is case-insensitive.
                 </p>
@@ -3291,8 +3291,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Card padding="md" tone="card" class="mb-6">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Swarm service alerts</h3>
-                <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                <h3 class="text-sm font-semibold text-base-content">Swarm service alerts</h3>
+                <p class="mt-1 text-xs text-muted">
                   Pulse raises alerts when running replicas fall behind the desired count or a rollout gets stuck. Adjust the gap thresholds below or disable service alerts entirely.
                 </p>
               </div>
@@ -3302,8 +3302,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   props.setDisableAllDockerServices(!props.disableAllDockerServices());
                   props.setHasUnsavedChanges(true);
                 }}
-                label={<span class="text-sm font-medium text-slate-900 dark:text-slate-100">Alerts</span>}
-                description={<span class="text-xs text-slate-500 dark:text-slate-400">Toggle Swarm service replica monitoring</span>}
+                label={<span class="text-sm font-medium text-base-content">Alerts</span>}
+                description={<span class="text-xs text-muted">Toggle Swarm service replica monitoring</span>}
                 size="sm"
               />
             </div>
@@ -3312,7 +3312,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               <div>
                 <label
                   for={serviceWarnInputId}
-                  class="text-xs font-medium uppercase tracking-wide text-slate-600 dark:text-slate-400"
+                  class="text-xs font-medium uppercase tracking-wide text-muted"
                 >
                   Warning gap %
                 </label>
@@ -3333,14 +3333,14 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   }}
                   class="mt-1 w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600"
                 />
-                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                <p class="mt-1 text-xs text-muted">
                   Convert to warning when at least this percentage of replicas are missing.
                 </p>
               </div>
               <div>
                 <label
                   for={serviceCriticalInputId}
-                  class="text-xs font-medium uppercase tracking-wide text-slate-600 dark:text-slate-400"
+                  class="text-xs font-medium uppercase tracking-wide text-muted"
                 >
                   Critical gap %
                 </label>
@@ -3361,7 +3361,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   }}
                   class="mt-1 w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600"
                 />
-                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                <p class="mt-1 text-xs text-muted">
                   Raise a critical alert when the missing replica gap meets or exceeds this value.
                 </p>
               </div>

@@ -21,14 +21,14 @@ const HEALTH_DOT: Record<string, string> = {
 export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
   return (
     <tr
-      class="cursor-pointer select-none bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors border-b border-slate-200 dark:border-slate-700"
+      class="cursor-pointer select-none bg-slate-50 dark:bg-slate-800 hover:bg-surface-hover transition-colors border-b border-border"
       onClick={() => props.onToggle()}
     >
       <td colSpan={99} class="px-1.5 sm:px-2 py-0.5">
         <div class="flex items-center gap-3">
           {/* Expand chevron */}
           <svg
-            class={`w-3.5 h-3.5 text-slate-500 dark:text-slate-400 transition-transform duration-150 flex-shrink-0 ${props.expanded ? 'rotate-90' : ''
+            class={`w-3.5 h-3.5 text-muted transition-transform duration-150 flex-shrink-0 ${props.expanded ? 'rotate-90' : ''
               }`}
             viewBox="0 0 24 24"
             fill="none"
@@ -41,7 +41,7 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
           </svg>
 
           {/* Group label */}
-          <span class="text-[11px] font-semibold text-slate-800 dark:text-slate-200 w-[140px] flex-shrink-0 truncate">
+          <span class="text-[11px] font-semibold text-base-content w-[140px] flex-shrink-0 truncate">
             {props.group.key}
           </span>
 
@@ -54,13 +54,13 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
                 free={Math.max(0, props.group.stats.totalBytes - props.group.stats.usedBytes)}
               />
             </div>
-            <span class="text-xs font-medium text-slate-600 dark:text-slate-400 hidden sm:inline">
+            <span class="text-xs font-medium text-muted hidden sm:inline">
               {formatPercent(props.group.stats.usagePercent)}
             </span>
           </Show>
 
           {/* Pool count */}
-          <span class="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
+          <span class="text-xs text-muted whitespace-nowrap">
             {props.group.items.length} {props.group.items.length === 1 ? 'pool' : 'pools'}
           </span>
 
@@ -69,7 +69,7 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
             <Show when={props.group.stats.byHealth.healthy > 0}>
               <span class="flex items-center gap-0.5">
                 <span class={`w-2 h-2 rounded-full ${HEALTH_DOT.healthy}`} />
-                <span class="text-[10px] text-slate-500 dark:text-slate-400">{props.group.stats.byHealth.healthy}</span>
+                <span class="text-[10px] text-muted">{props.group.stats.byHealth.healthy}</span>
               </span>
             </Show>
             <Show when={props.group.stats.byHealth.warning > 0}>
@@ -87,13 +87,13 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
             <Show when={props.group.stats.byHealth.offline > 0}>
               <span class="flex items-center gap-0.5">
                 <span class={`w-2 h-2 rounded-full ${HEALTH_DOT.offline}`} />
-                <span class="text-[10px] text-slate-500 dark:text-slate-400">{props.group.stats.byHealth.offline}</span>
+                <span class="text-[10px] text-muted">{props.group.stats.byHealth.offline}</span>
               </span>
             </Show>
             <Show when={props.group.stats.byHealth.unknown > 0}>
               <span class="flex items-center gap-0.5">
                 <span class={`w-2 h-2 rounded-full ${HEALTH_DOT.unknown}`} />
-                <span class="text-[10px] text-slate-500 dark:text-slate-400">{props.group.stats.byHealth.unknown}</span>
+                <span class="text-[10px] text-muted">{props.group.stats.byHealth.unknown}</span>
               </span>
             </Show>
           </div>

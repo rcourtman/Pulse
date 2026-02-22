@@ -463,7 +463,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                                 <span class="text-emerald-600 dark:text-emerald-400">{hostCounts().online} online</span>
                             </Show>
                             <Show when={hostCounts().offline > 0}>
-                                <span class="text-slate-400 dark:text-slate-500">{hostCounts().offline} offline</span>
+                                <span class="text-muted">{hostCounts().offline} offline</span>
                             </Show>
                         </div>
                         <Show when={props.onTimeRangeChange}>
@@ -490,16 +490,16 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                         <Card padding="sm" class="h-full">
                             <div class="flex flex-col h-full">
                                 <div class="flex items-center mb-1.5 min-w-0">
-                                    <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide shrink-0">CPU</span>
+                                    <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">CPU</span>
                                     <Show when={focusedHostName()}>
-                                        <span class="text-xs text-slate-400 dark:text-slate-500 ml-1.5 truncate">&mdash; {focusedHostName()}</span>
+                                        <span class="text-xs text-muted ml-1.5 truncate">&mdash; {focusedHostName()}</span>
                                     </Show>
                                 </div>
                                 <Show
                                     when={hasData('cpu')}
                                     fallback={
                                         isCurrentRangeLoaded() ? (
-                                            <div class="text-sm text-slate-400 dark:text-slate-500 py-2">
+                                            <div class="text-sm text-muted py-2">
                                                 No history yet
                                             </div>
                                         ) : (
@@ -525,16 +525,16 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                         <Card padding="sm" class="h-full">
                             <div class="flex flex-col h-full">
                                 <div class="flex items-center mb-1.5 min-w-0">
-                                    <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide shrink-0">Memory</span>
+                                    <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">Memory</span>
                                     <Show when={focusedHostName()}>
-                                        <span class="text-xs text-slate-400 dark:text-slate-500 ml-1.5 truncate">&mdash; {focusedHostName()}</span>
+                                        <span class="text-xs text-muted ml-1.5 truncate">&mdash; {focusedHostName()}</span>
                                     </Show>
                                 </div>
                                 <Show
                                     when={hasData('memory')}
                                     fallback={
                                         isCurrentRangeLoaded() ? (
-                                            <div class="text-sm text-slate-400 dark:text-slate-500 py-2">
+                                            <div class="text-sm text-muted py-2">
                                                 No history yet
                                             </div>
                                         ) : (
@@ -560,16 +560,16 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                         <Card padding="sm" class="h-full">
                             <div class="flex flex-col h-full">
                                 <div class="flex items-center mb-1.5 min-w-0">
-                                    <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide shrink-0">Storage</span>
+                                    <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">Storage</span>
                                     <Show when={focusedHostName()}>
-                                        <span class="text-xs text-slate-400 dark:text-slate-500 ml-1.5 truncate">&mdash; {focusedHostName()}</span>
+                                        <span class="text-xs text-muted ml-1.5 truncate">&mdash; {focusedHostName()}</span>
                                     </Show>
                                 </div>
                                 <Show
                                     when={hasData('disk')}
                                     fallback={
                                         isCurrentRangeLoaded() ? (
-                                            <div class="text-sm text-slate-400 dark:text-slate-500 py-2">
+                                            <div class="text-sm text-muted py-2">
                                                 No history yet
                                             </div>
                                         ) : (
@@ -597,19 +597,19 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                                 <Card padding="sm" class="h-full">
                                     <div class="flex flex-col h-full">
                                         <div class="flex items-center justify-between mb-1.5">
-                                            <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Workloads</span>
+                                            <span class="text-xs font-medium text-muted uppercase tracking-wide">Workloads</span>
                                             <svg class="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 004.5 9v.878m13.5-3A2.25 2.25 0 0119.5 9v.878m0 0a2.246 2.246 0 00-.75-.128H5.25c-.263 0-.515.045-.75.128m15 0A2.25 2.25 0 0121 12v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6c0-.98.626-1.813 1.5-2.122" />
                                             </svg>
                                         </div>
-                                        <div class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">
+                                        <div class="text-xl sm:text-2xl font-bold text-base-content">
                                             {workloadStats().running}
-                                            <span class="text-sm font-normal text-slate-500 dark:text-slate-400 ml-1">running</span>
+                                            <span class="text-sm font-normal text-muted ml-1">running</span>
                                         </div>
                                         <Show when={workloadStats().total > 0} fallback={
-                                            <div class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">No workloads detected</div>
+                                            <div class="text-[10px] text-muted mt-1">No workloads detected</div>
                                         }>
-                                            <div class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                                            <div class="text-[10px] text-muted mt-1">
                                                 <Show when={workloadStats().vms > 0}>
                                                     <span>{workloadStats().vms} VMs</span>
                                                 </Show>
@@ -621,7 +621,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                                                 </Show>
                                             </div>
                                             <Show when={workloadStats().stopped > 0}>
-                                                <div class="text-[10px] text-slate-400 dark:text-slate-500">
+                                                <div class="text-[10px] text-muted">
                                                     {workloadStats().stopped} stopped
                                                 </div>
                                             </Show>
@@ -634,16 +634,16 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                             <Card padding="sm" class="h-full">
                                 <div class="flex flex-col h-full">
                                     <div class="flex items-center mb-1.5 min-w-0">
-                                        <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide shrink-0">Network</span>
+                                        <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">Network</span>
                                         <Show when={focusedHostName()}>
-                                            <span class="text-xs text-slate-400 dark:text-slate-500 ml-1.5 truncate">&mdash; {focusedHostName()}</span>
+                                            <span class="text-xs text-muted ml-1.5 truncate">&mdash; {focusedHostName()}</span>
                                         </Show>
                                     </div>
                                     <Show
                                         when={hasNetData()}
                                         fallback={
                                             isCurrentRangeLoaded() ? (
-                                                <div class="text-sm text-slate-400 dark:text-slate-500 py-2">
+                                                <div class="text-sm text-muted py-2">
                                                     No history yet
                                                 </div>
                                             ) : (

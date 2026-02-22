@@ -146,7 +146,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
             when={!loading()}
             fallback={
               <div class="space-y-5">
-                <div class="rounded-md border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                <div class="rounded-md border border-border p-4 space-y-3">
                   <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                   <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
                     <div class="h-10 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
@@ -155,10 +155,10 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                   </div>
                 </div>
 
-                <div class="overflow-hidden rounded-md border border-slate-200 dark:border-slate-700">
+                <div class="overflow-hidden rounded-md border border-border">
                   <div class="h-10 w-full animate-pulse bg-slate-100 dark:bg-slate-800" />
                   {Array.from({ length: 4 }).map(() => (
-                    <div class="border-t border-slate-100 dark:border-slate-800 px-3 py-3">
+                    <div class="border-t border-border-subtle px-3 py-3">
                       <div class="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3">
                         <div class="h-4 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                         <div class="h-7 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
@@ -175,8 +175,8 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
               {(currentOrg) => (
                 <>
                   <Show when={canManageOrg(currentOrg(), props.currentUser)}>
-                    <div class="rounded-md border border-slate-200 dark:border-slate-700 p-4 space-y-3">
-                      <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Add Member</h4>
+                    <div class="rounded-md border border-border p-4 space-y-3">
+                      <h4 class="text-sm font-semibold text-base-content">Add Member</h4>
                       <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
                         <input
                           type="text"
@@ -219,7 +219,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                         {
                           key: 'userId',
                           label: 'User',
-                          render: (member) => <span class="text-slate-900 dark:text-slate-100">{member.userId}</span>
+                          render: (member) => <span class="text-base-content">{member.userId}</span>
                         },
                         {
                           key: 'role',
@@ -259,7 +259,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                         {
                           key: 'addedAt',
                           label: 'Added',
-                          render: (member) => <span class="text-slate-600 dark:text-slate-400">{new Date(member.addedAt).toLocaleDateString()}</span>
+                          render: (member) => <span class="text-muted">{new Date(member.addedAt).toLocaleDateString()}</span>
                         },
                         {
                           key: 'actions',

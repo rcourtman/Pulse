@@ -57,20 +57,20 @@ export const OperationsPage: Component = () => {
     return (
         <div class="space-y-6">
             <div class="mb-4">
-                <h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white mb-2">Operations</h1>
-                <p class="text-slate-500 dark:text-slate-400 mt-1">Platform diagnostics, system logs, and data exports.</p>
+                <h1 class="text-3xl font-bold tracking-tight text-base-content mb-2">Operations</h1>
+                <p class="text-muted mt-1">Platform diagnostics, system logs, and data exports.</p>
             </div>
 
             {/* Modern Tabs Navigation */}
             <div class="mb-6">
-                <nav class="flex space-x-2 bg-slate-100 dark:bg-slate-900 p-1.5 rounded-md sm:w-max border border-slate-200 dark:border-slate-800 overflow-x-auto scrollbar-hide" aria-label="Tabs" style="-webkit-overflow-scrolling: touch;">
+                <nav class="flex space-x-2 bg-base p-1.5 rounded-md sm:w-max border border-slate-200 dark:border-slate-800 overflow-x-auto scrollbar-hide" aria-label="Tabs" style="-webkit-overflow-scrolling: touch;">
                     {tabs.map((tab) => {
                         const isActive = () => activeTab() === tab.id;
                         return (
                             <button
                                 onClick={() => handleTabChange(tab.id)}
                                 class={`flex items-center gap-2.5 whitespace-nowrap px-4 py-2 rounded-md font-medium text-sm transition-all outline-none relative overflow-hidden group ${isActive()
-                                    ? 'bg-white text-blue-700 dark:bg-slate-800 dark:text-blue-300 shadow-sm border border-slate-200 dark:border-slate-700'
+                                    ? 'bg-white text-blue-700 dark:bg-slate-800 dark:text-blue-300 shadow-sm border border-border'
                                     : 'text-slate-600 hover:bg-white hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 border border-transparent'
                                     }`}
                                 aria-current={isActive() ? 'page' : undefined}

@@ -224,8 +224,8 @@ export const AICostDashboard: Component = () => {
   };
 
   return (
-    <Card padding="none" class="overflow-hidden border border-slate-200 dark:border-slate-700" border={false}>
-      <div class="bg-blue-50 dark:bg-blue-900 px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+    <Card padding="none" class="overflow-hidden border border-border" border={false}>
+      <div class="bg-blue-50 dark:bg-blue-900 px-6 py-4 border-b border-border">
         <div class="flex items-center gap-3">
           <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
             <svg class="w-5 h-5 text-blue-600 dark:text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -239,7 +239,7 @@ export const AICostDashboard: Component = () => {
             class="flex-1"
           />
           <Show when={loading()}>
-            <div class="text-xs text-slate-500 dark:text-slate-400">Loading…</div>
+            <div class="text-xs text-muted">Loading…</div>
           </Show>
           <div class="flex items-center gap-1">
             <button
@@ -248,7 +248,7 @@ export const AICostDashboard: Component = () => {
               onClick={() => handleRangeClick(1)}
               class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 1
                 ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
+                : 'border-slate-300 dark:border-slate-600 hover:bg-surface-hover'
                 } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               1d
@@ -259,7 +259,7 @@ export const AICostDashboard: Component = () => {
               onClick={() => handleRangeClick(7)}
               class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 7
                 ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
+                : 'border-slate-300 dark:border-slate-600 hover:bg-surface-hover'
                 } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               7d
@@ -270,7 +270,7 @@ export const AICostDashboard: Component = () => {
               onClick={() => handleRangeClick(30)}
               class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 30
                 ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
+                : 'border-slate-300 dark:border-slate-600 hover:bg-surface-hover'
                 } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               30d
@@ -281,7 +281,7 @@ export const AICostDashboard: Component = () => {
               onClick={() => handleRangeClick(90)}
               class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 90
                 ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
+                : 'border-slate-300 dark:border-slate-600 hover:bg-surface-hover'
                 } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               90d
@@ -292,7 +292,7 @@ export const AICostDashboard: Component = () => {
               onClick={() => handleRangeClick(365)}
               class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 365
                 ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
+                : 'border-slate-300 dark:border-slate-600 hover:bg-surface-hover'
                 } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               1y
@@ -303,7 +303,7 @@ export const AICostDashboard: Component = () => {
 
       <div class="p-6 space-y-4">
         <Show when={!summary() && loading()}>
-          <div class="text-sm text-slate-500 dark:text-slate-400">Loading usage…</div>
+          <div class="text-sm text-muted">Loading usage…</div>
         </Show>
 
         <Show when={summary()?.truncated}>
@@ -335,49 +335,49 @@ export const AICostDashboard: Component = () => {
         </Show>
 
         <Show when={!summary() && !loading() && loadError()}>
-          <div class="text-sm text-slate-500 dark:text-slate-400">{loadError()}</div>
+          <div class="text-sm text-muted">{loadError()}</div>
         </Show>
 
         <Show when={!summary() && !loading() && !loadError()}>
-          <div class="text-sm text-slate-500 dark:text-slate-400">No usage data yet.</div>
+          <div class="text-sm text-muted">No usage data yet.</div>
         </Show>
 
         <Show when={summary()}>
           {(data) => (
             <>
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <div class="text-xs text-slate-500 dark:text-slate-400">Estimated spend</div>
-                  <div class="text-lg font-semibold text-slate-900 dark:text-white">
+                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-border">
+                  <div class="text-xs text-muted">Estimated spend</div>
+                  <div class="text-lg font-semibold text-base-content">
                     <Show
                       when={estimatedTotalUSD() != null}
-                      fallback={<span class="text-slate-500 dark:text-slate-400">—</span>}
+                      fallback={<span class="text-muted">—</span>}
                     >
                       {formatUSD(estimatedTotalUSD() ?? 0)}
                     </Show>
                   </div>
                 </div>
-                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <div class="text-xs text-slate-500 dark:text-slate-400">Total tokens</div>
-                  <div class="text-lg font-semibold text-slate-900 dark:text-white">
+                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-border">
+                  <div class="text-xs text-muted">Total tokens</div>
+                  <div class="text-lg font-semibold text-base-content">
                     {formatNumber(data().totals.total_tokens)}
                   </div>
                 </div>
-                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <div class="text-xs text-slate-500 dark:text-slate-400">Model/provider pairs</div>
-                  <div class="text-lg font-semibold text-slate-900 dark:text-white">
+                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-border">
+                  <div class="text-xs text-muted">Model/provider pairs</div>
+                  <div class="text-lg font-semibold text-base-content">
                     {formatNumber(data().provider_models.length)}
                   </div>
                 </div>
               </div>
 
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <div class="text-xs text-slate-500 dark:text-slate-400">Chat</div>
-                  <div class="text-sm font-semibold text-slate-900 dark:text-white">
+                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-border">
+                  <div class="text-xs text-muted">Chat</div>
+                  <div class="text-sm font-semibold text-base-content">
                     {formatNumber(useCaseMap().get('chat')?.tokens ?? 0)} tokens
                   </div>
-                  <div class="text-xs text-slate-500 dark:text-slate-400">
+                  <div class="text-xs text-muted">
                     <Show
                       when={useCaseMap().get('chat')?.pricingKnown}
                       fallback={<span>—</span>}
@@ -386,12 +386,12 @@ export const AICostDashboard: Component = () => {
                     </Show>
                   </div>
                 </div>
-                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <div class="text-xs text-slate-500 dark:text-slate-400">Patrol</div>
-                  <div class="text-sm font-semibold text-slate-900 dark:text-white">
+                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-border">
+                  <div class="text-xs text-muted">Patrol</div>
+                  <div class="text-sm font-semibold text-base-content">
                     {formatNumber(useCaseMap().get('patrol')?.tokens ?? 0)} tokens
                   </div>
-                  <div class="text-xs text-slate-500 dark:text-slate-400">
+                  <div class="text-xs text-muted">
                     <Show
                       when={useCaseMap().get('patrol')?.pricingKnown}
                       fallback={<span>—</span>}
@@ -400,14 +400,14 @@ export const AICostDashboard: Component = () => {
                     </Show>
                   </div>
                 </div>
-                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <div class="text-xs text-slate-500 dark:text-slate-400">Budget alert (USD per 30d)</div>
-                  <div class="text-sm font-semibold text-slate-900 dark:text-white mt-1">
-                    <Show when={parsedBudgetUSD30d() != null} fallback={<span class="text-slate-500 dark:text-slate-400">—</span>}>
+                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-border">
+                  <div class="text-xs text-muted">Budget alert (USD per 30d)</div>
+                  <div class="text-sm font-semibold text-base-content mt-1">
+                    <Show when={parsedBudgetUSD30d() != null} fallback={<span class="text-muted">—</span>}>
                       {formatUSD(parsedBudgetUSD30d() ?? 0)}
                     </Show>
                   </div>
-                  <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                  <div class="text-[11px] text-muted mt-1">
                     Set in Pulse Assistant settings. Pro-rated for {days()}d:{' '}
                     <Show when={budgetForRange() != null} fallback={<span>—</span>}>
                       {formatUSD(budgetForRange() ?? 0)}
@@ -417,10 +417,10 @@ export const AICostDashboard: Component = () => {
               </div>
 
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-border">
                   <div class="flex items-center justify-between">
-                    <div class="text-xs text-slate-500 dark:text-slate-400">Daily estimated USD</div>
-                    <div class="text-xs text-slate-500 dark:text-slate-400">
+                    <div class="text-xs text-muted">Daily estimated USD</div>
+                    <div class="text-xs text-muted">
                       <Show when={anyPricingKnown() && lastDailyUSD() != null} fallback={<span>—</span>}>
                         {formatUSD(lastDailyUSD() ?? 0)}
                       </Show>
@@ -429,16 +429,16 @@ export const AICostDashboard: Component = () => {
                   <div class="mt-2">
                     <Show
                       when={anyPricingKnown() && dailyUSDValues().length >= 2}
-                      fallback={<div class="text-xs text-slate-500 dark:text-slate-400">No daily USD trend yet.</div>}
+                      fallback={<div class="text-xs text-muted">No daily USD trend yet.</div>}
                     >
                       <TinySparkline values={dailyUSDValues()} stroke="#10b981" />
                     </Show>
                   </div>
                 </div>
-                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                <div class="p-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-border">
                   <div class="flex items-center justify-between">
-                    <div class="text-xs text-slate-500 dark:text-slate-400">Daily total tokens</div>
-                    <div class="text-xs text-slate-500 dark:text-slate-400">
+                    <div class="text-xs text-muted">Daily total tokens</div>
+                    <div class="text-xs text-muted">
                       <Show when={lastDailyTokens() != null} fallback={<span>—</span>}>
                         {formatNumber(lastDailyTokens() ?? 0)}
                       </Show>
@@ -447,7 +447,7 @@ export const AICostDashboard: Component = () => {
                   <div class="mt-2">
                     <Show
                       when={dailyTokenValues().length >= 2}
-                      fallback={<div class="text-xs text-slate-500 dark:text-slate-400">No daily token trend yet.</div>}
+                      fallback={<div class="text-xs text-muted">No daily token trend yet.</div>}
                     >
                       <TinySparkline values={dailyTokenValues()} stroke="#3b82f6" />
                     </Show>
@@ -455,7 +455,7 @@ export const AICostDashboard: Component = () => {
                 </div>
               </div>
 
-              <div class="text-xs text-slate-500 dark:text-slate-400">
+              <div class="text-xs text-muted">
                 USD is an estimate based on public list prices. It may differ from billing.
                 <Show when={unpricedProviderModels().length > 0}>
                   <span class="ml-2">
@@ -479,7 +479,7 @@ export const AICostDashboard: Component = () => {
               </div>
 
               <div class="flex items-center justify-between gap-3">
-                <div class="text-xs text-slate-500 dark:text-slate-400">
+                <div class="text-xs text-muted">
                   History retention: {data().retention_days} days
                 </div>
                 <div class="flex items-center gap-2">
@@ -487,7 +487,7 @@ export const AICostDashboard: Component = () => {
                     type="button"
                     disabled={loading()}
                     onClick={() => downloadExport('csv')}
-                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded border border-border hover:bg-slate-100 dark:hover:bg-slate-800 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     Export CSV
                   </button>
@@ -495,7 +495,7 @@ export const AICostDashboard: Component = () => {
                     type="button"
                     disabled={loading()}
                     onClick={() => downloadExport('json')}
-                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded border border-border hover:bg-slate-100 dark:hover:bg-slate-800 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     Export JSON
                   </button>
@@ -503,7 +503,7 @@ export const AICostDashboard: Component = () => {
                     type="button"
                     disabled={loading()}
                     onClick={resetHistory}
-                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded border border-border hover:bg-slate-100 dark:hover:bg-slate-800 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     Reset history
                   </button>
@@ -513,8 +513,8 @@ export const AICostDashboard: Component = () => {
               <Show when={(data().targets?.length ?? 0) > 0}>
                 <div class="overflow-x-auto">
                   <Table class="min-w-full text-sm">
-                    <TableHeader class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                      <TableRow class="border-b border-slate-200 dark:border-slate-700">
+                    <TableHeader class="text-xs text-muted uppercase tracking-wide">
+                      <TableRow class="border-b border-border">
                         <TableHead class="text-left py-2 pr-4">Top targets</TableHead>
                         <TableHead class="text-right py-2 px-2">Est. USD</TableHead>
                         <TableHead class="text-right py-2 px-2">Calls</TableHead>
@@ -524,11 +524,11 @@ export const AICostDashboard: Component = () => {
                     <TableBody>
                       <For each={data().targets}>
                         {(t) => (
-                          <TableRow class="border-b border-slate-100 dark:border-slate-800">
+                          <TableRow class="border-b border-border-subtle">
                             <TableCell class="py-2 pr-4 text-slate-700 dark:text-slate-300 font-mono text-xs">
                               {t.target_type}:{t.target_id}
                             </TableCell>
-                            <TableCell class="py-2 px-2 text-right text-slate-900 dark:text-slate-100">
+                            <TableCell class="py-2 px-2 text-right text-base-content">
                               <Show
                                 when={t.pricing_known}
                                 fallback={<span class="text-slate-500 dark:text-slate-500">—</span>}
@@ -539,7 +539,7 @@ export const AICostDashboard: Component = () => {
                             <TableCell class="py-2 px-2 text-right text-slate-700 dark:text-slate-300">
                               {formatNumber(t.calls)}
                             </TableCell>
-                            <TableCell class="py-2 px-2 text-right text-slate-900 dark:text-slate-100">
+                            <TableCell class="py-2 px-2 text-right text-base-content">
                               {formatNumber(t.total_tokens)}
                             </TableCell>
                           </TableRow>
@@ -552,8 +552,8 @@ export const AICostDashboard: Component = () => {
 
               <div class="overflow-x-auto">
                 <Table class="min-w-full text-sm">
-                  <TableHeader class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                    <TableRow class="border-b border-slate-200 dark:border-slate-700">
+                  <TableHeader class="text-xs text-muted uppercase tracking-wide">
+                    <TableRow class="border-b border-border">
                       <TableHead class="text-left py-2 pr-4">Provider</TableHead>
                       <TableHead class="text-left py-2 pr-4">Model</TableHead>
                       <TableHead class="text-right py-2 px-2">Est. USD</TableHead>
@@ -565,14 +565,14 @@ export const AICostDashboard: Component = () => {
                   <TableBody>
                     <For each={data().provider_models}>
                       {(pm) => (
-                        <TableRow class="border-b border-slate-100 dark:border-slate-800">
-                          <TableCell class="py-2 pr-4 font-medium text-slate-900 dark:text-slate-100">
+                        <TableRow class="border-b border-border-subtle">
+                          <TableCell class="py-2 pr-4 font-medium text-base-content">
                             {PROVIDER_NAMES[pm.provider as keyof typeof PROVIDER_NAMES] || pm.provider}
                           </TableCell>
                           <TableCell class="py-2 pr-4 text-slate-700 dark:text-slate-300 font-mono text-xs">
                             {pm.model}
                           </TableCell>
-                          <TableCell class="py-2 px-2 text-right text-slate-900 dark:text-slate-100">
+                          <TableCell class="py-2 px-2 text-right text-base-content">
                             <Show
                               when={pm.pricing_known}
                               fallback={<span class="text-slate-500 dark:text-slate-500">—</span>}
@@ -586,7 +586,7 @@ export const AICostDashboard: Component = () => {
                           <TableCell class="py-2 px-2 text-right text-slate-700 dark:text-slate-300">
                             {formatNumber(pm.output_tokens)}
                           </TableCell>
-                          <TableCell class="py-2 px-2 text-right text-slate-900 dark:text-slate-100">
+                          <TableCell class="py-2 px-2 text-right text-base-content">
                             {formatNumber(pm.total_tokens)}
                           </TableCell>
                         </TableRow>

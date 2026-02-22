@@ -82,7 +82,7 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
                 const isLast = () => index() === props.allWidgets().length - 1;
 
                 return (
-                  <div class="flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                  <div class="flex items-center gap-2.5 px-3 py-2 hover:bg-surface-hover transition-colors">
                     <label class="flex min-w-0 flex-1 items-center gap-2.5 cursor-pointer">
                       <input
                         type="checkbox"
@@ -92,7 +92,7 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
                       />
                       <span
                         class={`truncate text-sm ${
-                          visible() ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500'
+                          visible() ? 'text-slate-700 dark:text-slate-200' : 'text-muted'
                         }`}
                       >
                         {widget.label}

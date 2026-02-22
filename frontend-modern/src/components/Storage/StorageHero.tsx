@@ -35,12 +35,12 @@ export const StorageHero: Component<StorageHeroProps> = (props) => {
     <Card padding="sm">
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {/* Pools + Health donut */}
-        <div class="flex items-center gap-3 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
+        <div class="flex items-center gap-3 rounded-md border border-border bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
           <MiniDonut size={32} strokeWidth={4} data={donutData()} centerText={String(props.summary.count)} />
           <div class="min-w-0">
-            <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Pools</div>
-            <div class="text-sm font-bold text-slate-900 dark:text-white">{props.summary.count}</div>
-            <div class="text-[10px] text-slate-500 dark:text-slate-400">
+            <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Pools</div>
+            <div class="text-sm font-bold text-base-content">{props.summary.count}</div>
+            <div class="text-[10px] text-muted">
               {props.healthBreakdown.healthy} healthy
               {props.healthBreakdown.warning > 0 && <span class="text-amber-600 dark:text-amber-400"> · {props.healthBreakdown.warning} warn</span>}
               {props.healthBreakdown.critical > 0 && <span class="text-red-600 dark:text-red-400"> · {props.healthBreakdown.critical} crit</span>}
@@ -49,11 +49,11 @@ export const StorageHero: Component<StorageHeroProps> = (props) => {
         </div>
 
         {/* Capacity gauge */}
-        <div class="flex items-center gap-3 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
+        <div class="flex items-center gap-3 rounded-md border border-border bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
           <MiniGauge percent={props.summary.usagePercent} size={32} strokeWidth={4} color={gaugeColor()} />
           <div class="min-w-0">
-            <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Capacity</div>
-            <div class="text-sm font-bold text-slate-900 dark:text-white">{formatBytes(props.summary.totalBytes)}</div>
+            <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Capacity</div>
+            <div class="text-sm font-bold text-base-content">{formatBytes(props.summary.totalBytes)}</div>
             <div class={`text-[10px] font-medium ${gaugeColor()}`}>
               {formatPercent(props.summary.usagePercent)} used
               <Show when={props.trend?.delta != null}>
@@ -66,9 +66,9 @@ export const StorageHero: Component<StorageHeroProps> = (props) => {
         </div>
 
         {/* Disks (replaces redundant Used card) */}
-        <div class="flex items-center gap-3 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
+        <div class="flex items-center gap-3 rounded-md border border-border bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
           <div class="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex-shrink-0">
-            <svg class="w-4 h-4 text-slate-500 dark:text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg class="w-4 h-4 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="2" y="2" width="20" height="8" rx="2" ry="2" />
               <rect x="2" y="14" width="20" height="8" rx="2" ry="2" />
               <circle cx="6" cy="6" r="1" fill="currentColor" />
@@ -76,23 +76,23 @@ export const StorageHero: Component<StorageHeroProps> = (props) => {
             </svg>
           </div>
           <div class="min-w-0">
-            <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Disks</div>
+            <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Disks</div>
             <Show
               when={props.diskCount != null && props.diskCount > 0}
-              fallback={<div class="text-sm font-bold text-slate-400 dark:text-slate-500">-</div>}
+              fallback={<div class="text-sm font-bold text-muted">-</div>}
             >
-              <div class="text-sm font-bold text-slate-900 dark:text-white">{props.diskCount}</div>
-              <div class="text-[10px] text-slate-500 dark:text-slate-400">physical</div>
+              <div class="text-sm font-bold text-base-content">{props.diskCount}</div>
+              <div class="text-[10px] text-muted">physical</div>
             </Show>
           </div>
         </div>
 
         {/* Used / Free summary (replaces separate Used + Free cards) */}
-        <div class="flex items-center gap-3 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
+        <div class="flex items-center gap-3 rounded-md border border-border bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
           <div class="min-w-0">
-            <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Allocation</div>
-            <div class="text-sm font-bold text-slate-900 dark:text-white">{formatBytes(props.summary.usedBytes)}</div>
-            <div class="text-[10px] text-slate-500 dark:text-slate-400">
+            <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Allocation</div>
+            <div class="text-sm font-bold text-base-content">{formatBytes(props.summary.usedBytes)}</div>
+            <div class="text-[10px] text-muted">
               {formatBytes(freeBytes())} free
             </div>
           </div>

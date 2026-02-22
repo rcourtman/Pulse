@@ -89,11 +89,11 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
             </svg>
           </div>
 
-          <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100 mb-6">
+          <h3 class="text-base font-semibold text-base-content mb-6">
             {props.emptyState!.title}
           </h3>
           <Show when={props.emptyState!.subtitle}>
-            <p class="text-sm text-slate-500 dark:text-slate-400 max-w-xs mb-6">
+            <p class="text-sm text-muted max-w-xs mb-6">
               {props.emptyState!.subtitle}
             </p>
           </Show>
@@ -104,7 +104,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
             {/* Suggestions */}
             <Show when={props.emptyState!.suggestions && props.emptyState!.suggestions!.length > 0}>
               <div class="space-y-2">
-                <div class="text-xs font-medium text-slate-400 dark:text-slate-500 text-left uppercase tracking-wider pl-1">
+                <div class="text-xs font-medium text-muted text-left uppercase tracking-wider pl-1">
                   Or try asking
                 </div>
                 <For each={props.emptyState!.suggestions}>
@@ -112,7 +112,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
                     <button
                       type="button"
                       onClick={() => props.emptyState!.onSuggestionClick?.(suggestion)}
-                      class="w-full text-left px-4 py-2.5 rounded-md bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+                      class="w-full text-left px-4 py-2.5 rounded-md bg-slate-50 dark:bg-slate-800 text-muted text-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
                     >
                       <span class="text-blue-500 dark:text-blue-400 mr-2 opacity-50">→</span>
                       {suggestion}

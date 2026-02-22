@@ -1348,7 +1348,7 @@ export function Dashboard(props: DashboardProps) {
   return (
     <div class="space-y-3">
       <Show when={isWorkloadsRoute() && !workloadsSummaryCollapsed()}>
-        <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-white dark:bg-slate-800">
+        <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-surface">
           <WorkloadsSummary
             timeRange={workloadsSummaryRange()}
             onTimeRangeChange={setWorkloadsSummaryRange}
@@ -1604,7 +1604,7 @@ export function Dashboard(props: DashboardProps) {
                 style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : 'max-content' }}
               >
                 <TableHeader>
-                  <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                  <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
                     <For each={mobileVisibleColumns()}>
                       {(col) => {
                         const isFirst = () => col.id === visibleColumns()[0]?.id;
@@ -1644,7 +1644,7 @@ export function Dashboard(props: DashboardProps) {
                     </For>
                   </TableRow>
                 </TableHeader>
-                <TableBody ref={setTableBodyRef} class="divide-y divide-slate-200 dark:divide-slate-700">
+                <TableBody ref={setTableBodyRef} class="divide-y divide-border">
                   <Show when={groupedWindowing.isWindowed() && topSpacerHeight() > 0}>
                     <TableRow aria-hidden="true">
                       <TableCell colspan={totalColumns()} style={{ height: `${topSpacerHeight()}px`, padding: '0', border: '0' }} />
@@ -1722,7 +1722,7 @@ export function Dashboard(props: DashboardProps) {
                                   />
                                   <Show when={selectedGuestId() === guestId()}>
                                     <TableRow>
-                                      <TableCell colspan={totalColumns()} class="p-0 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                                      <TableCell colspan={totalColumns()} class="p-0 border-b border-border bg-slate-50 dark:bg-slate-800">
                                         <div class="px-2 sm:px-4 py-3 sm:py-4" onClick={(e) => e.stopPropagation()}>
                                           <GuestDrawer
                                             guest={guest()}
@@ -1792,20 +1792,20 @@ export function Dashboard(props: DashboardProps) {
       {/* Stats */}
       <Show when={connected() && initialDataReceived()}>
         <div class="mb-4">
-          <div class="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded">
-            <span class="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400">
+          <div class="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-800 border border-border rounded">
+            <span class="flex items-center gap-1 text-xs text-muted">
               <span class="h-2 w-2 bg-green-500 rounded-full"></span>
               {totalStats().running} running
             </span>
             <Show when={totalStats().degraded > 0}>
               <span class="text-slate-400">|</span>
-              <span class="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400">
+              <span class="flex items-center gap-1 text-xs text-muted">
                 <span class="h-2 w-2 bg-orange-500 rounded-full"></span>
                 {totalStats().degraded} degraded
               </span>
             </Show>
             <span class="text-slate-400">|</span>
-            <span class="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400">
+            <span class="flex items-center gap-1 text-xs text-muted">
               <span class="h-2 w-2 bg-red-500 rounded-full"></span>
               {totalStats().stopped} stopped
             </span>

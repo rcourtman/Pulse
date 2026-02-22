@@ -64,7 +64,7 @@ export function DiskList(props: DiskListProps) {
                 >
                   {label}
                 </div>
-                <div class="mt-0.5 text-[9px] text-slate-500 dark:text-slate-400">
+                <div class="mt-0.5 text-[9px] text-muted">
                   {hasCapacity
                     ? `${formatBytes(disk.used)}/${formatBytes(disk.total)}`
                     : 'Usage unavailable'}

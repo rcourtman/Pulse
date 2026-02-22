@@ -692,14 +692,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   return (
     <div
-      class={`relative flex-shrink-0 h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 flex flex-col transition-all duration-300 ${isOpen() ? 'w-full sm:w-[480px] overflow-visible' : 'w-0 border-l-0 overflow-hidden'
+      class={`relative flex-shrink-0 h-full bg-white dark:bg-slate-900 border-l border-border flex flex-col transition-all duration-300 ${isOpen() ? 'w-full sm:w-[480px] overflow-visible' : 'w-0 border-l-0 overflow-hidden'
         }`}
     >
       <Show when={isOpen()}>
         {/* Floating Close Handle (Desktop only) */}
         <button
           onClick={props.onClose}
-          class="hidden sm:flex absolute left-0 top-1/2 -translate-x-full -translate-y-1/2 items-center justify-center w-8 py-3 rounded-l-xl bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm border border-r-0 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors z-50 cursor-pointer"
+          class="hidden sm:flex absolute left-0 top-1/2 -translate-x-full -translate-y-1/2 items-center justify-center w-8 py-3 rounded-l-xl bg-surface text-blue-600 dark:text-blue-400 shadow-sm border border-r-0 border-border hover:bg-surface-hover transition-colors z-50 cursor-pointer"
           title="Collapse Pulse Assistant"
         >
           <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
@@ -711,16 +711,16 @@ export const AIChat: Component<AIChatProps> = (props) => {
           </svg>
         </button>
         {/* Header - wraps on mobile */}
-        <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+        <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-border bg-slate-50 dark:bg-slate-800">
           <div class="flex items-center gap-3">
-            <div class="p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-md shadow-sm">
+            <div class="p-2 border border-border bg-surface rounded-md shadow-sm">
               <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
               </svg>
             </div>
             <div>
-              <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Pulse Assistant</h2>
-              <p class="text-[11px] text-slate-500 dark:text-slate-400">
+              <h2 class="text-sm font-semibold text-base-content">Pulse Assistant</h2>
+              <p class="text-[11px] text-muted">
                 Infrastructure intelligence
               </p>
             </div>
@@ -730,7 +730,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
             {/* New chat */}
             <button
               onClick={handleNewConversation}
-              class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 rounded-md border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800 transition-colors"
+              class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 rounded-md border border-border hover:border-slate-300 dark:hover:border-slate-600 bg-surface transition-colors"
               title="New chat"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -768,30 +768,30 @@ export const AIChat: Component<AIChatProps> = (props) => {
               </button>
 
               <Show when={showControlMenu()}>
-                <div class="absolute right-0 mt-2 w-60 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm z-50 overflow-hidden">
-                  <div class="px-3 py-2 text-[11px] text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                <div class="absolute right-0 mt-2 w-60 rounded-md border border-border bg-surface shadow-sm z-50 overflow-hidden">
+                  <div class="px-3 py-2 text-[11px] text-muted border-b border-border">
                     Control mode for this chat
                   </div>
                   <button
-                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${controlLevel() === 'read_only' ? 'bg-slate-50 dark:bg-slate-800' : ''}`}
+                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'read_only' ? 'bg-slate-50 dark:bg-slate-800' : ''}`}
                     onClick={() => updateControlLevel('read_only')}
                   >
-                    <div class="font-medium text-slate-800 dark:text-slate-200">Read-only</div>
-                    <div class="text-[11px] text-slate-500 dark:text-slate-400">No commands or control actions</div>
+                    <div class="font-medium text-base-content">Read-only</div>
+                    <div class="text-[11px] text-muted">No commands or control actions</div>
                   </button>
                   <button
-                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${controlLevel() === 'controlled' ? 'bg-amber-50 dark:bg-amber-900' : ''}`}
+                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'controlled' ? 'bg-amber-50 dark:bg-amber-900' : ''}`}
                     onClick={() => updateControlLevel('controlled')}
                   >
-                    <div class="font-medium text-slate-800 dark:text-slate-200">Approval</div>
-                    <div class="text-[11px] text-slate-500 dark:text-slate-400">Ask before running commands</div>
+                    <div class="font-medium text-base-content">Approval</div>
+                    <div class="text-[11px] text-muted">Ask before running commands</div>
                   </button>
                   <button
-                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${controlLevel() === 'autonomous' ? 'bg-red-50 dark:bg-red-900' : ''}`}
+                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'autonomous' ? 'bg-red-50 dark:bg-red-900' : ''}`}
                     onClick={() => updateControlLevel('autonomous')}
                   >
-                    <div class="font-medium text-slate-800 dark:text-slate-200">Autonomous</div>
-                    <div class="text-[11px] text-slate-500 dark:text-slate-400">Executes without approval (Pro)</div>
+                    <div class="font-medium text-base-content">Autonomous</div>
+                    <div class="text-[11px] text-muted">Executes without approval (Pro)</div>
                   </button>
                 </div>
               </Show>
@@ -812,7 +812,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   }
                   setShowSessions(next);
                 }}
-                class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md hover:bg-surface-hover transition-colors"
                 title="Chat sessions"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -822,12 +822,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
               <Show when={showSessions()}>
                 <div
-                  class="fixed w-72 max-h-96 bg-white dark:bg-slate-800 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 z-[9999] overflow-hidden"
+                  class="fixed w-72 max-h-96 bg-surface rounded-md shadow-sm border border-border z-[9999] overflow-hidden"
                   style={{ top: `${sessionDropdownPosition().top}px`, right: `${sessionDropdownPosition().right}px` }}
                 >
                   <button
                     onClick={handleNewConversation}
-                    class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 border-b border-slate-200 dark:border-slate-700"
+                    class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 border-b border-border"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -837,21 +837,21 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
                   <div class="max-h-64 overflow-y-auto">
                     <Show when={sessions().length > 0} fallback={
-                      <div class="px-3 py-6 text-center text-xs text-slate-500 dark:text-slate-400">
+                      <div class="px-3 py-6 text-center text-xs text-muted">
                         No previous conversations
                       </div>
                     }>
                       <For each={sessions()}>
                         {(session) => (
                           <div
-                            class={`group relative px-3 py-2.5 flex items-start gap-2 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer ${chat.sessionId() === session.id ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
+                            class={`group relative px-3 py-2.5 flex items-start gap-2 hover:bg-surface-hover cursor-pointer ${chat.sessionId() === session.id ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
                             onClick={() => handleLoadSession(session.id)}
                           >
                             <div class="flex-1 min-w-0">
-                              <div class="text-sm font-medium truncate text-slate-900 dark:text-slate-100">
+                              <div class="text-sm font-medium truncate text-base-content">
                                 {session.title || 'Untitled'}
                               </div>
-                              <div class="text-xs text-slate-500 dark:text-slate-400">
+                              <div class="text-xs text-muted">
                                 {session.message_count} messages
                               </div>
                             </div>
@@ -879,7 +879,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 e.stopPropagation();
                 props.onClose();
               }}
-              class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md hover:bg-surface-hover transition-colors"
               title="Close panel"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -968,7 +968,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
         {/* Status indicator bar */}
         <Show when={currentStatus()}>
-          <div class="px-4 py-2 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2.5 text-xs">
+          <div class="px-4 py-2 bg-slate-50 dark:bg-slate-800 border-t border-border flex items-center gap-2.5 text-xs">
             {/* Status icon based on type */}
             <Show when={currentStatus()?.type === 'thinking'}>
               <div class="flex items-center justify-center w-4 h-4">
@@ -993,7 +993,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               </div>
             </Show>
 
-            <span class="text-slate-600 dark:text-slate-400 font-medium">
+            <span class="text-muted font-medium">
               {currentStatus()?.text}
             </span>
 
@@ -1007,7 +1007,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         </Show>
 
         {/* Input */}
-        <div class="border-t border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-900">
+        <div class="border-t border-border p-4 bg-white dark:bg-slate-900">
           <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="flex gap-2 relative">
             <div class="flex-1 relative">
               <textarea
@@ -1017,7 +1017,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 onKeyDown={handleKeyDown}
                 placeholder="Ask about your infrastructure..."
                 rows={2}
-                class="w-full px-4 py-3 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                class="w-full px-4 py-3 text-sm rounded-md border border-border bg-surface text-base-content placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               />
               <div data-mention-autocomplete>
                 <MentionAutocomplete
@@ -1037,7 +1037,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   <button
                     type="button"
                     onClick={chat.stop}
-                    class="px-4 flex items-center justify-center border border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md transition-colors shadow-sm"
+                    class="px-4 flex items-center justify-center border border-border bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md transition-colors shadow-sm"
                     title="Stop"
                   >
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -1059,10 +1059,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
               </Show>
             </div>
           </form>
-          <div class="flex items-center justify-center gap-3 mt-2 text-[10px] text-slate-400 dark:text-slate-500">
-            <span><kbd class="font-sans px-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">Enter</kbd> to send</span>
+          <div class="flex items-center justify-center gap-3 mt-2 text-[10px] text-muted">
+            <span><kbd class="font-sans px-1 rounded bg-slate-100 dark:bg-slate-800 border border-border">Enter</kbd> to send</span>
             <span class="text-slate-300 dark:text-slate-600">&middot;</span>
-            <span><span class="font-semibold text-slate-500 dark:text-slate-400">@</span> to mention resources</span>
+            <span><span class="font-semibold text-muted">@</span> to mention resources</span>
           </div>
         </div>
       </Show>

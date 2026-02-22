@@ -119,7 +119,7 @@ export const ResponsiveHeader: Component<ResponsiveHeaderProps> = (props) => {
 export const StickyHeader: Component<ResponsiveHeaderProps & { width?: string }> = (props) => {
   return (
     <div
-      class={`sticky left-0 z-30 bg-slate-50 dark:bg-slate-800 border-r md:border-r-0 border-slate-200 dark:border-slate-600 ${props.width || 'w-[160px] sm:w-[200px] md:w-full'}`}
+      class={`sticky left-0 z-30 bg-slate-50 dark:bg-slate-800 border-r md:border-r-0 border-border ${props.width || 'w-[160px] sm:w-[200px] md:w-full'}`}
     >
       <ResponsiveHeader {...props} />
     </div>

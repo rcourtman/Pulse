@@ -87,7 +87,7 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
                 const isChecked = () => !props.isHidden(col.id);
                 return (
                   <label
-                    class="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                    class="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-surface-hover transition-colors"
                   >
                     <input
                       type="checkbox"
@@ -95,7 +95,7 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
                       onChange={() => props.onToggle(col.id)}
                       class="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 dark:border-slate-600 dark:bg-slate-700 dark:checked:bg-blue-600"
                     />
-                    <span class={`text-sm ${isChecked() ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500'}`}>
+                    <span class={`text-sm ${isChecked() ? 'text-slate-700 dark:text-slate-200' : 'text-muted'}`}>
                       {col.label}
                     </span>
                   </label>
@@ -105,7 +105,7 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
           </div>
 
           <Show when={props.columns.length === 0}>
-            <div class="px-3 py-4 text-xs text-slate-500 dark:text-slate-400 text-center">
+            <div class="px-3 py-4 text-xs text-muted text-center">
               No columns available to toggle
             </div>
           </Show>

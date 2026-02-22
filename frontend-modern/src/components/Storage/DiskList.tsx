@@ -250,8 +250,8 @@ export const DiskList: Component<DiskListProps> = (props) => {
             <Show
               when={hasPVENodes()}
               fallback={
-                <div class="mt-4 p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-left">
-                  <p class="text-sm text-slate-600 dark:text-slate-400">
+                <div class="mt-4 p-4 bg-slate-50 dark:bg-slate-800 border border-border rounded-md text-left">
+                  <p class="text-sm text-muted">
                     No Proxmox nodes configured. Add a Proxmox VE cluster in Settings to monitor physical disks.
                   </p>
                 </div>
@@ -280,7 +280,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
           <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
             <Table class="w-full">
               <TableHeader>
-                <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-600">
+                <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
                   <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     Node
                   </TableHead>
@@ -322,7 +322,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                   </TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody class="divide-y divide-slate-200 dark:divide-slate-700">
+              <TableBody class="divide-y divide-border">
                 <For each={filteredDisks()}>
                   {(disk) => {
                     const data = getDiskData(disk);
@@ -333,7 +333,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                     return (
                       <>
                         <TableRow
-                          class={`cursor-pointer transition-colors ${isSelected() ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+                          class={`cursor-pointer transition-colors ${isSelected() ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-surface-hover'}`}
                           onClick={() => handleRowClick(disk)}
                         >
                           <TableCell class="px-1.5 sm:px-2 py-0.5 text-xs whitespace-nowrap">
@@ -345,13 +345,13 @@ export const DiskList: Component<DiskListProps> = (props) => {
                                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                                 </svg>
                               </div>
-                              <span class="font-medium text-slate-900 dark:text-slate-100">
+                              <span class="font-medium text-base-content">
                                 {data.node}
                               </span>
                             </div>
                           </TableCell>
                           <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
-                            <span class="font-mono text-slate-600 dark:text-slate-400">
+                            <span class="font-mono text-muted">
                               {data.devPath}
                             </span>
                           </TableCell>
@@ -372,7 +372,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               when={data.used && data.used !== 'unknown'}
                               fallback={<span class="text-slate-400">-</span>}
                             >
-                              <span class="text-[10px] font-mono text-slate-600 dark:text-slate-400">
+                              <span class="text-[10px] font-mono text-muted">
                                 {data.used}
                               </span>
                             </Show>

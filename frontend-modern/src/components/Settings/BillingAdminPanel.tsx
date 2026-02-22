@@ -177,7 +177,7 @@ export const BillingAdminPanel: Component = () => {
               void loadOrganizations();
             }}
             disabled={loadingOrgs()}
-            class="w-full sm:w-auto px-3 py-1.5 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+            class="w-full sm:w-auto px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
           >
             Refresh
           </button>
@@ -213,10 +213,10 @@ export const BillingAdminPanel: Component = () => {
                         void ensureBillingState(id);
                       }}
                     >
-                      <div class="font-medium text-slate-900 dark:text-slate-100">
+                      <div class="font-medium text-base-content">
                         {org.display_name || org.org_id}
                       </div>
-                      <div class="text-xs text-slate-500 dark:text-slate-400">
+                      <div class="text-xs text-muted">
                         <span class="font-mono">{org.org_id}</span>
                         <Show when={org.soft_deleted}>
                           <span class="ml-2 rounded px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200">
@@ -292,7 +292,7 @@ export const BillingAdminPanel: Component = () => {
                           billingLoadingByOrgID()[orgID()] ||
                           currentSubState() === 'suspended'
                         }
-                        class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                        class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                       >
                         Suspend Org
                       </button>
@@ -308,7 +308,7 @@ export const BillingAdminPanel: Component = () => {
                           billingLoadingByOrgID()[orgID()] ||
                           currentSubState() === 'active'
                         }
-                        class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                        class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                       >
                         Activate Org
                       </button>
@@ -324,7 +324,7 @@ export const BillingAdminPanel: Component = () => {
               const billing = () => billingByOrgID()[orgID()];
               return (
                 <div class="px-3 pb-3 bg-slate-50 dark:bg-slate-800">
-                  <div class="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3">
+                  <div class="rounded-md border border-border bg-slate-50 dark:bg-slate-800 p-3">
                     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
                       <div class="text-xs font-semibold text-slate-600 dark:text-slate-300">
                         Billing state JSON
@@ -337,7 +337,7 @@ export const BillingAdminPanel: Component = () => {
                           setBillingByOrgID((prev) => ({ ...prev, [id]: undefined }));
                           void ensureBillingState(id);
                         }}
-                        class="px-2 py-1 text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"
+                        class="px-2 py-1 text-xs rounded-md border border-border bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"
                       >
                         Reload
                       </button>

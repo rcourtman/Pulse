@@ -120,7 +120,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
       {/* Assistant message - card style */}
       <Show when={!isUser()}>
         <div class="w-full pl-2 pr-2">
-          <div class="group relative bg-slate-50 dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700 p-5 shadow-sm transition-all hover:border-slate-300 dark:hover:border-slate-600">
+          <div class="group relative bg-slate-50 dark:bg-slate-800 rounded-md border border-border p-5 shadow-sm transition-all hover:border-slate-300 dark:hover:border-slate-600">
             {/* Assistant indicator */}
             <div class="flex items-center gap-2.5 mb-3">
               <div class="w-6 h-6 rounded-md bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 shadow-sm flex items-center justify-center shrink-0">
@@ -131,7 +131,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               <div class="flex items-baseline gap-2">
                 <span class="text-xs font-semibold text-slate-700 dark:text-slate-200">Assistant</span>
                 <Show when={props.message.model && !props.message.isStreaming}>
-                  <span class="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
+                  <span class="text-[10px] text-muted font-mono">
                     {props.message.model}
                   </span>
                 </Show>
@@ -219,10 +219,10 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
 
               <Show when={!props.message.isStreaming && contextTools().length > 0}>
                 <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700 flex flex-wrap gap-2">
-                  <span class="text-[10px] uppercase font-semibold text-slate-400 dark:text-slate-500 tracking-wider">Context used</span>
+                  <span class="text-[10px] uppercase font-semibold text-muted tracking-wider">Context used</span>
                   <div class="flex flex-wrap gap-1.5">
                     {contextTools().map((name) => (
-                      <span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 border border-slate-200 dark:border-slate-600 font-medium">
+                      <span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 border border-border font-medium">
                         {formatToolName(name)}
                       </span>
                     ))}

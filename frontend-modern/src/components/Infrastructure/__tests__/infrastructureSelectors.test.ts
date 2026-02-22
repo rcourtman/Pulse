@@ -273,7 +273,7 @@ describe('infrastructureSelectors', () => {
     it('returns baseline styling below threshold', () => {
       expect(getOutlierEmphasis(12, stats)).toEqual({
         fontWeight: 'normal',
-        color: 'text-slate-500 dark:text-slate-400',
+        color: 'text-muted',
         showOutlierHint: false,
       });
     });

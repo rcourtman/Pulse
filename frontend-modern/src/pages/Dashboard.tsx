@@ -137,7 +137,7 @@ export default function Dashboard() {
         <div class="flex items-center gap-4">
           <div>
             <div class="flex items-center gap-3">
-              <h1 id="dashboard-title" class="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">System Overview</h1>
+              <h1 id="dashboard-title" class="text-2xl font-bold text-base-content tracking-tight">System Overview</h1>
               <Show when={connected()}>
                 <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-semibold tracking-wide uppercase dark:bg-emerald-900 dark:border-emerald-800 dark:text-emerald-400">
                   <span class="relative flex h-1.5 w-1.5">
@@ -148,7 +148,7 @@ export default function Dashboard() {
                 </span>
               </Show>
             </div>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">Real-time status and resource utilization across environments.</p>
+            <p class="text-sm text-muted mt-1 font-medium">Real-time status and resource utilization across environments.</p>
           </div>
         </div>
         <div class="flex items-center gap-3 self-start sm:self-auto">
@@ -167,7 +167,7 @@ export default function Dashboard() {
       <Switch>
         <Match when={isLoading() && !initialLoadComplete()}>
           <section class="space-y-2" data-testid="dashboard-loading">
-            <div class="border border-slate-200 dark:border-slate-700 rounded-md p-4 sm:p-5 bg-white dark:bg-slate-800">
+            <div class="border border-border rounded-md p-4 sm:p-5 bg-surface">
               <div class="space-y-4">
                 <For each={['h-4 w-44', 'h-10 w-40']}>
                   {(dims) => <div data-testid="dashboard-skeleton-block" class={`animate-pulse bg-slate-200 dark:bg-slate-700 rounded ${dims}`} />}
@@ -182,7 +182,7 @@ export default function Dashboard() {
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <For each={Array.from({ length: 2 })}>
                 {() => (
-                  <div data-testid="dashboard-skeleton-block" class="border border-slate-200 dark:border-slate-700 rounded-md p-4 sm:p-5 bg-white dark:bg-slate-800"><div class="animate-pulse bg-slate-200 dark:bg-slate-700 rounded h-24" /></div>
+                  <div data-testid="dashboard-skeleton-block" class="border border-border rounded-md p-4 sm:p-5 bg-surface"><div class="animate-pulse bg-slate-200 dark:bg-slate-700 rounded h-24" /></div>
                 )}
               </For>
             </div>
@@ -190,9 +190,9 @@ export default function Dashboard() {
         </Match>
 
         <Match when={hasConnectionError()}>
-          <section class="border border-slate-200 dark:border-slate-700 rounded-md p-4 sm:p-5 bg-white dark:bg-slate-800" aria-live="polite">
-            <h2 class="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100">Dashboard unavailable</h2>
-            <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Real-time dashboard data is currently unavailable. Reconnect to try again.</p>
+          <section class="border border-border rounded-md p-4 sm:p-5 bg-surface" aria-live="polite">
+            <h2 class="text-base sm:text-lg font-semibold text-base-content">Dashboard unavailable</h2>
+            <p class="mt-2 text-sm text-muted">Real-time dashboard data is currently unavailable. Reconnect to try again.</p>
             <button
               type="button"
               onClick={() => reconnect()}
@@ -204,9 +204,9 @@ export default function Dashboard() {
         </Match>
 
         <Match when={isEmpty()}>
-          <section class="border border-slate-200 dark:border-slate-700 rounded-md p-4 sm:p-5 bg-white dark:bg-slate-800" aria-live="polite">
-            <h2 class="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100">No resources yet</h2>
-            <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Once connected platforms report resources, your dashboard overview will appear here.</p>
+          <section class="border border-border rounded-md p-4 sm:p-5 bg-surface" aria-live="polite">
+            <h2 class="text-base sm:text-lg font-semibold text-base-content">No resources yet</h2>
+            <p class="mt-2 text-sm text-muted">Once connected platforms report resources, your dashboard overview will appear here.</p>
           </section>
         </Match>
 

@@ -36,10 +36,10 @@ export function WhatsNewModal() {
         <div class="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden rounded-md bg-white shadow-sm dark:bg-slate-800">
           <div class="flex-shrink-0 flex items-start justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-700">
             <div>
-              <h2 class="text-xl sm:text-2xl font-semibold text-slate-900 dark:text-slate-100">
+              <h2 class="text-xl sm:text-2xl font-semibold text-base-content">
                 Welcome to the New Navigation!
               </h2>
-              <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+              <p class="mt-1 text-sm text-muted">
                 Everything is now organized by what you want to do, not where the data comes from.
               </p>
             </div>
@@ -96,7 +96,7 @@ export function WhatsNewModal() {
             </div>
 
             <div class="rounded-md border border-slate-200 bg-slate-50 p-3 sm:p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-              <div class="font-medium text-slate-900 dark:text-slate-100">
+              <div class="font-medium text-base-content">
                 Quick summary
               </div>
               <ul class="mt-2 space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
@@ -116,7 +116,7 @@ export function WhatsNewModal() {
             </div>
 
             <div class="rounded-md border border-slate-200 bg-white p-3 sm:p-4 dark:border-slate-700 dark:bg-slate-800">
-              <div class="text-sm font-medium text-slate-900 dark:text-slate-100">
+              <div class="text-sm font-medium text-base-content">
                 Why switch to a unified resource model?
               </div>
               <ul class="mt-2 space-y-1.5 text-xs sm:text-sm text-slate-700 dark:text-slate-300">
@@ -136,7 +136,7 @@ export function WhatsNewModal() {
             </div>
 
             <div class="rounded-md border border-slate-200 bg-white p-3 sm:p-4 dark:border-slate-700 dark:bg-slate-800">
-              <div class="text-sm font-medium text-slate-900 dark:text-slate-100">
+              <div class="text-sm font-medium text-base-content">
                 Finding things fast
               </div>
               <ul class="mt-2 space-y-1.5 text-xs sm:text-sm text-slate-700 dark:text-slate-300">
@@ -152,7 +152,7 @@ export function WhatsNewModal() {
             </div>
 
             <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-              <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+              <label class="flex items-center gap-2 text-sm text-muted">
                 <input
                   type="checkbox"
                   checked={dontShowAgain()}

@@ -25,8 +25,8 @@ export const DisksCard: Component<DisksCardProps> = (props) => {
                   <span class="text-slate-600 dark:text-slate-300 truncate max-w-[100px]" title={disk.mountpoint}>{disk.mountpoint}</span>
                   <span class="flex items-center gap-1.5">
                     <span class={`font-medium ${textColor}`}>{usagePercent.toFixed(0)}%</span>
-                    <span class="text-slate-400 dark:text-slate-500">·</span>
-                    <span class="text-slate-500 dark:text-slate-400">{formatBytes(disk.used)} / {formatBytes(disk.total)}</span>
+                    <span class="text-muted">·</span>
+                    <span class="text-muted">{formatBytes(disk.used)} / {formatBytes(disk.total)}</span>
                   </span>
                 </div>
                 <div class="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">

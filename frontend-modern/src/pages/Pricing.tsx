@@ -70,7 +70,7 @@ function CheckCell(props: { enabled: boolean; tier: TierColumn; featureKey: stri
     <span
       class={[
         'inline-flex w-full justify-center text-sm font-semibold',
-        props.enabled ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-400 dark:text-slate-500',
+        props.enabled ? 'text-emerald-700 dark:text-emerald-300' : 'text-muted',
       ].join(' ')}
       aria-label={label}
       title={label}
@@ -174,16 +174,16 @@ export default function Pricing() {
   return (
     <div class="space-y-6">
       <div class="space-y-1">
-        <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Pricing</h1>
-        <p class="text-sm text-slate-600 dark:text-slate-400">
+        <h1 class="text-2xl font-semibold text-base-content">Pricing</h1>
+        <p class="text-sm text-muted">
           Compare tiers and choose what fits.
         </p>
       </div>
 
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card padding="lg" class="relative">
-          <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Community</h2>
-          <div class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+          <h2 class="text-lg font-semibold text-base-content">Community</h2>
+          <div class="mt-2 text-3xl font-semibold tracking-tight text-base-content">
             Free forever
           </div>
           <ul class="mt-4 space-y-2 text-sm text-slate-700 dark:text-slate-200">
@@ -208,8 +208,8 @@ export default function Pricing() {
             </span>
           </div>
 
-          <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Pro</h2>
-          <div class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+          <h2 class="text-lg font-semibold text-base-content">Pro</h2>
+          <div class="mt-2 text-3xl font-semibold tracking-tight text-base-content">
             $15/month
           </div>
           <div class="mt-1 text-sm text-slate-600 dark:text-slate-300">
@@ -236,8 +236,8 @@ export default function Pricing() {
         </Card>
 
         <Card padding="lg" class="relative">
-          <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Cloud</h2>
-          <div class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+          <h2 class="text-lg font-semibold text-base-content">Cloud</h2>
+          <div class="mt-2 text-3xl font-semibold tracking-tight text-base-content">
             $29/month
           </div>
           <div class="mt-1 text-sm text-slate-600 dark:text-slate-300">
@@ -263,11 +263,11 @@ export default function Pricing() {
       </div>
 
       <Card padding="lg" class="overflow-hidden">
-        <h2 class="text-base font-semibold text-slate-900 dark:text-slate-100">Feature Comparison</h2>
+        <h2 class="text-base font-semibold text-base-content">Feature Comparison</h2>
         <div class="mt-4 overflow-x-auto">
           <Table class="min-w-[720px] w-full border-collapse">
             <TableHeader>
-              <TableRow class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+              <TableRow class="bg-slate-50 dark:bg-slate-800 border-b border-border">
                 <TableHead class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
                   Feature
                 </TableHead>
@@ -282,13 +282,13 @@ export default function Pricing() {
                 </TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody class="bg-white dark:bg-slate-800 divide-y divide-gray-100 dark:divide-gray-700">
+            <TableBody class="bg-surface divide-y divide-gray-100 dark:divide-gray-700">
               <For each={FEATURE_ROWS}>
                 {(row) => (
                   <TableRow>
                     <TableCell class="px-4 py-2">
-                      <div class="text-sm font-medium text-slate-900 dark:text-slate-100">{row.name}</div>
-                      <div class="mt-0.5 text-xs font-mono text-slate-500 dark:text-slate-400">{row.key}</div>
+                      <div class="text-sm font-medium text-base-content">{row.name}</div>
+                      <div class="mt-0.5 text-xs font-mono text-muted">{row.key}</div>
                     </TableCell>
                     <TableCell class="px-3 py-2"><CheckCell enabled={row.community} tier="community" featureKey={row.key} /></TableCell>
                     <TableCell class="px-3 py-2"><CheckCell enabled={row.pro} tier="pro" featureKey={row.key} /></TableCell>

@@ -178,7 +178,7 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
         <div class="flex items-center gap-2">
           <input
             type="url"
-            class="flex-1 text-xs px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            class="flex-1 text-xs px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md bg-surface text-base-content focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors"
             placeholder="https://192.168.1.100:8080"
             value={urlValue()}
             onInput={(e) => setUrlValue(e.currentTarget.value)}
@@ -267,7 +267,7 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
           </div>
         </Show>
 
-        <p class="mt-1.5 text-[10px] text-slate-400 dark:text-slate-500">
+        <p class="mt-1.5 text-[10px] text-muted">
           Add a URL to quickly access this {targetLabel()}'s web interface from the dashboard.
         </p>
       </div>

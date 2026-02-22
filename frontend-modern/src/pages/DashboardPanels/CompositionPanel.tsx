@@ -37,11 +37,11 @@ function DistributionItem(props: { type: string; count: number; total: number })
         <div class="space-y-1">
             <div class="flex items-center justify-between text-xs">
                 <div class="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                    <Dynamic component={Icon()} class="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                    <Dynamic component={Icon()} class="w-3.5 h-3.5 text-muted" />
                     <span class="font-medium">{TYPE_LABELS[props.type] ?? props.type}</span>
                 </div>
                 <div class="flex items-center gap-1.5">
-                    <span class="font-bold text-slate-900 dark:text-white">{props.count}</span>
+                    <span class="font-bold text-base-content">{props.count}</span>
                     <span class="text-slate-400 dark:text-slate-600">({percent()}%)</span>
                 </div>
             </div>
@@ -65,7 +65,7 @@ export function CompositionPanel(props: CompositionPanelProps) {
     return (
         <Card padding="none" class="px-4 py-3.5">
             <div class="flex items-center gap-2 mb-3">
-                <h2 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                <h2 class="text-xs font-semibold text-muted uppercase tracking-wide">
                     Composition
                 </h2>
             </div>
@@ -73,7 +73,7 @@ export function CompositionPanel(props: CompositionPanelProps) {
             <div class="space-y-4">
                 <Show when={totalInfra() > 0}>
                     <div class="space-y-2">
-                        <h3 class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Infrastructure</h3>
+                        <h3 class="text-[10px] font-bold text-muted uppercase tracking-wider">Infrastructure</h3>
                         <div class="space-y-3">
                             <For each={infraTypes()}>
                                 {([type, count]) => (
@@ -90,7 +90,7 @@ export function CompositionPanel(props: CompositionPanelProps) {
 
                 <Show when={totalWorkloads() > 0}>
                     <div class="space-y-2">
-                        <h3 class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Workloads</h3>
+                        <h3 class="text-[10px] font-bold text-muted uppercase tracking-wider">Workloads</h3>
                         <div class="space-y-3">
                             <For each={workloadTypes()}>
                                 {([type, count]) => (
@@ -102,7 +102,7 @@ export function CompositionPanel(props: CompositionPanelProps) {
                 </Show>
 
                 <Show when={totalInfra() === 0 && totalWorkloads() === 0}>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 py-2 text-center italic">No resources detected</p>
+                    <p class="text-xs text-muted py-2 text-center italic">No resources detected</p>
                 </Show>
             </div>
         </Card>

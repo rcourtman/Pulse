@@ -32,7 +32,7 @@ const HEALTH_BADGE: Record<NormalizedHealth, { bg: string; text: string }> = {
   warning: { bg: 'bg-yellow-100 dark:bg-yellow-900', text: 'text-yellow-700 dark:text-yellow-300' },
   critical: { bg: 'bg-red-100 dark:bg-red-900', text: 'text-red-700 dark:text-red-300' },
   offline: { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-600 dark:text-slate-300' },
-  unknown: { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-500 dark:text-slate-400' },
+  unknown: { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-muted' },
 };
 
 const TYPE_BADGE: Record<string, string> = {
@@ -85,7 +85,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         {...props.alertDataAttrs}
       >
         {/* Name + badges */}
-        <td class="px-1.5 sm:px-2 py-0.5 text-slate-900 dark:text-slate-100">
+        <td class="px-1.5 sm:px-2 py-0.5 text-base-content">
           <div class="flex items-center gap-1.5 min-w-0">
             <span class="truncate max-w-[220px] text-[11px]" title={props.record.name}>
               {props.record.name}
@@ -122,7 +122,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
 
         {/* Node (only when not grouped by node) */}
         <Show when={props.groupBy !== 'node'}>
-          <td class="px-1.5 sm:px-2 py-0.5 text-xs text-slate-600 dark:text-slate-400">
+          <td class="px-1.5 sm:px-2 py-0.5 text-xs text-muted">
             {getRecordNodeLabel(props.record)}
           </td>
         </Show>
@@ -177,11 +177,11 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
               e.stopPropagation();
               props.onToggleExpand();
             }}
-            class="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            class="p-1 rounded hover:bg-surface-hover transition-colors"
             aria-label={`Toggle details for ${props.record.name}`}
           >
             <svg
-              class={`w-3.5 h-3.5 text-slate-400 dark:text-slate-500 transition-transform duration-150 ${props.expanded ? 'rotate-90' : ''
+              class={`w-3.5 h-3.5 text-muted transition-transform duration-150 ${props.expanded ? 'rotate-90' : ''
                 }`}
               viewBox="0 0 24 24"
               fill="none"

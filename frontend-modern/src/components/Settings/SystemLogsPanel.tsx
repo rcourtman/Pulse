@@ -115,7 +115,7 @@ export const SystemLogsPanel: Component = () => {
                             <select
                                 value={level()}
                                 onChange={(e) => handleLevelChange(e.currentTarget.value)}
-                                class="form-select min-h-10 sm:min-h-9 text-sm py-2.5 px-3 rounded-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:ring-primary-500 focus:border-primary-500"
+                                class="form-select min-h-10 sm:min-h-9 text-sm py-2.5 px-3 rounded-md border-slate-300 dark:border-slate-600 bg-surface text-slate-600 dark:text-slate-300 focus:ring-primary-500 focus:border-primary-500"
                             >
                                 <option value="debug">Debug</option>
                                 <option value="info">Info</option>
@@ -129,7 +129,7 @@ export const SystemLogsPanel: Component = () => {
                                 onClick={() => setIsPaused(!isPaused())}
                                 class={`min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 rounded transition-colors ${isPaused()
                                     ? 'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400'
-                                    : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400'
+                                    : 'hover:bg-surface-hover text-muted'
                                     }`}
                                 title={isPaused() ? "Resume Stream" : "Pause Stream"}
                             >
@@ -137,7 +137,7 @@ export const SystemLogsPanel: Component = () => {
                             </button>
                             <button
                                 onClick={() => setLogs([])}
-                                class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors"
+                                class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 rounded hover:bg-surface-hover text-muted transition-colors"
                                 title="Clear Logs"
                             >
                                 <Trash2 size={18} />
@@ -183,7 +183,7 @@ export const SystemLogsPanel: Component = () => {
                         )}
                     </div>
 
-                    <div class="text-xs text-slate-500 dark:text-slate-400 flex justify-between px-1 pt-4">
+                    <div class="text-xs text-muted flex justify-between px-1 pt-4">
                         <span>Buffer: {logs().length} / {MAX_LOGS} lines</span>
                         <span class="flex items-center gap-2">
                             <div class={`w-2 h-2 rounded-full ${isPaused() ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`}></div>

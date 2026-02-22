@@ -60,8 +60,8 @@ function IncidentEventFilters(props: {
   };
 
   return (
-    <div class="flex flex-wrap items-center gap-1.5 p-2 bg-slate-50 dark:bg-slate-800/50 rounded border border-slate-200 dark:border-slate-700">
-      <span class="text-xs font-medium text-slate-500 dark:text-slate-400 mr-1">Filter events:</span>
+    <div class="flex flex-wrap items-center gap-1.5 p-2 bg-slate-50 dark:bg-slate-800/50 rounded border border-border">
+      <span class="text-xs font-medium text-muted mr-1">Filter events:</span>
       <For each={INCIDENT_EVENT_TYPES}>
         {(type) => {
           const selected = () => props.filters().has(type);
@@ -262,7 +262,7 @@ export function OverviewTab(props: {
         <Card padding="sm" class="sm:p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-[10px] sm:text-sm text-slate-600 dark:text-slate-400 uppercase tracking-wider sm:normal-case">Acknowledged</p>
+              <p class="text-[10px] sm:text-sm text-muted uppercase tracking-wider sm:normal-case">Acknowledged</p>
               <p class="text-lg sm:text-2xl font-semibold text-yellow-600 dark:text-yellow-400">
                 {alertStats().acknowledged}
               </p>
@@ -287,7 +287,7 @@ export function OverviewTab(props: {
         <Card padding="sm" class="sm:p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-[10px] sm:text-sm text-slate-600 dark:text-slate-400 uppercase tracking-wider sm:normal-case">Last 24 Hours</p>
+              <p class="text-[10px] sm:text-sm text-muted uppercase tracking-wider sm:normal-case">Last 24 Hours</p>
               <p class="text-lg sm:text-2xl font-semibold text-slate-700 dark:text-slate-300">
                 {alertStats().total24h}
               </p>
@@ -296,7 +296,7 @@ export function OverviewTab(props: {
               <svg
                 width="16"
                 height="16"
-                class="sm:w-5 sm:h-5 text-slate-600 dark:text-slate-400"
+                class="sm:w-5 sm:h-5 text-muted"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -312,7 +312,7 @@ export function OverviewTab(props: {
         <Card padding="sm" class="sm:p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-[10px] sm:text-sm text-slate-600 dark:text-slate-400 uppercase tracking-wider sm:normal-case">Guest Overrides</p>
+              <p class="text-[10px] sm:text-sm text-muted uppercase tracking-wider sm:normal-case">Guest Overrides</p>
               <p class="text-lg sm:text-2xl font-semibold text-blue-600 dark:text-blue-400">
                 {alertStats().overrides}
               </p>
@@ -341,7 +341,7 @@ export function OverviewTab(props: {
         <Show
           when={Object.keys(props.activeAlerts).length > 0}
           fallback={
-            <div class="text-center py-8 text-slate-500 dark:text-slate-400">
+            <div class="text-center py-8 text-muted">
               <div class="flex justify-center mb-3">
                 <svg class="w-12 h-12 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" />
@@ -354,11 +354,11 @@ export function OverviewTab(props: {
           }
         >
           <Show when={alertStats().acknowledged > 0 || alertStats().active > 0}>
-            <div class="flex flex-wrap items-center justify-between gap-1.5 p-1.5 bg-slate-50 dark:bg-slate-800 rounded-t-lg border border-slate-200 dark:border-slate-700">
+            <div class="flex flex-wrap items-center justify-between gap-1.5 p-1.5 bg-slate-50 dark:bg-slate-800 rounded-t-lg border border-border">
               <Show when={alertStats().acknowledged > 0}>
                 <button
                   onClick={() => props.setShowAcknowledged(!props.showAcknowledged())}
-                  class="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                  class="text-xs text-muted hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
                 >
                   {props.showAcknowledged() ? 'Hide' : 'Show'} acknowledged
                 </button>
@@ -415,7 +415,7 @@ export function OverviewTab(props: {
           </Show>
           <div class="space-y-2">
             <Show when={filteredAlerts().length === 0}>
-              <div class="text-center py-8 text-slate-500 dark:text-slate-400">
+              <div class="text-center py-8 text-muted">
                 {props.showAcknowledged() ? 'No active alerts' : 'No unacknowledged alerts'}
               </div>
             </Show>
@@ -484,7 +484,7 @@ export function OverviewTab(props: {
                           >
                             {alert.resourceName}
                           </span>
-                          <span class="text-xs text-slate-600 dark:text-slate-400">
+                          <span class="text-xs text-muted">
                             ({alert.type})
                           </span>
                           <Show when={alert.node}>
@@ -501,7 +501,7 @@ export function OverviewTab(props: {
                         <p class="text-sm text-slate-700 dark:text-slate-300 mt-1 break-words">
                           {alert.message}
                         </p>
-                        <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                        <p class="text-xs text-muted mt-1">
                           Started: {new Date(alert.startTime).toLocaleString()}
                         </p>
                       </div>
@@ -593,15 +593,15 @@ export function OverviewTab(props: {
                     </div>
                   </div>
                   <Show when={expandedIncidents().has(alert.id)}>
-                    <div class="mt-3 border-t border-slate-200 dark:border-slate-700 pt-3">
+                    <div class="mt-3 border-t border-border pt-3">
                       <Show when={incidentLoading()[alert.id]}>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">Loading timeline...</p>
+                        <p class="text-xs text-muted">Loading timeline...</p>
                       </Show>
                       <Show when={!incidentLoading()[alert.id]}>
                         <Show when={incidentTimelines()[alert.id]}>
                           {(timeline) => (
                             <div class="space-y-3">
-                              <div class="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+                              <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
                                 <span class="font-medium text-slate-700 dark:text-slate-200">Incident</span>
                                 <span>{timeline().status}</span>
                                 <Show when={timeline().acknowledged}>
@@ -631,9 +631,9 @@ export function OverviewTab(props: {
                                       <div class="space-y-2">
                                         <For each={filteredEvents}>
                                           {(event) => (
-                                            <div class="rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2">
-                                              <div class="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-                                                <span class="font-medium text-slate-800 dark:text-slate-200">
+                                            <div class="rounded border border-border bg-slate-50 dark:bg-slate-800 p-2">
+                                              <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
+                                                <span class="font-medium text-base-content">
                                                   {event.summary}
                                                 </span>
                                                 <span>{new Date(event.timestamp).toLocaleString()}</span>
@@ -649,7 +649,7 @@ export function OverviewTab(props: {
                                                 </p>
                                               </Show>
                                               <Show when={event.details && (event.details as { output_excerpt?: string }).output_excerpt}>
-                                                <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                                                <p class="text-xs text-muted mt-1">
                                                   {(event.details as { output_excerpt?: string }).output_excerpt}
                                                 </p>
                                               </Show>
@@ -659,19 +659,19 @@ export function OverviewTab(props: {
                                       </div>
                                     </Show>
                                     <Show when={events.length > 0 && filteredEvents.length === 0}>
-                                      <p class="text-xs text-slate-500 dark:text-slate-400">
+                                      <p class="text-xs text-muted">
                                         No timeline events match the selected filters.
                                       </p>
                                     </Show>
                                     <Show when={events.length === 0}>
-                                      <p class="text-xs text-slate-500 dark:text-slate-400">No timeline events yet.</p>
+                                      <p class="text-xs text-muted">No timeline events yet.</p>
                                     </Show>
                                   </>
                                 );
                               })()}
                               <div class="flex flex-col gap-2">
                                 <textarea
-                                  class="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 p-2 text-xs text-slate-800 dark:text-slate-200"
+                                  class="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 p-2 text-xs text-base-content"
                                   rows={2}
                                   placeholder="Add a note for this incident..."
                                   value={incidentNoteDrafts()[alert.id] || ''}
@@ -696,7 +696,7 @@ export function OverviewTab(props: {
                           )}
                         </Show>
                         <Show when={!incidentTimelines()[alert.id]}>
-                          <p class="text-xs text-slate-500 dark:text-slate-400">No incident timeline available.</p>
+                          <p class="text-xs text-muted">No incident timeline available.</p>
                         </Show>
                       </Show>
                     </div>

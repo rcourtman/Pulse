@@ -99,7 +99,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                     alt="Pulse Logo"
                     class="w-24 h-24 rounded-md mb-8 mx-auto dark:shadow-none"
                 />
-                <h1 class="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 dark:text-white mb-4 animate-fade-in delay-100">
+                <h1 class="text-4xl sm:text-5xl font-bold tracking-tight text-base-content mb-4 animate-fade-in delay-100">
                     Welcome to Pulse
                 </h1>
                 <p class="text-xl text-slate-500 dark:text-blue-200 font-light animate-fade-in delay-200 max-w-md mx-auto">
@@ -109,9 +109,9 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
 
             {/* Bootstrap token unlock */}
             <Show when={!props.isUnlocked}>
-                <div class="p-8 max-w-lg mx-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-left animate-slide-up delay-300 relative group">
+                <div class="p-8 max-w-lg mx-auto bg-surface border border-border rounded-md text-left animate-slide-up delay-300 relative group">
                     <div class="relative z-10">
-                        <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2 tracking-tight">Unlock Setup</h3>
+                        <h3 class="text-xl font-semibold text-base-content mb-2 tracking-tight">Unlock Setup</h3>
                         <p class="text-sm text-slate-500 dark:text-slate-300 mb-6">
                             Run the following command on your host to retrieve the secure bootstrap token:
                         </p>
@@ -151,7 +151,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                                     }
                                 }}
                                 onKeyPress={(e) => e.key === 'Enter' && handleUnlock()}
-                                class="w-full px-5 py-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
+                                class="w-full px-5 py-3.5 bg-white dark:bg-slate-900 border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
                                 placeholder="Paste your bootstrap token"
                                 autofocus
                             />

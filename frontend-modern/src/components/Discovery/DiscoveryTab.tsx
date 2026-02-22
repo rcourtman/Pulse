@@ -414,7 +414,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                                 {cmd.command}
                                             </code>
                                         </div>
-                                        <p class="text-slate-500 dark:text-slate-400 mt-0.5 pl-0.5">{cmd.description}</p>
+                                        <p class="text-muted mt-0.5 pl-0.5">{cmd.description}</p>
                                     </div>
                                 )}
                             </For>
@@ -427,7 +427,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             <Show when={showLoadingSpinner()}>
                 <div class="flex items-center justify-center py-8">
                     <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-                    <span class="ml-2 text-sm text-slate-500 dark:text-slate-400">Loading discovery...</span>
+                    <span class="ml-2 text-sm text-muted">Loading discovery...</span>
                 </div>
             </Show>
 
@@ -518,7 +518,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             {/* No discovery yet - only show after initial fetch completes to prevent flash */}
             <Show when={!discovery() && !isScanning()}>
                 <div class="text-center py-8">
-                    <div class="text-slate-500 dark:text-slate-400 mb-4">
+                    <div class="text-muted mb-4">
                         <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
@@ -527,14 +527,14 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                             fallback={
                                 <>
                                     <p class="text-sm">No discovery data yet</p>
-                                    <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                                    <p class="text-xs text-muted mt-1">
                                         Run a discovery scan to identify services and configurations
                                     </p>
                                 </>
                             }
                         >
                             <p class="text-sm">Checking existing discovery data...</p>
-                            <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                            <p class="text-xs text-muted mt-1">
                                 You can run discovery now if this takes too long.
                             </p>
                         </Show>
@@ -609,16 +609,16 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             {/* Discovery exists but has no meaningful data - show re-scan option */}
             <Show when={!discovery.loading && discovery() && !hasValidDiscovery() && !isScanning()}>
                 <div class="text-center py-8">
-                    <div class="text-slate-500 dark:text-slate-400 mb-4">
+                    <div class="text-muted mb-4">
                         <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <p class="text-sm">Unknown Service</p>
-                        <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                        <p class="text-xs text-muted mt-1">
                             Discovery completed but couldn't identify a known service.
                         </p>
                         <Show when={discovery()?.updated_at}>
-                            <p class="text-xs text-slate-400 dark:text-slate-500 mt-2">
+                            <p class="text-xs text-muted mt-2">
                                 Last scanned: {formatDiscoveryAge(discovery()!.updated_at)}
                             </p>
                         </Show>
@@ -648,11 +648,11 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                         <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
                             <div class="flex items-start justify-between">
                                 <div>
-                                    <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                    <h3 class="text-sm font-semibold text-base-content">
                                         {d().service_name || 'Unknown Service'}
                                     </h3>
                                     <Show when={d().service_version}>
-                                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                        <p class="text-xs text-muted mt-0.5">
                                             Version {d().service_version}
                                         </p>
                                     </Show>
@@ -711,7 +711,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                 <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">
                                     CLI Access
                                 </div>
-                                <code class="block bg-slate-100 dark:bg-slate-800 rounded px-2 py-1.5 text-xs text-slate-800 dark:text-slate-200 font-mono overflow-x-auto">
+                                <code class="block bg-slate-100 dark:bg-slate-800 rounded px-2 py-1.5 text-xs text-base-content font-mono overflow-x-auto">
                                     {d().cli_access}
                                 </code>
                             </div>
@@ -783,7 +783,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                             <span class="inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                                                 {port.port}/{port.protocol}
                                                 <Show when={port.process}>
-                                                    <span class="text-slate-500 dark:text-slate-400 ml-1">({port.process})</span>
+                                                    <span class="text-muted ml-1">({port.process})</span>
                                                 </Show>
                                             </span>
                                         )}
@@ -802,8 +802,8 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                     <For each={d().facts.slice(0, 8)}>
                                         {(fact) => (
                                             <div class="flex items-center justify-between text-xs">
-                                                <span class="text-slate-600 dark:text-slate-400">{fact.key}</span>
-                                                <span class="font-medium text-slate-800 dark:text-slate-200 truncate ml-2 max-w-[60%]" title={fact.value}>
+                                                <span class="text-muted">{fact.key}</span>
+                                                <span class="font-medium text-base-content truncate ml-2 max-w-[60%]" title={fact.value}>
                                                     {fact.value}
                                                 </span>
                                             </div>
@@ -835,7 +835,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                     <Show
                                         when={d().user_notes}
                                         fallback={
-                                            <p class="text-xs text-slate-400 dark:text-slate-500 italic">
+                                            <p class="text-xs text-muted italic">
                                                 No notes yet. Add notes to document important information.
                                             </p>
                                         }
@@ -851,7 +851,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                         value={notesText()}
                                         onInput={(e) => setNotesText(e.currentTarget.value)}
                                         placeholder="Add notes about this resource (API tokens, passwords, important info)..."
-                                        class="w-full h-24 px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        class="w-full h-24 px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded bg-surface text-base-content focus:outline-none focus:ring-1 focus:ring-blue-500"
                                     />
                                     <Show when={saveError()}>
                                         <p class="text-xs text-red-600 dark:text-red-400">{saveError()}</p>
@@ -901,7 +901,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                                 <div class="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                                                     {cmdName}
                                                 </div>
-                                                <pre class="text-[10px] bg-slate-100 dark:bg-slate-800 rounded p-2 overflow-x-auto text-slate-600 dark:text-slate-400 max-h-32 overflow-y-auto">
+                                                <pre class="text-[10px] bg-slate-100 dark:bg-slate-800 rounded p-2 overflow-x-auto text-muted max-h-32 overflow-y-auto">
                                                     {output || '(no output)'}
                                                 </pre>
                                             </div>
@@ -917,7 +917,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                 <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-1">
                                     Scan Info
                                 </div>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">
+                                <p class="text-xs text-muted">
                                     Scan completed in {(d().scan_duration! / 1000).toFixed(1)}s.
                                     Full scan details are available to administrators.
                                 </p>
@@ -925,8 +925,8 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                         </Show>
 
                         {/* Footer with Update button */}
-                        <div class="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
-                            <span class="text-xs text-slate-500 dark:text-slate-400">
+                        <div class="flex items-center justify-between pt-2 border-t border-border">
+                            <span class="text-xs text-muted">
                                 Last updated: {formatDiscoveryAge(d().updated_at)}
                             </span>
                             <button

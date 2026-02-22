@@ -34,7 +34,7 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
   return (
     <Card padding="none" tone="default" class="px-4 py-3.5 border-slate-100 dark:border-slate-700">
       <div class="flex items-center justify-between gap-2">
-        <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Alerts</h2>
+        <h2 class="text-sm font-semibold text-base-content">Alerts</h2>
         <div class="flex items-center gap-2">
           <a
             href={ALERTS_OVERVIEW_PATH}
@@ -60,14 +60,14 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
         }
       >
         <div class="mt-1">
-          <p class="text-xs text-slate-500 dark:text-slate-400 mb-1">
+          <p class="text-xs text-muted mb-1">
             <span class="font-mono font-semibold text-red-600 dark:text-red-400">{props.criticalCount}</span> critical · <span class="font-mono font-semibold text-amber-600 dark:text-amber-400">{props.warningCount}</span> warning
           </p>
 
           <ul class="space-y-0.5" role="list">
             <For each={recent()}>
               {(alert) => (
-                <li class="flex items-center gap-2 -mx-1 px-1 py-0.5 rounded hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                <li class="flex items-center gap-2 -mx-1 px-1 py-0.5 rounded hover:bg-surface-hover transition-colors">
                   <span class={severityBadgeClass(alert.level)}>
                     {alert.level === 'critical' ? 'CRIT' : 'WARN'}
                   </span>
@@ -83,7 +83,7 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
           </ul>
 
           <Show when={props.alerts.length > 4}>
-            <p class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+            <p class="mt-1 text-[11px] text-muted">
               <a href={ALERTS_OVERVIEW_PATH} class="text-blue-600 hover:underline dark:text-blue-400">
                 +{props.alerts.length - 4} more
               </a>

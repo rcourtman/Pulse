@@ -26,7 +26,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
     return (
         <div class="space-y-3">
             {/* Tabs */}
-            <div class="flex items-center gap-6 border-b border-slate-200 dark:border-slate-700 px-1 mb-1">
+            <div class="flex items-center gap-6 border-b border-border px-1 mb-1">
                 <button
                     onClick={() => switchTab('overview')}
                     class={`pb-2 text-sm font-medium transition-colors relative ${activeTab() === 'overview'
@@ -78,7 +78,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
                 <Suspense fallback={
                     <div class="flex items-center justify-center py-8">
                         <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                        <span class="ml-2 text-sm text-slate-500 dark:text-slate-400">Loading discovery...</span>
+                        <span class="ml-2 text-sm text-muted">Loading discovery...</span>
                     </div>
                 }>
                     <DiscoveryTab

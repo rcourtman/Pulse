@@ -49,7 +49,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
         <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <div class="space-y-4">
             {/* Version Status Section */}
-            <div class="rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div class="rounded-md border border-border overflow-hidden">
               {/* Version Grid */}
               <div class={`grid gap-px ${props.updateInfo()?.available ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
                 {/* Current Version */}
@@ -59,10 +59,10 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                       <Package class="w-5 h-5 text-blue-600 dark:text-blue-400" />
                     </div>
                     <div class="flex-1 min-w-0">
-                      <p class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      <p class="text-xs font-medium uppercase tracking-wide text-muted">
                         Current Version
                       </p>
-                      <p class="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100 truncate">
+                      <p class="mt-1 text-lg font-bold text-base-content truncate">
                         {props.versionInfo()?.version || 'Loading...'}
                       </p>
                       <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -111,17 +111,17 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                       : 'bg-slate-100 dark:bg-slate-700'
                       }`}>
                       <Show when={props.updateInfo()?.available} fallback={
-                        <CheckCircle class="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                        <CheckCircle class="w-5 h-5 text-muted" />
                       }>
                         <CheckCircle class="w-5 h-5 text-green-600 dark:text-green-400" />
                       </Show>
                     </div>
                     <div class="flex-1 min-w-0">
-                      <p class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      <p class="text-xs font-medium uppercase tracking-wide text-muted">
                         {props.updateInfo()?.available ? 'Available' : 'Status'}
                       </p>
                       <Show when={props.updateInfo()?.available} fallback={
-                        <p class="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">
+                        <p class="mt-1 text-lg font-bold text-base-content">
                           Up to date
                         </p>
                       }>
@@ -140,8 +140,8 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
               </div>
 
               {/* Check for updates button */}
-              <div class="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p class="text-xs text-slate-500 dark:text-slate-400">
+              <div class="bg-surface border-t border-border px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p class="text-xs text-muted">
                   <Show when={props.autoUpdateEnabled()}>
                     Auto-check enabled
                   </Show>
@@ -157,7 +157,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                     props.versionInfo()?.isSourceBuild
                   }
                   class={`self-end sm:self-auto min-h-10 sm:min-h-9 px-4 py-2.5 text-sm rounded-md transition-colors flex items-center gap-2 ${props.versionInfo()?.isSourceBuild
-                    ? 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                    ? 'bg-slate-100 dark:bg-slate-700 text-muted cursor-not-allowed'
                     : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                 >
@@ -487,7 +487,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
 
                 {/* Release notes footer */}
                 <Show when={props.updateInfo()?.releaseNotes}>
-                  <div class="px-5 py-3 border-t border-green-200 dark:border-green-800 bg-white dark:bg-slate-800">
+                  <div class="px-5 py-3 border-t border-green-200 dark:border-green-800 bg-surface">
                     <details class="group">
                       <summary class="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-300 cursor-pointer hover:text-green-800 dark:hover:text-green-200 transition-colors">
                         <svg class="w-4 h-4 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -495,7 +495,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         </svg>
                         View Release Notes
                       </summary>
-                      <pre class="mt-3 p-4 text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap font-mono bg-slate-100 dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700 max-h-64 overflow-y-auto">
+                      <pre class="mt-3 p-4 text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap font-mono bg-slate-100 dark:bg-slate-800 rounded-md border border-border max-h-64 overflow-y-auto">
                         {props.updateInfo()?.releaseNotes}
                       </pre>
                     </details>
@@ -528,7 +528,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                 disabled={props.versionInfo()?.isSourceBuild}
                 class={`p-4 rounded-md border-2 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed ${props.updateChannel() === 'stable'
                   ? 'border-green-500 bg-green-50 dark:bg-green-900'
-                  : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                  : 'border-border hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
               >
                 <div class="flex items-center gap-3">
@@ -538,7 +538,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                     }`}>
                     <svg class={`w-5 h-5 ${props.updateChannel() === 'stable'
                       ? 'text-green-600 dark:text-green-400'
-                      : 'text-slate-500 dark:text-slate-400'
+                      : 'text-muted'
                       }`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                     </svg>
@@ -546,9 +546,9 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                   <div>
                     <p class={`text-sm font-semibold ${props.updateChannel() === 'stable'
                       ? 'text-green-900 dark:text-green-100'
-                      : 'text-slate-900 dark:text-slate-100'
+                      : 'text-base-content'
                       }`}>Stable</p>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                    <p class="text-xs text-muted">
                       Production-ready releases
                     </p>
                   </div>
@@ -564,7 +564,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                 disabled={props.versionInfo()?.isSourceBuild}
                 class={`p-4 rounded-md border-2 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed ${props.updateChannel() === 'rc'
                   ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
-                  : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                  : 'border-border hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
               >
                 <div class="flex items-center gap-3">
@@ -574,7 +574,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                     }`}>
                     <svg class={`w-5 h-5 ${props.updateChannel() === 'rc'
                       ? 'text-blue-600 dark:text-blue-400'
-                      : 'text-slate-500 dark:text-slate-400'
+                      : 'text-muted'
                       }`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
                     </svg>
@@ -582,9 +582,9 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                   <div>
                     <p class={`text-sm font-semibold ${props.updateChannel() === 'rc'
                       ? 'text-blue-900 dark:text-blue-100'
-                      : 'text-slate-900 dark:text-slate-100'
+                      : 'text-base-content'
                       }`}>Release Candidate</p>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                    <p class="text-xs text-muted">
                       Preview upcoming features
                     </p>
                   </div>
@@ -593,7 +593,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
             </div>
 
             {/* Auto Update Toggle */}
-            <div class="p-4 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+            <div class="p-4 rounded-md border border-border bg-slate-50 dark:bg-slate-800">
               <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div class="flex items-center gap-3">
                   <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
@@ -602,10 +602,10 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                     </svg>
                   </div>
                   <div>
-                    <label class="text-sm font-medium text-slate-900 dark:text-slate-100">
+                    <label class="text-sm font-medium text-base-content">
                       Automatic Update Checks
                     </label>
-                    <p class="text-xs text-slate-600 dark:text-slate-400">
+                    <p class="text-xs text-muted">
                       Periodically check for new versions (installation is always manual)
                     </p>
                   </div>
@@ -628,7 +628,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
 
               {/* Auto update options (shown when enabled) */}
               <Show when={props.autoUpdateEnabled()}>
-                <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="mt-4 pt-4 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Check Interval */}
                   <div class="space-y-2">
                     <label class="text-xs font-medium text-slate-700 dark:text-slate-300">
@@ -640,7 +640,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         props.setAutoUpdateCheckInterval(parseInt(e.currentTarget.value));
                         props.setHasUnsavedChanges(true);
                       }}
-                      class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800"
+                      class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-surface"
                     >
                       <option value="6">Every 6 hours</option>
                       <option value="12">Every 12 hours</option>
@@ -661,7 +661,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         props.setAutoUpdateTime(e.currentTarget.value);
                         props.setHasUnsavedChanges(true);
                       }}
-                      class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800"
+                      class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-surface"
                     />
                   </div>
                 </div>

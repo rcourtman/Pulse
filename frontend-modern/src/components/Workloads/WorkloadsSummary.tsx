@@ -682,7 +682,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
             <span class="text-emerald-600 dark:text-emerald-400">{guestCounts().running} running</span>
           </Show>
           <Show when={guestCounts().stopped > 0}>
-            <span class="text-slate-400 dark:text-slate-500">{guestCounts().stopped} stopped</span>
+            <span class="text-muted">{guestCounts().stopped} stopped</span>
           </Show>
         </div>
         <Show when={props.onTimeRangeChange}>
@@ -710,16 +710,16 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           <div class="flex flex-col h-full">
             <div class="flex items-center justify-between mb-1.5">
               <div class="flex items-center min-w-0">
-                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide shrink-0">CPU</span>
+                <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">CPU</span>
                 <Show when={focusedWorkloadName()}>
-                  <span class="text-xs text-slate-400 dark:text-slate-500 ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
+                  <span class="text-xs text-muted ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
                 </Show>
               </div>
             </div>
             <Show
               when={hasCpuData()}
               fallback={
-                <div class="flex h-[56px] items-center text-sm text-slate-400 dark:text-slate-500">
+                <div class="flex h-[56px] items-center text-sm text-muted">
                   {fallbackTrendMessage()}
                 </div>
               }
@@ -744,16 +744,16 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           <div class="flex flex-col h-full">
             <div class="flex items-center justify-between mb-1.5">
               <div class="flex items-center min-w-0">
-                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide shrink-0">Memory</span>
+                <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">Memory</span>
                 <Show when={focusedWorkloadName()}>
-                  <span class="text-xs text-slate-400 dark:text-slate-500 ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
+                  <span class="text-xs text-muted ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
                 </Show>
               </div>
             </div>
             <Show
               when={hasMemoryData()}
               fallback={
-                <div class="flex h-[56px] items-center text-sm text-slate-400 dark:text-slate-500">
+                <div class="flex h-[56px] items-center text-sm text-muted">
                   {fallbackTrendMessage()}
                 </div>
               }
@@ -778,16 +778,16 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           <div class="flex flex-col h-full">
             <div class="flex items-center justify-between mb-1.5">
               <div class="flex items-center min-w-0">
-                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide shrink-0">Storage</span>
+                <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">Storage</span>
                 <Show when={focusedWorkloadName()}>
-                  <span class="text-xs text-slate-400 dark:text-slate-500 ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
+                  <span class="text-xs text-muted ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
                 </Show>
               </div>
             </div>
             <Show
               when={hasDiskData()}
               fallback={
-                <div class="flex h-[56px] items-center text-sm text-slate-400 dark:text-slate-500">
+                <div class="flex h-[56px] items-center text-sm text-muted">
                   {fallbackTrendMessage()}
                 </div>
               }
@@ -812,16 +812,16 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           <div class="flex flex-col h-full">
             <div class="flex items-center justify-between mb-1.5">
               <div class="flex items-center min-w-0">
-                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide shrink-0">Network</span>
+                <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">Network</span>
                 <Show when={focusedWorkloadName()}>
-                  <span class="text-xs text-slate-400 dark:text-slate-500 ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
+                  <span class="text-xs text-muted ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
                 </Show>
               </div>
             </div>
             <Show
               when={hasNetworkData()}
               fallback={
-                <div class="flex h-[56px] items-center text-sm text-slate-400 dark:text-slate-500">
+                <div class="flex h-[56px] items-center text-sm text-muted">
                   {fallbackTrendMessage()}
                 </div>
               }

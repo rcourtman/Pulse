@@ -13,7 +13,7 @@ export const segmentedButtonClass = (selected: boolean, disabled = false): strin
     return `${base} text-slate-400 dark:text-slate-600 cursor-not-allowed`;
   }
   if (selected) {
-    return `${base} bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600`;
+    return `${base} bg-surface text-base-content shadow-sm ring-1 ring-gray-200 dark:ring-gray-600`;
   }
-  return `${base} text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-600`;
+  return `${base} text-muted hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-600`;
 };

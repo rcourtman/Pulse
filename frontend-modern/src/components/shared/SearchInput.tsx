@@ -188,14 +188,14 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
           }
         }}
         class={`w-full pl-8 sm:pl-9 ${inputPaddingRight()} py-1.5 sm:py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md
-               bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-gray-400 dark:placeholder-gray-500
+               bg-white dark:bg-slate-900 text-base-content placeholder-muted
                focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all`}
         title={props.title}
         data-global-search
       />
       {/* Magnifying card icon */}
       <svg
-        class="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500"
+        class="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted"
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
@@ -239,7 +239,7 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
               class={`flex h-7 w-7 items-center justify-center rounded-md transition-colors
                      ${isHistoryOpen()
                   ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400'
-                  : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-slate-300'
+                  : 'text-muted hover:bg-surface-hover hover:text-slate-600 dark:hover:text-slate-300'
                 }`}
               onClick={() =>
                 setIsHistoryOpen((prev) => {
@@ -289,7 +289,7 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
           <Show
             when={searchHistory().length > 0}
             fallback={
-              <div class="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
+              <div class="px-3 py-2 text-xs text-muted">
                 {props.history?.emptyMessage ?? 'Searches you run will appear here.'}
               </div>
             }

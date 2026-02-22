@@ -87,8 +87,8 @@ const getHealthInfo = (health: string) => {
     }
     return {
         bgClass: 'bg-slate-100 dark:bg-slate-800',
-        textClass: 'text-slate-600 dark:text-slate-400',
-        borderClass: 'border-slate-200 dark:border-slate-700',
+        textClass: 'text-muted',
+        borderClass: 'border-border',
         dotClass: 'bg-slate-400',
         label: 'UNKNOWN',
     };
@@ -456,17 +456,17 @@ const Ceph: Component = () => {
                         {/* Total Storage Card */}
                         <Card padding="sm" tone="card">
                             <div class="flex items-center justify-between mb-2">
-                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Total Storage</span>
+                                <span class="text-xs font-medium text-muted uppercase tracking-wide">Total Storage</span>
                                 <svg class="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
                                 </svg>
                             </div>
-                            <div class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">
+                            <div class="text-xl sm:text-2xl font-bold text-base-content">
                                 {formatBytes(totalStats().totalBytes)}
                             </div>
                             <div class="mt-1.5">
                                 <UsageBar percent={totalStats().usagePercent} size="sm" />
-                                <div class="flex justify-between text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                                <div class="flex justify-between text-[10px] text-muted mt-1">
                                     <span>{formatBytes(totalStats().usedBytes)} used</span>
                                     <span>{totalStats().usagePercent.toFixed(1)}%</span>
                                 </div>
@@ -476,12 +476,12 @@ const Ceph: Component = () => {
                         {/* Clusters Card */}
                         <Card padding="sm" tone="card">
                             <div class="flex items-center justify-between mb-2">
-                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Clusters</span>
+                                <span class="text-xs font-medium text-muted uppercase tracking-wide">Clusters</span>
                                 <svg class="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-2.25-1.313M21 7.5v2.25m0-2.25l-2.25 1.313M3 7.5l2.25-1.313M3 7.5l2.25 1.313M3 7.5v2.25m9 3l2.25-1.313M12 12.75l-2.25-1.313M12 12.75V15m0 6.75l2.25-1.313M12 21.75V19.5m0 2.25l-2.25-1.313m0-16.875L12 2.25l2.25 1.313M21 14.25v2.25l-2.25 1.313m-13.5 0L3 16.5v-2.25" />
                                 </svg>
                             </div>
-                            <div class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">
+                            <div class="text-xl sm:text-2xl font-bold text-base-content">
                                 {clusters().length}
                             </div>
                             <div class="flex flex-wrap gap-1 mt-2">
@@ -496,14 +496,14 @@ const Ceph: Component = () => {
                         {/* Services Card */}
                         <Card padding="sm" tone="card">
                             <div class="flex items-center justify-between mb-2">
-                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Services</span>
+                                <span class="text-xs font-medium text-muted uppercase tracking-wide">Services</span>
                                 <svg class="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z" />
                                 </svg>
                             </div>
-                            <div class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">
+                            <div class="text-xl sm:text-2xl font-bold text-base-content">
                                 {allServices().reduce((acc, svc) => acc + svc.running, 0)}
-                                <span class="text-sm font-normal text-slate-500 dark:text-slate-400">
+                                <span class="text-sm font-normal text-muted">
                                     /{allServices().reduce((acc, svc) => acc + svc.total, 0)}
                                 </span>
                             </div>
@@ -515,15 +515,15 @@ const Ceph: Component = () => {
                         {/* Pools Card */}
                         <Card padding="sm" tone="card">
                             <div class="flex items-center justify-between mb-2">
-                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Pools</span>
+                                <span class="text-xs font-medium text-muted uppercase tracking-wide">Pools</span>
                                 <svg class="w-4 h-4 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 004.5 9v.878m13.5-3A2.25 2.25 0 0119.5 9v.878m0 0a2.246 2.246 0 00-.75-.128H5.25c-.263 0-.515.045-.75.128m15 0A2.25 2.25 0 0121 12v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6c0-.98.626-1.813 1.5-2.122" />
                                 </svg>
                             </div>
-                            <div class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">
+                            <div class="text-xl sm:text-2xl font-bold text-base-content">
                                 {allPools().length}
                             </div>
-                            <div class="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                            <div class="text-xs text-muted mt-2">
                                 {allPools().reduce((acc, pool) => acc + (pool.objects || 0), 0).toLocaleString()} objects
                             </div>
                         </Card>
@@ -532,8 +532,8 @@ const Ceph: Component = () => {
                     {/* Cluster Details Table */}
                     <Show when={clusters().length > 0}>
                         <Card padding="none" tone="card" class="overflow-hidden">
-                            <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-                                <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                            <div class="px-4 py-3 border-b border-border bg-slate-50 dark:bg-slate-800">
+                                <h3 class="text-sm font-semibold text-base-content">
                                     Cluster Overview
                                 </h3>
                             </div>
@@ -541,7 +541,7 @@ const Ceph: Component = () => {
                                 <style>{`.overflow-x-auto::-webkit-scrollbar { display: none; }`}</style>
                                 <Table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "700px" }}>
                                     <TableHeader>
-                                        <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                                        <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
                                             <TableHead class={`${thClass} pl-4`}>Cluster</TableHead>
                                             <TableHead class={thClass}>Health</TableHead>
                                             <TableHead class={thClass}>Monitors</TableHead>
@@ -554,13 +554,13 @@ const Ceph: Component = () => {
                                     <TableBody class="divide-y divide-gray-100 dark:divide-gray-700">
                                         <For each={clusters()}>
                                             {(cluster) => (
-                                                <TableRow class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                                <TableRow class="hover:bg-surface-hover transition-colors">
                                                     <TableCell class="px-4 py-2.5">
-                                                        <div class="font-medium text-sm text-slate-900 dark:text-slate-100">
+                                                        <div class="font-medium text-sm text-base-content">
                                                             {cluster.name || 'Ceph Cluster'}
                                                         </div>
                                                         <Show when={cluster.fsid}>
-                                                            <div class="text-[10px] text-slate-500 dark:text-slate-400 font-mono truncate max-w-[180px]">
+                                                            <div class="text-[10px] text-muted font-mono truncate max-w-[180px]">
                                                                 {cluster.fsid}
                                                             </div>
                                                         </Show>
@@ -586,7 +586,7 @@ const Ceph: Component = () => {
                                                             <span class={`font-semibold ${(cluster.numOsdsUp || 0) < (cluster.numOsds || 0) ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}`}>
                                                                 {cluster.numOsdsUp || 0}
                                                             </span>
-                                                            <span class="text-slate-400 dark:text-slate-500">
+                                                            <span class="text-muted">
                                                                 /{cluster.numOsds || 0}
                                                             </span>
                                                         </span>
@@ -599,7 +599,7 @@ const Ceph: Component = () => {
                                                     <TableCell class="px-2 py-2.5">
                                                         <div class="w-full max-w-[160px]">
                                                             <UsageBar percent={cluster.usagePercent || 0} size="sm" />
-                                                            <div class="flex justify-between text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                                            <div class="flex justify-between text-[10px] text-muted mt-0.5">
                                                                 <span>{formatBytes(cluster.usedBytes || 0)}</span>
                                                                 <span>{(cluster.usagePercent || 0).toFixed(1)}%</span>
                                                             </div>
@@ -617,8 +617,8 @@ const Ceph: Component = () => {
                     {/* Pools Table */}
                     <Show when={allPools().length > 0}>
                         <Card padding="none" tone="card" class="overflow-hidden">
-                            <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-                                <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                            <div class="px-4 py-3 border-b border-border bg-slate-50 dark:bg-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                                <h3 class="text-sm font-semibold text-base-content">
                                     Storage Pools ({filteredPools().length})
                                 </h3>
                                 {/* Search Input */}
@@ -631,10 +631,10 @@ const Ceph: Component = () => {
                                             aria-label="Search storage pools"
                                             value={searchTerm()}
                                             onInput={(e) => setSearchTerm(e.currentTarget.value)}
-                                            class="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
+                                            class="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-base-content placeholder-muted focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
                                         />
                                         <svg
-                                            class="absolute left-2.5 top-2 h-4 w-4 text-slate-400 dark:text-slate-500"
+                                            class="absolute left-2.5 top-2 h-4 w-4 text-muted"
                                             fill="none"
                                             viewBox="0 0 24 24"
                                             stroke="currentColor"
@@ -660,7 +660,7 @@ const Ceph: Component = () => {
                             <Show
                                 when={filteredPools().length > 0}
                                 fallback={
-                                    <div class="p-8 text-center text-slate-500 dark:text-slate-400">
+                                    <div class="p-8 text-center text-muted">
                                         No pools match "{searchTerm()}"
                                     </div>
                                 }
@@ -669,7 +669,7 @@ const Ceph: Component = () => {
                                     <style>{`.overflow-x-auto::-webkit-scrollbar { display: none; }`}</style>
                                     <Table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "650px" }}>
                                         <TableHeader>
-                                            <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                                            <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
                                                 <TableHead class={`${thClass} pl-4`}>Pool</TableHead>
                                                 <TableHead class={thClass}>Cluster</TableHead>
                                                 <TableHead class={thClass}>Used</TableHead>
@@ -681,11 +681,11 @@ const Ceph: Component = () => {
                                         <TableBody class="divide-y divide-gray-100 dark:divide-gray-700">
                                             <For each={filteredPools()}>
                                                 {(pool) => (
-                                                    <TableRow class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                                        <TableCell class="px-4 py-2.5 font-medium text-sm text-slate-900 dark:text-slate-100">
+                                                    <TableRow class="hover:bg-surface-hover transition-colors">
+                                                        <TableCell class="px-4 py-2.5 font-medium text-sm text-base-content">
                                                             {pool.name}
                                                         </TableCell>
-                                                        <TableCell class="px-2 py-2.5 text-xs text-slate-600 dark:text-slate-400">
+                                                        <TableCell class="px-2 py-2.5 text-xs text-muted">
                                                             {pool.clusterName}
                                                         </TableCell>
                                                         <TableCell class="px-2 py-2.5 text-xs text-slate-700 dark:text-slate-300 font-mono">
@@ -702,7 +702,7 @@ const Ceph: Component = () => {
                                                                 <div class="w-16">
                                                                     <UsageBar percent={pool.percentUsed || 0} size="sm" />
                                                                 </div>
-                                                                <span class="text-xs text-slate-600 dark:text-slate-400 font-mono w-12 text-right">
+                                                                <span class="text-xs text-muted font-mono w-12 text-right">
                                                                     {(pool.percentUsed || 0).toFixed(1)}%
                                                                 </span>
                                                             </div>

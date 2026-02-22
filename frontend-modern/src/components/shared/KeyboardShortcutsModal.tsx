@@ -59,7 +59,7 @@ export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
       ariaLabel="Keyboard shortcuts"
     >
       <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-700">
-        <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">
+        <h2 class="text-lg font-semibold text-base-content">
           Keyboard Shortcuts
         </h2>
         <button
@@ -78,7 +78,7 @@ export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
         <For each={shortcutGroups()}>
           {(group) => (
             <div>
-              <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
                 {group.title}
               </div>
               <div class="mt-2 space-y-2">

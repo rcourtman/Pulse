@@ -558,7 +558,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
     const ranges: HistoryTimeRange[] = ['24h', '7d', '30d', '90d'];
 
     return (
-        <div class={`flex flex-col h-full ${props.compact ? '' : 'bg-white dark:bg-slate-800 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 p-4'}`}>
+        <div class={`flex flex-col h-full ${props.compact ? '' : 'bg-surface rounded-md shadow-sm border border-border p-4'}`}>
             <div class={`flex items-center justify-between ${props.compact ? 'mb-2' : 'mb-4'}`}>
                 <div class="flex items-center gap-2">
                     <span class="text-sm font-medium text-slate-700 dark:text-slate-200">{props.label || 'History'}</span>
@@ -581,8 +581,8 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                 <div class="flex items-center gap-3">
                     <Show when={dataMin() !== null && dataMax() !== null}>
                         <div class="flex items-center gap-2 text-[10px]">
-                            <span><span class="text-slate-400 dark:text-slate-500">Min </span><span class="text-blue-400">{formatTooltipValue(dataMin()!, props.unit)}</span></span>
-                            <span><span class="text-slate-400 dark:text-slate-500">Max </span><span class="text-red-400">{formatTooltipValue(dataMax()!, props.unit)}</span></span>
+                            <span><span class="text-muted">Min </span><span class="text-blue-400">{formatTooltipValue(dataMin()!, props.unit)}</span></span>
+                            <span><span class="text-muted">Max </span><span class="text-red-400">{formatTooltipValue(dataMax()!, props.unit)}</span></span>
                         </div>
                     </Show>
                     {/* Time Range Selector */}
@@ -592,8 +592,8 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                                 <button
                                     onClick={() => updateRange(r)}
                                     class={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${range() === r
-                                        ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm'
-                                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                                        ? 'bg-white dark:bg-slate-600 text-base-content shadow-sm'
+                                        : 'text-muted hover:text-slate-900 dark:hover:text-white'
                                         }`}
                                 >
                                     {r}
@@ -614,7 +614,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
 
                 {/* Empty State */}
                 <Show when={!loading() && data().length === 0 && !error()}>
-                    <div class="absolute inset-0 flex items-center justify-center bg-white dark:bg-slate-800">
+                    <div class="absolute inset-0 flex items-center justify-center bg-surface">
                         <div class="text-center">
                             <div class="text-slate-400 mb-2">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto">
@@ -632,7 +632,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
 
                 {/* Loading State */}
                 <Show when={loading()}>
-                    <div class="absolute inset-0 flex items-center justify-center bg-white dark:bg-slate-800 -[1px]">
+                    <div class="absolute inset-0 flex items-center justify-center bg-surface -[1px]">
                         <div class="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                     </div>
                 </Show>
@@ -646,14 +646,14 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
 
                 {/* Pro Lock Overlay */}
                 <Show when={isLocked() && !props.hideLock}>
-                    <div class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white dark:bg-slate-800 rounded-md">
+                    <div class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-surface rounded-md">
                         <div class="bg-indigo-500 rounded-full p-3 shadow-sm mb-3">
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                             </svg>
                         </div>
-                        <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-1">{lockDays()}-Day History</h3>
+                        <h3 class="text-lg font-bold text-base-content mb-1">{lockDays()}-Day History</h3>
                         <p class="text-sm text-slate-600 dark:text-slate-300 text-center max-w-[200px] mb-4">
                             Upgrade to Pro to unlock {lockDays()} days of historical data retention.
                         </p>

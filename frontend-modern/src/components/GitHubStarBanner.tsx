@@ -96,12 +96,12 @@ export function GitHubStarBanner() {
   return (
     <Show when={showModal()}>
       <div class="fixed inset-0 bg-black flex items-center justify-center z-50 p-4">
-        <div class="bg-white dark:bg-slate-800 rounded-md shadow-sm max-w-md w-full overflow-hidden">
+        <div class="bg-surface rounded-md shadow-sm max-w-md w-full overflow-hidden">
           {/* Header with close button */}
           <div class="flex justify-end p-3 pb-0">
             <button
               onClick={handleDismiss}
-              class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              class="p-1.5 hover:bg-surface-hover rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
               title="Don't show again"
               aria-label="Close and don't show again"
             >
@@ -124,10 +124,10 @@ export function GitHubStarBanner() {
             </div>
 
             {/* Text */}
-            <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">
+            <h2 class="text-xl font-semibold text-base-content mb-2">
               Enjoying Pulse?
             </h2>
-            <p class="text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
+            <p class="text-muted mb-6 leading-relaxed">
               Pulse is built and maintained by an independent developer. If it's been useful for monitoring your infrastructure, a GitHub star helps more than you'd think.
             </p>
 
@@ -142,7 +142,7 @@ export function GitHubStarBanner() {
               </button>
               <button
                 onClick={handleMaybeLater}
-                class="w-full px-4 py-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+                class="w-full px-4 py-2 text-sm text-muted hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
               >
                 Maybe later
               </button>

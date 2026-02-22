@@ -155,11 +155,11 @@ export const RolesPanel: Component = () => {
             >
 
                 <Show when={licenseLoaded() && !hasFeature('rbac') && !loading()}>
-                    <div class="bg-slate-50 dark:bg-slate-800 p-4 sm:p-6 transition-colors border-b border-slate-100 dark:border-slate-800">
+                    <div class="bg-slate-50 dark:bg-slate-800 p-4 sm:p-6 transition-colors border-b border-border-subtle">
                         <div class="flex flex-col sm:flex-row items-center gap-4">
                             <div class="flex-1 text-center sm:text-left">
-                                <h4 class="text-base font-semibold text-slate-900 dark:text-white">Custom Roles (Pro)</h4>
-                                <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                                <h4 class="text-base font-semibold text-base-content">Custom Roles (Pro)</h4>
+                                <p class="text-sm text-muted mt-1">
                                     Define granular permissions and custom access tiers for your team.
                                 </p>
                             </div>
@@ -192,13 +192,13 @@ export const RolesPanel: Component = () => {
                                     label: 'Role',
                                     render: (role) => (
                                         <div class="flex flex-col">
-                                            <span class="font-medium text-slate-900 dark:text-slate-100 flex items-center gap-1">
+                                            <span class="font-medium text-base-content flex items-center gap-1">
                                                 {role.name}
                                                 <Show when={role.isBuiltIn}>
                                                     <BadgeCheck class="w-4 h-4 text-blue-500" />
                                                 </Show>
                                             </span>
-                                            <span class="text-xs text-slate-500 dark:text-slate-400">{role.description}</span>
+                                            <span class="text-xs text-muted">{role.description}</span>
                                         </div>
                                     )
                                 },
@@ -209,7 +209,7 @@ export const RolesPanel: Component = () => {
                                         <div class="flex flex-wrap gap-1">
                                             <For each={role.permissions}>
                                                 {(perm) => (
-                                                    <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                                    <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-border">
                                                         {perm.action}:{perm.resource}
                                                     </span>
                                                 )}
@@ -260,9 +260,9 @@ export const RolesPanel: Component = () => {
             {/* Role Modal */}
             <Show when={showModal()}>
                 <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
-                    <div class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 mx-4 max-h-[92vh] overflow-hidden">
-                        <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    <div class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-md shadow-sm border border-border mx-4 max-h-[92vh] overflow-hidden">
+                        <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
+                            <h3 class="text-lg font-semibold text-base-content">
                                 {editingRole() ? 'Edit Role' : 'New Role'}
                             </h3>
                             <button
@@ -367,7 +367,7 @@ export const RolesPanel: Component = () => {
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 sm:flex sm:items-center sm:justify-end gap-3 px-4 sm:px-6 py-4 border-t border-slate-200 dark:border-slate-700">
+                        <div class="grid grid-cols-1 sm:flex sm:items-center sm:justify-end gap-3 px-4 sm:px-6 py-4 border-t border-border">
                             <button
                                 type="button"
                                 onClick={() => setShowModal(false)}

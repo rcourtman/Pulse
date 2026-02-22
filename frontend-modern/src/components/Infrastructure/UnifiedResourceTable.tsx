@@ -156,7 +156,7 @@ interface IOEmphasis {
 
 const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphasis => {
   if (!Number.isFinite(value) || value <= 0 || stats.max <= 0) {
-    return { className: 'text-slate-400 dark:text-slate-500', showOutlierHint: false };
+    return { className: 'text-muted', showOutlierHint: false };
   }
 
   // For tiny sets, avoid aggressive highlighting.
@@ -165,7 +165,7 @@ const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphas
     if (ratio >= 0.995) {
       return { className: 'text-slate-800 dark:text-slate-100 font-medium', showOutlierHint: true };
     }
-    return { className: 'text-slate-500 dark:text-slate-400', showOutlierHint: false };
+    return { className: 'text-muted', showOutlierHint: false };
   }
 
   // Robust outlier score: only values meaningfully far from the cluster brighten.
@@ -177,15 +177,15 @@ const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphas
     if (modifiedZ >= 5.5 && value >= stats.p97) {
       return { className: 'text-slate-800 dark:text-slate-100 font-medium', showOutlierHint: true };
     }
-    return { className: 'text-slate-500 dark:text-slate-400', showOutlierHint: false };
+    return { className: 'text-muted', showOutlierHint: false };
   }
 
   // Fallback when values are too uniform for MAD to separate:
   // only near-peak values should get emphasis.
   if (value >= stats.p99) return { className: 'text-slate-900 dark:text-slate-50 font-semibold', showOutlierHint: true };
   if (value >= stats.p97) return { className: 'text-slate-800 dark:text-slate-100 font-medium', showOutlierHint: true };
-  if (value > 0) return { className: 'text-slate-500 dark:text-slate-400', showOutlierHint: false };
-  return { className: 'text-slate-400 dark:text-slate-500', showOutlierHint: false };
+  if (value > 0) return { className: 'text-muted', showOutlierHint: false };
+  return { className: 'text-muted', showOutlierHint: false };
 };
 
 export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props) => {
@@ -412,7 +412,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
           <div class="overflow-x-auto">
             <Table class="whitespace-nowrap min-w-[max-content]" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : 'max-content' }}>
               <TableHeader>
-                <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
                   <TableHead class="text-left pl-2 sm:pl-3" style={resourceColumnStyle()} onClick={() => handleSort('name')}>
                     Resource {renderSortIndicator('name')}
                   </TableHead>
@@ -463,7 +463,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                               <Show
                                 when={group.cluster}
                                 fallback={
-                                  <span class="text-slate-500 dark:text-slate-400">Standalone</span>
+                                  <span class="text-muted">Standalone</span>
                                 }
                               >
                                 <span>{group.cluster}</span>
@@ -471,7 +471,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                   Cluster
                                 </span>
                               </Show>
-                              <span class="text-[10px] text-slate-400 dark:text-slate-500 font-normal">
+                              <span class="text-[10px] text-muted font-normal">
                                 {group.resources.length} {group.resources.length === 1 ? 'resource' : 'resources'}
                               </span>
                             </div>
@@ -514,7 +514,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                     );
 
                     const rowClass = createMemo(() => {
-                      const baseHover = `cursor-pointer transition-all duration-200 relative group hover:bg-slate-50 dark:hover:bg-slate-700`;
+                      const baseHover = `cursor-pointer transition-all duration-200 relative group hover:bg-surface-hover`;
 
                       if (isExpanded()) {
                         return `cursor-pointer transition-all duration-200 relative z-10 group bg-blue-50 dark:bg-blue-900`;
@@ -525,7 +525,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                         className += ' bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300 dark:ring-blue-600';
                       }
                       if (props.hoveredResourceId === resource.id && !isHighlighted()) {
-                        className += ' bg-slate-50 dark:bg-slate-700';
+                        className += ' bg-surface-hover';
                       }
                       if (!isResourceOnline(resource)) {
                         className += ' opacity-60';
@@ -574,13 +574,13 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                               />
                               <div class="flex min-w-0 flex-1 items-baseline gap-1">
                                 <span
-                                  class="block min-w-0 flex-1 truncate font-medium text-[11px] text-slate-900 dark:text-slate-100 select-text"
+                                  class="block min-w-0 flex-1 truncate font-medium text-[11px] text-base-content select-text"
                                   title={displayName()}
                                 >
                                   {displayName()}
                                 </span>
                                 <Show when={hasAlternateName(resource)}>
-                                  <span class="hidden min-w-0 max-w-[28%] shrink truncate text-[9px] text-slate-500 dark:text-slate-400 lg:inline">
+                                  <span class="hidden min-w-0 max-w-[28%] shrink truncate text-[9px] text-muted lg:inline">
                                     ({resource.name})
                                   </span>
                                 </Show>
@@ -781,7 +781,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
             <div class="overflow-x-auto">
               <Table class="whitespace-nowrap min-w-[max-content]" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : 'max-content' }}>
                 <TableHeader>
-                  <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                  <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
                     <TableHead class="text-left pl-2 sm:pl-3" style={resourceColumnStyle()}>
                       Resource
                     </TableHead>
@@ -824,11 +824,11 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                         const tone = pbsRow()?.tone ?? 'muted';
                         if (tone === 'ok') return 'text-emerald-600 dark:text-emerald-400';
                         if (tone === 'warning') return 'text-amber-600 dark:text-amber-400';
-                        return 'text-slate-500 dark:text-slate-400';
+                        return 'text-muted';
                       });
 
                       const rowClass = createMemo(() => {
-                        const baseBorder = 'border-b border-slate-100 dark:border-slate-800';
+                        const baseBorder = 'border-b border-border-subtle';
                         const baseHover = `cursor-pointer transition-all duration-200 relative hover:shadow-sm group ${baseBorder}`;
 
                         if (isExpanded()) {
@@ -878,11 +878,11 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                   ariaLabel={statusIndicator().label}
                                   size="xs"
                                 />
-                                <span class="block min-w-0 flex-1 truncate font-medium text-[11px] text-slate-900 dark:text-slate-100 select-text" title={displayName()}>
+                                <span class="block min-w-0 flex-1 truncate font-medium text-[11px] text-base-content select-text" title={displayName()}>
                                   {displayName()}
                                 </span>
                                 <Show when={hasAlternateName(resource)}>
-                                  <span class="hidden min-w-0 max-w-[35%] shrink truncate text-[9px] text-slate-500 dark:text-slate-400 lg:inline">
+                                  <span class="hidden min-w-0 max-w-[35%] shrink truncate text-[9px] text-muted lg:inline">
                                     ({resource.name})
                                   </span>
                                 </Show>
@@ -998,7 +998,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
             <div class="overflow-x-auto">
               <Table class="whitespace-nowrap min-w-[max-content]" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : 'max-content' }}>
                 <TableHeader>
-                  <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                  <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-border">
                     <TableHead class="text-left pl-2 sm:pl-3" style={resourceColumnStyle()}>
                       Resource
                     </TableHead>
@@ -1047,7 +1047,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                         const tone = pmgRow()?.tone ?? 'muted';
                         if (tone === 'ok') return 'text-emerald-600 dark:text-emerald-400';
                         if (tone === 'warning') return 'text-amber-600 dark:text-amber-400';
-                        return 'text-slate-500 dark:text-slate-400';
+                        return 'text-muted';
                       });
                       const queueClass = createMemo(() =>
                         (pmgRow()?.deferred || 0) + (pmgRow()?.hold || 0) > 0
@@ -1056,7 +1056,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                       );
 
                       const rowClass = createMemo(() => {
-                        const baseBorder = 'border-b border-slate-100 dark:border-slate-800';
+                        const baseBorder = 'border-b border-border-subtle';
                         const baseHover = `cursor-pointer transition-all duration-200 relative hover:shadow-sm group ${baseBorder}`;
 
                         if (isExpanded()) {
@@ -1106,11 +1106,11 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                   ariaLabel={statusIndicator().label}
                                   size="xs"
                                 />
-                                <span class="block min-w-0 flex-1 truncate font-medium text-[11px] text-slate-900 dark:text-slate-100 select-text" title={displayName()}>
+                                <span class="block min-w-0 flex-1 truncate font-medium text-[11px] text-base-content select-text" title={displayName()}>
                                   {displayName()}
                                 </span>
                                 <Show when={hasAlternateName(resource)}>
-                                  <span class="hidden min-w-0 max-w-[35%] shrink truncate text-[9px] text-slate-500 dark:text-slate-400 lg:inline">
+                                  <span class="hidden min-w-0 max-w-[35%] shrink truncate text-[9px] text-muted lg:inline">
                                     ({resource.name})
                                   </span>
                                 </Show>

@@ -278,7 +278,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                 <span>{displayLabel()}</span>
                 <Show when={showMaxLabel()}>
                   <span
-                    class="text-[8px] font-normal text-slate-500 dark:text-slate-400"
+                    class="text-[8px] font-normal text-muted"
                     title={maxLabelFull()}
                   >
                     {' '}{maxLabelShort()}
@@ -290,7 +290,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                   </span>
                 </Show>
                 <Show when={useStackedSegments()}>
-                  <span class="text-[8px] font-normal text-slate-500 dark:text-slate-400">
+                  <span class="text-[8px] font-normal text-muted">
                     {' '}[{props.disks?.length}]
                   </span>
                 </Show>
@@ -318,7 +318,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
             <For each={miniDisks()}>
               {(disk) => (
                 <div class="flex flex-col items-stretch gap-0.5">
-                  <span class="text-[8px] text-slate-500 dark:text-slate-400 truncate" title={disk.label}>
+                  <span class="text-[8px] text-muted truncate" title={disk.label}>
                     {disk.label}
                   </span>
                   <div class="relative h-2.5 rounded-sm bg-slate-300 dark:bg-slate-800 overflow-hidden">

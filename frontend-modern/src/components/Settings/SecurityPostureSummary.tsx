@@ -147,7 +147,7 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
   return (
     <Card
       padding="none"
-      class="overflow-hidden border border-slate-200 dark:border-slate-700"
+      class="overflow-hidden border border-border"
       border={false}
     >
       {/* Header with Security Score */}
@@ -161,7 +161,7 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
               })()}
             </div>
             <div>
-              <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Security Posture</h2>
+              <h2 class="text-lg font-semibold text-base-content">Security Posture</h2>
               <p class={`text-sm ${scoreTone().subtitle}`}>
                 {props.status.publicAccess && !props.status.isPrivateNetwork
                   ? 'Public network access detected'
@@ -187,20 +187,20 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
                   ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950'
                   : item.critical
                     ? 'border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950'
-                    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800'
+                    : 'border-border bg-slate-50 dark:bg-slate-800'
                 }`}>
                 <div class="flex items-center justify-between mb-2">
-                  <span class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  <span class="text-sm font-semibold text-base-content">
                     {item.label}
                   </span>
                   <Show when={item.enabled} fallback={
-                    <XCircle class={`w-5 h-5 ${item.critical ? 'text-rose-500 dark:text-rose-400' : 'text-slate-400 dark:text-slate-500'}`} />
+                    <XCircle class={`w-5 h-5 ${item.critical ? 'text-rose-500 dark:text-rose-400' : 'text-muted'}`} />
                   }>
                     <CheckCircle class="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
                   </Show>
                 </div>
                 <div class="flex items-center justify-between">
-                  <p class="text-xs text-slate-600 dark:text-slate-400">
+                  <p class="text-xs text-muted">
                     {item.description}
                   </p>
                   <Show when={item.critical && !item.enabled}>
@@ -216,7 +216,7 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
 
         {/* Client IP Badge */}
         <Show when={props.status.clientIP}>
-          <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end">
+          <div class="mt-4 pt-4 border-t border-border flex items-center justify-end">
             <span class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
               Your IP: {props.status.clientIP}
             </span>

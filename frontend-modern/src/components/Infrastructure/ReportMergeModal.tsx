@@ -95,13 +95,13 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
         <div>
           <h3
             id={dialogTitleId()}
-            class="text-lg font-semibold text-slate-900 dark:text-slate-100"
+            class="text-lg font-semibold text-base-content"
           >
             Split Merged Resource
           </h3>
           <p
             id={dialogDescriptionId()}
-            class="mt-1 text-xs text-slate-500 dark:text-slate-400"
+            class="mt-1 text-xs text-muted"
           >
             Use this when two systems were combined incorrectly. Pulse will keep them separate on future refreshes.
           </p>
@@ -118,15 +118,15 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
 
       <div class="flex-1 overflow-y-auto space-y-4 px-5 py-4 text-sm text-slate-700 dark:text-slate-200">
         <div>
-          <div class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <div class="text-xs font-medium uppercase tracking-wide text-muted">
             Resource
           </div>
           <div class="mt-1 font-medium">{props.resourceName}</div>
-          <div class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{props.resourceId}</div>
+          <div class="mt-0.5 text-xs text-muted">{props.resourceId}</div>
         </div>
 
         <div>
-          <div class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <div class="text-xs font-medium uppercase tracking-wide text-muted">
             Merged Sources
           </div>
           <div class="mt-2 flex flex-wrap gap-2">
@@ -141,7 +141,7 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
         </div>
 
         <div>
-          <label class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <label class="text-xs font-medium uppercase tracking-wide text-muted">
             Notes (optional)
           </label>
           <textarea

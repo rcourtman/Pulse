@@ -185,10 +185,10 @@ export const RelaySettingsPanel: Component = () => {
             <div class="flex items-start gap-3">
               <RadioTower size={20} class="text-blue-500 mt-0.5 flex-shrink-0" strokeWidth={2} />
               <div>
-                <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
+                <p class="text-sm font-medium text-base-content">
                   Pro Required
                 </p>
-                <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                <p class="text-sm text-muted mt-1">
                   Remote access via Pulse Relay requires a Pro license. Upgrade to access your infrastructure from anywhere.
                 </p>
               </div>
@@ -215,16 +215,16 @@ export const RelaySettingsPanel: Component = () => {
               pulse={config()?.enabled && status()?.connected}
             />
             <div class="flex-1">
-              <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
+              <p class="text-sm font-medium text-base-content">
                 {connectionStatusText()}
               </p>
               <Show when={status()?.instance_id}>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                <p class="text-xs text-muted mt-0.5">
                   Instance: {status()!.instance_id}
                 </p>
               </Show>
               <Show when={status()?.connected && (status()!.active_channels > 0)}>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
+                <p class="text-xs text-muted">
                   {status()!.active_channels} active {status()!.active_channels === 1 ? 'channel' : 'channels'}
                 </p>
               </Show>
@@ -341,7 +341,7 @@ export const RelaySettingsPanel: Component = () => {
                         alt="Pulse mobile pairing QR code"
                         width="256"
                         height="256"
-                        class="rounded-md border border-slate-200 dark:border-slate-700 bg-white p-2"
+                        class="rounded-md border border-border bg-white p-2"
                       />
                     </Show>
 

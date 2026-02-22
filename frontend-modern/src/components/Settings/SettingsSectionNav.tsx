@@ -51,8 +51,8 @@ export const SettingsSectionNav: Component<SettingsSectionNavProps> = (props) =>
               type="button"
               onClick={() => props.onSelect(section.id)}
               class={`flex flex-1 justify-center sm:flex-none sm:justify-start items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 ${isActive()
-                ? 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-blue-600 dark:text-blue-400'
-                : 'text-gray-600 dark:text-gray-400 border border-transparent hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-gray-800'
+                ? 'bg-white dark:bg-gray-900 border border-border text-blue-600 dark:text-blue-400'
+                : 'text-muted border border-transparent hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-gray-800'
                 }`}
               aria-pressed={isActive()}
             >

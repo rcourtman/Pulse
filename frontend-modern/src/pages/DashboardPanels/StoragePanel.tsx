@@ -25,8 +25,8 @@ export function StoragePanel(props: StoragePanelProps) {
   return (
     <Card padding="none" class="px-4 py-3.5" aria-busy={props.loading}>
       <div class="flex items-center justify-between gap-3">
-        <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
-          Storage <span class="font-normal text-xs text-slate-500 dark:text-slate-400">({props.storage.total} pools)</span>
+        <h2 class="text-sm font-semibold text-base-content">
+          Storage <span class="font-normal text-xs text-muted">({props.storage.total} pools)</span>
         </h2>
         <a
           href={buildStoragePath()}
@@ -39,12 +39,12 @@ export function StoragePanel(props: StoragePanelProps) {
 
       <Switch>
         <Match when={props.storage.total === 0}>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">No storage resources</p>
+          <p class="text-xs text-muted mt-1">No storage resources</p>
         </Match>
         <Match when={props.storage.total > 0}>
           <div class="mt-1.5 space-y-1.5">
             <div class="flex items-center justify-between gap-3">
-              <p class="text-xs text-slate-500 dark:text-slate-400">
+              <p class="text-xs text-muted">
                 {formatBytes(props.storage.totalUsed)} / {formatBytes(props.storage.totalCapacity)}
               </p>
               <span class="text-xs font-mono font-semibold text-slate-700 dark:text-slate-200">

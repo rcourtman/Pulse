@@ -267,11 +267,11 @@ export const OIDCPanel: Component<Props> = (props) => {
       bodyClass="space-y-5"
     >
       <Show when={licenseLoaded() && !hasFeature('sso') && !loading()}>
-        <div class="p-5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md">
+        <div class="p-5 bg-slate-50 dark:bg-slate-800 border border-border rounded-md">
           <div class="flex flex-col sm:flex-row items-center gap-4">
             <div class="flex-1">
-              <h4 class="text-base font-semibold text-slate-900 dark:text-white">Single Sign-On</h4>
-              <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
+              <h4 class="text-base font-semibold text-base-content">Single Sign-On</h4>
+              <p class="text-sm text-muted mt-1">
                 Connect Pulse to your identity provider for seamless team authentication.
               </p>
             </div>
@@ -288,7 +288,7 @@ export const OIDCPanel: Component<Props> = (props) => {
         </div>
       </Show>
       <form class="space-y-5" onSubmit={handleSave}>
-        <div class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-3 text-xs text-slate-700 dark:text-slate-300">
+        <div class="bg-slate-50 dark:bg-slate-800 border border-border rounded-md p-3 text-xs text-slate-700 dark:text-slate-300">
           <ol class="space-y-1 list-decimal pl-4">
             <li>Set PUBLIC_URL environment variable</li>
             <li>Register client with your IdP using redirect URL below</li>
@@ -544,7 +544,7 @@ export const OIDCPanel: Component<Props> = (props) => {
 
           <div class="flex flex-wrap items-center justify-between gap-3 pt-4">
             <Show when={config()?.defaultRedirect}>
-              <div class="text-xs text-slate-500 dark:text-slate-400">
+              <div class="text-xs text-muted">
                 Redirect URL registered with your IdP must match Pulse:{' '}
                 {config()?.defaultRedirect}
               </div>
@@ -552,7 +552,7 @@ export const OIDCPanel: Component<Props> = (props) => {
             <div class="flex w-full sm:w-auto gap-3">
               <button
                 type="button"
-                class="flex-1 sm:flex-none min-h-10 sm:min-h-9 px-4 py-2.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700"
+                class="flex-1 sm:flex-none min-h-10 sm:min-h-9 px-4 py-2.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-md hover:bg-surface-hover"
                 onClick={() => resetForm(config())}
                 disabled={saving() || loading()}
               >

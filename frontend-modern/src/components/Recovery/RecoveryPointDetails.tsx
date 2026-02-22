@@ -209,23 +209,23 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
         <For each={summaryPairs()}>
           {(pair) => (
             <div class="rounded border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800">
-              <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{pair.k}</div>
-              <div class="mt-0.5 font-mono text-[11px] text-slate-800 dark:text-slate-200 break-all">{pair.v}</div>
+              <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">{pair.k}</div>
+              <div class="mt-0.5 font-mono text-[11px] text-base-content break-all">{pair.v}</div>
             </div>
           )}
         </For>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-slate-500 dark:text-slate-400">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-muted">
         <div class="rounded border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
-          <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Started</div>
-          <div class="mt-0.5 font-mono text-[11px] text-slate-800 dark:text-slate-200">
+          <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Started</div>
+          <div class="mt-0.5 font-mono text-[11px] text-base-content">
             {startedMs() > 0 ? formatAbsoluteTime(startedMs()) : 'n/a'}
           </div>
         </div>
         <div class="rounded border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
-          <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Completed</div>
-          <div class="mt-0.5 font-mono text-[11px] text-slate-800 dark:text-slate-200">
+          <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Completed</div>
+          <div class="mt-0.5 font-mono text-[11px] text-base-content">
             {completedMs() > 0 ? formatAbsoluteTime(completedMs()) : 'n/a'}
           </div>
         </div>
@@ -233,7 +233,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
 
       <Show when={hasPbsDetails()}>
         <div class="rounded border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
-          <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">PBS Details</div>
+          <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">PBS Details</div>
           <div class="mt-2 space-y-2">
             <Show when={pbsComment()}>
               <div class="rounded border border-emerald-100 border-l-4 border-l-emerald-400 bg-emerald-50 px-3 py-2 text-xs italic leading-relaxed text-emerald-900 dark:border-emerald-900 dark:border-l-emerald-500 dark:bg-emerald-950/30 dark:text-emerald-100">
@@ -243,8 +243,8 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
 
             <Show when={pbsOwner()}>
               <div class="rounded border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800">
-                <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Owner</div>
-                <div class="mt-0.5 font-mono text-[11px] text-slate-800 dark:text-slate-200 break-all">{pbsOwner()}</div>
+                <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Owner</div>
+                <div class="mt-0.5 font-mono text-[11px] text-base-content break-all">{pbsOwner()}</div>
               </div>
             </Show>
 
@@ -261,7 +261,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
 
             <Show when={isPbsProvider() && point().verified != null}>
               <div class="rounded border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800">
-                <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Verification</div>
+                <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Verification</div>
                 <div class="mt-0.5 flex items-center gap-2">
                   {point().verified ? (
                     <span class="inline-flex items-center gap-1 text-green-600 dark:text-green-400">
@@ -274,7 +274,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
                     <span class="text-amber-600 dark:text-amber-400">Failed</span>
                   )}
                   <Show when={typeof point().details?.verificationState === 'string'}>
-                    <span class="font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                    <span class="font-mono text-[11px] text-muted">
                       ({String(point().details?.verificationState)})
                     </span>
                   </Show>
@@ -301,7 +301,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
                 return (
                   <div class="rounded border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800">
                     <div class="flex items-center justify-between gap-2">
-                      <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                      <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
                         Repository Health
                       </div>
                       <Show when={status.length > 0}>
@@ -311,15 +311,15 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
                       </Show>
                     </div>
 
-                    <div class="mt-0.5 font-mono text-[11px] text-slate-800 dark:text-slate-200 break-all">
+                    <div class="mt-0.5 font-mono text-[11px] text-base-content break-all">
                       Datastore: {datastore.name}
                     </div>
 
                     <div class="mt-2">
-                      <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                      <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
                         Space Usage
                       </div>
-                      <div class="mt-0.5 font-mono text-[11px] text-slate-800 dark:text-slate-200">
+                      <div class="mt-0.5 font-mono text-[11px] text-base-content">
                         {formatBytes(datastore.used, 2)} / {formatBytes(datastore.total, 2)} ({Math.round(usagePercent)}%)
                       </div>
                       <div class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
@@ -338,10 +338,10 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
                       }
                     >
                       <div class="mt-2">
-                        <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                        <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
                           Dedup Factor
                         </div>
-                        <div class="mt-0.5 font-mono text-[11px] text-slate-800 dark:text-slate-200">
+                        <div class="mt-0.5 font-mono text-[11px] text-base-content">
                           {Number(dedupFactor).toFixed(2)}x
                         </div>
                       </div>
@@ -358,7 +358,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
                   onClick={() => setShowPbsFiles((v) => !v)}
                   class="flex w-full items-center justify-between px-3 py-2 text-left text-xs text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700"
                 >
-                  <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                  <span class="text-[10px] font-semibold uppercase tracking-wide text-muted">
                     Files ({pbsFiles().length})
                   </span>
                   <svg
@@ -391,8 +391,8 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
       </Show>
 
       <div class="rounded border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
-        <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Raw</div>
-        <pre class="mt-2 overflow-auto text-[11px] leading-relaxed text-slate-800 dark:text-slate-200 font-mono">
+        <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Raw</div>
+        <pre class="mt-2 overflow-auto text-[11px] leading-relaxed text-base-content font-mono">
 {prettyJSON()}
         </pre>
       </div>

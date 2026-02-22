@@ -27,12 +27,12 @@ export function formatDelta(delta: number | null): string | null {
 }
 
 export function deltaColorClass(delta: number | null): string {
-  if (delta === null) return 'text-slate-400 dark:text-slate-500';
+  if (delta === null) return 'text-muted';
   if (delta > 5) return 'text-red-500 dark:text-red-400';
   if (delta > 0) return 'text-amber-500 dark:text-amber-400';
   if (delta < -5) return 'text-emerald-500 dark:text-emerald-400';
   if (delta < 0) return 'text-blue-500 dark:text-blue-400';
-  return 'text-slate-500 dark:text-slate-400';
+  return 'text-muted';
 }
 
 export type ActionPriority = 'critical' | 'high' | 'medium' | 'low';

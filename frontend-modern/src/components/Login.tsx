@@ -314,7 +314,7 @@ export const Login: Component<LoginProps> = (props) => {
         <div class="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-slate-900">
           <div class="text-center">
             <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-            <p class="text-slate-600 dark:text-slate-400">Checking authentication...</p>
+            <p class="text-muted">Checking authentication...</p>
           </div>
         </div>
       }
@@ -349,7 +349,7 @@ export const Login: Component<LoginProps> = (props) => {
             <div class="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-slate-900">
               <div class="text-center">
                 <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-                <p class="text-slate-600 dark:text-slate-400">Loading setup...</p>
+                <p class="text-muted">Loading setup...</p>
               </div>
             </div>
           }
@@ -413,7 +413,7 @@ const LoginForm: Component<{
       <div class="max-w-md w-full space-y-8">
         {/* Demo Credentials Banner */}
         <Show when={isDemoServer()}>
-          <div class="bg-white dark:bg-slate-800 rounded-md p-4 shadow-sm border border-blue-200 dark:border-blue-800 animate-fade-in">
+          <div class="bg-surface rounded-md p-4 shadow-sm border border-blue-200 dark:border-blue-800 animate-fade-in">
             <div class="flex items-center gap-3">
               <div class="flex-shrink-0 w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
                 <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -421,7 +421,7 @@ const LoginForm: Component<{
                 </svg>
               </div>
               <div class="flex-1">
-                <div class="font-semibold text-sm text-slate-900 dark:text-white">Demo Mode</div>
+                <div class="font-semibold text-sm text-base-content">Demo Mode</div>
                 <div class="text-sm text-slate-600 dark:text-slate-300">
                   Login with <code class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">demo</code> / <code class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">demo</code>
                 </div>
@@ -446,13 +446,13 @@ const LoginForm: Component<{
           </h2>
 
           <Show when={showLocalLogin}>
-            <p class="mt-3 text-center text-sm text-slate-600 dark:text-slate-400 animate-fade-in delay-200">
+            <p class="mt-3 text-center text-sm text-muted animate-fade-in delay-200">
               Enter your credentials to continue
             </p>
           </Show>
         </div>
         <form
-          class="mt-8 space-y-6 bg-white dark:bg-slate-800 rounded-md p-8 shadow-sm border border-slate-200 dark:border-slate-700 animate-slide-up"
+          class="mt-8 space-y-6 bg-surface rounded-md p-8 shadow-sm border border-border animate-slide-up"
           onSubmit={handleSubmit}
         >
           {/* Multi-Provider SSO Section */}
@@ -503,12 +503,12 @@ const LoginForm: Component<{
               <Show when={showLocalLogin}>
                 <div class="flex items-center gap-3 pt-2">
                   <span class="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
-                  <span class="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                  <span class="text-xs uppercase tracking-wide text-muted">
                     or
                   </span>
                   <span class="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
                 </div>
-                <p class="text-xs text-center text-slate-500 dark:text-slate-400">
+                <p class="text-xs text-center text-muted">
                   Use your admin credentials to sign in below.
                 </p>
               </Show>
@@ -551,12 +551,12 @@ const LoginForm: Component<{
               <Show when={showLocalLogin}>
                 <div class="flex items-center gap-3 pt-2">
                   <span class="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
-                  <span class="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                  <span class="text-xs uppercase tracking-wide text-muted">
                     or
                   </span>
                   <span class="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
                 </div>
-                <p class="text-xs text-center text-slate-500 dark:text-slate-400">
+                <p class="text-xs text-center text-muted">
                   Use your admin credentials to sign in below.
                 </p>
               </Show>

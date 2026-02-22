@@ -53,7 +53,7 @@ interface IOEmphasis {
 
 const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphasis => {
   if (!Number.isFinite(value) || value <= 0 || stats.max <= 0) {
-    return { className: 'text-slate-400 dark:text-slate-500', showOutlierHint: false };
+    return { className: 'text-muted', showOutlierHint: false };
   }
 
   if (stats.count < 4) {
@@ -61,7 +61,7 @@ const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphas
     if (ratio >= 0.995) {
       return { className: 'text-slate-800 dark:text-slate-100 font-medium', showOutlierHint: true };
     }
-    return { className: 'text-slate-500 dark:text-slate-400', showOutlierHint: false };
+    return { className: 'text-muted', showOutlierHint: false };
   }
 
   if (stats.mad > 0) {
@@ -72,13 +72,13 @@ const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphas
     if (modifiedZ >= 5.5 && value >= stats.p97) {
       return { className: 'text-slate-800 dark:text-slate-100 font-medium', showOutlierHint: true };
     }
-    return { className: 'text-slate-500 dark:text-slate-400', showOutlierHint: false };
+    return { className: 'text-muted', showOutlierHint: false };
   }
 
   if (value >= stats.p99) return { className: 'text-slate-900 dark:text-slate-50 font-semibold', showOutlierHint: true };
   if (value >= stats.p97) return { className: 'text-slate-800 dark:text-slate-100 font-medium', showOutlierHint: true };
-  if (value > 0) return { className: 'text-slate-500 dark:text-slate-400', showOutlierHint: false };
-  return { className: 'text-slate-400 dark:text-slate-500', showOutlierHint: false };
+  if (value > 0) return { className: 'text-muted', showOutlierHint: false };
+  return { className: 'text-muted', showOutlierHint: false };
 }
 
 
@@ -100,7 +100,7 @@ const BACKUP_STATUS_CONFIG: Record<BackupStatus, { color: string; bgColor: strin
   fresh: { color: 'text-green-600 dark:text-green-400', bgColor: 'bg-green-100 dark:bg-green-900', icon: 'check' },
   stale: { color: 'text-yellow-600 dark:text-yellow-400', bgColor: 'bg-yellow-100 dark:bg-yellow-900', icon: 'warning' },
   critical: { color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-100 dark:bg-red-900', icon: 'x' },
-  never: { color: 'text-slate-400 dark:text-slate-500', bgColor: 'bg-slate-100 dark:bg-slate-800', icon: 'x' },
+  never: { color: 'text-muted', bgColor: 'bg-slate-100 dark:bg-slate-800', icon: 'x' },
 };
 
 function BackupIndicator(props: { lastBackup: string | number | null | undefined; isTemplate: boolean }) {
@@ -161,7 +161,7 @@ function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: Gues
   return (
     <>
       <span
-        class="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400"
+        class="inline-flex items-center gap-1 text-xs text-muted"
         onMouseEnter={tip.onMouseEnter}
         onMouseLeave={tip.onMouseLeave}
       >
@@ -260,7 +260,7 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
   // OS icons - Windows logo and terminal prompt for Linux
   const OSIcon = () => {
     const type = osType();
-    const iconClass = 'w-3.5 h-3.5 text-slate-500 dark:text-slate-400';
+    const iconClass = 'w-3.5 h-3.5 text-muted';
 
     switch (type) {
       case 'windows':
@@ -739,7 +739,7 @@ export function GuestRow(props: GuestRowProps) {
       : '';
     const defaultHover = hasUnacknowledgedAlert()
       ? ''
-      : 'hover:bg-slate-50 dark:hover:bg-slate-700';
+      : 'hover:bg-surface-hover';
     const stoppedDimming = !isRunning() ? 'opacity-60' : '';
 
     return [base, hover, defaultHover, alertBg, stoppedDimming].filter(Boolean).join(' ');
@@ -794,7 +794,7 @@ export function GuestRow(props: GuestRowProps) {
               />
               <div class="flex items-center gap-1.5 min-w-0 group/name">
                 <span
-                  class="text-[11px] font-medium text-slate-900 dark:text-slate-100 select-none truncate"
+                  class="text-[11px] font-medium text-base-content select-none truncate"
                   title={props.guest.name}
                 >
                   {props.guest.name}
@@ -811,7 +811,7 @@ export function GuestRow(props: GuestRowProps) {
 
             <Show when={lockLabel()}>
               <span
-                class="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap"
+                class="text-[10px] font-medium text-muted uppercase tracking-wide whitespace-nowrap"
                 title={`Guest is locked (${lockLabel()})`}
               >
                 Lock: {lockLabel()}
@@ -837,7 +837,7 @@ export function GuestRow(props: GuestRowProps) {
         {/* Info - merged identifier (VMID / image / namespace) for mixed-type views */}
         <Show when={isColVisible('info')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
-            <div class="flex justify-center text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
+            <div class="flex justify-center text-xs text-muted whitespace-nowrap">
               <Show when={infoValue()} fallback={<span class="text-slate-400">—</span>}>
                 <InfoTooltipCell value={infoValue()} tooltip={infoTooltip()} type={workloadType()} />
               </Show>
@@ -848,7 +848,7 @@ export function GuestRow(props: GuestRowProps) {
         {/* VMID */}
         <Show when={isColVisible('vmid')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
-            <div class="flex justify-center text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
+            <div class="flex justify-center text-xs text-muted whitespace-nowrap">
               <Show when={displayId()} fallback={<span class="text-slate-400">—</span>}>
                 {displayId()}
               </Show>
@@ -929,7 +929,7 @@ export function GuestRow(props: GuestRowProps) {
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show when={isRunning()} fallback={<span class="text-xs text-slate-400">—</span>}>
-                <span class={`text-xs whitespace-nowrap ${props.guest.uptime > 0 && props.guest.uptime < 3600 ? 'text-orange-500' : 'text-slate-600 dark:text-slate-400'}`}>
+                <span class={`text-xs whitespace-nowrap ${props.guest.uptime > 0 && props.guest.uptime < 3600 ? 'text-orange-500' : 'text-muted'}`}>
                   <Show when={isMobile()} fallback={formatUptime(props.guest.uptime)}>
                     {formatUptime(props.guest.uptime, true)}
                   </Show>
@@ -969,7 +969,7 @@ export function GuestRow(props: GuestRowProps) {
                 fallback={<span class="text-xs text-slate-400">—</span>}
               >
                 <span
-                  class="text-xs text-slate-600 dark:text-slate-400 truncate max-w-[140px]"
+                  class="text-xs text-muted truncate max-w-[140px]"
                   title={dockerImage()}
                 >
                   {getShortImageName(dockerImage())}
@@ -988,7 +988,7 @@ export function GuestRow(props: GuestRowProps) {
                 fallback={<span class="text-xs text-slate-400">—</span>}
               >
                 <span
-                  class="text-xs text-slate-600 dark:text-slate-400 truncate max-w-[120px]"
+                  class="text-xs text-muted truncate max-w-[120px]"
                   title={namespace()}
                 >
                   {namespace()}
@@ -1007,7 +1007,7 @@ export function GuestRow(props: GuestRowProps) {
                 fallback={<span class="text-xs text-slate-400">—</span>}
               >
                 <span
-                  class="text-xs text-slate-600 dark:text-slate-400 truncate max-w-[140px]"
+                  class="text-xs text-muted truncate max-w-[140px]"
                   title={contextLabel()}
                 >
                   {contextLabel()}
@@ -1151,7 +1151,7 @@ export function GuestRow(props: GuestRowProps) {
               fallback={
                 <button
                   type="button"
-                  class="inline-flex justify-center items-center text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                  class="inline-flex justify-center items-center text-muted hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
                   title="Open related infrastructure"
                   onClick={(event) => {
                     event.stopPropagation();

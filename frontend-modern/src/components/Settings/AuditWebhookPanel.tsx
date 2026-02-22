@@ -90,11 +90,11 @@ export function AuditWebhookPanel() {
                 description="Configure real-time delivery of security audit events to external systems."
                 icon={<Globe class="w-5 h-5" strokeWidth={2} />}
             >
-                <Show when={!loading()} fallback={<div class="text-sm text-slate-500 dark:text-slate-400">Loading...</div>}>
+                <Show when={!loading()} fallback={<div class="text-sm text-muted">Loading...</div>}>
                     <Card tone="info" padding="md">
                         <div class="text-sm">
-                            <p class="font-semibold text-slate-900 dark:text-slate-100">Pro Required</p>
-                            <p class="mt-1 text-slate-600 dark:text-slate-400">
+                            <p class="font-semibold text-base-content">Pro Required</p>
+                            <p class="mt-1 text-muted">
                                 Audit webhooks are part of the audit logging feature set and require Pro.
                             </p>
                         </div>
@@ -114,21 +114,21 @@ export function AuditWebhookPanel() {
                 bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
             >
                 <div class="space-y-6 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                    <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                    <p class="text-sm text-muted leading-relaxed">
                         Pulse can send a signed event payload whenever security-relevant activity occurs
                         (logins, settings changes, RBAC updates, and similar audit events).
                     </p>
 
-                    <Show when={!loading()} fallback={<p class="text-sm text-slate-500 dark:text-slate-400">Loading audit webhooks…</p>}>
+                    <Show when={!loading()} fallback={<p class="text-sm text-muted">Loading audit webhooks…</p>}>
                         <div class="space-y-3">
                             <For each={webhookUrls()}>
                                 {(url) => (
-                                    <div class="flex items-center justify-between gap-3 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3">
+                                    <div class="flex items-center justify-between gap-3 rounded-md border border-border bg-slate-50 dark:bg-slate-800 p-3">
                                         <div class="flex items-center gap-3 overflow-hidden min-w-0">
                                             <div class="p-2 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 rounded-md shrink-0">
                                                 <ExternalLink size={16} />
                                             </div>
-                                            <span class="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{url}</span>
+                                            <span class="text-sm font-medium text-base-content truncate">{url}</span>
                                         </div>
                                         <button
                                             onClick={() => handleRemoveWebhook(url)}
@@ -142,14 +142,14 @@ export function AuditWebhookPanel() {
                             </For>
 
                             <Show when={webhookUrls().length === 0}>
-                                <div class="py-10 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-md">
+                                <div class="py-10 flex flex-col items-center justify-center text-muted border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-md">
                                     <Globe size={36} class="opacity-40 mb-3" />
                                     <p class="text-sm">No audit webhooks configured yet.</p>
                                 </div>
                             </Show>
                         </div>
                     </Show>
-                    <div class="flex gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <div class="flex gap-3 pt-4 border-t border-border">
                         <input
                             type="text"
                             placeholder="https://your-api.com/webhook"

@@ -17,7 +17,7 @@ export const TemperatureGauge: Component<TemperatureGaugeProps> = (props) => {
     const textColorClass = createMemo(() => {
         if (props.value >= critical) return 'text-red-600 dark:text-red-400';
         if (props.value >= warning) return 'text-yellow-600 dark:text-yellow-400';
-        return 'text-slate-600 dark:text-slate-400';
+        return 'text-muted';
     });
 
     return (

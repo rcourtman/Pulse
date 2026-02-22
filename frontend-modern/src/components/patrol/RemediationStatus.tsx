@@ -35,7 +35,7 @@ export const RemediationStatus: Component<RemediationStatusProps> = (props) => {
           <span class="font-medium text-red-700 dark:text-red-300">Fix failed</span>
         </Show>
         <Show when={props.result.exit_code !== undefined}>
-          <span class="text-slate-500 dark:text-slate-400">exit code: {props.result.exit_code}</span>
+          <span class="text-muted">exit code: {props.result.exit_code}</span>
         </Show>
       </div>
 
@@ -44,14 +44,14 @@ export const RemediationStatus: Component<RemediationStatusProps> = (props) => {
       </Show>
 
       <Show when={props.result.message && props.result.message !== props.result.error}>
-        <div class="text-slate-600 dark:text-slate-400 mt-1">{props.result.message}</div>
+        <div class="text-muted mt-1">{props.result.message}</div>
       </Show>
 
       <Show when={props.result.output}>
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); setShowOutput(!showOutput()); }}
-          class="text-[10px] text-slate-500 dark:text-slate-400 hover:underline mt-1"
+          class="text-[10px] text-muted hover:underline mt-1"
         >
           {showOutput() ? 'Hide output' : 'Show output'}
         </button>

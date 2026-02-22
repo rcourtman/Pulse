@@ -350,11 +350,11 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
   return (
     <Show when={props.isOpen}>
       <div class="fixed inset-0 bg-black flex items-center justify-center z-50 p-4">
-        <div class="bg-white dark:bg-slate-800 rounded-md shadow-sm max-w-2xl w-full">
+        <div class="bg-surface rounded-md shadow-sm max-w-2xl w-full">
           {/* Header */}
-          <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+          <div class="px-6 py-4 border-b border-border">
             <div class="flex items-center justify-between">
-              <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-100">
+              <h2 class="text-xl font-semibold text-base-content">
                 Updating Pulse
               </h2>
               <Show when={isComplete()}>
@@ -376,11 +376,11 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
             <div class="flex flex-col items-center text-center space-y-4">
               {getStageIcon()}
               <div>
-                <div class="text-lg font-medium text-slate-900 dark:text-slate-100">
+                <div class="text-lg font-medium text-base-content">
                   {getStatusText()}
                 </div>
                 <Show when={status()?.status && !isComplete()}>
-                  <div class="text-sm text-slate-500 dark:text-slate-400 mt-1 capitalize">
+                  <div class="text-sm text-muted mt-1 capitalize">
                     {status()!.status.replace('-', ' ')}
                   </div>
                 </Show>
@@ -390,7 +390,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
             {/* Progress Bar */}
             <Show when={!isComplete() && status()?.progress !== undefined}>
               <div class="mt-6">
-                <div class="flex items-center justify-between text-sm text-slate-600 dark:text-slate-400 mb-2">
+                <div class="flex items-center justify-between text-sm text-muted mb-2">
                   <span>Progress</span>
                   <span>{status()!.progress}%</span>
                 </div>
@@ -458,7 +458,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
 
           {/* Footer */}
           <Show when={isComplete()}>
-            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-3">
+            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800 border-t border-border flex items-center justify-end gap-3">
               <Show when={!hasError()}>
                 <button
                   onClick={props.onViewHistory}

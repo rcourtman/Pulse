@@ -132,13 +132,13 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
   return (
     <Show when={props.visible && filteredResources().length > 0}>
       <div
-        class="absolute z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-sm overflow-hidden min-w-[280px] max-w-[400px]"
+        class="absolute z-50 bg-surface border border-border rounded-md shadow-sm overflow-hidden min-w-[280px] max-w-[400px]"
         style={{
           bottom: `${props.position.top}px`,
           left: `${props.position.left}px`,
         }}
       >
-        <div class="px-3 py-2 border-b border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-500 dark:text-slate-400">
+        <div class="px-3 py-2 border-b border-border text-xs font-medium text-muted">
           Resources
         </div>
         <div class="max-h-[240px] overflow-y-auto">
@@ -146,25 +146,25 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
             {(resource, index) => (
               <button
                 type="button"
-                class={`w-full px-3 py-2 flex items-center gap-3 text-left hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors ${
+                class={`w-full px-3 py-2 flex items-center gap-3 text-left hover:bg-surface-hover transition-colors ${
                   index() === selectedIndex() ? 'bg-slate-100 dark:bg-slate-700' : ''
                 }`}
                 onClick={() => props.onSelect(resource)}
                 onMouseEnter={() => setSelectedIndex(index())}
               >
-                <span class="text-slate-500 dark:text-slate-400">
+                <span class="text-muted">
                   {getTypeIcon(resource.type)}
                 </span>
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2">
-                    <span class="font-medium text-slate-900 dark:text-slate-100 truncate">
+                    <span class="font-medium text-base-content truncate">
                       {resource.name}
                     </span>
                     <Show when={resource.status}>
                       <span class={`w-2 h-2 rounded-full ${getStatusColor(resource.status)}`} />
                     </Show>
                   </div>
-                  <div class="text-xs text-slate-500 dark:text-slate-400">
+                  <div class="text-xs text-muted">
                     {resource.type}
                     <Show when={resource.node}>
                       {' · '}{resource.node}
@@ -175,7 +175,7 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
             )}
           </For>
         </div>
-        <div class="px-3 py-1.5 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-400 dark:text-slate-500 flex items-center gap-2">
+        <div class="px-3 py-1.5 border-t border-border text-xs text-muted flex items-center gap-2">
           <span class="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[10px]">↑↓</span>
           navigate
           <span class="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[10px]">↵</span>

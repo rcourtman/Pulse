@@ -115,7 +115,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     return (
         <div class="space-y-3">
             {/* Tabs */}
-            <div class="flex items-center gap-6 border-b border-slate-200 dark:border-slate-700 px-1 mb-1">
+            <div class="flex items-center gap-6 border-b border-border px-1 mb-1">
                 <button
                     onClick={() => switchTab('overview')}
                     class={`pb-2 text-sm font-medium transition-colors relative ${activeTab() === 'overview'
@@ -162,25 +162,25 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                         <div class="space-y-1.5 text-[11px]">
                             <Show when={props.guest.cpus}>
                                 <div class="flex items-center justify-between">
-                                    <span class="text-slate-500 dark:text-slate-400">CPUs</span>
+                                    <span class="text-muted">CPUs</span>
                                     <span class="font-medium text-slate-700 dark:text-slate-200">{props.guest.cpus}</span>
                                 </div>
                             </Show>
                             <Show when={props.guest.uptime > 0}>
                                 <div class="flex items-center justify-between">
-                                    <span class="text-slate-500 dark:text-slate-400">Uptime</span>
+                                    <span class="text-muted">Uptime</span>
                                     <span class="font-medium text-slate-700 dark:text-slate-200">{formatUptime(props.guest.uptime)}</span>
                                 </div>
                             </Show>
                             <Show when={props.guest.node}>
                                 <div class="flex items-center justify-between">
-                                    <span class="text-slate-500 dark:text-slate-400">Node</span>
+                                    <span class="text-muted">Node</span>
                                     <span class="font-medium text-slate-700 dark:text-slate-200">{props.guest.node}</span>
                                 </div>
                             </Show>
                             <Show when={hasAgentInfo()}>
                                 <div class="flex items-center justify-between">
-                                    <span class="text-slate-500 dark:text-slate-400">Agent</span>
+                                    <span class="text-muted">Agent</span>
                                     <span class="font-medium text-slate-700 dark:text-slate-200 truncate ml-2" title={isVM(props.guest) ? `QEMU guest agent ${agentVersion()}` : agentVersion()}>
                                         {isVM(props.guest) ? `QEMU ${agentVersion()}` : agentVersion()}
                                     </span>
@@ -200,7 +200,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                                             <span class="font-medium">{osName()}</span>
                                         </Show>
                                         <Show when={osName().length > 0 && osVersion().length > 0}>
-                                            <span class="text-slate-400 dark:text-slate-500 mx-1">•</span>
+                                            <span class="text-muted mx-1">•</span>
                                         </Show>
                                         <Show when={osVersion().length > 0}>
                                             <span>{osVersion()}</span>
@@ -246,12 +246,12 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                                     return (
                                         <>
                                             <div class="flex items-center justify-between">
-                                                <span class="text-slate-500 dark:text-slate-400">Last Backup</span>
+                                                <span class="text-muted">Last Backup</span>
                                                 <span class={`font-medium ${isCritical ? 'text-red-600 dark:text-red-400' : isOld ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}`}>
                                                     {daysSince === 0 ? 'Today' : daysSince === 1 ? 'Yesterday' : `${daysSince}d ago`}
                                                 </span>
                                             </div>
-                                            <div class="text-[10px] text-slate-400 dark:text-slate-500">
+                                            <div class="text-[10px] text-muted">
                                                 {backupDate.toLocaleDateString()}
                                             </div>
                                         </>
@@ -304,7 +304,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                                                 <div class="flex items-center gap-2 text-[11px] font-medium text-slate-700 dark:text-slate-200 min-w-0">
                                                     <span class="truncate min-w-0">{iface.name || 'interface'}</span>
                                                     <Show when={iface.mac}>
-                                                        <span class="text-[9px] text-slate-400 dark:text-slate-500 font-normal truncate shrink-0 max-w-[100px]" title={iface.mac}>{iface.mac}</span>
+                                                        <span class="text-[9px] text-muted font-normal truncate shrink-0 max-w-[100px]" title={iface.mac}>{iface.mac}</span>
                                                     </Show>
                                                 </div>
                                                 <Show when={addresses.length > 0}>
@@ -319,7 +319,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                                                     </div>
                                                 </Show>
                                                 <Show when={hasTraffic}>
-                                                    <div class="flex gap-3 mt-1 text-[10px] text-slate-500 dark:text-slate-400">
+                                                    <div class="flex gap-3 mt-1 text-[10px] text-muted">
                                                         <span>RX {formatBytes(iface.rxBytes ?? 0)}</span>
                                                         <span>TX {formatBytes(iface.txBytes ?? 0)}</span>
                                                     </div>
@@ -352,7 +352,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                 <Suspense fallback={
                     <div class="flex items-center justify-center py-8">
                         <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                        <span class="ml-2 text-sm text-slate-500 dark:text-slate-400">Loading discovery...</span>
+                        <span class="ml-2 text-sm text-muted">Loading discovery...</span>
                     </div>
                 }>
                     <DiscoveryTab

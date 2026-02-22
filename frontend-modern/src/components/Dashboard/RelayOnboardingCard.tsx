@@ -168,7 +168,7 @@ export const RelayOnboardingCard: Component = () => {
 
         <button
           type="button"
-          class="absolute right-3 top-3 inline-flex items-center justify-center rounded-md p-1 text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+          class="absolute right-3 top-3 inline-flex items-center justify-center rounded-md p-1 text-slate-500 hover:text-slate-700 hover:bg-surface-hover dark:text-slate-400 dark:hover:text-slate-200"
           onClick={dismiss}
           aria-label="Dismiss relay onboarding"
         >
@@ -181,10 +181,10 @@ export const RelayOnboardingCard: Component = () => {
           </div>
 
           <div class="min-w-0 flex-1">
-            <h2 class="text-base font-semibold text-slate-900 dark:text-slate-100">
+            <h2 class="text-base font-semibold text-base-content">
               Pair Your Mobile Device
             </h2>
-            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            <p class="mt-1 text-sm text-muted">
               Pulse Relay lets your phone securely connect to this Pulse instance for remote monitoring.
             </p>
 
@@ -212,7 +212,7 @@ export const RelayOnboardingCard: Component = () => {
               </Show>
 
               <Show when={hasRelay() && statusLoaded() && status()?.connected === false}>
-                <span class="text-xs text-slate-500 dark:text-slate-400">
+                <span class="text-xs text-muted">
                   Relay is currently disconnected.
                 </span>
               </Show>

@@ -111,8 +111,8 @@ export const Toast: Component<ToastProps> = (props) => {
     >
       <div
         class={`
-           bg-white dark:bg-slate-800
-          border border-slate-200 dark:border-slate-700
+           bg-surface
+          border border-border
           px-4 py-3 sm:px-5 sm:py-4 rounded-md shadow-sm 
           flex items-center gap-3 sm:gap-4 
           min-w-[300px] max-w-[400px] sm:min-w-[320px] sm:max-w-[500px]
@@ -130,7 +130,7 @@ export const Toast: Component<ToastProps> = (props) => {
         <button
           type="button"
           onClick={handleClose}
-          class="flex-shrink-0 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-white rounded-md p-1.5 transition-all duration-200"
+          class="flex-shrink-0 text-muted hover:text-slate-700 dark:hover:text-slate-200 hover:bg-white rounded-md p-1.5 transition-all duration-200"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path

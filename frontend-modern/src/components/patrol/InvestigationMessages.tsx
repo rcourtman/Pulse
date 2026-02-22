@@ -33,18 +33,18 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
   return (
     <div class="mt-2">
       <Show when={messages.loading}>
-        <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 py-2">
+        <div class="flex items-center gap-2 text-xs text-muted py-2">
           <span class="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
           Loading messages...
         </div>
       </Show>
 
       <Show when={!messages.loading && (!messages() || messages()!.length === 0)}>
-        <p class="text-xs text-slate-500 dark:text-slate-400 py-1">No investigation messages available.</p>
+        <p class="text-xs text-muted py-1">No investigation messages available.</p>
       </Show>
 
       <Show when={!messages.loading && messages() && messages()!.length > 0}>
-        <div class="space-y-2 max-h-80 overflow-y-auto rounded border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-800">
+        <div class="space-y-2 max-h-80 overflow-y-auto rounded border border-border p-2 bg-slate-50 dark:bg-slate-800">
           <For each={messages()}>
             {(msg: ChatMessage) => {
               if (isEmptyMessage(msg)) return null;
@@ -55,8 +55,8 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                     msg.role === 'user'
                       ? 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100'
                       : msg.role === 'system'
-                      ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs'
-                      : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200'
+                      ? 'bg-slate-100 dark:bg-slate-800 text-muted text-xs'
+                      : 'bg-surface text-base-content'
                   }`}>
                     {/* Reasoning content (extended thinking) */}
                     <Show when={msg.reasoning_content}>
@@ -64,7 +64,7 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                         <summary class="text-[10px] text-purple-600 dark:text-purple-400 cursor-pointer hover:underline">
                           Show reasoning
                         </summary>
-                        <div class="mt-1 text-[10px] text-slate-500 dark:text-slate-400 whitespace-pre-wrap break-words border-l-2 border-purple-200 dark:border-purple-800 pl-2">
+                        <div class="mt-1 text-[10px] text-muted whitespace-pre-wrap break-words border-l-2 border-purple-200 dark:border-purple-800 pl-2">
                           {msg.reasoning_content}
                         </div>
                       </details>
@@ -83,7 +83,7 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                             <div class="text-xs rounded border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900 px-2 py-1">
                               <span class="font-semibold text-indigo-700 dark:text-indigo-300">{tc.name}</span>
                               <Show when={tc.input && Object.keys(tc.input).length > 0}>
-                                <pre class="mt-1 text-[10px] text-slate-600 dark:text-slate-400 overflow-x-auto max-h-24 overflow-y-auto">
+                                <pre class="mt-1 text-[10px] text-muted overflow-x-auto max-h-24 overflow-y-auto">
                                   {JSON.stringify(tc.input, null, 2)}
                                 </pre>
                               </Show>
@@ -107,7 +107,7 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                         }`}>
                           {msg.tool_result!.is_error ? 'Error' : 'Result'}
                         </span>
-                        <pre class="mt-1 text-[10px] text-slate-600 dark:text-slate-400 overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap break-words">
+                        <pre class="mt-1 text-[10px] text-muted overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap break-words">
                           {msg.tool_result!.content}
                         </pre>
                       </div>

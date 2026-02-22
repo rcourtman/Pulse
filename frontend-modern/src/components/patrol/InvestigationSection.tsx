@@ -98,7 +98,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
       {/* Header */}
       <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-2">
-          <span class="text-sm font-medium text-slate-900 dark:text-slate-100">Investigation</span>
+          <span class="text-sm font-medium text-base-content">Investigation</span>
           {/* Show outcome badge when available, otherwise show status badge */}
           <Show when={investigation()?.outcome}
             fallback={
@@ -114,7 +114,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
             </span>
           </Show>
           <Show when={props.investigationAttempts && props.investigationAttempts > 1}>
-            <span class="text-[10px] text-slate-500 dark:text-slate-400">
+            <span class="text-[10px] text-muted">
               attempt {props.investigationAttempts}
             </span>
           </Show>
@@ -131,13 +131,13 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
           </button>
         </Show>
         <Show when={!canReinvestigate() && Date.now() < cooldownUntil()}>
-          <span class="text-xs text-slate-500 dark:text-slate-400">Re-investigation started</span>
+          <span class="text-xs text-muted">Re-investigation started</span>
         </Show>
       </div>
 
       {/* Loading */}
       <Show when={investigation.loading}>
-        <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 py-2">
+        <div class="flex items-center gap-2 text-xs text-muted py-2">
           <span class="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
           Loading investigation...
         </div>
@@ -145,7 +145,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
 
       {/* No investigation data */}
       <Show when={!investigation.loading && !investigation()}>
-        <p class="text-xs text-slate-500 dark:text-slate-400 py-1">
+        <p class="text-xs text-muted py-1">
           No investigation data available. Enable patrol autonomy to investigate findings.
         </p>
       </Show>
@@ -163,7 +163,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
 
             {/* Summary */}
             <Show when={inv().summary}>
-              <div class="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 rounded p-2">
+              <div class="text-sm text-muted bg-slate-50 dark:bg-slate-800 rounded p-2">
                 {inv().summary}
               </div>
             </Show>
@@ -181,11 +181,11 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
                   </For>
                 </div>
               </Show>
-              <span class="text-[10px] text-slate-500 dark:text-slate-400">
+              <span class="text-[10px] text-muted">
                 {inv().turn_count} turn{inv().turn_count === 1 ? '' : 's'}
               </span>
               <Show when={inv().started_at}>
-                <span class="text-[10px] text-slate-500 dark:text-slate-400">
+                <span class="text-[10px] text-muted">
                   started {formatTimestamp(inv().started_at)}
                 </span>
               </Show>

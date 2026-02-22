@@ -39,7 +39,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div class="flex min-w-0 items-center gap-3 flex-1">
             <Show when={local.icon}>
-              <div class="text-slate-400 dark:text-slate-500">
+              <div class="text-muted">
                 {local.icon}
               </div>
             </Show>

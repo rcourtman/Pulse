@@ -144,7 +144,7 @@ export const SecurityWarning: Component = () => {
                     }
                     size="sm"
                     class="flex-1"
-                    titleClass="text-slate-900 dark:text-slate-100"
+                    titleClass="text-base-content"
                   />
                   <button
                     type="button"
@@ -218,7 +218,7 @@ export const SecurityWarning: Component = () => {
                     href="https://github.com/rcourtman/Pulse/blob/main/docs/SECURITY.md"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="text-sm text-slate-600 dark:text-slate-400 hover:underline"
+                    class="text-sm text-muted hover:underline"
                   >
                     Learn More
                   </a>
@@ -226,29 +226,29 @@ export const SecurityWarning: Component = () => {
                     <button
                       type="button"
                       onClick={() => handleDismiss('day')}
-                      class="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+                      class="text-sm text-muted hover:text-slate-700 dark:hover:text-slate-300"
                     >
                       Dismiss ▼
                     </button>
-                    <div class="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 rounded shadow-sm border border-slate-200 dark:border-slate-700 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
+                    <div class="absolute left-0 top-full mt-1 bg-surface rounded shadow-sm border border-border opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
                       <button
                         type="button"
                         onClick={() => handleDismiss('day')}
-                        class="block w-full text-left px-3 py-1.5 text-sm hover:bg-slate-100 dark:hover:bg-slate-700"
+                        class="block w-full text-left px-3 py-1.5 text-sm hover:bg-surface-hover"
                       >
                         For 1 day
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDismiss('week')}
-                        class="block w-full text-left px-3 py-1.5 text-sm hover:bg-slate-100 dark:hover:bg-slate-700"
+                        class="block w-full text-left px-3 py-1.5 text-sm hover:bg-surface-hover"
                       >
                         For 1 week
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDismiss('forever')}
-                        class="block w-full text-left px-3 py-1.5 text-sm hover:bg-slate-100 dark:hover:bg-slate-700"
+                        class="block w-full text-left px-3 py-1.5 text-sm hover:bg-surface-hover"
                       >
                         Forever
                       </button>
