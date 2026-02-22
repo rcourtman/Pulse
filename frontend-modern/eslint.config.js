@@ -119,15 +119,16 @@ export default tseslint.config(
                     message: "Use the useTooltip() hook from @/hooks/useTooltip instead of reimplementing tooltip state.",
                 },
                 // Block hardcoded legacy colors in favor of semantic design system.
-                // Only flags light-mode base classes — dark: and hover:/focus: variants
-                // are excluded because they're either paired with tokens already or are
-                // intentional interactive-state overrides.
+                // Only flags EXTREME shades (50-200, 700-950) that look wrong in the
+                // opposite color mode. Mid-range grays (300-600) are mode-neutral and
+                // commonly used for indicators, disabled states, and chart colors.
+                // dark:/hover:/focus: variants are excluded by the (?:^|\s) anchor.
                 {
-                    selector: "Literal[value=/(?:^|\\s)(?:bg|text|border|ring)-(?:slate|gray|zinc|neutral)-(?:100|200|300|400|500|600|700|800|900)(?:$|\\s)/]",
+                    selector: "Literal[value=/(?:^|\\s)(?:bg|text|border|ring)-(?:slate|gray|zinc|neutral)-(?:50|100|200|700|800|900|950)(?:$|\\s)/]",
                     message: "Use semantic design system classes (e.g. bg-surface, text-base-content, border-border) instead of hardcoded tailwind grays. See DESIGN_SYSTEM.md for the token reference.",
                 },
                 {
-                    selector: "TemplateElement[value.raw=/(?:^|\\s)(?:bg|text|border|ring)-(?:slate|gray|zinc|neutral)-(?:100|200|300|400|500|600|700|800|900)(?:$|\\s)/]",
+                    selector: "TemplateElement[value.raw=/(?:^|\\s)(?:bg|text|border|ring)-(?:slate|gray|zinc|neutral)-(?:50|100|200|700|800|900|950)(?:$|\\s)/]",
                     message: "Use semantic design system classes (e.g. bg-surface, text-base-content, border-border) instead of hardcoded tailwind grays. See DESIGN_SYSTEM.md for the token reference.",
                 },
             ],
