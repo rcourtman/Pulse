@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	"github.com/rs/zerolog/log"
 )
 
@@ -33,6 +34,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 	r.mux.HandleFunc("/api/security/oidc", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleOIDCConfig)))
 	r.mux.HandleFunc("/api/oidc/login", r.handleOIDCLogin)
 	r.mux.HandleFunc(config.DefaultOIDCCallbackPath, r.handleOIDCCallback)
+	ssoAdminEndpoints := resolveSSOAdminEndpoints(ssoAdminEndpointAdapter{router: r}, extensions.SSOAdminRuntime{})
 	// Per-provider SSO OIDC routes: /api/oidc/{providerID}/login and /api/oidc/{providerID}/callback
 	// Use a prefix handler since Go 1.x ServeMux doesn't support path params.
 	// Requests matching /api/oidc/{something}/ are dispatched here; the legacy
@@ -60,13 +62,13 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 		if !ensureSettingsWriteScope(r.config, w, req) {
 			return
 		}
-		r.handleTestSSOProvider(w, req)
+		ssoAdminEndpoints.HandleProviderTest(w, req)
 	}))
 	r.mux.HandleFunc("/api/security/sso/providers/metadata/preview", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureSettingsReadScope(r.config, w, req) {
 			return
 		}
-		r.handleMetadataPreview(w, req)
+		ssoAdminEndpoints.HandleMetadataPreview(w, req)
 	}))
 	r.mux.HandleFunc("/api/security/sso/providers", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
@@ -82,7 +84,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		r.handleSSOProviders(w, req)
+		ssoAdminEndpoints.HandleProvidersCollection(w, req)
 	}))
 	r.mux.HandleFunc("/api/security/sso/providers/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
@@ -98,7 +100,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		r.handleSSOProvider(w, req)
+		ssoAdminEndpoints.HandleProviderItem(w, req)
 	}))
 
 	// SAML login flow routes (unauthenticated - these are login/callback endpoints)
@@ -617,4 +619,42 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 
 	// Simple stats page - requires authentication
 	r.mux.HandleFunc("/simple-stats", RequireAuth(r.config, r.handleSimpleStats))
+}
+
+type ssoAdminEndpointAdapter struct {
+	router *Router
+}
+
+var _ extensions.SSOAdminEndpoints = ssoAdminEndpointAdapter{}
+
+func (a ssoAdminEndpointAdapter) HandleProvidersCollection(w http.ResponseWriter, req *http.Request) {
+	if a.router == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "sso_unavailable", "SSO management is unavailable", nil)
+		return
+	}
+	a.router.handleSSOProviders(w, req)
+}
+
+func (a ssoAdminEndpointAdapter) HandleProviderItem(w http.ResponseWriter, req *http.Request) {
+	if a.router == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "sso_unavailable", "SSO management is unavailable", nil)
+		return
+	}
+	a.router.handleSSOProvider(w, req)
+}
+
+func (a ssoAdminEndpointAdapter) HandleProviderTest(w http.ResponseWriter, req *http.Request) {
+	if a.router == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "sso_unavailable", "SSO management is unavailable", nil)
+		return
+	}
+	a.router.handleTestSSOProvider(w, req)
+}
+
+func (a ssoAdminEndpointAdapter) HandleMetadataPreview(w http.ResponseWriter, req *http.Request) {
+	if a.router == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "sso_unavailable", "SSO management is unavailable", nil)
+		return
+	}
+	a.router.handleMetadataPreview(w, req)
 }
