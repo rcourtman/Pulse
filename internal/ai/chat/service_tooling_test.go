@@ -8,6 +8,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -42,9 +43,15 @@ func TestFilterToolsForPrompt_ReadOnlyAndSpecialty(t *testing.T) {
 		ControlLevel:  tools.ControlLevelControlled,
 	})
 
-	svc := &Service{executor: exec}
+	svc := &Service{
+		executor: exec,
+		cfg: &config.AIConfig{
+			PatrolAnalyzeDocker:  true,
+			PatrolAnalyzeStorage: true,
+		},
+	}
 
-	readOnlyTools := svc.filterToolsForPrompt(context.Background(), "show node status", true)
+	readOnlyTools := svc.filterToolsForPrompt(context.Background(), "show node status", true, false)
 	readOnlySet := toolNameSet(readOnlyTools)
 	if readOnlySet["pulse_control"] || readOnlySet["pulse_file_edit"] || readOnlySet["pulse_docker"] {
 		t.Fatalf("expected write tools to be filtered for read-only prompt")
@@ -53,7 +60,7 @@ func TestFilterToolsForPrompt_ReadOnlyAndSpecialty(t *testing.T) {
 		t.Fatalf("expected specialty tools to remain when no specialty keyword detected")
 	}
 
-	k8sTools := svc.filterToolsForPrompt(context.Background(), "check kubernetes pods", false)
+	k8sTools := svc.filterToolsForPrompt(context.Background(), "check kubernetes pods", false, false)
 	k8sSet := toolNameSet(k8sTools)
 	if !k8sSet["pulse_kubernetes"] {
 		t.Fatalf("expected kubernetes tool to be included")
@@ -71,13 +78,40 @@ func TestFilterToolsForPrompt_BroadInfraKeepsStorage(t *testing.T) {
 	})
 
 	svc := &Service{executor: exec}
-	toolsList := svc.filterToolsForPrompt(context.Background(), "full status overview", true)
+	toolsList := svc.filterToolsForPrompt(context.Background(), "full status overview", false, false)
 	set := toolNameSet(toolsList)
 	if !set["pulse_storage"] {
 		t.Fatalf("expected storage tool to be kept for broad infrastructure prompt")
 	}
-	if set["pulse_control"] || set["pulse_file_edit"] || set["pulse_docker"] {
-		t.Fatalf("expected write tools to be filtered for read-only prompt")
+	if !set["pulse_control"] || !set["pulse_file_edit"] || !set["pulse_docker"] {
+		t.Fatalf("expected interactive mode to keep write tools")
+	}
+}
+
+func TestFilterToolsForPrompt_AutonomousNonPatrol(t *testing.T) {
+	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
+		StateProvider: fakeStateProvider{},
+		AgentServer:   fakeAgentServer{},
+		ControlLevel:  tools.ControlLevelControlled,
+	})
+
+	svc := &Service{
+		executor: exec,
+		cfg: &config.AIConfig{
+			PatrolAnalyzeDocker:  false,
+			PatrolAnalyzeStorage: false,
+		},
+	}
+
+	// Use write intent so read-only write-tool gating does not hide docker.
+	filtered := svc.filterToolsForPrompt(context.Background(), "restart docker containers and check storage pools", true, false)
+	set := toolNameSet(filtered)
+
+	if !set["pulse_docker"] {
+		t.Fatalf("expected pulse_docker to be included for autonomous non-patrol runs")
+	}
+	if !set["pulse_storage"] {
+		t.Fatalf("expected pulse_storage to be included for autonomous non-patrol runs")
 	}
 }
 

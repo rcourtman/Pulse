@@ -286,7 +286,7 @@ func (s *Service) resolveExploreProvider(
 }
 
 func (s *Service) filterToolsForExplorePrompt(ctx context.Context, prompt string) []providers.Tool {
-	candidates := s.filterToolsForPrompt(ctx, prompt, true)
+	candidates := s.filterToolsForPrompt(ctx, prompt, true, false)
 	filtered := make([]providers.Tool, 0, len(candidates))
 	for _, tool := range candidates {
 		if tool.Name == pulseQuestionToolName {

@@ -512,7 +512,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	}
 
 	// Run agentic loop
-	filteredTools := s.filterToolsForPrompt(ctx, req.Prompt, autonomousMode)
+	filteredTools := s.filterToolsForPrompt(ctx, req.Prompt, autonomousMode, false)
 	log.Debug().
 		Str("session_id", session.ID).
 		Int("tools_count", len(filteredTools)).
@@ -718,7 +718,7 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 	}
 
 	// Get all tools (patrol runs in autonomous mode)
-	filteredTools := s.filterToolsForPrompt(ctx, req.Prompt, true)
+	filteredTools := s.filterToolsForPrompt(ctx, req.Prompt, true, true)
 
 	// Run the agentic loop
 	resultMessages, err := tempLoop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, callback)
@@ -830,7 +830,7 @@ func (s *Service) ListAvailableTools(ctx context.Context, prompt string) []strin
 		return nil
 	}
 
-	tools := s.filterToolsForPrompt(ctx, prompt, s.isAutonomousModeEnabled())
+	tools := s.filterToolsForPrompt(ctx, prompt, s.isAutonomousModeEnabled(), false)
 	names := make([]string, 0, len(tools))
 	for _, tool := range tools {
 		if tool.Name == "" {
@@ -1393,9 +1393,33 @@ func (s *Service) injectRecentContextIfNeeded(prompt, sessionID string, messages
 	messages[lastIdx].Content = summary + "\n\n---\nExplicit target: " + primaryName + "\nUser question (targeted): " + messages[lastIdx].Content
 }
 
-func (s *Service) filterToolsForPrompt(ctx context.Context, prompt string, autonomousMode bool) []providers.Tool {
+func (s *Service) filterToolsForPrompt(ctx context.Context, prompt string, autonomousMode bool, patrolMode bool) []providers.Tool {
 	mcpTools := s.executor.ListTools()
 	providerTools := ConvertMCPToolsToProvider(mcpTools)
+
+	// For patrol (autonomous mode), use config flags instead of keyword detection.
+	// Patrol seed context can mention all resource types, which defeats keyword filtering.
+	if patrolMode {
+		filtered := s.filterToolsForPatrol(providerTools)
+
+		// Keep write-intent gating for autonomous runs.
+		if !hasWriteIntent(convertPromptToMessages(prompt)) {
+			nonWrite := make([]providers.Tool, 0, len(filtered))
+			for _, tool := range filtered {
+				if !isWriteTool(tool.Name) {
+					nonWrite = append(nonWrite, tool)
+				}
+			}
+			filtered = nonWrite
+		}
+
+		log.Debug().
+			Int("total_tools", len(providerTools)).
+			Int("filtered_tools", len(filtered)).
+			Bool("autonomous_patrol_filter", true).
+			Msg("[filterToolsForPrompt] Filtered tools for patrol using config flags")
+		return filtered
+	}
 
 	// Filter out write/control tools when the user's request is read-only.
 	// This prevents models from calling pulse_control (restart, stop, etc.) when
@@ -1464,6 +1488,47 @@ func (s *Service) filterToolsForPrompt(ctx context.Context, prompt string, auton
 	// pulse_question is interactive; exclude it for autonomous runs (Pulse Patrol).
 	if !autonomousMode {
 		filtered = append(filtered, userQuestionTool())
+	}
+
+	return filtered
+}
+
+// filterToolsForPatrol filters tools for patrol runs using AI config flags
+// instead of keyword-based detection. This prevents the seed context
+// (which mentions all resource types) from causing all tools to be included.
+func (s *Service) filterToolsForPatrol(providerTools []providers.Tool) []providers.Tool {
+	s.mu.RLock()
+	cfg := s.cfg
+	s.mu.RUnlock()
+
+	// Determine which subsystems are enabled for patrol.
+	includeDocker := cfg != nil && cfg.PatrolAnalyzeDocker
+	includeStorage := cfg != nil && cfg.PatrolAnalyzeStorage
+	// K8s and PMG don't have dedicated top-level patrol flags.
+	includeK8s := true
+	includePMG := true
+
+	filtered := make([]providers.Tool, 0, len(providerTools))
+	for _, tool := range providerTools {
+		switch tool.Name {
+		case "pulse_docker":
+			if !includeDocker {
+				continue
+			}
+		case "pulse_storage":
+			if !includeStorage {
+				continue
+			}
+		case "pulse_kubernetes":
+			if !includeK8s {
+				continue
+			}
+		case "pulse_pmg":
+			if !includePMG {
+				continue
+			}
+		}
+		filtered = append(filtered, tool)
 	}
 
 	return filtered

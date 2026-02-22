@@ -14,8 +14,10 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -218,6 +220,10 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 	if strings.TrimSpace(seedContext) == "" {
 		return nil, nil
 	}
+	log.Info().
+		Int("seed_context_chars", len(seedContext)).
+		Int("seed_context_estimated_tokens", chat.EstimateTokens(seedContext)).
+		Msg("AI Patrol: Seed context built")
 
 	log.Debug().Msg("AI Patrol: Starting agentic patrol analysis")
 
@@ -1091,6 +1097,13 @@ type seedIntelligence struct {
 	hasBaselineStore bool
 }
 
+type seedSection struct {
+	priority int
+	name     string
+	content  string
+	summary  string
+}
+
 // seedForecast represents a capacity forecast for seed context.
 type seedForecast struct {
 	name, resourceID, metric, severity string
@@ -1103,56 +1116,186 @@ type seedForecast struct {
 // connection health, and baselines/trends so the model can analyze without tool calls.
 // Tools remain available for targeted deep-dives.
 func (p *PatrolService) buildSeedContext(state models.StateSnapshot, scope *PatrolScope, guestIntel map[string]*GuestIntelligence) (string, []string) {
-	var sb strings.Builder
-
 	p.mu.RLock()
 	cfg := p.config
 	p.mu.RUnlock()
 
 	now := time.Now()
 	scopedSet := p.buildScopedSet(scope)
-
-	sb.WriteString(p.seedPreviousRun(now))
 	intel := p.seedPrecomputeIntelligence(state, scopedSet, now)
-	sb.WriteString(p.seedResourceInventory(state, scopedSet, cfg, now, intel.isQuiet, guestIntel))
-	p.seedPMGSnapshot(&sb, state, scopedSet, cfg, intel.isQuiet)
-	sb.WriteString(p.seedBackupAnalysis(state, now))
-	sb.WriteString(p.seedHealthAndAlerts(state, scopedSet, cfg, now))
-	sb.WriteString(p.seedIntelligenceContext(intel, now))
 	findingsCtx, seededFindingIDs := p.seedFindingsAndContext(scope, state)
-	sb.WriteString(findingsCtx)
 
-	if scope != nil {
-		sb.WriteString("# Patrol Scope\n")
-		if scope.Reason != "" {
-			sb.WriteString(fmt.Sprintf("Trigger: %s\n", scope.Reason))
-		}
-		if scope.Context != "" {
-			sb.WriteString(fmt.Sprintf("Context: %s\n", scope.Context))
-		}
-		if len(scope.ResourceIDs) > 0 {
-			sb.WriteString(fmt.Sprintf("Focus resources: %s\n", strings.Join(scope.ResourceIDs, ", ")))
-		}
-		if len(scope.ResourceTypes) > 0 {
-			sb.WriteString(fmt.Sprintf("Resource types: %s\n", strings.Join(scope.ResourceTypes, ", ")))
-		}
-		if scope.AlertID != "" {
-			sb.WriteString(fmt.Sprintf("Alert ID: %s\n", scope.AlertID))
-		}
-		if scope.FindingID != "" {
-			sb.WriteString(fmt.Sprintf("Finding ID: %s\n", scope.FindingID))
-		}
-		sb.WriteString(fmt.Sprintf("Depth: %s\n", scope.Depth.String()))
+	sections := []seedSection{
+		// P0 — always include.
+		{priority: 0, name: "findings", content: findingsCtx},
+		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlerts(state, scopedSet, cfg, now)},
+		{priority: 0, name: "scope", content: buildScopeSection(scope)},
 
-		if scope.Depth == PatrolDepthQuick {
-			sb.WriteString("\nThis is a quick check — focus on the scoped resources, limit investigation depth.\n")
-		} else {
-			sb.WriteString("\nPerform thorough investigation including trends, baselines, logs, and correlations.\n")
-		}
-		sb.WriteString("\n")
+		// P1 — always include (typically compact).
+		{priority: 1, name: "previous_run", content: p.seedPreviousRun(now)},
+
+		// P2 — summarize when needed.
+		{
+			priority: 2,
+			name:     "resource_inventory",
+			content:  p.seedResourceInventory(state, scopedSet, cfg, now, false, guestIntel),
+			summary:  p.seedResourceInventorySummary(state, scopedSet, cfg, now, guestIntel),
+		},
+
+		// P3 — droppable if budget is tight.
+		{priority: 3, name: "intelligence", content: p.seedIntelligenceContext(intel, now)},
+		{priority: 3, name: "backup_analysis", content: p.seedBackupAnalysis(state, now)},
+
+		// P4 — least critical, dropped first.
+		{priority: 4, name: "pmg_snapshot", content: p.seedPMGSnapshotString(state, scopedSet, cfg, intel.isQuiet)},
 	}
 
-	return sb.String(), seededFindingIDs
+	budget := p.calculateSeedBudget()
+	result := p.assembleSeedWithinBudget(sections, budget)
+
+	return result, seededFindingIDs
+}
+
+func (p *PatrolService) calculateSeedBudget() int {
+	const (
+		systemPromptEstimate = 4_000
+		toolEstimate         = 8_000
+		outputReserve        = 8_000
+		historyReserve       = 16_000
+		minimumSeedBudget    = 16_000
+	)
+
+	model := ""
+	if p.aiService != nil {
+		if cfg := p.aiService.GetAIConfig(); cfg != nil {
+			model = strings.TrimSpace(cfg.GetPatrolModel())
+		}
+	}
+
+	contextWindow := providers.ContextWindowTokens(model)
+	budget := contextWindow - systemPromptEstimate - toolEstimate - outputReserve - historyReserve
+
+	// Clamp floor so small-context models aren't forced beyond practical capacity.
+	floor := minimumSeedBudget
+	if halfContext := contextWindow / 2; halfContext < floor {
+		floor = halfContext
+	}
+	if budget < floor {
+		budget = floor
+	}
+
+	log.Debug().
+		Str("model", model).
+		Int("context_window_tokens", contextWindow).
+		Int("seed_budget_tokens", budget).
+		Msg("AI Patrol: Calculated seed context token budget")
+
+	return budget
+}
+
+func (p *PatrolService) assembleSeedWithinBudget(sections []seedSection, budgetTokens int) string {
+	if len(sections) == 0 {
+		return ""
+	}
+
+	ordered := append([]seedSection(nil), sections...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		return ordered[i].priority < ordered[j].priority
+	})
+
+	var sb strings.Builder
+	usedTokens := 0
+	included := make([]string, 0, len(ordered))
+	summarized := make([]string, 0, len(ordered))
+	dropped := make([]string, 0, len(ordered))
+
+	appendSection := func(sectionName, content string) {
+		sb.WriteString(content)
+		usedTokens += chat.EstimateTokens(content)
+		included = append(included, sectionName)
+	}
+
+	for _, section := range ordered {
+		if strings.TrimSpace(section.content) == "" {
+			continue
+		}
+
+		contentTokens := chat.EstimateTokens(section.content)
+		switch {
+		case section.priority <= 1:
+			appendSection(section.name, section.content)
+		case section.priority == 2:
+			if usedTokens+contentTokens <= budgetTokens {
+				appendSection(section.name, section.content)
+			} else if strings.TrimSpace(section.summary) != "" {
+				summaryTokens := chat.EstimateTokens(section.summary)
+				if usedTokens+summaryTokens <= budgetTokens {
+					sb.WriteString(section.summary)
+					usedTokens += summaryTokens
+					summarized = append(summarized, section.name)
+					included = append(included, section.name)
+				} else {
+					dropped = append(dropped, section.name)
+				}
+			} else {
+				dropped = append(dropped, section.name)
+			}
+		default:
+			if usedTokens+contentTokens <= budgetTokens {
+				appendSection(section.name, section.content)
+			} else {
+				dropped = append(dropped, section.name)
+			}
+		}
+	}
+
+	log.Debug().
+		Int("budget_tokens", budgetTokens).
+		Int("used_tokens", usedTokens).
+		Bool("over_budget", usedTokens > budgetTokens).
+		Strs("included", included).
+		Strs("summarized", summarized).
+		Strs("dropped", dropped).
+		Msg("AI Patrol: Assembled seed context within budget")
+
+	return sb.String()
+}
+
+func buildScopeSection(scope *PatrolScope) string {
+	if scope == nil {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("# Patrol Scope\n")
+	if scope.Reason != "" {
+		sb.WriteString(fmt.Sprintf("Trigger: %s\n", scope.Reason))
+	}
+	if scope.Context != "" {
+		sb.WriteString(fmt.Sprintf("Context: %s\n", scope.Context))
+	}
+	if len(scope.ResourceIDs) > 0 {
+		sb.WriteString(fmt.Sprintf("Focus resources: %s\n", strings.Join(scope.ResourceIDs, ", ")))
+	}
+	if len(scope.ResourceTypes) > 0 {
+		sb.WriteString(fmt.Sprintf("Resource types: %s\n", strings.Join(scope.ResourceTypes, ", ")))
+	}
+	if scope.AlertID != "" {
+		sb.WriteString(fmt.Sprintf("Alert ID: %s\n", scope.AlertID))
+	}
+	if scope.FindingID != "" {
+		sb.WriteString(fmt.Sprintf("Finding ID: %s\n", scope.FindingID))
+	}
+	sb.WriteString(fmt.Sprintf("Depth: %s\n", scope.Depth.String()))
+
+	if scope.Depth == PatrolDepthQuick {
+		sb.WriteString("\nThis is a quick check — focus on the scoped resources, limit investigation depth.\n")
+	} else {
+		sb.WriteString("\nPerform thorough investigation including trends, baselines, logs, and correlations.\n")
+	}
+	sb.WriteString("\n")
+
+	return sb.String()
 }
 
 // buildScopedSet constructs the set of resource IDs in scope, expanding with correlated resources.
@@ -2027,6 +2170,276 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 	return sb.String()
 }
 
+// seedResourceInventorySummary builds a compact, always-condensed inventory snapshot.
+// Unlike seedResourceInventory quiet mode, this summary condenses even when scoped.
+func (p *PatrolService) seedResourceInventorySummary(state models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, now time.Time, guestIntel map[string]*GuestIntelligence) string {
+	_ = now
+
+	type compactResource struct {
+		name, status string
+		cpu, mem     float64
+		disk         float64
+	}
+
+	var lines []string
+
+	// --- Nodes ---
+	if cfg.AnalyzeNodes {
+		p.mu.RLock()
+		rs := p.readState
+		p.mu.RUnlock()
+
+		nodes := make([]compactResource, 0, len(state.Nodes))
+		if rs != nil {
+			for _, nv := range rs.Nodes() {
+				if !seedIsInScope(scopedSet, nv.ID()) {
+					continue
+				}
+				nodes = append(nodes, compactResource{
+					name:   nv.Name(),
+					status: string(nv.Status()),
+					cpu:    nv.CPUPercent(),
+					mem:    nv.MemoryPercent(),
+					disk:   nv.DiskPercent(),
+				})
+			}
+		} else {
+			for _, n := range state.Nodes {
+				if !seedIsInScope(scopedSet, n.ID) {
+					continue
+				}
+				nodes = append(nodes, compactResource{
+					name:   n.Name,
+					status: n.Status,
+					cpu:    n.CPU * 100,
+					mem:    n.Memory.Usage,
+					disk:   n.Disk.Usage,
+				})
+			}
+		}
+
+		if len(nodes) > 0 {
+			statusCounts := map[string]int{}
+			minCPU, maxCPU := nodes[0].cpu, nodes[0].cpu
+			minMem, maxMem := nodes[0].mem, nodes[0].mem
+			outliers := []string{}
+			for _, n := range nodes {
+				statusCounts[n.status]++
+				if n.cpu < minCPU {
+					minCPU = n.cpu
+				}
+				if n.cpu > maxCPU {
+					maxCPU = n.cpu
+				}
+				if n.mem < minMem {
+					minMem = n.mem
+				}
+				if n.mem > maxMem {
+					maxMem = n.mem
+				}
+				if outlier, ok := seedOutlierLabel(n.name, n.cpu, n.mem, n.disk); ok {
+					outliers = append(outliers, outlier)
+				}
+			}
+
+			line := fmt.Sprintf("Nodes: %d (%s), CPU %.0f-%.0f%%, Mem %.0f-%.0f%%",
+				len(nodes),
+				seedFormatStatusBreakdown(statusCounts, []string{"online", "offline", "unknown"}),
+				minCPU, maxCPU, minMem, maxMem)
+			if len(outliers) > 0 {
+				line += fmt.Sprintf(". High usage: %s", seedTruncateOutlierList(outliers, 5))
+			}
+			lines = append(lines, line)
+		}
+	}
+
+	// --- Guests ---
+	if cfg.AnalyzeGuests {
+		p.mu.RLock()
+		rs := p.readState
+		p.mu.RUnlock()
+
+		guests := []compactResource{}
+		if rs != nil {
+			for _, vmv := range rs.VMs() {
+				if vmv.Template() || !seedIsInScope(scopedSet, vmv.ID()) {
+					continue
+				}
+				guests = append(guests, compactResource{
+					name:   vmv.Name(),
+					status: string(vmv.Status()),
+					cpu:    vmv.CPUPercent(),
+					mem:    vmv.MemoryPercent(),
+					disk:   vmv.DiskPercent(),
+				})
+			}
+			for _, ctv := range rs.Containers() {
+				if ctv.Template() || !seedIsInScope(scopedSet, ctv.ID()) {
+					continue
+				}
+				guests = append(guests, compactResource{
+					name:   ctv.Name(),
+					status: string(ctv.Status()),
+					cpu:    ctv.CPUPercent(),
+					mem:    ctv.MemoryPercent(),
+					disk:   ctv.DiskPercent(),
+				})
+			}
+		} else {
+			for _, vm := range state.VMs {
+				if vm.Template || !seedIsInScope(scopedSet, vm.ID) {
+					continue
+				}
+				guests = append(guests, compactResource{
+					name:   vm.Name,
+					status: vm.Status,
+					cpu:    vm.CPU * 100,
+					mem:    vm.Memory.Usage,
+					disk:   vm.Disk.Usage,
+				})
+			}
+			for _, ct := range state.Containers {
+				if ct.Template || !seedIsInScope(scopedSet, ct.ID) {
+					continue
+				}
+				guests = append(guests, compactResource{
+					name:   ct.Name,
+					status: ct.Status,
+					cpu:    ct.CPU * 100,
+					mem:    ct.Memory.Usage,
+					disk:   ct.Disk.Usage,
+				})
+			}
+		}
+
+		if len(guests) > 0 {
+			statusCounts := map[string]int{}
+			outliers := []string{}
+			for _, g := range guests {
+				statusCounts[g.status]++
+				if outlier, ok := seedOutlierLabel(g.name, g.cpu, g.mem, g.disk); ok {
+					outliers = append(outliers, outlier)
+				}
+			}
+
+			line := fmt.Sprintf("Guests: %d (%s)",
+				len(guests),
+				seedFormatStatusBreakdown(statusCounts, []string{"running", "stopped", "paused"}))
+			if len(outliers) > 0 {
+				line += fmt.Sprintf(". High usage: %s", seedTruncateOutlierList(outliers, 5))
+			}
+
+			unreachable := 0
+			for id, intel := range guestIntel {
+				if !seedIsInScope(scopedSet, id) || intel == nil || intel.Reachable == nil || *intel.Reachable {
+					continue
+				}
+				unreachable++
+			}
+			if unreachable > 0 {
+				line += fmt.Sprintf(". Unreachable: %d", unreachable)
+			}
+
+			lines = append(lines, line)
+		}
+	}
+
+	// --- Storage ---
+	if cfg.AnalyzeStorage {
+		type storageRow struct {
+			name, status string
+			usage        float64
+		}
+
+		p.mu.RLock()
+		urp := p.unifiedResourceProvider
+		p.mu.RUnlock()
+
+		rows := []storageRow{}
+		if urp != nil {
+			for _, r := range urp.GetByType(unifiedresources.ResourceTypeStorage) {
+				if scopedSet != nil && !seedIsInScope(scopedSet, r.ID) {
+					continue
+				}
+				if r.Storage == nil {
+					continue
+				}
+
+				name := strings.TrimSpace(r.Name)
+				if name == "" {
+					name = strings.TrimSpace(r.ID)
+				}
+				status := "active"
+				switch r.Status {
+				case unifiedresources.StatusOffline:
+					status = "inactive"
+				case unifiedresources.StatusUnknown:
+					status = "unknown"
+				}
+				if r.Storage.IsZFS && strings.TrimSpace(r.Storage.ZFSPoolState) != "" {
+					status = strings.TrimSpace(r.Storage.ZFSPoolState)
+				}
+
+				usage := 0.0
+				if r.Metrics != nil && r.Metrics.Disk != nil {
+					if r.Metrics.Disk.Percent > 0 {
+						usage = r.Metrics.Disk.Percent
+					} else if r.Metrics.Disk.Used != nil && r.Metrics.Disk.Total != nil && *r.Metrics.Disk.Total > 0 {
+						usage = (float64(*r.Metrics.Disk.Used) / float64(*r.Metrics.Disk.Total)) * 100
+					}
+				}
+
+				rows = append(rows, storageRow{name: name, status: status, usage: usage})
+			}
+		} else {
+			for _, s := range state.Storage {
+				if !seedIsInScope(scopedSet, s.ID) {
+					continue
+				}
+				rows = append(rows, storageRow{name: s.Name, status: s.Status, usage: s.Usage})
+			}
+		}
+
+		if len(rows) > 0 {
+			statusCounts := map[string]int{}
+			outliers := []string{}
+			for _, row := range rows {
+				statusCounts[row.status]++
+				if row.usage > 80 {
+					outliers = append(outliers, fmt.Sprintf("%s (%.0f%%)", row.name, row.usage))
+				}
+			}
+
+			line := fmt.Sprintf("Storage: %d pools (%s)",
+				len(rows), seedFormatStatusBreakdown(statusCounts, []string{"active", "online", "inactive", "unknown"}))
+			if len(outliers) > 0 {
+				line += fmt.Sprintf(". High usage: %s", seedTruncateOutlierList(outliers, 5))
+			}
+			lines = append(lines, line)
+		}
+	}
+
+	if len(lines) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("# Infrastructure Summary (condensed)\n")
+	for _, line := range lines {
+		sb.WriteString(line)
+		sb.WriteString("\n")
+	}
+	sb.WriteString("\n")
+
+	return sb.String()
+}
+
+func (p *PatrolService) seedPMGSnapshotString(state models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, isQuiet bool) string {
+	var sb strings.Builder
+	p.seedPMGSnapshot(&sb, state, scopedSet, cfg, isQuiet)
+	return sb.String()
+}
+
 // seedPMGSnapshot adds Proxmox Mail Gateway status to the seed context
 func (p *PatrolService) seedPMGSnapshot(sb *strings.Builder, state models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, isQuiet bool) {
 	if !cfg.AnalyzePMG {
@@ -2813,6 +3226,67 @@ func (p *PatrolService) seedFindingsAndContext(scope *PatrolScope, state models.
 	}
 
 	return sb.String(), seededFindingIDs
+}
+
+func seedOutlierLabel(name string, cpu, mem, disk float64) (string, bool) {
+	type metricOutlier struct {
+		label string
+		value float64
+	}
+
+	best := metricOutlier{}
+	for _, m := range []metricOutlier{
+		{label: "CPU", value: cpu},
+		{label: "Mem", value: mem},
+		{label: "Disk", value: disk},
+	} {
+		if m.value > 80 && m.value > best.value {
+			best = m
+		}
+	}
+	if best.label == "" {
+		return "", false
+	}
+	return fmt.Sprintf("%s (%s %.0f%%)", name, best.label, best.value), true
+}
+
+func seedFormatStatusBreakdown(counts map[string]int, preferredOrder []string) string {
+	if len(counts) == 0 {
+		return "none"
+	}
+
+	parts := []string{}
+	seen := map[string]bool{}
+	for _, status := range preferredOrder {
+		if count := counts[status]; count > 0 {
+			parts = append(parts, fmt.Sprintf("%s: %d", status, count))
+			seen[status] = true
+		}
+	}
+
+	remaining := []string{}
+	for status, count := range counts {
+		if count <= 0 || seen[status] {
+			continue
+		}
+		remaining = append(remaining, status)
+	}
+	sort.Strings(remaining)
+	for _, status := range remaining {
+		parts = append(parts, fmt.Sprintf("%s: %d", status, counts[status]))
+	}
+
+	return strings.Join(parts, ", ")
+}
+
+func seedTruncateOutlierList(items []string, max int) string {
+	if len(items) == 0 {
+		return ""
+	}
+	if max <= 0 || len(items) <= max {
+		return strings.Join(items, ", ")
+	}
+	return fmt.Sprintf("%s (+%d more)", strings.Join(items[:max], ", "), len(items)-max)
 }
 
 // seedIsInScope returns true when scopedSet is nil (unscoped) or the resource is in the set.

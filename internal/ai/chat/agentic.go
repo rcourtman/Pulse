@@ -204,6 +204,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	if tools == nil {
 		tools = a.tools
 	}
+	// Cache tool definition token estimate - tools don't change during the loop.
+	cachedToolTokens := EstimateToolsTokens(tools)
 
 	var resultMessages []Message
 	turn := 0
@@ -274,6 +276,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			Int("tools", len(tools)).
 			Int("total_input_tokens", a.totalInputTokens).
 			Int("total_output_tokens", a.totalOutputTokens).
+			Int("estimated_context_tokens", EstimateMessagesTokens(providerMessages)).
 			Str("session_id", sessionID).
 			Msg("[AgenticLoop] Starting turn")
 
@@ -347,6 +350,89 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					log.Debug().
 						Str("session_id", sessionID).
 						Msg("[AgenticLoop] First turn appears conceptual - using auto tool choice")
+				}
+			}
+		}
+
+		// Pre-request context validation: catch overflow from message history growth.
+		// Phase 2 handles first-turn overflow via seed budget; this catches
+		// subsequent turns where tool results accumulate beyond the model's limit.
+		{
+			estimatedTokens := EstimateTokens(req.System) + EstimateMessagesTokens(req.Messages) + cachedToolTokens
+			modelID := ""
+			a.mu.Lock()
+			modelID = a.providerName + ":" + a.modelName
+			a.mu.Unlock()
+			contextLimit := providers.ContextWindowTokens(modelID)
+
+			if estimatedTokens > contextLimit {
+				log.Warn().
+					Int("estimated_tokens", estimatedTokens).
+					Int("context_limit", contextLimit).
+					Str("model", modelID).
+					Str("session_id", sessionID).
+					Msg("[AgenticLoop] Pre-request context overflow detected - emergency compaction")
+
+				// Emergency: aggressively compact ALL old tool results (keepTurns=0, minChars=100)
+				compactOldToolResults(providerMessages, currentTurnStartIndex, 0, 100, a.knowledgeAccumulator)
+
+				// Re-build request with compacted messages
+				req.Messages = providerMessages
+
+				// Re-estimate after compaction
+				estimatedTokens = EstimateTokens(req.System) + EstimateMessagesTokens(req.Messages) + cachedToolTokens
+				if estimatedTokens > contextLimit {
+					log.Warn().
+						Int("estimated_tokens", estimatedTokens).
+						Int("context_limit", contextLimit).
+						Str("session_id", sessionID).
+						Msg("[AgenticLoop] Still over limit after compaction - dropping tools for this turn")
+
+					req.Tools = nil
+					req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceNone}
+					forcedTextOnly = true
+
+					// Final check: if system + messages alone still exceed limit,
+					// prune old messages as last resort.
+					estimatedTokens = EstimateTokens(req.System) + EstimateMessagesTokens(req.Messages)
+					if estimatedTokens > contextLimit {
+						log.Warn().
+							Int("estimated_tokens", estimatedTokens).
+							Int("context_limit", contextLimit).
+							Str("session_id", sessionID).
+							Msg("[AgenticLoop] Still over limit after dropping tools - pruning old messages")
+
+						// Keep the first message (original user prompt) and the most recent half.
+						// This preserves the question context and recent investigation state.
+						if len(providerMessages) > 4 {
+							keepRecent := len(providerMessages) / 2
+							if keepRecent < 2 {
+								keepRecent = 2
+							}
+							pruned := make([]providers.Message, 0, 1+keepRecent)
+							pruned = append(pruned, providerMessages[0])
+							pruned = append(pruned, providerMessages[len(providerMessages)-keepRecent:]...)
+							providerMessages = pruned
+							req.Messages = providerMessages
+							estimatedTokens = EstimateTokens(req.System) + EstimateMessagesTokens(req.Messages)
+
+							log.Warn().
+								Int("messages_after_prune", len(providerMessages)).
+								Int("estimated_tokens_after_prune", estimatedTokens).
+								Str("session_id", sessionID).
+								Msg("[AgenticLoop] Pruned old messages to fit context window")
+						}
+
+						// If still over after all interventions, abort gracefully
+						if estimatedTokens > contextLimit {
+							log.Error().
+								Int("estimated_tokens", estimatedTokens).
+								Int("context_limit", contextLimit).
+								Str("session_id", sessionID).
+								Msg("[AgenticLoop] Cannot fit request in context window - aborting turn")
+							break
+						}
+					}
 				}
 			}
 		}

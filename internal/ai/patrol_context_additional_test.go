@@ -27,8 +27,11 @@ func TestPatrolService_buildSeedContext_QuietSummary(t *testing.T) {
 	}
 
 	seed, _ := ps.buildSeedContext(state, nil, nil)
-	if !strings.Contains(seed, "# Nodes: All 1 healthy") {
-		t.Fatalf("expected quiet node summary, got:\n%s", seed)
+	if !strings.Contains(seed, "# Node Metrics") {
+		t.Fatalf("expected detailed node metrics section, got:\n%s", seed)
+	}
+	if !strings.Contains(seed, "| node-1 | online | 10% | 20% |") {
+		t.Fatalf("expected node row in metrics table, got:\n%s", seed)
 	}
 }
 
