@@ -28,7 +28,7 @@ Run:
 ./scripts/audit-private-boundary.sh
 ```
 
-Enforce full boundary (non-zero exit on production paid-domain files):
+Enforce full boundary (non-zero exit on production paid-domain private implementation leakage):
 
 ```bash
 ./scripts/audit-private-boundary.sh --enforce
@@ -58,7 +58,18 @@ Enforce API `pkg/licensing` bridge boundary (non-zero exit if non-test `internal
 ./scripts/audit-private-boundary.sh --enforce-api-pkg-licensing-imports
 ```
 
-The script currently reports paid-domain files in:
+Enforce paid-surface allowlist integrity (non-zero exit if allowlist references missing files):
+
+```bash
+./scripts/audit-private-boundary.sh --enforce-paid-surface-allowlist
+```
+
+The script reports paid-domain files in two categories:
+
+- private implementation leakage (must be zero to pass `--enforce`)
+- allowlisted paid-surface adapters (tracked in `scripts/repo-boundary-paid-surface.allowlist`)
+
+Broad paid-domain discovery currently covers:
 
 - `internal/license/...`
 - paid-focused handlers in `internal/api/...` (`license`, `entitlement`, `billing`, `stripe`, `hosted`, `rbac`, `audit`, `reporting`, `sso`, `conversion`)
@@ -70,6 +81,7 @@ Current milestone:
 - Non-test `internal/api/*.go` imports of `internal/license/*`: **0**
 - API root imports of `internal/license`: **0**
 - Non-API runtime imports of `internal/license`: **0**
+- Production paid-domain private implementation leakage: **0**
 
 ## Safety requirements during extraction
 

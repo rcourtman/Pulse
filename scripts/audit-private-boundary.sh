@@ -2,9 +2,10 @@
 set -euo pipefail
 
 MODE="${1:-report}"
+PAID_SURFACE_ALLOWLIST_FILE="scripts/repo-boundary-paid-surface.allowlist"
 
-if [[ "${MODE}" != "report" && "${MODE}" != "--enforce" && "${MODE}" != "--enforce-api-imports" && "${MODE}" != "--enforce-api-root-imports" && "${MODE}" != "--enforce-nonapi-imports" && "${MODE}" != "--enforce-api-pkg-licensing-imports" ]]; then
-  echo "Usage: $0 [report|--enforce|--enforce-api-imports|--enforce-api-root-imports|--enforce-nonapi-imports|--enforce-api-pkg-licensing-imports]" >&2
+if [[ "${MODE}" != "report" && "${MODE}" != "--enforce" && "${MODE}" != "--enforce-api-imports" && "${MODE}" != "--enforce-api-root-imports" && "${MODE}" != "--enforce-nonapi-imports" && "${MODE}" != "--enforce-api-pkg-licensing-imports" && "${MODE}" != "--enforce-paid-surface-allowlist" ]]; then
+  echo "Usage: $0 [report|--enforce|--enforce-api-imports|--enforce-api-root-imports|--enforce-nonapi-imports|--enforce-api-pkg-licensing-imports|--enforce-paid-surface-allowlist]" >&2
   exit 2
 fi
 
@@ -23,6 +24,22 @@ SHIM_EXCLUDES='^(internal/license/features\.go|internal/license/license\.go|inte
 ALL_MATCHES="$(printf "%s\n" "${ALL_MATCHES}" | rg -v "${SHIM_EXCLUDES}" || true)"
 PROD_MATCHES="$(printf "%s\n" "${ALL_MATCHES}" | rg -v '_test\.go$' || true)"
 TEST_MATCHES="$(printf "%s\n" "${ALL_MATCHES}" | rg '_test\.go$' || true)"
+
+PAID_SURFACE_ALLOWLIST="$(cat "${PAID_SURFACE_ALLOWLIST_FILE}" 2>/dev/null | sed 's/#.*$//' | sed '/^$/d' | sort -u || true)"
+PAID_SURFACE_ALLOWLIST_REGEX='^$'
+if [[ -n "${PAID_SURFACE_ALLOWLIST}" ]]; then
+	PAID_SURFACE_ALLOWLIST_REGEX="$(printf "%s\n" "${PAID_SURFACE_ALLOWLIST}" | sed 's/[.[\*^$()+?{|]/\\&/g' | sed 's#/#\\/#g' | paste -sd'|' -)"
+fi
+
+PROD_PAID_SURFACE_MATCHES="$(printf "%s\n" "${PROD_MATCHES}" | rg "${PAID_SURFACE_ALLOWLIST_REGEX}" || true)"
+PROD_PRIVATE_IMPL_MATCHES="$(printf "%s\n" "${PROD_MATCHES}" | rg -v "${PAID_SURFACE_ALLOWLIST_REGEX}" || true)"
+
+PAID_SURFACE_MISSING_FILES="$(printf "%s\n" "${PAID_SURFACE_ALLOWLIST}" | while IFS= read -r file; do
+	[[ -z "${file}" ]] && continue
+	if [[ ! -f "${file}" ]]; then
+		printf "%s\n" "${file}"
+	fi
+done)"
 
 API_INTERNAL_LICENSE_IMPORTS="$(rg -n 'internal/license/' internal/api/*.go 2>/dev/null | rg -v '_test\.go' || true)"
 API_INTERNAL_LICENSE_ROOT_IMPORTS="$(rg -n '"github.com/rcourtman/pulse-go-rewrite/internal/license"' internal/api/*.go 2>/dev/null | rg -v '_test\.go' || true)"
@@ -45,12 +62,25 @@ NON_API_IMPORT_ALLOWLIST='^$'
 NON_API_INTERNAL_LICENSE_IMPORTS="$(printf "%s\n" "${NON_API_INTERNAL_LICENSE_ROOT_IMPORTS}" | rg -v "${NON_API_IMPORT_ALLOWLIST}" || true)"
 
 prod_count=0
+prod_private_impl_count=0
+prod_paid_surface_count=0
 test_count=0
 if [[ -n "${PROD_MATCHES}" ]]; then
   prod_count="$(printf "%s\n" "${PROD_MATCHES}" | sed '/^$/d' | wc -l | tr -d ' ')"
 fi
+if [[ -n "${PROD_PRIVATE_IMPL_MATCHES}" ]]; then
+  prod_private_impl_count="$(printf "%s\n" "${PROD_PRIVATE_IMPL_MATCHES}" | sed '/^$/d' | wc -l | tr -d ' ')"
+fi
+if [[ -n "${PROD_PAID_SURFACE_MATCHES}" ]]; then
+  prod_paid_surface_count="$(printf "%s\n" "${PROD_PAID_SURFACE_MATCHES}" | sed '/^$/d' | wc -l | tr -d ' ')"
+fi
 if [[ -n "${TEST_MATCHES}" ]]; then
   test_count="$(printf "%s\n" "${TEST_MATCHES}" | sed '/^$/d' | wc -l | tr -d ' ')"
+fi
+
+paid_surface_missing_file_count=0
+if [[ -n "${PAID_SURFACE_MISSING_FILES}" ]]; then
+  paid_surface_missing_file_count="$(printf "%s\n" "${PAID_SURFACE_MISSING_FILES}" | sed '/^$/d' | wc -l | tr -d ' ')"
 fi
 
 api_import_count=0
@@ -80,6 +110,8 @@ fi
 
 echo "Private boundary audit"
 echo "  Production files in paid domains: ${prod_count}"
+echo "  Production files in paid domains (private implementation leakage): ${prod_private_impl_count}"
+echo "  Production files in paid domains (allowlisted paid surface adapters): ${prod_paid_surface_count}"
 echo "  Test files in paid domains: ${test_count}"
 echo "  API files importing internal/license: ${api_import_count}"
 echo "  API root imports of internal/license: ${api_root_import_count}"
@@ -88,9 +120,27 @@ echo "  API files importing pkg/licensing: ${api_pkg_licensing_import_file_count
 echo "  API files importing pkg/licensing outside bridge: ${api_pkg_licensing_import_outside_allowlist_count}"
 
 if [[ "${prod_count}" -gt 0 ]]; then
-  echo
-  echo "Production files currently in paid domains:"
-  printf "%s\n" "${PROD_MATCHES}" | sed '/^$/d' | sed 's/^/  - /'
+	echo
+	echo "Production files currently in paid domains:"
+	printf "%s\n" "${PROD_MATCHES}" | sed '/^$/d' | sed 's/^/  - /'
+fi
+
+if [[ "${prod_private_impl_count}" -gt 0 ]]; then
+	echo
+	echo "Production files in paid domains outside paid-surface allowlist:"
+	printf "%s\n" "${PROD_PRIVATE_IMPL_MATCHES}" | sed '/^$/d' | sed 's/^/  - /'
+fi
+
+if [[ "${prod_paid_surface_count}" -gt 0 ]]; then
+	echo
+	echo "Allowlisted paid-surface adapter files:"
+	printf "%s\n" "${PROD_PAID_SURFACE_MATCHES}" | sed '/^$/d' | sed 's/^/  - /'
+fi
+
+if [[ "${paid_surface_missing_file_count}" -gt 0 ]]; then
+	echo
+	echo "Paid-surface allowlist entries that do not exist:"
+	printf "%s\n" "${PAID_SURFACE_MISSING_FILES}" | sed '/^$/d' | sed 's/^/  - /'
 fi
 
 if [[ "${test_count}" -gt 0 ]]; then
@@ -129,10 +179,16 @@ if [[ "${api_pkg_licensing_import_outside_allowlist_count}" -gt 0 ]]; then
 	printf "%s\n" "${API_PKG_LICENSING_IMPORT_FILES_OUTSIDE_ALLOWLIST}" | sed '/^$/d' | sed 's/^/  - /'
 fi
 
-if [[ "${MODE}" == "--enforce" && "${prod_count}" -gt 0 ]]; then
-  echo
-  echo "Boundary enforcement failed: production paid-domain files still live in public repo."
-  exit 1
+if [[ "${MODE}" == "--enforce" && "${prod_private_impl_count}" -gt 0 ]]; then
+	echo
+	echo "Boundary enforcement failed: production paid-domain implementation files still live in public repo."
+	exit 1
+fi
+
+if [[ ("${MODE}" == "--enforce" || "${MODE}" == "--enforce-paid-surface-allowlist") && "${paid_surface_missing_file_count}" -gt 0 ]]; then
+	echo
+	echo "Boundary enforcement failed: paid-surface allowlist contains paths that no longer exist."
+	exit 1
 fi
 
 if [[ ("${MODE}" == "--enforce" || "${MODE}" == "--enforce-api-imports") && "${api_import_count}" -gt 0 ]]; then

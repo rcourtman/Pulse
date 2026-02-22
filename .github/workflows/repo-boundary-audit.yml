@@ -27,6 +27,9 @@ jobs:
       - name: Enforce API pkg/licensing Bridge Boundary
         run: ./scripts/audit-private-boundary.sh --enforce-api-pkg-licensing-imports
 
+      - name: Enforce Paid Surface Allowlist Integrity
+        run: ./scripts/audit-private-boundary.sh --enforce-paid-surface-allowlist
+
       - name: Upload Audit Report
         uses: actions/upload-artifact@v4
         with:
