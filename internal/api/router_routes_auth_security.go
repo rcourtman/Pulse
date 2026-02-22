@@ -703,12 +703,6 @@ func newSSOAdminRuntime(router *Router) extensions.SSOAdminRuntime {
 		}
 		router.oidcManager.RemoveService(id)
 	}
-	runtime.HandleListProviders = router.handleListSSOProviders
-	runtime.HandleCreateProvider = router.handleCreateSSOProvider
-	runtime.HandleGetProvider = router.handleGetSSOProvider
-	runtime.HandleUpdateProvider = router.handleUpdateSSOProvider
-	runtime.HandleDeleteProvider = router.handleDeleteSSOProvider
-
 	return runtime
 }
 

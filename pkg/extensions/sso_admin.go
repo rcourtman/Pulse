@@ -218,11 +218,6 @@ type SSOAdminRuntime struct {
 	RemoveSAMLProvider     func(string)
 	InitializeOIDCProvider func(context.Context, string, *SSOProvider) error
 	RemoveOIDCProvider     func(string)
-	HandleListProviders    func(http.ResponseWriter, *http.Request)
-	HandleCreateProvider   func(http.ResponseWriter, *http.Request)
-	HandleGetProvider      func(http.ResponseWriter, *http.Request, string)
-	HandleUpdateProvider   func(http.ResponseWriter, *http.Request, string)
-	HandleDeleteProvider   func(http.ResponseWriter, *http.Request, string)
 	LogAuditEvent          LogSSOAuditEventFunc
 	WriteError             WriteSSOErrorFunc
 }
