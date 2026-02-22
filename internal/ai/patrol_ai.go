@@ -29,6 +29,8 @@ type AIAnalysisResult struct {
 	Response         string     // The AI's raw response text
 	Findings         []*Finding // Parsed findings from the response
 	RejectedFindings int        // Findings rejected by threshold validation
+	TriageFlags      int        // Number of deterministic triage flags
+	TriageSkippedLLM bool       // True if LLM was skipped due to quiet triage
 	InputTokens      int
 	OutputTokens     int
 	ToolCalls        []ToolCallRecord // Tool invocations during this analysis
@@ -222,12 +224,19 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 		Bool("quiet", triageResult.IsQuiet).
 		Int("flagged_resources", len(triageResult.FlaggedIDs)).
 		Msg("AI Patrol: Triage complete")
+	metrics := GetPatrolMetrics()
+	metrics.RecordTriageFlags(len(triageResult.Flags))
+	if triageResult.IsQuiet {
+		metrics.RecordTriageQuiet()
+	}
 
 	// Quiet infrastructure: skip LLM entirely
 	if triageResult.IsQuiet {
 		log.Info().Msg("AI Patrol: Infrastructure quiet, skipping LLM analysis")
 		return &AIAnalysisResult{
-			Response: "Infrastructure healthy — deterministic triage found no issues.",
+			Response:         "Infrastructure healthy — deterministic triage found no issues.",
+			TriageFlags:      0,
+			TriageSkippedLLM: true,
 		}, nil
 	}
 
@@ -556,6 +565,8 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 		Response:         finalContent,
 		Findings:         adapter.getCollectedFindings(),
 		RejectedFindings: rejectedCount,
+		TriageFlags:      len(triageResult.Flags),
+		TriageSkippedLLM: false,
 		InputTokens:      inputTokens,
 		OutputTokens:     outputTokens,
 		ToolCalls:        collectedToolCalls,

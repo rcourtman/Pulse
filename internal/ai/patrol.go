@@ -127,6 +127,9 @@ type PatrolRunRecord struct {
 	FindingIDs       []string `json:"finding_ids"`      // IDs of findings from this run
 	ErrorCount       int      `json:"error_count"`
 	Status           string   `json:"status"` // "healthy", "issues_found", "error"
+	// Triage stats
+	TriageFlags      int  `json:"triage_flags"`                 // Number of deterministic flags found
+	TriageSkippedLLM bool `json:"triage_skipped_llm,omitempty"` // True if LLM was skipped (quiet infra)
 	// AI Analysis details
 	AIAnalysis   string `json:"ai_analysis,omitempty"`   // The AI's raw response/analysis
 	InputTokens  int    `json:"input_tokens,omitempty"`  // Tokens sent to AI

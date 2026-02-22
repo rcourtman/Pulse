@@ -249,8 +249,11 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		newFindings       int
 		existingFindings  int
 		rejectedFindings  int
+		triageFlags       int
+		triageSkippedLLM  bool
 		findingIDs        []string
 		errors            int
+		lastAIError       error             // Preserve original error for circuit breaker categorization
 		aiAnalysis        *AIAnalysisResult // Stores the AI's analysis for the run record
 	}
 	var newFindings []*Finding
@@ -344,6 +347,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		if aiErr != nil {
 			log.Warn().Err(aiErr).Msg("AI Patrol: LLM analysis failed")
 			runStats.errors++
+			runStats.lastAIError = aiErr
 
 			// Create a finding to surface this error to the user
 			errMsg := aiErr.Error()
@@ -385,6 +389,8 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		} else if aiResult != nil {
 			runStats.aiAnalysis = aiResult
 			runStats.rejectedFindings = aiResult.RejectedFindings
+			runStats.triageFlags = aiResult.TriageFlags
+			runStats.triageSkippedLLM = aiResult.TriageSkippedLLM
 
 			// Auto-resolve previous patrol error finding if this run succeeded
 			errorFindingID := generateFindingID("ai-service", "reliability", "ai-patrol-error")
@@ -532,6 +538,8 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		runRecord.AIAnalysis = runStats.aiAnalysis.Response
 		runRecord.InputTokens = runStats.aiAnalysis.InputTokens
 		runRecord.OutputTokens = runStats.aiAnalysis.OutputTokens
+		runRecord.TriageFlags = runStats.triageFlags
+		runRecord.TriageSkippedLLM = runStats.triageSkippedLLM
 		toolCalls := runStats.aiAnalysis.ToolCalls
 		if len(toolCalls) > MaxToolCallsPerRun {
 			toolCalls = toolCalls[:MaxToolCallsPerRun]
@@ -642,6 +650,8 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		newFindings       int
 		existingFindings  int
 		rejectedFindings  int
+		triageFlags       int
+		triageSkippedLLM  bool
 		findingIDs        []string
 		errors            int
 		aiAnalysis        *AIAnalysisResult
@@ -754,6 +764,8 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		} else if aiResult != nil {
 			runStats.aiAnalysis = aiResult
 			runStats.rejectedFindings = aiResult.RejectedFindings
+			runStats.triageFlags = aiResult.TriageFlags
+			runStats.triageSkippedLLM = aiResult.TriageSkippedLLM
 			// Findings are already recorded via patrol_report_finding tool calls.
 			for _, f := range aiResult.Findings {
 				if f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical {
@@ -837,6 +849,8 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		runRecord.AIAnalysis = runStats.aiAnalysis.Response
 		runRecord.InputTokens = runStats.aiAnalysis.InputTokens
 		runRecord.OutputTokens = runStats.aiAnalysis.OutputTokens
+		runRecord.TriageFlags = runStats.triageFlags
+		runRecord.TriageSkippedLLM = runStats.triageSkippedLLM
 		toolCalls := runStats.aiAnalysis.ToolCalls
 		if len(toolCalls) > MaxToolCallsPerRun {
 			toolCalls = toolCalls[:MaxToolCallsPerRun]

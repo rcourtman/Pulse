@@ -13,6 +13,8 @@ type PatrolMetrics struct {
 	investigationOutcome *prometheus.CounterVec
 	fixVerification      *prometheus.CounterVec
 	runTotal             *prometheus.CounterVec
+	triageFlags          prometheus.Histogram
+	triageQuietTotal     prometheus.Counter
 	scopedDropped        prometheus.Counter
 	scopedDroppedFinal   prometheus.Counter
 	streamResumeOutcome  *prometheus.CounterVec
@@ -80,6 +82,23 @@ func newPatrolMetrics() *PatrolMetrics {
 				Help:      "Total patrol runs by trigger and type",
 			},
 			[]string{"trigger", "type"},
+		),
+		triageFlags: prometheus.NewHistogram(
+			prometheus.HistogramOpts{
+				Namespace: "pulse",
+				Subsystem: "patrol",
+				Name:      "triage_flags",
+				Help:      "Number of deterministic triage flags per patrol run",
+				Buckets:   []float64{0, 1, 2, 3, 5, 10, 20, 50},
+			},
+		),
+		triageQuietTotal: prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Namespace: "pulse",
+				Subsystem: "patrol",
+				Name:      "triage_quiet_total",
+				Help:      "Total patrol runs skipped due to quiet infrastructure (no triage flags)",
+			},
 		),
 		scopedDropped: prometheus.NewCounter(
 			prometheus.CounterOpts{
@@ -149,6 +168,8 @@ func newPatrolMetrics() *PatrolMetrics {
 		m.investigationOutcome,
 		m.fixVerification,
 		m.runTotal,
+		m.triageFlags,
+		m.triageQuietTotal,
 		m.scopedDropped,
 		m.scopedDroppedFinal,
 		m.streamResumeOutcome,
@@ -194,6 +215,16 @@ func (m *PatrolMetrics) RecordScopedDroppedFinal() {
 // RecordRun records a patrol run.
 func (m *PatrolMetrics) RecordRun(trigger, runType string) {
 	m.runTotal.WithLabelValues(trigger, runType).Inc()
+}
+
+// RecordTriageFlags records the number of triage flags for a patrol run.
+func (m *PatrolMetrics) RecordTriageFlags(count int) {
+	m.triageFlags.Observe(float64(count))
+}
+
+// RecordTriageQuiet records a patrol run that skipped LLM due to quiet infrastructure.
+func (m *PatrolMetrics) RecordTriageQuiet() {
+	m.triageQuietTotal.Inc()
 }
 
 // RecordStreamReplay records a stream subscriber sync that replayed buffered events.
