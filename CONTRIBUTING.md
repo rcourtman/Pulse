@@ -89,7 +89,7 @@ UI-heavy features.
 
 ## Installers & Scripts
 
-- Centralised guidance: `docs/script-library-guide.md`
+- Centralised guidance: `docs/internal/SCRIPT_LIBRARY.md`
 - Bundling: `make bundle-scripts`
 - Tests: `scripts/tests/run.sh` plus integration suites under
   `scripts/tests/integration/`
