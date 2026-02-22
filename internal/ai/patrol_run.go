@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
@@ -563,11 +564,17 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 	p.errorCount = runStats.errors
 	p.mu.Unlock()
 
-	// Record circuit breaker result only if we actually attempted LLM calls
-	// canRunLLM is true only when AI is enabled, licensed, AND breaker allowed
+	// Record circuit breaker result only if we actually attempted LLM calls.
+	// canRunLLM is true only when AI is enabled, licensed, AND breaker allowed.
+	// Use error categorization so non-transient errors (auth failures, insufficient
+	// credits) don't trip the breaker — those won't be fixed by waiting.
 	if breaker != nil && canRunLLM {
 		if runStats.errors > 0 {
-			breaker.RecordFailure(fmt.Errorf("patrol completed with %d errors", runStats.errors))
+			aiErr := runStats.lastAIError
+			if aiErr == nil {
+				aiErr = fmt.Errorf("patrol completed with %d errors", runStats.errors)
+			}
+			breaker.RecordFailureWithCategory(aiErr, circuit.CategorizeError(aiErr))
 		} else {
 			breaker.RecordSuccess()
 		}
