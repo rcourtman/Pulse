@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -68,6 +69,9 @@ func TestSecurityTokens_ListCreateDelete(t *testing.T) {
 	}
 	if len(cfg.APITokens) != 1 {
 		t.Fatalf("expected token stored in config")
+	}
+	if got := cfg.APITokens[0].OrgID; got != "default" {
+		t.Fatalf("expected token org binding default, got %q", got)
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/api/security/tokens", nil)
@@ -211,5 +215,29 @@ func TestSecurityTokens_Create_WithInvalidExpiresIn(t *testing.T) {
 	}
 	if len(cfg.APITokens) != 0 {
 		t.Fatalf("expected no token stored in config when expiresIn < 1m")
+	}
+}
+
+func TestSecurityTokens_Create_BindsTokenToRequestOrg(t *testing.T) {
+	cfg := &config.Config{}
+	persistence := config.NewConfigPersistence(t.TempDir())
+	router := &Router{
+		config:      cfg,
+		persistence: persistence,
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/tokens", strings.NewReader(`{"name":"test","scopes":["monitoring:read"]}`))
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "acme"))
+	rr := httptest.NewRecorder()
+	router.handleCreateAPIToken(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+	if len(cfg.APITokens) != 1 {
+		t.Fatalf("expected token stored in config")
+	}
+	if got := cfg.APITokens[0].OrgID; got != "acme" {
+		t.Fatalf("token org binding = %q, want acme", got)
 	}
 }

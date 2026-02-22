@@ -891,6 +891,13 @@ func Load() (*Config, error) {
 
 	// Load API tokens
 	if tokens, err := persistence.LoadAPITokens(); err == nil {
+		if migrated := bindLegacyAPITokensToDefault(tokens); migrated > 0 {
+			if err := persistence.SaveAPITokens(tokens); err != nil {
+				log.Error().Err(err).Int("count", migrated).Msg("Failed to persist legacy API token org binding migration")
+			} else {
+				log.Warn().Int("count", migrated).Msg("Migrated legacy API tokens to default organization binding")
+			}
+		}
 		cfg.APITokens = tokens
 		cfg.SortAPITokens()
 		log.Info().Int("count", len(tokens)).Msg("Loaded API tokens from persistence")
@@ -1315,6 +1322,7 @@ func Load() (*Config, error) {
 				Suffix:    suffix,
 				CreatedAt: time.Now().UTC(),
 				Scopes:    []string{ScopeWildcard},
+				OrgID:     "default",
 			}
 			cfg.APITokens = append(cfg.APITokens, record)
 			migratedCount++

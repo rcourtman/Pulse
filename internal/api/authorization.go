@@ -60,7 +60,7 @@ func (l *MultiTenantOrganizationLoader) GetOrganization(orgID string) (*models.O
 }
 
 // TokenCanAccessOrg checks if an API token is authorized to access the specified organization.
-// It uses the token's CanAccessOrg method and logs warnings for legacy tokens.
+// It uses the token's CanAccessOrg method and logs warnings for unbound legacy tokens.
 func (c *DefaultAuthorizationChecker) TokenCanAccessOrg(token *config.APITokenRecord, orgID string) bool {
 	if token == nil {
 		// No token means session-based auth - defer to user membership check
@@ -70,13 +70,12 @@ func (c *DefaultAuthorizationChecker) TokenCanAccessOrg(token *config.APITokenRe
 	// Check if token can access the org
 	canAccess := token.CanAccessOrg(orgID)
 
-	// Log warning for legacy tokens with wildcard access
-	if token.IsLegacyToken() && orgID != "default" {
+	if token.IsLegacyToken() {
 		log.Warn().
 			Str("token_id", token.ID).
 			Str("token_name", token.Name).
 			Str("org_id", orgID).
-			Msg("Legacy token with wildcard access used for non-default org - consider binding to specific org")
+			Msg("Legacy unbound token attempted organization access and was denied")
 	}
 
 	if !canAccess {

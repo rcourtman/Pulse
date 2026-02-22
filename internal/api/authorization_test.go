@@ -44,10 +44,10 @@ func TestDefaultAuthorizationChecker_TokenCanAccessOrg(t *testing.T) {
 		assert.False(t, checker.TokenCanAccessOrg(token, "acme"))
 	})
 
-	t.Run("wildcard legacy access", func(t *testing.T) {
-		token := &config.APITokenRecord{} // empty orgs = legacy
+	t.Run("wildcard legacy access denied", func(t *testing.T) {
+		token := &config.APITokenRecord{} // empty orgs = legacy/unbound
 		assert.False(t, checker.TokenCanAccessOrg(token, "tenant1"))
-		assert.True(t, checker.TokenCanAccessOrg(token, "default"))
+		assert.False(t, checker.TokenCanAccessOrg(token, "default"))
 	})
 }
 
@@ -122,7 +122,7 @@ func TestDefaultAuthorizationChecker_CheckAccess(t *testing.T) {
 		assert.True(t, res.Allowed)
 		assert.False(t, res.IsLegacyToken)
 
-		tokenLegacy := &config.APITokenRecord{OrgID: ""} // Legacy default-only
+		tokenLegacy := &config.APITokenRecord{OrgID: ""} // Legacy/unbound
 		res = checker.CheckAccess(tokenLegacy, "user1", "acme")
 		assert.False(t, res.Allowed)
 		assert.False(t, res.IsLegacyToken)

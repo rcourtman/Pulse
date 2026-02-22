@@ -21,10 +21,10 @@ func TestAPITokenRecord_CanAccessOrg(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "Legacy Token - Access Default",
+			name:     "Legacy Token - Access Default Denied",
 			token:    APITokenRecord{OrgID: ""},
 			orgID:    "default",
-			expected: true,
+			expected: false,
 		},
 
 		// Single Org Binding

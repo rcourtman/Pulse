@@ -496,6 +496,7 @@ func (cw *ConfigWatcher) reloadConfig() {
 				Suffix:    suffix,
 				CreatedAt: time.Now().UTC(),
 				Scopes:    []string{ScopeWildcard},
+				OrgID:     "default",
 			})
 		}
 
@@ -586,6 +587,21 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 			Msg("Failed to reload API tokens after retries - preserving existing tokens")
 		// CRITICAL: Keep existing tokens rather than clearing them
 		return
+	}
+
+	if migrated := bindLegacyAPITokensToDefault(tokens); migrated > 0 {
+		if err := globalPersistence.SaveAPITokens(tokens); err != nil {
+			log.Error().
+				Err(err).
+				Int("count", migrated).
+				Str("api_tokens_path", cw.apiTokensPath).
+				Msg("Failed to persist legacy API token org binding migration during reload")
+		} else {
+			log.Warn().
+				Int("count", migrated).
+				Str("api_tokens_path", cw.apiTokensPath).
+				Msg("Migrated legacy API tokens to default organization binding during reload")
+		}
 	}
 
 	// Only update if we successfully loaded tokens

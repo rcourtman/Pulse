@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -71,7 +72,6 @@ type APITokenRecord struct {
 
 	// OrgID binds this token to a single organization.
 	// If set, the token can only access resources within this organization.
-	// Empty string means the token is not org-bound (legacy behavior with wildcard access).
 	OrgID string `json:"orgId,omitempty"`
 
 	// OrgIDs allows multi-org access for MSP tokens.
@@ -129,15 +129,13 @@ func (r *APITokenRecord) Clone() APITokenRecord {
 
 // CanAccessOrg checks if this token is authorized to access the specified organization.
 // Returns true if:
-// - Token has no org binding (legacy compatibility): default org only
 // - Token's OrgID matches the requested orgID
 // - Token's OrgIDs contains the requested orgID
-// - Requested orgID is "default" and token is explicitly bound to "default"
+// Tokens without org binding are denied.
 func (r *APITokenRecord) CanAccessOrg(orgID string) bool {
-	// Legacy tokens (no org binding) are restricted to the default org only.
-	// This prevents cross-tenant access by unscoped tokens.
+	// Unbound legacy tokens are denied everywhere.
 	if r.OrgID == "" && len(r.OrgIDs) == 0 {
-		return orgID == "" || orgID == "default"
+		return false
 	}
 
 	// Check multi-org binding first (takes precedence)
@@ -154,13 +152,13 @@ func (r *APITokenRecord) CanAccessOrg(orgID string) bool {
 	return r.OrgID == orgID
 }
 
-// IsLegacyToken returns true if this token has no org binding (wildcard access).
+// IsLegacyToken returns true if this token has no org binding (deprecated/unbound).
 func (r *APITokenRecord) IsLegacyToken() bool {
 	return r.OrgID == "" && len(r.OrgIDs) == 0
 }
 
 // GetBoundOrgs returns all organizations this token is bound to.
-// Returns nil for legacy tokens with wildcard access.
+// Returns nil for unbound legacy tokens.
 func (r *APITokenRecord) GetBoundOrgs() []string {
 	if len(r.OrgIDs) > 0 {
 		return r.OrgIDs
@@ -186,6 +184,7 @@ func NewAPITokenRecord(rawToken, name string, scopes []string) (*APITokenRecord,
 		Suffix:    tokenSuffix(rawToken),
 		CreatedAt: now,
 		Scopes:    normalizeScopes(scopes),
+		OrgID:     "default",
 	}
 	return record, nil
 }
@@ -207,7 +206,19 @@ func NewHashedAPITokenRecord(hashedToken, name string, createdAt time.Time, scop
 		Suffix:    tokenSuffix(hashedToken),
 		CreatedAt: createdAt,
 		Scopes:    normalizeScopes(scopes),
+		OrgID:     "default",
 	}, nil
+}
+
+func bindLegacyAPITokensToDefault(tokens []APITokenRecord) int {
+	migrated := 0
+	for i := range tokens {
+		if strings.TrimSpace(tokens[i].OrgID) == "" && len(tokens[i].OrgIDs) == 0 {
+			tokens[i].OrgID = "default"
+			migrated++
+		}
+	}
+	return migrated
 }
 
 // tokenPrefix returns the first six characters suitable for hints.

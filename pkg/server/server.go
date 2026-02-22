@@ -117,6 +117,9 @@ func Run(ctx context.Context, version string) error {
 			// Continue anyway - migration failure shouldn't block startup
 		}
 	}
+	if err := ensureDefaultOrgOwnerMembership(mtPersistence, cfg.AuthUser); err != nil {
+		log.Warn().Err(err).Msg("Failed to ensure default organization owner membership")
+	}
 
 	// Local upgrade metrics must be durable and tenant-aware (P0-6).
 	// Renamed from conversion.db -> upgrade_metrics.db to reduce "marketing telemetry" optics.
@@ -640,5 +643,92 @@ func LooksLikeBase64(s string) bool {
 		}
 		return false
 	}
+	return true
+}
+
+func ensureDefaultOrgOwnerMembership(mtp *config.MultiTenantPersistence, adminUser string) error {
+	if mtp == nil {
+		return nil
+	}
+	adminUser = strings.TrimSpace(adminUser)
+	if adminUser == "" {
+		return nil
+	}
+
+	org, err := mtp.LoadOrganization("default")
+	if err != nil {
+		return fmt.Errorf("load default organization: %w", err)
+	}
+	if org == nil {
+		org = &models.Organization{}
+	}
+
+	changed := false
+	now := time.Now().UTC()
+	if strings.TrimSpace(org.ID) == "" {
+		org.ID = "default"
+		changed = true
+	}
+	if strings.TrimSpace(org.DisplayName) == "" {
+		org.DisplayName = "default"
+		changed = true
+	}
+	if org.CreatedAt.IsZero() {
+		org.CreatedAt = now
+		changed = true
+	}
+	if strings.TrimSpace(org.OwnerUserID) == "" {
+		org.OwnerUserID = adminUser
+		changed = true
+	}
+
+	if ensureOrgOwnerMembership(org, adminUser, now) {
+		changed = true
+	}
+
+	if ownerUserID := strings.TrimSpace(org.OwnerUserID); ownerUserID != "" && ownerUserID != adminUser {
+		if ensureOrgOwnerMembership(org, ownerUserID, now) {
+			changed = true
+		}
+	}
+
+	if !changed {
+		return nil
+	}
+	return mtp.SaveOrganization(org)
+}
+
+func ensureOrgOwnerMembership(org *models.Organization, userID string, now time.Time) bool {
+	userID = strings.TrimSpace(userID)
+	if org == nil || userID == "" {
+		return false
+	}
+
+	for i := range org.Members {
+		if strings.TrimSpace(org.Members[i].UserID) != userID {
+			continue
+		}
+		changed := false
+		if org.Members[i].Role != models.OrgRoleOwner {
+			org.Members[i].Role = models.OrgRoleOwner
+			changed = true
+		}
+		if org.Members[i].AddedAt.IsZero() {
+			org.Members[i].AddedAt = now
+			changed = true
+		}
+		if strings.TrimSpace(org.Members[i].AddedBy) == "" {
+			org.Members[i].AddedBy = userID
+			changed = true
+		}
+		return changed
+	}
+
+	org.Members = append(org.Members, models.OrganizationMember{
+		UserID:  userID,
+		Role:    models.OrgRoleOwner,
+		AddedAt: now,
+		AddedBy: userID,
+	})
 	return true
 }

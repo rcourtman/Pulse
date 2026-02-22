@@ -160,6 +160,10 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
+	record.OrgID = strings.TrimSpace(GetOrgID(req.Context()))
+	if record.OrgID == "" {
+		record.OrgID = "default"
+	}
 
 	if payload.ExpiresIn != nil && *payload.ExpiresIn != "" {
 		dur, err := time.ParseDuration(*payload.ExpiresIn)

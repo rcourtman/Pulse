@@ -47,6 +47,9 @@ func TestNewAPITokenRecord(t *testing.T) {
 	if len(record.Scopes) != 1 || record.Scopes[0] != ScopeWildcard {
 		t.Fatalf("Scopes = %v", record.Scopes)
 	}
+	if record.OrgID != "default" {
+		t.Fatalf("OrgID = %q, want default", record.OrgID)
+	}
 }
 
 func TestNewHashedAPITokenRecord(t *testing.T) {
@@ -72,6 +75,9 @@ func TestNewHashedAPITokenRecord(t *testing.T) {
 	}
 	if record.CreatedAt.IsZero() {
 		t.Fatalf("expected CreatedAt to be set")
+	}
+	if record.OrgID != "default" {
+		t.Fatalf("OrgID = %q, want default", record.OrgID)
 	}
 }
 
@@ -130,5 +136,31 @@ func TestConfig_APITokenExpiration_Enforced(t *testing.T) {
 	}
 	if !cfg.IsValidAPIToken(rawToken) {
 		t.Fatalf("expected non-expired token to be accepted by IsValidAPIToken")
+	}
+}
+
+func TestBindLegacyAPITokensToDefault(t *testing.T) {
+	tokens := []APITokenRecord{
+		{ID: "legacy-1"},
+		{ID: "bound-single", OrgID: "org-a"},
+		{ID: "bound-multi", OrgIDs: []string{"org-a", "org-b"}},
+		{ID: "legacy-2", OrgID: "   "},
+	}
+
+	migrated := bindLegacyAPITokensToDefault(tokens)
+	if migrated != 2 {
+		t.Fatalf("migrated = %d, want 2", migrated)
+	}
+	if tokens[0].OrgID != "default" {
+		t.Fatalf("tokens[0].OrgID = %q, want default", tokens[0].OrgID)
+	}
+	if tokens[1].OrgID != "org-a" {
+		t.Fatalf("tokens[1].OrgID = %q, want org-a", tokens[1].OrgID)
+	}
+	if len(tokens[2].OrgIDs) != 2 {
+		t.Fatalf("tokens[2].OrgIDs = %v, want 2 entries", tokens[2].OrgIDs)
+	}
+	if tokens[3].OrgID != "default" {
+		t.Fatalf("tokens[3].OrgID = %q, want default", tokens[3].OrgID)
 	}
 }

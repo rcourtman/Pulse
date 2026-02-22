@@ -102,6 +102,37 @@ func TestLoad_LegacyAPIToken(t *testing.T) {
 	assert.GreaterOrEqual(t, len(cfg.APITokens), 1)
 }
 
+func TestLoad_APITokens_LegacyOrgBindingMigrated(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+	os.Unsetenv("API_TOKEN")
+	os.Unsetenv("API_TOKENS")
+
+	p := NewConfigPersistence(tempDir)
+	legacy := []APITokenRecord{
+		{
+			ID:        "legacy-token",
+			Name:      "Legacy",
+			Hash:      "legacy-hash",
+			Prefix:    "legacy",
+			Suffix:    "hash",
+			CreatedAt: time.Now().UTC(),
+			Scopes:    []string{ScopeWildcard},
+		},
+	}
+	require.NoError(t, p.SaveAPITokens(legacy))
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Len(t, cfg.APITokens, 1)
+	assert.Equal(t, "default", cfg.APITokens[0].OrgID)
+
+	persisted, err := p.LoadAPITokens()
+	require.NoError(t, err)
+	require.Len(t, persisted, 1)
+	assert.Equal(t, "default", persisted[0].OrgID)
+}
+
 func TestLoad_MockEnv(t *testing.T) {
 	// Look for mock.env in current directory (default behavior if not found elsewhere?)
 	// Load() checks "mock.env" in current dir (line 537).

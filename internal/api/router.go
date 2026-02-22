@@ -8129,9 +8129,9 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		writeErrorResponse(w, http.StatusInternalServerError, "token_generation_failed", "Failed to generate API token", nil)
 		return
 	}
-
-	if orgID != "" && orgID != "default" {
-		record.OrgID = orgID
+	record.OrgID = orgID
+	if record.OrgID == "" {
+		record.OrgID = "default"
 	}
 
 	activeConfig := r.config

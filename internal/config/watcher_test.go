@@ -200,8 +200,14 @@ func TestConfigWatcher_ReloadAPITokens(t *testing.T) {
 	assert.Len(t, cfg.APITokens, 1)
 	if len(cfg.APITokens) > 0 {
 		assert.Equal(t, "Test Token", cfg.APITokens[0].Name)
+		assert.Equal(t, "default", cfg.APITokens[0].OrgID)
 	}
 	Mu.Unlock()
+
+	persisted, err := p.LoadAPITokens()
+	require.NoError(t, err)
+	require.Len(t, persisted, 1)
+	assert.Equal(t, "default", persisted[0].OrgID)
 
 	// Wait for callback
 	require.Eventually(t, func() bool { return callbackCalled.Load() }, 1*time.Second, 10*time.Millisecond)

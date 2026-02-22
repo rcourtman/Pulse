@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 )
 
@@ -179,5 +181,90 @@ func TestPerformAutoImport_AuditFailureMissingPassphrase(t *testing.T) {
 	}
 	if !strings.Contains(event.Details, "reason=missing_passphrase") {
 		t.Fatalf("expected failure reason in details, got %q", event.Details)
+	}
+}
+
+func TestEnsureDefaultOrgOwnerMembership_SeedsMissingDefaultOrg(t *testing.T) {
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+
+	if err := ensureDefaultOrgOwnerMembership(mtp, "admin"); err != nil {
+		t.Fatalf("ensureDefaultOrgOwnerMembership: %v", err)
+	}
+
+	org, err := mtp.LoadOrganization("default")
+	if err != nil {
+		t.Fatalf("LoadOrganization(default): %v", err)
+	}
+	if org.ID != "default" {
+		t.Fatalf("org.ID = %q, want default", org.ID)
+	}
+	if org.DisplayName != "default" {
+		t.Fatalf("org.DisplayName = %q, want default", org.DisplayName)
+	}
+	if org.OwnerUserID != "admin" {
+		t.Fatalf("org.OwnerUserID = %q, want admin", org.OwnerUserID)
+	}
+	if org.CreatedAt.IsZero() {
+		t.Fatal("expected org.CreatedAt to be set")
+	}
+	if len(org.Members) != 1 {
+		t.Fatalf("org.Members length = %d, want 1", len(org.Members))
+	}
+	if org.Members[0].UserID != "admin" || org.Members[0].Role != models.OrgRoleOwner {
+		t.Fatalf("expected admin owner member, got user=%q role=%q", org.Members[0].UserID, org.Members[0].Role)
+	}
+}
+
+func TestEnsureDefaultOrgOwnerMembership_PreservesOwnerAndAddsAdminOwnerMembership(t *testing.T) {
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	seed := &models.Organization{
+		ID:          "default",
+		DisplayName: "Default",
+		OwnerUserID: "alice",
+		Members: []models.OrganizationMember{
+			{UserID: "alice", Role: models.OrgRoleOwner},
+		},
+	}
+	if err := mtp.SaveOrganization(seed); err != nil {
+		t.Fatalf("SaveOrganization(seed): %v", err)
+	}
+
+	if err := ensureDefaultOrgOwnerMembership(mtp, "admin"); err != nil {
+		t.Fatalf("ensureDefaultOrgOwnerMembership: %v", err)
+	}
+
+	org, err := mtp.LoadOrganization("default")
+	if err != nil {
+		t.Fatalf("LoadOrganization(default): %v", err)
+	}
+	if org.OwnerUserID != "alice" {
+		t.Fatalf("org.OwnerUserID = %q, want alice", org.OwnerUserID)
+	}
+
+	roles := map[string]models.OrganizationRole{}
+	for _, member := range org.Members {
+		roles[member.UserID] = member.Role
+	}
+	if roles["alice"] != models.OrgRoleOwner {
+		t.Fatalf("alice role = %q, want owner", roles["alice"])
+	}
+	if roles["admin"] != models.OrgRoleOwner {
+		t.Fatalf("admin role = %q, want owner", roles["admin"])
+	}
+}
+
+func TestEnsureDefaultOrgOwnerMembership_NoOpWithoutAdminUser(t *testing.T) {
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+
+	if err := ensureDefaultOrgOwnerMembership(mtp, ""); err != nil {
+		t.Fatalf("ensureDefaultOrgOwnerMembership: %v", err)
+	}
+
+	persistence, err := mtp.GetPersistence("default")
+	if err != nil {
+		t.Fatalf("GetPersistence(default): %v", err)
+	}
+	if _, err := persistence.LoadOrganization(); err == nil {
+		t.Fatal("expected no persisted org metadata when admin user is empty")
 	}
 }
