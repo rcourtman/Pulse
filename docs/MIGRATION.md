@@ -30,11 +30,15 @@ Never copy `/etc/pulse` (or `/data` in Docker/Kubernetes) manually. Encryption k
 | System settings (`system.json`) | Update history/backup folders |
 | API token records | — |
 | OIDC config | — |
+| SSO / SAML config | — |
+| TrueNAS connections (`truenas.enc`) | — |
 | Guest metadata/notes | — |
+| — | Relay config (`relay.enc`) — re-enable in Settings |
 | — | Host metadata (notes/tags/AI command overrides) |
 | — | Docker metadata cache |
 | — | Agent profiles and assignments |
 | — | AI settings and findings (`ai.enc`, `ai_findings.json`, `ai_patrol_runs.json`, `ai_usage_history.json`) |
+| — | RBAC roles (`rbac_roles.json`) — re-create after import |
 | — | Pro/Cloud license (`license.enc`) |
 | — | Server sessions (`sessions.json`) |
 | — | Update history (`update-history.jsonl`) |

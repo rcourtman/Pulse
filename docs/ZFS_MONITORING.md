@@ -2,6 +2,8 @@
 
 Pulse automatically detects and monitors ZFS pools on your Proxmox nodes.
 
+> **TrueNAS users:** TrueNAS ZFS pool monitoring is handled separately via the TrueNAS integration. See [CONFIGURATION.md](CONFIGURATION.md#truenas) for setup. This page covers Proxmox-native ZFS pools.
+
 ## 🚀 Features
 
 *   **Auto-Detection**: No configuration needed.

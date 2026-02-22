@@ -1,6 +1,6 @@
 # Proxmox Mail Gateway (PMG) Monitoring
 
-Pulse 5.0 adds support for monitoring Proxmox Mail Gateway instances alongside your PVE and PBS infrastructure.
+Pulse monitors Proxmox Mail Gateway instances alongside your PVE, PBS, and other infrastructure.
 
 ## Features
 
@@ -41,7 +41,7 @@ PMG does not support API tokens. Use a dedicated PMG user with read-only access 
 
 ## Dashboard
 
-The Mail Gateway tab shows:
+In the v6 unified navigation, PMG data appears on the **Infrastructure** page (filter by **PMG** source):
 
 | Metric | Description |
 |--------|-------------|

@@ -1,6 +1,6 @@
 # Automatic Updates
 
-Pulse 5.0 introduces one-click updates for supported deployment types, making it easy to keep your monitoring system up to date.
+Pulse supports one-click updates for supported deployment types, making it easy to keep your monitoring system up to date.
 
 ## Supported Deployment Types
 
