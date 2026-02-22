@@ -632,7 +632,7 @@ export default function AuditLogPanel() {
                                         setPageOffset(0);
                                         void fetchAuditEvents({ offset: 0 });
                                     }}
-                                    class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-surface-alt text-base-content hover:bg-slate-300 dark:hover:bg-slate-600"
+                                    class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-surface-alt text-base-content hover:bg-surface-hover"
                                     title="Click to clear filter"
                                     aria-label={`Clear ${chip.label}`}
                                     onMouseEnter={(e) => {

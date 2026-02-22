@@ -629,7 +629,7 @@ export function ResourceTable(props: ResourceTableProps) {
  <button
  type="button"
  onClick={() => props.onRemoveOverride(resource.id)}
- class="p-1.5 bg-surface-alt hover:text-muted dark:hover:text-slate-200 rounded transition-colors"
+ class="p-1.5 bg-surface-alt hover:text-muted rounded transition-colors"
  aria-label={`Revert to defaults for ${resource.displayName || resource.name}`}
  title="Revert to defaults"
  >
@@ -936,7 +936,7 @@ export function ResourceTable(props: ResourceTableProps) {
                       <button
                         type="button"
                         onClick={() => setShowDelayRow(!showDelayRow())}
-                        class="p-1 hover:text-muted dark:hover:text-slate-300 transition-colors"
+                        class="p-1 hover:text-muted transition-colors"
                         title={
                           showDelayRow() ? 'Hide alert delay settings' : 'Show alert delay settings'
                         }
@@ -1141,7 +1141,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                     type="checkbox"
                                     checked={selectedIds().has(resource.id)}
                                     onChange={(e) => toggleSelection(resource.id, e.currentTarget.checked)}
-                                    class="rounded border-border text-sky-600 focus:ring-sky-500 dark:bg-slate-700 transition-shadow cursor-pointer"
+                                    class="rounded border-border text-sky-600 focus:ring-sky-500 transition-shadow cursor-pointer"
                                     aria-label={`Select ${resource.displayName || resource.name}`}
                                   />
                                 </TableCell>
@@ -1540,7 +1540,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                           props.onCancelEdit();
                                           setActiveMetricInput(null);
                                         }}
-                                        class="p-1 hover:text-muted dark:hover:text-slate-300"
+                                        class="p-1 hover:text-muted"
                                         title="Cancel editing"
                                         aria-label="Cancel editing"
                                       >
@@ -1601,7 +1601,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       <button
                                         type="button"
                                         onClick={() => props.onRemoveOverride(resource.id)}
-                                        class="p-1 hover:text-muted dark:hover:text-slate-200 transition-colors"
+                                        class="p-1 hover:text-muted transition-colors"
                                         title="Revert to defaults"
                                         aria-label={`Revert to defaults for ${resource.displayName || resource.name}`}
                                       >
@@ -1683,7 +1683,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 type="checkbox"
                                 checked={selectedIds().has(resource.id)}
                                 onChange={(e) => toggleSelection(resource.id, e.currentTarget.checked)}
-                                class="rounded border-border text-sky-600 focus:ring-sky-500 dark:bg-slate-700 transition-shadow cursor-pointer"
+                                class="rounded border-border text-sky-600 focus:ring-sky-500 transition-shadow cursor-pointer"
                                 aria-label={`Select ${resource.displayName || resource.name}`}
                               />
                             </TableCell>
@@ -1975,7 +1975,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                         props.onCancelEdit();
                                         setActiveMetricInput(null);
                                       }}
-                                      class="p-1 hover:text-muted dark:hover:text-slate-300"
+                                      class="p-1 hover:text-muted"
                                       title="Cancel editing"
                                       aria-label="Cancel editing"
                                     >
@@ -2033,7 +2033,7 @@ export function ResourceTable(props: ResourceTableProps) {
  <button
  type="button"
  onClick={() => props.onRemoveOverride(resource.id)}
- class="p-1 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
+ class="p-1 hover:text-base-content transition-colors"
  title="Revert to defaults"
  aria-label={`Revert to defaults for ${resource.displayName || resource.name}`}
  >

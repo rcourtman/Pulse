@@ -86,7 +86,7 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
                     <label class="flex min-w-0 flex-1 items-center gap-2.5 cursor-pointer">
                       <input
                         type="checkbox"
-                        class="w-3.5 h-3.5 rounded border-border text-blue-600 focus:ring-blue-500 focus:ring-offset-0 dark:bg-slate-700 dark:checked:bg-blue-600"
+                        class="w-3.5 h-3.5 rounded border-border text-blue-600 focus:ring-blue-500 focus:ring-offset-0 dark:checked:bg-blue-600"
                         checked={visible()}
                         onChange={() => props.toggleWidget(widget.id)}
                       />
@@ -102,7 +102,7 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
                     <div class="flex items-center gap-0.5">
                       <button
                         type="button"
-                        class="rounded p-1 transition-colors hover:bg-slate-200 hover:text-muted dark:hover:bg-slate-600 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                        class="rounded p-1 transition-colors hover:bg-surface-hover hover:text-muted disabled:opacity-30 disabled:cursor-not-allowed"
                         title="Move up"
                         aria-label={`Move ${widget.label} up`}
                         disabled={isFirst()}
@@ -114,7 +114,7 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
                       </button>
                       <button
                         type="button"
-                        class="rounded p-1 transition-colors hover:bg-slate-200 hover:text-muted dark:hover:bg-slate-600 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                        class="rounded p-1 transition-colors hover:bg-surface-hover hover:text-muted disabled:opacity-30 disabled:cursor-not-allowed"
                         title="Move down"
                         aria-label={`Move ${widget.label} down`}
                         disabled={isLast()}

@@ -257,7 +257,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                     <button
                         type="button"
                         onClick={props.onClose}
-                        class="p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-surface-hover dark:hover:text-slate-300"
+                        class="p-1.5 rounded-md text-slate-500 hover:text-base-content hover:bg-surface-hover"
                     >
                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -297,7 +297,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                         <button
                                             type="button"
                                             onClick={() => handleUseExample(example)}
-                                            class="text-xs px-2 py-1 rounded-md text-muted hover:bg-surface-alt dark:hover:bg-slate-700 transition-colors"
+                                            class="text-xs px-2 py-1 rounded-md text-muted hover:bg-surface-alt transition-colors"
                                             disabled={loading()}
                                         >
                                             {example}
@@ -606,7 +606,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                             type="button"
                             onClick={handleSubmit}
                             disabled={loading() || !prompt().trim()}
-                            class="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-alt dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            class="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-alt disabled:cursor-not-allowed disabled:opacity-60"
                             title="Regenerate using the current prompt"
                         >
                             <Lightbulb class="w-4 h-4" />

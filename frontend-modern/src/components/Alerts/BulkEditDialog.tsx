@@ -119,7 +119,7 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
                                                 ) : (
                                                     <input
                                                         type="number"
-                                                        class="w-full h-9 rounded-md border border-border bg-surface px-3 py-1 text-sm shadow-sm transition-colors focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 dark:text-slate-50"
+                                                        class="w-full h-9 rounded-md border border-border bg-surface px-3 py-1 text-sm shadow-sm transition-colors focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                                         min={bounds.min}
                                                         max={bounds.max}
                                                         step={bounds.step}

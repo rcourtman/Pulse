@@ -357,7 +357,7 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
                     <Show when={settingsLoaded() && currentState() === 'confirming'}>
                         <button
                             type="button"
-                            class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-surface-alt text-muted hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                            class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-surface-alt text-muted hover:bg-surface-hover transition-colors"
                             onClick={handleCancel}
                             title="Cancel"
                         >

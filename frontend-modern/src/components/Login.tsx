@@ -311,7 +311,7 @@ export const Login: Component<LoginProps> = (props) => {
  <Show
  when={!loadingAuth()}
  fallback={
- <div class="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-slate-900">
+ <div class="min-h-screen flex items-center justify-center bg-blue-50">
  <div class="text-center">
  <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
  <p class="text-muted">Checking authentication...</p>
@@ -346,7 +346,7 @@ export const Login: Component<LoginProps> = (props) => {
  >
  <Suspense
  fallback={
- <div class="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-slate-900">
+ <div class="min-h-screen flex items-center justify-center bg-blue-50">
  <div class="text-center">
  <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
  <p class="text-muted">Loading setup...</p>

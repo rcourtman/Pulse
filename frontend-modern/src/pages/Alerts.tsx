@@ -3309,7 +3309,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   });
                   props.setHasUnsavedChanges(true);
                 }}
-                class="flex w-full items-center justify-center gap-2 rounded-md border-2 border-dashed border-border py-2 text-sm text-muted transition-all hover:border-slate-400 hover:bg-surface-hover dark:hover:border-slate-500"
+                class="flex w-full items-center justify-center gap-2 rounded-md border-2 border-dashed border-border py-2 text-sm text-muted transition-all hover:border-slate-400 hover:bg-surface-hover"
               >
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -3439,7 +3439,7 @@ export function IncidentEventFilters(props: {
               type="button"
               class={`px-2 py-0.5 rounded border text-[10px] ${selected()
                 ? 'border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300'
-                : 'border-border text-slate-500 dark:text-slate-300'
+                : 'border-border text-slate-500'
                 }`}
               onClick={() => toggleFilter(type)}
             >
@@ -4422,7 +4422,7 @@ function HistoryTab(props: {
                       }}
                     >
                       {/* Background track for all slots */}
-                      <div class="absolute bottom-0 h-1 w-full rounded-full bg-slate-300 opacity-30 dark:bg-slate-600"></div>
+                      <div class="absolute bottom-0 h-1 w-full rounded-full bg-slate-300 opacity-30"></div>
                       {/* Actual bar */}
                       <div
                         class="relative w-full rounded-sm transition-all"

@@ -167,7 +167,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                     </Show>
 
                     <Show when={!useCustomPassword()}>
-                        <div class="bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-blue-900 rounded-md p-4 animate-fade-in">
+                        <div class="bg-blue-50 border border-blue-200 dark:border-blue-900 rounded-md p-4 animate-fade-in">
                             <p class="text-sm text-blue-800 dark:text-blue-200 font-medium">
                                 A secure 16-character password will be generated and shown after setup.
                             </p>
@@ -195,7 +195,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                 <button
                     onClick={handleSetup}
                     disabled={isSettingUp()}
-                    class="flex-1 py-3.5 px-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-medium rounded-md transition-colors flex justify-center items-center gap-2 duration-200"
+                    class="flex-1 py-3.5 px-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:bg-surface-alt disabled:text-muted disabled:cursor-not-allowed text-white font-medium rounded-md transition-colors flex justify-center items-center gap-2 duration-200"
                 >
                     {isSettingUp() ? (
                         <>

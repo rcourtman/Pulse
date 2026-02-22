@@ -831,7 +831,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                   props.onTest(tempId, testPayload);
                 }}
                 disabled={props.testing === (editingId() || 'temp-new-webhook')}
-                class="px-3 py-1.5 border border-border rounded text-xs hover:bg-slate-100 dark:text-slate-200"
+                class="px-3 py-1.5 border border-border rounded text-xs hover:bg-slate-100"
               >
                 {props.testing === (editingId() || 'temp-new-webhook') ? 'Testing...' : 'Test'}
               </button>

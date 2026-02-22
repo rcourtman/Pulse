@@ -1391,7 +1391,7 @@ function ConnectionStatusBadge(props: {
         <span class="h-2.5 w-2.5 rounded-full bg-green-600 dark:bg-green-400 flex-shrink-0"></span>
       </Show>
       <Show when={!props.connected() && !props.reconnecting()}>
-        <span class="h-2.5 w-2.5 rounded-full bg-slate-600 dark:bg-slate-400 flex-shrink-0"></span>
+        <span class="h-2.5 w-2.5 rounded-full bg-slate-600 flex-shrink-0"></span>
       </Show>
       <span
         class={`whitespace-nowrap overflow-hidden transition-all duration-500 ${props.connected() || (!props.connected() && !props.reconnecting())

@@ -159,7 +159,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                             <button
                                 onClick={handleUnlock}
                                 disabled={isValidating() || !props.bootstrapToken.trim()}
-                                class="w-full py-3.5 px-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-medium rounded-md transition-colors flex justify-center items-center gap-2 duration-200"
+                                class="w-full py-3.5 px-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:bg-surface-alt disabled:text-muted disabled:cursor-not-allowed text-white font-medium rounded-md transition-colors flex justify-center items-center gap-2 duration-200"
                             >
                                 {isValidating() ? (
                                     <>

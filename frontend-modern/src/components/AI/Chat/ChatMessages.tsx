@@ -112,7 +112,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
                     <button
                       type="button"
                       onClick={() => props.emptyState!.onSuggestionClick?.(suggestion)}
-                      class="w-full text-left px-4 py-2.5 rounded-md bg-surface-alt text-muted text-sm hover:bg-surface-hover transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+                      class="w-full text-left px-4 py-2.5 rounded-md bg-surface-alt text-muted text-sm hover:bg-surface-hover transition-colors border border-transparent hover:border-border"
                     >
                       <span class="text-blue-500 dark:text-blue-400 mr-2 opacity-50">→</span>
                       {suggestion}

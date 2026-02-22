@@ -22,7 +22,7 @@ export const ZFSHealthMap: Component<ZFSHealthMapProps> = (props) => {
         if (state === 'ONLINE') return 'bg-green-500 dark:bg-green-500 hover:bg-green-400';
         if (state === 'DEGRADED') return 'bg-yellow-500 dark:bg-yellow-500 hover:bg-yellow-400';
         if (state === 'FAULTED' || state === 'UNAVAIL' || state === 'OFFLINE') return 'bg-red-500 dark:bg-red-500 hover:bg-red-400';
-        return 'bg-slate-400 dark:bg-slate-800 hover:bg-slate-300';
+        return 'bg-slate-400 hover:bg-slate-300';
     };
 
     const isResilvering = (device: ZFSDevice) => {

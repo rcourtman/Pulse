@@ -2422,7 +2422,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
  <button
  type="button"
  onClick={() => setSearchTerm('')}
-            class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+            class="absolute right-3 top-2.5 text-slate-400 hover:text-muted"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -2486,7 +2486,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={() => handleTabClick('proxmox')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'proxmox' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-slate-700 hover:border-slate-300 dark:hover:text-slate-300' }`}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'proxmox' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300' }`}
           >
             <Server class="w-4 h-4" />
             <span class="hidden sm:inline">Proxmox / PBS</span>
@@ -2495,7 +2495,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={() => handleTabClick('pmg')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'pmg' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-slate-700 hover:border-slate-300 dark:hover:text-slate-300' }`}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'pmg' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300' }`}
           >
             <Mail class="w-4 h-4" />
             <span class="hidden sm:inline">Mail Gateway</span>
@@ -2504,7 +2504,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={() => handleTabClick('hosts')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'hosts' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-slate-700 hover:border-slate-300 dark:hover:text-slate-300' }`}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'hosts' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300' }`}
           >
             <Users class="w-4 h-4" />
             <span class="hidden sm:inline">Host Agents</span>
@@ -2513,7 +2513,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={() => handleTabClick('docker')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'docker' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-slate-700 hover:border-slate-300 dark:hover:text-slate-300' }`}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'docker' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300' }`}
           >
             <Boxes class="w-4 h-4" />
             <span>Containers</span>
@@ -2527,7 +2527,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={expandAll}
-            class="text-xs px-2 py-1 hover:text-muted dark:hover:text-slate-300 hover:bg-surface-hover rounded transition-colors"
+            class="text-xs px-2 py-1 hover:text-muted hover:bg-surface-hover rounded transition-colors"
           >
             Expand all
           </button>
@@ -2535,7 +2535,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={collapseAll}
-            class="text-xs px-2 py-1 hover:text-muted dark:hover:text-slate-300 hover:bg-surface-hover rounded transition-colors"
+            class="text-xs px-2 py-1 hover:text-muted hover:bg-surface-hover rounded transition-colors"
           >
             Collapse all
           </button>
@@ -3253,7 +3253,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
  <Show when={(props.dockerIgnoredPrefixes().length ?? 0) > 0}>
  <button
  type="button"
- class="inline-flex items-center justify-center rounded-md border border-transparent px-3 py-1 text-xs font-medium transition hover:bg-surface-alt dark:hover:bg-slate-700"
+ class="inline-flex items-center justify-center rounded-md border border-transparent px-3 py-1 text-xs font-medium transition hover:bg-surface-alt"
  onClick={handleResetDockerIgnored}
  >
  Reset

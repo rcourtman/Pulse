@@ -1014,7 +1014,7 @@ export const UnifiedAgents: Component = () => {
                                 disabled={confirmedNoToken()}
                                 class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${confirmedNoToken()
  ? 'bg-green-600 text-white cursor-default'
- : 'bg-slate-900 text-white hover:bg-black dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white'
+ : 'bg-slate-900 text-white hover:bg-black dark:hover:bg-white'
  }`}
                             >
                                 {confirmedNoToken() ? 'No token confirmed' : 'Confirm without token'}
@@ -1474,7 +1474,7 @@ export const UnifiedAgents: Component = () => {
  type="button"
  onClick={resetFilters}
  disabled={!hasFilters()}
- class={`min-h-10 sm:min-h-9 rounded-md px-3 py-2 text-sm font-medium transition-colors ${hasFilters() ?' text-base-content hover:bg-surface-alt dark:hover:bg-slate-700' : ' text-slate-400 cursor-not-allowed ' }`}
+ class={`min-h-10 sm:min-h-9 rounded-md px-3 py-2 text-sm font-medium transition-colors ${hasFilters() ?' text-base-content hover:bg-surface-alt' : ' text-slate-400 cursor-not-allowed ' }`}
                     >
                         Clear
                     </button>

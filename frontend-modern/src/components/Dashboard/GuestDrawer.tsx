@@ -120,7 +120,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                     onClick={() => switchTab('overview')}
                     class={`pb-2 text-sm font-medium transition-colors relative ${activeTab() === 'overview'
  ? 'text-blue-600 dark:text-blue-400'
- : ' hover:text-muted dark:hover:text-slate-200'
+ : ' hover:text-muted'
  }`}
                 >
                     Overview
@@ -132,7 +132,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                     onClick={() => switchTab('discovery')}
                     class={`pb-2 text-sm font-medium transition-colors relative ${activeTab() === 'discovery'
  ? 'text-blue-600 dark:text-blue-400'
- : ' hover:text-muted dark:hover:text-slate-200'
+ : ' hover:text-muted'
  }`}
                 >
                     Discovery
@@ -145,7 +145,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                 <button
                     type="button"
                     onClick={() => navigate(infrastructureHref())}
-                    class="inline-flex items-center rounded border border-border bg-surface-alt px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-slate-200 dark:hover:bg-slate-700"
+                    class="inline-flex items-center rounded border border-border bg-surface-alt px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
                 >
                     Open related infrastructure
                 </button>

@@ -155,27 +155,9 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
 };
 
 /**
- * A button for section header actions (e.g., "Edit Defaults")
- */
-export interface SectionActionButtonProps {
-    label: string;
-    onClick: () => void;
-    icon?: JSX.Element;
-    variant?: 'default' | 'primary' | 'danger';
-    disabled?: boolean;
-    title?: string;
-}
-
-export const SectionActionButton: Component<SectionActionButtonProps> = (props) => {
-    const variantClasses = {
-        default: 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-700',
-        primary: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900',
-        danger: 'text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900',
-    };
-
-    return (
-        <button
-            type="button"
+ * A button for section header actions (e.g., "Edit Defaults") */
+export interface SectionActionButtonProps { label: string; onClick: () => void; icon?: JSX.Element; variant?: 'default' | 'primary' | 'danger'; disabled?: boolean; title?: string;
+} export const SectionActionButton: Component<SectionActionButtonProps> = (props) => { const variantClasses = { default: 'text-slate-600 hover:text-base-content hover:bg-slate-100', primary: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900', danger: 'text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900', }; return ( <button type="button"
             onClick={(e) => {
                 e.stopPropagation();
                 props.onClick();

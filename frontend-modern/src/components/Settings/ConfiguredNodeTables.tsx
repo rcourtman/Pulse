@@ -149,7 +149,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                 );
                 return (
                   <TableRow
-                    class="absolute top-0 left-0 w-full even:bg-slate-50 dark:even:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors"
+                    class="absolute top-0 left-0 w-full even:bg-surface-alt hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors"
                     style={{
                       height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`,
@@ -237,7 +237,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                                 <button
                                   type="button"
                                   onClick={() => props.onRefreshCluster?.(node.id)}
-                                  class="flex min-h-10 sm:min-h-9 items-center gap-1 px-2.5 py-1.5 text-xs font-medium hover:text-muted dark:hover:text-slate-200 bg-surface border border-border rounded hover:bg-surface-hover transition-colors"
+                                  class="flex min-h-10 sm:min-h-9 items-center gap-1 px-2.5 py-1.5 text-xs font-medium hover:text-muted bg-surface border border-border rounded hover:bg-surface-hover transition-colors"
                                   title="Re-detect cluster membership (use if nodes were added to the Proxmox cluster)"
                                 >
                                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -433,7 +433,7 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
  {(node) => {
  const statusMeta = createMemo(() => resolvePbsStatusMeta(node, props.statePbs));
  return (
- <TableRow class="even: dark:even:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
+ <TableRow class="even:bg-surface-alt hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
  <TableCell class="align-top py-3 pl-4 pr-3">
  <div class="min-w-0 space-y-1">
  <div class="flex items-start gap-3">
@@ -631,7 +631,7 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
  {(node) => {
  const statusMeta = createMemo(() => resolvePmgStatusMeta(node, props.statePmg));
  return (
- <TableRow class="even: dark:even:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
+ <TableRow class="even:bg-surface-alt hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
  <TableCell class="align-top py-3 pl-4 pr-3">
  <div class="min-w-0 space-y-1">
  <div class="flex items-start gap-3">

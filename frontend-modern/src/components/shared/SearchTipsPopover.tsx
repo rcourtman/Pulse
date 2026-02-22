@@ -133,7 +133,7 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
  </span>
  <button
  type="button"
- class="rounded p-1 transition-colors hover:text-muted dark:hover:text-slate-300"
+ class="rounded p-1 transition-colors hover:text-muted"
  onClick={close}
  aria-label="Close search tips"
  >

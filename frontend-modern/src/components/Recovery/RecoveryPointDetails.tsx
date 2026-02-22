@@ -285,7 +285,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
                     String(point().details?.verificationUpid || '').length > 0
                   }
                 >
-                  <div class="mt-1 font-mono text-[10px] text-slate-400 break-all dark:text-slate-500">
+                  <div class="mt-1 font-mono text-[10px] text-slate-400 break-all">
                     UPID: {String(point().details?.verificationUpid)}
                   </div>
                 </Show>

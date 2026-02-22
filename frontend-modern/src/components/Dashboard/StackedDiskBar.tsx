@@ -321,7 +321,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                   <span class="text-[8px] text-muted truncate" title={disk.label}>
                     {disk.label}
                   </span>
-                  <div class="relative h-2.5 rounded-sm bg-slate-300 dark:bg-slate-800 overflow-hidden">
+                  <div class="relative h-2.5 rounded-sm bg-surface-alt overflow-hidden">
                     <div
                       class="h-full"
                       style={{

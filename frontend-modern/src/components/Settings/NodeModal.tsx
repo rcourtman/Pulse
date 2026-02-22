@@ -455,7 +455,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                   <button
                     type="button"
                     onClick={props.onClose}
-                    class="text-slate-400 hover:text-slate-500 dark:hover:text-slate-300"
+                    class="text-slate-400 hover:text-muted"
                   >
                     <svg
                       width="20"
@@ -1184,7 +1184,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             notificationStore.success('Command copied!');
                                           }
                                         }}
-                                        class="absolute top-1 right-1 p-1 hover:text-muted dark:hover:text-slate-200 transition-colors"
+                                        class="absolute top-1 right-1 p-1 hover:text-muted transition-colors"
                                         title="Copy command"
                                       >
                                         <svg
@@ -1222,7 +1222,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             notificationStore.success('Command copied!');
                                           }
                                         }}
-                                        class="absolute top-1 right-1 p-1 hover:text-muted dark:hover:text-slate-200 transition-colors"
+                                        class="absolute top-1 right-1 p-1 hover:text-muted transition-colors"
                                         title="Copy command"
                                       >
                                         <svg
@@ -1755,7 +1755,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             notificationStore.success('Command copied!');
                                           }
                                         }}
-                                        class="absolute top-1 right-1 p-1 hover:text-muted dark:hover:text-slate-200 transition-colors"
+                                        class="absolute top-1 right-1 p-1 hover:text-muted transition-colors"
                                         title="Copy command"
                                       >
                                         <svg
@@ -1792,7 +1792,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             notificationStore.success('Command copied!');
                                           }
                                         }}
-                                        class="absolute top-1 right-1 p-1 hover:text-muted dark:hover:text-slate-200 transition-colors"
+                                        class="absolute top-1 right-1 p-1 hover:text-muted transition-colors"
                                         title="Copy command"
                                       >
                                         <svg

@@ -31,7 +31,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
                     onClick={() => switchTab('overview')}
                     class={`pb-2 text-sm font-medium transition-colors relative ${activeTab() === 'overview'
  ? 'text-blue-600 dark:text-blue-400'
- : ' hover:text-muted dark:hover:text-slate-200'
+ : ' hover:text-muted'
  }`}
                 >
                     Overview
@@ -43,7 +43,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
                     onClick={() => switchTab('discovery')}
                     class={`pb-2 text-sm font-medium transition-colors relative ${activeTab() === 'discovery'
  ? 'text-blue-600 dark:text-blue-400'
- : ' hover:text-muted dark:hover:text-slate-200'
+ : ' hover:text-muted'
  }`}
                 >
                     Discovery

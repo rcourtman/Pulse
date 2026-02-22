@@ -151,7 +151,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                   <label
                     class={`flex items-start gap-3 rounded-md border p-2 transition-colors ${props.discoveryMode() === 'auto'
  ? 'border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900'
- : 'border-transparent hover:border-slate-200 dark:hover:border-slate-600'
+ : 'border-transparent hover:border-border'
  }`}
                   >
                     <input
@@ -185,7 +185,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                   <label
                     class={`flex items-start gap-3 rounded-md border p-2 transition-colors ${props.discoveryMode() === 'custom'
  ? 'border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900'
- : 'border-transparent hover:border-slate-200 dark:hover:border-slate-600'
+ : 'border-transparent hover:border-border'
  }`}
                   >
                     <input
@@ -284,7 +284,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
  Discovery subnet
  </label>
  <span
- class="text-slate-400 hover:text-slate-500 dark:hover:text-slate-300"
+ class="text-slate-400 hover:text-muted"
  title="Use CIDR notation (comma-separated for multiple), e.g. 192.168.1.0/24, 10.0.0.0/24. Smaller ranges keep scans quick."
  >
  <svg

@@ -300,7 +300,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
             </div>
 
             {/* Import Section */}
-            <div class="group border border-border rounded-md p-5 bg-surface-alt hover:border-slate-400 dark:hover:border-slate-600 transition-all duration-200">
+            <div class="group border border-border rounded-md p-5 bg-surface-alt hover:border-border transition-all duration-200">
               <div class="flex items-start gap-4">
                 <div class="flex-shrink-0 w-12 h-12 bg-slate-500 rounded-md flex items-center justify-center shadow-sm shadow-gray-500">
                   {/* Upload/Restore Icon */}

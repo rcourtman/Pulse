@@ -148,7 +148,7 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
       <button
         ref={buttonRef}
         type="button"
-        class={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-full p-1 text-slate-400 transition-colors hover:text-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-8 sm:min-w-8 dark:text-slate-500 dark:hover:text-blue-400 ${props.class ?? ''}`}
+        class={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-full p-1 text-slate-400 transition-colors hover:text-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-8 sm:min-w-8 dark:hover:text-blue-400 ${props.class ?? ''}`}
         onClick={(e) => {
           e.stopPropagation();
           setIsOpen(!isOpen());
@@ -181,7 +181,7 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
               </span>
               <button
                 type="button"
-                class="p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded transition-colors"
+                class="p-0.5 text-slate-400 hover:text-muted rounded transition-colors"
                 onClick={() => setIsOpen(false)}
                 aria-label="Close help"
               >

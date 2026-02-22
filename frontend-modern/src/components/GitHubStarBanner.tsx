@@ -101,7 +101,7 @@ export function GitHubStarBanner() {
           <div class="flex justify-end p-3 pb-0">
             <button
               onClick={handleDismiss}
-              class="p-1.5 hover:bg-surface-hover rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              class="p-1.5 hover:bg-surface-hover rounded-md text-slate-400 hover:text-muted transition-colors"
               title="Don't show again"
               aria-label="Close and don't show again"
             >
@@ -135,14 +135,14 @@ export function GitHubStarBanner() {
             <div class="flex flex-col gap-3">
               <button
                 onClick={handleStarClick}
-                class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-base hover:bg-slate-800 dark:text-slate-900 dark:hover:bg-white rounded-md transition-colors"
+                class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-base hover:bg-slate-800 dark:hover:bg-white rounded-md transition-colors"
               >
                 <StarIcon class="w-4 h-4" />
                 Star on GitHub
               </button>
               <button
                 onClick={handleMaybeLater}
-                class="w-full px-4 py-2 text-sm text-muted hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+                class="w-full px-4 py-2 text-sm text-muted hover:text-base-content transition-colors"
               >
                 Maybe later
               </button>

@@ -65,7 +65,7 @@ export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
         <button
           type="button"
           onClick={props.onClose}
-          class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+          class="text-slate-400 hover:text-muted"
           aria-label="Close shortcuts"
         >
           <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -711,7 +711,7 @@ export function AIIntelligence() {
  onClick={() => handleRunPatrol()}
  disabled={isTriggeringPatrol() || !canTriggerPatrol() || manualRunRequested() || patrolStream.isStreaming()}
  title={triggerPatrolDisabledReason()}
- class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled: rounded-md transition-colors"
+ class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-surface-alt disabled:text-muted rounded-md transition-colors"
  >
  <PlayIcon class={`w-4 h-4 ${(isTriggeringPatrol() || manualRunRequested() || patrolStream.isStreaming()) ?'animate-pulse' : ''}`} />
               {isTriggeringPatrol() ? 'Starting…' : (manualRunRequested() || patrolStream.isStreaming()) ? 'Running…' : 'Run Patrol'}
@@ -752,7 +752,7 @@ export function AIIntelligence() {
             <button
               onClick={() => setShowAdvancedSettings(!showAdvancedSettings())}
               disabled={!patrolEnabledLocal()}
-              class={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all shadow-sm ${showAdvancedSettings() ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-800' : ' text-base-content border border-border hover:bg-surface-alt dark:hover:bg-slate-750' } ${!patrolEnabledLocal() ? 'opacity-50 cursor-not-allowed hidden' : ''}`}
+              class={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all shadow-sm ${showAdvancedSettings() ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-800' : ' text-base-content border border-border hover:bg-surface-alt' } ${!patrolEnabledLocal() ? 'opacity-50 cursor-not-allowed hidden' : ''}`}
  >
  <SettingsIcon class="w-4 h-4" />
  Configure Patrol
@@ -847,12 +847,7 @@ export function AIIntelligence() {
                               onClick={() => handleAutonomyChange(level)}
                               disabled={isDisabled()}
                               title={isProLocked() ? 'Upgrade to Pro for automatic fixes' : undefined}
-                              class={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-200 ${isActive()
- ? ' text-blue-600 dark:text-blue-400 shadow-[0_1px_3px_rgba(0,0,0,0.1)]'
- : isDisabled()
- ? ' '
- : 'text-muted hover:text-slate-900 dark:hover:text-slate-200 hover:bg-surface-hover'
- } ${isDisabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              class={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-200 ${isActive() ? ' text-blue-600 dark:text-blue-400 shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : isDisabled() ? ' ' : 'text-muted hover:text-base-content hover:bg-surface-hover' } ${isDisabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                               {level === 'monitor' ? 'Monitor' : level === 'approval' ? 'Investigate' : 'Auto-fix'}
  </button>
@@ -916,7 +911,7 @@ export function AIIntelligence() {
                     <button
                       onClick={saveAdvancedSettings}
                       disabled={isSavingAdvanced()}
-                      class="w-full py-2.5 text-sm font-medium text-white bg-base dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover: rounded-md shadow-sm transition-all focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 disabled:opacity-70 flex items-center justify-center gap-2"
+                      class="w-full py-2.5 text-sm font-medium text-white bg-base dark:bg-white hover:bg-slate-800 dark:hover: rounded-md shadow-sm transition-all focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 disabled:opacity-70 flex items-center justify-center gap-2"
                     >
                       <Show when={isSavingAdvanced()}>
                         <div class="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full"></div>

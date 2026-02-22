@@ -500,7 +500,7 @@ export const AgentProfilesPanel: Component = () => {
                                     <button
                                         type="button"
                                         onClick={() => setShowModal(false)}
-                                        class="p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-surface-hover dark:hover:text-slate-300"
+                                        class="p-1.5 rounded-md text-slate-500 hover:text-base-content hover:bg-surface-hover"
                                     >
                                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />

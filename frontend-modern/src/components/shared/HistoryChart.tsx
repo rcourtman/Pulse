@@ -592,7 +592,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                                 <button
                                     onClick={() => updateRange(r)}
                                     class={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${range() === r
-                                        ? 'bg-white dark:bg-slate-600 text-base-content shadow-sm'
+                                        ? 'bg-white text-base-content shadow-sm'
                                         : 'text-muted hover:text-base-content'
                                         }`}
                                 >

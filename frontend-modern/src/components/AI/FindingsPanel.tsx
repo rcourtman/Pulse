@@ -606,7 +606,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
  <button
  type="button"
  onClick={(e) => handleAcknowledge(finding, e)}
- class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+ class="p-1 text-slate-400 hover:text-muted"
  title="Acknowledge"
  disabled={actionLoading() === finding.id}
  >
@@ -618,7 +618,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
  <button
  type="button"
  onClick={(e) => handleSnooze(finding, 24, e)}
- class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+ class="p-1 text-slate-400 hover:text-muted"
  title="Snooze 24h"
  disabled={actionLoading() === finding.id}
  >
@@ -629,7 +629,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
  <button
  type="button"
  onClick={(e) => handleStartDismiss(finding, 'will_fix_later', e)}
- class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+ class="p-1 text-slate-400 hover:text-muted"
  title="Dismiss"
  disabled={actionLoading() === finding.id}
  >

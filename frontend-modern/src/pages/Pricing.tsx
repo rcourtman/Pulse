@@ -44,7 +44,7 @@ function TierCtaButton(props: { children: string; disabled?: boolean; onClick?: 
  class={[
  'w-full inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold transition-colors',
  props.disabled
- ? 'bg-surface-hover text-slate-600 dark:text-slate-200 cursor-not-allowed'
+ ? 'bg-surface-hover text-base-content cursor-not-allowed'
  : 'bg-blue-600 text-white hover:bg-blue-700',
  ].join(' ')}
  disabled={props.disabled}

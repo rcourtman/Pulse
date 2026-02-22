@@ -576,7 +576,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
  onClick={() => setActiveTab(tab.id)}
  class={`pb-2 text-sm font-medium transition-colors relative ${activeTab() === tab.id
  ?'text-blue-600 dark:text-blue-400'
- : ' hover:text-muted dark:hover:text-slate-200'
+ : ' hover:text-muted'
  }`}
             >
               {tab.label}
@@ -843,7 +843,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         setDockerActionBusy(false);
                       }
                     }}
-                    class="rounded-md border border-border bg-surface px-2.5 py-1 text-[11px] font-semibold text-base-content hover:bg-surface-hover disabled:opacity-60 disabled:hover: dark:disabled:hover:bg-slate-900"
+                    class="rounded-md border border-border bg-surface px-2.5 py-1 text-[11px] font-semibold text-base-content hover:bg-surface-hover disabled:opacity-60"
                     title={dockerUpdateActionsLoading() ? 'Loading server settings...' : undefined}
                   >
                     Check Updates
@@ -1251,7 +1251,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           <button
             type="button"
             onClick={() => setShowReportModal(true)}
-            class="text-xs font-medium transition-colors hover:text-muted dark:hover:text-slate-200"
+            class="text-xs font-medium transition-colors hover:text-muted"
           >
             Split merged resource
           </button>

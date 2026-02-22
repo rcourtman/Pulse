@@ -1,6 +1,6 @@
 import type { Organization, OrganizationRole } from '@/api/orgs';
 
-const defaultBadgeClass = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+const defaultBadgeClass = 'bg-slate-100 text-slate-700';
 
 const roleBadgeClasses: Record<OrganizationRole, string> = {
   owner: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',

@@ -999,9 +999,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
             {/* Subtle animated dots */}
             <div class="flex gap-0.5 ml-1">
-              <span class="w-1 h-1 rounded-full bg-slate-400 dark:bg-slate-500 animate-bounce" style="animation-delay: 0ms; animation-duration: 1s" />
-              <span class="w-1 h-1 rounded-full bg-slate-400 dark:bg-slate-500 animate-bounce" style="animation-delay: 150ms; animation-duration: 1s" />
-              <span class="w-1 h-1 rounded-full bg-slate-400 dark:bg-slate-500 animate-bounce" style="animation-delay: 300ms; animation-duration: 1s" />
+              <span class="w-1 h-1 rounded-full bg-slate-400 animate-bounce" style="animation-delay: 0ms; animation-duration: 1s" />
+              <span class="w-1 h-1 rounded-full bg-slate-400 animate-bounce" style="animation-delay: 150ms; animation-duration: 1s" />
+              <span class="w-1 h-1 rounded-full bg-slate-400 animate-bounce" style="animation-delay: 300ms; animation-duration: 1s" />
             </div>
           </div>
         </Show>
@@ -1037,7 +1037,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   <button
                     type="button"
                     onClick={chat.stop}
-                    class="px-4 flex items-center justify-center border border-border hover:bg-surface-alt dark:hover:bg-slate-700 text-base-content rounded-md transition-colors shadow-sm"
+                    class="px-4 flex items-center justify-center border border-border hover:bg-surface-alt text-base-content rounded-md transition-colors shadow-sm"
                     title="Stop"
                   >
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">

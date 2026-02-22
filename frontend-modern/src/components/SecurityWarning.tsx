@@ -226,7 +226,7 @@ export const SecurityWarning: Component = () => {
                     <button
                       type="button"
                       onClick={() => handleDismiss('day')}
-                      class="text-sm text-muted hover:text-slate-700 dark:hover:text-slate-300"
+                      class="text-sm text-muted hover:text-base-content"
                     >
                       Dismiss ▼
                     </button>

@@ -1046,7 +1046,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                     <button
                       type="button"
                       onClick={() => setTestResult(null)}
-                      class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      class="text-slate-400 hover:text-base-content"
                     >
                       <X class="w-4 h-4" />
                     </button>
@@ -1182,7 +1182,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
               <button
                 type="button"
                 onClick={() => setShowMetadataPreview(false)}
-                class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                class="text-slate-400 hover:text-base-content"
               >
                 <X class="w-5 h-5" />
               </button>

@@ -70,8 +70,8 @@ export const OperationsPage: Component = () => {
                             <button
                                 onClick={() => handleTabChange(tab.id)}
                                 class={`flex items-center gap-2.5 whitespace-nowrap px-4 py-2 rounded-md font-medium text-sm transition-all outline-none relative overflow-hidden group ${isActive()
- ? 'bg-white text-blue-700 dark:bg-slate-800 dark:text-blue-300 shadow-sm border border-border'
- : 'text-slate-600 hover:bg-white hover:text-base-content dark:hover:bg-slate-800 border border-transparent'
+ ? 'bg-white text-blue-700 dark:text-blue-300 shadow-sm border border-border'
+ : 'text-slate-600 hover:bg-white hover:text-base-content border border-transparent'
  }`}
                                 aria-current={isActive() ? 'page' : undefined}
                                 title={tab.desc}

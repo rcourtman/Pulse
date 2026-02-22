@@ -109,7 +109,7 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
                 type="button"
                 onClick={handleClose}
                 disabled={loading()}
-                class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 disabled:opacity-50"
+                class="text-slate-400 hover:text-muted disabled:opacity-50"
               >
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path

@@ -963,27 +963,27 @@ const Recovery: Component = () => {
                       onClick={() => setView('events')}
                       aria-pressed={view() === 'events'}
                       class={segmentedButtonClass(view() === 'events')}
- >
- Events
- </button>
- </div>
- <div class="h-5 w-px bg-surface-hover hidden sm:block" />
+                    >
+                      Events
+                    </button>
+                  </div>
+                  <div class="h-5 w-px bg-surface-hover hidden sm:block" />
 
- <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
- <label
- for="recovery-provider-filter"
- class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
- >
- Provider
- </label>
- <select
- id="recovery-provider-filter"
- value={providerFilter()}
- onChange={(event) => setProviderFilter(event.currentTarget.value)}
- class="min-w-[10rem] max-w-[14rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
- >
- <For each={providerOptions()}>
- {(p) => <option value={p}>{p ==='all' ? 'All Providers' : sourceLabel(p)}</option>}
+                  <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
+                    <label
+                      for="recovery-provider-filter"
+                      class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
+                    >
+                      Provider
+                    </label>
+                    <select
+                      id="recovery-provider-filter"
+                      value={providerFilter()}
+                      onChange={(event) => setProviderFilter(event.currentTarget.value)}
+                      class="min-w-[10rem] max-w-[14rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
+                    >
+                      <For each={providerOptions()}>
+                        {(p) => <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>}
                       </For>
                     </select>
                   </div>
@@ -1019,7 +1019,7 @@ const Recovery: Component = () => {
                     type="button"
                     aria-pressed={protectedStaleOnly()}
                     onClick={() => setProtectedStaleOnly((v) => !v)}
-                    class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${protectedStaleOnly() ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100' : 'border-border bg-surface text-base-content hover:bg-surface-hover' }`}
+                    class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${protectedStaleOnly() ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100' : 'border-border bg-surface text-base-content hover:bg-surface-hover'}`}
                   >
                     Stale only
                   </button>
@@ -1119,11 +1119,9 @@ const Recovery: Component = () => {
                         >
                           <TableCell
                             class={`relative max-w-[420px] truncate whitespace-nowrap px-3 py-0.5 text-base-content ${issueTone === 'rose' || issueTone === 'blue'
- ? 'font-medium dark:text-slate-100'
- : issueTone === 'amber'
- ? 'dark:text-slate-200'
- : 'dark:text-slate-300'
- }`}
+                              ? 'font-medium'
+                              : ''
+                              }`}
                             title={label}
                           >
                             <Show when={issueTone !== 'none'}>
@@ -1312,9 +1310,9 @@ const Recovery: Component = () => {
                           setCurrentPage(1);
                         }}
                         class={`rounded px-2 py-1 ${chartRangeDays() === range
- ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
- : 'text-muted hover:bg-surface-hover'
- }`}
+                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                          : 'text-muted hover:bg-surface-hover'
+                          }`}
                       >
                         {range === 365 ? '1y' : `${range}d`}
                       </button>
@@ -1384,7 +1382,7 @@ const Recovery: Component = () => {
                               <button
                                 type="button"
                                 class={`h-full w-full rounded-sm ${isSelected ? 'bg-blue-100 dark:bg-blue-900' : 'hover:bg-surface-hover'
- }`}
+                                  }`}
                                 aria-label={`${prettyDateLabel(point.key)}: ${total} recovery points`}
                                 onClick={() => {
                                   setSelectedDateKey((prev) => (prev === point.key ? null : point.key));
@@ -1451,7 +1449,7 @@ const Recovery: Component = () => {
                               <Show when={showLabel}>
                                 <span
                                   class={`absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] ${isSelected ? 'font-semibold text-blue-700 dark:text-blue-300' : 'text-muted'
- }`}
+                                    }`}
                                 >
                                   {compactAxisLabel(point.key, chartRangeDays())}
                                 </span>
@@ -1578,31 +1576,31 @@ const Recovery: Component = () => {
                           onClick={() => setView('events')}
                           aria-pressed={view() === 'events'}
                           class={segmentedButtonClass(view() === 'events')}
- >
- Events
- </button>
- </div>
- </Show>
- <div class="h-5 w-px bg-surface-hover hidden sm:block" />
+                        >
+                          Events
+                        </button>
+                      </div>
+                    </Show>
+                    <div class="h-5 w-px bg-surface-hover hidden sm:block" />
 
- <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
- <label
- for="recovery-provider-filter-events"
- class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
- >
- Provider
- </label>
- <select
- id="recovery-provider-filter-events"
- value={providerFilter()}
- onChange={(event) => {
- setProviderFilter(normalizeProviderFromQuery(event.currentTarget.value));
- setCurrentPage(1);
- }}
- class="min-w-[10rem] max-w-[14rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
- >
- <For each={providerOptions()}>
- {(p) => <option value={p}>{p ==='all' ? 'All Providers' : sourceLabel(p)}</option>}
+                    <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
+                      <label
+                        for="recovery-provider-filter-events"
+                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
+                      >
+                        Provider
+                      </label>
+                      <select
+                        id="recovery-provider-filter-events"
+                        value={providerFilter()}
+                        onChange={(event) => {
+                          setProviderFilter(normalizeProviderFromQuery(event.currentTarget.value));
+                          setCurrentPage(1);
+                        }}
+                        class="min-w-[10rem] max-w-[14rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
+                      >
+                        <For each={providerOptions()}>
+                          {(p) => <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>}
                         </For>
                       </select>
                     </div>
@@ -1729,127 +1727,127 @@ const Recovery: Component = () => {
                             onChange={(event) => {
                               setVerificationFilter(event.currentTarget.value as VerificationFilter);
                               if (event.currentTarget.value !== 'all') setOutcomeFilter('all');
- setCurrentPage(1);
- }}
- class="min-w-[6.5rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
- >
- <option value="all">Any</option>
- <option value="verified">Verified</option>
- <option value="unverified">Unverified</option>
- <option value="unknown">Unknown</option>
- </select>
- </div>
- </Show>
+                              setCurrentPage(1);
+                            }}
+                            class="min-w-[6.5rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
+                          >
+                            <option value="all">Any</option>
+                            <option value="verified">Verified</option>
+                            <option value="unverified">Unverified</option>
+                            <option value="unknown">Unknown</option>
+                          </select>
+                        </div>
+                      </Show>
 
- <Show when={showClusterFilter()}>
- <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
- <label
- for="recovery-cluster-filter"
- class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
- >
- Cluster
- </label>
- <select
- id="recovery-cluster-filter"
- value={clusterFilter()}
- onChange={(event) => {
- setClusterFilter(event.currentTarget.value);
- setCurrentPage(1);
- }}
- class="min-w-[8rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
- >
- <option value="all">All</option>
- <For each={clusterOptions().filter((value) => value !=='all')}>
- {(cluster) => <option value={cluster}>{cluster}</option>}
- </For>
- </select>
- </div>
- </Show>
+                      <Show when={showClusterFilter()}>
+                        <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
+                          <label
+                            for="recovery-cluster-filter"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
+                          >
+                            Cluster
+                          </label>
+                          <select
+                            id="recovery-cluster-filter"
+                            value={clusterFilter()}
+                            onChange={(event) => {
+                              setClusterFilter(event.currentTarget.value);
+                              setCurrentPage(1);
+                            }}
+                            class="min-w-[8rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
+                          >
+                            <option value="all">All</option>
+                            <For each={clusterOptions().filter((value) => value !== 'all')}>
+                              {(cluster) => <option value={cluster}>{cluster}</option>}
+                            </For>
+                          </select>
+                        </div>
+                      </Show>
 
- <Show when={showNodeFilter()}>
- <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
- <label
- for="recovery-node-filter"
- class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
- >
- Node/Host
- </label>
- <select
- id="recovery-node-filter"
- value={nodeFilter()}
- onChange={(event) => {
- setNodeFilter(event.currentTarget.value);
- setCurrentPage(1);
- }}
- class="min-w-[7.5rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
- >
- <option value="all">All</option>
- <For each={nodeOptions().filter((value) => value !=='all')}>
- {(node) => <option value={node}>{node}</option>}
- </For>
- </select>
- </div>
- </Show>
+                      <Show when={showNodeFilter()}>
+                        <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
+                          <label
+                            for="recovery-node-filter"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
+                          >
+                            Node/Host
+                          </label>
+                          <select
+                            id="recovery-node-filter"
+                            value={nodeFilter()}
+                            onChange={(event) => {
+                              setNodeFilter(event.currentTarget.value);
+                              setCurrentPage(1);
+                            }}
+                            class="min-w-[7.5rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
+                          >
+                            <option value="all">All</option>
+                            <For each={nodeOptions().filter((value) => value !== 'all')}>
+                              {(node) => <option value={node}>{node}</option>}
+                            </For>
+                          </select>
+                        </div>
+                      </Show>
 
- <Show when={showNamespaceFilter()}>
- <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
- <label
- for="recovery-namespace-filter"
- class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
- >
- Namespace
- </label>
- <select
- id="recovery-namespace-filter"
- value={namespaceFilter()}
- onChange={(event) => {
- setNamespaceFilter(event.currentTarget.value);
- setCurrentPage(1);
- }}
- class="min-w-[8rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
- >
- <option value="all">All</option>
- <For each={namespaceOptions().filter((value) => value !=='all')}>
- {(namespace) => <option value={namespace}>{namespace}</option>}
- </For>
- </select>
- </div>
- </Show>
- </div>
- </Show>
- </Show>
- </div>
- </Card>
- </Show>
+                      <Show when={showNamespaceFilter()}>
+                        <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
+                          <label
+                            for="recovery-namespace-filter"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
+                          >
+                            Namespace
+                          </label>
+                          <select
+                            id="recovery-namespace-filter"
+                            value={namespaceFilter()}
+                            onChange={(event) => {
+                              setNamespaceFilter(event.currentTarget.value);
+                              setCurrentPage(1);
+                            }}
+                            class="min-w-[8rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
+                          >
+                            <option value="all">All</option>
+                            <For each={namespaceOptions().filter((value) => value !== 'all')}>
+                              {(namespace) => <option value={namespace}>{namespace}</option>}
+                            </For>
+                          </select>
+                        </div>
+                      </Show>
+                    </div>
+                  </Show>
+                </Show>
+              </div>
+            </Card>
+          </Show>
 
- <Card padding="none" tone="card" class="mb-4 overflow-hidden">
- <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 ">
- Recovery Events
- </div>
- <Show
- when={groupedByDay().length > 0}
- fallback={
- <div class="p-6">
- <EmptyState
- title="No recovery events match your filters"
- description="Adjust your search, provider, method, status, or verification filters."
- actions={
- <Show when={hasActiveArtifactFilters()}>
- <button
- type="button"
- onClick={resetAllArtifactFilters}
- class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content hover:"
- >
- Clear filters
- </button>
- </Show>
- }
- />
- </div>
- }
- >
- <div class="overflow-x-auto">
- <Table class="w-full border-collapse text-xs whitespace-nowrap" style={{'min-width': tableMinWidth() }}>
+          <Card padding="none" tone="card" class="mb-4 overflow-hidden">
+            <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 ">
+              Recovery Events
+            </div>
+            <Show
+              when={groupedByDay().length > 0}
+              fallback={
+                <div class="p-6">
+                  <EmptyState
+                    title="No recovery events match your filters"
+                    description="Adjust your search, provider, method, status, or verification filters."
+                    actions={
+                      <Show when={hasActiveArtifactFilters()}>
+                        <button
+                          type="button"
+                          onClick={resetAllArtifactFilters}
+                          class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content hover:"
+                        >
+                          Clear filters
+                        </button>
+                      </Show>
+                    }
+                  />
+                </div>
+              }
+            >
+              <div class="overflow-x-auto">
+                <Table class="w-full border-collapse text-xs whitespace-nowrap" style={{ 'min-width': tableMinWidth() }}>
                   <TableHeader>
                     <TableRow class="bg-surface-alt text-muted border-b border-border">
                       <For each={mobileVisibleArtifactColumns()}>{(col) => <TableHead class="py-0.5 px-3 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap">{col.label}</TableHead>}</For>
@@ -2008,62 +2006,62 @@ const Recovery: Component = () => {
                                               </TableCell>
                                             );
                                           case 'outcome':
- return (
- <TableCell class="whitespace-nowrap px-3 py-0.5">
- <span
- class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${OUTCOME_BADGE_CLASS[outcome]
- }`}
- >
- {titleize(outcome)}
- </span>
- </TableCell>
- );
- default:
- return (
- <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted">-</TableCell>
- );
- }
- }}
- </For>
- </TableRow>
- <Show when={selectedPoint()?.id === p.id}>
- <TableRow>
- <TableCell colSpan={tableColumnCount()} class="bg-surface-alt px-0 sm:px-4 py-4 border-b border-border relative">
- <div class="flex items-center justify-between px-4 pb-2 mb-2 border-b border-border">
- <h2 class="text-sm font-semibold text-base-content">Recovery Point Details</h2>
- <button
- type="button"
- onClick={(e) => { e.stopPropagation(); setSelectedPoint(null); }}
- class="rounded-md p-1 hover:text-base-content hover:bg-surface-hover"
- aria-label="Close details"
- >
- <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
- <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
- </svg>
- </button>
- </div>
- <div class="px-4">
- <RecoveryPointDetails point={p} />
- </div>
- </TableCell>
- </TableRow>
- </Show>
- </>
- );
- }}
- </For>
- </>
- )}
- </For>
- </TableBody>
- </Table>
- </div>
+                                            return (
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5">
+                                                <span
+                                                  class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${OUTCOME_BADGE_CLASS[outcome]
+                                                    }`}
+                                                >
+                                                  {titleize(outcome)}
+                                                </span>
+                                              </TableCell>
+                                            );
+                                          default:
+                                            return (
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted">-</TableCell>
+                                            );
+                                        }
+                                      }}
+                                    </For>
+                                  </TableRow>
+                                  <Show when={selectedPoint()?.id === p.id}>
+                                    <TableRow>
+                                      <TableCell colSpan={tableColumnCount()} class="bg-surface-alt px-0 sm:px-4 py-4 border-b border-border relative">
+                                        <div class="flex items-center justify-between px-4 pb-2 mb-2 border-b border-border">
+                                          <h2 class="text-sm font-semibold text-base-content">Recovery Point Details</h2>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setSelectedPoint(null); }}
+                                            class="rounded-md p-1 hover:text-base-content hover:bg-surface-hover"
+                                            aria-label="Close details"
+                                          >
+                                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                          </button>
+                                        </div>
+                                        <div class="px-4">
+                                          <RecoveryPointDetails point={p} />
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                  </Show>
+                                </>
+                              );
+                            }}
+                          </For>
+                        </>
+                      )}
+                    </For>
+                  </TableBody>
+                </Table>
+              </div>
 
- <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted border-t border-border">
- <div>
- <Show when={(recoveryPoints.meta().total || 0) > 0} fallback={<span>Showing 0 of 0 events</span>}>
- <span>
- Showing {(recoveryPoints.meta().page - 1) * recoveryPoints.meta().limit + 1} -{' '}
+              <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted border-t border-border">
+                <div>
+                  <Show when={(recoveryPoints.meta().total || 0) > 0} fallback={<span>Showing 0 of 0 events</span>}>
+                    <span>
+                      Showing {(recoveryPoints.meta().page - 1) * recoveryPoints.meta().limit + 1} -{' '}
                       {Math.min(recoveryPoints.meta().page * recoveryPoints.meta().limit, recoveryPoints.meta().total)} of{' '}
                       {recoveryPoints.meta().total} events
                     </span>

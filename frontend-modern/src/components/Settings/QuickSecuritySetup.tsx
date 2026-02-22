@@ -218,7 +218,7 @@ Important:
                   onClick={() => setUseCustomPassword(false)}
                   class={`px-3 py-1 text-xs rounded-md transition-colors ${!useCustomPassword()
                     ? 'bg-blue-600 text-white'
-                    : 'bg-surface-hover text-base-content hover:bg-slate-300 dark:hover:bg-slate-600'
+                    : 'bg-surface-hover text-base-content hover:bg-surface-hover'
                     }`}
                 >
                   Auto-Generate
@@ -228,7 +228,7 @@ Important:
                   onClick={() => setUseCustomPassword(true)}
                   class={`px-3 py-1 text-xs rounded-md transition-colors ${useCustomPassword()
                     ? 'bg-blue-600 text-white'
-                    : 'bg-surface-hover text-base-content hover:bg-slate-300 dark:hover:bg-slate-600'
+                    : 'bg-surface-hover text-base-content hover:bg-surface-hover'
                     }`}
                 >
                   Custom

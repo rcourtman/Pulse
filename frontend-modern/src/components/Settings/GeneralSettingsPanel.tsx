@@ -82,7 +82,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <button
               type="button"
               class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${props.themePreference() === 'light'
- ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
+ ? 'bg-white text-base-content shadow-sm'
  : 'text-muted hover:text-base-content'
  }`}
               onClick={() => props.setThemePreference('light')}
@@ -93,7 +93,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <button
               type="button"
               class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${props.themePreference() === 'dark'
- ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
+ ? 'bg-white text-base-content shadow-sm'
  : 'text-muted hover:text-base-content'
  }`}
               onClick={() => props.setThemePreference('dark')}
@@ -104,7 +104,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <button
               type="button"
               class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${props.themePreference() === 'system'
- ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
+ ? 'bg-white text-base-content shadow-sm'
  : 'text-muted hover:text-base-content'
  }`}
               onClick={() => props.setThemePreference('system')}
@@ -134,7 +134,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
  <button
  type="button"
  class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 text-sm rounded-md transition-all ${temperatureStore.unit() ==='celsius'
- ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
+ ? 'bg-white text-base-content shadow-sm'
  : 'text-muted hover:text-base-content'
  }`}
               onClick={() => temperatureStore.setUnit('celsius')}
@@ -144,7 +144,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <button
               type="button"
               class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 text-sm rounded-md transition-all ${temperatureStore.unit() === 'fahrenheit'
- ? 'bg-white dark:bg-slate-700 text-base-content shadow-sm'
+ ? 'bg-white text-base-content shadow-sm'
  : 'text-muted hover:text-base-content'
  }`}
               onClick={() => temperatureStore.setUnit('fahrenheit')}
@@ -334,7 +334,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                     min={PVE_POLLING_MIN_SECONDS}
                     max={PVE_POLLING_MAX_SECONDS}
                     value={props.pvePollingCustomSeconds()}
-                    class="w-full sm:w-32 min-h-10 rounded-md border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-blue-400 shadow-sm"
+                    class="w-full sm:w-32 min-h-10 rounded-md border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:focus:ring-blue-400 shadow-sm"
                     disabled={props.pvePollingEnvLocked()}
                     onInput={(e) => {
                       if (props.pvePollingEnvLocked()) return;
