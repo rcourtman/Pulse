@@ -341,6 +341,8 @@ Triggers a test alert to all configured channels.
 ### Audit Webhooks (Pro)
 - `GET /api/admin/webhooks/audit` (admin, `settings:read`)
 - `POST /api/admin/webhooks/audit` (admin, `settings:write`)
+  - Body: `{ "urls": ["https://..."] }`
+  - Strict JSON contract: unknown fields and trailing payload are rejected.
 
 ### Advanced Reporting (Pro)
 - `GET /api/admin/reports/generate` (admin, `settings:read`)
@@ -607,6 +609,28 @@ Configure OIDC provider details (Issuer, Client ID, etc).
 ### Login
 `GET /api/oidc/login`
 Initiate OIDC login flow.
+
+### SSO Provider Management (Pro)
+- `GET /api/security/sso/providers` (admin)
+- `POST /api/security/sso/providers` (admin)
+- `GET /api/security/sso/providers/{id}` (admin)
+- `PUT /api/security/sso/providers/{id}` (admin)
+- `DELETE /api/security/sso/providers/{id}` (admin)
+
+Provider mutation request contract:
+- Max request body: 1MB.
+- Strict JSON contract: unknown fields and trailing payload are rejected.
+- Provider IDs must match server validation.
+- SAML providers require `advanced_sso` feature entitlement.
+
+### SSO Test and Metadata Preview (Pro)
+- `POST /api/security/sso/providers/test` (admin)
+- `POST /api/security/sso/providers/metadata/preview` (admin)
+
+Test/preview request contract:
+- Max request body: 32KB.
+- Strict JSON contract: unknown fields and trailing payload are rejected.
+- Common errors include `invalid_json`, `validation_error`, `rate_limited`, `body_too_large`.
 
 ---
 
