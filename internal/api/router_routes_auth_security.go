@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/crewjam/saml"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -648,6 +649,7 @@ func newSSOAdminRuntime(router *Router) extensions.SSOAdminRuntime {
 	runtime.TestOIDCConnection = func(ctx context.Context, cfg *extensions.OIDCTestConfig) extensions.SSOTestResponse {
 		return toExtensionSSOTestResponse(router.testOIDCConnection(ctx, toAPIOIDCTestConfig(cfg)))
 	}
+	runtime.PreviewSAMLMetadata = previewSAMLMetadataFromRuntime
 
 	return runtime
 }
@@ -713,6 +715,83 @@ func toExtensionSSOTestDetails(details *SSOTestDetails) *extensions.SSOTestDetai
 	}
 
 	return converted
+}
+
+func previewSAMLMetadataFromRuntime(ctx context.Context, req extensions.MetadataPreviewRequest) (extensions.MetadataPreviewResponse, error) {
+	var (
+		rawXML   []byte
+		metadata *saml.EntityDescriptor
+		err      error
+	)
+
+	httpClient := newTestHTTPClient()
+
+	if req.MetadataURL != "" {
+		if !validateURL(req.MetadataURL, []string{"https", "http"}) {
+			return extensions.MetadataPreviewResponse{}, &extensions.MetadataPreviewError{
+				Code:    "validation_error",
+				Message: "Invalid metadata URL",
+			}
+		}
+		rawXML, metadata, err = fetchSAMLMetadataFromURL(ctx, httpClient, req.MetadataURL)
+		if err != nil {
+			return extensions.MetadataPreviewResponse{}, &extensions.MetadataPreviewError{
+				Code:    "fetch_error",
+				Message: "Failed to fetch metadata: " + err.Error(),
+			}
+		}
+	} else {
+		rawXML = []byte(req.MetadataXML)
+		metadata, err = parseSAMLMetadataXML(rawXML)
+		if err != nil {
+			return extensions.MetadataPreviewResponse{}, &extensions.MetadataPreviewError{
+				Code:    "parse_error",
+				Message: "Failed to parse metadata: " + err.Error(),
+			}
+		}
+	}
+
+	parsed := &extensions.ParsedMetadataInfo{
+		EntityID: metadata.EntityID,
+	}
+
+	if len(metadata.IDPSSODescriptors) > 0 {
+		idpDesc := metadata.IDPSSODescriptors[0]
+		for _, sso := range idpDesc.SingleSignOnServices {
+			if sso.Binding == saml.HTTPPostBinding || sso.Binding == saml.HTTPRedirectBinding {
+				parsed.SSOURL = sso.Location
+				break
+			}
+		}
+		for _, slo := range idpDesc.SingleLogoutServices {
+			parsed.SLOURL = slo.Location
+			break
+		}
+		for _, nid := range idpDesc.NameIDFormats {
+			parsed.NameIDFormats = append(parsed.NameIDFormats, string(nid))
+		}
+		for _, kd := range idpDesc.KeyDescriptors {
+			if kd.Use == "signing" || kd.Use == "" {
+				for _, x509Cert := range kd.KeyInfo.X509Data.X509Certificates {
+					certInfo := extractCertificateInfo(x509Cert.Data)
+					if certInfo != nil {
+						parsed.Certificates = append(parsed.Certificates, extensions.CertificateInfo{
+							Subject:   certInfo.Subject,
+							Issuer:    certInfo.Issuer,
+							NotBefore: certInfo.NotBefore,
+							NotAfter:  certInfo.NotAfter,
+							IsExpired: certInfo.IsExpired,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	return extensions.MetadataPreviewResponse{
+		XML:    formatXML(rawXML),
+		Parsed: parsed,
+	}, nil
 }
 
 var _ extensions.SSOAdminEndpoints = ssoAdminEndpointAdapter{}

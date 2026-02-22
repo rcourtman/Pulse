@@ -43,6 +43,28 @@ type SSOTestResponse struct {
 	Details *SSOTestDetails `json:"details,omitempty"`
 }
 
+// MetadataPreviewRequest represents a request to preview IdP metadata.
+type MetadataPreviewRequest struct {
+	Type        string `json:"type"` // "saml"
+	MetadataURL string `json:"metadataUrl,omitempty"`
+	MetadataXML string `json:"metadataXml,omitempty"`
+}
+
+// MetadataPreviewResponse contains metadata preview information.
+type MetadataPreviewResponse struct {
+	XML    string              `json:"xml"`
+	Parsed *ParsedMetadataInfo `json:"parsed"`
+}
+
+// ParsedMetadataInfo contains parsed metadata details.
+type ParsedMetadataInfo struct {
+	EntityID      string            `json:"entityId"`
+	SSOURL        string            `json:"ssoUrl,omitempty"`
+	SLOURL        string            `json:"sloUrl,omitempty"`
+	Certificates  []CertificateInfo `json:"certificates,omitempty"`
+	NameIDFormats []string          `json:"nameIdFormats,omitempty"`
+}
+
 // SSOTestDetails contains detailed information about the tested provider.
 type SSOTestDetails struct {
 	Type             string            `json:"type"`
@@ -73,12 +95,26 @@ type LogSSOAuditEventFunc func(ctx context.Context, event, path string, success 
 
 // SSOAdminRuntime exposes runtime capabilities needed by SSO admin endpoints.
 type SSOAdminRuntime struct {
-	GetClientIP        func(*http.Request) string
-	AllowAuthRequest   func(clientIP string) bool
-	TestSAMLConnection func(context.Context, *SAMLTestConfig) SSOTestResponse
-	TestOIDCConnection func(context.Context, *OIDCTestConfig) SSOTestResponse
-	LogAuditEvent      LogSSOAuditEventFunc
-	WriteError         WriteSSOErrorFunc
+	GetClientIP         func(*http.Request) string
+	AllowAuthRequest    func(clientIP string) bool
+	TestSAMLConnection  func(context.Context, *SAMLTestConfig) SSOTestResponse
+	TestOIDCConnection  func(context.Context, *OIDCTestConfig) SSOTestResponse
+	PreviewSAMLMetadata func(context.Context, MetadataPreviewRequest) (MetadataPreviewResponse, error)
+	LogAuditEvent       LogSSOAuditEventFunc
+	WriteError          WriteSSOErrorFunc
+}
+
+// MetadataPreviewError provides a structured error for metadata preview operations.
+type MetadataPreviewError struct {
+	Code    string
+	Message string
+}
+
+func (e *MetadataPreviewError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return e.Message
 }
 
 // BindSSOAdminEndpointsFunc allows enterprise modules to bind replacement
