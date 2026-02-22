@@ -122,7 +122,7 @@ func triageThresholdChecks(state models.StateSnapshot, scopedSet map[string]bool
 			})
 		}
 
-		mem := n.Memory.Usage * 100
+		mem := n.Memory.Usage // already percent (0-100)
 		if sev, threshold := triageWarnWatchSeverity(mem, thresholds.NodeMemWarning, thresholds.NodeMemWatch); sev != "" {
 			flags = append(flags, TriageFlag{
 				ResourceID:   n.ID,
@@ -143,7 +143,7 @@ func triageThresholdChecks(state models.StateSnapshot, scopedSet map[string]bool
 			continue
 		}
 
-		mem := vm.Memory.Usage * 100
+		mem := vm.Memory.Usage // already percent (0-100)
 		if sev, threshold := triageWarnWatchSeverity(mem, thresholds.GuestMemWarning, thresholds.GuestMemWatch); sev != "" {
 			flags = append(flags, TriageFlag{
 				ResourceID:   vm.ID,
@@ -158,7 +158,7 @@ func triageThresholdChecks(state models.StateSnapshot, scopedSet map[string]bool
 			})
 		}
 
-		disk := vm.Disk.Usage * 100
+		disk := vm.Disk.Usage // already percent (0-100)
 		if sev, threshold := triageCriticalWarnWatchSeverity(disk, thresholds.GuestDiskCrit, thresholds.GuestDiskWarn, thresholds.GuestDiskWatch); sev != "" {
 			flags = append(flags, TriageFlag{
 				ResourceID:   vm.ID,
@@ -194,7 +194,7 @@ func triageThresholdChecks(state models.StateSnapshot, scopedSet map[string]bool
 			continue
 		}
 
-		mem := ct.Memory.Usage * 100
+		mem := ct.Memory.Usage // already percent (0-100)
 		if sev, threshold := triageWarnWatchSeverity(mem, thresholds.GuestMemWarning, thresholds.GuestMemWatch); sev != "" {
 			flags = append(flags, TriageFlag{
 				ResourceID:   ct.ID,
@@ -209,7 +209,7 @@ func triageThresholdChecks(state models.StateSnapshot, scopedSet map[string]bool
 			})
 		}
 
-		disk := ct.Disk.Usage * 100
+		disk := ct.Disk.Usage // already percent (0-100)
 		if sev, threshold := triageCriticalWarnWatchSeverity(disk, thresholds.GuestDiskCrit, thresholds.GuestDiskWarn, thresholds.GuestDiskWatch); sev != "" {
 			flags = append(flags, TriageFlag{
 				ResourceID:   ct.ID,
@@ -244,7 +244,7 @@ func triageThresholdChecks(state models.StateSnapshot, scopedSet map[string]bool
 		if !seedIsInScope(scopedSet, s.ID) {
 			continue
 		}
-		usage := s.Usage * 100
+		usage := s.Usage // already percent (0-100)
 		if sev, threshold := triageCriticalWarnWatchSeverity(usage, thresholds.StorageCritical, thresholds.StorageWarning, thresholds.StorageWatch); sev != "" {
 			flags = append(flags, TriageFlag{
 				ResourceID:   s.ID,

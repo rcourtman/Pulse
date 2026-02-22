@@ -16,8 +16,8 @@ func TestTriageThresholdChecks(t *testing.T) {
 			{
 				ID:     "node/pve1",
 				Name:   "pve1",
-				CPU:    0.92,
-				Memory: models.Memory{Usage: 0.30},
+				CPU:    0.92,                       // CPU is 0-1 scale (92%)
+				Memory: models.Memory{Usage: 30.0}, // Memory.Usage is already percent
 			},
 		},
 	}
@@ -270,7 +270,7 @@ func TestTriageDeduplication(t *testing.T) {
 				Name:       "web-01",
 				Status:     "running",
 				Template:   false,
-				Disk:       models.Disk{Usage: 0.95},
+				Disk:       models.Disk{Usage: 95.0}, // already percent
 				LastBackup: time.Now(),
 			},
 		},

@@ -133,9 +133,9 @@ func triageIntegrationState(vmCount int) models.StateSnapshot {
 				ID:     "node/pve1",
 				Name:   "pve1",
 				Status: "online",
-				CPU:    0.15,
-				Memory: models.Memory{Usage: 20.0},
-				Disk:   models.Disk{Usage: 30.0},
+				CPU:    0.15,                       // CPU is 0-1 scale (15%)
+				Memory: models.Memory{Usage: 20.0}, // already percent (20%)
+				Disk:   models.Disk{Usage: 30.0},   // already percent (30%)
 			},
 		},
 		VMs: make([]models.VM, 0, vmCount),
@@ -148,9 +148,9 @@ func triageIntegrationState(vmCount int) models.StateSnapshot {
 			Node:     "pve1",
 			Status:   "running",
 			Template: false,
-			CPU:      0.10,
-			Memory:   models.Memory{Usage: 42.0},
-			Disk:     models.Disk{Usage: 36.0},
+			CPU:      0.10,                       // CPU is 0-1 scale (10%)
+			Memory:   models.Memory{Usage: 42.0}, // already percent (42%)
+			Disk:     models.Disk{Usage: 36.0},   // already percent (36%)
 		})
 	}
 

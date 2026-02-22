@@ -97,7 +97,7 @@ func newPatrolMetrics() *PatrolMetrics {
 				Namespace: "pulse",
 				Subsystem: "patrol",
 				Name:      "triage_quiet_total",
-				Help:      "Total patrol runs skipped due to quiet infrastructure (no triage flags)",
+				Help:      "Total patrol runs skipped due to quiet infrastructure (no triage flags and no active findings)",
 			},
 		),
 		scopedDropped: prometheus.NewCounter(
