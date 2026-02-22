@@ -33,6 +33,7 @@ interface AISettings {
   patrol_enabled?: boolean;
   model?: string;
   alert_triggered_analysis?: boolean;
+  patrol_event_triggers_enabled?: boolean;
   patrol_auto_fix?: boolean;
   auto_fix_model?: string;
 }
@@ -172,6 +173,7 @@ export function AIIntelligence() {
   const [isTogglingPatrol, setIsTogglingPatrol] = createSignal(false);
   const [isTriggeringPatrol, setIsTriggeringPatrol] = createSignal(false);
   const [alertTriggeredAnalysis, setAlertTriggeredAnalysis] = createSignal<boolean>(false);
+  const [patrolEventTriggers, setPatrolEventTriggers] = createSignal<boolean>(true);
   const [startingTrial, setStartingTrial] = createSignal(false);
 
   const canStartTrial = createMemo(() => {
@@ -259,6 +261,7 @@ export function AIIntelligence() {
       setPatrolInterval(data.patrol_interval_minutes ?? 360);
       setPatrolEnabledLocal(data.patrol_enabled ?? true);
       setAlertTriggeredAnalysis(!alertAnalysisLocked() && data.alert_triggered_analysis !== false);
+      setPatrolEventTriggers(data.patrol_event_triggers_enabled !== false);
 
     } catch (err) {
       console.error('Failed to load AI settings:', err);
@@ -391,6 +394,25 @@ export function AIIntelligence() {
     }
   }
 
+  // Toggle event-triggered patrols
+  async function handlePatrolEventTriggersChange(enabled: boolean) {
+    if (isUpdatingSettings()) return;
+    setIsUpdatingSettings(true);
+    const previous = patrolEventTriggers();
+    setPatrolEventTriggers(enabled);
+    try {
+      await apiFetchJSON('/api/settings/ai/update', {
+        method: 'PUT',
+        body: JSON.stringify({ patrol_event_triggers_enabled: enabled }),
+      });
+    } catch (err) {
+      console.error('Failed to update event-triggered patrols:', err);
+      setPatrolEventTriggers(previous);
+      notificationStore.error('Failed to update event triggers setting');
+    } finally {
+      setIsUpdatingSettings(false);
+    }
+  }
 
   // Fetch patrol status (license_required reflects auto-fix, not patrol access)
   const [patrolStatus, { refetch: refetchPatrolStatus }] = createResource<PatrolStatus | null>(async () => {
@@ -881,6 +903,20 @@ export function AIIntelligence() {
                         </Show>
                       </div>
                     </Show>
+
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="flex-1">
+                        <label class="text-sm font-medium text-base-content">Event-Triggered Patrols</label>
+                        <p class="text-[11px] text-muted mt-0.5 leading-tight">
+                          Run extra patrols when alerts fire or anomalies are detected.
+                        </p>
+                      </div>
+                      <Toggle
+                        checked={patrolEventTriggers()}
+                        onChange={(e) => handlePatrolEventTriggersChange(e.currentTarget.checked)}
+                        disabled={isUpdatingSettings() || !patrolEnabledLocal()}
+                      />
+                    </div>
 
                     <div class="flex items-start justify-between gap-3">
                       <div class="flex-1">

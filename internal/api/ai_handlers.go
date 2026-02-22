@@ -31,13 +31,12 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license/conversion"
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -938,13 +937,14 @@ type AISettingsResponse struct {
 	AuthMethod     string `json:"auth_method"`     // "api_key" or "oauth"
 	OAuthConnected bool   `json:"oauth_connected"` // true if OAuth tokens are configured
 	// Patrol settings for token efficiency
-	PatrolSchedulePreset   string                `json:"patrol_schedule_preset"`   // DEPRECATED: legacy preset
-	PatrolIntervalMinutes  int                   `json:"patrol_interval_minutes"`  // Patrol interval in minutes (0 = disabled)
-	PatrolEnabled          bool                  `json:"patrol_enabled"`           // true if patrol is enabled
-	PatrolAutoFix          bool                  `json:"patrol_auto_fix"`          // true if patrol can auto-fix issues
-	AlertTriggeredAnalysis bool                  `json:"alert_triggered_analysis"` // true if AI analyzes when alerts fire
-	UseProactiveThresholds bool                  `json:"use_proactive_thresholds"` // true if patrol warns before thresholds (false = use exact thresholds)
-	AvailableModels        []providers.ModelInfo `json:"available_models"`         // List of models for current provider
+	PatrolSchedulePreset       string                `json:"patrol_schedule_preset"`        // DEPRECATED: legacy preset
+	PatrolIntervalMinutes      int                   `json:"patrol_interval_minutes"`       // Patrol interval in minutes (0 = disabled)
+	PatrolEnabled              bool                  `json:"patrol_enabled"`                // true if patrol is enabled
+	PatrolAutoFix              bool                  `json:"patrol_auto_fix"`               // true if patrol can auto-fix issues
+	AlertTriggeredAnalysis     bool                  `json:"alert_triggered_analysis"`      // true if AI analyzes when alerts fire
+	PatrolEventTriggersEnabled bool                  `json:"patrol_event_triggers_enabled"` // true if event-driven patrol triggers (alerts, anomalies) are enabled
+	UseProactiveThresholds     bool                  `json:"use_proactive_thresholds"`      // true if patrol warns before thresholds (false = use exact thresholds)
+	AvailableModels            []providers.ModelInfo `json:"available_models"`              // List of models for current provider
 	// Multi-provider credentials - shows which providers are configured
 	AnthropicConfigured  bool     `json:"anthropic_configured"`      // true if Anthropic API key or OAuth is set
 	OpenAIConfigured     bool     `json:"openai_configured"`         // true if OpenAI API key is set
@@ -981,12 +981,13 @@ type AISettingsUpdateRequest struct {
 	CustomContext  *string `json:"custom_context,omitempty"` // user-provided infrastructure context
 	AuthMethod     *string `json:"auth_method,omitempty"`    // "api_key" or "oauth"
 	// Patrol settings for token efficiency
-	PatrolSchedulePreset   *string `json:"patrol_schedule_preset,omitempty"`   // DEPRECATED: use patrol_interval_minutes
-	PatrolIntervalMinutes  *int    `json:"patrol_interval_minutes,omitempty"`  // Custom interval in minutes (0 = disabled, minimum 10)
-	PatrolEnabled          *bool   `json:"patrol_enabled,omitempty"`           // true if patrol is enabled
-	PatrolAutoFix          *bool   `json:"patrol_auto_fix,omitempty"`          // true if patrol can auto-fix issues
-	AlertTriggeredAnalysis *bool   `json:"alert_triggered_analysis,omitempty"` // true if AI analyzes when alerts fire
-	UseProactiveThresholds *bool   `json:"use_proactive_thresholds,omitempty"` // true if patrol warns before thresholds (default: false = exact thresholds)
+	PatrolSchedulePreset       *string `json:"patrol_schedule_preset,omitempty"`        // DEPRECATED: use patrol_interval_minutes
+	PatrolIntervalMinutes      *int    `json:"patrol_interval_minutes,omitempty"`       // Custom interval in minutes (0 = disabled, minimum 10)
+	PatrolEnabled              *bool   `json:"patrol_enabled,omitempty"`                // true if patrol is enabled
+	PatrolAutoFix              *bool   `json:"patrol_auto_fix,omitempty"`               // true if patrol can auto-fix issues
+	AlertTriggeredAnalysis     *bool   `json:"alert_triggered_analysis,omitempty"`      // true if AI analyzes when alerts fire
+	PatrolEventTriggersEnabled *bool   `json:"patrol_event_triggers_enabled,omitempty"` // true if event-driven patrol triggers (alerts, anomalies) are enabled
+	UseProactiveThresholds     *bool   `json:"use_proactive_thresholds,omitempty"`      // true if patrol warns before thresholds (default: false = exact thresholds)
 	// Multi-provider credentials
 	AnthropicAPIKey  *string `json:"anthropic_api_key,omitempty"`  // Set Anthropic API key
 	OpenAIAPIKey     *string `json:"openai_api_key,omitempty"`     // Set OpenAI API key
@@ -1061,13 +1062,14 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		AuthMethod:     authMethod,
 		OAuthConnected: settings.OAuthAccessToken != "",
 		// Patrol settings
-		PatrolSchedulePreset:   settings.PatrolSchedulePreset,
-		PatrolIntervalMinutes:  settings.PatrolIntervalMinutes,
-		PatrolEnabled:          settings.PatrolEnabled,
-		PatrolAutoFix:          settings.PatrolAutoFix,
-		AlertTriggeredAnalysis: settings.AlertTriggeredAnalysis,
-		UseProactiveThresholds: settings.UseProactiveThresholds,
-		AvailableModels:        nil, // Now populated via /api/ai/models endpoint
+		PatrolSchedulePreset:       settings.PatrolSchedulePreset,
+		PatrolIntervalMinutes:      settings.PatrolIntervalMinutes,
+		PatrolEnabled:              settings.PatrolEnabled,
+		PatrolAutoFix:              settings.PatrolAutoFix,
+		AlertTriggeredAnalysis:     settings.AlertTriggeredAnalysis,
+		PatrolEventTriggersEnabled: settings.PatrolEventTriggersEnabled,
+		UseProactiveThresholds:     settings.UseProactiveThresholds,
+		AvailableModels:            nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
 		AnthropicConfigured:    settings.HasProvider(config.AIProviderAnthropic),
 		OpenAIConfigured:       settings.HasProvider(config.AIProviderOpenAI),
@@ -1336,6 +1338,11 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.AlertTriggeredAnalysis = *req.AlertTriggeredAnalysis
 	}
 
+	// Handle event-triggered patrols toggle
+	if req.PatrolEventTriggersEnabled != nil {
+		settings.PatrolEventTriggersEnabled = *req.PatrolEventTriggersEnabled
+	}
+
 	// Handle request timeout (for slow hardware)
 	if req.RequestTimeoutSeconds != nil {
 		if *req.RequestTimeoutSeconds < 0 {
@@ -1447,26 +1454,27 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 
 	// Return updated settings
 	response := AISettingsResponse{
-		Enabled:                settings.Enabled,
-		Provider:               settings.Provider,
-		APIKeySet:              settings.APIKey != "",
-		Model:                  settings.GetModel(),
-		ChatModel:              settings.ChatModel,
-		PatrolModel:            settings.PatrolModel,
-		AutoFixModel:           settings.AutoFixModel,
-		BaseURL:                settings.BaseURL,
-		Configured:             settings.IsConfigured(),
-		AutonomousMode:         settings.IsAutonomous(), // Derived from control_level
-		CustomContext:          settings.CustomContext,
-		AuthMethod:             authMethod,
-		OAuthConnected:         settings.OAuthAccessToken != "",
-		PatrolSchedulePreset:   settings.PatrolSchedulePreset,
-		PatrolIntervalMinutes:  settings.PatrolIntervalMinutes,
-		PatrolEnabled:          settings.PatrolEnabled,
-		PatrolAutoFix:          settings.PatrolAutoFix,
-		AlertTriggeredAnalysis: settings.AlertTriggeredAnalysis,
-		UseProactiveThresholds: settings.UseProactiveThresholds,
-		AvailableModels:        nil, // Now populated via /api/ai/models endpoint
+		Enabled:                    settings.Enabled,
+		Provider:                   settings.Provider,
+		APIKeySet:                  settings.APIKey != "",
+		Model:                      settings.GetModel(),
+		ChatModel:                  settings.ChatModel,
+		PatrolModel:                settings.PatrolModel,
+		AutoFixModel:               settings.AutoFixModel,
+		BaseURL:                    settings.BaseURL,
+		Configured:                 settings.IsConfigured(),
+		AutonomousMode:             settings.IsAutonomous(), // Derived from control_level
+		CustomContext:              settings.CustomContext,
+		AuthMethod:                 authMethod,
+		OAuthConnected:             settings.OAuthAccessToken != "",
+		PatrolSchedulePreset:       settings.PatrolSchedulePreset,
+		PatrolIntervalMinutes:      settings.PatrolIntervalMinutes,
+		PatrolEnabled:              settings.PatrolEnabled,
+		PatrolAutoFix:              settings.PatrolAutoFix,
+		AlertTriggeredAnalysis:     settings.AlertTriggeredAnalysis,
+		PatrolEventTriggersEnabled: settings.PatrolEventTriggersEnabled,
+		UseProactiveThresholds:     settings.UseProactiveThresholds,
+		AvailableModels:            nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
 		AnthropicConfigured:    settings.HasProvider(config.AIProviderAnthropic),
 		OpenAIConfigured:       settings.HasProvider(config.AIProviderOpenAI),
@@ -3252,7 +3260,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 			Healthy:         true,
 			LicenseRequired: true,
 			LicenseStatus:   "none",
-			UpgradeURL:      conversion.UpgradeURLForFeature(license.FeatureAIAutoFix),
+			UpgradeURL:      pkglicensing.UpgradeURLForFeature(pkglicensing.FeatureAIAutoFix),
 		}
 		if err := utils.WriteJSONResponse(w, response); err != nil {
 			log.Error().Err(err).Msg("Failed to write patrol status response (no AI service)")
@@ -3264,7 +3272,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 	if patrol == nil {
 		// Patrol not initialized
 		licenseStatus, _ := aiService.GetLicenseState()
-		hasAutoFixFeature := aiService.HasLicenseFeature(license.FeatureAIAutoFix)
+		hasAutoFixFeature := aiService.HasLicenseFeature(pkglicensing.FeatureAIAutoFix)
 		response := PatrolStatusResponse{
 			Running:         false,
 			Enabled:         false,
@@ -3273,7 +3281,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 			LicenseStatus:   licenseStatus,
 		}
 		if !hasAutoFixFeature {
-			response.UpgradeURL = conversion.UpgradeURLForFeature(license.FeatureAIAutoFix)
+			response.UpgradeURL = pkglicensing.UpgradeURLForFeature(pkglicensing.FeatureAIAutoFix)
 		}
 		if err := utils.WriteJSONResponse(w, response); err != nil {
 			log.Error().Err(err).Msg("Failed to write patrol status response")
@@ -3288,7 +3296,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 	// GetLicenseState returns accurate state: none, active, expired, grace_period
 	licenseStatus, _ := aiService.GetLicenseState()
 	// Check for auto-fix feature - patrol itself is free, auto-fix requires Pro
-	hasAutoFixFeature := aiService.HasLicenseFeature(license.FeatureAIAutoFix)
+	hasAutoFixFeature := aiService.HasLicenseFeature(pkglicensing.FeatureAIAutoFix)
 
 	// Get fixed count from investigation orchestrator
 	fixedCount := 0
@@ -3314,7 +3322,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 		LicenseStatus:    licenseStatus,
 	}
 	if !hasAutoFixFeature {
-		response.UpgradeURL = conversion.UpgradeURLForFeature(license.FeatureAIAutoFix)
+		response.UpgradeURL = pkglicensing.UpgradeURLForFeature(pkglicensing.FeatureAIAutoFix)
 	}
 	response.Summary.Critical = summary.Critical
 	response.Summary.Warning = summary.Warning
@@ -3556,7 +3564,7 @@ func (h *AISettingsHandler) HandleForcePatrol(w http.ResponseWriter, r *http.Req
 
 	// Cadence cap: Community tier is limited to 1 patrol run per hour.
 	// Patrol itself is free (ai_patrol), but higher cadence is gated behind Pro/Cloud.
-	if !aiService.HasLicenseFeature(license.FeatureAIAutoFix) {
+	if !aiService.HasLicenseFeature(pkglicensing.FeatureAIAutoFix) {
 		if last := patrol.GetStatus().LastPatrolAt; last != nil {
 			if since := time.Since(*last); since < 1*time.Hour {
 				remaining := (1*time.Hour - since).Round(time.Minute)
@@ -4937,8 +4945,8 @@ func (h *AISettingsHandler) HandleListApprovals(w http.ResponseWriter, r *http.R
 	}
 
 	// Check license
-	if !h.GetAIService(r.Context()).HasLicenseFeature(license.FeatureAIAutoFix) {
-		WriteLicenseRequired(w, license.FeatureAIAutoFix, "Pulse Patrol Auto-Fix feature requires Pro license")
+	if !h.GetAIService(r.Context()).HasLicenseFeature(pkglicensing.FeatureAIAutoFix) {
+		WriteLicenseRequired(w, pkglicensing.FeatureAIAutoFix, "Pulse Patrol Auto-Fix feature requires Pro license")
 		return
 	}
 
@@ -5004,8 +5012,8 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 	}
 
 	// Check license
-	if !h.GetAIService(r.Context()).HasLicenseFeature(license.FeatureAIAutoFix) {
-		WriteLicenseRequired(w, license.FeatureAIAutoFix, "Pulse Patrol Auto-Fix feature requires Pro license")
+	if !h.GetAIService(r.Context()).HasLicenseFeature(pkglicensing.FeatureAIAutoFix) {
+		WriteLicenseRequired(w, pkglicensing.FeatureAIAutoFix, "Pulse Patrol Auto-Fix feature requires Pro license")
 		return
 	}
 
@@ -5594,7 +5602,7 @@ func (h *AISettingsHandler) HandleGetPatrolAutonomy(w http.ResponseWriter, r *ht
 	// Community tier lock: without ai_autofix, patrol autonomy is findings-only ("monitor").
 	// If config contains a higher level from a previous Pro/trial period, clamp the effective
 	// value at read time so the UI reflects runtime enforcement.
-	hasAutoFix := aiService.HasLicenseFeature(license.FeatureAIAutoFix)
+	hasAutoFix := aiService.HasLicenseFeature(pkglicensing.FeatureAIAutoFix)
 	if !hasAutoFix && autonomyLevel != config.PatrolAutonomyMonitor {
 		autonomyLevel = config.PatrolAutonomyMonitor
 	}
@@ -5637,8 +5645,8 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomy(w http.ResponseWriter, r 
 	}
 
 	// Community tier lock: ANY autonomy above "monitor" implies investigation and requires Pro.
-	if !aiService.HasLicenseFeature(license.FeatureAIAutoFix) && req.AutonomyLevel != config.PatrolAutonomyMonitor {
-		WriteLicenseRequired(w, license.FeatureAIAutoFix, "Investigation and auto-fix require Pulse Pro. Community tier is limited to Monitor (findings-only) autonomy.")
+	if !aiService.HasLicenseFeature(pkglicensing.FeatureAIAutoFix) && req.AutonomyLevel != config.PatrolAutonomyMonitor {
+		WriteLicenseRequired(w, pkglicensing.FeatureAIAutoFix, "Investigation and auto-fix require Pulse Pro. Community tier is limited to Monitor (findings-only) autonomy.")
 		return
 	}
 
@@ -5772,8 +5780,8 @@ func (h *AISettingsHandler) HandleReapproveInvestigationFix(w http.ResponseWrite
 	}
 
 	// Check license
-	if !h.GetAIService(r.Context()).HasLicenseFeature(license.FeatureAIAutoFix) {
-		WriteLicenseRequired(w, license.FeatureAIAutoFix, "Pulse Patrol Auto-Fix feature requires Pro license")
+	if !h.GetAIService(r.Context()).HasLicenseFeature(pkglicensing.FeatureAIAutoFix) {
+		WriteLicenseRequired(w, pkglicensing.FeatureAIAutoFix, "Pulse Patrol Auto-Fix feature requires Pro license")
 		return
 	}
 
@@ -5932,8 +5940,8 @@ func (h *AISettingsHandler) HandleReinvestigateFinding(w http.ResponseWriter, r 
 
 	// Reinvestigation is investigation and requires Pro (ai_autofix).
 	// This is defense-in-depth in addition to the route-level RequireLicenseFeature gate.
-	if !aiService.HasLicenseFeature(license.FeatureAIAutoFix) {
-		WriteLicenseRequired(w, license.FeatureAIAutoFix, "Reinvestigation requires Pulse Pro (AI Auto-Fix feature).")
+	if !aiService.HasLicenseFeature(pkglicensing.FeatureAIAutoFix) {
+		WriteLicenseRequired(w, pkglicensing.FeatureAIAutoFix, "Reinvestigation requires Pulse Pro (AI Auto-Fix feature).")
 		return
 	}
 

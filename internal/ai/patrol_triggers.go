@@ -106,6 +106,9 @@ type TriggerManager struct {
 	recentEvents    []time.Time
 	eventWindow     time.Duration
 
+	// Event trigger gating - when false, event-driven triggers (alert_fired, alert_cleared, anomaly) are rejected
+	eventTriggersEnabled bool
+
 	// Callback to execute patrol
 	onTrigger func(ctx context.Context, scope PatrolScope)
 
@@ -168,6 +171,7 @@ func NewTriggerManager(cfg TriggerManagerConfig) *TriggerManager {
 		eventWindow:          cfg.EventWindow,
 		recentEvents:         make([]time.Time, 0),
 		pendingTriggers:      make([]PatrolScope, 0),
+		eventTriggersEnabled: true,
 		stopCh:               make(chan struct{}),
 	}
 }
@@ -314,11 +318,39 @@ func (tm *TriggerManager) processPendingTriggers(ctx context.Context) {
 	callback(ctx, trigger)
 }
 
+// SetEventTriggersEnabled controls whether event-driven triggers (alert_fired, alert_cleared, anomaly)
+// are accepted. When disabled, only manual, scheduled, startup, user_action, and verification triggers pass through.
+func (tm *TriggerManager) SetEventTriggersEnabled(enabled bool) {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	tm.eventTriggersEnabled = enabled
+	log.Info().Bool("enabled", enabled).Msg("patrol event triggers updated")
+}
+
+// isEventDrivenTrigger returns true for trigger reasons that are event-driven
+// (alerts firing/clearing, anomaly detection) as opposed to user-initiated or scheduled triggers.
+func isEventDrivenTrigger(reason TriggerReason) bool {
+	switch reason {
+	case TriggerReasonAlertFired, TriggerReasonAlertCleared, TriggerReasonAnomalyDetected:
+		return true
+	default:
+		return false
+	}
+}
+
 // TriggerPatrol queues a patrol run with the given scope
 // Returns true if the trigger was accepted, false if rate limited or queue full
 func (tm *TriggerManager) TriggerPatrol(scope PatrolScope) bool {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
+
+	// Gate event-driven triggers when disabled
+	if !tm.eventTriggersEnabled && isEventDrivenTrigger(scope.Reason) {
+		log.Debug().
+			Str("reason", string(scope.Reason)).
+			Msg("event-driven patrol trigger rejected: event triggers disabled")
+		return false
+	}
 
 	// Check if queue is full
 	if len(tm.pendingTriggers) >= tm.maxPendingTriggers {

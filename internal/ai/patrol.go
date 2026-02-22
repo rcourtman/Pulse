@@ -265,7 +265,8 @@ type PatrolService struct {
 	forecastProvider     ForecastProvider     // For trend forecasts
 
 	// Event-driven patrol triggers (Phase 7)
-	triggerManager *TriggerManager // For event-driven patrol scheduling
+	triggerManager       *TriggerManager // For event-driven patrol scheduling
+	eventTriggersEnabled bool            // When false, event-driven triggers (alerts, anomalies) are rejected
 
 	// Unified intelligence facade - aggregates all subsystems for unified view
 	intelligence *Intelligence
@@ -451,15 +452,16 @@ type PatrolStreamEvent struct {
 // NewPatrolService creates a new patrol service
 func NewPatrolService(aiService *Service, stateProvider StateProvider) *PatrolService {
 	return &PatrolService{
-		aiService:         aiService,
-		stateProvider:     stateProvider,
-		config:            DefaultPatrolConfig(),
-		findings:          NewFindingsStore(),
-		thresholds:        DefaultPatrolThresholds(),
-		stopCh:            make(chan struct{}),
-		runHistoryStore:   NewPatrolRunHistoryStore(MaxPatrolRunHistory),
-		streamSubscribers: make(map[chan PatrolStreamEvent]*streamSubscriber),
-		streamPhase:       "idle",
-		adHocTrigger:      make(chan *alerts.Alert, 10), // Buffer triggers
+		aiService:            aiService,
+		stateProvider:        stateProvider,
+		config:               DefaultPatrolConfig(),
+		findings:             NewFindingsStore(),
+		thresholds:           DefaultPatrolThresholds(),
+		eventTriggersEnabled: true,
+		stopCh:               make(chan struct{}),
+		runHistoryStore:      NewPatrolRunHistoryStore(MaxPatrolRunHistory),
+		streamSubscribers:    make(map[chan PatrolStreamEvent]*streamSubscriber),
+		streamPhase:          "idle",
+		adHocTrigger:         make(chan *alerts.Alert, 10), // Buffer triggers
 	}
 }

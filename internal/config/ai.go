@@ -59,6 +59,9 @@ type AIConfig struct {
 	// Alert-triggered AI analysis - analyze specific resources when alerts fire
 	AlertTriggeredAnalysis bool `json:"alert_triggered_analysis"` // Enable AI analysis when alerts fire (token-efficient)
 
+	// Event-triggered patrols - run extra patrols when alerts fire or anomalies are detected
+	PatrolEventTriggersEnabled bool `json:"patrol_event_triggers_enabled"` // Enable event-driven patrol triggers (alerts, anomalies)
+
 	// Request timeout - how long to wait for AI responses (default: 300s / 5 min)
 	// Increase this for slow hardware running local models (e.g., Ollama on low-power devices)
 	RequestTimeoutSeconds int `json:"request_timeout_seconds,omitempty"`
@@ -156,6 +159,8 @@ func NewDefaultAIConfig() *AIConfig {
 		PatrolAnalyzeStorage:  true,
 		// Alert-triggered analysis is highly token-efficient - enabled by default
 		AlertTriggeredAnalysis: true,
+		// Event-triggered patrols enabled by default (alerts, anomalies trigger extra patrols)
+		PatrolEventTriggersEnabled: true,
 	}
 }
 
@@ -560,6 +565,14 @@ func (c *AIConfig) IsAlertTriggeredAnalysisEnabled() bool {
 		return false
 	}
 	return c.AlertTriggeredAnalysis
+}
+
+// IsPatrolEventTriggersEnabled returns true if event-driven patrol triggers (alerts, anomalies) are enabled
+func (c *AIConfig) IsPatrolEventTriggersEnabled() bool {
+	if !c.Enabled {
+		return false
+	}
+	return c.PatrolEventTriggersEnabled
 }
 
 // GetRequestTimeout returns the timeout duration for AI requests

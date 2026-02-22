@@ -26,10 +26,10 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -754,9 +754,9 @@ func (s *Service) GetLicenseState() (string, bool) {
 // Feature constants are imported from the license package for compile-time consistency.
 // This ensures the ai package always uses the same feature strings as the license system.
 const (
-	FeatureAIPatrol  = license.FeatureAIPatrol
-	FeatureAIAlerts  = license.FeatureAIAlerts
-	FeatureAIAutoFix = license.FeatureAIAutoFix
+	FeatureAIPatrol  = pkglicensing.FeatureAIPatrol
+	FeatureAIAlerts  = pkglicensing.FeatureAIAlerts
+	FeatureAIAutoFix = pkglicensing.FeatureAIAutoFix
 )
 
 // StartPatrol starts the background patrol service
@@ -793,6 +793,7 @@ func (s *Service) StartPatrol(ctx context.Context) {
 	patrolCfg.AnalyzeStorage = cfg.PatrolAnalyzeStorage
 	patrol.SetConfig(patrolCfg)
 	patrol.SetProactiveMode(cfg.UseProactiveThresholds)
+	patrol.SetEventTriggersEnabled(cfg.IsPatrolEventTriggersEnabled())
 	patrol.Start(ctx)
 
 	// Configure alert-triggered analyzer (also Pro-only)
@@ -873,6 +874,9 @@ func (s *Service) ReconfigurePatrol() {
 
 	// Update proactive threshold mode
 	patrol.SetProactiveMode(cfg.UseProactiveThresholds)
+
+	// Update event-driven patrol trigger gate
+	patrol.SetEventTriggersEnabled(cfg.IsPatrolEventTriggersEnabled())
 
 	log.Info().
 		Bool("enabled", patrolCfg.Enabled).

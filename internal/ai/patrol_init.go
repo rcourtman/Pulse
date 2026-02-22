@@ -580,6 +580,18 @@ func (p *PatrolService) GetTriggerManager() *TriggerManager {
 	return p.triggerManager
 }
 
+// SetEventTriggersEnabled controls whether event-driven patrol triggers (alert_fired, alert_cleared, anomaly)
+// are accepted. Propagates the setting to both PatrolService and the TriggerManager.
+func (p *PatrolService) SetEventTriggersEnabled(enabled bool) {
+	p.mu.Lock()
+	p.eventTriggersEnabled = enabled
+	tm := p.triggerManager
+	p.mu.Unlock()
+	if tm != nil {
+		tm.SetEventTriggersEnabled(enabled)
+	}
+}
+
 // TriggerScopedPatrol runs a targeted patrol for specific resources.
 // This is called by the TriggerManager for event-driven patrols.
 // When ResourceIDs or ResourceTypes are specified in the scope, only those resources

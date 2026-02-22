@@ -1748,7 +1748,14 @@ func (p *PatrolService) TriggerPatrolForAlert(alert *alerts.Alert) {
 
 	p.mu.RLock()
 	triggerManager := p.triggerManager
+	eventTriggersEnabled := p.eventTriggersEnabled
 	p.mu.RUnlock()
+
+	// Gate: skip if event-driven triggers are disabled
+	if !eventTriggersEnabled {
+		log.Debug().Str("alert_id", alert.ID).Msg("alert-triggered patrol skipped: event triggers disabled")
+		return
+	}
 
 	resourceType := inferResourceType(alert.Type, alert.Metadata)
 
