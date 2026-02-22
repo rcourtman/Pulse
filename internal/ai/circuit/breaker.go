@@ -246,13 +246,14 @@ func (b *Breaker) RecordFailureWithCategory(err error, category ErrorCategory) {
 	b.lastFailure = time.Now()
 	b.lastError = err
 	b.consecutiveSuccesses = 0
-	b.consecutiveFailures++
 	b.totalFailures++
 
 	// Handle different error categories
 	switch category {
 	case ErrorCategoryInvalid, ErrorCategoryFatal:
-		// Don't trip on invalid/fatal errors - these won't be fixed by waiting
+		// Don't trip on invalid/fatal errors - these won't be fixed by waiting.
+		// Don't increment consecutiveFailures so a subsequent transient error
+		// isn't closer to tripping than it should be.
 		if b.state == StateHalfOpen {
 			b.halfOpenProbeInFlight = false
 		}
@@ -266,6 +267,10 @@ func (b *Breaker) RecordFailureWithCategory(err error, category ErrorCategory) {
 	case ErrorCategoryRateLimit:
 		// Rate limit errors should trip immediately with appropriate backoff
 		b.consecutiveFailures = b.config.FailureThreshold
+		// Fall through to trip logic below
+
+	default:
+		b.consecutiveFailures++
 	}
 
 	switch b.state {
