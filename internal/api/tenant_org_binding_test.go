@@ -236,7 +236,7 @@ func TestTenantMiddlewareOrgBoundReadScopeCannotWriteAlertsConfig(t *testing.T) 
 		}
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newMultiTenantRouter(t, cfg)
 
 	req := httptest.NewRequest(http.MethodPut, "/api/alerts/config", strings.NewReader(`{}`))
 	req.Header.Set("X-Pulse-Org-ID", "org-a")
@@ -269,7 +269,7 @@ func TestTenantMiddlewareRejectsOrgBoundTokenReuseAcrossTenants(t *testing.T) {
 		}
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newMultiTenantRouter(t, cfg)
 
 	orgAReq := httptest.NewRequest(http.MethodGet, "/api/config", nil)
 	orgAReq.Header.Set("X-Pulse-Org-ID", "org-a")

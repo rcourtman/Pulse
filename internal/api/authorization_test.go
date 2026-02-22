@@ -55,27 +55,22 @@ func TestDefaultAuthorizationChecker_UserCanAccessOrg(t *testing.T) {
 	ml := new(mockOrgLoader)
 	checker := NewAuthorizationChecker(ml)
 
-	t.Run("default org denied when metadata missing", func(t *testing.T) {
-		ml.On("GetOrganization", "default").Return(nil, nil).Once()
-		assert.False(t, checker.UserCanAccessOrg("user1", "default"))
+	t.Run("default org allowed without metadata", func(t *testing.T) {
+		// Default org is always accessible to any authenticated user.
+		assert.True(t, checker.UserCanAccessOrg("user1", "default"))
 	})
 
-	t.Run("default org enforces membership when metadata configured", func(t *testing.T) {
-		org := &models.Organization{
-			ID: "default",
-			Members: []models.OrganizationMember{
-				{UserID: "owner", Role: models.OrgRoleOwner},
-				{UserID: "user1", Role: models.OrgRoleMember},
-			},
-		}
-		ml.On("GetOrganization", "default").Return(org, nil).Twice()
+	t.Run("default org accessible regardless of membership", func(t *testing.T) {
+		// Default org is always accessible, even if membership data exists.
 		assert.True(t, checker.UserCanAccessOrg("user1", "default"))
-		assert.False(t, checker.UserCanAccessOrg("other", "default"))
+		assert.True(t, checker.UserCanAccessOrg("other", "default"))
 	})
 
 	t.Run("missing loader", func(t *testing.T) {
 		badChecker := NewAuthorizationChecker(nil)
-		assert.False(t, badChecker.UserCanAccessOrg("user1", "default"))
+		// Default org is always accessible, even without a loader.
+		assert.True(t, badChecker.UserCanAccessOrg("user1", "default"))
+		// Non-default orgs are denied without a loader (fail closed).
 		assert.False(t, badChecker.UserCanAccessOrg("user1", "acme"))
 	})
 

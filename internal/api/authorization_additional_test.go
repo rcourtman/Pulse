@@ -14,9 +14,11 @@ func TestMultiTenantOrganizationLoader_NoPersistence(t *testing.T) {
 }
 
 func TestDefaultAuthorizationChecker_CanAccessOrg_Default(t *testing.T) {
+	// Default org is always accessible to any authenticated user,
+	// even without an organization loader configured.
 	checker := NewAuthorizationChecker(nil)
-	if checker.CanAccessOrg("user", nil, "default") {
-		t.Fatalf("expected default org access denial without organization loader")
+	if !checker.CanAccessOrg("user", nil, "default") {
+		t.Fatalf("expected default org to be accessible to any authenticated user")
 	}
 }
 
@@ -30,6 +32,8 @@ func (s staticOrgLoader) GetOrganization(string) (*models.Organization, error) {
 }
 
 func TestDefaultAuthorizationChecker_CanAccessOrg_DefaultWithMembershipConfigured(t *testing.T) {
+	// Default org is always accessible to any authenticated user,
+	// regardless of membership configuration.
 	checker := NewAuthorizationChecker(staticOrgLoader{
 		org: &models.Organization{
 			ID: "default",
@@ -39,10 +43,11 @@ func TestDefaultAuthorizationChecker_CanAccessOrg_DefaultWithMembershipConfigure
 		},
 	})
 
-	if checker.CanAccessOrg("user", nil, "default") {
-		t.Fatalf("expected default org membership enforcement to deny non-member")
+	// Both member and non-member should be able to access the default org.
+	if !checker.CanAccessOrg("user", nil, "default") {
+		t.Fatalf("expected default org to be accessible to non-member user")
 	}
 	if !checker.CanAccessOrg("owner", nil, "default") {
-		t.Fatalf("expected owner to access default org")
+		t.Fatalf("expected default org to be accessible to owner")
 	}
 }

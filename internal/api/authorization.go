@@ -96,6 +96,12 @@ func (c *DefaultAuthorizationChecker) UserCanAccessOrg(userID, orgID string) boo
 		return false
 	}
 
+	// The default organization is always accessible to any authenticated user.
+	// This ensures single-tenant deployments work without org membership data.
+	if orgID == "default" {
+		return true
+	}
+
 	// Fail closed when membership data cannot be resolved.
 	if c.orgLoader == nil {
 		log.Warn().
@@ -148,6 +154,15 @@ type AuthorizationResult struct {
 
 // CheckAccess performs a comprehensive authorization check for a request.
 func (c *DefaultAuthorizationChecker) CheckAccess(token *config.APITokenRecord, userID, orgID string) AuthorizationResult {
+	// The default organization is always accessible to any authenticated principal.
+	if orgID == "default" && (token != nil || userID != "") {
+		return AuthorizationResult{
+			Allowed:       true,
+			Reason:        "Default organization is accessible to all authenticated users",
+			IsLegacyToken: token != nil && token.IsLegacyToken(),
+		}
+	}
+
 	// Check token-based access first
 	if token != nil {
 		if !token.CanAccessOrg(orgID) {
