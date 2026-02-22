@@ -650,6 +650,12 @@ func newSSOAdminRuntime(router *Router) extensions.SSOAdminRuntime {
 		return toExtensionSSOTestResponse(router.testOIDCConnection(ctx, toAPIOIDCTestConfig(cfg)))
 	}
 	runtime.PreviewSAMLMetadata = previewSAMLMetadataFromRuntime
+	runtime.IsValidProviderID = validateProviderID
+	runtime.HandleListProviders = router.handleListSSOProviders
+	runtime.HandleCreateProvider = router.handleCreateSSOProvider
+	runtime.HandleGetProvider = router.handleGetSSOProvider
+	runtime.HandleUpdateProvider = router.handleUpdateSSOProvider
+	runtime.HandleDeleteProvider = router.handleDeleteSSOProvider
 
 	return runtime
 }
