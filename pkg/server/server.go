@@ -27,6 +27,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
@@ -43,6 +44,10 @@ type BusinessHooks struct {
 	// OnMetricsStoreReady is called when the metrics store is initialized.
 	// This allows enterprise features to access metrics for reporting.
 	OnMetricsStoreReady func(store *metrics.Store)
+
+	// BindRBACAdminEndpoints allows enterprise modules to replace or decorate
+	// RBAC admin endpoints without importing internal API packages.
+	BindRBACAdminEndpoints extensions.BindRBACAdminEndpointsFunc
 }
 
 var (
@@ -232,7 +237,10 @@ func Run(ctx context.Context, version string) error {
 	// Trigger enterprise hooks if registered
 	globalHooksMu.Lock()
 	onMetricsStoreReady := globalHooks.OnMetricsStoreReady
+	bindRBACAdminEndpoints := globalHooks.BindRBACAdminEndpoints
 	globalHooksMu.Unlock()
+
+	api.SetRBACAdminEndpointsBinder(bindRBACAdminEndpoints)
 
 	if onMetricsStoreReady != nil {
 		func() {
