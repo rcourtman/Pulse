@@ -84,7 +84,18 @@ const PAIR_RULES = [
     ['hover:text-slate-900', 'dark:hover:text-slate-100', 'hover:text-base-content'],
     ['hover:text-gray-900', 'dark:hover:text-gray-100', 'hover:text-base-content'],
     // hover borders
+    // hover borders
     ['hover:border-slate-300', 'dark:hover:border-slate-600', 'hover:border-border'],
+    // Remaining combos from manual audit (wave 6)
+    ['text-slate-800', 'dark:text-slate-200', 'text-base-content'],
+    ['text-slate-600', 'dark:text-slate-400', 'text-muted'],
+    ['text-slate-600', 'dark:text-slate-300', 'text-muted'],
+    ['text-slate-700', 'dark:text-slate-300', 'text-base-content'],
+    ['text-slate-700', 'dark:text-slate-200', 'text-base-content'],
+    ['bg-slate-100', 'dark:bg-slate-700', 'bg-surface-hover'],
+    ['bg-slate-200', 'dark:bg-slate-800', 'bg-surface-alt'],
+    ['border-slate-300', 'dark:border-slate-600', 'border-border'],
+    ['hover:bg-slate-50', 'dark:hover:bg-slate-600', 'hover:bg-surface-hover'],
 ];
 
 function escapeRegex(str) {

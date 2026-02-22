@@ -203,7 +203,7 @@ const StatusBadge: Component<{
         online: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
         offline: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
         warning: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
-        unknown: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
+        unknown: 'bg-surface-alt text-base-content',
     };
 
     return (
@@ -522,7 +522,7 @@ export const DiagnosticsPanel: Component = () => {
                                 type="button"
                                 onClick={() => exportDiagnostics(false)}
                                 disabled={exportLoading()}
-                                class="flex min-h-10 sm:min-h-9 items-center gap-1.5 px-3 py-2 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+                                class="flex min-h-10 sm:min-h-9 items-center gap-1.5 px-3 py-2 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover transition-colors"
                             >
                                 <Download class="w-3.5 h-3.5" />
                                 Full

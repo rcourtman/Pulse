@@ -505,8 +505,8 @@ export function OverviewTab(props: {
                     <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start justify-end">
                       <button
                         class={`px-3 py-1.5 text-xs font-medium border rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed ${alert.acknowledged
- ? 'bg-white dark:bg-slate-700 text-base-content border-border hover:bg-slate-50 dark:hover:bg-slate-600'
- : 'bg-white dark:bg-slate-700 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900'
+ ? ' text-base-content border-border hover:bg-surface-hover'
+ : ' text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900'
  }`}
                         disabled={processingAlerts().has(alert.id)}
                         onClick={async (e) => {
@@ -573,7 +573,7 @@ export function OverviewTab(props: {
                             : 'Acknowledge'}
                       </button>
                       <button
-                        class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-slate-50 dark:hover:bg-slate-600"
+                        class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover"
                         onClick={() => {
                           void toggleIncidentTimeline(alert.id, alert.startTime);
                         }}
@@ -678,7 +678,7 @@ export function OverviewTab(props: {
                                 />
                                 <div class="flex justify-end">
                                   <button
-                                    class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
                                     disabled={incidentNoteSaving().has(alert.id) || !(incidentNoteDrafts()[alert.id] || '').trim()}
                                     onClick={() => {
                                       void saveIncidentNote(alert.id, alert.startTime);

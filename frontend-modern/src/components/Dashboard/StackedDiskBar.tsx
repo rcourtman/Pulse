@@ -345,7 +345,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
           </div>
           <For each={tooltipContent()}>
             {(item, idx) => (
-              <div class="flex flex-col gap-1 py-0.5" classList={{ 'border-t border-slate-700': idx() > 0 }}>
+              <div class="flex flex-col gap-1 py-0.5" classList={{ 'border-t border-border': idx() > 0 }}>
                 <div class="flex justify-between gap-3">
                   <span
                     class="truncate max-w-[100px]"

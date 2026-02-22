@@ -183,7 +183,7 @@ function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: Gues
           <Show when={hasInterfaces()}>
             <For each={props.networkInterfaces}>
               {(iface, idx) => (
-                <div class="py-1" classList={{ 'border-t border-slate-700': idx() > 0 }}>
+                <div class="py-1" classList={{ 'border-t border-border': idx() > 0 }}>
                   <div class="flex items-center gap-2 text-blue-400 font-medium">
                     <span>{iface.name || 'eth' + idx()}</span>
                     <Show when={iface.mac}>

@@ -78,7 +78,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     if (!capabilities) return [];
 
     const supportedBadge = 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-400';
-    const unsupportedBadge = 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+    const unsupportedBadge = 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-muted';
     const badges: { label: string; classes: string; title: string }[] = [];
 
     if (capabilities.nodeCpuMemory) {

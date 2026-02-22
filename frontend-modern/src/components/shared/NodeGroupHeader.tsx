@@ -45,7 +45,7 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
         <span
           class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${props.node.isClusterMember
             ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-            : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+            : 'bg-surface-alt text-muted'
             }`}
         >
           {props.node.isClusterMember ? props.node.clusterName : 'Standalone'}

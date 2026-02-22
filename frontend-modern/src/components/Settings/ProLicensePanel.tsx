@@ -113,7 +113,7 @@ export const ProLicensePanel: Component = () => {
 
   const statusTone = createMemo(() => {
     const current = status();
-    if (!current) return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
+    if (!current) return 'bg-surface-alt text-muted';
     if (current.valid && current.in_grace_period) {
       return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300';
     }
@@ -123,7 +123,7 @@ export const ProLicensePanel: Component = () => {
     if (current.expires_at) {
       return 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300';
     }
-    return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
+    return 'bg-surface-alt text-muted';
   });
 
   const hasLicenseDetails = createMemo(() => {

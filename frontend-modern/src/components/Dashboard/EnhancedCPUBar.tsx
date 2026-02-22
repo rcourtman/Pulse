@@ -68,7 +68,7 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
 
                     <div class="flex justify-between gap-3 py-0.5">
                         <span class="text-slate-400">Usage</span>
-                        <span class={`font-medium ${props.usage > 90 ? 'text-red-400' : 'text-slate-200'}`}>
+                        <span class={`font-medium ${props.usage > 90 ? 'text-red-400' : 'text-base-content'}`}>
                             {formatPercent(props.usage)}
                         </span>
                     </div>

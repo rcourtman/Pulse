@@ -155,7 +155,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       case 'controlled':
         return 'border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-200 dark:bg-amber-900';
       default:
-        return 'border-slate-200 text-slate-600 bg-white dark:border-slate-700 dark:text-slate-200 dark:bg-slate-800';
+        return 'border-border text-muted bg-surface';
     }
   });
 

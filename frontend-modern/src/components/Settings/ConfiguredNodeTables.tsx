@@ -194,7 +194,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                                         ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-300'
                                         : endpoint.Online
                                           ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                                          : 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400';
+                                          : 'border-border bg-surface-alt text-muted';
 
                                     return (
                                       <div class={`rounded border px-3 py-2 text-[0.7rem] ${statusColor}`}>
@@ -237,7 +237,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                                 <button
                                   type="button"
                                   onClick={() => props.onRefreshCluster?.(node.id)}
-                                  class="flex min-h-10 sm:min-h-9 items-center gap-1 px-2.5 py-1.5 text-xs font-medium hover:text-muted dark:hover:text-slate-200 bg-surface border border-border rounded hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+                                  class="flex min-h-10 sm:min-h-9 items-center gap-1 px-2.5 py-1.5 text-xs font-medium hover:text-muted dark:hover:text-slate-200 bg-surface border border-border rounded hover:bg-surface-hover transition-colors"
                                   title="Re-detect cluster membership (use if nodes were added to the Proxmox cluster)"
                                 >
                                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

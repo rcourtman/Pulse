@@ -330,12 +330,12 @@ export default function AuditLogPanel() {
     const getEventTypeBadge = (event: string) => {
         const colors: Record<string, string> = {
             login: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-            logout: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
+            logout: 'bg-surface-alt text-base-content',
             config_change: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
             startup: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-            oidc_token_refresh: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
+            oidc_token_refresh: 'bg-surface-alt text-base-content',
         };
-        return colors[event] || 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200';
+        return colors[event] || 'bg-surface-alt text-base-content';
     };
 
     const hasSignedEvents = () => events().some((event) => event.signature);
@@ -467,7 +467,7 @@ export default function AuditLogPanel() {
                     <button
                         onClick={() => fetchAuditEvents()}
                         disabled={loading()}
-                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
                     >
                         <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
                         Refresh
@@ -483,14 +483,14 @@ export default function AuditLogPanel() {
                     <button
                         onClick={() => setCancelVerifyAll(true)}
                         disabled={!verifyingAll()}
-                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-muted bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-muted bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={() => verifyAllEvents({ showToast: true, resume: true })}
                         disabled={verifyingAll() || !hasResumeEvents()}
-                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-muted bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-muted bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
                         onMouseEnter={(e) => {
                             if (!hasResumeEvents()) return;
                             const rect = e.currentTarget.getBoundingClientRect();
@@ -613,7 +613,7 @@ export default function AuditLogPanel() {
                                 showSuccess('Audit filters cleared');
                             }
                         }}
-                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover"
                     >
                         Clear{activeFilterCount() > 0 ? ` (${activeFilterCount()})` : ''}
                     </button>
@@ -924,7 +924,7 @@ export default function AuditLogPanel() {
                                 setPageOffset(nextOffset);
                                 void fetchAuditEvents({ offset: nextOffset });
                             }}
-                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600"
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover"
                         >
                             Go
                         </button>
@@ -936,7 +936,7 @@ export default function AuditLogPanel() {
                                 void fetchAuditEvents({ offset: 0 });
                             }}
                             disabled={pageOffset() === 0}
-                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
                         >
                             First
                         </button>
@@ -947,7 +947,7 @@ export default function AuditLogPanel() {
                                 void fetchAuditEvents({ offset: nextOffset });
                             }}
                             disabled={pageOffset() === 0}
-                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
                         >
                             Previous
                         </button>
@@ -958,7 +958,7 @@ export default function AuditLogPanel() {
                                 void fetchAuditEvents({ offset: nextOffset });
                             }}
                             disabled={!hasNextPage()}
-                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
                         >
                             Next
                         </button>
@@ -969,7 +969,7 @@ export default function AuditLogPanel() {
                                 void fetchAuditEvents({ offset: lastOffset });
                             }}
                             disabled={!hasNextPage()}
-                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
                         >
                             Last
                         </button>

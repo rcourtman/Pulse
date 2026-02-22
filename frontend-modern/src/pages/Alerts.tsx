@@ -5045,7 +5045,7 @@ function HistoryTab(props: {
                                                   />
                                                   <div class="flex justify-end">
                                                     <button
-                                                      class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                      class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
                                                       disabled={incidentNoteSaving().has(rowKey) || !(incidentNoteDrafts()[rowKey] || '').trim()}
                                                       onClick={() => {
                                                         void saveIncidentNote(rowKey, alert.id, alert.startTime);

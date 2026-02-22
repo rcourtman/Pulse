@@ -51,7 +51,7 @@ const TYPE_BADGE: Record<string, string> = {
 
 const getTypeBadgeClass = (type: string): string => {
   const key = type.toLowerCase().replace(/[-_\s]/g, '');
-  return TYPE_BADGE[key] || 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
+  return TYPE_BADGE[key] || 'bg-surface-alt text-muted';
 };
 
 export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {

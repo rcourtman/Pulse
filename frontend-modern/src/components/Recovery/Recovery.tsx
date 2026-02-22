@@ -1118,7 +1118,7 @@ const Recovery: Component = () => {
                           }}
                         >
                           <TableCell
-                            class={`relative max-w-[420px] truncate whitespace-nowrap px-3 py-0.5 text-slate-900 ${issueTone === 'rose' || issueTone === 'blue'
+                            class={`relative max-w-[420px] truncate whitespace-nowrap px-3 py-0.5 text-base-content ${issueTone === 'rose' || issueTone === 'blue'
  ? 'font-medium dark:text-slate-100'
  : issueTone === 'amber'
  ? 'dark:text-slate-200'

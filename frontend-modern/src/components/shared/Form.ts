@@ -2,7 +2,7 @@ const baseField = 'flex flex-col gap-1';
 const baseLabel = 'text-sm font-medium text-base-content';
 const baseHelp = 'text-xs text-muted';
 const baseControl = [
-  'w-full min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900',
+  'w-full min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-3 py-2.5 text-sm text-base-content',
   'focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors',
   'dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-500',
 ].join(' ');

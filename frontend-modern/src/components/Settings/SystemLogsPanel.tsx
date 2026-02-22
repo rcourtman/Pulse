@@ -161,7 +161,7 @@ export const SystemLogsPanel: Component = () => {
                         class="bg-slate-950 text-slate-300 font-mono text-xs p-4 rounded-md h-[500px] overflow-y-auto whitespace-pre-wrap leading-relaxed border border-border-subtle scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
                     >
                         <For each={logs()}>{(log) =>
-                            <div class="animate-enter border-b border-slate-900 last:border-0 pb-0.5 mb-0.5 hover:bg-slate-900 px-1 -mx-1 rounded">
+                            <div class="animate-enter border-b border-border-subtle last:border-0 pb-0.5 mb-0.5 hover:bg-surface-hover px-1 -mx-1 rounded">
                                 {/* Basic highlighting for log levels */}
                                 {log.includes('"level":"error"') || log.includes('ERR') || log.includes('[ERROR]') ? (
                                     <span class="text-red-400">{log}</span>

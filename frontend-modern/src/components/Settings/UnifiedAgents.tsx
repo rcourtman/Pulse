@@ -1570,7 +1570,7 @@ export const UnifiedAgents: Component = () => {
                                     if (connectedFromStatus(row.healthStatus)) {
                                         return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
                                     }
-                                    return 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300';
+                                    return 'bg-surface-alt text-base-content';
                                 };
                                 return (
                                     <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass()}`}>

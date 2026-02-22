@@ -298,7 +298,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                                 class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 rounded-md text-sm font-medium transition-all ${
                                     typeFilter() === type
                                         ? 'bg-blue-600 border border-blue-500 text-blue-400'
-                                        : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-500'
+                                        : 'bg-surface border border-border text-muted hover:border-border'  
                                 }`}
                                 onClick={() => setTypeFilter(type)}
                             >
@@ -334,7 +334,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                                     const badge = getTypeBadge(resource.type);
                                     return (
                                         <button
-                                            class={`w-full flex items-start sm:items-center gap-3 px-3 py-2 text-left transition-colors border-b border-slate-800 last:border-b-0 ${
+                                            class={`w-full flex items-start sm:items-center gap-3 px-3 py-2 text-left transition-colors border-b border-border last:border-b-0 ${
                                                 isSelected(resource.id)
                                                     ? 'bg-blue-600'
                                                     : 'hover:bg-slate-800'

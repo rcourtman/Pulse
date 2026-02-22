@@ -488,7 +488,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
  value={resourceId()}
  onInput={(event) => updateResourceId(event.currentTarget.value)}
  placeholder="resource identifier"
- class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${resourceIdError() ?'border-red-400 dark:border-red-500' : 'border-border' }`}
+ class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${resourceIdError() ?'border-red-400 dark:border-red-500' : 'border-border' }`}
                         />
                         <Show when={resourceIdError() !== ''}>
  <p class="text-xs text-red-600 dark:text-red-400">{resourceIdError()}</p>

@@ -529,7 +529,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </Show>
             <Show when={finding.status === 'active' && finding.loopState && !finding.investigationStatus && !finding.investigationOutcome}>
               <span
-                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${loopStateColors[finding.loopState!] || 'border-slate-200 bg-surface-alt dark:border-slate-700 text-muted'}`}
+                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${loopStateColors[finding.loopState!] || 'border-border bg-surface-alt text-muted'}`}
                 title={`Patrol loop: ${formatLoopState(finding.loopState!)}`}
               >
                 {formatLoopState(finding.loopState!)}
@@ -557,7 +557,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </Show>
             {/* Investigation outcome badge — replaces status badge when outcome is known */}
             <Show when={finding.investigationOutcome && finding.investigationStatus !== 'running' && finding.investigationStatus !== 'pending'}>
-              <span class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${investigationOutcomeColors[finding.investigationOutcome!] || 'border-slate-200 bg-surface-alt dark:border-slate-700 text-muted'}`}>
+              <span class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${investigationOutcomeColors[finding.investigationOutcome!] || 'border-border bg-surface-alt text-muted'}`}>
                 {investigationOutcomeLabels[finding.investigationOutcome!]}
               </span>
             </Show>

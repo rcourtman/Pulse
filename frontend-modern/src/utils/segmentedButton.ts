@@ -15,5 +15,5 @@ export const segmentedButtonClass = (selected: boolean, disabled = false): strin
   if (selected) {
     return `${base} bg-surface text-base-content shadow-sm ring-1 ring-gray-200 dark:ring-gray-600`;
   }
-  return `${base} text-muted hover:text-base-content hover:bg-slate-50 dark:hover:bg-slate-600`;
+  return `${base} text-muted hover:text-base-content hover:bg-surface-hover`;
 };
