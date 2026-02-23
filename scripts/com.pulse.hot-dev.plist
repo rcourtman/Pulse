@@ -9,11 +9,11 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Volumes/Development/pulse/repos/pulse/scripts/dev-launchd-wrapper.sh</string>
+        <string>/ABSOLUTE/PATH/TO/pulse/scripts/dev-launchd-wrapper.sh</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Volumes/Development/pulse/repos/pulse</string>
+    <string>/ABSOLUTE/PATH/TO/pulse</string>
 
     <key>RunAtLoad</key>
     <true/>
@@ -22,10 +22,10 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/Users/rcourtman/Library/Logs/Pulse/hot-dev.stdout.log</string>
+    <string>/tmp/pulse-hot-dev.stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/rcourtman/Library/Logs/Pulse/hot-dev.stderr.log</string>
+    <string>/tmp/pulse-hot-dev.stderr.log</string>
 
     <key>ThrottleInterval</key>
     <integer>5</integer>

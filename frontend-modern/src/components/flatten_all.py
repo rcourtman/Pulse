@@ -49,4 +49,6 @@ def process_file(file_path):
     except Exception as e:
         print(f"Error processing {file_path}: {e}")
 
-process_directory('/Volumes/Development/pulse/repos/pulse/frontend-modern/src')
+if __name__ == "__main__":
+    src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    process_directory(src_dir)

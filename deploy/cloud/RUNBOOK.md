@@ -124,8 +124,8 @@ cd deploy/cloud
 Defaults:
 
 - `DOMAIN=cloud.pulserelay.pro`
-- `SSH_TARGET=root@pulse-cloud`
-- `ADMIN_KEY_FILE=/Volumes/Development/pulse/secrets/cloud-cp/admin_key`
+- `SSH_TARGET=root@cloud-host`
+- `ADMIN_KEY_FILE=${XDG_CONFIG_HOME:-$HOME/.config}/pulse-cloud/admin_key`
 - `EXPECT_CP_ENV=production`
 - `EXPECT_STRIPE_MODE=live`
 - `CHECK_STRIPE_CHECKOUT_PROBE=false`
@@ -139,10 +139,10 @@ Use staging for full end-to-end hosted-signup and provisioning drills without re
 Recommended Stripe setup:
 - Use a dedicated Stripe Sandbox (for example: `Pulse Staging`)
 - Keep staging/test credentials separate from live credentials
-- Store local copies in:
-  - `/Volumes/Development/pulse/secrets/stripe/test_secret_key`
-  - `/Volumes/Development/pulse/secrets/stripe/test_price_id`
-  - `/Volumes/Development/pulse/secrets/stripe/test_webhook_secret`
+- Store local copies in your local secret store, for example:
+  - `${XDG_CONFIG_HOME:-$HOME/.config}/pulse-cloud/stripe/test_secret_key`
+  - `${XDG_CONFIG_HOME:-$HOME/.config}/pulse-cloud/stripe/test_price_id`
+  - `${XDG_CONFIG_HOME:-$HOME/.config}/pulse-cloud/stripe/test_webhook_secret`
 
 1. Create staging env file from template:
 
@@ -158,14 +158,15 @@ chmod 600 .env
 - `STRIPE_WEBHOOK_SECRET=whsec_...` (from Stripe test-mode webhook endpoint)
 - `CP_TRIAL_SIGNUP_PRICE_ID=price_...` (test-mode recurring price)
 
-If you run setup from the dev machine that has `/Volumes/Development/pulse/secrets`, you can populate `.env` safely:
+If your operator machine has local staging Stripe secret files, you can populate `.env` safely:
 
 ```bash
 cd /opt/pulse-cloud
+PULSE_STRIPE_SECRET_DIR="${PULSE_STRIPE_SECRET_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/pulse-cloud/stripe}"
 sudo sed -i "s|^CP_ENV=.*|CP_ENV=staging|" .env
-sudo sed -i "s|^STRIPE_API_KEY=.*|STRIPE_API_KEY=$(cat /Volumes/Development/pulse/secrets/stripe/test_secret_key)|" .env
-sudo sed -i "s|^CP_TRIAL_SIGNUP_PRICE_ID=.*|CP_TRIAL_SIGNUP_PRICE_ID=$(cat /Volumes/Development/pulse/secrets/stripe/test_price_id)|" .env
-sudo sed -i "s|^STRIPE_WEBHOOK_SECRET=.*|STRIPE_WEBHOOK_SECRET=$(cat /Volumes/Development/pulse/secrets/stripe/test_webhook_secret)|" .env
+sudo sed -i "s|^STRIPE_API_KEY=.*|STRIPE_API_KEY=$(cat "${PULSE_STRIPE_SECRET_DIR}/test_secret_key")|" .env
+sudo sed -i "s|^CP_TRIAL_SIGNUP_PRICE_ID=.*|CP_TRIAL_SIGNUP_PRICE_ID=$(cat "${PULSE_STRIPE_SECRET_DIR}/test_price_id")|" .env
+sudo sed -i "s|^STRIPE_WEBHOOK_SECRET=.*|STRIPE_WEBHOOK_SECRET=$(cat "${PULSE_STRIPE_SECRET_DIR}/test_webhook_secret")|" .env
 ```
 
 3. Run setup in staging mode:
@@ -184,7 +185,7 @@ cd deploy/cloud
 
 `preflight-staging.sh` defaults:
 - `DOMAIN=cloud-staging.pulserelay.pro`
-- `SSH_TARGET=root@pulse-cloud-staging`
+- `SSH_TARGET=root@cloud-staging-host`
 - `EXPECT_CP_ENV=staging`
 - `EXPECT_STRIPE_MODE=test`
 - `CHECK_STRIPE_CHECKOUT_PROBE=true`

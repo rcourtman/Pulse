@@ -30,6 +30,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 ROOT_DIR=$(cd "${SCRIPT_DIR}/.." && pwd -P)
+DEFAULT_PULSE_REPOS_DIR=$(cd "${ROOT_DIR}/.." && pwd -P)
 SCRIPT_PATH="${SCRIPT_DIR}/$(basename "${BASH_SOURCE[0]}")"
 SCRIPT_MTIME=$(stat -c %Y "${SCRIPT_PATH}" 2>/dev/null || stat -f %m "${SCRIPT_PATH}")
 
@@ -273,8 +274,8 @@ mkdir -p internal/api/frontend-modern/dist
 touch internal/api/frontend-modern/dist/index.html
 
 # Check if Pro module is available and use it for full audit logging support
-# Use PULSE_REPOS_DIR env var or default to /Volumes/Development/pulse/repos
-PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-/Volumes/Development/pulse/repos}"
+# Use PULSE_REPOS_DIR env var or default to the parent directory that contains sibling repos.
+PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-${DEFAULT_PULSE_REPOS_DIR}}"
 PRO_MODULE_DIR="${PULSE_REPOS_DIR}/pulse-enterprise"
 if [[ -d "${PRO_MODULE_DIR}" ]] && [[ ${HOT_DEV_USE_PRO:-true} == "true" ]]; then
     log_info "Building Pro binary (includes persistent audit logging)..."
@@ -567,7 +568,7 @@ log_info "Starting backend file watcher..."
         # Use the same build logic as the initial build
         local build_success=0
         local build_output
-        PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-/Volumes/Development/pulse/repos}"
+        PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-${DEFAULT_PULSE_REPOS_DIR}}"
         PRO_MODULE_DIR="${PULSE_REPOS_DIR}/pulse-enterprise"
         if [[ -d "${PRO_MODULE_DIR}" ]] && [[ ${HOT_DEV_USE_PRO:-true} == "true" ]]; then
             log_info "Building Pro binary..."
