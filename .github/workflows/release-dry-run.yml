@@ -113,7 +113,7 @@ jobs:
           npx playwright test tests/00-diagnostic.spec.ts --reporter=list
 
           echo "Running API-level update integration test..."
-          UPDATE_API_BASE_URL=http://localhost:7655 go test ../../tests/integration/api -run TestUpdateFlowIntegration -count=1
+          UPDATE_API_BASE_URL=http://localhost:7655 go test ./api -run TestUpdateFlowIntegration -count=1
 
           docker compose -f docker-compose.test.yml down -v
 

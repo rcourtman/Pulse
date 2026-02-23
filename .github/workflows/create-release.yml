@@ -290,7 +290,7 @@ jobs:
             sleep 2
           done
 
-          UPDATE_API_BASE_URL=http://localhost:7655 go test ../../tests/integration/api -run TestUpdateFlowIntegration -count=1
+          UPDATE_API_BASE_URL=http://localhost:7655 go test ./api -run TestUpdateFlowIntegration -count=1
           docker compose -f docker-compose.test.yml down -v
 
       - name: Cleanup
