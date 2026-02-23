@@ -23,6 +23,7 @@
     "test:coverage:ai": "vitest run --coverage --coverage.provider=v8 --coverage.thresholds.100 --coverage.thresholds.perFile --coverage.include=src/components/AI/aiChatUtils.ts",
     "type-check": "tsc --noEmit",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "lint:headers": "node scripts/header-audit.mjs",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
     "lint:cpd": "jscpd",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",

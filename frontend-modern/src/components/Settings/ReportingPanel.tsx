@@ -2,7 +2,7 @@ import { createSignal, For, Show, JSX } from 'solid-js';
 import FileText from 'lucide-solid/icons/file-text';
 import Download from 'lucide-solid/icons/download';
 import BarChart from 'lucide-solid/icons/bar-chart';
-import SettingsPanel from '@/components/shared/SettingsPanel';
+import OperationsPanel from '@/components/Settings/OperationsPanel';
 import { formField, formLabel, formHelpText, formControl } from '@/components/shared/Form';
 import { showSuccess, showWarning } from '@/utils/toast';
 import { apiFetch } from '@/utils/apiClient';
@@ -53,7 +53,6 @@ export function ReportingPanel() {
             let filename: string;
 
             if (resources.length === 1) {
-                // Single resource: use existing GET endpoint for backwards compatibility
                 const res = resources[0];
                 const params = new URLSearchParams({
                     resourceType: res.type,
@@ -71,9 +70,8 @@ export function ReportingPanel() {
                 response = await apiFetch(`/api/admin/reports/generate?${params.toString()}`);
                 filename = `report-${res.name}-${new Date().toISOString().split('T')[0]}.${format()}`;
             } else {
-                // Multiple resources: use POST multi endpoint
                 const body = {
-                    resources: resources.map(r => ({
+                    resources: resources.map((r) => ({
                         resourceType: r.type,
                         resourceId: r.id,
                     })),
@@ -118,15 +116,12 @@ export function ReportingPanel() {
 
     return (
         <div class="space-y-6">
-            <SettingsPanel
+            <OperationsPanel
                 title="Detailed Reporting"
                 description="Generate reports across infrastructure, workloads, storage, and backup resources."
                 icon={<BarChart class="w-5 h-5" strokeWidth={2} />}
-                noPadding
-                bodyClass="divide-y divide-border"
             >
                 <div class="space-y-6 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
-                    {/* Resource Picker */}
                     <FormField label="Resources" helpText="Select the resources to include in the report">
                         <ResourcePicker
                             selected={selectedResources}
@@ -193,7 +188,6 @@ export function ReportingPanel() {
                             </div>
                         </FormField>
                     </div>
-
                 </div>
 
                 <div class="flex justify-end p-4 sm:p-6 hover:bg-surface-hover transition-colors">
@@ -216,7 +210,7 @@ export function ReportingPanel() {
                         }
                     </button>
                 </div>
-            </SettingsPanel>
+            </OperationsPanel>
 
             <div class="rounded-md border border-blue-200 bg-blue-50 p-6 dark:border-blue-800 dark:bg-blue-900">
                 <div class="flex flex-col sm:flex-row gap-4">

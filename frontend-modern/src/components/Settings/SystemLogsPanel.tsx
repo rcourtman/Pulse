@@ -1,5 +1,5 @@
 import { Component, createSignal, onMount, onCleanup, For } from 'solid-js';
-import SettingsPanel from '@/components/shared/SettingsPanel';
+import OperationsPanel from '@/components/Settings/OperationsPanel';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
@@ -100,12 +100,10 @@ export const SystemLogsPanel: Component = () => {
 
     return (
         <div class="space-y-6">
-            <SettingsPanel
+            <OperationsPanel
                 title="System Logs"
                 description="Stream real-time system logs and download support bundles."
                 icon={<Terminal class="w-5 h-5" strokeWidth={2} />}
-                noPadding
-                bodyClass="divide-y divide-border"
             >
                 {/* Controls */}
                 <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
@@ -191,7 +189,7 @@ export const SystemLogsPanel: Component = () => {
                         </span>
                     </div>
                 </div>
-            </SettingsPanel>
+            </OperationsPanel>
         </div>
     );
 };

@@ -1,6 +1,7 @@
 import { For, Show, createMemo, createSignal, onMount } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
+import { PageHeader } from '@/components/shared/PageHeader';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import { getUpgradeActionUrlOrFallback, loadLicenseStatus, entitlements } from '@/stores/license';
 import { LicenseAPI } from '@/api/license';
@@ -173,12 +174,10 @@ export default function Pricing() {
 
  return (
  <div class="space-y-6">
- <div class="space-y-1">
- <h1 class="text-2xl font-semibold text-base-content">Pricing</h1>
- <p class="text-sm text-muted">
- Compare tiers and choose what fits.
- </p>
- </div>
+ <PageHeader
+ title="Pricing"
+ description="Compare tiers and choose what fits."
+ />
 
  <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
  <Card padding="lg" class="relative">

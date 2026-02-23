@@ -51,6 +51,7 @@ import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
 import { Card } from '@/components/shared/Card';
+import { PageHeader } from '@/components/shared/PageHeader';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
 import type { ToggleChangeEvent } from '@/components/shared/Toggle';
@@ -2154,10 +2155,10 @@ const Settings: Component<SettingsProps> = (props) => {
             <div class="space-y-6">
                 {/* Page header - no card wrapper for cleaner hierarchy */}
                 <div class="px-1">
-                    <h1 class="text-2xl font-bold text-base-content mb-2">
-                        {headerMeta().title}
-                    </h1>
-                    <p class="text-base text-muted">{headerMeta().description}</p>
+                    <PageHeader
+                        title={headerMeta().title}
+                        description={headerMeta().description}
+                    />
                 </div>
 
                 {/* Save notification bar - only show when there are unsaved changes */}

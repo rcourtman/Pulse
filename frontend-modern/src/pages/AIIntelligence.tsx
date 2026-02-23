@@ -49,6 +49,7 @@ import SparklesIcon from 'lucide-solid/icons/sparkles';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
+import { PageHeader } from '@/components/shared/PageHeader';
 import { TogglePrimitive, Toggle } from '@/components/shared/Toggle';
 import { ApprovalBanner, PatrolStatusBar, RunHistoryPanel, CountdownTimer } from '@/components/patrol';
 import { usePatrolStream } from '@/hooks/usePatrolStream';
@@ -700,56 +701,56 @@ export function AIIntelligence() {
     <div class="h-full flex flex-col bg-base">
       {/* Header */}
       <div class="flex-shrink-0 bg-surface border-b border-border px-4 py-3">
-        {/* Top row: Title and refresh */}
-        <div class="flex items-center justify-between gap-4 mb-3">
-          <div class="flex items-center gap-3">
-            <PulsePatrolLogo class="w-6 h-6 text-base-content" />
-            <div title="Pulse Patrol constantly monitors your infrastructure, investigates alerts, and can automatically fix issues based on your autonomy settings.">
-              <h1 class="text-lg font-semibold text-base-content">Patrol</h1>
-              <p class="text-sm text-muted">
-                Pulse Patrol monitoring and analysis
-              </p>
-            </div>
-          </div>
-
-          <div class="flex items-center gap-3">
-            {/* Last/Next patrol timing - only show if patrol has run */}
-            <Show when={patrolStatus()?.last_patrol_at}>
-              <div class="hidden sm:flex items-center gap-3 text-xs text-muted">
-                <span>Last: {formatRelativeTime(patrolStatus()?.last_patrol_at, { compact: true, emptyText: 'Never'})}</span>
- <Show when={patrolStatus()?.next_patrol_at}>
- <span class="text-muted">|</span>
- <CountdownTimer
- targetDate={patrolStatus()!.next_patrol_at!}
- prefix="Next run: "
- class="font-variant-numeric tabular-nums font-medium text-blue-600 dark:text-blue-400"
- />
- </Show>
- </div>
- </Show>
-
- {/* Run Patrol Button */}
- <button
- onClick={() => handleRunPatrol()}
- disabled={isTriggeringPatrol() || !canTriggerPatrol() || manualRunRequested() || patrolStream.isStreaming()}
- title={triggerPatrolDisabledReason()}
- class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-surface-alt disabled:text-muted rounded-md transition-colors"
- >
- <PlayIcon class={`w-4 h-4 ${(isTriggeringPatrol() || manualRunRequested() || patrolStream.isStreaming()) ?'animate-pulse' : ''}`} />
-              {isTriggeringPatrol() ? 'Starting…' : (manualRunRequested() || patrolStream.isStreaming()) ? 'Running…' : 'Run Patrol'}
-            </button>
-
-            {/* Refresh Button */}
-            <button
-              onClick={() => loadAllData()}
-              disabled={isRefreshing()}
-              class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50 transition-colors"
+        <PageHeader
+          id="patrol-title"
+          title={(
+            <span
+              class="inline-flex items-center gap-3"
+              title="Pulse Patrol constantly monitors your infrastructure, investigates alerts, and can automatically fix issues based on your autonomy settings."
             >
-              <RefreshCwIcon class={`w-4 h-4 ${isRefreshing() ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-          </div>
-        </div>
+              <PulsePatrolLogo class="w-6 h-6 text-base-content" />
+              <span>Patrol</span>
+            </span>
+          )}
+          description="Pulse Patrol monitoring and analysis"
+          class="mb-3"
+          actions={(
+            <div class="flex flex-wrap items-center justify-end gap-3">
+              <Show when={patrolStatus()?.last_patrol_at}>
+                <div class="hidden sm:flex items-center gap-3 text-xs text-muted">
+                  <span>Last: {formatRelativeTime(patrolStatus()?.last_patrol_at, { compact: true, emptyText: 'Never' })}</span>
+                  <Show when={patrolStatus()?.next_patrol_at}>
+                    <span class="text-muted">|</span>
+                    <CountdownTimer
+                      targetDate={patrolStatus()!.next_patrol_at!}
+                      prefix="Next run: "
+                      class="font-variant-numeric tabular-nums font-medium text-blue-600 dark:text-blue-400"
+                    />
+                  </Show>
+                </div>
+              </Show>
+
+              <button
+                onClick={() => handleRunPatrol()}
+                disabled={isTriggeringPatrol() || !canTriggerPatrol() || manualRunRequested() || patrolStream.isStreaming()}
+                title={triggerPatrolDisabledReason()}
+                class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-surface-alt disabled:text-muted rounded-md transition-colors"
+              >
+                <PlayIcon class={`w-4 h-4 ${(isTriggeringPatrol() || manualRunRequested() || patrolStream.isStreaming()) ? 'animate-pulse' : ''}`} />
+                {isTriggeringPatrol() ? 'Starting…' : (manualRunRequested() || patrolStream.isStreaming()) ? 'Running…' : 'Run Patrol'}
+              </button>
+
+              <button
+                onClick={() => loadAllData()}
+                disabled={isRefreshing()}
+                class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50 transition-colors"
+              >
+                <RefreshCwIcon class={`w-4 h-4 ${isRefreshing() ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
+          )}
+        />
 
         {/* Settings row - Simplified for Enterprise Feel */}
         <div class="flex items-center gap-4 mt-2 mb-1">

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from '@solidjs/router';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Card } from '@/components/shared/Card';
 import { SearchInput } from '@/components/shared/SearchInput';
+import { PageHeader } from '@/components/shared/PageHeader';
 import { MigrationNoticeBanner } from '@/components/shared/MigrationNoticeBanner';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
@@ -337,6 +338,11 @@ export function Infrastructure() {
 
  return (
  <div data-testid="infrastructure-page" class="space-y-4">
+ <PageHeader
+ id="infrastructure-title"
+ title="Infrastructure"
+ description="Unified inventory across platforms with filtering, grouping, and health context."
+ />
  <Show when={!loading() || initialLoadComplete()} fallback={
  <div class="space-y-3 animate-pulse pointer-events-none select-none">
  <div class="hidden lg:block h-[124px] w-full bg-surface-alt rounded-md border border-border"></div>

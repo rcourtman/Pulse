@@ -3,6 +3,7 @@ import { apiFetchJSON } from '@/utils/apiClient';
 import { showSuccess, showError } from '@/utils/toast';
 import { formatRelativeTime } from '@/utils/format';
 import { Card } from '@/components/shared/Card';
+import OperationsPanel from '@/components/Settings/OperationsPanel';
 import Activity from 'lucide-solid/icons/activity';
 import Server from 'lucide-solid/icons/server';
 import HardDrive from 'lucide-solid/icons/hard-drive';
@@ -393,47 +394,33 @@ export const DiagnosticsPanel: Component = () => {
     return (
         <div class="space-y-6">
             {/* Header Card */}
-            <Card
-                padding="none"
-                class="overflow-hidden border border-border"
-                border={false}
-            >
-                <div class="px-3 py-3 sm:px-6 sm:py-4 border-b border-border bg-surface-alt">
-                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        <div class="flex items-center gap-3 sm:gap-4">
-                            <div class="text-muted flex-shrink-0">
-                                <Activity class="w-5 h-5 sm:w-5 sm:h-5" />
+            <OperationsPanel
+                title="System Diagnostics"
+                description="Connection health, configuration status, and troubleshooting tools"
+                icon={<Activity class="w-5 h-5 sm:w-5 sm:h-5" />}
+                action={
+                    <div class="flex items-center justify-between sm:justify-end gap-3 flex-wrap">
+                        <Show when={diagnosticsData()}>
+                            <div class="text-left sm:text-right text-xs text-muted">
+                                <div>Version {diagnosticsData()?.version}</div>
+                                <div>Uptime: {formatUptime(diagnosticsData()?.uptime || 0)}</div>
                             </div>
-                            <div class="min-w-0">
-                                <h2 class="text-base sm:text-lg font-semibold text-base-content">System Diagnostics</h2>
-                                <p class="text-xs sm:text-sm hidden sm:block text-muted">
-                                    Connection health, configuration status, and troubleshooting tools
-                                </p>
-                            </div>
-                        </div>
-                        <div class="flex items-center justify-between sm:justify-end gap-3 flex-wrap">
-                            <Show when={diagnosticsData()}>
-                                <div class="text-left sm:text-right text-xs text-muted">
-                                    <div>Version {diagnosticsData()?.version}</div>
-                                    <div>Uptime: {formatUptime(diagnosticsData()?.uptime || 0)}</div>
-                                </div>
-                            </Show>
-                            <button
-                                type="button"
-                                onClick={runDiagnostics}
-                                disabled={loading()}
-                                class="flex min-h-10 sm:min-h-9 min-w-10 items-center gap-2 px-3 sm:px-4 py-2.5 rounded-md font-medium text-sm transition-colors whitespace-nowrap bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:bg-surface disabled:text-muted"
-                            >
-                                <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
-                                <span class="sm:hidden">{loading() ? '...' : 'Run'}</span>
-                                <span class="hidden sm:inline">{loading() ? 'Running...' : 'Run Diagnostics'}</span>
-                            </button>
-                        </div>
+                        </Show>
+                        <button
+                            type="button"
+                            onClick={runDiagnostics}
+                            disabled={loading()}
+                            class="flex min-h-10 sm:min-h-9 min-w-10 items-center gap-2 px-3 sm:px-4 py-2.5 rounded-md font-medium text-sm transition-colors whitespace-nowrap bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:bg-surface disabled:text-muted"
+                        >
+                            <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
+                            <span class="sm:hidden">{loading() ? '...' : 'Run'}</span>
+                            <span class="hidden sm:inline">{loading() ? 'Running...' : 'Run Diagnostics'}</span>
+                        </button>
                     </div>
-                </div>
-
+                }
+            >
                 {/* Quick Actions */}
-                <div class="px-4 sm:px-6 py-3 sm:py-4 bg-surface-alt border-t border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div class="px-4 sm:px-6 py-3 sm:py-4 hover:bg-surface-hover transition-colors flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <p class="text-xs text-muted">
                         Test all connections and inspect runtime configuration
                     </p>
@@ -460,7 +447,7 @@ export const DiagnosticsPanel: Component = () => {
                         </div>
                     </Show>
                 </div>
-            </Card>
+            </OperationsPanel>
 
             {/* Diagnostics Content */}
             <Show when={diagnosticsData()} fallback={

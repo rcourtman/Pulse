@@ -1,4 +1,4 @@
-import { Component, createEffect, createSignal, onMount, Show, For } from 'solid-js';
+import { Component, createEffect, createMemo, createSignal, onMount, Show, For } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { RBACAPI } from '@/api/rbac';
 import type { Role, Permission } from '@/types/rbac';
@@ -29,13 +29,24 @@ export const RolesPanel: Component = () => {
     const [formName, setFormName] = createSignal('');
     const [formDescription, setFormDescription] = createSignal('');
     const [formPermissions, setFormPermissions] = createSignal<Permission[]>([]);
+    const rbacEnabled = createMemo(() => licenseLoaded() && hasFeature('rbac'));
 
     const loadRoles = async () => {
+        if (!rbacEnabled()) {
+            setRoles([]);
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         try {
             const data = await RBACAPI.getRoles();
             setRoles(data || []);
         } catch (err) {
+            if (err instanceof Error && /feature not included in license/i.test(err.message)) {
+                setRoles([]);
+                return;
+            }
             logger.error('Failed to load roles', err);
             notificationStore.error('Failed to load roles');
         } finally {
@@ -44,8 +55,20 @@ export const RolesPanel: Component = () => {
     };
 
     onMount(() => {
-        loadLicenseStatus();
-        loadRoles();
+        void loadLicenseStatus();
+    });
+
+    createEffect(() => {
+        if (!licenseLoaded()) {
+            setLoading(true);
+            return;
+        }
+        if (!hasFeature('rbac')) {
+            setRoles([]);
+            setLoading(false);
+            return;
+        }
+        void loadRoles();
     });
 
     createEffect((wasPaywallVisible) => {
@@ -144,6 +167,7 @@ export const RolesPanel: Component = () => {
                     <button
                         type="button"
                         onClick={handleCreate}
+                        disabled={!rbacEnabled()}
                         class="inline-flex w-full sm:w-auto min-h-10 sm:min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
                     >
                         <Plus class="w-4 h-4" />
@@ -182,7 +206,7 @@ export const RolesPanel: Component = () => {
                     </div>
                 </Show>
 
-                <Show when={!loading()}>
+                <Show when={!loading() && rbacEnabled()}>
                     <div class="w-full overflow-x-auto">
                         <PulseDataGrid
                             data={roles()}

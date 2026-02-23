@@ -5,6 +5,7 @@ import { useResources } from '@/hooks/useResources';
 import { Card } from '@/components/shared/Card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { PageHeader } from '@/components/shared/PageHeader';
 import type { CephCluster, CephPool, CephServiceStatus } from '@/types/api';
 import { formatBytes } from '@/utils/format';
 import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
@@ -388,6 +389,11 @@ const Ceph: Component = () => {
 
  return (
  <div class="space-y-4">
+ <PageHeader
+ id="ceph-title"
+ title="Ceph"
+ description="Cluster health, services, pools, and capacity across connected storage nodes."
+ />
  {/* Navigation */}
 
  {/* Loading State */}

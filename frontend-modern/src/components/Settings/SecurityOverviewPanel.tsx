@@ -1,6 +1,7 @@
 import { Component, Show, Accessor } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
+import SettingsPanel from '@/components/shared/SettingsPanel';
 import { SecurityPostureSummary } from './SecurityPostureSummary';
 import Shield from 'lucide-solid/icons/shield';
 import Info from 'lucide-solid/icons/info';
@@ -131,26 +132,18 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
 
       {/* Security Tips Card */}
       <Show when={!props.securityStatusLoading() && props.securityStatus()}>
-        <Card
-          padding="md"
-          class="border border-border bg-surface-alt"
-          border={false}
+        <SettingsPanel
+          title="Security Best Practices"
+          description="Recommended hardening actions for production deployments."
+          icon={<Info class="w-5 h-5" strokeWidth={2} />}
         >
-          <div class="flex items-start gap-3">
-            <div class="p-1.5 bg-surface-hover rounded-md flex-shrink-0">
-              <Info class="w-4 h-4 text-muted" />
-            </div>
-            <div class="text-xs text-muted">
-              <p class="font-medium text-base-content mb-1">Security Best Practices</p>
-              <ul class="space-y-0.5 list-disc list-inside">
-                <li>Enable HTTPS via a reverse proxy for encrypted connections</li>
-                <li>Use strong, unique passwords and rotate credentials regularly</li>
-                <li>Consider SSO/OIDC for centralized team authentication</li>
-                <li>Review API token scopes and remove unused tokens</li>
-              </ul>
-            </div>
-          </div>
-        </Card>
+          <ul class="space-y-1.5 list-disc list-inside text-sm text-muted">
+            <li>Enable HTTPS via a reverse proxy for encrypted connections</li>
+            <li>Use strong, unique passwords and rotate credentials regularly</li>
+            <li>Consider SSO/OIDC for centralized team authentication</li>
+            <li>Review API token scopes and remove unused tokens</li>
+          </ul>
+        </SettingsPanel>
       </Show>
     </div>
   );

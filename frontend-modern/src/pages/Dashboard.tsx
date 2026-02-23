@@ -9,6 +9,7 @@ import type { HistoryTimeRange } from '@/api/charts';
 import type { Alert } from '@/types/api';
 import { DashboardHero, RecentAlertsPanel, TrendCharts, DashboardCustomizer } from './DashboardPanels';
 import type { DashboardWidgetDef, DashboardWidgetId } from './DashboardPanels/dashboardWidgets';
+import { PageHeader } from '@/components/shared/PageHeader';
 
 
 export default function Dashboard() {
@@ -133,36 +134,36 @@ export default function Dashboard() {
 
   return (
     <main data-testid="dashboard-page" aria-labelledby="dashboard-title" class="space-y-6">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
-        <div class="flex items-center gap-4">
-          <div>
-            <div class="flex items-center gap-3">
-              <h1 id="dashboard-title" class="text-2xl font-bold text-base-content tracking-tight">System Overview</h1>
-              <Show when={connected()}>
-                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-semibold tracking-wide uppercase dark:bg-emerald-900 dark:border-emerald-800 dark:text-emerald-400">
-                  <span class="relative flex h-1.5 w-1.5">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-                  </span>
-                  Live
-                </span>
-              </Show>
-            </div>
-            <p class="text-sm text-muted mt-1 font-medium">Real-time status and resource utilization across environments.</p>
+      <PageHeader
+        id="dashboard-title"
+        title="System Overview"
+        description="Real-time status and resource utilization across environments."
+        class="pb-2"
+        titleMeta={
+          <Show when={connected()}>
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-semibold tracking-wide uppercase dark:bg-emerald-900 dark:border-emerald-800 dark:text-emerald-400">
+              <span class="relative flex h-1.5 w-1.5">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+              </span>
+              Live
+            </span>
+          </Show>
+        }
+        actions={(
+          <div class="flex items-center gap-3 self-start sm:self-auto">
+            <DashboardCustomizer
+              allWidgets={layout.allWidgetsOrdered}
+              isHidden={layout.isHidden}
+              toggleWidget={layout.toggleWidget}
+              moveUp={layout.moveUp}
+              moveDown={layout.moveDown}
+              resetToDefaults={layout.resetToDefaults}
+              isDefault={layout.isDefault}
+            />
           </div>
-        </div>
-        <div class="flex items-center gap-3 self-start sm:self-auto">
-          <DashboardCustomizer
-            allWidgets={layout.allWidgetsOrdered}
-            isHidden={layout.isHidden}
-            toggleWidget={layout.toggleWidget}
-            moveUp={layout.moveUp}
-            moveDown={layout.moveDown}
-            resetToDefaults={layout.resetToDefaults}
-            isDefault={layout.isDefault}
-          />
-        </div>
-      </div>
+        )}
+      />
 
       <Switch>
         <Match when={isLoading() && !initialLoadComplete()}>

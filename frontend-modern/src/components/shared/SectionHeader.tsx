@@ -42,18 +42,18 @@ export function SectionHeader(props: SectionHeaderProps) {
   return (
     <div class={`flex flex-col gap-1 ${alignmentClass} ${local.class ?? ''}`.trim()} {...rest}>
       <Show when={local.label}>
-        <span class="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-muted">
+        <span class="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-muted dark:text-slate-300">
           {local.label}
         </span>
       </Show>
       <h2
-        class={`${sizeClass()} font-medium text-base-content ${local.titleClass ?? ''}`.trim()}
+        class={`${sizeClass()} font-semibold text-base-content dark:text-slate-100 ${local.titleClass ?? ''}`.trim()}
       >
         {local.title}
       </h2>
       <Show when={local.description}>
         <p
-          class={`text-xs sm:text-sm text-muted ${local.descriptionClass ?? ''}`.trim()}
+          class={`text-xs sm:text-sm text-muted dark:text-slate-200 ${local.descriptionClass ?? ''}`.trim()}
         >
           {local.description}
         </p>

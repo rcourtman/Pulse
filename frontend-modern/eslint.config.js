@@ -162,5 +162,25 @@ export default tseslint.config(
             ],
         },
     },
+    {
+        files: [
+            "src/components/Settings/DiagnosticsPanel.tsx",
+            "src/components/Settings/ReportingPanel.tsx",
+            "src/components/Settings/SystemLogsPanel.tsx",
+        ],
+        rules: {
+            "no-restricted-imports": [
+                "error",
+                {
+                    paths: [
+                        {
+                            name: "@/components/shared/SettingsPanel",
+                            message: "Use @/components/Settings/OperationsPanel so Operations tab headers remain consistent.",
+                        },
+                    ],
+                },
+            ],
+        },
+    },
     prettier
 );

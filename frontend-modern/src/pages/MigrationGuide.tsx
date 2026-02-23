@@ -1,6 +1,7 @@
 import { For } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
+import { PageHeader } from '@/components/shared/PageHeader';
 import { LEGACY_REDIRECTS } from '@/routing/legacyRedirects';
 import { LEGACY_ROUTE_MIGRATION_METADATA } from '@/routing/legacyRouteMetadata';
 
@@ -54,11 +55,15 @@ export function MigrationGuide() {
  return (
  <div class="space-y-4">
  <Card class="p-5">
- <h1 class="text-base font-semibold text-base-content">Navigation Migration Guide</h1>
- <p class="mt-2 text-sm text-muted">
+ <PageHeader
+ title="Navigation Migration Guide"
+ description={(
+ <>
  Pulse now uses a resource-first layout: Infrastructure, Workloads, Storage, and Recovery.
  Legacy URLs still redirect for compatibility, but this guide shows the canonical destinations.
- </p>
+ </>
+ )}
+ />
  <div class="mt-3 text-xs text-muted space-y-1">
  <div class="font-medium text-base-content">Why change?</div>
  <div>

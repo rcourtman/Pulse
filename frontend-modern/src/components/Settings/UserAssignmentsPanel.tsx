@@ -27,8 +27,16 @@ export const UserAssignmentsPanel: Component = () => {
 
     // Form state
     const [formRoleIds, setFormRoleIds] = createSignal<string[]>([]);
+    const rbacEnabled = createMemo(() => licenseLoaded() && hasFeature('rbac'));
 
     const loadData = async () => {
+        if (!rbacEnabled()) {
+            setAssignments([]);
+            setRoles([]);
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         try {
             const [usersData, rolesData] = await Promise.all([
@@ -38,6 +46,11 @@ export const UserAssignmentsPanel: Component = () => {
             setAssignments(usersData || []);
             setRoles(rolesData || []);
         } catch (err) {
+            if (err instanceof Error && /feature not included in license/i.test(err.message)) {
+                setAssignments([]);
+                setRoles([]);
+                return;
+            }
             logger.error('Failed to load user assignments', err);
             notificationStore.error('Failed to load user assignments');
         } finally {
@@ -46,8 +59,21 @@ export const UserAssignmentsPanel: Component = () => {
     };
 
     onMount(() => {
-        loadLicenseStatus();
-        loadData();
+        void loadLicenseStatus();
+    });
+
+    createEffect(() => {
+        if (!licenseLoaded()) {
+            setLoading(true);
+            return;
+        }
+        if (!hasFeature('rbac')) {
+            setAssignments([]);
+            setRoles([]);
+            setLoading(false);
+            return;
+        }
+        void loadData();
     });
 
     createEffect((wasPaywallVisible) => {
@@ -72,11 +98,19 @@ export const UserAssignmentsPanel: Component = () => {
     };
 
     const loadUserPermissions = async (username: string) => {
+        if (!rbacEnabled()) {
+            setUserPermissions([]);
+            return;
+        }
         setLoadingPermissions(true);
         try {
             const perms = await RBACAPI.getUserPermissions(username);
             setUserPermissions(perms || []);
         } catch (err) {
+            if (err instanceof Error && /feature not included in license/i.test(err.message)) {
+                setUserPermissions([]);
+                return;
+            }
             logger.error('Failed to load user permissions', err);
         } finally {
             setLoadingPermissions(false);
@@ -128,6 +162,7 @@ export const UserAssignmentsPanel: Component = () => {
                             placeholder="Search users..."
                             value={searchQuery()}
                             onInput={(e) => setSearchQuery(e.currentTarget.value)}
+                            disabled={!rbacEnabled()}
                             class="min-h-10 sm:min-h-9 pl-9 pr-3 py-2.5 text-sm rounded-md border border-border bg-surface text-base-content focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
                         />
                     </div>
@@ -164,7 +199,7 @@ export const UserAssignmentsPanel: Component = () => {
  </div>
  </Show>
 
- <Show when={!loading() && filteredAssignments().length === 0}>
+                <Show when={!loading() && rbacEnabled() && filteredAssignments().length === 0}>
  <div class="text-center py-12 px-6">
  <Users class="w-12 h-12 mx-auto text-slate-300 mb-4" />
  <h4 class="text-base font-medium text-base-content mb-2">No users yet</h4>
@@ -183,7 +218,7 @@ export const UserAssignmentsPanel: Component = () => {
                     </div>
                 </Show>
 
-                <Show when={!loading() && filteredAssignments().length > 0}>
+                <Show when={!loading() && rbacEnabled() && filteredAssignments().length > 0}>
                     <div class="w-full overflow-x-auto">
                         <PulseDataGrid
                             data={filteredAssignments()}

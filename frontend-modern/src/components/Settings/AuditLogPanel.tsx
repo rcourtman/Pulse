@@ -10,6 +10,7 @@ import X from 'lucide-solid/icons/x';
 import ShieldAlert from 'lucide-solid/icons/shield-alert';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import Toggle from '@/components/shared/Toggle';
+import SettingsPanel from '@/components/shared/SettingsPanel';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import {
     createLocalStorageBooleanSignal,
@@ -111,8 +112,18 @@ export default function AuditLogPanel() {
     const [cancelVerifyAll, setCancelVerifyAll] = createSignal(false);
     const [verifyCanceled, setVerifyCanceled] = createSignal(false);
     const [verifyControllers, setVerifyControllers] = createSignal<Record<string, AbortController>>({});
+    const auditLoggingEnabled = createMemo(() => licenseLoaded() && hasFeature('audit_logging'));
 
     const fetchAuditEvents = async (options?: { limit?: number; offset?: number }) => {
+        if (!auditLoggingEnabled()) {
+            setEvents([]);
+            setTotalEvents(0);
+            setIsPersistent(false);
+            setError(null);
+            setLoading(false);
+            return;
+        }
+
         const limit = options?.limit ?? pageSize();
         const offset = options?.offset ?? pageOffset();
 
@@ -132,6 +143,13 @@ export default function AuditLogPanel() {
             if (successFilter() === 'failed') params.set('success', 'false');
 
             const response = await apiFetch(`/api/audit?${params.toString()}`);
+            if (response.status === 402) {
+                setEvents([]);
+                setTotalEvents(0);
+                setIsPersistent(false);
+                setError(null);
+                return;
+            }
             if (!response.ok) {
                 throw new Error(`Failed to fetch audit events: ${response.statusText}`);
             }
@@ -157,6 +175,13 @@ export default function AuditLogPanel() {
             }
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Unknown error';
+            if (typeof msg === 'string' && /feature not included in license/i.test(msg)) {
+                setEvents([]);
+                setTotalEvents(0);
+                setIsPersistent(false);
+                setError(null);
+                return;
+            }
             setError(msg);
             showWarning('Audit Log Error', msg);
         } finally {
@@ -165,6 +190,7 @@ export default function AuditLogPanel() {
     };
 
     const verifyEvent = async (event: AuditEvent) => {
+        if (!auditLoggingEnabled()) return;
         if (!event.signature) return;
         setVerifying((prev) => ({ ...prev, [event.id]: true }));
         try {
@@ -212,6 +238,7 @@ export default function AuditLogPanel() {
     };
 
     const verifyAllEvents = async (options?: { limit?: number; showToast?: boolean; resume?: boolean }) => {
+        if (!auditLoggingEnabled()) return;
         const limit = options?.limit;
         let signedEvents = events().filter((event) => event.signature);
         if (options?.resume) {
@@ -290,8 +317,23 @@ export default function AuditLogPanel() {
 
     onMount(() => {
         setIsMounted(true);
-        loadLicenseStatus();
-        fetchAuditEvents();
+        void loadLicenseStatus();
+    });
+
+    createEffect(() => {
+        if (!licenseLoaded()) {
+            setLoading(true);
+            return;
+        }
+        if (!hasFeature('audit_logging')) {
+            setEvents([]);
+            setTotalEvents(0);
+            setIsPersistent(false);
+            setError(null);
+            setLoading(false);
+            return;
+        }
+        void fetchAuditEvents();
     });
 
     createEffect(() => {
@@ -457,62 +499,64 @@ export default function AuditLogPanel() {
 
     return (
         <div class="space-y-6">
-            {/* Header */}
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div class="flex items-center gap-3">
-                    <Shield class="w-6 h-6 text-slate-500" />
-                    <h2 class="text-xl font-semibold text-base-content">Audit Log</h2>
-                </div>
-                <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-                    <button
-                        onClick={() => fetchAuditEvents()}
-                        disabled={loading()}
-                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
-                    >
-                        <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
-                        Refresh
-                    </button>
-                    <button
-                        onClick={() => verifyAllEvents({ showToast: true })}
-                        disabled={!isPersistent() || loading() || verifyingAll() || !hasSignedEvents()}
-                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-md hover:bg-blue-100 dark:hover:bg-blue-800 disabled:opacity-50"
-                    >
-                        <CheckCircle class="w-4 h-4" />
-                        {verifyAllLabel()}
-                    </button>
-                    <button
-                        onClick={() => setCancelVerifyAll(true)}
-                        disabled={!verifyingAll()}
-                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-muted bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        onClick={() => verifyAllEvents({ showToast: true, resume: true })}
-                        disabled={verifyingAll() || !hasResumeEvents()}
-                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-muted bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
-                        onMouseEnter={(e) => {
-                            if (!hasResumeEvents()) return;
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            showTooltip(
-                                'Retries failed, error, or unchecked signatures on this page.',
-                                rect.left + rect.width / 2,
-                                rect.top,
-                                { align: 'center', direction: 'up', maxWidth: 260 },
-                            );
-                        }}
-                        onMouseLeave={() => hideTooltip()}
-                    >
-                        <Play class="w-4 h-4" />
-                        Resume{resumeCount() > 0 ? ` (${resumeCount()})` : ''}
-                    </button>
-                    <Show when={verifyCanceled() && !verifyingAll()}>
-                        <span class="text-xs text-amber-600 dark:text-amber-400">
-                            Verification canceled
-                        </span>
-                    </Show>
-                </div>
-            </div>
+            <SettingsPanel
+                title="Audit Log"
+                description="Persistent, searchable audit events with optional signature verification."
+                icon={<Shield class="w-5 h-5" strokeWidth={2} />}
+                noPadding
+                bodyClass="space-y-6 p-4 sm:p-6"
+                action={(
+                    <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                        <button
+                            onClick={() => fetchAuditEvents()}
+                            disabled={loading() || !auditLoggingEnabled()}
+                            class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
+                        >
+                            <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
+                            Refresh
+                        </button>
+                        <button
+                            onClick={() => verifyAllEvents({ showToast: true })}
+                            disabled={!isPersistent() || loading() || verifyingAll() || !hasSignedEvents()}
+                            class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-md hover:bg-blue-100 dark:hover:bg-blue-800 disabled:opacity-50"
+                        >
+                            <CheckCircle class="w-4 h-4" />
+                            {verifyAllLabel()}
+                        </button>
+                        <button
+                            onClick={() => setCancelVerifyAll(true)}
+                            disabled={!verifyingAll()}
+                            class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-muted bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={() => verifyAllEvents({ showToast: true, resume: true })}
+                            disabled={verifyingAll() || !hasResumeEvents()}
+                            class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-muted bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
+                            onMouseEnter={(e) => {
+                                if (!hasResumeEvents()) return;
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                showTooltip(
+                                    'Retries failed, error, or unchecked signatures on this page.',
+                                    rect.left + rect.width / 2,
+                                    rect.top,
+                                    { align: 'center', direction: 'up', maxWidth: 260 },
+                                );
+                            }}
+                            onMouseLeave={() => hideTooltip()}
+                        >
+                            <Play class="w-4 h-4" />
+                            Resume{resumeCount() > 0 ? ` (${resumeCount()})` : ''}
+                        </button>
+                        <Show when={verifyCanceled() && !verifyingAll()}>
+                            <span class="text-xs text-amber-600 dark:text-amber-400">
+                                Verification canceled
+                            </span>
+                        </Show>
+                    </div>
+                )}
+            >
 
             {/* Upgrade CTA */}
             <Show when={licenseLoaded() && !hasFeature('audit_logging') && !loading()}>
@@ -976,6 +1020,7 @@ export default function AuditLogPanel() {
                     </div>
                 </div>
             </Show>
+            </SettingsPanel>
         </div>
     );
 }

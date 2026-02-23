@@ -8,6 +8,7 @@ import TerminalIcon from 'lucide-solid/icons/terminal';
 import { DiagnosticsPanel } from '@/components/Settings/DiagnosticsPanel';
 import { ReportingPanel } from '@/components/Settings/ReportingPanel';
 import { SystemLogsPanel } from '@/components/Settings/SystemLogsPanel';
+import { PageHeader } from '@/components/shared/PageHeader';
 
 type OperationsTabId = 'diagnostics' | 'reporting' | 'logs';
 
@@ -56,10 +57,11 @@ export const OperationsPage: Component = () => {
 
     return (
         <div class="space-y-6">
-            <div class="mb-4">
-                <h1 class="text-3xl font-bold tracking-tight text-base-content mb-2">Operations</h1>
-                <p class="text-muted mt-1">Platform diagnostics, system logs, and data exports.</p>
-            </div>
+            <PageHeader
+                title="Operations"
+                description="Platform diagnostics, system logs, and data exports."
+                class="mb-4"
+            />
 
             {/* Modern Tabs Navigation */}
             <div class="mb-6">

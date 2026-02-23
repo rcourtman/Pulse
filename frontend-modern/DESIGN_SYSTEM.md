@@ -10,6 +10,9 @@ This document outlines the standard UI primitives, tokens, and components that c
 
 ## Enforcement
 - `npm run lint` is a hard gate for design-system regressions in `src/components` and `src/pages`.
+- `npm run lint:headers` audits header composition and page-level header usage policy.
+- Routed surfaces must use shared header primitives (`PageHeader`, `SectionHeader`, `SettingsPanel`, `OperationsPanel`) instead of raw `<h1>` markup.
+- Only explicit non-visual route wrappers are exempt from header primitive requirements.
 - CI must fail on:
   - orphaned utility prefixes (for example `dark:hover:` or `group-hover:` with no class after them)
   - `dark:bg-white` / `dark:hover:bg-white`

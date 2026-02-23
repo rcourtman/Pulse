@@ -113,6 +113,9 @@ jobs:
       - name: Lint frontend
         run: npm --prefix frontend-modern run lint
 
+      - name: Audit header composition
+        run: npm --prefix frontend-modern run lint:headers
+
       - name: Check frontend copy-paste duplication
         run: npm --prefix frontend-modern run lint:cpd
 
