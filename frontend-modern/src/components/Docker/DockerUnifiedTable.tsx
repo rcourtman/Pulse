@@ -1093,7 +1093,7 @@ const DockerContainerRow: Component<{
               value={cpuPercent()}
               type="cpu"
               resourceId={metricsKey}
-              isRunning={isRunning() && (container.cpuPercent ?? 0) > 0}
+              isRunning={isRunning()}
               showMobile={false}
               class="w-full"
             />
