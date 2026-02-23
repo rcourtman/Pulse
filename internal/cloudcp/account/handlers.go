@@ -163,17 +163,17 @@ func HandleInviteMember(reg *registry.TenantRegistry) http.HandlerFunc {
 			return
 		}
 		actorRole, hasActorRole := requestActorRole(r)
-		if hasActorRole && !actorCanManageAccount(actorRole) {
+		if !hasActorRole || !actorCanManageAccount(actorRole) {
 			auditEvent(r, "cp_account_member_invite", "failure").
 				Str("account_id", accountID).
 				Str("email", email).
 				Str("actor_role", string(actorRole)).
-				Str("reason", "insufficient_role").
+				Str("reason", "missing_or_insufficient_role").
 				Msg("Account member invite failed")
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		if hasActorRole && role == registry.MemberRoleOwner && actorRole != registry.MemberRoleOwner {
+		if role == registry.MemberRoleOwner && actorRole != registry.MemberRoleOwner {
 			auditEvent(r, "cp_account_member_invite", "failure").
 				Str("account_id", accountID).
 				Str("email", email).
@@ -311,12 +311,12 @@ func HandleUpdateMemberRole(reg *registry.TenantRegistry) http.HandlerFunc {
 			return
 		}
 		actorRole, hasActorRole := requestActorRole(r)
-		if hasActorRole && !actorCanManageAccount(actorRole) {
+		if !hasActorRole || !actorCanManageAccount(actorRole) {
 			auditEvent(r, "cp_account_member_role_update", "failure").
 				Str("account_id", accountID).
 				Str("user_id", userID).
 				Str("actor_role", string(actorRole)).
-				Str("reason", "insufficient_role").
+				Str("reason", "missing_or_insufficient_role").
 				Msg("Account member role update failed")
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
@@ -364,7 +364,7 @@ func HandleUpdateMemberRole(reg *registry.TenantRegistry) http.HandlerFunc {
 			return
 		}
 
-		if hasActorRole && (role == registry.MemberRoleOwner || existing.Role == registry.MemberRoleOwner) && actorRole != registry.MemberRoleOwner {
+		if (role == registry.MemberRoleOwner || existing.Role == registry.MemberRoleOwner) && actorRole != registry.MemberRoleOwner {
 			auditEvent(r, "cp_account_member_role_update", "failure").
 				Str("account_id", accountID).
 				Str("user_id", userID).
@@ -478,12 +478,12 @@ func HandleRemoveMember(reg *registry.TenantRegistry) http.HandlerFunc {
 			return
 		}
 		actorRole, hasActorRole := requestActorRole(r)
-		if hasActorRole && !actorCanManageAccount(actorRole) {
+		if !hasActorRole || !actorCanManageAccount(actorRole) {
 			auditEvent(r, "cp_account_member_remove", "failure").
 				Str("account_id", accountID).
 				Str("user_id", userID).
 				Str("actor_role", string(actorRole)).
-				Str("reason", "insufficient_role").
+				Str("reason", "missing_or_insufficient_role").
 				Msg("Account member removal failed")
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
@@ -511,7 +511,7 @@ func HandleRemoveMember(reg *registry.TenantRegistry) http.HandlerFunc {
 		}
 
 		if m.Role == registry.MemberRoleOwner {
-			if hasActorRole && actorRole != registry.MemberRoleOwner {
+			if actorRole != registry.MemberRoleOwner {
 				auditEvent(r, "cp_account_member_remove", "failure").
 					Str("account_id", accountID).
 					Str("user_id", userID).

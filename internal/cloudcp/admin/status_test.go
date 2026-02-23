@@ -148,6 +148,49 @@ func TestAdminKeyMiddleware(t *testing.T) {
 		}
 	})
 
+	t.Run("injects default owner role when missing", func(t *testing.T) {
+		roleSeen := ""
+		inspect := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			roleSeen = r.Header.Get("X-User-Role")
+			w.WriteHeader(http.StatusOK)
+		})
+		h := AdminKeyMiddleware("secret-key", inspect)
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/tenants", nil)
+		req.Header.Set("X-Admin-Key", "secret-key")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		if roleSeen != string(registry.MemberRoleOwner) {
+			t.Fatalf("X-User-Role = %q, want %q", roleSeen, registry.MemberRoleOwner)
+		}
+	})
+
+	t.Run("preserves explicit caller role header", func(t *testing.T) {
+		roleSeen := ""
+		inspect := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			roleSeen = r.Header.Get("X-User-Role")
+			w.WriteHeader(http.StatusOK)
+		})
+		h := AdminKeyMiddleware("secret-key", inspect)
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/tenants", nil)
+		req.Header.Set("X-Admin-Key", "secret-key")
+		req.Header.Set("X-User-Role", string(registry.MemberRoleAdmin))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		if roleSeen != string(registry.MemberRoleAdmin) {
+			t.Fatalf("X-User-Role = %q, want %q", roleSeen, registry.MemberRoleAdmin)
+		}
+	})
+
 	t.Run("correct Bearer token", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/admin/tenants", nil)
 		req.Header.Set("Authorization", "Bearer secret-key")

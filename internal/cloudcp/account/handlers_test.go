@@ -65,6 +65,13 @@ func doRequest(t *testing.T, h http.Handler, req *http.Request) *httptest.Respon
 	return rec
 }
 
+func doRawRequest(t *testing.T, h http.Handler, req *http.Request) *httptest.ResponseRecorder {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
 func TestInviteMember(t *testing.T) {
 	reg := newTestRegistry(t)
 	mux := newTestMux(reg)
@@ -481,5 +488,93 @@ func TestRemoveMember_AdminCannotRemoveOwner(t *testing.T) {
 	}
 	if m == nil || m.Role != registry.MemberRoleOwner {
 		t.Fatalf("owner membership changed unexpectedly: %+v", m)
+	}
+}
+
+func TestInviteMember_ForbiddenWhenActorRoleMissing(t *testing.T) {
+	reg := newTestRegistry(t)
+	handler := HandleInviteMember(reg)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Test"}); err != nil {
+		t.Fatal(err)
+	}
+
+	body := `{"email":"tech@msp.com","role":"tech"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/members", bytes.NewBufferString(body))
+	req.SetPathValue("account_id", accountID)
+	rec := doRawRequest(t, http.HandlerFunc(handler), req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+}
+
+func TestUpdateMemberRole_ForbiddenWhenActorRoleMissing(t *testing.T) {
+	reg := newTestRegistry(t)
+	handler := HandleUpdateMemberRole(reg)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Test"}); err != nil {
+		t.Fatal(err)
+	}
+
+	userID, err := registry.GenerateUserID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateUser(&registry.User{ID: userID, Email: "tech@msp.com"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateMembership(&registry.AccountMembership{AccountID: accountID, UserID: userID, Role: registry.MemberRoleTech}); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/accounts/"+accountID+"/members/"+userID, bytes.NewBufferString(`{"role":"admin"}`))
+	req.SetPathValue("account_id", accountID)
+	req.SetPathValue("user_id", userID)
+	rec := doRawRequest(t, http.HandlerFunc(handler), req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+}
+
+func TestRemoveMember_ForbiddenWhenActorRoleMissing(t *testing.T) {
+	reg := newTestRegistry(t)
+	handler := HandleRemoveMember(reg)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Test"}); err != nil {
+		t.Fatal(err)
+	}
+
+	userID, err := registry.GenerateUserID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateUser(&registry.User{ID: userID, Email: "tech@msp.com"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateMembership(&registry.AccountMembership{AccountID: accountID, UserID: userID, Role: registry.MemberRoleTech}); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/accounts/"+accountID+"/members/"+userID, nil)
+	req.SetPathValue("account_id", accountID)
+	req.SetPathValue("user_id", userID)
+	rec := doRawRequest(t, http.HandlerFunc(handler), req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusForbidden, rec.Body.String())
 	}
 }

@@ -100,11 +100,9 @@ func requireAnyAccountRole(allowed ...registry.MemberRole) func(http.Handler) ht
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// If role is missing, this request is likely on the admin-key fallback path
-			// (no session/membership middleware). Allow and defer to admin auth.
 			role := strings.TrimSpace(r.Header.Get("X-User-Role"))
 			if role == "" {
-				next.ServeHTTP(w, r)
+				writeAuthzError(w, http.StatusForbidden, "missing_role")
 				return
 			}
 			if _, ok := allowedSet[registry.MemberRole(role)]; !ok {
