@@ -395,9 +395,15 @@ func Run(ctx context.Context, version string) error {
 		IsDocker: isDocker,
 		Enabled:  cfg.TelemetryEnabled,
 		GetSnapshot: func() telemetry.Snapshot {
+			// Use the latest config (may have been swapped by a reload).
+			currentCfg := cfg
+			if reloaded := reloadableMonitor.GetConfig(); reloaded != nil {
+				currentCfg = reloaded
+			}
+
 			snap := telemetry.Snapshot{
-				MultiTenant: cfg.MultiTenantEnabled,
-				APITokens:   len(cfg.APITokens),
+				MultiTenant: currentCfg.MultiTenantEnabled,
+				APITokens:   len(currentCfg.APITokens),
 				LicenseTier: "free",
 			}
 
@@ -423,7 +429,7 @@ func Run(ctx context.Context, version string) error {
 			}
 
 			// SSO/OIDC status.
-			snap.SSOEnabled = cfg.OIDC != nil && cfg.OIDC.Enabled
+			snap.SSOEnabled = currentCfg.OIDC != nil && currentCfg.OIDC.Enabled
 
 			// License tier.
 			if router != nil && router.GetLicenseHandlers() != nil {
