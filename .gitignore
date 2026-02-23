@@ -9,6 +9,8 @@
 /pulse-host-agent-*
 /pulse-agent
 /pulse-agent-*
+/pulse-linux-amd64
+/pulse-control-plane-linux-amd64
 
 # Logs
 *.log

@@ -4,7 +4,7 @@ set -euo pipefail
 
 DOMAIN="${DOMAIN:-cloud.pulserelay.pro}"
 SSH_TARGET="${SSH_TARGET:-root@pulse-cloud}"
-ADMIN_KEY_FILE="${ADMIN_KEY_FILE:-/Volumes/Development/pulse/secrets/cloud-cp/admin_key}"
+ADMIN_KEY_FILE="${ADMIN_KEY_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/pulse-cloud/admin_key}"
 BACKUP_MAX_AGE_SECONDS="${BACKUP_MAX_AGE_SECONDS:-172800}" # 48h
 CHECK_TRIAL_SIGNUP_ROUTES="${CHECK_TRIAL_SIGNUP_ROUTES:-true}"
 CHECK_PUBLIC_SIGNUP_ROUTES="${CHECK_PUBLIC_SIGNUP_ROUTES:-true}"
