@@ -217,6 +217,7 @@ scripts/watch-snapshot.sh
 scripts/auto-backup.sh
 scripts/safe-checkout.sh
 BACKUP_SYSTEM.md
+scripts/com.pulse.hot-dev.plist
 
 # Overnight refactor scripts and artifacts (local only)
 scripts/overnight-refactor/

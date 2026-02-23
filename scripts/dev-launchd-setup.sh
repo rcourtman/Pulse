@@ -8,8 +8,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd -P)"
 LABEL="com.pulse.hot-dev"
-PLIST_SRC="${SCRIPT_DIR}/com.pulse.hot-dev.plist"
+PLIST_TEMPLATE="${SCRIPT_DIR}/com.pulse.hot-dev.plist.template"
 PLIST_DST="$HOME/Library/LaunchAgents/${LABEL}.plist"
 LOG_DIR="$HOME/Library/Logs/Pulse"
 GUI_DOMAIN="gui/$(id -u)"
@@ -37,8 +38,8 @@ uninstall() {
 }
 
 install() {
-    if [[ ! -f "${PLIST_SRC}" ]]; then
-        log_error "Plist template not found: ${PLIST_SRC}"
+    if [[ ! -f "${PLIST_TEMPLATE}" ]]; then
+        log_error "Plist template not found: ${PLIST_TEMPLATE}"
         exit 1
     fi
 
@@ -53,10 +54,22 @@ install() {
     launchctl bootout "${GUI_DOMAIN}/${LABEL}" 2>/dev/null && \
         log_info "Stopped existing service" || true
 
-    # Symlink plist into LaunchAgents
+    # Render plist into LaunchAgents from template.
+    local wrapper_path work_dir stdout_path stderr_path
+    wrapper_path="${SCRIPT_DIR}/dev-launchd-wrapper.sh"
+    work_dir="${ROOT_DIR}"
+    stdout_path="${LOG_DIR}/hot-dev.stdout.log"
+    stderr_path="${LOG_DIR}/hot-dev.stderr.log"
+
     mkdir -p "$HOME/Library/LaunchAgents"
-    ln -sf "${PLIST_SRC}" "${PLIST_DST}"
-    log_ok "Symlinked plist to ${PLIST_DST}"
+    sed \
+        -e "s|__WRAPPER_PATH__|${wrapper_path}|g" \
+        -e "s|__WORKDIR__|${work_dir}|g" \
+        -e "s|__STDOUT_PATH__|${stdout_path}|g" \
+        -e "s|__STDERR_PATH__|${stderr_path}|g" \
+        "${PLIST_TEMPLATE}" > "${PLIST_DST}"
+    chmod 0644 "${PLIST_DST}"
+    log_ok "Rendered plist to ${PLIST_DST}"
 
     # Bootstrap (load + start)
     launchctl bootstrap "${GUI_DOMAIN}" "${PLIST_DST}"

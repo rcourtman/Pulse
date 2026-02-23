@@ -163,10 +163,13 @@ If your operator machine has local staging Stripe secret files, you can populate
 ```bash
 cd /opt/pulse-cloud
 PULSE_STRIPE_SECRET_DIR="${PULSE_STRIPE_SECRET_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/pulse-cloud/stripe}"
+STRIPE_API_KEY_VALUE="$(cat "${PULSE_STRIPE_SECRET_DIR}/test_secret_key")"
+STRIPE_PRICE_ID_VALUE="$(cat "${PULSE_STRIPE_SECRET_DIR}/test_price_id")"
+STRIPE_WEBHOOK_SECRET_VALUE="$(cat "${PULSE_STRIPE_SECRET_DIR}/test_webhook_secret")"
 sudo sed -i "s|^CP_ENV=.*|CP_ENV=staging|" .env
-sudo sed -i "s|^STRIPE_API_KEY=.*|STRIPE_API_KEY=$(cat "${PULSE_STRIPE_SECRET_DIR}/test_secret_key")|" .env
-sudo sed -i "s|^CP_TRIAL_SIGNUP_PRICE_ID=.*|CP_TRIAL_SIGNUP_PRICE_ID=$(cat "${PULSE_STRIPE_SECRET_DIR}/test_price_id")|" .env
-sudo sed -i "s|^STRIPE_WEBHOOK_SECRET=.*|STRIPE_WEBHOOK_SECRET=$(cat "${PULSE_STRIPE_SECRET_DIR}/test_webhook_secret")|" .env
+sudo sed -i "s|^STRIPE_API_KEY=.*|STRIPE_API_KEY=${STRIPE_API_KEY_VALUE}|" .env
+sudo sed -i "s|^CP_TRIAL_SIGNUP_PRICE_ID=.*|CP_TRIAL_SIGNUP_PRICE_ID=${STRIPE_PRICE_ID_VALUE}|" .env
+sudo sed -i "s|^STRIPE_WEBHOOK_SECRET=.*|STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET_VALUE}|" .env
 ```
 
 3. Run setup in staging mode:
