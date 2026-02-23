@@ -63,11 +63,11 @@ export const ZFSHealthMap: Component<ZFSHealthMapProps> = (props) => {
                             transform: 'translate(-50%, -100%)',
                         }}
                     >
-                        <div class="bg-base text-white text-[10px] rounded-md shadow-sm px-2 py-1.5 min-w-[120px] border border-border">
+                        <div class="bg-surface text-base-content text-[10px] rounded-md shadow-sm px-2 py-1.5 min-w-[120px] border border-border">
                             <div class="font-medium mb-0.5 text-base-content">
                                 {hoveredDevice()?.name}
                             </div>
-                            <div class="text-slate-400 mb-1">
+                            <div class="text-muted mb-1">
                                 {hoveredDevice()?.type}
                             </div>
                             <div class="flex items-center gap-2 border-t border-border pt-1">
@@ -84,7 +84,7 @@ export const ZFSHealthMap: Component<ZFSHealthMapProps> = (props) => {
                                 </Show>
                             </div>
                             <Show when={hoveredDevice()?.message}>
-                                <div class="text-slate-400 mt-1 italic max-w-[200px] break-words">
+                                <div class="text-muted mt-1 italic max-w-[200px] break-words">
                                     {hoveredDevice()?.message}
                                 </div>
                             </Show>

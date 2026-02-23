@@ -129,7 +129,7 @@ const HealthBadge: Component<{ health: string; message?: string }> = (props) => 
  transform: 'translate(-50%, -100%)',
  }}
  >
- <div class="bg-base text-white text-[10px] rounded-md shadow-sm px-2.5 py-1.5 max-w-[280px] border border-border">
+ <div class="bg-surface text-base-content text-[10px] rounded-md shadow-sm px-2.5 py-1.5 max-w-[280px] border border-border">
  {props.message}
  </div>
  </div>
@@ -189,8 +189,8 @@ const ServiceStatusCell: Component<{ services: CephServiceStatus[] }> = (props) 
  transform: 'translate(-50%, -100%)',
  }}
  >
- <div class="bg-base text-white text-[10px] rounded-md shadow-sm px-2.5 py-2 min-w-[180px] border border-border">
- <div class="font-medium mb-1.5 text-slate-300 border-b border-border pb-1">
+ <div class="bg-surface text-base-content text-[10px] rounded-md shadow-sm px-2.5 py-2 min-w-[180px] border border-border">
+ <div class="font-medium mb-1.5 text-base-content border-b border-border pb-1">
  Ceph Services
  </div>
  <div class="space-y-1">
@@ -199,7 +199,7 @@ const ServiceStatusCell: Component<{ services: CephServiceStatus[] }> = (props) 
  const status = getServiceStatus(svc);
  return (
  <div class="flex items-center justify-between gap-3">
- <span class="flex items-center gap-1.5 text-slate-400">
+ <span class="flex items-center gap-1.5 text-muted">
  <ServiceIcon type={svc.type} class="w-3.5 h-3.5" />
  <span class="uppercase">{svc.type}</span>
  </span>

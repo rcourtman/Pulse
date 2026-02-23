@@ -947,7 +947,7 @@ export function AIIntelligence() {
                     <button
                       onClick={saveAdvancedSettings}
                       disabled={isSavingAdvanced()}
-                      class="w-full py-2.5 text-sm font-medium text-white bg-base dark:bg-white hover:bg-slate-800 dark:hover: rounded-md shadow-sm transition-all focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 disabled:opacity-70 flex items-center justify-center gap-2"
+                      class="w-full py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm transition-all focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-70 flex items-center justify-center gap-2"
                     >
                       <Show when={isSavingAdvanced()}>
                         <div class="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full"></div>

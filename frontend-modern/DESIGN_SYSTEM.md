@@ -8,6 +8,14 @@ This document outlines the standard UI primitives, tokens, and components that c
 1. **Never hardcode hex values** or use static `gray` / `white` / `slate` labels for structural layout colors. 
 2. Use the **Semantic Tokens**. These resolve dynamically inside `tailwind.config.js` via `index.css` CSS-variables to flawlessly support light/dark transitions without needing a literal `dark:` prefix in the layout classes.
 
+## Enforcement
+- `npm run lint` is a hard gate for design-system regressions in `src/components` and `src/pages`.
+- CI must fail on:
+  - orphaned utility prefixes (for example `dark:hover:` or `group-hover:` with no class after them)
+  - `dark:bg-white` / `dark:hover:bg-white`
+  - low-contrast class combinations like `bg-base` + `text-white`
+- If a UI requires exceptional styling, prefer adding a semantic token or shared component rather than bypassing the rule.
+
 ---
 
 ## 🏗 Tokens
@@ -138,4 +146,3 @@ import { formControl, formSelect, formLabel, formField, formCheckbox } from '@/c
   <input class={formControl} type="text" />
 </div>
 ```
-

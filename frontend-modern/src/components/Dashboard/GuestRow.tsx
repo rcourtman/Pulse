@@ -781,7 +781,7 @@ export function GuestRow(props: GuestRowProps) {
         >
           <div class="flex items-center gap-2 min-w-0">
             <div class={`transition-transform duration-200 ${props.isExpanded ? 'rotate-90' : ''}`}>
- <svg class="w-3.5 h-3.5 text-slate-500 group-hover: dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+ <svg class="w-3.5 h-3.5 text-muted group-hover:text-base-content" fill="none" viewBox="0 0 24 24" stroke="currentColor">
  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
  </svg>
  </div>

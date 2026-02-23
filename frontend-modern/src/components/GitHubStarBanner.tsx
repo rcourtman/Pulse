@@ -135,7 +135,7 @@ export function GitHubStarBanner() {
             <div class="flex flex-col gap-3">
               <button
                 onClick={handleStarClick}
-                class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-base hover:bg-slate-800 dark:hover:bg-white rounded-md transition-colors"
+                class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
               >
                 <StarIcon class="w-4 h-4" />
                 Star on GitHub

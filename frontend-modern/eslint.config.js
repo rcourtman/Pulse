@@ -50,7 +50,7 @@ export default tseslint.config(
         ],
         rules: {
             "no-restricted-syntax": [
-                "warn",
+                "error",
                 // Metric color/threshold functions — use @/utils/metricThresholds
                 {
                     selector: "FunctionDeclaration[id.name=/^get(Bar|Usage|Memory|Disk|Cpu|Metric|Threshold)(Color|Colour)/i]",
@@ -134,12 +134,30 @@ export default tseslint.config(
                 // Catch orphaned CSS prefixes (e.g. "hover: " with no utility after it).
                 // These produce no CSS output and are always a bug from bad find-replace.
                 {
-                    selector: "Literal[value=/(?:^|\\s)(?:hover|focus|active|dark|lg|md|sm|xl|2xl):\\s/]",
+                    selector: "Literal[value=/(?:^|\\s)(?:hover|focus|active|dark|group-hover|peer-focus|before|after|lg|md|sm|xl|2xl):\\s/]",
                     message: "Orphaned CSS prefix detected (e.g. 'hover: ' with nothing after it). This is a broken class string — the utility class is missing.",
                 },
                 {
-                    selector: "TemplateElement[value.raw=/(?:^|\\s)(?:hover|focus|active|dark|lg|md|sm|xl|2xl):\\s/]",
+                    selector: "TemplateElement[value.raw=/(?:^|\\s)(?:hover|focus|active|dark|group-hover|peer-focus|before|after|lg|md|sm|xl|2xl):\\s/]",
                     message: "Orphaned CSS prefix detected (e.g. 'hover: ' with nothing after it). This is a broken class string — the utility class is missing.",
+                },
+                // Block dark-mode white backgrounds, which are almost always unreadable.
+                {
+                    selector: "Literal[value=/(?:^|\\s)dark:(?:hover:)?bg-white(?:$|\\s)/]",
+                    message: "Avoid dark:bg-white / dark:hover:bg-white. Use semantic surface tokens for dark mode-safe contrast.",
+                },
+                {
+                    selector: "TemplateElement[value.raw=/(?:^|\\s)dark:(?:hover:)?bg-white(?:$|\\s)/]",
+                    message: "Avoid dark:bg-white / dark:hover:bg-white. Use semantic surface tokens for dark mode-safe contrast.",
+                },
+                // Prevent low-contrast combinations that caused prior regressions.
+                {
+                    selector: "Literal[value=/(?=.*(?:^|\\s)bg-base(?:$|\\s))(?=.*(?:^|\\s)text-white(?:$|\\s))/]",
+                    message: "Avoid combining bg-base with text-white. Use semantic pairs like bg-surface + text-base-content or a dedicated accent background.",
+                },
+                {
+                    selector: "TemplateElement[value.raw=/(?=.*(?:^|\\s)bg-base(?:$|\\s))(?=.*(?:^|\\s)text-white(?:$|\\s))/]",
+                    message: "Avoid combining bg-base with text-white. Use semantic pairs like bg-surface + text-base-content or a dedicated accent background.",
                 },
             ],
         },

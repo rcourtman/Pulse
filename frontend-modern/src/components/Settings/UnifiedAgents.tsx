@@ -1014,7 +1014,7 @@ export const UnifiedAgents: Component = () => {
                                 disabled={confirmedNoToken()}
                                 class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${confirmedNoToken()
  ? 'bg-green-600 text-white cursor-default'
- : 'bg-slate-900 text-white hover:bg-black dark:hover:bg-white'
+ : 'bg-surface text-base-content border border-border hover:bg-surface-hover'
  }`}
                             >
                                 {confirmedNoToken() ? 'No token confirmed' : 'Confirm without token'}

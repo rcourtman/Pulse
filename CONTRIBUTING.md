@@ -85,6 +85,10 @@ Use SolidJS patterns (signals, memos, createEffect) and the shared design-system
 components in `components/shared/`. Add screenshots when introducing new
 UI-heavy features.
 
+Design-system lint rules are enforced as CI blockers. Avoid hardcoded structural
+light/dark classes and broken utility chains; use semantic tokens from
+`frontend-modern/DESIGN_SYSTEM.md`.
+
 ---
 
 ## Installers & Scripts
