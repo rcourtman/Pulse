@@ -737,6 +737,7 @@ func Load() (*Config, error) {
 		DiscoveryEnabled:                false,
 		DiscoverySubnet:                 "auto",
 		TemperatureMonitoringEnabled:    true,
+		TelemetryEnabled:                true,            // Enabled by default; opt out via PULSE_TELEMETRY=false or Settings
 		MaxPollTimeout:                  3 * time.Minute, // Default max poll timeout for large clusters
 		EnvOverrides:                    make(map[string]bool),
 		AgentConnectURL:                 "",

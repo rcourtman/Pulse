@@ -564,6 +564,12 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		return
 	}
 
+	// Reject early if telemetryEnabled is locked by env var
+	if _, ok := rawRequest["telemetryEnabled"]; ok && h.config.EnvOverrides["PULSE_TELEMETRY"] {
+		http.Error(w, "telemetryEnabled is locked by the PULSE_TELEMETRY environment variable", http.StatusConflict)
+		return
+	}
+
 	// Start with existing settings
 	settings := *existingSettings
 	discoveryConfigUpdated := false
@@ -687,12 +693,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if _, ok := rawRequest["reduceProUpsellNoise"]; ok {
 		settings.ReduceProUpsellNoise = updates.ReduceProUpsellNoise
 	}
-	if _, ok := rawRequest["telemetryEnabled"]; ok {
-		// Server-side enforcement: reject changes when locked by env var
-		if h.config.EnvOverrides["PULSE_TELEMETRY"] {
-			http.Error(w, "telemetryEnabled is locked by the PULSE_TELEMETRY environment variable", http.StatusConflict)
-			return
-		}
+	if _, ok := rawRequest["telemetryEnabled"]; ok && updates.TelemetryEnabled != nil {
 		settings.TelemetryEnabled = updates.TelemetryEnabled
 		// Note: h.config.TelemetryEnabled is updated after successful persistence below
 	}
