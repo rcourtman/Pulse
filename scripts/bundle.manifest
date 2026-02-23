@@ -14,4 +14,4 @@ output: dist/install-docker-agent.sh
 scripts/lib/common.sh
 scripts/lib/systemd.sh
 scripts/lib/http.sh
-scripts/install-docker-agent-v2.sh
+scripts/install-docker-agent.sh

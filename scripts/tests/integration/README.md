@@ -20,9 +20,9 @@ scripts/tests/integration/test-docker-agent-install.sh
 The script will:
 
 1. Launch an Ubuntu 22.04 container (when Docker is available).
-2. Inject lightweight stubs for `systemctl`, `docker`, `curl`, and `wget`.
-3. Execute the refactored installer through several scenarios (dry run,
-   full install, missing Docker handling, multi-target configuration, uninstall).
+2. Inject lightweight stubs for `curl` to avoid network calls.
+3. Execute the deprecated docker-agent wrapper through several scenarios
+   (missing arguments and delegation to the unified installer).
 
 The container is discarded automatically, and no files are written to the host
 outside of the repository.
