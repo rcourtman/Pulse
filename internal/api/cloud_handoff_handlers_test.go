@@ -31,7 +31,7 @@ func makeExchangeRequest(t *testing.T, handler http.HandlerFunc, host, token str
 	if token != "" {
 		form.Set("token", token)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/api/cloud/handoff/exchange", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/api/cloud/handoff/exchange?format=json", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Host = host
 	req.RemoteAddr = "127.0.0.1:12345"
@@ -251,6 +251,73 @@ func TestHandleHandoffExchange(t *testing.T) {
 			t.Fatalf("status = %d, want %d", second.Code, http.StatusUnauthorized)
 		}
 	})
+}
+
+func TestHandleHandoffExchangeBrowserFlowSetsSessionCookies(t *testing.T) {
+	key := []byte("test-handoff-key")
+	configDir := t.TempDir()
+	secretsDir := filepath.Join(configDir, "secrets")
+	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(secretsDir, "handoff.key"), key, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	handler := HandleHandoffExchange(configDir)
+	tenantID := "tenant-browser"
+	token := signHandoffToken(t, key, cloudHandoffClaims{
+		AccountID: "acct-browser",
+		Email:     "browser@example.com",
+		Role:      "owner",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "jti-browser",
+			Subject:   "user-browser",
+			Issuer:    cloudHandoffIssuer,
+			Audience:  jwt.ClaimStrings{tenantID},
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	})
+
+	form := url.Values{}
+	form.Set("token", token)
+	req := httptest.NewRequest(http.MethodPost, "/api/cloud/handoff/exchange", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Host = tenantID + ".example.com"
+	req.RemoteAddr = "127.0.0.1:12345"
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusTemporaryRedirect)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/" {
+		t.Fatalf("redirect location = %q, want %q", loc, "/")
+	}
+
+	cookies := rec.Result().Cookies()
+	var haveSession, haveCSRF, haveOrg bool
+	for _, c := range cookies {
+		switch c.Name {
+		case "pulse_session":
+			haveSession = c.Value != ""
+		case "pulse_csrf":
+			haveCSRF = c.Value != ""
+		case "pulse_org_id":
+			haveOrg = c.Value == tenantID
+		}
+	}
+
+	if !haveSession {
+		t.Fatal("expected pulse_session cookie")
+	}
+	if !haveCSRF {
+		t.Fatal("expected pulse_csrf cookie")
+	}
+	if !haveOrg {
+		t.Fatal("expected pulse_org_id cookie for tenant")
+	}
 }
 
 func TestHandleHandoffExchangeKeyMissing(t *testing.T) {

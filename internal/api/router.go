@@ -348,7 +348,7 @@ func (r *Router) setupRoutes() {
 		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
 	}
 	r.configProfileHandler = NewConfigProfileHandler(r.multiTenant)
-	r.licenseHandlers = NewLicenseHandlers(r.multiTenant, r.hostedMode)
+	r.licenseHandlers = NewLicenseHandlers(r.multiTenant, r.hostedMode, r.config)
 	rbacProvider := NewTenantRBACProvider(r.config.DataPath)
 	r.rbacProvider = rbacProvider
 	orgHandlers := NewOrgHandlers(r.multiTenant, r.mtMonitor, rbacProvider)
@@ -976,6 +976,9 @@ func (r *Router) SetConfig(cfg *config.Config) {
 	}
 	if r.aiSettingsHandler != nil {
 		r.aiSettingsHandler.SetConfig(r.config)
+	}
+	if r.licenseHandlers != nil {
+		r.licenseHandlers.SetConfig(r.config)
 	}
 }
 
@@ -2801,6 +2804,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/public/signup",             // Hosted mode: public signup
 				"/api/public/magic-link/request", // Hosted mode: request magic link
 				"/api/public/magic-link/verify",  // Hosted mode: verify magic link
+				"/api/cloud/handoff/exchange",    // Hosted mode: control-plane workspace handoff (token-authenticated)
 				"/api/webhooks/stripe",           // Hosted mode: Stripe webhook (signature verification is auth)
 				config.DefaultOIDCCallbackPath,
 				"/install-docker-agent.sh",       // Docker agent bootstrap script must be public
@@ -2975,6 +2979,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		// Skip CSRF for cloud handoff (GET with token param, no prior session).
 		if req.URL.Path == "/auth/cloud-handoff" {
+			skipCSRF = true
+		}
+		// Skip CSRF for control-plane workspace handoff exchange (POST with signed handoff token).
+		if req.URL.Path == "/api/cloud/handoff/exchange" {
 			skipCSRF = true
 		}
 		if strings.HasPrefix(req.URL.Path, "/api/") && !skipCSRF && isValidProxyAuthRequest(r.config, req) && isCrossSiteBrowserRequest(req) {

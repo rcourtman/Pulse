@@ -170,12 +170,13 @@ func tenantIDFromRequest(r *http.Request) string {
 	return tenantID
 }
 
-// HandleHandoffExchange verifies a control-plane-minted handoff JWT and records its jti to prevent replay.
+// HandleHandoffExchange verifies a control-plane-minted handoff JWT, records its
+// jti to prevent replay, then creates a tenant session and redirects to the app.
 //
 // Route (wiring happens elsewhere): POST /api/cloud/handoff/exchange
 //
-// This minimal implementation returns success JSON containing user info derived from the token.
-// Wiring into RBAC/session minting is intentionally deferred.
+// If the caller requests JSON (`Accept: application/json` or `?format=json`),
+// this returns a success payload instead of redirecting.
 func HandleHandoffExchange(configDir string) http.HandlerFunc {
 	configDir = filepath.Clean(configDir)
 	keyPath := filepath.Join(configDir, "secrets", "handoff.key")
@@ -231,6 +232,10 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 			http.Error(w, "invalid token", http.StatusUnauthorized)
 			return
 		}
+		if strings.TrimSpace(claims.ID) == "" || strings.TrimSpace(claims.Subject) == "" || strings.TrimSpace(claims.Email) == "" {
+			http.Error(w, "invalid token", http.StatusUnauthorized)
+			return
+		}
 
 		ok, err := replay.checkAndStore(claims.ID, claims.ExpiresAt.Time)
 		if err != nil {
@@ -242,18 +247,65 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 			return
 		}
 
-		resp := map[string]any{
-			"ok":         true,
-			"tenant_id":  tenantID,
-			"account_id": claims.AccountID,
-			"user_id":    claims.Subject,
-			"email":      claims.Email,
-			"role":       claims.Role,
-			"jti":        claims.ID,
-			"exp":        claims.ExpiresAt.Time.UTC().Format(time.RFC3339),
+		sessionToken := generateSessionToken()
+		if sessionToken == "" {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(resp)
+
+		userAgent := r.Header.Get("User-Agent")
+		clientIP := GetClientIP(r)
+		sessionDuration := 24 * time.Hour
+		GetSessionStore().CreateSession(sessionToken, sessionDuration, userAgent, clientIP, claims.Email)
+		TrackUserSession(claims.Email, sessionToken)
+
+		csrfToken := generateCSRFToken(sessionToken)
+		isSecure, sameSitePolicy := getCookieSettings(r)
+		cookieMaxAge := int(sessionDuration.Seconds())
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     "pulse_session",
+			Value:    sessionToken,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   isSecure,
+			SameSite: sameSitePolicy,
+			MaxAge:   cookieMaxAge,
+		})
+		http.SetCookie(w, &http.Cookie{
+			Name:     "pulse_csrf",
+			Value:    csrfToken,
+			Path:     "/",
+			Secure:   isSecure,
+			SameSite: sameSitePolicy,
+			MaxAge:   cookieMaxAge,
+		})
+		http.SetCookie(w, &http.Cookie{
+			Name:     "pulse_org_id",
+			Value:    tenantID,
+			Path:     "/",
+			Secure:   isSecure,
+			SameSite: sameSitePolicy,
+			MaxAge:   cookieMaxAge,
+		})
+
+		if strings.Contains(r.Header.Get("Accept"), "application/json") || r.URL.Query().Get("format") == "json" {
+			resp := map[string]any{
+				"ok":         true,
+				"tenant_id":  tenantID,
+				"account_id": claims.AccountID,
+				"user_id":    claims.Subject,
+				"email":      claims.Email,
+				"role":       claims.Role,
+				"jti":        claims.ID,
+				"exp":        claims.ExpiresAt.Time.UTC().Format(time.RFC3339),
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 	}
 }
