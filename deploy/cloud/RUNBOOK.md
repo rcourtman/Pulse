@@ -71,7 +71,7 @@ Required values:
 - `CONTROL_PLANE_IMAGE` (digest-pinned control-plane image ref)
 - `CP_ADMIN_KEY` (control plane admin API key)
 - `CP_PULSE_IMAGE` (digest-pinned tenant image ref)
-- `CP_TRIAL_SIGNUP_PRICE_ID` (Stripe recurring price ID used for hosted trial checkout)
+- `CP_TRIAL_SIGNUP_PRICE_ID` (Stripe recurring price ID used for hosted trial checkout; use current v6 monthly in production)
 - `CP_ALLOW_DOCKERLESS_PROVISIONING=false`
 - `CP_REQUIRE_EMAIL_PROVIDER=true`
 - `RESEND_API_KEY` (required in production)
@@ -83,6 +83,11 @@ Stripe key mode must match environment:
 
 - `CP_ENV=production` -> `STRIPE_API_KEY` must be `sk_live_...`
 - `CP_ENV=staging` -> `STRIPE_API_KEY` must be `sk_test_...`
+
+Pricing note:
+
+- Current v6 production monthly price ID: `price_1T47OVBrHBocJIGHg4sMHMV7` ($15/mo).
+- Existing v5 subscriptions should remain on their current recurring prices until grandfathering policy changes.
 
 Recommended rate-limit overrides (all are requests/minute per source IP):
 
