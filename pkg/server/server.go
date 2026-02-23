@@ -23,6 +23,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
@@ -382,6 +383,61 @@ func Run(ctx context.Context, version string) error {
 
 	// Wire alert-triggered AI analysis
 	router.WireAlertTriggeredAI()
+
+	// Start anonymous telemetry (enabled by default; opt out via PULSE_TELEMETRY=false or Settings toggle).
+	// Persistence is created once here (outside the closure) to avoid NewConfigPersistence's
+	// fatal-on-error path running inside the telemetry goroutine.
+	isDocker := os.Getenv("PULSE_DOCKER") == "true"
+	telemetryPersistence := config.NewConfigPersistence(baseDataDir)
+	telemetry.Start(ctx, telemetry.Config{
+		Version:  version,
+		DataDir:  baseDataDir,
+		IsDocker: isDocker,
+		Enabled:  cfg.TelemetryEnabled,
+		GetSnapshot: func() telemetry.Snapshot {
+			snap := telemetry.Snapshot{
+				MultiTenant: cfg.MultiTenantEnabled,
+				APITokens:   len(cfg.APITokens),
+				LicenseTier: "free",
+			}
+
+			// Resource counts from monitor state.
+			if mon := reloadableMonitor.GetMonitor(); mon != nil {
+				state := mon.GetState()
+				snap.PVENodes = len(state.Nodes)
+				snap.PBSInstances = len(state.PBSInstances)
+				snap.PMGInstances = len(state.PMGInstances)
+				snap.VMs = len(state.VMs)
+				snap.Containers = len(state.Containers)
+				snap.DockerHosts = len(state.DockerHosts)
+				snap.KubernetesClusters = len(state.KubernetesClusters)
+				snap.ActiveAlerts = len(state.ActiveAlerts)
+			}
+
+			// Feature flags from persisted config (using pre-created persistence).
+			if aiCfg, err := telemetryPersistence.LoadAIConfig(); err == nil && aiCfg != nil {
+				snap.AIEnabled = aiCfg.Enabled
+			}
+			if relayCfg, err := telemetryPersistence.LoadRelayConfig(); err == nil {
+				snap.RelayEnabled = relayCfg.Enabled
+			}
+
+			// SSO/OIDC status.
+			snap.SSOEnabled = cfg.OIDC != nil && cfg.OIDC.Enabled
+
+			// License tier.
+			if router != nil && router.GetLicenseHandlers() != nil {
+				if svc := router.GetLicenseHandlers().Service(context.Background()); svc != nil {
+					if lic := svc.Current(); lic != nil {
+						snap.LicenseTier = string(lic.Claims.Tier)
+					}
+				}
+			}
+
+			return snap
+		},
+	})
+	defer telemetry.Stop()
 
 	// Create HTTP server with unified configuration
 	srv := &http.Server{

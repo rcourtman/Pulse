@@ -1110,6 +1110,9 @@ type SystemSettings struct {
 	ReduceProUpsellNoise       bool `json:"reduceProUpsellNoise,omitempty"`       // Hide proactive Pro prompts; paywalls still appear when accessing gated features
 	DisableLocalUpgradeMetrics bool `json:"disableLocalUpgradeMetrics,omitempty"` // Disable local-only upgrade UX metrics collection (no network calls)
 
+	// Telemetry (enabled by default, opt-out)
+	TelemetryEnabled *bool `json:"telemetryEnabled,omitempty"` // Send anonymous usage telemetry (install ID, version, resource counts, feature flags — no PII)
+
 	// APIToken removed - now handled via .env file only
 }
 

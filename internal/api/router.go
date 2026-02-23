@@ -2537,6 +2537,11 @@ func (r *Router) learnBaselines(store *ai.BaselineStore, metricsHistory *monitor
 
 // GetAlertTriggeredAnalyzer returns the alert-triggered analyzer for wiring into the monitor's alert callback
 // This enables AI to analyze specific resources when alerts fire, providing token-efficient real-time insights
+// GetLicenseHandlers returns the license handlers for external callers (e.g. telemetry).
+func (r *Router) GetLicenseHandlers() *LicenseHandlers {
+	return r.licenseHandlers
+}
+
 func (r *Router) GetAlertTriggeredAnalyzer() *ai.AlertTriggeredAnalyzer {
 	if r.aiSettingsHandler != nil {
 		return r.aiSettingsHandler.GetAlertTriggeredAnalyzer(context.Background())

@@ -456,6 +456,9 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 		settings.DisableDockerUpdateActions = h.config.DisableDockerUpdateActions
 		// Expose legacy route redirect setting (respects env override)
 		settings.DisableLegacyRouteRedirects = h.config.DisableLegacyRouteRedirects
+		// Expose effective telemetry value (respects env override)
+		effectiveTelemetry := h.config.TelemetryEnabled
+		settings.TelemetryEnabled = &effectiveTelemetry
 	}
 
 	// Include env override information
@@ -684,6 +687,15 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if _, ok := rawRequest["reduceProUpsellNoise"]; ok {
 		settings.ReduceProUpsellNoise = updates.ReduceProUpsellNoise
 	}
+	if _, ok := rawRequest["telemetryEnabled"]; ok {
+		// Server-side enforcement: reject changes when locked by env var
+		if h.config.EnvOverrides["PULSE_TELEMETRY"] {
+			http.Error(w, "telemetryEnabled is locked by the PULSE_TELEMETRY environment variable", http.StatusConflict)
+			return
+		}
+		settings.TelemetryEnabled = updates.TelemetryEnabled
+		// Note: h.config.TelemetryEnabled is updated after successful persistence below
+	}
 	if _, ok := rawRequest["fullWidthMode"]; ok {
 		settings.FullWidthMode = updates.FullWidthMode
 	}
@@ -812,6 +824,11 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		log.Error().Err(err).Msg("Failed to save system settings")
 		http.Error(w, "Failed to save settings", http.StatusInternalServerError)
 		return
+	}
+
+	// Apply telemetryEnabled to in-memory config only AFTER successful persistence
+	if _, ok := rawRequest["telemetryEnabled"]; ok && settings.TelemetryEnabled != nil {
+		h.config.TelemetryEnabled = *settings.TelemetryEnabled
 	}
 
 	// Reload cached system settings after successful save

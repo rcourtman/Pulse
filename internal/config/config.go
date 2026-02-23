@@ -145,6 +145,7 @@ type Config struct {
 	DisableDockerUpdateActions  bool             `envconfig:"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS" default:"false"`  // Hide Docker update buttons (read-only mode for containers)
 	DisableLegacyRouteRedirects bool             `envconfig:"PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS" default:"false"` // Disable frontend legacy URL redirects globally
 	DisableLocalUpgradeMetrics  bool             `envconfig:"PULSE_DISABLE_LOCAL_UPGRADE_METRICS" default:"false"`  // Disable local-only upgrade UX metrics collection
+	TelemetryEnabled            bool             `envconfig:"PULSE_TELEMETRY" default:"true"`                       // Anonymous telemetry enabled by default (install ID, version, resource counts, feature flags — opt out any time)
 	MultiTenantEnabled          bool             `envconfig:"PULSE_MULTI_TENANT_ENABLED" default:"false"`           // Enable multi-tenant support
 
 	// Proxy authentication settings
@@ -846,6 +847,12 @@ func Load() (*Config, error) {
 			cfg.DisableLegacyRouteRedirects = systemSettings.DisableLegacyRouteRedirects
 			// Load DisableLocalUpgradeMetrics (privacy: local-only upgrade UX metrics)
 			cfg.DisableLocalUpgradeMetrics = systemSettings.DisableLocalUpgradeMetrics
+			// Load TelemetryEnabled (enabled by default; nil means true for upgrading users)
+			if systemSettings.TelemetryEnabled != nil {
+				cfg.TelemetryEnabled = *systemSettings.TelemetryEnabled
+			} else {
+				cfg.TelemetryEnabled = true // default: enabled
+			}
 			// Load PublicURL from settings (will be overridden by env var if set)
 			if systemSettings.PublicURL != "" {
 				cfg.PublicURL = systemSettings.PublicURL
@@ -1060,6 +1067,17 @@ func Load() (*Config, error) {
 			log.Info().Bool("disabled", disabled).Msg("Overriding local upgrade metrics setting from environment")
 		} else {
 			log.Warn().Str("value", disableLocalUpgradeMetricsStr).Msg("Invalid PULSE_DISABLE_LOCAL_UPGRADE_METRICS value, ignoring")
+		}
+	}
+
+	if telemetryStr := utils.GetenvTrim("PULSE_TELEMETRY"); telemetryStr != "" {
+		if enabled, err := strconv.ParseBool(telemetryStr); err == nil {
+			cfg.TelemetryEnabled = enabled
+			cfg.EnvOverrides["PULSE_TELEMETRY"] = true
+			cfg.EnvOverrides["telemetryEnabled"] = true
+			log.Info().Bool("enabled", enabled).Msg("Overriding telemetry setting from environment")
+		} else {
+			log.Warn().Str("value", telemetryStr).Msg("Invalid PULSE_TELEMETRY value, ignoring")
 		}
 	}
 

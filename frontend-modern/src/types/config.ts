@@ -52,6 +52,7 @@ export interface SystemConfig {
   disableLegacyRouteRedirects?: boolean; // Disable legacy frontend URL redirects globally
   reduceProUpsellNoise?: boolean; // Hide proactive Pro prompts; paywalls still appear when accessing gated features
   disableLocalUpgradeMetrics?: boolean; // Disable local-only upgrade UX metrics collection
+  telemetryEnabled?: boolean; // Opt-in anonymous usage telemetry
 }
 
 /**
@@ -192,6 +193,7 @@ export const DEFAULT_CONFIG: {
     backupPollingEnabled: true,
     backupPollingInterval: 0,
     temperatureMonitoringEnabled: true,
+    telemetryEnabled: true,
     sshPort: 22,
     allowedOrigins: '',
     frontendPort: 7655,

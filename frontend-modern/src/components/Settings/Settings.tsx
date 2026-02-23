@@ -490,6 +490,8 @@ const Settings: Component<SettingsProps> = (props) => {
     const [savingReduceUpsells, setSavingReduceUpsells] = createSignal(false);
     const [disableLocalUpgradeMetrics, setDisableLocalUpgradeMetrics] = createSignal(false);
     const [savingUpgradeMetrics, setSavingUpgradeMetrics] = createSignal(false);
+    const [telemetryEnabled, setTelemetryEnabled] = createSignal(true);
+    const [savingTelemetry, setSavingTelemetry] = createSignal(false);
 
     const temperatureMonitoringLocked = () =>
         Boolean(
@@ -503,6 +505,8 @@ const Settings: Component<SettingsProps> = (props) => {
         Boolean(envOverrides().disableLegacyRouteRedirects || envOverrides()['PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS']);
     const disableLocalUpgradeMetricsLocked = () =>
         Boolean(envOverrides().disableLocalUpgradeMetrics || envOverrides()['PULSE_DISABLE_LOCAL_UPGRADE_METRICS']);
+    const telemetryEnabledLocked = () =>
+        Boolean(envOverrides().telemetryEnabled || envOverrides()['PULSE_TELEMETRY']);
 
     const pvePollingEnvLocked = () =>
         Boolean(envOverrides().pvePollingInterval || envOverrides().PVE_POLLING_INTERVAL);
@@ -681,6 +685,28 @@ const Settings: Component<SettingsProps> = (props) => {
             setDisableLocalUpgradeMetrics(previous);
         } finally {
             setSavingUpgradeMetrics(false);
+        }
+    };
+
+    const handleTelemetryEnabledChange = async (enabled: boolean): Promise<void> => {
+        if (telemetryEnabledLocked() || savingTelemetry()) return;
+        const previous = telemetryEnabled();
+        setTelemetryEnabled(enabled);
+        setSavingTelemetry(true);
+        try {
+            await SettingsAPI.updateSystemSettings({ telemetryEnabled: enabled });
+            notificationStore.success(
+                enabled
+                    ? 'Anonymous telemetry enabled — takes effect on next restart'
+                    : 'Anonymous telemetry disabled — takes effect on next restart',
+                3000,
+            );
+        } catch (error) {
+            logger.error('Failed to update telemetry setting', error);
+            notificationStore.error(error instanceof Error ? error.message : 'Failed to update telemetry setting');
+            setTelemetryEnabled(previous);
+        } finally {
+            setSavingTelemetry(false);
         }
     };
 
@@ -1655,6 +1681,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 setDisableLegacyRouteRedirects(systemSettings.disableLegacyRouteRedirects ?? false);
                 setReduceProUpsellNoise(systemSettings.reduceProUpsellNoise ?? false);
                 setDisableLocalUpgradeMetrics(systemSettings.disableLocalUpgradeMetrics ?? false);
+                setTelemetryEnabled(systemSettings.telemetryEnabled ?? true);
 
                 // Backup polling controls
                 if (typeof systemSettings.backupPollingEnabled === 'boolean') {
@@ -3353,6 +3380,10 @@ const Settings: Component<SettingsProps> = (props) => {
                                     disableLocalUpgradeMetricsLocked={disableLocalUpgradeMetricsLocked}
                                     savingUpgradeMetrics={savingUpgradeMetrics}
                                     handleDisableLocalUpgradeMetricsChange={handleDisableLocalUpgradeMetricsChange}
+                                    telemetryEnabled={telemetryEnabled}
+                                    telemetryEnabledLocked={telemetryEnabledLocked}
+                                    savingTelemetry={savingTelemetry}
+                                    handleTelemetryEnabledChange={handleTelemetryEnabledChange}
                                 />
                             </Show>
 

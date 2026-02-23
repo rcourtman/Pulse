@@ -428,7 +428,7 @@ Use this only in trusted environments.
 
 ## Privacy
 
-Patrol runs on your server and only sends the minimal context needed for analysis to the configured provider (when AI is enabled). No telemetry is sent to Pulse by default.
+Patrol runs on your server and only sends the minimal context needed for analysis to the configured provider (when AI is enabled). Anonymous telemetry (counts and feature flags only — no hostnames or credentials) is enabled by default and can be disabled any time — see [Privacy](PRIVACY.md) for details.
 
 ---
 

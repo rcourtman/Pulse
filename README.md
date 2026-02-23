@@ -63,7 +63,7 @@ Power-user shortcuts:
 - **One-Click Updates**: Easy upgrades for supported deployments
 - **OIDC/SSO/SAML**: Single sign-on with multi-provider support
 - **Mobile Remote Access (Coming Soon)**: Relay protocol with end-to-end encryption is available now; public mobile app launch is in staged rollout (Pro)
-- **Privacy Focused**: No outbound telemetry by default. Monitoring data stays on your server.
+- **Privacy Focused**: Anonymous telemetry is enabled by default and [fully documented](docs/PRIVACY.md) — no hostnames, credentials, or personal data is ever sent. Disable any time in Settings or via `PULSE_TELEMETRY=false`.
 
 ## ⚡ Quick Start
 

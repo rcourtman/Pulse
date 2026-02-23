@@ -290,6 +290,7 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 | `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Hide Docker update buttons (read-only mode) | `false` |
 | `PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS` | Disable legacy frontend URL redirects | `false` |
 | `PULSE_DISABLE_LOCAL_UPGRADE_METRICS` | Disable local-only upgrade metrics collection | `false` |
+| `PULSE_TELEMETRY` | Anonymous usage telemetry ([details](PRIVACY.md)); set `false` to disable | `true` |
 
 ### Logging Overrides
 

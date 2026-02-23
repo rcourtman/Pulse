@@ -47,6 +47,11 @@ interface GeneralSettingsPanelProps {
   disableLocalUpgradeMetricsLocked: () => boolean;
   savingUpgradeMetrics: Accessor<boolean>;
   handleDisableLocalUpgradeMetricsChange: (disabled: boolean) => Promise<void>;
+
+  telemetryEnabled: Accessor<boolean>;
+  telemetryEnabledLocked: () => boolean;
+  savingTelemetry: Accessor<boolean>;
+  handleTelemetryEnabledChange: (enabled: boolean) => Promise<void>;
 }
 
 export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props) => {
@@ -180,7 +185,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
       {/* Navigation + Privacy Card */}
       <SettingsPanel
         title="Navigation and privacy"
-        description="Control migration helpers and local-only metrics collection."
+        description="Control migration helpers, local metrics, and anonymous telemetry."
         icon={<Sliders class="w-5 h-5" strokeWidth={2} />}
         noPadding
         bodyClass="divide-y divide-border"
@@ -253,6 +258,33 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             class="shrink-0"
             disabled={props.disableLocalUpgradeMetricsLocked() || props.savingUpgradeMetrics()}
             onChange={() => props.handleDisableLocalUpgradeMetricsChange(!props.disableLocalUpgradeMetrics())}
+          />
+        </div>
+
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+          <div class="flex-1 min-w-0 space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-medium text-base-content truncate">
+                Anonymous telemetry
+              </span>
+              <Show when={props.telemetryEnabledLocked()}>
+                <span
+                  class="shrink-0 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+                  title="Locked by environment variable PULSE_TELEMETRY"
+                >
+                  ENV
+                </span>
+              </Show>
+            </div>
+            <p class="text-xs text-muted line-clamp-3">
+              Help improve Pulse by sharing anonymous usage data: a random install ID, version, platform, resource counts, and feature flags. No hostnames, credentials, or personal information is ever sent. <a href="https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md" target="_blank" rel="noopener noreferrer" class="underline hover:text-base-content">Full details</a>
+            </p>
+          </div>
+          <Toggle
+            checked={props.telemetryEnabled()}
+            class="shrink-0"
+            disabled={props.telemetryEnabledLocked() || props.savingTelemetry()}
+            onChange={() => props.handleTelemetryEnabledChange(!props.telemetryEnabled())}
           />
         </div>
       </SettingsPanel>

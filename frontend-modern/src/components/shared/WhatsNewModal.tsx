@@ -4,6 +4,7 @@ import ServerIcon from 'lucide-solid/icons/server';
 import BoxesIcon from 'lucide-solid/icons/boxes';
 import HardDriveIcon from 'lucide-solid/icons/hard-drive';
 import ShieldCheckIcon from 'lucide-solid/icons/shield-check';
+import ChartBarIcon from 'lucide-solid/icons/chart-bar';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import XIcon from 'lucide-solid/icons/x';
 
@@ -95,60 +96,27 @@ export function WhatsNewModal() {
               </div>
             </div>
 
-            <div class="rounded-md border border-border bg-surface-hover p-3 sm:p-4 text-sm text-base-content">
-              <div class="font-medium text-base-content">
-                Quick summary
+            <div class="rounded-md border border-sky-200 bg-sky-50 p-3 sm:p-4 dark:border-sky-800 dark:bg-sky-900/40">
+              <div class="flex items-center gap-2 text-sm font-medium text-sky-900 dark:text-sky-100">
+                <ChartBarIcon class="h-4 w-4 flex-shrink-0" />
+                Anonymous telemetry
               </div>
-              <ul class="mt-2 space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
-                <li class="flex items-start gap-2">
-                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500"></span>
-                  <span>Infrastructure combines Proxmox nodes, Hosts, and container hosts.</span>
-                </li>
-                <li class="flex items-start gap-2">
-                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-purple-500"></span>
-                  <span>Workloads now shows every VM, container, and Kubernetes workload.</span>
-                </li>
-                <li class="flex items-start gap-2">
-                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-amber-500"></span>
-                  <span>Storage and Recovery live at the top level for faster access.</span>
-                </li>
-              </ul>
-            </div>
-
-            <div class="rounded-md border border-border bg-surface p-3 sm:p-4">
-              <div class="text-sm font-medium text-base-content">
-                Why switch to a unified resource model?
-              </div>
-              <ul class="mt-2 space-y-1.5 text-xs sm:text-sm text-base-content">
-                <li class="flex items-start gap-2">
-                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400"></span>
-                  <span>One inventory and one search across Proxmox, agents, containers, Kubernetes, and more.</span>
-                </li>
-                <li class="flex items-start gap-2">
-                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400"></span>
-                  <span>Consistent filters, drawers, and workflows instead of separate pages per platform.</span>
-                </li>
-                <li class="flex items-start gap-2">
-                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400"></span>
-                  <span>Easier to add new sources (like TrueNAS) without growing the top-level nav forever.</span>
-                </li>
-              </ul>
-            </div>
-
-            <div class="rounded-md border border-border bg-surface p-3 sm:p-4">
-              <div class="text-sm font-medium text-base-content">
-                Finding things fast
-              </div>
-              <ul class="mt-2 space-y-1.5 text-xs sm:text-sm text-base-content">
-                <li class="flex items-start gap-2">
-                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400"></span>
-                  <span>Use the Command Palette: press <span class="font-mono">Cmd+K</span> (or <span class="font-mono">Ctrl+K</span>) and type what you remember: <span class="font-mono">proxmox</span>, <span class="font-mono">containers</span>, <span class="font-mono">k8s</span>, <span class="font-mono">hosts</span>.</span>
-                </li>
-                <li class="flex items-start gap-2">
-                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400"></span>
-                  <span>Old bookmarks still redirect, and Pulse will show a small banner explaining where that page moved.</span>
-                </li>
-              </ul>
+              <p class="mt-1.5 text-xs text-sky-900 dark:text-sky-200">
+                Pulse now sends a lightweight anonymous ping once a day — just a random install ID, version, platform, resource counts, and feature flags. No hostnames, credentials, IP addresses, or personal information is ever sent.
+              </p>
+              <p class="mt-1.5 text-xs text-sky-900 dark:text-sky-200">
+                This helps the developer understand how Pulse is used and prioritise what to build next. You can disable it any time in{' '}
+                <span class="font-medium">Settings &rarr; System &rarr; General</span> or by setting{' '}
+                <code class="rounded bg-sky-100 px-1 py-0.5 text-[10px] font-mono dark:bg-sky-800">PULSE_TELEMETRY=false</code>.{' '}
+                <a
+                  href="https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="underline hover:text-sky-700 dark:hover:text-sky-100"
+                >
+                  Full details
+                </a>
+              </p>
             </div>
 
             <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
