@@ -698,8 +698,8 @@ const Settings: Component<SettingsProps> = (props) => {
             await SettingsAPI.updateSystemSettings({ telemetryEnabled: enabled });
             notificationStore.success(
                 enabled
-                    ? 'Anonymous telemetry enabled — takes effect on next restart'
-                    : 'Anonymous telemetry disabled — takes effect on next restart',
+                    ? 'Anonymous telemetry enabled'
+                    : 'Anonymous telemetry disabled',
                 3000,
             );
         } catch (error) {

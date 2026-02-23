@@ -389,7 +389,7 @@ func Run(ctx context.Context, version string) error {
 	// fatal-on-error path running inside the telemetry goroutine.
 	isDocker := os.Getenv("PULSE_DOCKER") == "true"
 	telemetryPersistence := config.NewConfigPersistence(baseDataDir)
-	telemetry.Start(ctx, telemetry.Config{
+	telemetryCfg := telemetry.Config{
 		Version:  version,
 		DataDir:  baseDataDir,
 		IsDocker: isDocker,
@@ -436,8 +436,21 @@ func Run(ctx context.Context, version string) error {
 
 			return snap
 		},
-	})
+	}
+	telemetry.Start(ctx, telemetryCfg)
 	defer telemetry.Stop()
+
+	// Wire live telemetry toggle so Settings changes take effect immediately.
+	router.SetTelemetryToggleFunc(func(enabled bool) {
+		if enabled {
+			telemetryCfg.Enabled = true
+			telemetry.Start(ctx, telemetryCfg)
+			log.Info().Msg("Telemetry re-enabled via settings (live toggle)")
+		} else {
+			telemetry.Stop()
+			log.Info().Msg("Telemetry disabled via settings (live toggle)")
+		}
+	})
 
 	// Create HTTP server with unified configuration
 	srv := &http.Server{

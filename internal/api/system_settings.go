@@ -40,6 +40,7 @@ type SystemSettingsHandler struct {
 	wsHub                    *websocket.Hub
 	reloadSystemSettingsFunc func() // Function to reload cached system settings
 	reloadMonitorFunc        func() error
+	telemetryToggleFunc      func(enabled bool) // Called when telemetry is toggled at runtime
 	mtMonitor                interface {
 		GetMonitor(string) (*monitoring.Monitor, error)
 	}
@@ -63,6 +64,12 @@ func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPers
 		reloadSystemSettingsFunc: reloadSystemSettingsFunc,
 		reloadMonitorFunc:        reloadMonitorFunc,
 	}
+}
+
+// SetTelemetryToggleFunc sets the callback invoked when telemetry is toggled
+// at runtime (true = start, false = stop).
+func (h *SystemSettingsHandler) SetTelemetryToggleFunc(fn func(enabled bool)) {
+	h.telemetryToggleFunc = fn
 }
 
 // SetMonitor updates the monitor reference used by the handler at runtime.
@@ -788,6 +795,9 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	h.config.DisableLocalUpgradeMetrics = settings.DisableLocalUpgradeMetrics
 	if settings.TelemetryEnabled != nil {
 		h.config.TelemetryEnabled = *settings.TelemetryEnabled
+		if h.telemetryToggleFunc != nil {
+			h.telemetryToggleFunc(*settings.TelemetryEnabled)
+		}
 	}
 	if _, ok := rawRequest["publicURL"]; ok {
 		h.config.PublicURL = settings.PublicURL

@@ -2542,6 +2542,14 @@ func (r *Router) GetLicenseHandlers() *LicenseHandlers {
 	return r.licenseHandlers
 }
 
+// SetTelemetryToggleFunc wires a callback that is invoked when the user
+// toggles telemetry on or off at runtime via system settings.
+func (r *Router) SetTelemetryToggleFunc(fn func(enabled bool)) {
+	if r.systemSettingsHandler != nil {
+		r.systemSettingsHandler.SetTelemetryToggleFunc(fn)
+	}
+}
+
 func (r *Router) GetAlertTriggeredAnalyzer() *ai.AlertTriggeredAnalyzer {
 	if r.aiSettingsHandler != nil {
 		return r.aiSettingsHandler.GetAlertTriggeredAnalyzer(context.Background())
