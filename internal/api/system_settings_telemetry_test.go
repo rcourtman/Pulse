@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -191,5 +193,51 @@ func TestTelemetryUpdate_GetReturnsEffectiveValue(t *testing.T) {
 	}
 	if !*response.TelemetryEnabled {
 		t.Error("GET should return effective runtime value (true), not stale disk value (false)")
+	}
+}
+
+func TestTelemetryUpdate_NoMutationOnPersistFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:           tempDir,
+		ConfigPath:         tempDir,
+		TelemetryEnabled:   true,
+		PVEPollingInterval: 10 * time.Second,
+		EnvOverrides:       make(map[string]bool),
+	}
+	handler, persistence, token := setupTelemetryTest(t, cfg)
+
+	initial := config.DefaultSystemSettings()
+	if err := persistence.SaveSystemSettings(*initial); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make the config directory read-only so SaveSystemSettings fails.
+	systemFile := filepath.Join(tempDir, "system.json")
+	if err := os.Chmod(systemFile, 0400); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(tempDir, 0500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		os.Chmod(tempDir, 0700)
+		os.Chmod(systemFile, 0600)
+	})
+
+	body, _ := json.Marshal(map[string]interface{}{"telemetryEnabled": false})
+	req := httptest.NewRequest(http.MethodPost, "/api/system-settings", bytes.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateSystemSettings(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when persistence fails, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// In-memory config must NOT have been mutated.
+	if !cfg.TelemetryEnabled {
+		t.Error("TelemetryEnabled should still be true after persistence failure")
 	}
 }

@@ -2813,20 +2813,14 @@ func isNumericIP(host string) bool {
 }
 
 // UpdateAllowedPrivateCIDRs parses and updates the list of allowed private CIDR ranges for webhooks
-func (n *NotificationManager) UpdateAllowedPrivateCIDRs(cidrsString string) error {
-	n.allowedPrivateMu.Lock()
-	defer n.allowedPrivateMu.Unlock()
-
-	// Clear existing allowlist
-	n.allowedPrivateNets = nil
-
-	// Empty string means no allowlist (block all private IPs)
+// ParseAllowedPrivateCIDRs validates a comma-separated CIDR string and returns
+// the parsed networks. It does NOT modify any runtime state — use
+// ApplyAllowedPrivateCIDRs to commit the result.
+func ParseAllowedPrivateCIDRs(cidrsString string) ([]*net.IPNet, error) {
 	if cidrsString == "" {
-		log.Info().Msg("webhook private IP allowlist cleared - all private IPs blocked")
-		return nil
+		return nil, nil
 	}
 
-	// Parse comma-separated CIDRs
 	cidrs := strings.Split(cidrsString, ",")
 	var parsedNets []*net.IPNet
 
@@ -2840,7 +2834,7 @@ func (n *NotificationManager) UpdateAllowedPrivateCIDRs(cidrsString string) erro
 		if !strings.Contains(cidr, "/") {
 			ip := net.ParseIP(cidr)
 			if ip == nil {
-				return fmt.Errorf("invalid IP address: %s", cidr)
+				return nil, fmt.Errorf("invalid IP address: %s", cidr)
 			}
 			if ip.To4() != nil {
 				cidr = cidr + "/32"
@@ -2851,18 +2845,41 @@ func (n *NotificationManager) UpdateAllowedPrivateCIDRs(cidrsString string) erro
 
 		_, ipNet, err := net.ParseCIDR(cidr)
 		if err != nil {
-			return fmt.Errorf("invalid CIDR range %s: %w", cidr, err)
+			return nil, fmt.Errorf("invalid CIDR range %s: %w", cidr, err)
 		}
 
 		parsedNets = append(parsedNets, ipNet)
 	}
 
-	n.allowedPrivateNets = parsedNets
-	log.Info().
-		Str("cidrs", cidrsString).
-		Int("count", len(parsedNets)).
-		Msg("webhook private IP allowlist updated")
+	return parsedNets, nil
+}
 
+// ApplyAllowedPrivateCIDRs atomically replaces the runtime allowlist with
+// pre-validated networks (from ParseAllowedPrivateCIDRs).
+func (n *NotificationManager) ApplyAllowedPrivateCIDRs(cidrsString string, nets []*net.IPNet) {
+	n.allowedPrivateMu.Lock()
+	defer n.allowedPrivateMu.Unlock()
+
+	n.allowedPrivateNets = nets
+	if len(nets) == 0 {
+		log.Info().Msg("webhook private IP allowlist cleared - all private IPs blocked")
+	} else {
+		log.Info().
+			Str("cidrs", cidrsString).
+			Int("count", len(nets)).
+			Msg("webhook private IP allowlist updated")
+	}
+}
+
+// UpdateAllowedPrivateCIDRs validates and applies CIDR changes in one call.
+// Kept for backward compatibility; prefer ParseAllowedPrivateCIDRs + ApplyAllowedPrivateCIDRs
+// when you need persist-before-mutate semantics.
+func (n *NotificationManager) UpdateAllowedPrivateCIDRs(cidrsString string) error {
+	nets, err := ParseAllowedPrivateCIDRs(cidrsString)
+	if err != nil {
+		return err
+	}
+	n.ApplyAllowedPrivateCIDRs(cidrsString, nets)
 	return nil
 }
 

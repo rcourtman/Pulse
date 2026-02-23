@@ -135,26 +135,40 @@ func TestSend_Success(t *testing.T) {
 		body, _ := io.ReadAll(r.Body)
 		json.Unmarshal(body, &lastPing)
 		received.Add(1)
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer ts.Close()
 
 	// Override the endpoint for testing.
 	origEndpoint := pingEndpoint
-	// We can't easily override the const, so test send() indirectly
-	// by verifying the function doesn't panic and handles context correctly.
+	pingEndpoint = ts.URL
+	defer func() { pingEndpoint = origEndpoint }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// send() to the real endpoint will fail in tests (no network), but should not panic.
 	ping := Ping{
-		InstallID: "test",
-		Version:   "1.0.0",
+		InstallID: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+		Version:   "6.0.0",
 		Event:     "startup",
+		Platform:  "docker",
+		OS:        "linux",
+		Arch:      "amd64",
 	}
 	send(ctx, ping)
-	_ = origEndpoint
+
+	if received.Load() != 1 {
+		t.Fatalf("expected 1 request to reach server, got %d", received.Load())
+	}
+	if lastPing.InstallID != ping.InstallID {
+		t.Errorf("install_id = %q, want %q", lastPing.InstallID, ping.InstallID)
+	}
+	if lastPing.Event != "startup" {
+		t.Errorf("event = %q, want %q", lastPing.Event, "startup")
+	}
+	if lastPing.Version != "6.0.0" {
+		t.Errorf("version = %q, want %q", lastPing.Version, "6.0.0")
+	}
 }
 
 func TestStartStop_DisabledByDefault(t *testing.T) {

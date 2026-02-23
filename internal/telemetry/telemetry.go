@@ -55,10 +55,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const (
-	// pingEndpoint is the URL that receives anonymous telemetry pings.
-	pingEndpoint = "https://license.pulserelay.pro/v1/telemetry/ping"
+// pingEndpoint is the URL that receives anonymous telemetry pings.
+// It is a var (not const) so that tests can redirect it to a local server.
+var pingEndpoint = "https://license.pulserelay.pro/v1/telemetry/ping"
 
+const (
 	// heartbeatInterval is how often a running instance phones home.
 	heartbeatInterval = 24 * time.Hour
 

@@ -703,13 +703,17 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		http.Error(w, "Invalid theme value. Must be 'light', 'dark', or empty", http.StatusBadRequest)
 		return
 	}
-	if _, ok := rawRequest["webhookAllowedPrivateCIDRs"]; ok && h.getMonitor(r.Context()) != nil {
-		if nm := h.getMonitor(r.Context()).GetNotificationManager(); nm != nil {
-			if err := nm.UpdateAllowedPrivateCIDRs(settings.WebhookAllowedPrivateCIDRs); err != nil {
-				log.Error().Err(err).Msg("Failed to update webhook allowed private CIDRs")
-				http.Error(w, fmt.Sprintf("Invalid webhook allowed private CIDRs: %v", err), http.StatusBadRequest)
-				return
-			}
+	// Validate CIDRs before persistence (parse only — do NOT mutate runtime yet).
+	var parsedCIDRNets []*net.IPNet
+	cidrUpdateRequested := false
+	if _, ok := rawRequest["webhookAllowedPrivateCIDRs"]; ok {
+		cidrUpdateRequested = true
+		var err error
+		parsedCIDRNets, err = notifications.ParseAllowedPrivateCIDRs(settings.WebhookAllowedPrivateCIDRs)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to validate webhook allowed private CIDRs")
+			http.Error(w, fmt.Sprintf("Invalid webhook allowed private CIDRs: %v", err), http.StatusBadRequest)
+			return
 		}
 	}
 
@@ -818,6 +822,11 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 			h.getMonitor(r.Context()).EnableTemperatureMonitoring()
 		} else if !settings.TemperatureMonitoringEnabled && prevTempEnabled {
 			h.getMonitor(r.Context()).DisableTemperatureMonitoring()
+		}
+	}
+	if cidrUpdateRequested && h.getMonitor(r.Context()) != nil {
+		if nm := h.getMonitor(r.Context()).GetNotificationManager(); nm != nil {
+			nm.ApplyAllowedPrivateCIDRs(settings.WebhookAllowedPrivateCIDRs, parsedCIDRNets)
 		}
 	}
 	if _, ok := rawRequest["publicURL"]; ok {
