@@ -20,7 +20,9 @@ import (
 )
 
 const (
-	cloudHandoffIssuer = "pulse-cloud-control-plane"
+	cloudHandoffIssuer     = "pulse-cloud-control-plane"
+	handoffPrivateDirPerm  = 0o700
+	handoffPrivateFilePerm = 0o600
 )
 
 type cloudHandoffClaims struct {
@@ -46,12 +48,17 @@ func (s *jtiReplayStore) init() {
 			s.initErr = fmt.Errorf("configDir is required")
 			return
 		}
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			s.initErr = fmt.Errorf("create config dir: %w", err)
+		secretsDir := filepath.Join(dir, "secrets")
+		if err := os.MkdirAll(secretsDir, handoffPrivateDirPerm); err != nil {
+			s.initErr = fmt.Errorf("create handoff secrets dir: %w", err)
+			return
+		}
+		if err := os.Chmod(secretsDir, handoffPrivateDirPerm); err != nil {
+			s.initErr = fmt.Errorf("chmod handoff secrets dir: %w", err)
 			return
 		}
 
-		dbPath := filepath.Join(dir, "handoff_jti.db")
+		dbPath := filepath.Join(secretsDir, "handoff_jti.db")
 		dsn := dbPath + "?" + url.Values{
 			"_pragma": []string{
 				"busy_timeout(30000)",
@@ -81,9 +88,30 @@ func (s *jtiReplayStore) init() {
 			s.initErr = fmt.Errorf("init handoff jti schema: %w", err)
 			return
 		}
+		for _, path := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
+			if err := hardenPrivateFile(path, handoffPrivateFilePerm); err != nil {
+				_ = db.Close()
+				s.initErr = fmt.Errorf("harden handoff jti file permissions: %w", err)
+				return
+			}
+		}
 
 		s.db = db
 	})
+}
+
+func hardenPrivateFile(path string, mode os.FileMode) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	if info.Mode().Perm() == mode {
+		return nil
+	}
+	return os.Chmod(path, mode)
 }
 
 func (s *jtiReplayStore) checkAndStore(jti string, expiresAt time.Time) (stored bool, err error) {

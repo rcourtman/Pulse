@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -146,6 +147,46 @@ func TestJTIReplayStoreCheckAndStore(t *testing.T) {
 	_, err = store.checkAndStore("   ", expires)
 	if err == nil {
 		t.Fatal("expected empty jti to return error")
+	}
+}
+
+func TestJTIReplayStoreSecuresPermissionModes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits are not enforced on Windows")
+	}
+
+	configDir := t.TempDir()
+	store := &jtiReplayStore{configDir: configDir}
+	t.Cleanup(func() {
+		if store.db != nil {
+			_ = store.db.Close()
+		}
+	})
+
+	stored, err := store.checkAndStore("jti-perms", time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("checkAndStore() error = %v", err)
+	}
+	if !stored {
+		t.Fatal("expected first JTI insert to store")
+	}
+
+	secretsDir := filepath.Join(configDir, "secrets")
+	dirInfo, err := os.Stat(secretsDir)
+	if err != nil {
+		t.Fatalf("stat secrets dir: %v", err)
+	}
+	if got := dirInfo.Mode().Perm(); got != handoffPrivateDirPerm {
+		t.Fatalf("secrets dir mode = %#o, want %#o", got, handoffPrivateDirPerm)
+	}
+
+	dbPath := filepath.Join(secretsDir, "handoff_jti.db")
+	dbInfo, err := os.Stat(dbPath)
+	if err != nil {
+		t.Fatalf("stat handoff db: %v", err)
+	}
+	if got := dbInfo.Mode().Perm(); got != handoffPrivateFilePerm {
+		t.Fatalf("handoff db mode = %#o, want %#o", got, handoffPrivateFilePerm)
 	}
 }
 
