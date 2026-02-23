@@ -680,15 +680,12 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 	if _, ok := rawRequest["disableDockerUpdateActions"]; ok {
 		settings.DisableDockerUpdateActions = updates.DisableDockerUpdateActions
-		h.config.DisableDockerUpdateActions = settings.DisableDockerUpdateActions
 	}
 	if _, ok := rawRequest["disableLegacyRouteRedirects"]; ok {
 		settings.DisableLegacyRouteRedirects = updates.DisableLegacyRouteRedirects
-		h.config.DisableLegacyRouteRedirects = settings.DisableLegacyRouteRedirects
 	}
 	if _, ok := rawRequest["disableLocalUpgradeMetrics"]; ok {
 		settings.DisableLocalUpgradeMetrics = updates.DisableLocalUpgradeMetrics
-		h.config.DisableLocalUpgradeMetrics = settings.DisableLocalUpgradeMetrics
 	}
 	if _, ok := rawRequest["reduceProUpsellNoise"]; ok {
 		settings.ReduceProUpsellNoise = updates.ReduceProUpsellNoise
@@ -701,7 +698,22 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		settings.FullWidthMode = updates.FullWidthMode
 	}
 
-	// Update the config
+	// Pre-save validation (may return errors before anything is persisted)
+	if settings.Theme != "" && settings.Theme != "light" && settings.Theme != "dark" {
+		http.Error(w, "Invalid theme value. Must be 'light', 'dark', or empty", http.StatusBadRequest)
+		return
+	}
+	if _, ok := rawRequest["webhookAllowedPrivateCIDRs"]; ok && h.getMonitor(r.Context()) != nil {
+		if nm := h.getMonitor(r.Context()).GetNotificationManager(); nm != nil {
+			if err := nm.UpdateAllowedPrivateCIDRs(settings.WebhookAllowedPrivateCIDRs); err != nil {
+				log.Error().Err(err).Msg("Failed to update webhook allowed private CIDRs")
+				http.Error(w, fmt.Sprintf("Invalid webhook allowed private CIDRs: %v", err), http.StatusBadRequest)
+				return
+			}
+		}
+	}
+
+	// Detect PVE interval change (compare before mutation, apply after save)
 	if _, ok := rawRequest["pvePollingInterval"]; ok && settings.PVEPollingInterval > 0 {
 		newInterval := time.Duration(settings.PVEPollingInterval) * time.Second
 		if newInterval < 10*time.Second {
@@ -709,6 +721,24 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		}
 		if h.config.PVEPollingInterval != newInterval {
 			pveIntervalChanged = true
+		}
+	}
+
+	prevDiscoveryEnabled := h.config.DiscoveryEnabled
+
+	// ---- Persist FIRST, then apply to in-memory config ----
+	// This ensures runtime state never diverges from disk on save failure.
+	if err := h.persistence.SaveSystemSettings(settings); err != nil {
+		log.Error().Err(err).Msg("Failed to save system settings")
+		http.Error(w, "Failed to save settings", http.StatusInternalServerError)
+		return
+	}
+
+	// ---- Apply all in-memory config mutations (safe: disk is committed) ----
+	if _, ok := rawRequest["pvePollingInterval"]; ok && settings.PVEPollingInterval > 0 {
+		newInterval := time.Duration(settings.PVEPollingInterval) * time.Second
+		if newInterval < 10*time.Second {
+			newInterval = 10 * time.Second
 		}
 		h.config.PVEPollingInterval = newInterval
 	}
@@ -734,8 +764,6 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if settings.UpdateChannel != "" {
 		h.config.UpdateChannel = settings.UpdateChannel
 	}
-
-	// Update auto-update settings
 	h.config.AutoUpdateEnabled = settings.AutoUpdateEnabled
 	if settings.AutoUpdateCheckInterval > 0 {
 		h.config.AutoUpdateCheckInterval = time.Duration(settings.AutoUpdateCheckInterval) * time.Hour
@@ -743,29 +771,27 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if settings.AutoUpdateTime != "" {
 		h.config.AutoUpdateTime = settings.AutoUpdateTime
 	}
-
-	// Validate theme if provided
-	if settings.Theme != "" && settings.Theme != "light" && settings.Theme != "dark" {
-		http.Error(w, "Invalid theme value. Must be 'light', 'dark', or empty", http.StatusBadRequest)
-		return
-	}
-
-	// Update discovery settings and manage the service
-	prevDiscoveryEnabled := h.config.DiscoveryEnabled
 	h.config.DiscoveryEnabled = settings.DiscoveryEnabled
 	if settings.DiscoverySubnet != "" {
 		h.config.DiscoverySubnet = settings.DiscoverySubnet
 	}
 	h.config.Discovery = config.CloneDiscoveryConfig(settings.DiscoveryConfig)
-
 	if tempToggleRequested {
 		h.config.TemperatureMonitoringEnabled = settings.TemperatureMonitoringEnabled
 	}
+	h.config.DisableDockerUpdateActions = settings.DisableDockerUpdateActions
+	h.config.DisableLegacyRouteRedirects = settings.DisableLegacyRouteRedirects
+	h.config.DisableLocalUpgradeMetrics = settings.DisableLocalUpgradeMetrics
+	if settings.TelemetryEnabled != nil {
+		h.config.TelemetryEnabled = *settings.TelemetryEnabled
+	}
+	if _, ok := rawRequest["publicURL"]; ok {
+		h.config.PublicURL = settings.PublicURL
+	}
 
-	// Start or stop discovery service based on setting change
+	// ---- Side effects (discovery, temperature, notifications) ----
 	if h.getMonitor(r.Context()) != nil {
 		if settings.DiscoveryEnabled && !prevDiscoveryEnabled {
-			// Discovery was just enabled, start the service
 			subnet := h.config.DiscoverySubnet
 			if subnet == "" {
 				subnet = "auto"
@@ -773,11 +799,9 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 			h.getMonitor(r.Context()).StartDiscoveryService(context.Background(), h.wsHub, subnet)
 			log.Info().Msg("Discovery service started via settings update")
 		} else if !settings.DiscoveryEnabled && prevDiscoveryEnabled {
-			// Discovery was just disabled, stop the service
 			h.getMonitor(r.Context()).StopDiscoveryService()
 			log.Info().Msg("Discovery service stopped via settings update")
 		} else if settings.DiscoveryEnabled && settings.DiscoverySubnet != "" {
-			// Subnet changed while discovery is enabled, update it
 			if svc := h.getMonitor(r.Context()).GetDiscoveryService(); svc != nil {
 				svc.SetSubnet(settings.DiscoverySubnet)
 			}
@@ -789,7 +813,6 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 			}
 		}
 	}
-
 	if tempToggleRequested && h.getMonitor(r.Context()) != nil {
 		if settings.TemperatureMonitoringEnabled && !prevTempEnabled {
 			h.getMonitor(r.Context()).EnableTemperatureMonitoring()
@@ -797,39 +820,13 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 			h.getMonitor(r.Context()).DisableTemperatureMonitoring()
 		}
 	}
-
-	// Update webhook allowed private CIDRs if changed
-	if _, ok := rawRequest["webhookAllowedPrivateCIDRs"]; ok && h.getMonitor(r.Context()) != nil {
-		if nm := h.getMonitor(r.Context()).GetNotificationManager(); nm != nil {
-			if err := nm.UpdateAllowedPrivateCIDRs(settings.WebhookAllowedPrivateCIDRs); err != nil {
-				log.Error().Err(err).Msg("Failed to update webhook allowed private CIDRs")
-				http.Error(w, fmt.Sprintf("Invalid webhook allowed private CIDRs: %v", err), http.StatusBadRequest)
-				return
-			}
-		}
-	}
-
-	// Update public URL for notifications if changed
 	if _, ok := rawRequest["publicURL"]; ok {
-		h.config.PublicURL = settings.PublicURL
 		if h.getMonitor(r.Context()) != nil {
 			if nm := h.getMonitor(r.Context()).GetNotificationManager(); nm != nil {
 				nm.SetPublicURL(settings.PublicURL)
 				log.Info().Str("publicURL", settings.PublicURL).Msg("Updated notification public URL from settings")
 			}
 		}
-	}
-
-	// Save to persistence
-	if err := h.persistence.SaveSystemSettings(settings); err != nil {
-		log.Error().Err(err).Msg("Failed to save system settings")
-		http.Error(w, "Failed to save settings", http.StatusInternalServerError)
-		return
-	}
-
-	// Apply telemetryEnabled to in-memory config only AFTER successful persistence
-	if _, ok := rawRequest["telemetryEnabled"]; ok && settings.TelemetryEnabled != nil {
-		h.config.TelemetryEnabled = *settings.TelemetryEnabled
 	}
 
 	// Reload cached system settings after successful save
