@@ -380,6 +380,15 @@ func TestValidateWebhookURL_LoopbackVariants(t *testing.T) {
 	}
 }
 
+func TestValidateWebhookURL_IPv6Unspecified(t *testing.T) {
+	nm := NewNotificationManager("")
+
+	err := nm.ValidateWebhookURL("http://[::]/webhook")
+	if err == nil {
+		t.Error("Expected error for IPv6 unspecified address (::)")
+	}
+}
+
 func TestValidateWebhookURL_LinkLocalIPv6(t *testing.T) {
 	nm := NewNotificationManager("")
 

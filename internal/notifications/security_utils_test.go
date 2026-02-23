@@ -458,6 +458,12 @@ func TestIsPrivateIP(t *testing.T) {
 			ip:       "93.184.216.34",
 			expected: false,
 		},
+		// IPv6 unspecified (RFC4291)
+		{
+			name:     ":: IPv6 unspecified",
+			ip:       "::",
+			expected: true,
+		},
 		// IPv6 loopback
 		{
 			name:     "::1 IPv6 loopback",

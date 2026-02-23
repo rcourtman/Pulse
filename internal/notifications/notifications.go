@@ -2793,6 +2793,7 @@ func isPrivateIP(ip net.IP) bool {
 		"198.51.100.0/24", // Documentation TEST-NET-2 (RFC5737)
 		"203.0.113.0/24",  // Documentation TEST-NET-3 (RFC5737)
 		"::1/128",         // IPv6 loopback
+		"::/128",          // IPv6 unspecified (RFC4291)
 		"fe80::/10",       // IPv6 link-local
 		"fc00::/7",        // IPv6 unique local
 	}

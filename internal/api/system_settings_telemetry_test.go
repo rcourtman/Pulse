@@ -281,3 +281,78 @@ func TestTelemetryUpdate_UnrelatedUpdateDoesNotToggle(t *testing.T) {
 		t.Error("telemetry toggle callback should NOT fire for unrelated settings updates")
 	}
 }
+
+func TestCIDRUpdate_InvalidCIDRRejectedBeforePersist(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:         tempDir,
+		ConfigPath:       tempDir,
+		TelemetryEnabled: true,
+		EnvOverrides:     make(map[string]bool),
+	}
+	handler, persistence, token := setupTelemetryTest(t, cfg)
+
+	initial := config.DefaultSystemSettings()
+	initial.WebhookAllowedPrivateCIDRs = "192.168.1.0/24"
+	if err := persistence.SaveSystemSettings(*initial); err != nil {
+		t.Fatal(err)
+	}
+
+	// Send an invalid CIDR value — should be rejected with 400 before persisting.
+	body, _ := json.Marshal(map[string]interface{}{"webhookAllowedPrivateCIDRs": "not-a-cidr"})
+	req := httptest.NewRequest(http.MethodPost, "/api/system-settings", bytes.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateSystemSettings(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid CIDR, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify persisted value was NOT changed.
+	saved, err := persistence.LoadSystemSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.WebhookAllowedPrivateCIDRs != "192.168.1.0/24" {
+		t.Errorf("persisted CIDRs should be unchanged, got %q", saved.WebhookAllowedPrivateCIDRs)
+	}
+}
+
+func TestCIDRUpdate_ValidCIDRPersisted(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:         tempDir,
+		ConfigPath:       tempDir,
+		TelemetryEnabled: true,
+		EnvOverrides:     make(map[string]bool),
+	}
+	handler, persistence, token := setupTelemetryTest(t, cfg)
+
+	initial := config.DefaultSystemSettings()
+	if err := persistence.SaveSystemSettings(*initial); err != nil {
+		t.Fatal(err)
+	}
+
+	// Send a valid CIDR value.
+	body, _ := json.Marshal(map[string]interface{}{"webhookAllowedPrivateCIDRs": "10.0.0.0/8, 172.16.0.0/12"})
+	req := httptest.NewRequest(http.MethodPost, "/api/system-settings", bytes.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateSystemSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify persisted value was updated.
+	saved, err := persistence.LoadSystemSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.WebhookAllowedPrivateCIDRs != "10.0.0.0/8, 172.16.0.0/12" {
+		t.Errorf("persisted CIDRs should be updated, got %q", saved.WebhookAllowedPrivateCIDRs)
+	}
+}
