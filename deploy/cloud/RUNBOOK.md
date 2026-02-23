@@ -71,12 +71,18 @@ Required values:
 - `CONTROL_PLANE_IMAGE` (digest-pinned control-plane image ref)
 - `CP_ADMIN_KEY` (control plane admin API key)
 - `CP_PULSE_IMAGE` (digest-pinned tenant image ref)
+- `CP_TRIAL_SIGNUP_PRICE_ID` (Stripe recurring price ID used for hosted trial checkout)
 - `CP_ALLOW_DOCKERLESS_PROVISIONING=false`
 - `CP_REQUIRE_EMAIL_PROVIDER=true`
 - `RESEND_API_KEY` (required in production)
 - `PULSE_EMAIL_FROM` (e.g. `noreply@pulserelay.pro`)
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_API_KEY`
+
+Stripe key mode must match environment:
+
+- `CP_ENV=production` -> `STRIPE_API_KEY` must be `sk_live_...`
+- `CP_ENV=staging` -> `STRIPE_API_KEY` must be `sk_test_...`
 
 Recommended rate-limit overrides (all are requests/minute per source IP):
 
@@ -105,6 +111,83 @@ curl -fsS -k --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/readyz"
 curl -fsS -k --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/status" -H "X-Admin-Key: ${ADMIN_KEY}" | jq
 docker compose -f /opt/pulse-cloud/docker-compose.yml ps
 ```
+
+### Launch Gate Preflight (Operator Machine)
+
+Run the automated preflight from this repository before any launch/cutover:
+
+```bash
+cd deploy/cloud
+./preflight-live.sh
+```
+
+Defaults:
+
+- `DOMAIN=cloud.pulserelay.pro`
+- `SSH_TARGET=root@pulse-cloud`
+- `ADMIN_KEY_FILE=/Volumes/Development/pulse/secrets/cloud-cp/admin_key`
+- `EXPECT_CP_ENV=production`
+- `EXPECT_STRIPE_MODE=live`
+- `CHECK_STRIPE_CHECKOUT_PROBE=false`
+
+Override any of these env vars when validating staging or a different host.
+
+### Staging (Stripe Test Mode)
+
+Use staging for full end-to-end hosted-signup and provisioning drills without real card charges.
+
+Recommended Stripe setup:
+- Use a dedicated Stripe Sandbox (for example: `Pulse Staging`)
+- Keep staging/test credentials separate from live credentials
+- Store local copies in:
+  - `/Volumes/Development/pulse/secrets/stripe/test_secret_key`
+  - `/Volumes/Development/pulse/secrets/stripe/test_price_id`
+  - `/Volumes/Development/pulse/secrets/stripe/test_webhook_secret`
+
+1. Create staging env file from template:
+
+```bash
+cd /opt/pulse-cloud
+cp .env.staging.example .env
+chmod 600 .env
+```
+
+2. Set required staging values:
+- `CP_ENV=staging`
+- `STRIPE_API_KEY=sk_test_...`
+- `STRIPE_WEBHOOK_SECRET=whsec_...` (from Stripe test-mode webhook endpoint)
+- `CP_TRIAL_SIGNUP_PRICE_ID=price_...` (test-mode recurring price)
+
+If you run setup from the dev machine that has `/Volumes/Development/pulse/secrets`, you can populate `.env` safely:
+
+```bash
+cd /opt/pulse-cloud
+sudo sed -i "s|^CP_ENV=.*|CP_ENV=staging|" .env
+sudo sed -i "s|^STRIPE_API_KEY=.*|STRIPE_API_KEY=$(cat /Volumes/Development/pulse/secrets/stripe/test_secret_key)|" .env
+sudo sed -i "s|^CP_TRIAL_SIGNUP_PRICE_ID=.*|CP_TRIAL_SIGNUP_PRICE_ID=$(cat /Volumes/Development/pulse/secrets/stripe/test_price_id)|" .env
+sudo sed -i "s|^STRIPE_WEBHOOK_SECRET=.*|STRIPE_WEBHOOK_SECRET=$(cat /Volumes/Development/pulse/secrets/stripe/test_webhook_secret)|" .env
+```
+
+3. Run setup in staging mode:
+
+```bash
+cd /path/to/repo/deploy/cloud
+sudo -E PULSE_CLOUD_EXPECT_ENV=staging PULSE_CLOUD_EXPECT_STRIPE_MODE=test bash setup.sh
+```
+
+4. Run staging preflight (includes checkout probe by default):
+
+```bash
+cd deploy/cloud
+./preflight-staging.sh
+```
+
+`preflight-staging.sh` defaults:
+- `DOMAIN=cloud-staging.pulserelay.pro`
+- `SSH_TARGET=root@pulse-cloud-staging`
+- `EXPECT_CP_ENV=staging`
+- `EXPECT_STRIPE_MODE=test`
+- `CHECK_STRIPE_CHECKOUT_PROBE=true`
 
 ## Stripe Webhook Configuration
 
