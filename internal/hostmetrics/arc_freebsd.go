@@ -5,13 +5,14 @@ package hostmetrics
 import (
 	"encoding/binary"
 	"fmt"
-	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 func readFreeBSDARCSize() (uint64, error) {
 	// kstat.zfs.misc.arcstats.size holds the current ARC size in bytes.
 	// This is a uint64 sysctl on FreeBSD.
-	raw, err := syscall.SysctlRaw("kstat.zfs.misc.arcstats.size")
+	raw, err := unix.SysctlRaw("kstat.zfs.misc.arcstats.size")
 	if err != nil {
 		return 0, err
 	}
