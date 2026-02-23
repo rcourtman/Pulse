@@ -1,0 +1,83 @@
+{
+  "scenarios": [
+    {
+      "id": "multi-tenant",
+      "name": "Multi-tenant Isolation",
+      "description": "Validates org lifecycle, switching, and isolation boundaries.",
+      "deterministic": {
+        "command": [
+          "npx",
+          "playwright",
+          "test",
+          "tests/03-multi-tenant.spec.ts",
+          "--project=chromium",
+          "--reporter=list",
+          "--retries=1"
+        ],
+        "env": {
+          "PULSE_MULTI_TENANT_ENABLED": "true"
+        }
+      },
+      "agentic": {
+        "task_file": "evals/tasks/multi-tenant.md"
+      }
+    },
+    {
+      "id": "trial-signup",
+      "name": "Pro Trial Signup Return",
+      "description": "Ensures trial flow redirects to hosted signup, completes Stripe sandbox checkout, and returns with trial entitlements.",
+      "deterministic": {
+        "command": [
+          "npx",
+          "playwright",
+          "test",
+          "tests/07-trial-signup-return.spec.ts",
+          "--project=chromium",
+          "--reporter=list",
+          "--retries=1"
+        ]
+      },
+      "agentic": {
+        "task_file": "evals/tasks/trial-signup.md"
+      }
+    },
+    {
+      "id": "cloud-hosting",
+      "name": "Pulse Cloud Hosted Signup",
+      "description": "Validates public cloud signup, Stripe sandbox checkout completion, and magic-link request behavior.",
+      "deterministic": {
+        "command": [
+          "npx",
+          "playwright",
+          "test",
+          "tests/08-cloud-hosting.spec.ts",
+          "--project=chromium",
+          "--reporter=list",
+          "--retries=1"
+        ]
+      },
+      "agentic": {
+        "task_file": "evals/tasks/cloud-hosting.md"
+      }
+    },
+    {
+      "id": "cloud-billing-lifecycle",
+      "name": "Cloud Billing Lifecycle",
+      "description": "Validates post-checkout cloud lifecycle transitions (active to canceled) through Stripe + webhook processing.",
+      "deterministic": {
+        "command": [
+          "npx",
+          "playwright",
+          "test",
+          "tests/09-cloud-billing-lifecycle.spec.ts",
+          "--project=chromium",
+          "--reporter=list",
+          "--retries=1"
+        ]
+      },
+      "agentic": {
+        "task_file": "evals/tasks/cloud-billing-lifecycle.md"
+      }
+    }
+  ]
+}

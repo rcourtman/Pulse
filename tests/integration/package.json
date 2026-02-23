@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "test": "playwright test",
+    "evals": "node ./scripts/run-evals.mjs",
+    "test:visual": "npm test -- tests/06-theme-visual.spec.ts --project=chromium",
+    "test:visual:update": "npm test -- tests/06-theme-visual.spec.ts --project=chromium --update-snapshots",
     "test:ui": "playwright test --ui",
     "test:debug": "playwright test --debug",
     "test:headed": "playwright test --headed",

@@ -2,7 +2,7 @@
 #
 # Run Pulse integration tests with different suites
 # Usage: ./run-tests.sh [suite]
-#   suite: all, core, diagnostic, perf, visual, multi-tenant, updates-api
+#   suite: all, core, diagnostic, perf, visual, multi-tenant, trial, cloud-hosting, cloud-lifecycle, evals, updates-api
 #
 
 set -e
@@ -122,6 +122,18 @@ run_suite() {
         multi-tenant)
             npx playwright test "tests/03-multi-tenant.spec.ts" --project=chromium --reporter=list
             ;;
+        trial)
+            npx playwright test "tests/07-trial-signup-return.spec.ts" --project=chromium --reporter=list
+            ;;
+        cloud-hosting)
+            npx playwright test "tests/08-cloud-hosting.spec.ts" --project=chromium --reporter=list
+            ;;
+        cloud-lifecycle)
+            npx playwright test "tests/09-cloud-billing-lifecycle.spec.ts" --project=chromium --reporter=list
+            ;;
+        evals)
+            node ./scripts/run-evals.mjs --mode deterministic
+            ;;
         updates-api)
             (
                 cd "$REPO_ROOT"
@@ -161,6 +173,9 @@ case "$SUITE" in
         run_suite "Diagnostic Smoke" "diagnostic" || FAILED_TESTS+=("Diagnostic Smoke")
         run_suite "Core E2E" "core" || FAILED_TESTS+=("Core E2E")
         run_suite "Multi-tenant E2E" "multi-tenant" "false" "false" "false" "false" "true" || FAILED_TESTS+=("Multi-tenant E2E")
+        run_suite "Trial Signup E2E" "trial" || FAILED_TESTS+=("Trial Signup E2E")
+        run_suite "Cloud Hosting E2E" "cloud-hosting" || FAILED_TESTS+=("Cloud Hosting E2E")
+        run_suite "Cloud Billing Lifecycle E2E" "cloud-lifecycle" || FAILED_TESTS+=("Cloud Billing Lifecycle E2E")
         run_suite "Navigation Performance" "perf" || FAILED_TESTS+=("Navigation Performance")
         run_suite "Theme Visual Regression" "visual" || FAILED_TESTS+=("Theme Visual Regression")
         run_suite "Update API Integration" "updates-api" || FAILED_TESTS+=("Update API Integration")
@@ -186,13 +201,29 @@ case "$SUITE" in
         run_suite "Multi-tenant E2E" "multi-tenant" "false" "false" "false" "false" "true" || FAILED_TESTS+=("Multi-tenant E2E")
         ;;
 
+    trial)
+        run_suite "Trial Signup E2E" "trial" || FAILED_TESTS+=("Trial Signup E2E")
+        ;;
+
+    cloud-hosting)
+        run_suite "Cloud Hosting E2E" "cloud-hosting" || FAILED_TESTS+=("Cloud Hosting E2E")
+        ;;
+
+    cloud-lifecycle)
+        run_suite "Cloud Billing Lifecycle E2E" "cloud-lifecycle" || FAILED_TESTS+=("Cloud Billing Lifecycle E2E")
+        ;;
+
+    evals)
+        run_suite "Agentic Eval Pack (Deterministic)" "evals" || FAILED_TESTS+=("Agentic Eval Pack (Deterministic)")
+        ;;
+
     updates-api)
         run_suite "Update API Integration" "updates-api" || FAILED_TESTS+=("Update API Integration")
         ;;
 
     *)
         echo "Unknown suite: $SUITE"
-        echo "Available suites: all, diagnostic, core, perf, visual, multi-tenant, updates-api"
+        echo "Available suites: all, diagnostic, core, perf, visual, multi-tenant, trial, cloud-hosting, cloud-lifecycle, evals, updates-api"
         exit 1
         ;;
 esac

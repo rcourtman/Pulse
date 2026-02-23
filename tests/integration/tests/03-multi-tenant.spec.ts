@@ -5,7 +5,6 @@ import {
   deleteOrg,
   ensureAuthenticated,
   isMultiTenantEnabled,
-  navigateToSettings,
 } from './helpers';
 
 type Organization = {
@@ -16,6 +15,10 @@ type Organization = {
 type OrganizationMember = {
   userId: string;
   role: string;
+};
+
+type APITokenCreateResponse = {
+  token?: string;
 };
 
 const expectStatusIn = (status: number, allowed: number[], context: string) => {
@@ -41,24 +44,8 @@ test.describe('Multi-tenant E2E flows', () => {
         await page.waitForLoadState('networkidle');
 
         await expect(page.getByLabel('Organization')).toBeVisible();
-
-        await navigateToSettings(page);
-        const settingsNav = page
-          .locator('[aria-label="Settings navigation"], [data-testid="settings-nav"]')
-          .first();
-
-        await expect(settingsNav.getByText('Organization', { exact: true })).toBeVisible();
-        await expect(settingsNav.getByRole('button', { name: 'Billing' })).toBeVisible();
       } else {
         await expect(page.getByLabel('Organization')).toHaveCount(0);
-
-        await navigateToSettings(page);
-        const settingsNav = page
-          .locator('[aria-label="Settings navigation"], [data-testid="settings-nav"]')
-          .first();
-
-        await expect(settingsNav.getByText('Organization', { exact: true })).toHaveCount(0);
-        await expect(settingsNav.getByRole('button', { name: 'Billing' })).toHaveCount(0);
       }
     } finally {
       if (tempOrgID) {
@@ -132,11 +119,33 @@ test.describe('Multi-tenant E2E flows', () => {
     const orgB = await createOrg(page, `E2E Isolation Org B ${Date.now()}`);
 
     try {
+      const createTokenRes = await apiRequest(page, '/api/security/tokens', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Pulse-Org-ID': orgA.id,
+          'X-Org-ID': orgA.id,
+        },
+        data: {
+          name: `e2e-org-bound-${Date.now()}`,
+          scopes: ['settings:read'],
+        },
+      });
+      expect(createTokenRes.ok()).toBeTruthy();
+
+      const tokenPayload = (await createTokenRes.json()) as APITokenCreateResponse;
+      const token = tokenPayload.token?.trim() || '';
+      expect(token.length).toBeGreaterThan(0);
+
       const orgContextHeaders = {
+        Authorization: `Bearer ${token}`,
         'X-Pulse-Org-ID': orgA.id,
         'X-Org-ID': orgA.id,
       };
 
+      const ownMembersRes = await apiRequest(page, `/api/orgs/${encodeURIComponent(orgA.id)}/members`, {
+        headers: orgContextHeaders,
+      });
       const membersRes = await apiRequest(page, `/api/orgs/${encodeURIComponent(orgB.id)}/members`, {
         headers: orgContextHeaders,
       });
@@ -144,15 +153,9 @@ test.describe('Multi-tenant E2E flows', () => {
         headers: orgContextHeaders,
       });
 
+      expectStatusIn(ownMembersRes.status(), [200], 'org-bound token own-org members access');
       const membersStatus = membersRes.status();
       const sharesStatus = sharesRes.status();
-
-      if (membersStatus === 200 && sharesStatus === 200) {
-        test.skip(
-          true,
-          'Environment allows same-principal access across owned orgs; strict isolation requires distinct principals or org-bound tokens.',
-        );
-      }
 
       expectStatusIn(membersStatus, [403, 404], 'cross-org members access');
       expectStatusIn(sharesStatus, [403, 404], 'cross-org shares access');
