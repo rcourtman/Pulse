@@ -24,6 +24,16 @@ End-to-end Playwright tests that validate critical user flows against a running 
 - `tests/02-navigation-perf.spec.ts` — route transition performance budgets for:
   - Infrastructure → Workloads
   - Workloads → Infrastructure
+- `tests/06-theme-visual.spec.ts` — visual regression baselines for light/dark auth surfaces:
+  - Logged-out login page (full page + form card)
+  - Authenticated Settings → Authentication page
+- `tests/07-trial-signup-return.spec.ts` — trial workflow contract:
+  - Click "Start 14-day Pro Trial" redirects to hosted signup URL
+  - After returning from signup, billing panel shows real trial expiry and countdown (not lifetime)
+- `tests/08-cloud-hosting.spec.ts` — hosted cloud signup contract:
+  - Public `/cloud/signup` form submits workspace creation request
+  - Magic-link request path succeeds
+  - Unavailable hosted mode shows fallback portal link
 
 ## Running Tests
 
@@ -33,6 +43,37 @@ cd tests/integration
 ./scripts/setup.sh   # one-time (installs deps + builds docker images)
 npm test
 ```
+
+### Eval Packs (No Manual Steps)
+Run the curated scenario pack (multi-tenant, trial-signup, cloud-hosting) and emit a report:
+```bash
+cd tests/integration
+npm run evals
+```
+
+Filter to one scenario:
+```bash
+npm run evals -- --scenario trial-signup
+```
+
+Reports are written to:
+- `tests/integration/eval-results/<timestamp>/report.json`
+- `tests/integration/eval-results/<timestamp>/report.md`
+
+### Agentic Mode (External Browser Agent)
+The eval runner supports external browser-capable agents through a command template:
+```bash
+cd tests/integration
+PULSE_EVAL_MODE=agentic \
+PULSE_EVAL_AGENT_COMMAND_TEMPLATE='<your-agent-command-using {{task_file}} and {{result_json}}>' \
+npm run evals
+```
+
+Supported placeholders in `PULSE_EVAL_AGENT_COMMAND_TEMPLATE`:
+- `{{task_file}}`
+- `{{result_json}}`
+- `{{scenario_id}}`
+- `{{base_url}}`
 
 The docker-compose stack seeds a deterministic bootstrap token for first-run setup:
 - Override via `PULSE_E2E_BOOTSTRAP_TOKEN`
@@ -56,6 +97,32 @@ PULSE_E2E_USERNAME='admin' \
 PULSE_E2E_PASSWORD='adminadminadmin' \
 npm test
 ```
+
+### Snapshot-Clean Proxmox LXC Trial SAT
+For real trial workflow validation against a fresh LXC each run:
+
+- Runbook: `docs/operations/TRIAL_E2E_LXC_SNAPSHOT_RUNBOOK.md`
+- Probe script: `tests/integration/scripts/trial-signup-contract.sh`
+
+### Run Theme Visual Regression Suite
+```bash
+cd tests/integration
+PULSE_E2E_SKIP_DOCKER=1 \
+PULSE_BASE_URL='http://your-pulse-host:7655' \
+PULSE_E2E_USERNAME='admin' \
+PULSE_E2E_PASSWORD='your-password' \
+npm run test:visual
+```
+
+To refresh baselines intentionally:
+```bash
+npm run test:visual:update
+```
+
+When running against an existing instance (`PULSE_E2E_SKIP_DOCKER=1`), authenticated
+visual snapshots require explicit credentials:
+- `PULSE_E2E_USERNAME`
+- `PULSE_E2E_PASSWORD`
 
 If the instance is behind self-signed TLS:
 ```bash
