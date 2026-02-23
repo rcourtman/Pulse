@@ -55,7 +55,8 @@ const measureTabTransition = async (
 test.describe.serial('Navigation performance budgets', () => {
   test.skip(!truthy(process.env.PULSE_E2E_PERF), 'Set PULSE_E2E_PERF=1 to enable navigation perf checks');
 
-  test('infrastructure and workloads tab switches stay within budget', async ({ page }) => {
+  test('infrastructure and workloads tab switches stay within budget', async ({ page, browserName, isMobile }) => {
+    test.skip(browserName !== 'chromium' || Boolean(isMobile), 'Perf budgets are pinned to desktop Chromium');
     test.slow();
 
     const iterations = toPositiveInt(process.env.PULSE_E2E_PERF_ITERATIONS, 3);
@@ -64,9 +65,16 @@ test.describe.serial('Navigation performance budgets', () => {
 
     await ensureAuthenticated(page);
 
-    const initialMockMode = await getMockMode(page);
-    if (!initialMockMode.enabled) {
-      await setMockMode(page, true);
+    let initialMockMode: { enabled: boolean } | null = null;
+    try {
+      initialMockMode = await getMockMode(page);
+      if (!initialMockMode.enabled) {
+        await setMockMode(page, true);
+      }
+    } catch (error) {
+      // Some auth/bootstrap paths can delay privileged settings APIs.
+      // Perf measurements can still run with the compose default mock mode.
+      console.warn(`[perf] unable to read/set mock mode, continuing: ${String(error)}`);
     }
 
     try {
@@ -101,7 +109,7 @@ test.describe.serial('Navigation performance budgets', () => {
       expect(infraToWorkloadsMedianMs).toBeLessThanOrEqual(infraToWorkloadsBudgetMs);
       expect(workloadsToInfraMedianMs).toBeLessThanOrEqual(workloadsToInfraBudgetMs);
     } finally {
-      if (!initialMockMode.enabled) {
+      if (initialMockMode && !initialMockMode.enabled) {
         await setMockMode(page, false);
       }
     }

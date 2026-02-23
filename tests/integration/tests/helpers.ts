@@ -68,20 +68,76 @@ export async function maybeCompleteSetupWizard(page: Page) {
   const wizard = page.getByRole('main', { name: 'Pulse Setup Wizard' });
   await expect(wizard).toBeVisible();
 
+  const securityConfigured = wizard.getByText(/security configured/i);
+  const secureDashboardHeading = wizard.getByText('Secure Your Dashboard');
+  const continueButton = wizard.getByRole('button', { name: /continue to setup|continue/i });
+  const finishButton = wizard.getByRole('button', { name: /go to dashboard|skip for now/i });
+
   await page.getByPlaceholder('Paste your bootstrap token').fill(E2E_CREDENTIALS.bootstrapToken);
-  await page.getByRole('button', { name: /continue/i }).click();
 
-  await expect(wizard.getByText('Secure Your Dashboard')).toBeVisible();
-  await wizard.getByRole('button', { name: /custom password/i }).click();
+  // Welcome step auto-submits pasted tokens; only click Continue if no transition happened.
+  let onSecurityStep = false;
+  let onCompleteStep = false;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    if (await securityConfigured.isVisible({ timeout: 150 }).catch(() => false)) {
+      onCompleteStep = true;
+      break;
+    }
+    if (await secureDashboardHeading.isVisible({ timeout: 150 }).catch(() => false)) {
+      onSecurityStep = true;
+      break;
+    }
+    if (attempt === 5 && await continueButton.isVisible({ timeout: 250 }).catch(() => false)) {
+      await continueButton.click();
+    }
+    await page.waitForTimeout(200);
+  }
 
-  await wizard.locator('input[type="text"]').first().fill(E2E_CREDENTIALS.username);
-  await wizard.locator('input[type="password"]').nth(0).fill(E2E_CREDENTIALS.password);
-  await wizard.locator('input[type="password"]').nth(1).fill(E2E_CREDENTIALS.password);
+  if (!onSecurityStep && !onCompleteStep) {
+    throw new Error('Setup wizard did not reach security or completion step');
+  }
 
-  await wizard.getByRole('button', { name: /create account/i }).click();
-  await expect(wizard.getByText(/security configured/i)).toBeVisible();
+  if (onSecurityStep) {
+    const customPasswordButton = wizard.getByRole('button', { name: /custom password/i });
+    if (await customPasswordButton.isVisible({ timeout: 4000 }).catch(() => false)) {
+      let clickedCustomPassword = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          await customPasswordButton.click({ timeout: 10_000, force: attempt > 0 });
+          clickedCustomPassword = true;
+          break;
+        } catch (error) {
+          // The step can transition to complete while waiting; handle that as success.
+          if (await securityConfigured.isVisible({ timeout: 250 }).catch(() => false)) {
+            onCompleteStep = true;
+            break;
+          }
+          if (attempt === 2) {
+            throw error;
+          }
+          await page.waitForTimeout(200);
+        }
+      }
 
-  await wizard.getByRole('button', { name: /go to dashboard|skip for now/i }).click();
+      if (!onCompleteStep && clickedCustomPassword) {
+        await wizard.locator('input[type="text"]').first().fill(E2E_CREDENTIALS.username);
+        await wizard.locator('input[type="password"]').nth(0).fill(E2E_CREDENTIALS.password);
+        await wizard.locator('input[type="password"]').nth(1).fill(E2E_CREDENTIALS.password);
+
+        await wizard.getByRole('button', { name: /create account/i }).click();
+        await expect(securityConfigured).toBeVisible();
+        onCompleteStep = true;
+      }
+    } else {
+      await expect(securityConfigured).toBeVisible();
+      onCompleteStep = true;
+    }
+  }
+
+  if (onCompleteStep) {
+    await finishButton.scrollIntoViewIfNeeded();
+    await finishButton.click({ timeout: 10_000 });
+  }
 
   await page.waitForLoadState('domcontentloaded');
 }
@@ -167,10 +223,18 @@ export async function logout(page: Page) {
 }
 
 export async function setMockMode(page: Page, enabled: boolean) {
-  const res = await page.request.post('/api/system/mock-mode', {
+  const send = () => apiRequest(page, '/api/system/mock-mode', {
+    method: 'POST',
     data: { enabled },
     headers: { 'Content-Type': 'application/json' },
   });
+
+  let res = await send();
+  if (res.status() === 401) {
+    await login(page);
+    res = await send();
+  }
+
   if (!res.ok()) {
     throw new Error(`Failed to update mock mode: ${res.status()} ${await res.text()}`);
   }
@@ -178,7 +242,14 @@ export async function setMockMode(page: Page, enabled: boolean) {
 }
 
 export async function getMockMode(page: Page) {
-  const res = await page.request.get('/api/system/mock-mode');
+  const send = () => apiRequest(page, '/api/system/mock-mode');
+
+  let res = await send();
+  if (res.status() === 401) {
+    await login(page);
+    res = await send();
+  }
+
   if (!res.ok()) {
     throw new Error(`Failed to read mock mode: ${res.status()} ${await res.text()}`);
   }
@@ -347,20 +418,38 @@ export async function resetTestEnvironment() {
  * Make API request to Pulse backend
  */
 export async function apiRequest(page: Page, endpoint: string, options: any = {}) {
-  const baseURL = 'http://localhost:7655';
-  const response = await page.request.fetch(`${baseURL}${endpoint}`, options);
+  const baseURL = (
+    process.env.PULSE_BASE_URL ||
+    process.env.PLAYWRIGHT_BASE_URL ||
+    'http://localhost:7655'
+  ).replace(/\/+$/, '');
+
+  const method = String(options.method || 'GET').toUpperCase();
+  const headers = { ...(options.headers || {}) } as Record<string, string>;
+  const hasNonSessionAuth =
+    typeof headers.Authorization === 'string' &&
+    /^(basic|bearer)\s+/i.test(headers.Authorization) ||
+    typeof headers['X-API-Token'] === 'string';
+
+  if (!hasNonSessionAuth && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    const hasCSRFHeader = Object.keys(headers).some((name) => name.toLowerCase() === 'x-csrf-token');
+    if (!hasCSRFHeader) {
+      const cookies = await page.context().cookies(baseURL);
+      const csrfCookie = cookies.find((cookie) => cookie.name === 'pulse_csrf')?.value;
+      if (csrfCookie) {
+        headers['X-CSRF-Token'] = csrfCookie;
+      }
+    }
+  }
+
+  const response = await page.request.fetch(`${baseURL}${endpoint}`, {
+    ...options,
+    headers,
+  });
   return response;
 }
 
 export async function isMultiTenantEnabled(page: Page): Promise<boolean> {
-  const res = await apiRequest(page, '/api/license/status');
-  if (!res.ok()) return false;
-
-  const data = (await res.json()) as { features?: string[] };
-  if (!(data.features?.includes('multi_tenant') ?? false)) {
-    return false;
-  }
-
   const orgsRes = await apiRequest(page, '/api/orgs');
   return orgsRes.ok();
 }

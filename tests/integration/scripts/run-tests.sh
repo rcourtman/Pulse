@@ -2,7 +2,7 @@
 #
 # Run Pulse integration tests with different suites
 # Usage: ./run-tests.sh [suite]
-#   suite: all, core, diagnostic, perf, updates-api
+#   suite: all, core, diagnostic, perf, visual, multi-tenant, updates-api
 #
 
 set -e
@@ -24,6 +24,29 @@ echo "==================================="
 echo ""
 
 cd "$TEST_ROOT"
+REPO_ROOT="$(cd "$TEST_ROOT/../.." && pwd)"
+
+if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    COMPOSE_CMD=(docker compose)
+else
+    COMPOSE_CMD=(docker-compose)
+fi
+
+compose() {
+    "${COMPOSE_CMD[@]}" -f docker-compose.test.yml "$@"
+}
+
+ensure_test_images() {
+    if ! docker image inspect pulse-mock-github:test >/dev/null 2>&1; then
+        echo "Building missing image: pulse-mock-github:test"
+        docker build -t pulse-mock-github:test "$TEST_ROOT/mock-github-server"
+    fi
+
+    if ! docker image inspect pulse:test >/dev/null 2>&1; then
+        echo "Building missing image: pulse:test"
+        docker build -t pulse:test -f "$REPO_ROOT/Dockerfile" "$REPO_ROOT"
+    fi
+}
 
 # Function to run suite with specific mock config
 run_suite() {
@@ -33,6 +56,7 @@ run_suite() {
     local network_error="${4:-false}"
     local rate_limit="${5:-false}"
     local stale_release="${6:-false}"
+    local multi_tenant_enabled="${7:-false}"
 
     echo ""
     echo -e "${YELLOW}Running: $name${NC}"
@@ -43,25 +67,39 @@ run_suite() {
     export MOCK_NETWORK_ERROR="$network_error"
     export MOCK_RATE_LIMIT="$rate_limit"
     export MOCK_STALE_RELEASE="$stale_release"
+    export PULSE_MULTI_TENANT_ENABLED="$multi_tenant_enabled"
+    local pulse_base_url="${PULSE_BASE_URL:-http://localhost:${PULSE_E2E_PORT:-7655}}"
+    pulse_base_url="${pulse_base_url%/}"
+    local health_url="${pulse_base_url}/api/health"
 
     # Start services
     echo "Starting test environment..."
-    docker-compose -f docker-compose.test.yml up -d
+    if ! compose up -d; then
+        echo -e "${RED}❌ Failed to start docker services${NC}"
+        compose logs
+        compose down -v
+        return 1
+    fi
 
     # Wait for services
     echo "Waiting for services to be ready..."
+    local health_ok=0
     for i in {1..60}; do
-        if curl -fsS "http://localhost:7655/api/health" >/dev/null 2>&1; then
+        if curl -fsS "$health_url" >/dev/null 2>&1; then
+            health_ok=1
             break
         fi
         sleep 1
     done
 
-    # Check if services are healthy
-    if ! docker-compose -f docker-compose.test.yml ps | grep -q "Up"; then
+    # Check if the Pulse test container is actually running and reachable.
+    local pulse_running
+    pulse_running="$(docker inspect -f '{{.State.Running}}' pulse-test-server 2>/dev/null || true)"
+    if [ "$health_ok" -ne 1 ] || [ "$pulse_running" != "true" ]; then
         echo -e "${RED}❌ Services failed to start${NC}"
-        docker-compose -f docker-compose.test.yml logs
-        docker-compose -f docker-compose.test.yml down -v
+        compose ps
+        compose logs
+        compose down -v
         return 1
     fi
 
@@ -76,10 +114,20 @@ run_suite() {
             npx playwright test "tests/01-core-e2e.spec.ts" --reporter=list
             ;;
         perf)
-            PULSE_E2E_PERF=1 npx playwright test "tests/02-navigation-perf.spec.ts" --reporter=list
+            PULSE_E2E_PERF=1 npx playwright test "tests/02-navigation-perf.spec.ts" --project=chromium --reporter=list
+            ;;
+        visual)
+            npx playwright test "tests/06-theme-visual.spec.ts" --project=chromium --reporter=list
+            ;;
+        multi-tenant)
+            npx playwright test "tests/03-multi-tenant.spec.ts" --project=chromium --reporter=list
             ;;
         updates-api)
-            UPDATE_API_BASE_URL=http://localhost:7655 go test ./api -run TestUpdateFlowIntegration -count=1
+            (
+                cd "$REPO_ROOT"
+                UPDATE_API_BASE_URL="$pulse_base_url" \
+                go test ./internal/api -run 'TestHandleCheckUpdates|TestHandleApplyUpdate|TestHandleUpdateStatus' -count=1
+            )
             ;;
         *)
             echo "Unknown suite: $suite"
@@ -98,20 +146,23 @@ run_suite() {
 
     # Cleanup
     echo "Cleaning up..."
-    docker-compose -f docker-compose.test.yml down -v
+    compose down -v
 
     return $TEST_RESULT
 }
 
 # Run specific test suite or all tests
 FAILED_TESTS=()
+ensure_test_images
 
 case "$SUITE" in
     all)
         echo "Running all suites..."
         run_suite "Diagnostic Smoke" "diagnostic" || FAILED_TESTS+=("Diagnostic Smoke")
         run_suite "Core E2E" "core" || FAILED_TESTS+=("Core E2E")
+        run_suite "Multi-tenant E2E" "multi-tenant" "false" "false" "false" "false" "true" || FAILED_TESTS+=("Multi-tenant E2E")
         run_suite "Navigation Performance" "perf" || FAILED_TESTS+=("Navigation Performance")
+        run_suite "Theme Visual Regression" "visual" || FAILED_TESTS+=("Theme Visual Regression")
         run_suite "Update API Integration" "updates-api" || FAILED_TESTS+=("Update API Integration")
         ;;
 
@@ -127,13 +178,21 @@ case "$SUITE" in
         run_suite "Navigation Performance" "perf" || FAILED_TESTS+=("Navigation Performance")
         ;;
 
+    visual)
+        run_suite "Theme Visual Regression" "visual" || FAILED_TESTS+=("Theme Visual Regression")
+        ;;
+
+    multi-tenant)
+        run_suite "Multi-tenant E2E" "multi-tenant" "false" "false" "false" "false" "true" || FAILED_TESTS+=("Multi-tenant E2E")
+        ;;
+
     updates-api)
         run_suite "Update API Integration" "updates-api" || FAILED_TESTS+=("Update API Integration")
         ;;
 
     *)
         echo "Unknown suite: $SUITE"
-        echo "Available suites: all, diagnostic, core, perf, updates-api"
+        echo "Available suites: all, diagnostic, core, perf, visual, multi-tenant, updates-api"
         exit 1
         ;;
 esac
