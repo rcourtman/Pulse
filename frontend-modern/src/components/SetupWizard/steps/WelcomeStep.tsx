@@ -2,6 +2,7 @@ import { Component, createSignal, Show } from 'solid-js';
 import { showError, showSuccess } from '@/utils/toast';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
+import { copyToClipboard } from '@/utils/clipboard';
 import { Copy, Check, Terminal } from 'lucide-solid';
 
 interface WelcomeStepProps {
@@ -21,12 +22,12 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
     const [copied, setCopied] = createSignal(false);
 
     const copyCommand = async () => {
-        try {
-            await navigator.clipboard.writeText(getTokenCommand());
+        const copied = await copyToClipboard(getTokenCommand());
+        if (copied) {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
             showSuccess('Command copied to clipboard');
-        } catch (_err) {
+        } else {
             showError('Failed to copy command');
         }
     };
