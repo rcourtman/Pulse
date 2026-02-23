@@ -390,85 +390,6 @@ export const DiagnosticsPanel: Component = () => {
         }
     };
 
-    // Calculate overall system health
-    const systemHealth = () => {
-        const data = diagnosticsData();
-        if (!data) return 'unknown';
-
-        const issues: string[] = [];
-
-        // Check node connectivity
-        const disconnectedNodes = data.nodes?.filter(n => !n.connected).length || 0;
-        if (disconnectedNodes > 0) issues.push('nodes');
-
-        // Check PBS connectivity  
-        const disconnectedPbs = data.pbs?.filter(p => !p.connected).length || 0;
-        if (disconnectedPbs > 0) issues.push('pbs');
-
-        // Check for errors
-        if (data.errors?.length > 0) issues.push('errors');
-
-        // Check metrics store health
-        if (data.metricsStore && data.metricsStore.status === 'unavailable') issues.push('metrics');
-
-        // Check alerts config
-        if (data.alerts?.legacyThresholdsDetected || data.alerts?.missingCooldown) issues.push('alerts');
-
-        if (issues.length === 0) return 'healthy';
-        if (issues.length <= 2) return 'warning';
-        return 'critical';
-    };
-
-    const healthTone = () => {
-        const health = systemHealth();
-        if (health === 'healthy') {
-            return {
-                headerBg: 'bg-emerald-50 dark:bg-emerald-950',
-                headerBorder: 'border-b border-emerald-200 dark:border-emerald-800',
-                iconWrap: 'bg-emerald-100 dark:bg-emerald-900',
-                icon: 'text-emerald-700 dark:text-emerald-300',
-                subtitle: 'text-emerald-700 dark:text-emerald-300',
-                meta: 'text-emerald-700 dark:text-emerald-300',
-                button:
-                    'border border-emerald-300 dark:border-emerald-700 bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-100 hover:bg-emerald-200 dark:hover:bg-emerald-900',
-            };
-        }
-        if (health === 'warning') {
-            return {
-                headerBg: 'bg-amber-50 dark:bg-amber-950',
-                headerBorder: 'border-b border-amber-200 dark:border-amber-800',
-                iconWrap: 'bg-amber-100 dark:bg-amber-900',
-                icon: 'text-amber-700 dark:text-amber-300',
-                subtitle: 'text-amber-700 dark:text-amber-300',
-                meta: 'text-amber-700 dark:text-amber-300',
-                button:
-                    'border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-100 hover:bg-amber-200 dark:hover:bg-amber-900',
-            };
-        }
-        if (health === 'critical') {
-            return {
-                headerBg: 'bg-rose-50 dark:bg-rose-950',
-                headerBorder: 'border-b border-rose-200 dark:border-rose-800',
-                iconWrap: 'bg-rose-100 dark:bg-rose-900',
-                icon: 'text-rose-700 dark:text-rose-300',
-                subtitle: 'text-rose-700 dark:text-rose-300',
-                meta: 'text-rose-700 dark:text-rose-300',
-                button:
-                    'border border-rose-300 dark:border-rose-700 bg-rose-100 dark:bg-rose-900 text-rose-800 dark:text-rose-100 hover:bg-rose-200 dark:hover:bg-rose-900',
-            };
-        }
-        return {
-            headerBg: 'bg-surface-alt',
-            headerBorder: 'border-b border-border',
-            iconWrap: 'bg-surface-hover',
-            icon: 'text-base-content',
-            subtitle: 'text-muted',
-            meta: 'text-muted',
-            button:
-                'border border-border bg-surface-hover text-base-content hover:bg-surface-hover',
-        };
-    };
-
     return (
         <div class="space-y-6">
             {/* Header Card */}
@@ -477,22 +398,22 @@ export const DiagnosticsPanel: Component = () => {
                 class="overflow-hidden border border-border"
                 border={false}
             >
-                <div class={`px-4 sm:px-6 py-4 sm:py-5 ${healthTone().headerBg} ${healthTone().headerBorder}`}>
+                <div class="px-3 py-3 sm:px-6 sm:py-4 border-b border-border bg-surface-alt">
                     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div class="flex items-center gap-3 sm:gap-4">
-                            <div class={`p-2 sm:p-3 rounded-md flex-shrink-0 ${healthTone().iconWrap}`}>
-                                <Activity class={`w-5 h-5 sm:w-6 sm:h-6 ${healthTone().icon}`} />
+                            <div class="text-muted flex-shrink-0">
+                                <Activity class="w-5 h-5 sm:w-5 sm:h-5" />
                             </div>
                             <div class="min-w-0">
                                 <h2 class="text-base sm:text-lg font-semibold text-base-content">System Diagnostics</h2>
-                                <p class={`text-xs sm:text-sm hidden sm:block ${healthTone().subtitle}`}>
+                                <p class="text-xs sm:text-sm hidden sm:block text-muted">
                                     Connection health, configuration status, and troubleshooting tools
                                 </p>
                             </div>
                         </div>
                         <div class="flex items-center justify-between sm:justify-end gap-3 flex-wrap">
                             <Show when={diagnosticsData()}>
-                                <div class={`text-left sm:text-right text-xs ${healthTone().meta}`}>
+                                <div class="text-left sm:text-right text-xs text-muted">
                                     <div>Version {diagnosticsData()?.version}</div>
                                     <div>Uptime: {formatUptime(diagnosticsData()?.uptime || 0)}</div>
                                 </div>
@@ -501,7 +422,7 @@ export const DiagnosticsPanel: Component = () => {
                                 type="button"
                                 onClick={runDiagnostics}
                                 disabled={loading()}
-                                class={`flex min-h-10 sm:min-h-9 min-w-10 items-center gap-2 px-3 sm:px-4 py-2.5 rounded-md font-medium text-sm transition-colors disabled:opacity-50 whitespace-nowrap ${healthTone().button}`}
+                                class="flex min-h-10 sm:min-h-9 min-w-10 items-center gap-2 px-3 sm:px-4 py-2.5 rounded-md font-medium text-sm transition-colors whitespace-nowrap bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:bg-surface disabled:text-muted"
                             >
                                 <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
                                 <span class="sm:hidden">{loading() ? '...' : 'Run'}</span>

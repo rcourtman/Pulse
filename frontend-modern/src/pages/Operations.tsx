@@ -63,20 +63,20 @@ export const OperationsPage: Component = () => {
 
             {/* Modern Tabs Navigation */}
             <div class="mb-6">
-                <nav class="flex space-x-2 bg-base p-1.5 rounded-md sm:w-max border border-border overflow-x-auto scrollbar-hide" aria-label="Tabs" style="-webkit-overflow-scrolling: touch;">
+                <nav class="flex space-x-2 bg-surface-alt p-1.5 rounded-md sm:w-max border border-border overflow-x-auto scrollbar-hide" aria-label="Tabs" style="-webkit-overflow-scrolling: touch;">
                     {tabs.map((tab) => {
                         const isActive = () => activeTab() === tab.id;
                         return (
                             <button
                                 onClick={() => handleTabChange(tab.id)}
                                 class={`flex items-center gap-2.5 whitespace-nowrap px-4 py-2 rounded-md font-medium text-sm transition-all outline-none relative overflow-hidden group ${isActive()
- ? 'bg-white text-blue-700 dark:text-blue-300 shadow-sm border border-border'
- : 'text-slate-600 hover:bg-white hover:text-base-content border border-transparent'
+ ? 'bg-surface text-base-content shadow-sm border border-border'
+ : 'text-muted hover:bg-surface hover:text-base-content border border-transparent'
  }`}
                                 aria-current={isActive() ? 'page' : undefined}
                                 title={tab.desc}
                             >
-                                <tab.icon class={`w-4 h-4 transition-transform duration-200 ${isActive() ? 'text-blue-500 scale-110' : 'text-slate-400 group-hover:scale-110 group-hover:text-blue-500'}`} />
+                                <tab.icon class={`w-4 h-4 transition-transform duration-200 ${isActive() ? 'text-blue-500 scale-110' : 'text-muted group-hover:scale-110 group-hover:text-blue-500'}`} />
                                 <span class="relative z-10">{tab.label}</span>
                             </button>
                         );
