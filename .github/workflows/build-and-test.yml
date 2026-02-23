@@ -77,6 +77,9 @@ jobs:
       - name: Script smoke tests
         run: scripts/tests/run.sh
 
+      - name: Script integration tests
+        run: scripts/tests/integration/test-docker-agent-install.sh
+
       - name: Go unit tests
         env:
           PULSE_DATA_DIR: /tmp/pulse-test-data

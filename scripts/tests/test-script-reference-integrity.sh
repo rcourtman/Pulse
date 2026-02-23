@@ -8,8 +8,10 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BUNDLE_MANIFEST="${ROOT_DIR}/scripts/bundle.manifest"
+STANDALONE_MANIFEST="${ROOT_DIR}/scripts/standalone.manifest"
 
 failures=0
+declare -A STANDALONE_DECLARED=()
 
 record_failure() {
   echo "[FAIL] $1" >&2
@@ -75,9 +77,99 @@ check_bundle_manifest() {
   fi
 }
 
+load_standalone_manifest() {
+  local line script reason
+
+  if [[ ! -f "${STANDALONE_MANIFEST}" ]]; then
+    record_failure "missing standalone manifest (${STANDALONE_MANIFEST})"
+    return 1
+  fi
+
+  while IFS= read -r line; do
+    [[ -z "${line}" || "${line}" =~ ^[[:space:]]*# ]] && continue
+    if [[ "${line}" != *"|"* ]]; then
+      record_failure "standalone manifest malformed line: ${line}"
+      continue
+    fi
+
+    script="$(echo "${line%%|*}" | xargs)"
+    reason="$(echo "${line#*|}" | xargs)"
+
+    if [[ -z "${script}" || -z "${reason}" ]]; then
+      record_failure "standalone manifest missing script or reason: ${line}"
+      continue
+    fi
+
+    if [[ "${script}" != scripts/*.sh ]]; then
+      record_failure "standalone manifest entry must be scripts/*.sh: ${script}"
+      continue
+    fi
+
+    if ! git -C "${ROOT_DIR}" ls-files --error-unmatch "${script}" >/dev/null 2>&1; then
+      record_failure "standalone manifest entry not tracked: ${script}"
+      continue
+    fi
+
+    STANDALONE_DECLARED["${script}"]="${reason}"
+  done < "${STANDALONE_MANIFEST}"
+
+  if (( ${#STANDALONE_DECLARED[@]} == 0 )); then
+    record_failure "standalone manifest has no usable entries"
+    return 1
+  fi
+}
+
+has_external_path_reference() {
+  local script="$1"
+  local pattern result_line ref_file normalized
+
+  for pattern in "${script}" "./${script}"; do
+    while IFS= read -r result_line; do
+      ref_file="${result_line%%:*}"
+      normalized="${ref_file#${ROOT_DIR}/}"
+      normalized="${normalized#./}"
+      [[ "${normalized}" == "${script}" ]] && continue
+      [[ "${normalized}" == "scripts/standalone.manifest" ]] && continue
+      return 0
+    done < <(rg --hidden -n -F "${pattern}" "${ROOT_DIR}" --glob '!**/.git/**' || true)
+  done
+
+  return 1
+}
+
+check_unreferenced_scripts_are_declared() {
+  local script checked=0 unreferenced=0
+
+  while IFS= read -r script; do
+    [[ "${script}" == scripts/tests/* ]] && continue
+    [[ "${script}" == scripts/lib/* ]] && continue
+    ((checked += 1))
+
+    if has_external_path_reference "${script}"; then
+      continue
+    fi
+
+    ((unreferenced += 1))
+    if [[ -z "${STANDALONE_DECLARED[${script}]:-}" ]]; then
+      record_failure "unreferenced script must be declared in scripts/standalone.manifest: ${script}"
+    fi
+  done < <(git -C "${ROOT_DIR}" ls-files '*.sh' | grep '^scripts/' || true)
+
+  if (( checked == 0 )); then
+    record_failure "no scripts checked for standalone declaration"
+    return 1
+  fi
+
+  if (( failures == 0 )); then
+    record_pass "unreferenced script declaration check passed (${unreferenced} unreferenced scripts declared)"
+  fi
+}
+
 main() {
   check_script_refs
   check_bundle_manifest
+  load_standalone_manifest
+  check_unreferenced_scripts_are_declared
 
   if (( failures > 0 )); then
     echo "script reference integrity checks failed: ${failures}" >&2
