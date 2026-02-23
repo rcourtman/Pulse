@@ -91,6 +91,7 @@ type StripeAccount struct {
 	StripeSubItemWorkspacesID string `json:"stripe_sub_item_workspaces_id"`
 	PlanVersion               string `json:"plan_version"`
 	SubscriptionState         string `json:"subscription_state"` // trial, active, past_due, canceled
+	GraceStartedAt            *int64 `json:"grace_started_at"`
 	TrialEndsAt               *int64 `json:"trial_ends_at"`
 	CurrentPeriodEnd          *int64 `json:"current_period_end"`
 	UpdatedAt                 int64  `json:"updated_at"`

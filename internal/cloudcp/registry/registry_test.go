@@ -665,6 +665,7 @@ func TestStripeAccountCRUD(t *testing.T) {
 
 	trialEnds := time.Now().UTC().Add(7 * 24 * time.Hour).Unix()
 	periodEnd := time.Now().UTC().Add(30 * 24 * time.Hour).Unix()
+	graceStarted := time.Now().UTC().Add(-2 * time.Hour).Unix()
 
 	sa := &StripeAccount{
 		AccountID:                 accountID,
@@ -672,7 +673,8 @@ func TestStripeAccountCRUD(t *testing.T) {
 		StripeSubscriptionID:      "sub_test_123",
 		StripeSubItemWorkspacesID: "si_workspaces_123",
 		PlanVersion:               "msp_hosted_v1",
-		SubscriptionState:         "trial",
+		SubscriptionState:         "past_due",
+		GraceStartedAt:            &graceStarted,
 		TrialEndsAt:               &trialEnds,
 		CurrentPeriodEnd:          &periodEnd,
 	}
@@ -696,6 +698,9 @@ func TestStripeAccountCRUD(t *testing.T) {
 	if got.StripeSubscriptionID != "sub_test_123" {
 		t.Errorf("StripeSubscriptionID = %q, want %q", got.StripeSubscriptionID, "sub_test_123")
 	}
+	if got.GraceStartedAt == nil || *got.GraceStartedAt != graceStarted {
+		t.Fatalf("GraceStartedAt = %v, want %d", got.GraceStartedAt, graceStarted)
+	}
 
 	// Get by customer id
 	got2, err := reg.GetStripeAccountByCustomerID("cus_test_123")
@@ -708,6 +713,7 @@ func TestStripeAccountCRUD(t *testing.T) {
 
 	// Update
 	got2.SubscriptionState = "active"
+	got2.GraceStartedAt = nil
 	got2.PlanVersion = "msp_hosted_v2"
 	got2.StripeSubscriptionID = "sub_test_456"
 	if err := reg.UpdateStripeAccount(got2); err != nil {
@@ -726,6 +732,9 @@ func TestStripeAccountCRUD(t *testing.T) {
 	}
 	if got3.StripeSubscriptionID != "sub_test_456" {
 		t.Errorf("StripeSubscriptionID = %q, want %q", got3.StripeSubscriptionID, "sub_test_456")
+	}
+	if got3.GraceStartedAt != nil {
+		t.Fatalf("GraceStartedAt = %v, want nil", got3.GraceStartedAt)
 	}
 	if got3.UpdatedAt == 0 {
 		t.Error("UpdatedAt should be set")

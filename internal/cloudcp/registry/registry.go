@@ -92,6 +92,7 @@ func (r *TenantRegistry) initSchema() error {
 		stripe_sub_item_workspaces_id TEXT,
 		plan_version TEXT NOT NULL DEFAULT '',
 		subscription_state TEXT NOT NULL DEFAULT 'trial',
+		grace_started_at INTEGER,
 		trial_ends_at INTEGER,
 		current_period_end INTEGER,
 		updated_at INTEGER NOT NULL,
@@ -172,6 +173,26 @@ func (r *TenantRegistry) initSchema() error {
 		if _, err := r.db.Exec(`ALTER TABLE stripe_events ADD COLUMN processing_started_at INTEGER`); err != nil {
 			return fmt.Errorf("migrate stripe_events: add processing_started_at: %w", err)
 		}
+	}
+
+	// Migration: add grace_started_at to stripe_accounts if missing.
+	hasGraceStartedAt, err := r.tableHasColumn("stripe_accounts", "grace_started_at")
+	if err != nil {
+		return fmt.Errorf("check stripe_accounts schema for grace_started_at: %w", err)
+	}
+	if !hasGraceStartedAt {
+		if _, err := r.db.Exec(`ALTER TABLE stripe_accounts ADD COLUMN grace_started_at INTEGER`); err != nil {
+			return fmt.Errorf("migrate stripe_accounts: add grace_started_at: %w", err)
+		}
+	}
+	// Backfill legacy past_due/grace rows to preserve existing grace windows.
+	if _, err := r.db.Exec(`
+		UPDATE stripe_accounts
+		SET grace_started_at = updated_at
+		WHERE grace_started_at IS NULL
+		  AND subscription_state IN ('past_due', 'grace')
+	`); err != nil {
+		return fmt.Errorf("migrate stripe_accounts: backfill grace_started_at: %w", err)
 	}
 
 	return nil
@@ -800,14 +821,15 @@ func (r *TenantRegistry) CreateStripeAccount(sa *StripeAccount) error {
 	_, err := r.db.Exec(`
 		INSERT INTO stripe_accounts (
 			account_id, stripe_customer_id, stripe_subscription_id, stripe_sub_item_workspaces_id,
-			plan_version, subscription_state, trial_ends_at, current_period_end, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			plan_version, subscription_state, grace_started_at, trial_ends_at, current_period_end, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		sa.AccountID,
 		sa.StripeCustomerID,
 		nullableString(sa.StripeSubscriptionID),
 		nullableString(sa.StripeSubItemWorkspacesID),
 		sa.PlanVersion,
 		sa.SubscriptionState,
+		nullableInt64Ptr(sa.GraceStartedAt),
 		nullableInt64Ptr(sa.TrialEndsAt),
 		nullableInt64Ptr(sa.CurrentPeriodEnd),
 		sa.UpdatedAt,
@@ -822,7 +844,7 @@ func (r *TenantRegistry) CreateStripeAccount(sa *StripeAccount) error {
 func (r *TenantRegistry) GetStripeAccount(accountID string) (*StripeAccount, error) {
 	row := r.db.QueryRow(`SELECT
 		account_id, stripe_customer_id, stripe_subscription_id, stripe_sub_item_workspaces_id,
-		plan_version, subscription_state, trial_ends_at, current_period_end, updated_at
+		plan_version, subscription_state, grace_started_at, trial_ends_at, current_period_end, updated_at
 		FROM stripe_accounts WHERE account_id = ?`, strings.TrimSpace(accountID))
 	return scanStripeAccount(row)
 }
@@ -831,7 +853,7 @@ func (r *TenantRegistry) GetStripeAccount(accountID string) (*StripeAccount, err
 func (r *TenantRegistry) GetStripeAccountByCustomerID(customerID string) (*StripeAccount, error) {
 	row := r.db.QueryRow(`SELECT
 		account_id, stripe_customer_id, stripe_subscription_id, stripe_sub_item_workspaces_id,
-		plan_version, subscription_state, trial_ends_at, current_period_end, updated_at
+		plan_version, subscription_state, grace_started_at, trial_ends_at, current_period_end, updated_at
 		FROM stripe_accounts WHERE stripe_customer_id = ?`, strings.TrimSpace(customerID))
 	return scanStripeAccount(row)
 }
@@ -840,7 +862,7 @@ func (r *TenantRegistry) GetStripeAccountByCustomerID(customerID string) (*Strip
 func (r *TenantRegistry) ListStripeAccounts() ([]*StripeAccount, error) {
 	rows, err := r.db.Query(`SELECT
 		account_id, stripe_customer_id, stripe_subscription_id, stripe_sub_item_workspaces_id,
-		plan_version, subscription_state, trial_ends_at, current_period_end, updated_at
+		plan_version, subscription_state, grace_started_at, trial_ends_at, current_period_end, updated_at
 		FROM stripe_accounts
 		ORDER BY updated_at DESC`)
 	if err != nil {
@@ -891,13 +913,14 @@ func (r *TenantRegistry) UpdateStripeAccount(sa *StripeAccount) error {
 	res, err := r.db.Exec(`
 		UPDATE stripe_accounts SET
 			stripe_customer_id = ?, stripe_subscription_id = ?, stripe_sub_item_workspaces_id = ?,
-			plan_version = ?, subscription_state = ?, trial_ends_at = ?, current_period_end = ?, updated_at = ?
+			plan_version = ?, subscription_state = ?, grace_started_at = ?, trial_ends_at = ?, current_period_end = ?, updated_at = ?
 		WHERE account_id = ?`,
 		sa.StripeCustomerID,
 		nullableString(sa.StripeSubscriptionID),
 		nullableString(sa.StripeSubItemWorkspacesID),
 		sa.PlanVersion,
 		sa.SubscriptionState,
+		nullableInt64Ptr(sa.GraceStartedAt),
 		nullableInt64Ptr(sa.TrialEndsAt),
 		nullableInt64Ptr(sa.CurrentPeriodEnd),
 		sa.UpdatedAt,
@@ -1157,7 +1180,7 @@ func boolToInt(b bool) int {
 func scanStripeAccount(s scanner) (*StripeAccount, error) {
 	var sa StripeAccount
 	var subID, subItemID sql.NullString
-	var trialEnds, periodEnd sql.NullInt64
+	var graceStartedAt, trialEnds, periodEnd sql.NullInt64
 	if err := s.Scan(
 		&sa.AccountID,
 		&sa.StripeCustomerID,
@@ -1165,6 +1188,7 @@ func scanStripeAccount(s scanner) (*StripeAccount, error) {
 		&subItemID,
 		&sa.PlanVersion,
 		&sa.SubscriptionState,
+		&graceStartedAt,
 		&trialEnds,
 		&periodEnd,
 		&sa.UpdatedAt,
@@ -1179,6 +1203,10 @@ func scanStripeAccount(s scanner) (*StripeAccount, error) {
 	}
 	if subItemID.Valid {
 		sa.StripeSubItemWorkspacesID = subItemID.String
+	}
+	if graceStartedAt.Valid {
+		v := graceStartedAt.Int64
+		sa.GraceStartedAt = &v
 	}
 	if trialEnds.Valid {
 		v := trialEnds.Int64

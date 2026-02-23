@@ -51,6 +51,7 @@ func TestGraceEnforcerRevokesBillingCapabilitiesAfterExpiry(t *testing.T) {
 		StripeSubscriptionID: subscriptionID,
 		PlanVersion:          "cloud_v1",
 		SubscriptionState:    "past_due",
+		GraceStartedAt:       ptrInt64(time.Now().UTC().Add(-15 * 24 * time.Hour).Unix()),
 		UpdatedAt:            time.Now().UTC().Add(-15 * 24 * time.Hour).Unix(),
 	}); err != nil {
 		t.Fatalf("CreateStripeAccount: %v", err)
@@ -111,4 +112,60 @@ func TestGraceEnforcerRevokesBillingCapabilitiesAfterExpiry(t *testing.T) {
 	if sa.SubscriptionState != "canceled" {
 		t.Fatalf("stripe subscription state = %q, want %q", sa.SubscriptionState, "canceled")
 	}
+}
+
+func TestGraceEnforcerUsesGraceStartedAtInsteadOfUpdatedAt(t *testing.T) {
+	reg := newTestRegistry(t)
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatalf("GenerateAccountID: %v", err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindIndividual,
+		DisplayName: "Acme",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+
+	customerID := "cus_grace_recent"
+	tenantID := "t-grace-recent"
+	if err := reg.Create(&registry.Tenant{
+		ID:               tenantID,
+		AccountID:        accountID,
+		State:            registry.TenantStateActive,
+		StripeCustomerID: customerID,
+	}); err != nil {
+		t.Fatalf("Create tenant: %v", err)
+	}
+
+	// updated_at is old, but grace_started_at is recent. Enforcer must not cancel.
+	if err := reg.CreateStripeAccount(&registry.StripeAccount{
+		AccountID:         accountID,
+		StripeCustomerID:  customerID,
+		PlanVersion:       "cloud_v1",
+		SubscriptionState: "past_due",
+		GraceStartedAt:    ptrInt64(time.Now().UTC().Add(-2 * 24 * time.Hour).Unix()),
+		UpdatedAt:         time.Now().UTC().Add(-40 * 24 * time.Hour).Unix(),
+	}); err != nil {
+		t.Fatalf("CreateStripeAccount: %v", err)
+	}
+
+	enforcer := NewGraceEnforcer(reg)
+	enforcer.enforce(context.Background())
+
+	tenant, err := reg.Get(tenantID)
+	if err != nil {
+		t.Fatalf("Get tenant: %v", err)
+	}
+	if tenant == nil {
+		t.Fatal("expected tenant to exist")
+	}
+	if tenant.State != registry.TenantStateActive {
+		t.Fatalf("tenant state = %q, want %q", tenant.State, registry.TenantStateActive)
+	}
+}
+
+func ptrInt64(v int64) *int64 {
+	return &v
 }

@@ -92,8 +92,11 @@ func (g *GraceEnforcer) enforce(ctx context.Context) {
 			continue
 		}
 
-		// Check if updated_at is older than the grace cutoff.
-		if sa.UpdatedAt == 0 || time.Unix(sa.UpdatedAt, 0).UTC().After(cutoff) {
+		// Enforce grace expiry based on immutable grace start time.
+		if sa.GraceStartedAt == nil || *sa.GraceStartedAt <= 0 {
+			continue
+		}
+		if time.Unix(*sa.GraceStartedAt, 0).UTC().After(cutoff) {
 			continue
 		}
 
@@ -102,6 +105,7 @@ func (g *GraceEnforcer) enforce(ctx context.Context) {
 			Str("account_id", tenant.AccountID).
 			Str("stripe_customer_id", tenant.StripeCustomerID).
 			Str("subscription_state", string(pkglicensing.SubStateGrace)).
+			Time("grace_started_at", time.Unix(*sa.GraceStartedAt, 0).UTC()).
 			Int("grace_days_exceeded", maxGraceDays).
 			Msg("Grace period expired, transitioning tenant to canceled")
 

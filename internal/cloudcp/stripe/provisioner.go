@@ -560,6 +560,20 @@ func normalizeStripeAccountSubscriptionState(status string) string {
 	}
 }
 
+func applyStripeAccountGraceWindow(sa *registry.StripeAccount, subState pkglicensing.SubscriptionState, now time.Time) {
+	if sa == nil {
+		return
+	}
+	if subState == pkglicensing.SubStateGrace {
+		if sa.GraceStartedAt == nil || *sa.GraceStartedAt <= 0 {
+			ts := now.UTC().Unix()
+			sa.GraceStartedAt = &ts
+		}
+		return
+	}
+	sa.GraceStartedAt = nil
+}
+
 func planVersionFromMetadata(metadata map[string]string, fallback string) string {
 	if metadata != nil {
 		if v := strings.TrimSpace(metadata["plan_version"]); v != "" {
@@ -740,6 +754,7 @@ func (p *Provisioner) HandleSubscriptionUpdated(ctx context.Context, sub Subscri
 		sa.StripeSubscriptionID = strings.TrimSpace(sub.ID)
 		sa.PlanVersion = planVersion
 		sa.SubscriptionState = normalizeStripeAccountSubscriptionState(sub.Status)
+		applyStripeAccountGraceWindow(sa, subState, time.Now().UTC())
 		if updateErr := p.registry.UpdateStripeAccount(sa); updateErr != nil {
 			log.Warn().
 				Err(updateErr).
@@ -797,6 +812,7 @@ func (p *Provisioner) HandleSubscriptionDeleted(ctx context.Context, sub Subscri
 	if sa, saErr := p.registry.GetStripeAccountByCustomerID(customerID); saErr == nil && sa != nil {
 		sa.StripeSubscriptionID = strings.TrimSpace(sub.ID)
 		sa.SubscriptionState = "canceled"
+		sa.GraceStartedAt = nil
 		if updateErr := p.registry.UpdateStripeAccount(sa); updateErr != nil {
 			log.Warn().
 				Err(updateErr).
@@ -871,6 +887,7 @@ func (p *Provisioner) HandleMSPSubscriptionUpdated(ctx context.Context, sub Subs
 	sa.StripeSubscriptionID = strings.TrimSpace(sub.ID)
 	sa.PlanVersion = planVersion
 	sa.SubscriptionState = normalizeStripeAccountSubscriptionState(sub.Status)
+	applyStripeAccountGraceWindow(sa, subState, time.Now().UTC())
 	if err := p.registry.UpdateStripeAccount(sa); err != nil {
 		return fmt.Errorf("update stripe account: %w", err)
 	}
@@ -962,6 +979,7 @@ func (p *Provisioner) HandleMSPSubscriptionDeleted(ctx context.Context, sub Subs
 	// Persist account-level Stripe state.
 	sa.StripeSubscriptionID = strings.TrimSpace(sub.ID)
 	sa.SubscriptionState = "canceled"
+	sa.GraceStartedAt = nil
 	if err := p.registry.UpdateStripeAccount(sa); err != nil {
 		return fmt.Errorf("update stripe account: %w", err)
 	}
