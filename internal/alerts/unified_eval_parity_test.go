@@ -2,9 +2,27 @@ package alerts
 
 import (
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
+
+func newUnifiedEvalParityManager(t *testing.T) *Manager {
+	t.Helper()
+	m := NewManagerWithDataDir(t.TempDir())
+
+	// Stop background workers to avoid post-test writes into temp dirs.
+	t.Cleanup(func() {
+		if m.historyManager != nil {
+			m.historyManager.Stop()
+		}
+		closeSignalChannel(m.escalationStop)
+		closeSignalChannel(m.cleanupStop)
+		time.Sleep(10 * time.Millisecond)
+	})
+
+	return m
+}
 
 func disableTestTimeThresholds(m *Manager) {
 	m.mu.Lock()
@@ -19,8 +37,8 @@ func disableTestTimeThresholds(m *Manager) {
 // standard metrics (CPU, memory, disk, I/O).
 func TestParityCheckGuestUsesEvaluateUnifiedMetrics(t *testing.T) {
 	// Create two managers with identical config
-	guestMgr := NewManager()
-	unifiedMgr := NewManager()
+	guestMgr := newUnifiedEvalParityManager(t)
+	unifiedMgr := newUnifiedEvalParityManager(t)
 
 	cfg := AlertConfig{
 		Enabled: true,
@@ -83,8 +101,8 @@ func TestParityCheckGuestUsesEvaluateUnifiedMetrics(t *testing.T) {
 // TestParityCheckNodeUsesEvaluateUnifiedMetrics verifies that CheckNode
 // produces the same metric alerts as evaluateUnifiedMetrics for CPU, memory, disk.
 func TestParityCheckNodeUsesEvaluateUnifiedMetrics(t *testing.T) {
-	nodeMgr := NewManager()
-	unifiedMgr := NewManager()
+	nodeMgr := newUnifiedEvalParityManager(t)
+	unifiedMgr := newUnifiedEvalParityManager(t)
 
 	cfg := AlertConfig{
 		Enabled: true,
@@ -138,8 +156,8 @@ func TestParityCheckNodeUsesEvaluateUnifiedMetrics(t *testing.T) {
 // TestParityCheckPBSUsesEvaluateUnifiedMetrics verifies that CheckPBS
 // produces the same metric alerts as evaluateUnifiedMetrics for CPU, memory.
 func TestParityCheckPBSUsesEvaluateUnifiedMetrics(t *testing.T) {
-	pbsMgr := NewManager()
-	unifiedMgr := NewManager()
+	pbsMgr := newUnifiedEvalParityManager(t)
+	unifiedMgr := newUnifiedEvalParityManager(t)
 
 	cpuThreshold := &HysteresisThreshold{Trigger: 80, Clear: 75}
 	memThreshold := &HysteresisThreshold{Trigger: 85, Clear: 80}
@@ -191,7 +209,7 @@ func TestParityCheckPBSUsesEvaluateUnifiedMetrics(t *testing.T) {
 }
 
 func TestSmokeUnifiedEvaluatorActiveEndToEnd(t *testing.T) {
-	m := NewManager()
+	m := newUnifiedEvalParityManager(t)
 
 	cfg := m.GetConfig()
 	cfg.Enabled = true
@@ -228,7 +246,7 @@ func TestSmokeUnifiedEvaluatorActiveEndToEnd(t *testing.T) {
 }
 
 func TestSmokeAlertDisableGatesUnifiedEvaluation(t *testing.T) {
-	m := NewManager()
+	m := newUnifiedEvalParityManager(t)
 
 	cfg := m.GetConfig()
 	cfg.Enabled = false
@@ -249,7 +267,7 @@ func TestSmokeAlertDisableGatesUnifiedEvaluation(t *testing.T) {
 }
 
 func TestSmokeReenableProducesCorrectAlerts(t *testing.T) {
-	m := NewManager()
+	m := newUnifiedEvalParityManager(t)
 
 	cfg := m.GetConfig()
 	cfg.Enabled = false
