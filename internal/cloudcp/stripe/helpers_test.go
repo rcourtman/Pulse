@@ -105,3 +105,31 @@ func TestIsSafeStripeID(t *testing.T) {
 		})
 	}
 }
+
+func TestRedactMagicLinkURL(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "removes query token",
+			in:   "https://tenant.cloud.example.com/auth/magic-link/verify?token=abc123&foo=bar",
+			want: "https://tenant.cloud.example.com/auth/magic-link/verify",
+		},
+		{
+			name: "invalid URL returns empty",
+			in:   "not a url",
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := redactMagicLinkURL(tt.in)
+			if got != tt.want {
+				t.Fatalf("redactMagicLinkURL(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}

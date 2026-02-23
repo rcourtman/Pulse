@@ -4,6 +4,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,6 +14,11 @@ import (
 const (
 	defaultCPRateLimit  = 120
 	defaultCPRateWindow = time.Minute
+)
+
+var (
+	trustedProxyOnce  sync.Once
+	trustedProxyCIDRs []*net.IPNet
 )
 
 // CPRateLimiter provides simple IP-based rate limiting for control plane endpoints.
@@ -126,6 +132,56 @@ func isTrustedProxyIP(rawIP string) bool {
 		return false
 	}
 
-	// Only trust forwarding headers from local/private upstream peers.
-	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
+	trustedProxyOnce.Do(loadTrustedProxyCIDRs)
+	if len(trustedProxyCIDRs) == 0 {
+		return false
+	}
+	for _, network := range trustedProxyCIDRs {
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func loadTrustedProxyCIDRs() {
+	raw := strings.TrimSpace(os.Getenv("CP_TRUSTED_PROXY_CIDRS"))
+	if raw == "" {
+		// Backward-compatible fallback to the shared setting used by the app server.
+		raw = strings.TrimSpace(os.Getenv("PULSE_TRUSTED_PROXY_CIDRS"))
+	}
+	if raw == "" {
+		return
+	}
+
+	for _, entry := range strings.Split(raw, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+
+		if strings.Contains(entry, "/") {
+			_, network, err := net.ParseCIDR(entry)
+			if err != nil {
+				continue
+			}
+			network.IP = network.IP.Mask(network.Mask)
+			trustedProxyCIDRs = append(trustedProxyCIDRs, network)
+			continue
+		}
+
+		ip := net.ParseIP(entry)
+		if ip == nil {
+			continue
+		}
+		bits := 32
+		if ip.To4() == nil {
+			bits = 128
+		}
+		mask := net.CIDRMask(bits, bits)
+		trustedProxyCIDRs = append(trustedProxyCIDRs, &net.IPNet{
+			IP:   ip.Mask(mask),
+			Mask: mask,
+		})
+	}
 }

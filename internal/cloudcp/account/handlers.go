@@ -364,6 +364,49 @@ func HandleUpdateMemberRole(reg *registry.TenantRegistry) http.HandlerFunc {
 			return
 		}
 
+		if hasActorRole && (role == registry.MemberRoleOwner || existing.Role == registry.MemberRoleOwner) && actorRole != registry.MemberRoleOwner {
+			auditEvent(r, "cp_account_member_role_update", "failure").
+				Str("account_id", accountID).
+				Str("user_id", userID).
+				Str("actor_role", string(actorRole)).
+				Str("target_current_role", string(existing.Role)).
+				Str("target_new_role", string(role)).
+				Str("reason", "owner_role_change_requires_owner_actor").
+				Msg("Account member role update failed")
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+
+		if existing.Role == registry.MemberRoleOwner && role != registry.MemberRoleOwner {
+			memberships, listErr := reg.ListMembersByAccount(accountID)
+			if listErr != nil {
+				auditEvent(r, "cp_account_member_role_update", "failure").
+					Err(listErr).
+					Str("account_id", accountID).
+					Str("user_id", userID).
+					Str("reason", "membership_list_failed").
+					Msg("Account member role update failed")
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
+
+			owners := 0
+			for _, mm := range memberships {
+				if mm.Role == registry.MemberRoleOwner {
+					owners++
+				}
+			}
+			if owners <= 1 {
+				auditEvent(r, "cp_account_member_role_update", "failure").
+					Str("account_id", accountID).
+					Str("user_id", userID).
+					Str("reason", "cannot_demote_last_owner").
+					Msg("Account member role update denied")
+				http.Error(w, "cannot demote last owner", http.StatusConflict)
+				return
+			}
+		}
+
 		if err := reg.UpdateMembershipRole(accountID, userID, role); err != nil {
 			if isNotFoundErr(err) {
 				auditEvent(r, "cp_account_member_role_update", "failure").
@@ -373,18 +416,6 @@ func HandleUpdateMemberRole(reg *registry.TenantRegistry) http.HandlerFunc {
 					Str("reason", "membership_not_found").
 					Msg("Account member role update failed")
 				http.Error(w, "membership not found", http.StatusNotFound)
-				return
-			}
-			if hasActorRole && (role == registry.MemberRoleOwner || existing.Role == registry.MemberRoleOwner) && actorRole != registry.MemberRoleOwner {
-				auditEvent(r, "cp_account_member_role_update", "failure").
-					Str("account_id", accountID).
-					Str("user_id", userID).
-					Str("actor_role", string(actorRole)).
-					Str("target_current_role", string(existing.Role)).
-					Str("target_new_role", string(role)).
-					Str("reason", "owner_role_change_requires_owner_actor").
-					Msg("Account member role update failed")
-				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
 			auditEvent(r, "cp_account_member_role_update", "failure").
@@ -480,6 +511,18 @@ func HandleRemoveMember(reg *registry.TenantRegistry) http.HandlerFunc {
 		}
 
 		if m.Role == registry.MemberRoleOwner {
+			if hasActorRole && actorRole != registry.MemberRoleOwner {
+				auditEvent(r, "cp_account_member_remove", "failure").
+					Str("account_id", accountID).
+					Str("user_id", userID).
+					Str("actor_role", string(actorRole)).
+					Str("target_role", string(m.Role)).
+					Str("reason", "owner_removal_requires_owner_actor").
+					Msg("Account member removal failed")
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+
 			memberships, err := reg.ListMembersByAccount(accountID)
 			if err != nil {
 				auditEvent(r, "cp_account_member_remove", "failure").
@@ -517,17 +560,6 @@ func HandleRemoveMember(reg *registry.TenantRegistry) http.HandlerFunc {
 					Str("reason", "membership_not_found").
 					Msg("Account member removal failed")
 				http.Error(w, "membership not found", http.StatusNotFound)
-				return
-			}
-			if hasActorRole && m.Role == registry.MemberRoleOwner && actorRole != registry.MemberRoleOwner {
-				auditEvent(r, "cp_account_member_remove", "failure").
-					Str("account_id", accountID).
-					Str("user_id", userID).
-					Str("actor_role", string(actorRole)).
-					Str("target_role", string(m.Role)).
-					Str("reason", "owner_removal_requires_owner_actor").
-					Msg("Account member removal failed")
-				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
 			auditEvent(r, "cp_account_member_remove", "failure").

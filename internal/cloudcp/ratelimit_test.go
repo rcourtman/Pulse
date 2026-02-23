@@ -3,9 +3,15 @@ package cloudcp
 import (
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 )
+
+func resetTrustedProxyConfig() {
+	trustedProxyOnce = sync.Once{}
+	trustedProxyCIDRs = nil
+}
 
 func TestCPRateLimiterAllow_WithinLimitThenRejects(t *testing.T) {
 	rl := NewCPRateLimiter(2, time.Minute)
@@ -71,6 +77,8 @@ func TestCPRateLimiterMiddleware_TooManyRequests(t *testing.T) {
 
 func TestClientIP(t *testing.T) {
 	t.Run("x-forwarded-for-single-value", func(t *testing.T) {
+		t.Setenv("CP_TRUSTED_PROXY_CIDRS", "127.0.0.1/32")
+		resetTrustedProxyConfig()
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.Header.Set("X-Forwarded-For", "203.0.113.9")
 		req.RemoteAddr = "127.0.0.1:9999"
@@ -81,6 +89,8 @@ func TestClientIP(t *testing.T) {
 	})
 
 	t.Run("x-forwarded-for-first-value", func(t *testing.T) {
+		t.Setenv("CP_TRUSTED_PROXY_CIDRS", "127.0.0.1/32")
+		resetTrustedProxyConfig()
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.Header.Set("X-Forwarded-For", " 203.0.113.1 , 10.0.0.1 ")
 		req.RemoteAddr = "127.0.0.1:9999"
@@ -91,6 +101,8 @@ func TestClientIP(t *testing.T) {
 	})
 
 	t.Run("remote-addr-host-port", func(t *testing.T) {
+		t.Setenv("CP_TRUSTED_PROXY_CIDRS", "")
+		resetTrustedProxyConfig()
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.RemoteAddr = "198.51.100.2:7777"
 
@@ -100,11 +112,25 @@ func TestClientIP(t *testing.T) {
 	})
 
 	t.Run("remote-addr-unparseable", func(t *testing.T) {
+		t.Setenv("CP_TRUSTED_PROXY_CIDRS", "")
+		resetTrustedProxyConfig()
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.RemoteAddr = "not-a-host-port"
 
 		if got := clientIP(req); got != "not-a-host-port" {
 			t.Fatalf("clientIP = %q, want %q", got, "not-a-host-port")
+		}
+	})
+
+	t.Run("untrusted-forwarded-for-ignored", func(t *testing.T) {
+		t.Setenv("CP_TRUSTED_PROXY_CIDRS", "10.0.0.0/8")
+		resetTrustedProxyConfig()
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("X-Forwarded-For", "203.0.113.77")
+		req.RemoteAddr = "198.51.100.20:7777"
+
+		if got := clientIP(req); got != "198.51.100.20" {
+			t.Fatalf("clientIP = %q, want %q", got, "198.51.100.20")
 		}
 	})
 }

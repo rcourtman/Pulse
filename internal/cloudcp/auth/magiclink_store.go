@@ -234,7 +234,7 @@ func (s *Store) Consume(tokenHash []byte, now time.Time) (*TokenRecord, error) {
 
 // DeleteExpired removes tokens that have passed their expiry time.
 func (s *Store) DeleteExpired(now time.Time) error {
-	if s == nil || s.db == nil {
+	if s == nil {
 		return nil
 	}
 	s.mu.Lock()
@@ -244,7 +244,7 @@ func (s *Store) DeleteExpired(now time.Time) error {
 		return nil
 	}
 	defer s.mu.Unlock()
-	if _, err := s.db.Exec(`DELETE FROM magic_link_tokens WHERE expires_at < ?`, now.UTC().Unix()); err != nil {
+	if _, err := db.Exec(`DELETE FROM magic_link_tokens WHERE expires_at < ?`, now.UTC().Unix()); err != nil {
 		return fmt.Errorf("delete expired magic link tokens: %w", err)
 	}
 	return nil

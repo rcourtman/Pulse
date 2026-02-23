@@ -17,12 +17,20 @@ const (
 // GraceEnforcer periodically transitions tenants stuck in SubStateGrace
 // for longer than maxGraceDays to canceled.
 type GraceEnforcer struct {
-	registry *registry.TenantRegistry
+	registry    *registry.TenantRegistry
+	provisioner *Provisioner
 }
 
 // NewGraceEnforcer creates a GraceEnforcer.
-func NewGraceEnforcer(reg *registry.TenantRegistry) *GraceEnforcer {
-	return &GraceEnforcer{registry: reg}
+func NewGraceEnforcer(reg *registry.TenantRegistry, provisioners ...*Provisioner) *GraceEnforcer {
+	var provisioner *Provisioner
+	if len(provisioners) > 0 {
+		provisioner = provisioners[0]
+	}
+	return &GraceEnforcer{
+		registry:    reg,
+		provisioner: provisioner,
+	}
 }
 
 // Run starts the enforcement loop. It blocks until ctx is cancelled.
@@ -97,6 +105,27 @@ func (g *GraceEnforcer) enforce(ctx context.Context) {
 			Int("grace_days_exceeded", maxGraceDays).
 			Msg("Grace period expired, transitioning tenant to canceled")
 
+		// Primary path: reuse the subscription-delete lifecycle so billing state
+		// and capabilities are revoked alongside tenant state.
+		if g.provisioner != nil {
+			subID := sa.StripeSubscriptionID
+			if subID == "" {
+				subID = tenant.StripeSubscriptionID
+			}
+			if err := g.provisioner.HandleSubscriptionDeleted(ctx, Subscription{
+				ID:       subID,
+				Customer: tenant.StripeCustomerID,
+			}); err != nil {
+				log.Error().
+					Err(err).
+					Str("tenant_id", tenant.ID).
+					Str("stripe_customer_id", tenant.StripeCustomerID).
+					Msg("Grace enforcer: failed to revoke subscription entitlements")
+			}
+			continue
+		}
+
+		// Fallback for legacy callers without a provisioner dependency.
 		tenant.State = registry.TenantStateCanceled
 		if err := g.registry.Update(tenant); err != nil {
 			log.Error().Err(err).Str("tenant_id", tenant.ID).Msg("Grace enforcer: failed to cancel tenant")

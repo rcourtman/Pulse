@@ -132,7 +132,7 @@ func Run(ctx context.Context, version string) error {
 	}
 
 	// Start grace period enforcer
-	graceEnforcer := cpstripe.NewGraceEnforcer(reg)
+	graceEnforcer := cpstripe.NewGraceEnforcer(reg, provisioner)
 	go graceEnforcer.Run(ctx)
 
 	// Start Stripe billing reconciler (best effort; no-op when STRIPE_API_KEY is unset).

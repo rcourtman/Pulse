@@ -341,3 +341,145 @@ func TestCannotRemoveLastOwner(t *testing.T) {
 		t.Fatal("expected owner membership to remain")
 	}
 }
+
+func TestUpdateMemberRole_AdminCannotDemoteOwner(t *testing.T) {
+	reg := newTestRegistry(t)
+	mux := newTestMux(reg)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Test"}); err != nil {
+		t.Fatal(err)
+	}
+
+	ownerID, err := registry.GenerateUserID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminID, err := registry.GenerateUserID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateUser(&registry.User{ID: ownerID, Email: "owner@msp.com"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateUser(&registry.User{ID: adminID, Email: "admin@msp.com"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateMembership(&registry.AccountMembership{AccountID: accountID, UserID: ownerID, Role: registry.MemberRoleOwner}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateMembership(&registry.AccountMembership{AccountID: accountID, UserID: adminID, Role: registry.MemberRoleAdmin}); err != nil {
+		t.Fatal(err)
+	}
+
+	body := `{"role":"tech"}`
+	req := httptest.NewRequest(http.MethodPatch, "/api/accounts/"+accountID+"/members/"+ownerID, bytes.NewBufferString(body))
+	req.Header.Set("X-User-Role", string(registry.MemberRoleAdmin))
+	rec := doRequest(t, mux, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+
+	m, err := reg.GetMembership(accountID, ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m == nil || m.Role != registry.MemberRoleOwner {
+		t.Fatalf("owner role changed unexpectedly: %+v", m)
+	}
+}
+
+func TestUpdateMemberRole_CannotDemoteLastOwner(t *testing.T) {
+	reg := newTestRegistry(t)
+	mux := newTestMux(reg)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Test"}); err != nil {
+		t.Fatal(err)
+	}
+
+	ownerID, err := registry.GenerateUserID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateUser(&registry.User{ID: ownerID, Email: "owner@msp.com"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateMembership(&registry.AccountMembership{AccountID: accountID, UserID: ownerID, Role: registry.MemberRoleOwner}); err != nil {
+		t.Fatal(err)
+	}
+
+	body := `{"role":"admin"}`
+	req := httptest.NewRequest(http.MethodPatch, "/api/accounts/"+accountID+"/members/"+ownerID, bytes.NewBufferString(body))
+	req.Header.Set("X-User-Role", string(registry.MemberRoleOwner))
+	rec := doRequest(t, mux, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+
+	m, err := reg.GetMembership(accountID, ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m == nil || m.Role != registry.MemberRoleOwner {
+		t.Fatalf("owner role changed unexpectedly: %+v", m)
+	}
+}
+
+func TestRemoveMember_AdminCannotRemoveOwner(t *testing.T) {
+	reg := newTestRegistry(t)
+	mux := newTestMux(reg)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Test"}); err != nil {
+		t.Fatal(err)
+	}
+
+	ownerID, err := registry.GenerateUserID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminID, err := registry.GenerateUserID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateUser(&registry.User{ID: ownerID, Email: "owner@msp.com"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateUser(&registry.User{ID: adminID, Email: "admin@msp.com"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateMembership(&registry.AccountMembership{AccountID: accountID, UserID: ownerID, Role: registry.MemberRoleOwner}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateMembership(&registry.AccountMembership{AccountID: accountID, UserID: adminID, Role: registry.MemberRoleAdmin}); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/accounts/"+accountID+"/members/"+ownerID, nil)
+	req.Header.Set("X-User-Role", string(registry.MemberRoleAdmin))
+	rec := doRequest(t, mux, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+
+	m, err := reg.GetMembership(accountID, ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m == nil || m.Role != registry.MemberRoleOwner {
+		t.Fatalf("owner membership changed unexpectedly: %+v", m)
+	}
+}

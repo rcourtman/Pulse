@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -175,8 +176,21 @@ func (p *Provisioner) generateAndLogMagicLink(email, tenantID string) {
 	log.Info().
 		Str("tenant_id", tenantID).
 		Str("email", email).
-		Str("magic_link_url", magicURL).
+		Str("magic_link_url_redacted", redactMagicLinkURL(magicURL)).
 		Msg("Magic link generated for new tenant")
+}
+
+func redactMagicLinkURL(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u == nil {
+		return ""
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	u.RawQuery = ""
+	u.Fragment = ""
+	return u.String()
 }
 
 func (p *Provisioner) writeBillingState(tenantDataDir string, state *pkglicensing.BillingState) error {
