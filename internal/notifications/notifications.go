@@ -64,7 +64,8 @@ func (n *NotificationManager) createSecureWebhookClient(timeout time.Duration) *
 func (n *NotificationManager) createSecureWebhookClientWithTLS(timeout time.Duration, skipTLSVerify bool) *http.Client {
 	// dedicated transport that pins DNS resolution to prevent rebinding
 	transport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
+		// Proxy intentionally nil — outbound proxies would bypass DialContext
+		// SSRF checks by resolving the target on the proxy side.
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			// Extract hostname and port
 			host, port, err := net.SplitHostPort(addr)

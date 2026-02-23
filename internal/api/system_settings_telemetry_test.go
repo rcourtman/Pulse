@@ -241,3 +241,43 @@ func TestTelemetryUpdate_NoMutationOnPersistFailure(t *testing.T) {
 		t.Error("TelemetryEnabled should still be true after persistence failure")
 	}
 }
+
+func TestTelemetryUpdate_UnrelatedUpdateDoesNotToggle(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:         tempDir,
+		ConfigPath:       tempDir,
+		TelemetryEnabled: true,
+		EnvOverrides:     make(map[string]bool),
+	}
+	handler, persistence, token := setupTelemetryTest(t, cfg)
+
+	// Persist with telemetry enabled.
+	initial := config.DefaultSystemSettings()
+	enabled := true
+	initial.TelemetryEnabled = &enabled
+	if err := persistence.SaveSystemSettings(*initial); err != nil {
+		t.Fatal(err)
+	}
+
+	// Track whether toggle callback fires.
+	toggleCalled := false
+	handler.SetTelemetryToggleFunc(func(en bool) {
+		toggleCalled = true
+	})
+
+	// Send an update that does NOT include telemetryEnabled.
+	body, _ := json.Marshal(map[string]interface{}{"theme": "dark"})
+	req := httptest.NewRequest(http.MethodPost, "/api/system-settings", bytes.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateSystemSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if toggleCalled {
+		t.Error("telemetry toggle callback should NOT fire for unrelated settings updates")
+	}
+}

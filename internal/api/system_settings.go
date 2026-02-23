@@ -793,7 +793,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	h.config.DisableDockerUpdateActions = settings.DisableDockerUpdateActions
 	h.config.DisableLegacyRouteRedirects = settings.DisableLegacyRouteRedirects
 	h.config.DisableLocalUpgradeMetrics = settings.DisableLocalUpgradeMetrics
-	if settings.TelemetryEnabled != nil {
+	if _, ok := rawRequest["telemetryEnabled"]; ok && settings.TelemetryEnabled != nil {
 		h.config.TelemetryEnabled = *settings.TelemetryEnabled
 		if h.telemetryToggleFunc != nil {
 			h.telemetryToggleFunc(*settings.TelemetryEnabled)
