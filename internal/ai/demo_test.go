@@ -17,24 +17,6 @@ func TestIsDemoMode(t *testing.T) {
 	}
 }
 
-func TestIsMockResource(t *testing.T) {
-	t.Setenv("PULSE_MOCK_MODE", "false")
-	if !IsMockResource("node/pve1", "", "") {
-		t.Fatal("expected mock resource to be detected for pattern match")
-	}
-	if IsMockResource("", "", "") {
-		t.Fatal("expected empty resource values to be treated as non-mock")
-	}
-	if IsMockResource("node/prod1", "production", "node1") {
-		t.Fatal("expected non-mock resource to return false")
-	}
-
-	t.Setenv("PULSE_MOCK_MODE", "true")
-	if IsMockResource("node/pve1", "", "") {
-		t.Fatal("expected demo mode to bypass mock filtering")
-	}
-}
-
 func TestPatrolService_InjectDemoFindings(t *testing.T) {
 	service := NewPatrolService(nil, nil)
 	if service.findings == nil || service.runHistoryStore == nil {

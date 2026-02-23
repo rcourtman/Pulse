@@ -44,7 +44,7 @@
   :root {
     /*
       Layout tokens.
-      Goal: keep the app readable (not “widescreen”), but avoid self-inflicted cramping on large monitors.
+      Goal: keep the app readable (not "widescreen"), but avoid self-inflicted cramping on large monitors.
     */
     --pulse-shell-max-width: min(97vw, 1560px);
     --pulse-shell-padding-inline: clamp(0.75rem, 1.2vw, 1.5rem);
@@ -94,67 +94,6 @@
   html {
     overflow-y: scroll;
     scroll-behavior: smooth;
-  }
-
-  /* Threshold slider styles */
-  .threshold-slider-container {
-    @apply relative w-full;
-  }
-
-  .threshold-slider {
-    @apply w-full h-3.5 appearance-none bg-transparent relative z-10;
-  }
-
-  /* Slider track styles - match progress bar height */
-  .threshold-slider::-webkit-slider-runnable-track {
-    @apply h-3.5 rounded bg-slate-200 dark:bg-slate-600;
-  }
-
-  .threshold-slider::-moz-range-track {
-    @apply h-3.5 rounded bg-slate-200 dark:bg-slate-600;
-  }
-
-  /* Slider thumb styles with value display */
-  .threshold-slider::-webkit-slider-thumb {
-    @apply appearance-none w-12 h-5 rounded-full cursor-pointer relative;
-    margin-top: -2.5px;
-    /* Center thumb on track */
-    background: white;
-    border: 2px solid currentColor;
-    box-shadow:
-      0 1px 3px 0 rgba(0, 0, 0, 0.1),
-      0 1px 2px 0 rgba(0, 0, 0, 0.06);
-  }
-
-  .threshold-slider::-moz-range-thumb {
-    @apply appearance-none w-12 h-5 rounded-full cursor-pointer relative border-0;
-    background: white;
-    border: 2px solid currentColor;
-    box-shadow:
-      0 1px 3px 0 rgba(0, 0, 0, 0.1),
-      0 1px 2px 0 rgba(0, 0, 0, 0.06);
-  }
-
-  /* Color coding for different metrics */
-  .threshold-slider.slider-cpu {
-    color: #3b82f6;
-    /* blue-500 */
-  }
-
-  .threshold-slider.slider-memory {
-    color: #10b981;
-    /* green-500 */
-  }
-
-  .threshold-slider.slider-disk {
-    color: #f59e0b;
-    /* amber-500 */
-  }
-
-  /* Value display inside thumb */
-  .threshold-value {
-    @apply absolute inset-0 flex items-center justify-center text-[10px] font-semibold pointer-events-none;
-    color: currentColor;
   }
 }
 
@@ -210,11 +149,6 @@
     @apply bg-surface border border-border shadow-sm rounded-md;
   }
 
-  /* Table styles */
-  .table-header {
-    @apply text-xs font-medium text-muted uppercase tracking-wider;
-  }
-
   .table-row {
     @apply border-b border-border hover:bg-surface-hover;
   }
@@ -228,49 +162,10 @@
     @apply form-input pr-8 appearance-none;
   }
 
-  /* Secondary button — bordered, ghost-style */
-  .btn-secondary {
-    @apply px-4 py-2 text-sm font-medium border border-border text-base-content rounded-md bg-surface hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
-  }
-
-  /* Status indicators */
-  .status-running {
-    @apply text-green-600 dark:text-green-400;
-  }
-
-  .status-stopped {
-    @apply text-slate-600 dark:text-slate-400;
-  }
-
-  .status-error {
-    @apply text-red-600 dark:text-red-400;
-  }
-
   /* Progress bars */
-  .progress-bar {
-    @apply bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden;
-  }
-
   .progress-fill {
     @apply h-full;
     transition: width 300ms ease-out;
-  }
-
-  /* Stable chart containers */
-  .chart-stable-container {
-    contain: layout style;
-    will-change: contents;
-  }
-
-  /* Prevent chart SVG flicker */
-  .sparkline {
-    backface-visibility: hidden;
-    transform: translateZ(0);
-  }
-
-  /* Disable animations in charts mode to prevent blinking */
-  .charts-mode .sparkline path {
-    transition: none !important;
   }
 
   /* Custom scrollbar - subtle styling */
@@ -354,7 +249,6 @@
 body,
 .card,
 .table-row,
-.table-header,
 .bg-white,
 .bg-slate-50,
 .bg-slate-100,
@@ -508,28 +402,6 @@ body,
   animation: slide-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
 }
 
-.animate-pulse-slow {
-  animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* New Premium Animations */
-@keyframes float {
-
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-10px);
-  }
-}
-
-.animate-float {
-  animation: float 6s ease-in-out infinite;
-}
-
-
 .delay-100 {
   animation-delay: 100ms;
 }
@@ -540,11 +412,6 @@ body,
 
 .delay-300 {
   animation-delay: 300ms;
-}
-
-/* Card hover utility */
-.card-hover {
-  @apply hover:bg-surface-hover transition-colors duration-200;
 }
 
 /* Staggered Entry Animation */
