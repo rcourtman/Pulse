@@ -167,7 +167,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                     </Show>
 
                     <Show when={!useCustomPassword()}>
-                        <div class="bg-blue-50 border border-blue-200 dark:border-blue-900 rounded-md p-4 animate-fade-in">
+                        <div class="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-md p-4 animate-fade-in">
                             <p class="text-sm text-blue-800 dark:text-blue-200 font-medium">
                                 A secure 16-character password will be generated and shown after setup.
                             </p>
