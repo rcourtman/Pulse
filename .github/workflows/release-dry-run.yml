@@ -91,7 +91,7 @@ jobs:
 
       - name: Build Docker images for integration tests
         run: |
-          VERSION="v$(cat VERSION | tr -d '\n')"
+          docker build -t pulse:test --target runtime .
           docker build -t pulse-mock-github:test tests/integration/mock-github-server
         env:
           PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
