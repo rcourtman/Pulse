@@ -168,11 +168,11 @@ const stringToMappings = (input: string) => {
   return result;
 };
 
-interface Props {
+interface SSOProvidersPanelProps {
   onConfigUpdated?: () => void;
 }
 
-export const SSOProvidersPanel: Component<Props> = (props) => {
+export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   const [providers, setProviders] = createSignal<SSOProvider[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [saving, setSaving] = createSignal(false);

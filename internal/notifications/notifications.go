@@ -46,6 +46,11 @@ const (
 const (
 	queueTypeSuffixResolved = "_resolved"
 	metadataResolvedAt      = "resolvedAt"
+
+	// Apprise timeout bounds (seconds), applied during config normalization.
+	appriseDefaultTimeoutSecs = 15
+	appriseMaxTimeoutSecs     = 120
+	appriseMinTimeoutSecs     = 5
 )
 
 // notificationEvent represents the type of notification being processed.
@@ -283,11 +288,11 @@ func NormalizeAppriseConfig(cfg AppriseConfig) AppriseConfig {
 	normalized.CLIPath = "apprise" // Force default binary for security
 
 	if normalized.TimeoutSeconds <= 0 {
-		normalized.TimeoutSeconds = 15
-	} else if normalized.TimeoutSeconds > 120 {
-		normalized.TimeoutSeconds = 120
-	} else if normalized.TimeoutSeconds < 5 {
-		normalized.TimeoutSeconds = 5
+		normalized.TimeoutSeconds = appriseDefaultTimeoutSecs
+	} else if normalized.TimeoutSeconds > appriseMaxTimeoutSecs {
+		normalized.TimeoutSeconds = appriseMaxTimeoutSecs
+	} else if normalized.TimeoutSeconds < appriseMinTimeoutSecs {
+		normalized.TimeoutSeconds = appriseMinTimeoutSecs
 	}
 
 	cleanTargets := make([]string, 0, len(normalized.Targets))

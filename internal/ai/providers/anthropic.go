@@ -15,10 +15,11 @@ import (
 )
 
 const (
-	anthropicAPIURL     = "https://api.anthropic.com/v1/messages"
-	anthropicAPIVersion = "2023-06-01"
-	maxRetries          = 3
-	initialBackoff      = 2 * time.Second
+	anthropicAPIURL      = "https://api.anthropic.com/v1/messages"
+	anthropicAPIVersion  = "2023-06-01"
+	maxRetries           = 3
+	initialBackoff       = 2 * time.Second
+	defaultClientTimeout = 5 * time.Minute
 )
 
 // AnthropicClient implements the Provider interface for Anthropic's Claude API
@@ -43,7 +44,7 @@ func NewAnthropicClientWithBaseURL(apiKey, model, baseURL string, timeout time.D
 		baseURL = anthropicAPIURL
 	}
 	if timeout <= 0 {
-		timeout = 300 * time.Second // Default 5 minutes
+		timeout = defaultClientTimeout
 	}
 	return &AnthropicClient{
 		apiKey:  apiKey,

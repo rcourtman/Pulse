@@ -14,16 +14,16 @@ import { shouldHideDockerUpdateActions, areSystemSettingsLoaded } from '@/stores
 
 
 
-interface UpdateBadgeProps {
+interface ContainerUpdateBadgeProps {
     updateStatus?: DockerContainerUpdateStatus;
     compact?: boolean;
 }
 
 /**
- * UpdateBadge displays a visual indicator when a container image has an update available.
+ * ContainerUpdateBadge displays a visual indicator when a container image has an update available.
  * Uses a blue color scheme to differentiate from health/status badges.
  */
-export const UpdateBadge: Component<UpdateBadgeProps> = (props) => {
+export const ContainerUpdateBadge: Component<ContainerUpdateBadgeProps> = (props) => {
     const hasUpdate = () => props.updateStatus?.updateAvailable === true;
     const hasError = () => Boolean(props.updateStatus?.error);
 
@@ -285,7 +285,7 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
         <Show when={hasUpdate()}>
             {/* Case 1: Settings loaded and updates are disabled - show read-only badge */}
             <Show when={settingsLoaded() && shouldHideButton()}>
-                <UpdateBadge updateStatus={props.updateStatus} compact={props.compact} />
+                <ContainerUpdateBadge updateStatus={props.updateStatus} compact={props.compact} />
             </Show>
 
             {/* Case 2: Settings loading OR settings loaded with updates enabled - show button */}
@@ -372,5 +372,5 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
     );
 };
 
-export default UpdateBadge;
+export default ContainerUpdateBadge;
 

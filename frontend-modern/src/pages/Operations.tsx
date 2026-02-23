@@ -12,7 +12,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 
 type OperationsTabId = 'diagnostics' | 'reporting' | 'logs';
 
-export const OperationsPage: Component = () => {
+export const Operations: Component = () => {
     const location = useLocation();
     const navigate = useNavigate();
 
@@ -98,4 +98,4 @@ export const OperationsPage: Component = () => {
     );
 };
 
-export default OperationsPage;
+export default Operations;

@@ -48,11 +48,11 @@ const stringToMappings = (input: string) => {
   return result;
 };
 
-interface Props {
+interface OIDCPanelProps {
   onConfigUpdated?: (config: OIDCConfigResponse) => void;
 }
 
-export const OIDCPanel: Component<Props> = (props) => {
+export const OIDCPanel: Component<OIDCPanelProps> = (props) => {
   const [config, setConfig] = createSignal<OIDCConfigResponse | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
