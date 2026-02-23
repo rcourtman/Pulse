@@ -963,11 +963,12 @@ func TestCheckBackupsCreatesAndClearsAlerts(t *testing.T) {
 	key := BuildGuestKey("inst", "node", 100)
 	guestsByKey := map[string]GuestLookup{
 		key: {
-			Name:     "app-server",
-			Instance: "inst",
-			Node:     "node",
-			Type:     "qemu",
-			VMID:     100,
+			ResourceID: "qemu/100",
+			Name:       "app-server",
+			Instance:   "inst",
+			Node:       "node",
+			Type:       "qemu",
+			VMID:       100,
 		},
 	}
 	guestsByVMID := map[string][]GuestLookup{
@@ -1132,17 +1133,17 @@ func TestCheckBackupsHandlesPbsOnlyGuests(t *testing.T) {
 	m.mu.RLock()
 	found := false
 	for id, alert := range m.activeAlerts {
-		if strings.HasPrefix(id, "backup-age-") {
+		if strings.HasPrefix(id, "backup-orphaned-") {
 			found = true
-			if alert.Level != AlertLevelCritical {
-				t.Fatalf("expected PBS backup alert to be critical")
+			if alert.Level != AlertLevelWarning {
+				t.Fatalf("expected PBS orphaned backup alert to be warning, got %s", alert.Level)
 			}
 			break
 		}
 	}
 	m.mu.RUnlock()
 	if !found {
-		t.Fatalf("expected PBS backup alert to be created")
+		t.Fatalf("expected PBS orphaned backup alert to be created")
 	}
 }
 
@@ -1471,6 +1472,357 @@ func TestCheckBackupsSkipsOrphanedWhenDisabled(t *testing.T) {
 		if strings.HasPrefix(id, "backup-age-") {
 			t.Fatalf("expected orphaned backup to be skipped, found alert %s", id)
 		}
+		if strings.HasPrefix(id, "backup-orphaned-") {
+			t.Fatalf("expected orphaned backup alert to be suppressed when alertOrphaned=false, found alert %s", id)
+		}
+	}
+}
+
+func TestCheckBackupsCreatesOrphanedAlert(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	alertOrphaned := true
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:       true,
+		WarningDays:   7,
+		CriticalDays:  14,
+		AlertOrphaned: &alertOrphaned,
+		IgnoreVMIDs:   []string{},
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+	// Backup is only 1 day old — well below both age thresholds.
+	storageBackups := []models.StorageBackup{
+		{
+			ID:       "inst-node-200-backup",
+			Storage:  "local",
+			Node:     "node",
+			Instance: "inst",
+			Type:     "qemu",
+			VMID:     200,
+			Time:     now.Add(-1 * 24 * time.Hour),
+		},
+	}
+
+	// Empty guest maps → VMID 200 is orphaned (not in inventory).
+	m.CheckBackups(storageBackups, nil, nil, map[string]GuestLookup{}, map[string][]GuestLookup{})
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	found := false
+	for id, alert := range m.activeAlerts {
+		if strings.HasPrefix(id, "backup-orphaned-") {
+			found = true
+			if alert.Type != "backup-orphaned" {
+				t.Fatalf("expected alert type backup-orphaned, got %s", alert.Type)
+			}
+			if alert.Level != AlertLevelWarning {
+				t.Fatalf("expected alert level warning, got %s", alert.Level)
+			}
+			if alert.Metadata == nil || alert.Metadata["orphaned"] != true {
+				t.Fatalf("expected metadata orphaned=true")
+			}
+			if alert.Metadata["vmid"] != "200" {
+				t.Fatalf("expected metadata vmid=200, got %v", alert.Metadata["vmid"])
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected a backup-orphaned alert to be created for orphaned VMID 200")
+	}
+	// Also verify no backup-age alert was created (below thresholds).
+	for id := range m.activeAlerts {
+		if strings.HasPrefix(id, "backup-age-") {
+			t.Fatalf("expected no backup-age alert for orphan below age threshold, found %s", id)
+		}
+	}
+}
+
+func TestCheckBackupsOrphanedAlertClearsWhenGuestReappears(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	alertOrphaned := true
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:       true,
+		WarningDays:   7,
+		CriticalDays:  14,
+		AlertOrphaned: &alertOrphaned,
+		IgnoreVMIDs:   []string{},
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+	storageBackups := []models.StorageBackup{
+		{
+			ID:       "inst-node-300-backup",
+			Storage:  "local",
+			Node:     "node",
+			Instance: "inst",
+			Type:     "qemu",
+			VMID:     300,
+			Time:     now.Add(-1 * 24 * time.Hour),
+		},
+	}
+
+	// First cycle: guest absent → orphaned alert fires.
+	m.CheckBackups(storageBackups, nil, nil, map[string]GuestLookup{}, map[string][]GuestLookup{})
+
+	m.mu.RLock()
+	orphanedFound := false
+	for id := range m.activeAlerts {
+		if strings.HasPrefix(id, "backup-orphaned-") {
+			orphanedFound = true
+		}
+	}
+	m.mu.RUnlock()
+	if !orphanedFound {
+		t.Fatalf("expected orphaned alert after first cycle")
+	}
+
+	// Second cycle: guest reappears in inventory → orphaned alert should clear.
+	guestKey := BuildGuestKey("inst", "node", 300)
+	guestsByKey := map[string]GuestLookup{
+		guestKey: {ResourceID: "qemu/300", Name: "restored-vm", Instance: "inst", Node: "node", Type: "qemu", VMID: 300},
+	}
+	guestsByVMID := map[string][]GuestLookup{
+		"300": {guestsByKey[guestKey]},
+	}
+	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for id := range m.activeAlerts {
+		if strings.HasPrefix(id, "backup-orphaned-") {
+			t.Fatalf("expected orphaned alert to be cleared after guest reappears, found %s", id)
+		}
+	}
+}
+
+func TestCheckBackupsOrphanedIgnoresVMIDs(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	alertOrphaned := true
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:       true,
+		WarningDays:   7,
+		CriticalDays:  14,
+		AlertOrphaned: &alertOrphaned,
+		IgnoreVMIDs:   []string{"20*"},
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+	storageBackups := []models.StorageBackup{
+		{
+			ID:       "inst-node-200-backup",
+			Storage:  "local",
+			Node:     "node",
+			Instance: "inst",
+			Type:     "qemu",
+			VMID:     200,
+			Time:     now.Add(-1 * 24 * time.Hour),
+		},
+		{
+			ID:       "inst-node-300-backup",
+			Storage:  "local",
+			Node:     "node",
+			Instance: "inst",
+			Type:     "qemu",
+			VMID:     300,
+			Time:     now.Add(-1 * 24 * time.Hour),
+		},
+	}
+
+	// Both are orphaned (not in inventory), but VMID 200 matches ignore pattern "20*".
+	m.CheckBackups(storageBackups, nil, nil, map[string]GuestLookup{}, map[string][]GuestLookup{})
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for id := range m.activeAlerts {
+		if strings.HasPrefix(id, "backup-orphaned-") && strings.Contains(id, "200") {
+			t.Fatalf("expected orphaned alert for VMID 200 to be suppressed by ignoreVMIDs, found %s", id)
+		}
+	}
+	found300 := false
+	for id := range m.activeAlerts {
+		if strings.HasPrefix(id, "backup-orphaned-") && strings.Contains(id, "300") {
+			found300 = true
+		}
+	}
+	if !found300 {
+		t.Fatalf("expected orphaned alert for VMID 300 (not in ignore list)")
+	}
+}
+
+func TestCheckBackupsOrphanedWithZeroAgeThresholds(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	alertOrphaned := true
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:       true,
+		WarningDays:   0,
+		CriticalDays:  0,
+		AlertOrphaned: &alertOrphaned,
+		IgnoreVMIDs:   []string{},
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+	storageBackups := []models.StorageBackup{
+		{
+			ID:       "inst-node-400-backup",
+			Storage:  "local",
+			Node:     "node",
+			Instance: "inst",
+			Type:     "qemu",
+			VMID:     400,
+			Time:     now.Add(-1 * 24 * time.Hour),
+		},
+	}
+
+	// Orphaned guest with zero age thresholds — should still fire orphaned alert.
+	m.CheckBackups(storageBackups, nil, nil, map[string]GuestLookup{}, map[string][]GuestLookup{})
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	found := false
+	for id := range m.activeAlerts {
+		if strings.HasPrefix(id, "backup-orphaned-") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected backup-orphaned alert even with zero age thresholds")
+	}
+	// No backup-age alerts should exist since thresholds are 0.
+	for id := range m.activeAlerts {
+		if strings.HasPrefix(id, "backup-age-") {
+			t.Fatalf("expected no backup-age alert with zero thresholds, found %s", id)
+		}
+	}
+}
+
+func TestCheckBackupsOrphanedWithPersistedMetadata(t *testing.T) {
+	// When a guest is deleted, enrichWithPersistedMetadata adds an entry to
+	// guestsByVMID with an empty ResourceID (just name/type metadata for display).
+	// This must NOT suppress orphaned alerts — only live guests (ResourceID != "")
+	// indicate the guest is still in inventory.
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	alertOrphaned := true
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:       true,
+		WarningDays:   7,
+		CriticalDays:  14,
+		AlertOrphaned: &alertOrphaned,
+		IgnoreVMIDs:   []string{},
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+	storageBackups := []models.StorageBackup{
+		{
+			ID:       "inst-node-500-backup",
+			Storage:  "local",
+			Node:     "node",
+			Instance: "inst",
+			Type:     "qemu",
+			VMID:     500,
+			Time:     now.Add(-1 * 24 * time.Hour),
+		},
+	}
+
+	// Simulate persisted metadata for deleted guest: entry exists in
+	// guestsByVMID but with empty ResourceID (no live guest).
+	guestsByVMID := map[string][]GuestLookup{
+		"500": {{Name: "deleted-vm", Instance: "inst", Node: "node", Type: "qemu", VMID: 500}},
+	}
+
+	m.CheckBackups(storageBackups, nil, nil, map[string]GuestLookup{}, guestsByVMID)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	found := false
+	for id := range m.activeAlerts {
+		if strings.HasPrefix(id, "backup-orphaned-") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected backup-orphaned alert even when guestsByVMID has metadata-only entry (no ResourceID)")
+	}
+}
+
+func TestCheckBackupsOrphanedCrossInstanceVMID(t *testing.T) {
+	// Instance A's guest (VMID 600) is deleted, but instance B has a live
+	// guest with the same VMID. The storage backup from instance A should
+	// still fire an orphaned alert — the live guest on instance B is irrelevant.
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	alertOrphaned := true
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:       true,
+		WarningDays:   7,
+		CriticalDays:  14,
+		AlertOrphaned: &alertOrphaned,
+		IgnoreVMIDs:   []string{},
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+	// Storage backup from instance A.
+	storageBackups := []models.StorageBackup{
+		{
+			ID:       "instA-nodeA-600-backup",
+			Storage:  "local",
+			Node:     "nodeA",
+			Instance: "instA",
+			Type:     "qemu",
+			VMID:     600,
+			Time:     now.Add(-1 * 24 * time.Hour),
+		},
+	}
+
+	// Instance B has a live guest with the same VMID.
+	keyB := BuildGuestKey("instB", "nodeB", 600)
+	guestsByKey := map[string]GuestLookup{
+		keyB: {ResourceID: "qemu/600", Name: "vm-instB", Instance: "instB", Node: "nodeB", Type: "qemu", VMID: 600},
+	}
+	guestsByVMID := map[string][]GuestLookup{
+		"600": {guestsByKey[keyB]},
+	}
+
+	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	found := false
+	for id := range m.activeAlerts {
+		if strings.HasPrefix(id, "backup-orphaned-") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected backup-orphaned alert for instA even though instB has a live guest with the same VMID")
 	}
 }
 
@@ -1515,8 +1867,8 @@ func TestCheckBackupsIgnoresVMIDs(t *testing.T) {
 	keyIgnored := BuildGuestKey("inst", "node", 101)
 	keyAllowed := BuildGuestKey("inst", "node", 200)
 	guestsByKey := map[string]GuestLookup{
-		keyIgnored: {Name: "ignored-vm", Instance: "inst", Node: "node", Type: "qemu", VMID: 101},
-		keyAllowed: {Name: "allowed-vm", Instance: "inst", Node: "node", Type: "qemu", VMID: 200},
+		keyIgnored: {ResourceID: "qemu/101", Name: "ignored-vm", Instance: "inst", Node: "node", Type: "qemu", VMID: 101},
+		keyAllowed: {ResourceID: "qemu/200", Name: "allowed-vm", Instance: "inst", Node: "node", Type: "qemu", VMID: 200},
 	}
 	guestsByVMID := map[string][]GuestLookup{
 		"101": {guestsByKey[keyIgnored]},
@@ -5648,7 +6000,7 @@ func TestClearActiveAlertsWithExistingAlerts(t *testing.T) {
 func TestClearBackupAlertsLocked(t *testing.T) {
 	// t.Parallel()
 
-	t.Run("clears backup-age alerts only", func(t *testing.T) {
+	t.Run("clears backup-age and backup-orphaned alerts only", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 
@@ -5667,16 +6019,21 @@ func TestClearBackupAlertsLocked(t *testing.T) {
 			ID:   "backup-alert-2",
 			Type: "backup-age",
 		}
+		// Add a backup-orphaned alert
+		m.activeAlerts["backup-orphaned-1"] = &Alert{
+			ID:   "backup-orphaned-1",
+			Type: "backup-orphaned",
+		}
 
-		if len(m.activeAlerts) != 3 {
-			t.Fatalf("expected 3 alerts, got %d", len(m.activeAlerts))
+		if len(m.activeAlerts) != 4 {
+			t.Fatalf("expected 4 alerts, got %d", len(m.activeAlerts))
 		}
 
 		m.mu.Lock()
 		m.clearBackupAlertsLocked()
 		m.mu.Unlock()
 
-		// Should have removed backup-age alerts, keeping cpu alert
+		// Should have removed backup-age and backup-orphaned alerts, keeping cpu alert
 		if len(m.activeAlerts) != 1 {
 			t.Errorf("expected 1 alert remaining, got %d", len(m.activeAlerts))
 		}
@@ -5688,6 +6045,9 @@ func TestClearBackupAlertsLocked(t *testing.T) {
 		}
 		if _, exists := m.activeAlerts["backup-alert-2"]; exists {
 			t.Error("expected backup-alert-2 to be cleared")
+		}
+		if _, exists := m.activeAlerts["backup-orphaned-1"]; exists {
+			t.Error("expected backup-orphaned-1 to be cleared")
 		}
 	})
 

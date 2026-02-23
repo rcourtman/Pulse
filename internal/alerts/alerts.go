@@ -5478,8 +5478,10 @@ func (m *Manager) CheckBackups(
 	}
 
 	if backupCfg.WarningDays <= 0 && backupCfg.CriticalDays <= 0 {
-		m.clearBackupAlerts()
-		return
+		if backupCfg.AlertOrphaned == nil || !*backupCfg.AlertOrphaned {
+			m.clearBackupAlerts()
+			return
+		}
 	}
 
 	type backupRecord struct {
@@ -5695,7 +5697,168 @@ func (m *Manager) CheckBackups(
 			continue
 		}
 		if record.vmid != "" && record.lookup.ResourceID == "" {
-			if currentBackupCfg.AlertOrphaned != nil && !*currentBackupCfg.AlertOrphaned {
+			// Check whether the VMID exists anywhere in live inventory.
+			// If it does, the backup is ambiguous (VMID collision) but not orphaned.
+			// Entries with empty ResourceID are persisted metadata for deleted guests
+			// and do not count as live inventory.
+			// For PVE storage backups, only match guests from the same instance —
+			// a live VMID on instance B does not mean instance A's backup isn't orphaned.
+			existsInInventory := false
+			if guests, ok := guestsByVMID[record.vmid]; ok {
+				for _, g := range guests {
+					if g.ResourceID == "" {
+						continue
+					}
+					if record.source == "PVE storage" && g.Instance != record.instance {
+						continue
+					}
+					existsInInventory = true
+					break
+				}
+			}
+			if !existsInInventory {
+				if g, ok := guestsByKey[record.key]; ok && g.ResourceID != "" {
+					existsInInventory = true
+				}
+			}
+
+			if !existsInInventory {
+				if currentBackupCfg.AlertOrphaned != nil && !*currentBackupCfg.AlertOrphaned {
+					continue
+				}
+
+				// Create a backup-orphaned alert immediately — no age threshold required.
+				alertKey := sanitizeAlertKey(key)
+				alertID := fmt.Sprintf("backup-orphaned-%s", alertKey)
+				validAlerts[alertID] = struct{}{}
+
+				displayName := record.fallbackName
+				if displayName == "" {
+					displayName = "Unknown guest"
+				}
+
+				node := record.node
+				if node == "" {
+					node = record.lookup.Node
+				}
+				instance := record.instance
+				if instance == "" {
+					instance = record.lookup.Instance
+				}
+
+				var sourceLabel string
+				switch record.source {
+				case "PBS":
+					sourceLabel = fmt.Sprintf("PBS datastore %s on %s", record.datastore, strings.TrimPrefix(instance, "PBS:"))
+				case "PMG":
+					if node != "" {
+						sourceLabel = fmt.Sprintf("PMG node %s", node)
+					} else {
+						sourceLabel = "PMG"
+					}
+				default:
+					sourceLabel = fmt.Sprintf("storage %s on %s", record.storage, node)
+				}
+
+				message := fmt.Sprintf(
+					"Orphaned backup: %s (VMID %s) via %s — guest no longer exists in inventory",
+					displayName,
+					record.vmid,
+					sourceLabel,
+				)
+
+				metadata := map[string]interface{}{
+					"source":         record.source,
+					"lastBackupTime": record.lastTime,
+					"ageDays":        ageDays,
+					"orphaned":       true,
+					"vmid":           record.vmid,
+				}
+				if record.storage != "" {
+					metadata["storage"] = record.storage
+				}
+				if record.datastore != "" {
+					metadata["datastore"] = record.datastore
+				}
+				if record.backupType != "" {
+					metadata["backupType"] = record.backupType
+				}
+				if record.filename != "" {
+					metadata["filename"] = record.filename
+				}
+
+				m.mu.Lock()
+				if existing, exists := m.activeAlerts[alertID]; exists && existing != nil {
+					existing.LastSeen = now
+					existing.Level = AlertLevelWarning
+					existing.Value = ageDays
+					existing.Threshold = 0
+					existing.Message = message
+					if existing.Metadata == nil {
+						existing.Metadata = make(map[string]interface{})
+					}
+					for k, v := range metadata {
+						existing.Metadata[k] = v
+					}
+					m.mu.Unlock()
+					continue
+				}
+
+				alert := &Alert{
+					ID:           alertID,
+					Type:         "backup-orphaned",
+					Level:        AlertLevelWarning,
+					ResourceID:   alertKey,
+					ResourceName: fmt.Sprintf("%s backup", displayName),
+					Node:         node,
+					Instance:     instance,
+					Message:      message,
+					Value:        ageDays,
+					Threshold:    0,
+					StartTime:    now,
+					LastSeen:     now,
+					Metadata:     metadata,
+				}
+
+				m.preserveAlertState(alertID, alert)
+
+				m.activeAlerts[alertID] = alert
+				m.recentAlerts[alertID] = alert
+				m.historyManager.AddAlert(*alert)
+
+				go func() {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Error().Interface("panic", r).Msg("Panic in SaveActiveAlerts goroutine (backup-orphaned)")
+						}
+					}()
+					if err := m.SaveActiveAlerts(); err != nil {
+						log.Error().Err(err).Msg("Failed to save active alerts after backup-orphaned alert creation")
+					}
+				}()
+
+				if !m.checkRateLimit(alertID) {
+					m.mu.Unlock()
+					log.Debug().
+						Str("alertID", alertID).
+						Str("resource", displayName).
+						Msg("Backup orphaned alert suppressed due to rate limit")
+					continue
+				}
+
+				if m.onAlert != nil {
+					notified := now
+					alert.LastNotified = &notified
+					if m.dispatchAlert(alert, true) {
+						log.Info().
+							Str("alertID", alertID).
+							Str("resource", displayName).
+							Msg("Backup orphaned alert dispatched")
+					} else {
+						alert.LastNotified = nil
+					}
+				}
+				m.mu.Unlock()
 				continue
 			}
 		}
@@ -5860,7 +6023,7 @@ func (m *Manager) CheckBackups(
 
 	m.mu.Lock()
 	for alertID, alert := range m.activeAlerts {
-		if alert == nil || alert.Type != "backup-age" {
+		if alert == nil || (alert.Type != "backup-age" && alert.Type != "backup-orphaned") {
 			continue
 		}
 		if _, ok := validAlerts[alertID]; ok {
@@ -9989,7 +10152,7 @@ func (m *Manager) clearBackupAlerts() {
 
 func (m *Manager) clearBackupAlertsLocked() {
 	for alertID, alert := range m.activeAlerts {
-		if alert == nil || alert.Type != "backup-age" {
+		if alert == nil || (alert.Type != "backup-age" && alert.Type != "backup-orphaned") {
 			continue
 		}
 		m.clearAlertNoLock(alertID)
