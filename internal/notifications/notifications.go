@@ -2777,16 +2777,23 @@ func (n *NotificationManager) ValidateWebhookURL(webhookURL string) error {
 
 // isPrivateIP checks if an IP address is in a private range
 func isPrivateIP(ip net.IP) bool {
-	// Private IPv4 ranges
+	// Private and special-use ranges that should not be reachable via webhooks.
 	privateRanges := []string{
-		"10.0.0.0/8",     // RFC1918
-		"172.16.0.0/12",  // RFC1918
-		"192.168.0.0/16", // RFC1918
-		"127.0.0.0/8",    // Loopback
-		"169.254.0.0/16", // Link-local
-		"::1/128",        // IPv6 loopback
-		"fe80::/10",      // IPv6 link-local
-		"fc00::/7",       // IPv6 unique local
+		"10.0.0.0/8",      // RFC1918
+		"172.16.0.0/12",   // RFC1918
+		"192.168.0.0/16",  // RFC1918
+		"127.0.0.0/8",     // Loopback
+		"169.254.0.0/16",  // Link-local
+		"100.64.0.0/10",   // CGNAT (RFC6598)
+		"198.18.0.0/15",   // Benchmarking (RFC2544)
+		"0.0.0.0/8",       // "This" network (RFC1122)
+		"192.0.0.0/24",    // IETF protocol assignments (RFC6890)
+		"192.0.2.0/24",    // Documentation TEST-NET-1 (RFC5737)
+		"198.51.100.0/24", // Documentation TEST-NET-2 (RFC5737)
+		"203.0.113.0/24",  // Documentation TEST-NET-3 (RFC5737)
+		"::1/128",         // IPv6 loopback
+		"fe80::/10",       // IPv6 link-local
+		"fc00::/7",        // IPv6 unique local
 	}
 
 	for _, cidr := range privateRanges {

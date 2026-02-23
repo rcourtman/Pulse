@@ -497,6 +497,60 @@ func TestIsPrivateIP(t *testing.T) {
 			ip:       "2606:4700:4700::1111",
 			expected: false,
 		},
+		// CGNAT (RFC6598) 100.64.0.0/10
+		{
+			name:     "100.64.0.1 CGNAT",
+			ip:       "100.64.0.1",
+			expected: true,
+		},
+		{
+			name:     "100.127.255.254 CGNAT upper",
+			ip:       "100.127.255.254",
+			expected: true,
+		},
+		{
+			name:     "100.128.0.1 outside CGNAT",
+			ip:       "100.128.0.1",
+			expected: false,
+		},
+		// Benchmarking (RFC2544) 198.18.0.0/15
+		{
+			name:     "198.18.0.1 benchmarking",
+			ip:       "198.18.0.1",
+			expected: true,
+		},
+		{
+			name:     "198.19.255.254 benchmarking upper",
+			ip:       "198.19.255.254",
+			expected: true,
+		},
+		{
+			name:     "198.20.0.1 outside benchmarking",
+			ip:       "198.20.0.1",
+			expected: false,
+		},
+		// "This" network (RFC1122) 0.0.0.0/8
+		{
+			name:     "0.0.0.0 this network",
+			ip:       "0.0.0.0",
+			expected: true,
+		},
+		// Documentation TEST-NETs (RFC5737)
+		{
+			name:     "192.0.2.1 TEST-NET-1",
+			ip:       "192.0.2.1",
+			expected: true,
+		},
+		{
+			name:     "198.51.100.1 TEST-NET-2",
+			ip:       "198.51.100.1",
+			expected: true,
+		},
+		{
+			name:     "203.0.113.1 TEST-NET-3",
+			ip:       "203.0.113.1",
+			expected: true,
+		},
 	}
 
 	for _, tt := range tests {
