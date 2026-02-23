@@ -3,7 +3,7 @@ import { Component, createSignal, createEffect, onCleanup, Show, For } from 'sol
 import { useNavigate } from '@solidjs/router';
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
-import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
+import { apiFetchJSON } from '@/utils/apiClient';
 import { getPulseBaseUrl } from '@/utils/url';
 import type { State } from '@/types/api';
 import { SecurityAPI } from '@/api/security';
@@ -16,7 +16,7 @@ import {
     trackPaywallViewed,
     trackUpgradeClicked,
 } from '@/utils/upgradeMetrics';
-import { loadLicenseStatus, entitlements, getUpgradeActionUrlOrFallback } from '@/stores/license';
+import { loadLicenseStatus, entitlements, getUpgradeActionUrlOrFallback, startProTrial } from '@/stores/license';
 import type { WizardState } from '../SetupWizard';
 
 interface CompleteStepProps {
@@ -239,23 +239,12 @@ Keep these credentials secure!
 
         setTrialStarting(true);
         try {
-            const res = await apiFetch('/api/license/trial/start', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-API-Token': props.state.apiToken,
-                },
-                body: JSON.stringify({}),
-            });
-
-            if (!res.ok) {
-                // 409 means trial already started — treat as success.
-                if (res.status === 409) {
-                    setTrialStarted(true);
-                    return;
+            const result = await startProTrial();
+            if (result?.outcome === 'redirect') {
+                if (typeof window !== 'undefined') {
+                    window.location.href = result.actionUrl;
                 }
-                const text = await res.text().catch(() => '');
-                throw new Error(text || `Trial start failed (${res.status})`);
+                return;
             }
 
             showSuccess('14-day Pro trial started! Set up Relay to monitor from your phone.');

@@ -29,9 +29,6 @@ jobs:
     name: Playwright Core E2E
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # E2E tests are smoke tests - they run but don't block merges
-    # This reduces friction from flaky tests while maintaining visibility
-    continue-on-error: true
 
     steps:
       - name: Checkout code
@@ -61,6 +58,7 @@ jobs:
         env:
           PULSE_E2E_BOOTSTRAP_TOKEN: 0123456789abcdef0123456789abcdef0123456789abcdef
           PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL: "true"
+          PULSE_MULTI_TENANT_ENABLED: "true"
         run: node scripts/pretest.mjs
 
       - name: Run E2E suite

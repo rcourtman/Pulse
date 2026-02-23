@@ -10,6 +10,8 @@ PULSE_CLOUD_INSTALL_DIR="${PULSE_CLOUD_INSTALL_DIR:-/opt/pulse-cloud}"
 PULSE_CLOUD_DATA_DIR="${PULSE_CLOUD_DATA_DIR:-/data}"
 PULSE_CLOUD_DOCKER_NETWORK="${PULSE_CLOUD_DOCKER_NETWORK:-pulse-cloud}"
 PULSE_CLOUD_BUNDLE_URL="${PULSE_CLOUD_BUNDLE_URL:-}"
+PULSE_CLOUD_EXPECT_ENV="${PULSE_CLOUD_EXPECT_ENV:-production}"
+PULSE_CLOUD_EXPECT_STRIPE_MODE="${PULSE_CLOUD_EXPECT_STRIPE_MODE:-}"
 
 log() {
   echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] $*"
@@ -169,6 +171,9 @@ EOF
   install -m 0644 "${src_dir}/traefik-dynamic.yml" "${PULSE_CLOUD_INSTALL_DIR}/traefik-dynamic.yml"
   install -m 0644 "${src_dir}/Dockerfile.control-plane" "${PULSE_CLOUD_INSTALL_DIR}/Dockerfile.control-plane"
   install -m 0644 "${src_dir}/.env.example" "${PULSE_CLOUD_INSTALL_DIR}/.env.example"
+  if [[ -f "${src_dir}/.env.staging.example" ]]; then
+    install -m 0644 "${src_dir}/.env.staging.example" "${PULSE_CLOUD_INSTALL_DIR}/.env.staging.example"
+  fi
 
   # Install operational scripts alongside compose so cron/jobs can reference stable paths.
   if [[ -f "${src_dir}/backup.sh" ]]; then
@@ -190,32 +195,39 @@ EOF
 
 ensure_env_file() {
   local env_path="${PULSE_CLOUD_INSTALL_DIR}/.env"
+  local expected_env template
+  expected_env="$(echo "${PULSE_CLOUD_EXPECT_ENV}" | tr '[:upper:]' '[:lower:]' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  template=".env.example"
+  if [[ "${expected_env}" == "staging" && -f "${PULSE_CLOUD_INSTALL_DIR}/.env.staging.example" ]]; then
+    template=".env.staging.example"
+  fi
   if [[ -f "${env_path}" ]]; then
     chmod 0600 "${env_path}" || true
     return 0
   fi
 
-  log "no ${env_path}; creating from .env.example"
-  if [[ -f "${PULSE_CLOUD_INSTALL_DIR}/.env.example" ]]; then
-    cp -n "${PULSE_CLOUD_INSTALL_DIR}/.env.example" "${env_path}"
+  log "no ${env_path}; creating from ${template}"
+  if [[ -f "${PULSE_CLOUD_INSTALL_DIR}/${template}" ]]; then
+    cp -n "${PULSE_CLOUD_INSTALL_DIR}/${template}" "${env_path}"
     chmod 0600 "${env_path}"
   else
-    die "missing ${PULSE_CLOUD_INSTALL_DIR}/.env.example; cannot create ${env_path}"
+    die "missing ${PULSE_CLOUD_INSTALL_DIR}/${template}; cannot create ${env_path}"
   fi
 
   cat <<EOF
 
-Created ${env_path} from .env.example.
+Created ${env_path} from ${template}.
 
 Edit it now and set required values:
   - DOMAIN
   - ACME_EMAIL
   - CF_DNS_API_TOKEN
-  - CP_ENV (production for live deployments)
+  - CP_ENV (${PULSE_CLOUD_EXPECT_ENV} for this setup run)
   - TRAEFIK_IMAGE (digest pinned)
   - CONTROL_PLANE_IMAGE (digest pinned)
   - CP_ADMIN_KEY
   - CP_PULSE_IMAGE (digest pinned)
+  - CP_TRIAL_SIGNUP_PRICE_ID
   - CP_ALLOW_DOCKERLESS_PROVISIONING=false
   - CP_REQUIRE_EMAIL_PROVIDER=true
   - RESEND_API_KEY
@@ -238,7 +250,7 @@ validate_env_file() {
 
   local missing=()
   local k v
-  for k in DOMAIN ACME_EMAIL CF_DNS_API_TOKEN CP_ENV TRAEFIK_IMAGE CONTROL_PLANE_IMAGE CP_ADMIN_KEY CP_PULSE_IMAGE CP_ALLOW_DOCKERLESS_PROVISIONING CP_REQUIRE_EMAIL_PROVIDER RESEND_API_KEY PULSE_EMAIL_FROM STRIPE_WEBHOOK_SECRET STRIPE_API_KEY; do
+  for k in DOMAIN ACME_EMAIL CF_DNS_API_TOKEN CP_ENV TRAEFIK_IMAGE CONTROL_PLANE_IMAGE CP_ADMIN_KEY CP_PULSE_IMAGE CP_TRIAL_SIGNUP_PRICE_ID CP_ALLOW_DOCKERLESS_PROVISIONING CP_REQUIRE_EMAIL_PROVIDER RESEND_API_KEY PULSE_EMAIL_FROM STRIPE_WEBHOOK_SECRET STRIPE_API_KEY; do
     v="$(grep -E "^${k}=" "${env_path}" | tail -n 1 | cut -d= -f2- || true)"
     # Trim surrounding quotes and whitespace.
     v="${v%\"}"; v="${v#\"}"
@@ -264,13 +276,17 @@ validate_env_file() {
     fi
   done
 
-  local cp_env
+  local cp_env expected_env
   cp_env="$(grep -E '^CP_ENV=' "${env_path}" | tail -n 1 | cut -d= -f2- || true)"
   cp_env="${cp_env%\"}"; cp_env="${cp_env#\"}"
   cp_env="${cp_env%\'}"; cp_env="${cp_env#\'}"
   cp_env="$(echo "${cp_env}" | tr '[:upper:]' '[:lower:]' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-  if [[ "${cp_env}" != "production" ]]; then
-    die "CP_ENV must be set to production for deploy/cloud setup"
+  expected_env="$(echo "${PULSE_CLOUD_EXPECT_ENV}" | tr '[:upper:]' '[:lower:]' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  if [[ "${expected_env}" != "production" && "${expected_env}" != "staging" ]]; then
+    die "PULSE_CLOUD_EXPECT_ENV must be production or staging (got '${PULSE_CLOUD_EXPECT_ENV}')"
+  fi
+  if [[ "${cp_env}" != "${expected_env}" ]]; then
+    die "CP_ENV must be '${expected_env}' for this setup run (got '${cp_env}')"
   fi
 
   local dockerless
@@ -288,7 +304,40 @@ validate_env_file() {
   require_email="${require_email%\'}"; require_email="${require_email#\'}"
   require_email="$(echo "${require_email}" | tr '[:upper:]' '[:lower:]' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
   if [[ "${require_email}" != "true" && "${require_email}" != "1" && "${require_email}" != "yes" && "${require_email}" != "on" ]]; then
-    die "CP_REQUIRE_EMAIL_PROVIDER must be enabled for production deploys"
+    die "CP_REQUIRE_EMAIL_PROVIDER must be enabled for ${expected_env} deploys"
+  fi
+
+  local stripe_key stripe_mode expected_stripe_mode
+  stripe_key="$(grep -E '^STRIPE_API_KEY=' "${env_path}" | tail -n 1 | cut -d= -f2- || true)"
+  stripe_key="${stripe_key%\"}"; stripe_key="${stripe_key#\"}"
+  stripe_key="${stripe_key%\'}"; stripe_key="${stripe_key#\'}"
+  stripe_key="$(echo "${stripe_key}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+
+  expected_stripe_mode="$(echo "${PULSE_CLOUD_EXPECT_STRIPE_MODE}" | tr '[:upper:]' '[:lower:]' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  if [[ -z "${expected_stripe_mode}" ]]; then
+    if [[ "${expected_env}" == "staging" ]]; then
+      expected_stripe_mode="test"
+    else
+      expected_stripe_mode="live"
+    fi
+  fi
+
+  case "${expected_stripe_mode}" in
+    test|live)
+      ;;
+    *)
+      die "PULSE_CLOUD_EXPECT_STRIPE_MODE must be test or live (got '${PULSE_CLOUD_EXPECT_STRIPE_MODE}')"
+      ;;
+  esac
+
+  stripe_mode="unknown"
+  if [[ "${stripe_key}" == sk_test_* ]]; then
+    stripe_mode="test"
+  elif [[ "${stripe_key}" == sk_live_* ]]; then
+    stripe_mode="live"
+  fi
+  if [[ "${stripe_mode}" != "${expected_stripe_mode}" ]]; then
+    die "STRIPE_API_KEY mode mismatch: expected ${expected_stripe_mode}, got ${stripe_mode}"
   fi
 }
 
@@ -355,6 +404,7 @@ Installed:
 Paths:
   - Deploy dir: ${PULSE_CLOUD_INSTALL_DIR}
   - Data dir:   ${PULSE_CLOUD_DATA_DIR}
+  - Environment: ${PULSE_CLOUD_EXPECT_ENV}
 
 Health:
   - Control plane: https://${domain}/healthz

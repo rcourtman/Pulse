@@ -9,8 +9,8 @@ import {
   hasFeature,
   loadLicenseStatus,
   licenseLoaded,
+  startProTrial,
 } from '@/stores/license';
-import { apiFetch } from '@/utils/apiClient';
 import { showError, showSuccess } from '@/utils/toast';
 import { logger } from '@/utils/logger';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
@@ -131,15 +131,12 @@ export const RelayOnboardingCard: Component = () => {
 
     setTrialStarting(true);
     try {
-      const res = await apiFetch('/api/license/trial/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        throw new Error(text || `Trial start failed (${res.status})`);
+      const result = await startProTrial();
+      if (result?.outcome === 'redirect') {
+        if (typeof window !== 'undefined') {
+          window.location.href = result.actionUrl;
+        }
+        return;
       }
 
       showSuccess('Trial started. Relay is now available.');
@@ -223,4 +220,3 @@ export const RelayOnboardingCard: Component = () => {
     </Show>
   );
 };
-

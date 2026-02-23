@@ -2,9 +2,15 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,18 +23,127 @@ import (
 type LicenseHandlers struct {
 	mtPersistence *config.MultiTenantPersistence
 	hostedMode    bool
+	cfg           *config.Config
 	services      sync.Map // map[string]*licenseService
 	trialLimiter  *RateLimiter
+	trialReplay   *jtiReplayStore
 }
 
 // NewLicenseHandlers creates a new license handlers instance.
 
-func NewLicenseHandlers(mtp *config.MultiTenantPersistence, hostedMode bool) *LicenseHandlers {
+func NewLicenseHandlers(mtp *config.MultiTenantPersistence, hostedMode bool, cfgs ...*config.Config) *LicenseHandlers {
+	var cfg *config.Config
+	if len(cfgs) > 0 {
+		cfg = cfgs[0]
+	}
+
+	var trialReplay *jtiReplayStore
+	if mtp != nil {
+		trialReplay = &jtiReplayStore{configDir: mtp.BaseDataDir()}
+	}
+
 	return &LicenseHandlers{
 		mtPersistence: mtp,
 		hostedMode:    hostedMode,
+		cfg:           cfg,
 		trialLimiter:  NewRateLimiter(1, 24*time.Hour), // 1 trial start attempt per org per 24h
+		trialReplay:   trialReplay,
 	}
+}
+
+func (h *LicenseHandlers) SetConfig(cfg *config.Config) {
+	if h == nil || cfg == nil {
+		return
+	}
+	h.cfg = cfg
+}
+
+func (h *LicenseHandlers) proTrialSignupURL() string {
+	config.Mu.RLock()
+	defer config.Mu.RUnlock()
+
+	if h != nil && h.cfg != nil {
+		return proTrialSignupURLFromLicensing(h.cfg.ProTrialSignupURL)
+	}
+	return proTrialSignupURLFromLicensing("")
+}
+
+func localTrialStartEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("PULSE_ALLOW_LOCAL_TRIAL_START"))) {
+	case "1", "true", "yes", "on":
+		if strings.EqualFold(strings.TrimSpace(os.Getenv("PULSE_DEV")), "true") ||
+			strings.EqualFold(strings.TrimSpace(os.Getenv("NODE_ENV")), "development") {
+			return true
+		}
+		log.Warn().Msg("Ignoring PULSE_ALLOW_LOCAL_TRIAL_START outside development mode")
+		return false
+	default:
+		return false
+	}
+}
+
+func trialCallbackURLForRequest(r *http.Request, cfg *config.Config) string {
+	baseURL := ""
+	if cfg != nil {
+		baseURL = strings.TrimSpace(cfg.PublicURL)
+	}
+	if baseURL == "" && r != nil {
+		scheme := "http"
+		if xfProto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); xfProto != "" {
+			scheme = strings.ToLower(strings.TrimSpace(strings.Split(xfProto, ",")[0]))
+		} else if r.TLS != nil {
+			scheme = "https"
+		}
+
+		host := strings.TrimSpace(r.Host)
+		if xfHost := strings.TrimSpace(r.Header.Get("X-Forwarded-Host")); xfHost != "" {
+			host = strings.TrimSpace(strings.Split(xfHost, ",")[0])
+		}
+		if host == "" {
+			return ""
+		}
+		baseURL = scheme + "://" + host
+	}
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if baseURL == "" {
+		return ""
+	}
+	return baseURL + "/auth/trial-activate"
+}
+
+func normalizeHostForTrial(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if strings.Contains(raw, "://") {
+		if parsed, err := url.Parse(raw); err == nil {
+			raw = parsed.Host
+		}
+	}
+	if host, _, err := net.SplitHostPort(raw); err == nil && host != "" {
+		raw = host
+	}
+	raw = strings.Trim(raw, "[]")
+	return strings.ToLower(strings.TrimSpace(raw))
+}
+
+func (h *LicenseHandlers) hostedTrialSignupActionURL(r *http.Request, orgID string) string {
+	base := h.proTrialSignupURL()
+	parsed, err := url.Parse(base)
+	if err != nil || parsed == nil {
+		return base
+	}
+
+	query := parsed.Query()
+	if trimmedOrg := strings.TrimSpace(orgID); trimmedOrg != "" {
+		query.Set("org_id", trimmedOrg)
+	}
+	if callback := trialCallbackURLForRequest(r, h.cfg); callback != "" {
+		query.Set("return_url", callback)
+	}
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
 }
 
 // getTenantComponents resolves the license service and persistence for the current tenant.
@@ -101,18 +216,35 @@ func (h *LicenseHandlers) ensureEvaluatorForOrg(orgID string, service *licenseSe
 		return nil
 	}
 
-	// Self-hosted default org: only wire trial evaluator when an explicit, active trial exists.
+	// Self-hosted mode:
+	// - Default org uses its own billing state.
+	// - Non-default orgs inherit default-org billing state when they do not yet have
+	//   org-local billing state. This keeps instance-wide licenses/trials consistent
+	//   across tenant contexts in self-hosted deployments.
+	evaluatorOrgID := orgID
+
 	state, err := billingStore.GetBillingState(orgID)
 	if err != nil {
 		return fmt.Errorf("load billing state for org %q: %w", orgID, err)
 	}
+	if (state == nil || state.SubscriptionState == "") && orgID != "" && orgID != "default" {
+		defaultState, defaultErr := billingStore.GetBillingState("default")
+		if defaultErr != nil {
+			return fmt.Errorf("load default billing state fallback: %w", defaultErr)
+		}
+		if defaultState != nil && defaultState.SubscriptionState != "" {
+			state = defaultState
+			evaluatorOrgID = "default"
+		}
+	}
+
 	if state == nil || state.SubscriptionState == "" {
 		service.SetEvaluator(nil)
 		return nil
 	}
 
 	// Billing state exists: wire evaluator without caching so UI updates immediately after writes.
-	evaluator := newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, orgID, 0)
+	evaluator := newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, evaluatorOrgID, 0)
 	service.SetEvaluator(evaluator)
 	return nil
 }
@@ -157,6 +289,16 @@ func (h *LicenseHandlers) HandleStartTrial(w http.ResponseWriter, r *http.Reques
 	orgID := GetOrgID(r.Context())
 	if orgID == "" {
 		orgID = "default"
+	}
+
+	// Default path: require hosted signup/checkout for trial starts.
+	// This avoids anonymous local trial activation that can be abused by fresh installs.
+	if !localTrialStartEnabled() {
+		writeErrorResponse(w, http.StatusConflict, "trial_signup_required", "Trial signup is required before activation", map[string]string{
+			"org_id":     orgID,
+			"action_url": h.hostedTrialSignupActionURL(r, orgID),
+		})
+		return
 	}
 
 	svc, _, err := h.getTenantComponents(r.Context())
@@ -206,6 +348,124 @@ func (h *LicenseHandlers) HandleStartTrial(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(state)
+}
+
+// HandleTrialActivation handles GET /auth/trial-activate.
+// It verifies a hosted signup trial activation token, blocks replay, starts a
+// local 14-day Pro trial, then redirects to Settings.
+func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h == nil || h.mtPersistence == nil {
+		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+		return
+	}
+
+	token := strings.TrimSpace(r.URL.Query().Get("token"))
+	if token == "" {
+		http.Redirect(w, r, "/settings?trial=invalid", http.StatusTemporaryRedirect)
+		return
+	}
+
+	publicKey, err := trialActivationPublicKeyFromLicensing()
+	if err != nil {
+		log.Error().Err(err).Msg("Trial activation public key not configured")
+		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+		return
+	}
+
+	expectedHost := normalizeHostForTrial(r.Host)
+	if expectedHost == "" {
+		expectedHost = normalizeHostForTrial(trialCallbackURLForRequest(r, h.cfg))
+	}
+	claims, err := verifyTrialActivationTokenFromLicensing(token, publicKey, expectedHost, time.Now().UTC())
+	if err != nil {
+		log.Warn().Err(err).Msg("Trial activation token verification failed")
+		http.Redirect(w, r, "/settings?trial=invalid", http.StatusTemporaryRedirect)
+		return
+	}
+
+	replayStore := h.trialReplay
+	if replayStore == nil {
+		replayStore = &jtiReplayStore{configDir: h.mtPersistence.BaseDataDir()}
+	}
+	tokenHash := sha256.Sum256([]byte(token))
+	replayID := "trial_activate:" + hex.EncodeToString(tokenHash[:])
+	expiresAt := time.Now().UTC().Add(15 * time.Minute)
+	if claims.ExpiresAt != nil {
+		expiresAt = claims.ExpiresAt.Time
+	}
+	stored, err := replayStore.checkAndStore(replayID, expiresAt)
+	if err != nil {
+		log.Error().Err(err).Msg("Trial activation replay-store failure")
+		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+		return
+	}
+	if !stored {
+		log.Warn().Str("replay_id_prefix", replayID[:24]).Msg("Trial activation token replay blocked")
+		http.Redirect(w, r, "/settings?trial=replayed", http.StatusTemporaryRedirect)
+		return
+	}
+
+	orgID := strings.TrimSpace(claims.OrgID)
+	if orgID == "" {
+		orgID = "default"
+	}
+
+	ctx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
+	svc, _, err := h.getTenantComponents(ctx)
+	if err != nil {
+		log.Error().Err(err).Str("org_id", orgID).Msg("Trial activation tenant resolution failed")
+		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+		return
+	}
+
+	billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
+	existing, err := billingStore.GetBillingState(orgID)
+	if err != nil {
+		log.Error().Err(err).Str("org_id", orgID).Msg("Trial activation billing state load failed")
+		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+		return
+	}
+	decision := evaluateTrialStartEligibilityFromLicensing(svc.Current() != nil && svc.IsValid(), existing)
+	if !decision.Allowed {
+		log.Info().
+			Str("org_id", orgID).
+			Str("reason", string(decision.Reason)).
+			Msg("Trial activation denied due to ineligible state")
+		http.Redirect(w, r, "/settings?trial=ineligible", http.StatusTemporaryRedirect)
+		return
+	}
+
+	state := buildProTrialBillingStateFromLicensing(time.Now())
+	if err := billingStore.SaveBillingState(orgID, state); err != nil {
+		log.Error().Err(err).Str("org_id", orgID).Msg("Trial activation billing state save failed")
+		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+		return
+	}
+	if svc.Current() == nil {
+		eval := newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, orgID, 0)
+		svc.SetEvaluator(eval)
+	}
+
+	isSecure, sameSite := getCookieSettings(r)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "pulse_org_id",
+		Value:    orgID,
+		Path:     "/",
+		Secure:   isSecure,
+		SameSite: sameSite,
+		MaxAge:   int((24 * time.Hour).Seconds()),
+	})
+
+	log.Info().
+		Str("org_id", orgID).
+		Str("email", strings.TrimSpace(claims.Email)).
+		Msg("Trial activation succeeded")
+
+	http.Redirect(w, r, "/settings?trial=activated", http.StatusTemporaryRedirect)
 }
 
 // HandleLicenseStatus handles GET /api/license/status

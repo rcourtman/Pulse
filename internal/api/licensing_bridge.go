@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/ed25519"
 	"net/http"
 	"time"
 
@@ -38,6 +39,7 @@ type conversionStore = pkglicensing.ConversionStore
 type conversionEvent = pkglicensing.ConversionEvent
 type conversionHealthStatus = pkglicensing.HealthStatus
 type conversionCollectionConfigSnapshot = pkglicensing.CollectionConfigSnapshot
+type trialActivationClaimsModel = pkglicensing.TrialActivationClaims
 
 const (
 	featureMultiTenantKey          = pkglicensing.FeatureMultiTenant
@@ -65,6 +67,10 @@ func hasMultiTenantLicense(service *licenseService) bool {
 
 func upgradeURLForFeatureFromLicensing(feature string) string {
 	return pkglicensing.UpgradeURLForFeature(feature)
+}
+
+func proTrialSignupURLFromLicensing(override string) string {
+	return pkglicensing.ResolveProTrialSignupURL(override)
 }
 
 func defaultBillingStateFromLicensing() *billingState {
@@ -210,6 +216,14 @@ func conversionValidationReasonFromLicensing(err error) string {
 
 func parseOptionalTimeParamFromLicensing(raw string, defaultValue time.Time) (time.Time, error) {
 	return pkglicensing.ParseOptionalTimeParam(raw, defaultValue)
+}
+
+func trialActivationPublicKeyFromLicensing() (ed25519.PublicKey, error) {
+	return pkglicensing.TrialActivationPublicKey()
+}
+
+func verifyTrialActivationTokenFromLicensing(token string, key ed25519.PublicKey, expectedInstanceHost string, now time.Time) (*trialActivationClaimsModel, error) {
+	return pkglicensing.VerifyTrialActivationToken(token, key, expectedInstanceHost, now)
 }
 
 func writePaymentRequiredFromLicensing(w http.ResponseWriter, payload map[string]interface{}) {

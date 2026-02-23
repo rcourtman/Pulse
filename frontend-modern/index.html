@@ -21,16 +21,28 @@
         background-color: inherit;
       }
     </style>
-    <!-- Apply dark mode immediately from localStorage to prevent flash -->
+    <!-- Apply theme immediately from localStorage to prevent flash -->
     <script>
       (function() {
         try {
-          var darkMode = localStorage.getItem('pulse_dark_mode');
-          var prefersDark = darkMode === 'true' || 
-            (darkMode === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
-          if (prefersDark) {
-            document.documentElement.classList.add('dark');
+          var themePreference = localStorage.getItem('pulseThemePreference');
+          var legacyDarkMode = localStorage.getItem('darkMode');
+          var legacyBootstrapMode = localStorage.getItem('pulse_dark_mode');
+          var prefersDark;
+
+          if (themePreference === 'dark') {
+            prefersDark = true;
+          } else if (themePreference === 'light') {
+            prefersDark = false;
+          } else if (legacyDarkMode === 'true' || legacyDarkMode === 'false') {
+            prefersDark = legacyDarkMode === 'true';
+          } else if (legacyBootstrapMode === 'true' || legacyBootstrapMode === 'false') {
+            prefersDark = legacyBootstrapMode === 'true';
+          } else {
+            prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
           }
+
+          document.documentElement.classList.toggle('dark', prefersDark);
         } catch (e) {}
       })();
     </script>

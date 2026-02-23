@@ -7,7 +7,7 @@ import (
 )
 
 func TestNewSQLiteResourceStoreCreatesSecureDirectory(t *testing.T) {
-	dataDir := filepath.Join(t.TempDir(), "resources")
+	dataDir := t.TempDir()
 
 	store, err := NewSQLiteResourceStore(dataDir, "org-1")
 	if err != nil {
@@ -15,9 +15,10 @@ func TestNewSQLiteResourceStoreCreatesSecureDirectory(t *testing.T) {
 	}
 	defer store.Close()
 
-	info, err := os.Stat(dataDir)
+	resourcesDir := filepath.Join(dataDir, "orgs", "org-1", "resources")
+	info, err := os.Stat(resourcesDir)
 	if err != nil {
-		t.Fatalf("Stat(%q) error = %v", dataDir, err)
+		t.Fatalf("Stat(%q) error = %v", resourcesDir, err)
 	}
 
 	if perms := info.Mode().Perm(); perms != 0o700 {

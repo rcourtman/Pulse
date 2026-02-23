@@ -35,6 +35,33 @@ type EntitlementPayload struct {
 	// HostedMode indicates that this server is running in Pulse hosted mode.
 	// It is used by the frontend to gate hosted-control-plane-only UI.
 	HostedMode bool `json:"hosted_mode"`
+
+	// Valid mirrors the effective license validity for display surfaces.
+	Valid bool `json:"valid"`
+
+	// LicensedEmail is the activated license email when available.
+	LicensedEmail string `json:"licensed_email,omitempty"`
+
+	// ExpiresAt is the RFC3339 expiration timestamp when available.
+	ExpiresAt *string `json:"expires_at,omitempty"`
+
+	// IsLifetime indicates a lifetime entitlement with no expiration.
+	IsLifetime bool `json:"is_lifetime"`
+
+	// DaysRemaining is the number of days left until expiration.
+	DaysRemaining int `json:"days_remaining"`
+
+	// InGracePeriod indicates whether the entitlement is currently in grace.
+	InGracePeriod bool `json:"in_grace_period,omitempty"`
+
+	// GracePeriodEnd is the RFC3339 grace period end timestamp when available.
+	GracePeriodEnd *string `json:"grace_period_end,omitempty"`
+
+	// TrialEligible indicates whether this org can start a self-serve trial right now.
+	TrialEligible bool `json:"trial_eligible"`
+
+	// TrialEligibilityReason is set when trial start is denied.
+	TrialEligibilityReason string `json:"trial_eligibility_reason,omitempty"`
 }
 
 // LimitStatus represents a quantitative limit with current usage state.
@@ -97,6 +124,13 @@ func BuildEntitlementPayloadWithUsage(
 		Limits:         []LimitStatus{},
 		Tier:           string(status.Tier),
 		UpgradeReasons: []UpgradeReason{},
+		Valid:          status.Valid,
+		LicensedEmail:  status.Email,
+		ExpiresAt:      status.ExpiresAt,
+		IsLifetime:     status.IsLifetime,
+		DaysRemaining:  status.DaysRemaining,
+		InGracePeriod:  status.InGracePeriod,
+		GracePeriodEnd: status.GracePeriodEnd,
 	}
 
 	if payload.Capabilities == nil {

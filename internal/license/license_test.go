@@ -1375,6 +1375,42 @@ func TestEvaluatorMatrix(t *testing.T) {
 		}
 	})
 
+	t.Run("license=nil evaluator!=nil trial => status includes trial expiry", func(t *testing.T) {
+		svc := NewService()
+		trialEndsAt := time.Now().Add(36 * time.Hour).Unix()
+		eval := entitlements.NewEvaluator(staticEntitlementSource{
+			capabilities: []string{
+				FeatureAIPatrol,
+				FeatureAIAutoFix,
+			},
+			subscriptionState: entitlements.SubStateTrial,
+			trialEndsAt:       &trialEndsAt,
+		})
+		svc.SetEvaluator(eval)
+
+		status := svc.Status()
+		if !status.Valid {
+			t.Fatalf("Status().Valid=%v, want true", status.Valid)
+		}
+		if status.Tier != TierPro {
+			t.Fatalf("Status().Tier=%q, want %q", status.Tier, TierPro)
+		}
+		if status.ExpiresAt == nil {
+			t.Fatal("Status().ExpiresAt=nil, want trial expiration timestamp")
+		}
+		expiresAt, err := time.Parse(time.RFC3339, *status.ExpiresAt)
+		if err != nil {
+			t.Fatalf("Status().ExpiresAt parse error: %v", err)
+		}
+		if expiresAt.Unix() != trialEndsAt {
+			t.Fatalf("Status().ExpiresAt=%d, want %d", expiresAt.Unix(), trialEndsAt)
+		}
+		// 36h remaining should round up to 2 days.
+		if status.DaysRemaining != 2 {
+			t.Fatalf("Status().DaysRemaining=%d, want %d", status.DaysRemaining, 2)
+		}
+	})
+
 	t.Run("license=nil evaluator!=nil expired => free-only (hosted)", func(t *testing.T) {
 		svc := NewService()
 		eval := entitlements.NewEvaluator(staticEntitlementSource{

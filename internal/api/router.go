@@ -350,7 +350,7 @@ func (r *Router) setupRoutes() {
 		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
 	}
 	r.configProfileHandler = NewConfigProfileHandler(r.multiTenant)
-	r.licenseHandlers = NewLicenseHandlers(r.multiTenant, r.hostedMode)
+	r.licenseHandlers = NewLicenseHandlers(r.multiTenant, r.hostedMode, r.config)
 	rbacProvider := NewTenantRBACProvider(r.config.DataPath)
 	r.rbacProvider = rbacProvider
 	orgHandlers := NewOrgHandlers(r.multiTenant, r.mtMonitor, rbacProvider)
@@ -978,6 +978,9 @@ func (r *Router) SetConfig(cfg *config.Config) {
 	}
 	if r.aiSettingsHandler != nil {
 		r.aiSettingsHandler.SetConfig(r.config)
+	}
+	if r.licenseHandlers != nil {
+		r.licenseHandlers.SetConfig(r.config)
 	}
 }
 
@@ -2823,6 +2826,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/install/install-docker.sh", // Docker turnkey installer
 				"/api/ai/oauth/callback",         // OAuth callback from Anthropic for Claude subscription auth
 				"/auth/cloud-handoff",            // Cloud control plane handoff (token-authenticated)
+				"/auth/trial-activate",           // Hosted trial signup callback (token-authenticated)
 			}
 
 			// Also allow static assets without auth (JS, CSS, etc)
@@ -2978,6 +2982,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		// Skip CSRF for cloud handoff (GET with token param, no prior session).
 		if req.URL.Path == "/auth/cloud-handoff" {
+			skipCSRF = true
+		}
+		// Skip CSRF for hosted trial activation callback (GET with signed token).
+		if req.URL.Path == "/auth/trial-activate" {
 			skipCSRF = true
 		}
 		// Skip CSRF for control-plane workspace handoff exchange (POST with signed handoff token).

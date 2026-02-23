@@ -284,3 +284,71 @@ func TestEntitlementHandler_UsesEvaluatorWhenNoLicense(t *testing.T) {
 		}
 	}
 }
+
+func TestEntitlementHandler_TrialEligibility_FreshOrgAllowed(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	h := NewLicenseHandlers(mtp, false)
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	req := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	h.HandleEntitlements(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var payload EntitlementPayload
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal payload failed: %v", err)
+	}
+	if !payload.TrialEligible {
+		t.Fatalf("trial_eligible=%v, want true", payload.TrialEligible)
+	}
+	if payload.TrialEligibilityReason != "" {
+		t.Fatalf("trial_eligibility_reason=%q, want empty", payload.TrialEligibilityReason)
+	}
+}
+
+func TestEntitlementHandler_TrialEligibility_AlreadyUsedDenied(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	orgID := "default"
+	now := time.Now()
+	startedAt := now.Add(-15 * 24 * time.Hour).Unix()
+	endsAt := now.Add(-24 * time.Hour).Unix()
+	store := config.NewFileBillingStore(baseDir)
+	if err := store.SaveBillingState(orgID, &entitlements.BillingState{
+		Capabilities:      []string{},
+		Limits:            map[string]int64{},
+		MetersEnabled:     []string{},
+		PlanVersion:       "trial",
+		SubscriptionState: entitlements.SubStateExpired,
+		TrialStartedAt:    &startedAt,
+		TrialEndsAt:       &endsAt,
+	}); err != nil {
+		t.Fatalf("SaveBillingState: %v", err)
+	}
+
+	h := NewLicenseHandlers(mtp, false)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, orgID)
+	req := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	h.HandleEntitlements(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var payload EntitlementPayload
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal payload failed: %v", err)
+	}
+	if payload.TrialEligible {
+		t.Fatalf("trial_eligible=%v, want false", payload.TrialEligible)
+	}
+	if payload.TrialEligibilityReason != "already_used" {
+		t.Fatalf("trial_eligibility_reason=%q, want %q", payload.TrialEligibilityReason, "already_used")
+	}
+}

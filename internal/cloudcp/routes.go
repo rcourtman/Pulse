@@ -36,6 +36,9 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	adminLimiter := NewCPRateLimiter(deps.Config.AdminRateLimitPerMinute, time.Minute)
 	accountAPILimiter := NewCPRateLimiter(deps.Config.AccountAPIRateLimitPerMinute, time.Minute)
 	portalAPILimiter := NewCPRateLimiter(deps.Config.PortalAPIRateLimitPerMinute, time.Minute)
+	trialSignupLimiter := NewCPRateLimiter(30, time.Minute)
+	publicSignupLimiter := NewCPRateLimiter(30, time.Minute)
+	publicMagicLinkLimiter := NewCPRateLimiter(20, time.Minute)
 
 	adminAuth := func(next http.Handler) http.Handler {
 		return admin.AdminKeyMiddleware(deps.Config.AdminKey, next)
@@ -87,6 +90,21 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	if deps.MagicLinks != nil {
 		mux.Handle("/auth/logout", sessionAuthLimiter.Middleware(sessionAuth(cpauth.HandleLogout(deps.Registry))))
 	}
+
+	// Hosted Pulse Pro trial signup: public form + checkout + return completion.
+	trialSignupHandlers := NewTrialSignupHandlers(deps.Config)
+	mux.Handle("/start-pro-trial", trialSignupLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleStartProTrial)))
+	mux.Handle("/api/trial-signup/checkout", trialSignupLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleCheckout)))
+	mux.Handle("/trial-signup/complete", trialSignupLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleTrialSignupComplete)))
+
+	// Pulse Cloud self-serve signup: public page + API checkout + magic-link request.
+	publicCloudSignupHandlers := NewPublicCloudSignupHandlers(deps.Config, deps.Registry, deps.MagicLinks, deps.EmailSender)
+	mux.Handle("/signup", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleSignupPage)))
+	mux.Handle("/cloud/signup", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleSignupPage)))
+	mux.Handle("/signup/complete", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleSignupComplete)))
+	mux.Handle("/cloud/signup/complete", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleSignupComplete)))
+	mux.Handle("/api/public/signup", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandlePublicSignup)))
+	mux.Handle("/api/public/magic-link/request", publicMagicLinkLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandlePublicMagicLinkRequest)))
 
 	// Admin API (key-authenticated)
 	tenantsHandler := admin.HandleListTenants(deps.Registry)

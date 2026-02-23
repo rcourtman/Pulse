@@ -66,21 +66,6 @@ export const Login: Component<LoginProps> = (props) => {
  };
 
  onMount(async () => {
- // Apply saved theme preference from localStorage
- const savedTheme = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
- if (savedTheme === 'false') {
- document.documentElement.classList.remove('dark');
- } else if (savedTheme === 'true') {
- document.documentElement.classList.add('dark');
- } else {
- // No saved preference - use system preference
- if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
- document.documentElement.classList.add('dark');
- } else {
- document.documentElement.classList.remove('dark');
- }
- }
-
  const params = new URLSearchParams(window.location.search);
 
  // Handle OIDC callback
@@ -311,7 +296,7 @@ export const Login: Component<LoginProps> = (props) => {
  <Show
  when={!loadingAuth()}
  fallback={
- <div class="min-h-screen flex items-center justify-center bg-blue-50">
+ <div class="min-h-screen flex items-center justify-center bg-base">
  <div class="text-center">
  <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
  <p class="text-muted">Checking authentication...</p>
@@ -346,7 +331,7 @@ export const Login: Component<LoginProps> = (props) => {
  >
  <Suspense
  fallback={
- <div class="min-h-screen flex items-center justify-center bg-blue-50">
+ <div class="min-h-screen flex items-center justify-center bg-base">
  <div class="text-center">
  <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
  <p class="text-muted">Loading setup...</p>
@@ -409,7 +394,7 @@ const LoginForm: Component<{
  };
 
  return (
- <div class="min-h-screen flex items-center justify-center bg-blue-50 py-12 px-4 sm:px-6 lg:px-8">
+ <div class="min-h-screen flex items-center justify-center bg-base py-12 px-4 sm:px-6 lg:px-8">
  <div class="max-w-md w-full space-y-8">
  {/* Demo Credentials Banner */}
  <Show when={isDemoServer()}>

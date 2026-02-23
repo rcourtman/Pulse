@@ -2,20 +2,28 @@ package api
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 func TestTrialStart_DefaultOrgWritesBillingJSONAndEnablesTrialEntitlements(t *testing.T) {
+	t.Setenv("PULSE_ALLOW_LOCAL_TRIAL_START", "true")
+	t.Setenv("PULSE_DEV", "true")
+
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
 	h := NewLicenseHandlers(mtp, false)
@@ -91,12 +99,157 @@ func TestTrialStart_DefaultOrgWritesBillingJSONAndEnablesTrialEntitlements(t *te
 	if *payload.TrialDaysRemaining < 13 || *payload.TrialDaysRemaining > 14 {
 		t.Fatalf("payload.trial_days_remaining=%d, want 13-14", *payload.TrialDaysRemaining)
 	}
+	if payload.TrialEligible {
+		t.Fatalf("payload.trial_eligible=%v, want false", payload.TrialEligible)
+	}
+	if payload.TrialEligibilityReason != "already_used" {
+		t.Fatalf("payload.trial_eligibility_reason=%q, want %q", payload.TrialEligibilityReason, "already_used")
+	}
 	if !contains(payload.Capabilities, license.FeatureRelay) {
 		t.Fatalf("expected payload capabilities to include %q, got %v", license.FeatureRelay, payload.Capabilities)
+	}
+
+	statusReq := httptest.NewRequest(http.MethodGet, "/api/license/status", nil).WithContext(ctx)
+	statusRec := httptest.NewRecorder()
+	h.HandleLicenseStatus(statusRec, statusReq)
+	if statusRec.Code != http.StatusOK {
+		t.Fatalf("license status status=%d, want %d: %s", statusRec.Code, http.StatusOK, statusRec.Body.String())
+	}
+
+	var status license.LicenseStatus
+	if err := json.NewDecoder(statusRec.Body).Decode(&status); err != nil {
+		t.Fatalf("decode license status payload: %v", err)
+	}
+	if !status.Valid {
+		t.Fatalf("status.valid=%v, want true", status.Valid)
+	}
+	if status.Tier != license.TierPro {
+		t.Fatalf("status.tier=%q, want %q", status.Tier, license.TierPro)
+	}
+	if status.ExpiresAt == nil {
+		t.Fatal("status.expires_at=nil, want trial expiration timestamp")
+	}
+	if status.DaysRemaining < 13 || status.DaysRemaining > 14 {
+		t.Fatalf("status.days_remaining=%d, want 13-14", status.DaysRemaining)
+	}
+}
+
+func TestTrialStart_DefaultPathRequiresHostedSignup(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	h := NewLicenseHandlers(mtp, false)
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	req := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	h.HandleStartTrial(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+
+	var apiErr APIError
+	if err := json.NewDecoder(rec.Body).Decode(&apiErr); err != nil {
+		t.Fatalf("decode APIError: %v", err)
+	}
+	if apiErr.Code != "trial_signup_required" {
+		t.Fatalf("code=%q, want %q", apiErr.Code, "trial_signup_required")
+	}
+	actionURL := apiErr.Details["action_url"]
+	parsedActionURL, err := url.Parse(actionURL)
+	if err != nil {
+		t.Fatalf("parse action_url: %v", err)
+	}
+	parsedDefaultURL, err := url.Parse(pkglicensing.DefaultProTrialSignupURL)
+	if err != nil {
+		t.Fatalf("parse default trial signup url: %v", err)
+	}
+	if parsedActionURL.Scheme != parsedDefaultURL.Scheme || parsedActionURL.Host != parsedDefaultURL.Host || parsedActionURL.Path != parsedDefaultURL.Path {
+		t.Fatalf("action_url base=%q://%q%q, want %q://%q%q",
+			parsedActionURL.Scheme, parsedActionURL.Host, parsedActionURL.Path,
+			parsedDefaultURL.Scheme, parsedDefaultURL.Host, parsedDefaultURL.Path)
+	}
+	if parsedActionURL.Query().Get("org_id") != "default" {
+		t.Fatalf("action_url org_id=%q, want %q", parsedActionURL.Query().Get("org_id"), "default")
+	}
+	if parsedActionURL.Query().Get("return_url") != "http://example.com/auth/trial-activate" {
+		t.Fatalf("action_url return_url=%q, want %q", parsedActionURL.Query().Get("return_url"), "http://example.com/auth/trial-activate")
+	}
+}
+
+func TestTrialStart_LocalStartOverrideIgnoredOutsideDevMode(t *testing.T) {
+	t.Setenv("PULSE_ALLOW_LOCAL_TRIAL_START", "true")
+	t.Setenv("PULSE_DEV", "false")
+	t.Setenv("NODE_ENV", "production")
+
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	h := NewLicenseHandlers(mtp, false)
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	req := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	h.HandleStartTrial(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+
+	var apiErr APIError
+	if err := json.NewDecoder(rec.Body).Decode(&apiErr); err != nil {
+		t.Fatalf("decode APIError: %v", err)
+	}
+	if apiErr.Code != "trial_signup_required" {
+		t.Fatalf("code=%q, want %q", apiErr.Code, "trial_signup_required")
+	}
+}
+
+func TestTrialStart_DefaultPathUsesConfiguredTrialSignupURL(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+
+	cfg := &config.Config{ProTrialSignupURL: "https://billing.example.com/start-pro-trial?source=test"}
+	h := NewLicenseHandlers(mtp, false, cfg)
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	req := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	h.HandleStartTrial(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+
+	var apiErr APIError
+	if err := json.NewDecoder(rec.Body).Decode(&apiErr); err != nil {
+		t.Fatalf("decode APIError: %v", err)
+	}
+	actionURL := apiErr.Details["action_url"]
+	parsedActionURL, err := url.Parse(actionURL)
+	if err != nil {
+		t.Fatalf("parse action_url: %v", err)
+	}
+	parsedConfiguredURL, err := url.Parse(cfg.ProTrialSignupURL)
+	if err != nil {
+		t.Fatalf("parse configured trial signup url: %v", err)
+	}
+	if parsedActionURL.Scheme != parsedConfiguredURL.Scheme || parsedActionURL.Host != parsedConfiguredURL.Host || parsedActionURL.Path != parsedConfiguredURL.Path {
+		t.Fatalf("action_url base=%q://%q%q, want %q://%q%q",
+			parsedActionURL.Scheme, parsedActionURL.Host, parsedActionURL.Path,
+			parsedConfiguredURL.Scheme, parsedConfiguredURL.Host, parsedConfiguredURL.Path)
+	}
+	if parsedActionURL.Query().Get("org_id") != "default" {
+		t.Fatalf("action_url org_id=%q, want %q", parsedActionURL.Query().Get("org_id"), "default")
+	}
+	if parsedActionURL.Query().Get("return_url") != "http://example.com/auth/trial-activate" {
+		t.Fatalf("action_url return_url=%q, want %q", parsedActionURL.Query().Get("return_url"), "http://example.com/auth/trial-activate")
 	}
 }
 
 func TestTrialStart_RejectsSecondAttemptForSameOrg(t *testing.T) {
+	t.Setenv("PULSE_ALLOW_LOCAL_TRIAL_START", "true")
+	t.Setenv("PULSE_DEV", "true")
+
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
 	h := NewLicenseHandlers(mtp, false)
@@ -164,5 +317,94 @@ func TestTrialEntitlements_TrialDaysRemainingFromBillingState(t *testing.T) {
 	// 36 hours => 2 days (ceil).
 	if *payload.TrialDaysRemaining != 2 {
 		t.Fatalf("trial_days_remaining=%d, want %d", *payload.TrialDaysRemaining, 2)
+	}
+}
+
+func TestTrialActivation_SignedTokenStartsTrial(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	h := NewLicenseHandlers(mtp, false)
+
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+
+	token, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
+		OrgID:        "default",
+		Email:        "owner@example.com",
+		InstanceHost: "pulse.example.com",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
+		},
+	})
+	if err != nil {
+		t.Fatalf("SignTrialActivationToken: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/trial-activate?token="+url.QueryEscape(token), nil)
+	req.Host = "pulse.example.com"
+	rec := httptest.NewRecorder()
+	h.HandleTrialActivation(rec, req)
+
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusTemporaryRedirect, rec.Body.String())
+	}
+	if got := rec.Header().Get("Location"); got != "/settings?trial=activated" {
+		t.Fatalf("redirect=%q, want %q", got, "/settings?trial=activated")
+	}
+
+	store := config.NewFileBillingStore(baseDir)
+	state, err := store.GetBillingState("default")
+	if err != nil {
+		t.Fatalf("GetBillingState: %v", err)
+	}
+	if state == nil || state.SubscriptionState != entitlements.SubStateTrial {
+		t.Fatalf("subscription_state=%q, want %q", state.SubscriptionState, entitlements.SubStateTrial)
+	}
+}
+
+func TestTrialActivation_ReplayTokenRejected(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	h := NewLicenseHandlers(mtp, false)
+
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+
+	token, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
+		OrgID:        "default",
+		Email:        "owner@example.com",
+		InstanceHost: "pulse.example.com",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
+		},
+	})
+	if err != nil {
+		t.Fatalf("SignTrialActivationToken: %v", err)
+	}
+
+	firstReq := httptest.NewRequest(http.MethodGet, "/auth/trial-activate?token="+url.QueryEscape(token), nil)
+	firstReq.Host = "pulse.example.com"
+	firstRec := httptest.NewRecorder()
+	h.HandleTrialActivation(firstRec, firstReq)
+	if firstRec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("first status=%d, want %d", firstRec.Code, http.StatusTemporaryRedirect)
+	}
+
+	replayReq := httptest.NewRequest(http.MethodGet, "/auth/trial-activate?token="+url.QueryEscape(token), nil)
+	replayReq.Host = "pulse.example.com"
+	replayRec := httptest.NewRecorder()
+	h.HandleTrialActivation(replayRec, replayReq)
+
+	if replayRec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("replay status=%d, want %d", replayRec.Code, http.StatusTemporaryRedirect)
+	}
+	if got := replayRec.Header().Get("Location"); got != "/settings?trial=replayed" {
+		t.Fatalf("replay redirect=%q, want %q", got, "/settings?trial=replayed")
 	}
 }

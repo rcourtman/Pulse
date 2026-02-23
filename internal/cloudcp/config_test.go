@@ -183,6 +183,53 @@ func TestLoadConfig_EmailProviderRequired(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_RequiresTrialSignupPriceWhenStripeEnabled(t *testing.T) {
+	setRequiredCPEnv(t)
+	t.Setenv("CP_REQUIRE_EMAIL_PROVIDER", "false")
+	t.Setenv("STRIPE_API_KEY", "sk_test_123")
+	t.Setenv("CP_TRIAL_SIGNUP_PRICE_ID", "")
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected error when STRIPE_API_KEY is set but CP_TRIAL_SIGNUP_PRICE_ID is missing")
+	}
+	if !strings.Contains(err.Error(), "CP_TRIAL_SIGNUP_PRICE_ID is required") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfig_RequiresLiveStripeKeyInProduction(t *testing.T) {
+	setRequiredCPEnv(t)
+	t.Setenv("CP_ENV", "production")
+	t.Setenv("CP_REQUIRE_EMAIL_PROVIDER", "false")
+	t.Setenv("STRIPE_API_KEY", "sk_test_123")
+	t.Setenv("CP_TRIAL_SIGNUP_PRICE_ID", "price_123")
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected error when CP_ENV=production and STRIPE_API_KEY is test mode")
+	}
+	if !strings.Contains(err.Error(), "must be a live key") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfig_RequiresTestStripeKeyInStaging(t *testing.T) {
+	setRequiredCPEnv(t)
+	t.Setenv("CP_ENV", "staging")
+	t.Setenv("CP_REQUIRE_EMAIL_PROVIDER", "false")
+	t.Setenv("STRIPE_API_KEY", "sk_live_123")
+	t.Setenv("CP_TRIAL_SIGNUP_PRICE_ID", "price_123")
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected error when CP_ENV=staging and STRIPE_API_KEY is live mode")
+	}
+	if !strings.Contains(err.Error(), "must be a test key") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestLoadConfig_RejectsDockerlessProvisioningInProduction(t *testing.T) {
 	setRequiredCPEnv(t)
 	t.Setenv("CP_ENV", "production")
@@ -228,5 +275,24 @@ func TestEnvOrDefaultInt64(t *testing.T) {
 	t.Setenv(key, "not-an-int")
 	if got, _ := envOrDefaultInt64(key, 99); got != 99 {
 		t.Fatalf("envOrDefaultInt64 invalid = %d, want 99", got)
+	}
+}
+
+func TestStripeSecretKeyMode(t *testing.T) {
+	tests := []struct {
+		name string
+		key  string
+		want string
+	}{
+		{name: "test", key: "sk_test_123", want: "test"},
+		{name: "live", key: "sk_live_123", want: "live"},
+		{name: "unknown", key: "abc", want: "unknown"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := stripeSecretKeyMode(tt.key); got != tt.want {
+				t.Fatalf("stripeSecretKeyMode(%q) = %q, want %q", tt.key, got, tt.want)
+			}
+		})
 	}
 }

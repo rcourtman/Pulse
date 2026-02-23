@@ -34,6 +34,8 @@ type CPConfig struct {
 	AllowDockerlessProvisioning       bool
 	StripeWebhookSecret               string
 	StripeAPIKey                      string
+	TrialSignupPriceID                string
+	TrialActivationPrivateKey         string
 	RequireEmailProvider              bool
 	ResendAPIKey                      string // Resend API key (optional — if empty, emails are logged)
 	EmailFrom                         string // Sender email address (e.g. "noreply@pulserelay.pro")
@@ -114,6 +116,8 @@ func LoadConfig() (*CPConfig, error) {
 		AllowDockerlessProvisioning:       envOrDefaultBool("CP_ALLOW_DOCKERLESS_PROVISIONING", false),
 		StripeWebhookSecret:               strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
 		StripeAPIKey:                      strings.TrimSpace(os.Getenv("STRIPE_API_KEY")),
+		TrialSignupPriceID:                strings.TrimSpace(os.Getenv("CP_TRIAL_SIGNUP_PRICE_ID")),
+		TrialActivationPrivateKey:         strings.TrimSpace(os.Getenv("CP_TRIAL_ACTIVATION_PRIVATE_KEY")),
 		RequireEmailProvider:              envOrDefaultBool("CP_REQUIRE_EMAIL_PROVIDER", true),
 		ResendAPIKey:                      strings.TrimSpace(os.Getenv("RESEND_API_KEY")),
 		EmailFrom:                         envOrDefault("PULSE_EMAIL_FROM", "noreply@pulserelay.pro"),
@@ -181,6 +185,22 @@ func (c *CPConfig) validate() error {
 			return fmt.Errorf("PULSE_EMAIL_FROM is required when CP_REQUIRE_EMAIL_PROVIDER=true")
 		}
 	}
+	if strings.TrimSpace(c.StripeAPIKey) != "" && strings.TrimSpace(c.TrialSignupPriceID) == "" {
+		return fmt.Errorf("CP_TRIAL_SIGNUP_PRICE_ID is required when STRIPE_API_KEY is configured")
+	}
+	if strings.TrimSpace(c.StripeAPIKey) != "" {
+		stripeMode := stripeSecretKeyMode(c.StripeAPIKey)
+		switch c.Environment {
+		case "production":
+			if stripeMode != "live" {
+				return fmt.Errorf("STRIPE_API_KEY must be a live key (sk_live_...) when CP_ENV=production")
+			}
+		case "staging":
+			if stripeMode != "test" {
+				return fmt.Errorf("STRIPE_API_KEY must be a test key (sk_test_...) when CP_ENV=staging")
+			}
+		}
+	}
 
 	parsedBaseURL, err := url.Parse(c.BaseURL)
 	if err != nil {
@@ -203,6 +223,18 @@ func normalizeCPEnvironment(raw string) string {
 		return "production"
 	default:
 		return strings.ToLower(strings.TrimSpace(raw))
+	}
+}
+
+func stripeSecretKeyMode(raw string) string {
+	key := strings.TrimSpace(raw)
+	switch {
+	case strings.HasPrefix(key, "sk_live_"):
+		return "live"
+	case strings.HasPrefix(key, "sk_test_"):
+		return "test"
+	default:
+		return "unknown"
 	}
 }
 

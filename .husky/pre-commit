@@ -73,10 +73,14 @@ fi
 
 # Run frontend linting (if package.json has lint script)
 if [ -f frontend-modern/package.json ]; then
-    echo "Running frontend linter..."
-    cd frontend-modern
-    npm run lint --if-present || true
-    cd ..
+    if git diff --cached --name-only | grep -q "^frontend-modern/"; then
+        echo "Running frontend linter..."
+        cd frontend-modern
+        npm run lint
+        cd ..
+    else
+        echo "Skipping frontend lint (no staged frontend changes)."
+    fi
 fi
 
 # Re-stage only files that were already staged (to pick up formatter changes)

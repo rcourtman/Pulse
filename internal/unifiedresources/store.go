@@ -4,9 +4,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -50,24 +52,38 @@ type SQLiteResourceStore struct {
 	mu     sync.Mutex
 }
 
-const maxOrgIDLength = 64
+const (
+	maxOrgIDLength     = 64
+	defaultOrgID       = "default"
+	resourceDBFileName = "unified_resources.db"
+)
+
+var resourceStoreOrgIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 
 // NewSQLiteResourceStore opens or creates the SQLite store.
 func NewSQLiteResourceStore(dataDir, orgID string) (*SQLiteResourceStore, error) {
 	if dataDir == "" {
-		dataDir = filepath.Join(utils.GetDataDir(), "resources")
+		dataDir = utils.GetDataDir()
 	}
+
+	resolvedOrgID, err := normalizeOrgID(orgID)
+	if err != nil {
+		return nil, err
+	}
+
+	path := resourceDBPath(dataDir, resolvedOrgID)
 	// Resource-store metadata can include user-authored links/exclusions; keep directory owner-only.
-	if err := os.MkdirAll(dataDir, 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return nil, fmt.Errorf("failed to create resources directory: %w", err)
 	}
 
-	orgPart := sanitizeOrgID(orgID)
-	fileName := "unified_resources.db"
-	if orgPart != "" && orgPart != "default" {
-		fileName = fmt.Sprintf("unified_resources_%s.db", orgPart)
+	// Backward compatibility: migrate non-default org stores from the legacy
+	// shared-path naming scheme into tenant-scoped directories on first access.
+	if resolvedOrgID != defaultOrgID {
+		if err := migrateLegacyResourceStore(dataDir, resolvedOrgID, path); err != nil {
+			return nil, err
+		}
 	}
-	path := filepath.Join(dataDir, fileName)
 
 	dsn := path + "?" + url.Values{
 		"_pragma": []string{
@@ -99,6 +115,88 @@ func NewSQLiteResourceStore(dataDir, orgID string) (*SQLiteResourceStore, error)
 		return nil, wrappedInitErr
 	}
 	return store, nil
+}
+
+func normalizeOrgID(orgID string) (string, error) {
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return defaultOrgID, nil
+	}
+	if orgID == defaultOrgID {
+		return defaultOrgID, nil
+	}
+	if !isValidResourceStoreOrgID(orgID) {
+		return "", fmt.Errorf("invalid organization ID: %s", orgID)
+	}
+	return orgID, nil
+}
+
+func isValidResourceStoreOrgID(orgID string) bool {
+	if orgID == "" || orgID == "." || orgID == ".." {
+		return false
+	}
+	if filepath.Base(orgID) != orgID {
+		return false
+	}
+	return resourceStoreOrgIDPattern.MatchString(orgID)
+}
+
+func resourceDBPath(dataDir, orgID string) string {
+	if orgID == defaultOrgID {
+		return filepath.Join(dataDir, "resources", resourceDBFileName)
+	}
+	return filepath.Join(dataDir, "orgs", orgID, "resources", resourceDBFileName)
+}
+
+func migrateLegacyResourceStore(dataDir, orgID, newPath string) error {
+	legacyPath := filepath.Join(dataDir, "resources", legacyResourceStoreFileName(orgID))
+	if legacyPath == newPath {
+		return nil
+	}
+
+	if err := copyFileIfMissing(legacyPath, newPath, 0600); err != nil {
+		return fmt.Errorf("migrate legacy resource store %q -> %q: %w", legacyPath, newPath, err)
+	}
+	// Copy SQLite sidecar files when present to preserve uncheckpointed state.
+	for _, suffix := range []string{"-wal", "-shm"} {
+		legacyCompanion := legacyPath + suffix
+		newCompanion := newPath + suffix
+		if err := copyFileIfMissing(legacyCompanion, newCompanion, 0600); err != nil {
+			return fmt.Errorf("migrate legacy resource store companion %q -> %q: %w", legacyCompanion, newCompanion, err)
+		}
+	}
+	return nil
+}
+
+func copyFileIfMissing(src, dst string, perm os.FileMode) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
+	if err != nil {
+		if os.IsExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	_, copyErr := io.Copy(dstFile, srcFile)
+	closeErr := dstFile.Close()
+	if copyErr != nil {
+		_ = os.Remove(dst)
+		return copyErr
+	}
+	if closeErr != nil {
+		_ = os.Remove(dst)
+		return closeErr
+	}
+	return nil
 }
 
 func (s *SQLiteResourceStore) initSchema() error {
@@ -394,4 +492,12 @@ func sanitizeOrgID(orgID string) string {
 		sanitized = sanitized[:maxOrgIDLength]
 	}
 	return sanitized
+}
+
+func legacyResourceStoreFileName(orgID string) string {
+	orgPart := sanitizeOrgID(orgID)
+	if orgPart != "" && orgPart != defaultOrgID {
+		return fmt.Sprintf("unified_resources_%s.db", orgPart)
+	}
+	return resourceDBFileName
 }

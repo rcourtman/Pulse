@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 // EntitlementPayload is the normalized entitlement response for frontend consumption.
@@ -41,6 +43,7 @@ func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Requ
 			payload.PlanVersion = pv
 		}
 	}
+	payload.TrialEligible, payload.TrialEligibilityReason = h.trialStartEligibility(r.Context(), svc)
 	payload.HostedMode = h != nil && h.hostedMode
 
 	w.Header().Set("Content-Type", "application/json")
@@ -109,4 +112,28 @@ func buildEntitlementPayloadWithUsage(
 // Exported for testing.
 func limitState(current, limit int64) string {
 	return limitStateFromLicensing(current, limit)
+}
+
+func (h *LicenseHandlers) trialStartEligibility(ctx context.Context, svc *licenseService) (eligible bool, reason string) {
+	if h == nil || h.mtPersistence == nil {
+		return false, "unavailable"
+	}
+
+	orgID := GetOrgID(ctx)
+	if orgID == "" {
+		orgID = "default"
+	}
+
+	billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
+	existing, err := billingStore.GetBillingState(orgID)
+	if err != nil {
+		return false, "unavailable"
+	}
+
+	hasActiveLicense := svc != nil && svc.Current() != nil && svc.IsValid()
+	decision := evaluateTrialStartEligibilityFromLicensing(hasActiveLicense, existing)
+	if decision.Allowed {
+		return true, ""
+	}
+	return false, string(decision.Reason)
 }

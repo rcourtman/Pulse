@@ -28,7 +28,11 @@ import { MONITORING_READ_SCOPE } from '@/constants/apiScopes';
 import { UpdatesAPI } from './api/updates';
 import type { VersionInfo } from './api/updates';
 import type { TimeRange } from './api/charts';
-import { apiFetch, getOrgID as getSelectedOrgID, setOrgID as setSelectedOrgID } from './utils/apiClient';
+import {
+  apiFetch,
+  getOrgID as getSelectedOrgID,
+  setOrgID as setSelectedOrgID,
+} from './utils/apiClient';
 import type { SecurityStatus } from '@/types/config';
 import { SettingsAPI } from './api/settings';
 import { OrgsAPI } from '@/api/orgs';
@@ -74,7 +78,14 @@ import {
   fetchInfrastructureSummaryAndCache,
   hasFreshInfrastructureSummaryCache,
 } from '@/utils/infrastructureSummaryCache';
-import { initKioskMode, isKioskMode, setKioskMode, subscribeToKioskMode, getKioskModePreference, getPulseWebSocketUrl } from './utils/url';
+import {
+  initKioskMode,
+  isKioskMode,
+  setKioskMode,
+  subscribeToKioskMode,
+  getKioskModePreference,
+  getPulseWebSocketUrl,
+} from './utils/url';
 import {
   buildLegacyRedirectTarget,
   getActiveTabForPath,
@@ -92,11 +103,20 @@ import { buildStorageRecoveryTabSpecs } from './routing/platformTabs';
 import { isMultiTenantEnabled, isPro, licenseLoaded, loadLicenseStatus } from '@/stores/license';
 
 import { showToast } from '@/utils/toast';
+import {
+  applyThemeClass,
+  computeIsDark,
+  getStoredThemePreference,
+  hasStoredThemePreference,
+  normalizeThemePreference,
+  persistThemePreference,
+  type ThemePreference,
+} from '@/utils/theme';
 
 function isPublicRoutePath(pathname: string): boolean {
   // Public routes must be viewable without authentication.
   // Keep the list small and explicit.
-  return pathname === '/pricing';
+  return pathname === '/pricing' || pathname === '/cloud' || pathname === '/cloud/signup';
 }
 
 const Dashboard = lazy(() =>
@@ -117,13 +137,13 @@ const AIIntelligencePage = lazy(() =>
 const MigrationGuidePage = lazy(() => import('./pages/MigrationGuide'));
 const NotFoundPage = lazy(() => import('./pages/NotFound'));
 const PricingPage = lazy(() => import('./pages/Pricing'));
-const OperationsPage = lazy(() => import('./pages/Operations'));
+const HostedSignupPage = lazy(() => import('./pages/HostedSignup'));
+const Operations = lazy(() => import('./pages/Operations'));
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
 const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 const STORAGE_PATH = buildStoragePath();
 const RECOVERY_ROUTE_PATH = buildRecoveryPath();
 const RECOVERY_REMOTE_EVENTS_PATH = buildRecoveryPath({ view: 'events', mode: 'remote' });
-
 
 // Enhanced store type with proper typing
 type EnhancedStore = ReturnType<typeof getGlobalWebSocketStore>;
@@ -322,7 +342,9 @@ function App() {
 
     // Respect data-saver / very slow connections.
     // We treat this as an optimization, not a correctness requirement.
-    const conn = (navigator as unknown as { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+    const conn = (
+      navigator as unknown as { connection?: { saveData?: boolean; effectiveType?: string } }
+    ).connection;
     if (conn?.saveData) return false;
     const effective = conn?.effectiveType;
     if (typeof effective === 'string' && (effective === 'slow-2g' || effective === '2g')) {
@@ -347,10 +369,9 @@ function App() {
     }
 
     hasPrewarmedInfrastructureCharts = true;
-    void fetchInfrastructureSummaryAndCache(range, { caller: 'App prewarm' })
-      .catch(() => {
-        // Non-blocking prewarm; ignore failures.
-      });
+    void fetchInfrastructureSummaryAndCache(range, { caller: 'App prewarm' }).catch(() => {
+      // Non-blocking prewarm; ignore failures.
+    });
   };
 
   const preloadLazyRoutes = () => {
@@ -495,7 +516,9 @@ function App() {
       localStorage.removeItem(STORAGE_KEYS.GUEST_METADATA);
       localStorage.removeItem(STORAGE_KEYS.DOCKER_METADATA);
       localStorage.removeItem(STORAGE_KEYS.DOCKER_METADATA + '_hosts');
-    } catch { /* ignore storage errors */ }
+    } catch {
+      /* ignore storage errors */
+    }
 
     try {
       const store = wsStore();
@@ -518,7 +541,7 @@ function App() {
       hour: 'numeric',
       minute: '2-digit',
       second: '2-digit',
-      hour12: true
+      hour12: true,
     });
   };
 
@@ -563,9 +586,12 @@ function App() {
     }
 
     if (typeof window.requestIdleCallback === 'function') {
-      const id = window.requestIdleCallback(() => {
-        prewarmInfrastructureCharts();
-      }, { timeout: 2_000 });
+      const id = window.requestIdleCallback(
+        () => {
+          prewarmInfrastructureCharts();
+        },
+        { timeout: 2_000 },
+      );
       onCleanup(() => {
         window.cancelIdleCallback(id);
       });
@@ -615,58 +641,27 @@ function App() {
   // Version info
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
   // Theme settings
-  // This addresses issue #443 where dark mode wasn't persisting
-  // Priority: 1. localStorage (user's last choice on this device)
-  //           2. System preference
-  //           3. Server preference (loaded later for cross-device sync)
-  const savedThemePref = localStorage.getItem(STORAGE_KEYS.THEME_PREFERENCE) as 'light' | 'dark' | 'system' | null;
-  const savedDarkMode = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
-
-  let initialThemePref: 'light' | 'dark' | 'system' = 'system';
-  if (savedThemePref && ['light', 'dark', 'system'].includes(savedThemePref)) {
-    initialThemePref = savedThemePref;
-  } else if (savedDarkMode !== null) {
-    initialThemePref = savedDarkMode === 'true' ? 'dark' : 'light';
-  }
-
-  const [themePreference, setThemePreference] = createSignal<'light' | 'dark' | 'system'>(initialThemePref);
+  // Single source of truth:
+  // 1) localStorage preference (including migrated legacy key)
+  // 2) system preference
+  // 3) server preference (only when no local preference exists)
+  const initialThemePref = getStoredThemePreference();
+  const [themePreference, setThemePreference] = createSignal<ThemePreference>(initialThemePref);
   const [, setHasLoadedServerTheme] = createSignal(false);
-
-  const computeIsDark = (pref: 'light' | 'dark' | 'system') => {
-    if (pref === 'dark') return true;
-    if (pref === 'light') return false;
-    return typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)').matches : false;
-  };
 
   const [darkMode, setDarkMode] = createSignal(computeIsDark(initialThemePref));
 
-  const applyThemeClasses = (isDark: boolean) => {
-    if (typeof window === 'undefined') return;
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  };
-
   // Apply dark mode immediately on initialization
-  applyThemeClasses(darkMode());
+  applyThemeClass(darkMode());
 
   // Handle explicit theme changes
-  const handleThemeChange = async (newPref: 'light' | 'dark' | 'system') => {
+  const handleThemeChange = async (newPref: ThemePreference) => {
     setThemePreference(newPref);
-    localStorage.setItem(STORAGE_KEYS.THEME_PREFERENCE, newPref);
-
-    // update old key for safety
-    if (newPref !== 'system') {
-      localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(newPref === 'dark'));
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.DARK_MODE);
-    }
+    persistThemePreference(newPref);
 
     const isDark = computeIsDark(newPref);
     setDarkMode(isDark);
-    applyThemeClasses(isDark);
+    applyThemeClass(isDark);
 
     logger.info('Theme changed', { pref: newPref, active: isDark ? 'dark' : 'light' });
 
@@ -690,7 +685,7 @@ function App() {
       if (themePreference() === 'system') {
         const isDark = e.matches;
         setDarkMode(isDark);
-        applyThemeClasses(isDark);
+        applyThemeClass(isDark);
       }
     };
     mediaQuery.addEventListener('change', systemThemeListener);
@@ -699,13 +694,13 @@ function App() {
       if (!theme) return;
       logger.info('Received theme change from another browser instance', { theme });
 
-      const pref = ['light', 'dark', 'system'].includes(theme) ? (theme as 'light' | 'dark' | 'system') : 'system';
+      const pref = normalizeThemePreference(theme);
       setThemePreference(pref);
-      localStorage.setItem(STORAGE_KEYS.THEME_PREFERENCE, pref);
+      persistThemePreference(pref);
 
       const isDark = computeIsDark(pref);
       setDarkMode(isDark);
-      applyThemeClasses(isDark);
+      applyThemeClass(isDark);
     };
 
     // Handle WebSocket reconnection - refresh alert config to restore activation state
@@ -727,7 +722,6 @@ function App() {
       eventBus.off('websocket_reconnected', handleWebSocketReconnected);
     });
   });
-
 
   // Check auth on mount
   onMount(async () => {
@@ -811,15 +805,13 @@ function App() {
           const systemSettings = await SettingsAPI.getSystemSettings();
           updateSystemSettingsFromResponse(systemSettings);
 
-          if (!savedThemePref && systemSettings.theme && systemSettings.theme !== '') {
-            const pref = ['light', 'dark', 'system'].includes(systemSettings.theme)
-              ? (systemSettings.theme as 'light' | 'dark' | 'system')
-              : 'system';
+          if (!hasStoredThemePreference() && systemSettings.theme && systemSettings.theme !== '') {
+            const pref = normalizeThemePreference(systemSettings.theme);
             setThemePreference(pref);
-            localStorage.setItem(STORAGE_KEYS.THEME_PREFERENCE, pref);
+            persistThemePreference(pref);
             const isDark = computeIsDark(pref);
             setDarkMode(isDark);
-            applyThemeClasses(isDark);
+            applyThemeClass(isDark);
           }
 
           setHasLoadedServerTheme(true);
@@ -862,15 +854,13 @@ function App() {
           updateSystemSettingsFromResponse(systemSettings);
 
           // Only apply server theme if user has no local preference on this device.
-          if (!savedThemePref && systemSettings.theme && systemSettings.theme !== '') {
-            const pref = ['light', 'dark', 'system'].includes(systemSettings.theme)
-              ? (systemSettings.theme as 'light' | 'dark' | 'system')
-              : 'system';
+          if (!hasStoredThemePreference() && systemSettings.theme && systemSettings.theme !== '') {
+            const pref = normalizeThemePreference(systemSettings.theme);
             setThemePreference(pref);
-            localStorage.setItem(STORAGE_KEYS.THEME_PREFERENCE, pref);
+            persistThemePreference(pref);
             const isDark = computeIsDark(pref);
             setDarkMode(isDark);
-            applyThemeClasses(isDark);
+            applyThemeClass(isDark);
           }
 
           setHasLoadedServerTheme(true);
@@ -924,15 +914,13 @@ function App() {
           updateSystemSettingsFromResponse(systemSettings);
 
           // Only apply server theme if user has no local preference on this device.
-          if (!savedThemePref && systemSettings.theme && systemSettings.theme !== '') {
-            const pref = ['light', 'dark', 'system'].includes(systemSettings.theme)
-              ? (systemSettings.theme as 'light' | 'dark' | 'system')
-              : 'system';
+          if (!hasStoredThemePreference() && systemSettings.theme && systemSettings.theme !== '') {
+            const pref = normalizeThemePreference(systemSettings.theme);
             setThemePreference(pref);
-            localStorage.setItem(STORAGE_KEYS.THEME_PREFERENCE, pref);
+            persistThemePreference(pref);
             const isDark = computeIsDark(pref);
             setDarkMode(isDark);
-            applyThemeClasses(isDark);
+            applyThemeClass(isDark);
           }
 
           setHasLoadedServerTheme(true);
@@ -1017,14 +1005,7 @@ function App() {
 
   // Workloads view - v2 resources only
   const WorkloadsView = () => {
-    return (
-      <Dashboard
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
-      />
-    );
+    return <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />;
   };
 
   // V2 is GA - always serve V2 at canonical routes.
@@ -1043,8 +1024,6 @@ function App() {
     const [commandPaletteOpen, setCommandPaletteOpen] = createSignal(false);
     const location = useLocation();
     const isPublicRoute = createMemo(() => isPublicRoutePath(location.pathname));
-
-
 
     useKeyboardShortcuts({
       enabled: () => !needsAuth(),
@@ -1107,13 +1086,25 @@ function App() {
         <Show
           when={isPublicRoute()}
           fallback={
-            <Show when={!needsAuth()} fallback={<Login onLogin={handleLogin} hasAuth={hasAuth()} securityStatus={securityStatus() ?? undefined} />}>
+            <Show
+              when={!needsAuth()}
+              fallback={
+                <Login
+                  onLogin={handleLogin}
+                  hasAuth={hasAuth()}
+                  securityStatus={securityStatus() ?? undefined}
+                />
+              }
+            >
               <ErrorBoundary>
-                <Show when={enhancedStore()} fallback={
-                  <div class="min-h-screen flex items-center justify-center bg-base">
-                    <div class="text-muted">Initializing...</div>
-                  </div>
-                }>
+                <Show
+                  when={enhancedStore()}
+                  fallback={
+                    <div class="min-h-screen flex items-center justify-center bg-base">
+                      <div class="text-muted">Initializing...</div>
+                    </div>
+                  }
+                >
                   <WebSocketContext.Provider value={enhancedStore()!}>
                     <DarkModeContext.Provider value={darkMode}>
                       <Show when={!kioskMode()}>
@@ -1173,9 +1164,7 @@ function App() {
           }
         >
           <div class="min-h-screen bg-base text-base-content font-sans">
-            <div class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
-              {props.children}
-            </div>
+            <div class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">{props.children}</div>
           </div>
         </Show>
         <ToastContainer />
@@ -1187,6 +1176,8 @@ function App() {
   return (
     <Router root={RootLayout}>
       <Route path="/pricing" component={PricingPage} />
+      <Route path="/cloud" component={() => <Navigate href="/cloud/signup" />} />
+      <Route path="/cloud/signup" component={HostedSignupPage} />
       <Route path="/dashboard" component={DashboardPage} />
       <Route path="/" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
       <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsView} />
@@ -1206,7 +1197,8 @@ function App() {
               toast={{
                 type: 'info',
                 title: 'Replication moved',
-                message: 'Replication is now shown in Recovery (Remote events). Update your bookmark to /recovery.',
+                message:
+                  'Replication is now shown in Recovery (Remote events). Update your bookmark to /recovery.',
                 onceKey: 'pulse_toast_replication_moved_to_recovery',
               }}
             />
@@ -1267,7 +1259,8 @@ function App() {
               toast={{
                 type: 'info',
                 title: 'Replication moved',
-                message: 'Replication is now shown in Recovery (Remote events). Update your bookmark to /recovery.',
+                message:
+                  'Replication is now shown in Recovery (Remote events). Update your bookmark to /recovery.',
                 onceKey: 'pulse_toast_replication_moved_to_recovery',
               }}
             />
@@ -1306,7 +1299,10 @@ function App() {
           path={LEGACY_REDIRECTS.mail.path}
           component={() => (
             <LegacyRedirect
-              to={buildLegacyRedirectTarget(LEGACY_REDIRECTS.mail.destination, LEGACY_REDIRECTS.mail.source)}
+              to={buildLegacyRedirectTarget(
+                LEGACY_REDIRECTS.mail.destination,
+                LEGACY_REDIRECTS.mail.source,
+              )}
               toast={{
                 title: LEGACY_REDIRECTS.mail.toastTitle,
                 message: LEGACY_REDIRECTS.mail.toastMessage,
@@ -1350,7 +1346,7 @@ function App() {
       <Route path="/alerts/*" component={AlertsPage} />
       <Route path="/ai/*" component={AIIntelligencePage} />
       <Route path="/settings/*" component={SettingsRoute} />
-      <Route path="/operations/*" component={OperationsPage} />
+      <Route path="/operations/*" component={Operations} />
       <Route path="*all" component={NotFoundPage} />
     </Router>
   );
@@ -1363,12 +1359,13 @@ function ConnectionStatusBadge(props: {
 }) {
   return (
     <div
-      class={`group status text-xs rounded-full flex items-center justify-center transition-all duration-500 ease-in-out px-1.5 ${props.connected()
-        ? 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300 min-w-6 h-6 group-hover:px-3'
-        : props.reconnecting()
-          ? 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300 py-1'
-          : 'disconnected bg-surface-hover text-base-content min-w-6 h-6 group-hover:px-3'
-        } ${props.class ?? ''}`}
+      class={`group status text-xs rounded-full flex items-center justify-center transition-all duration-500 ease-in-out px-1.5 ${
+        props.connected()
+          ? 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300 min-w-6 h-6 group-hover:px-3'
+          : props.reconnecting()
+            ? 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300 py-1'
+            : 'disconnected bg-surface-hover text-base-content min-w-6 h-6 group-hover:px-3'
+      } ${props.class ?? ''}`}
     >
       <Show when={props.reconnecting()}>
         <svg class="animate-spin h-3 w-3 flex-shrink-0" fill="none" viewBox="0 0 24 24">
@@ -1394,10 +1391,11 @@ function ConnectionStatusBadge(props: {
         <span class="h-2.5 w-2.5 rounded-full bg-slate-600 flex-shrink-0"></span>
       </Show>
       <span
-        class={`whitespace-nowrap overflow-hidden transition-all duration-500 ${props.connected() || (!props.connected() && !props.reconnecting())
-          ? 'max-w-0 group-hover:max-w-[100px] group-hover:ml-2 group-hover:mr-1 opacity-0 group-hover:opacity-100'
-          : 'max-w-[100px] ml-1 opacity-100'
-          }`}
+        class={`whitespace-nowrap overflow-hidden transition-all duration-500 ${
+          props.connected() || (!props.connected() && !props.reconnecting())
+            ? 'max-w-0 group-hover:max-w-[100px] group-hover:ml-2 group-hover:mr-1 opacity-0 group-hover:opacity-100'
+            : 'max-w-[100px] ml-1 opacity-100'
+        }`}
       >
         {props.connected()
           ? 'Connected'
@@ -1544,8 +1542,7 @@ function AppLayout(props: {
 
   // Determine active tab from current path
   const getActiveTabDesktop = () => getActiveTabForPath(location.pathname);
-  const getActiveTabMobile = () =>
-    getActiveTabForPath(location.pathname);
+  const getActiveTabMobile = () => getActiveTabForPath(location.pathname);
 
   type PlatformTab = {
     id: string;
@@ -1570,9 +1567,7 @@ function AppLayout(props: {
         tooltip: 'Environment overview and command center',
         enabled: true,
         live: true,
-        icon: (
-          <LayoutDashboardIcon class="w-4 h-4 shrink-0" />
-        ),
+        icon: <LayoutDashboardIcon class="w-4 h-4 shrink-0" />,
         alwaysShow: true,
       },
       {
@@ -1618,11 +1613,11 @@ function AppLayout(props: {
         live: true,
         icon: <ActivityIcon class="w-4 h-4 shrink-0" />,
         alwaysShow: true,
-      }
+      },
     ];
 
     // Filter out platforms that should be hidden when not configured
-    return allPlatforms.filter(p => p.alwaysShow || p.enabled);
+    return allPlatforms.filter((p) => p.alwaysShow || p.enabled);
   });
 
   const platformTabsMobile = createMemo(() => {
@@ -1681,10 +1676,10 @@ function AppLayout(props: {
         live: true,
         icon: <ActivityIcon class="w-4 h-4 shrink-0" />,
         alwaysShow: true,
-      }
+      },
     ];
 
-    return allPlatforms.filter(p => p.alwaysShow || p.enabled);
+    return allPlatforms.filter((p) => p.alwaysShow || p.enabled);
   });
 
   const utilityTabs = createMemo(() => {
@@ -1708,8 +1703,8 @@ function AppLayout(props: {
     // If no scopes (session auth), show settings
     // If scopes include '*' (wildcard) or 'settings:read', show settings
     const scopes = props.tokenScopes();
-    const hasSettingsAccess = !scopes || scopes.length === 0 ||
-      scopes.includes('*') || scopes.includes('settings:read');
+    const hasSettingsAccess =
+      !scopes || scopes.length === 0 || scopes.includes('*') || scopes.includes('settings:read');
 
     const tabs: Array<{
       id: 'alerts' | 'ai' | 'settings';
@@ -1721,27 +1716,27 @@ function AppLayout(props: {
       breakdown: { warning: number; critical: number } | undefined;
       icon: JSX.Element;
     }> = [
-        {
-          id: 'alerts',
-          label: 'Alerts',
-          route: '/alerts',
-          tooltip: 'Review active alerts and automation rules',
-          badge: null,
-          count: activeAlertCount,
-          breakdown,
-          icon: <BellIcon class="w-4 h-4 shrink-0" />,
-        },
-        {
-          id: 'ai',
-          label: 'Patrol',
-          route: '/ai',
-          tooltip: 'Pulse Patrol monitoring and analysis',
-          badge: null, // Patrol is free with BYOK; auto-fix is Pro
-          count: undefined,
-          breakdown: undefined,
-          icon: <PulsePatrolLogo class="w-4 h-4 shrink-0" />,
-        },
-      ];
+      {
+        id: 'alerts',
+        label: 'Alerts',
+        route: '/alerts',
+        tooltip: 'Review active alerts and automation rules',
+        badge: null,
+        count: activeAlertCount,
+        breakdown,
+        icon: <BellIcon class="w-4 h-4 shrink-0" />,
+      },
+      {
+        id: 'ai',
+        label: 'Patrol',
+        route: '/ai',
+        tooltip: 'Pulse Patrol monitoring and analysis',
+        badge: null, // Patrol is free with BYOK; auto-fix is Pro
+        count: undefined,
+        breakdown: undefined,
+        icon: <PulsePatrolLogo class="w-4 h-4 shrink-0" />,
+      },
+    ];
 
     // Only show settings tab if user has access
     if (hasSettingsAccess) {
@@ -1792,17 +1787,21 @@ function AppLayout(props: {
         />
       </Show>
       <div
-        class={`header mb-3 flex items-center gap-2 ${kioskMode()
-          ? 'fixed top-0 left-0 right-0 z-50 justify-end bg-surface shadow-sm'
-          : 'justify-between sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0'}`}
-        style={kioskMode()
-          ? {
-            transform: headerVisible() ? 'translateY(0)' : 'translateY(-100%)',
-            opacity: headerVisible() ? 1 : 0,
-            transition: `transform ${headerVisible() ? 200 : 300}ms ease, opacity ${headerVisible() ? 200 : 300}ms ease`,
-            'pointer-events': headerVisible() ? 'auto' : 'none',
-          }
-          : undefined}
+        class={`header mb-3 flex items-center gap-2 ${
+          kioskMode()
+            ? 'fixed top-0 left-0 right-0 z-50 justify-end bg-surface shadow-sm'
+            : 'justify-between sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0'
+        }`}
+        style={
+          kioskMode()
+            ? {
+                transform: headerVisible() ? 'translateY(0)' : 'translateY(-100%)',
+                opacity: headerVisible() ? 1 : 0,
+                transition: `transform ${headerVisible() ? 200 : 300}ms ease, opacity ${headerVisible() ? 200 : 300}ms ease`,
+                'pointer-events': headerVisible() ? 'auto' : 'none',
+              }
+            : undefined
+        }
         ref={(el) => {
           headerEl = el;
         }}
@@ -1864,7 +1863,9 @@ function AppLayout(props: {
             </div>
           </div>
         </Show>
-        <div class={`header-controls flex items-center gap-2 ${kioskMode() ? '' : 'justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end'}`}>
+        <div
+          class={`header-controls flex items-center gap-2 ${kioskMode() ? '' : 'justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end'}`}
+        >
           <Show when={props.hasAuth() && !props.needsAuth()}>
             <div class="flex items-center gap-2">
               <Show when={isMultiTenantEnabled()}>
@@ -1879,11 +1880,16 @@ function AppLayout(props: {
               <button
                 type="button"
                 onClick={toggleKioskMode}
-                class={`group relative flex h-11 w-11 items-center justify-center rounded-full text-xs transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10 ${kioskMode()
-                  ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800'
-                  : 'bg-surface-hover text-base-content hover:bg-border'
-                  }`}
-                title={kioskMode() ? 'Exit kiosk mode (show navigation)' : 'Enter kiosk mode (hide navigation)'}
+                class={`group relative flex h-11 w-11 items-center justify-center rounded-full text-xs transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10 ${
+                  kioskMode()
+                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800'
+                    : 'bg-surface-hover text-base-content hover:bg-border'
+                }`}
+                title={
+                  kioskMode()
+                    ? 'Exit kiosk mode (show navigation)'
+                    : 'Enter kiosk mode (hide navigation)'
+                }
                 aria-label={kioskMode() ? 'Exit kiosk mode' : 'Enter kiosk mode'}
                 aria-pressed={kioskMode()}
               >
@@ -1892,9 +1898,7 @@ function AppLayout(props: {
                 </Show>
               </button>
               <Show when={props.proxyAuthInfo()?.username}>
-                <span class="text-xs px-2 py-1 text-muted">
-                  {props.proxyAuthInfo()?.username}
-                </span>
+                <span class="text-xs px-2 py-1 text-muted">{props.proxyAuthInfo()?.username}</span>
               </Show>
               <button
                 type="button"
@@ -1927,7 +1931,6 @@ function AppLayout(props: {
           />
         </div>
       </div>
-
 
       {/* Tabs - hidden in kiosk mode */}
       <Show when={!kioskMode()}>
@@ -2009,31 +2012,35 @@ function AppLayout(props: {
                       <span class="flex items-center gap-1">
                         <span class="hidden xs:inline">{tab.label}</span>
                         <span class="xs:hidden">{tab.label.charAt(0)}</span>
-                        {tab.id === 'alerts' && (() => {
-                          const total = tab.count ?? 0;
-                          if (total <= 0) {
-                            return null;
-                          }
-                          return (
-                            <span class="inline-flex items-center gap-1">
-                              {tab.breakdown && tab.breakdown.critical > 0 && (
-                                <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-600 dark:bg-red-500 rounded-full">
-                                  {tab.breakdown.critical}
-                                </span>
-                              )}
-                              {tab.breakdown && tab.breakdown.warning > 0 && (
-                                <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900 dark:text-amber-100 bg-amber-200 dark:bg-amber-500 rounded-full">
-                                  {tab.breakdown.warning}
-                                </span>
-                              )}
-                            </span>
-                          );
-                        })()}
+                        {tab.id === 'alerts' &&
+                          (() => {
+                            const total = tab.count ?? 0;
+                            if (total <= 0) {
+                              return null;
+                            }
+                            return (
+                              <span class="inline-flex items-center gap-1">
+                                {tab.breakdown && tab.breakdown.critical > 0 && (
+                                  <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-600 dark:bg-red-500 rounded-full">
+                                    {tab.breakdown.critical}
+                                  </span>
+                                )}
+                                {tab.breakdown && tab.breakdown.warning > 0 && (
+                                  <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900 dark:text-amber-100 bg-amber-200 dark:bg-amber-500 rounded-full">
+                                    {tab.breakdown.warning}
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })()}
                       </span>
                       <Show when={tab.badge === 'update'}>
                         <span class="ml-1 flex items-center">
                           <span class="sr-only">Update available</span>
-                          <span aria-hidden="true" class="block h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
+                          <span
+                            aria-hidden="true"
+                            class="block h-2 w-2 rounded-full bg-red-500 animate-pulse"
+                          ></span>
                         </span>
                       </Show>
                       <Show when={tab.badge === 'pro'}>
@@ -2115,7 +2122,11 @@ function AppLayout(props: {
           type="button"
           onClick={() => aiChatStore.toggle()}
           class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex min-h-10 sm:min-h-9 min-w-10 items-center justify-center px-2.5 py-2.5 rounded-l-xl bg-blue-600 text-white shadow-sm hover:bg-blue-700 transition-colors duration-200 group sm:top-1/2 sm:translate-y-[-50%] top-auto bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] translate-y-0"
-          title={aiChatStore.context.context?.name ? `Pulse Assistant - ${aiChatStore.context.context.name}` : 'Pulse Assistant (⌘K)'}
+          title={
+            aiChatStore.context.context?.name
+              ? `Pulse Assistant - ${aiChatStore.context.context.name}`
+              : 'Pulse Assistant (⌘K)'
+          }
           aria-label="Expand Pulse Assistant"
         >
           <svg

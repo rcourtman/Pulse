@@ -40,6 +40,15 @@ export interface LicenseEntitlements {
   trial_expires_at?: number;
   trial_days_remaining?: number;
   hosted_mode?: boolean;
+  valid?: boolean;
+  licensed_email?: string;
+  expires_at?: string;
+  is_lifetime?: boolean;
+  days_remaining?: number;
+  in_grace_period?: boolean;
+  grace_period_end?: string;
+  trial_eligible?: boolean;
+  trial_eligibility_reason?: string;
 }
 
 export interface ActivateLicenseResponse {

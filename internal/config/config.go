@@ -27,6 +27,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog/log"
 )
@@ -147,6 +148,7 @@ type Config struct {
 	DisableLocalUpgradeMetrics  bool             `envconfig:"PULSE_DISABLE_LOCAL_UPGRADE_METRICS" default:"false"`  // Disable local-only upgrade UX metrics collection
 	TelemetryEnabled            bool             `envconfig:"PULSE_TELEMETRY" default:"true"`                       // Anonymous telemetry enabled by default (install ID, version, resource counts, feature flags — opt out any time)
 	MultiTenantEnabled          bool             `envconfig:"PULSE_MULTI_TENANT_ENABLED" default:"false"`           // Enable multi-tenant support
+	ProTrialSignupURL           string           `envconfig:"PULSE_PRO_TRIAL_SIGNUP_URL" default:""`                // Hosted signup/checkout URL for starting Pulse Pro trials
 
 	// Proxy authentication settings
 	ProxyAuthSecret        string `envconfig:"PROXY_AUTH_SECRET"`
@@ -739,6 +741,7 @@ func Load() (*Config, error) {
 		TemperatureMonitoringEnabled:    true,
 		TelemetryEnabled:                true,            // Enabled by default; opt out via PULSE_TELEMETRY=false or Settings
 		MaxPollTimeout:                  3 * time.Minute, // Default max poll timeout for large clusters
+		ProTrialSignupURL:               pkglicensing.DefaultProTrialSignupURL,
 		EnvOverrides:                    make(map[string]bool),
 		AgentConnectURL:                 "",
 		OIDC:                            NewOIDCConfig(),
@@ -1079,6 +1082,17 @@ func Load() (*Config, error) {
 			log.Info().Bool("enabled", enabled).Msg("Overriding telemetry setting from environment")
 		} else {
 			log.Warn().Str("value", telemetryStr).Msg("Invalid PULSE_TELEMETRY value, ignoring")
+		}
+	}
+	if trialSignupURL := utils.GetenvTrim(pkglicensing.ProTrialSignupURLEnvVar); trialSignupURL != "" {
+		resolved := pkglicensing.ResolveProTrialSignupURL(trialSignupURL)
+		if resolved != pkglicensing.DefaultProTrialSignupURL {
+			cfg.ProTrialSignupURL = resolved
+			cfg.EnvOverrides[pkglicensing.ProTrialSignupURLEnvVar] = true
+			cfg.EnvOverrides["proTrialSignupURL"] = true
+			log.Info().Str("url", resolved).Msg("Overriding Pulse Pro trial signup URL from environment")
+		} else {
+			log.Warn().Str("value", trialSignupURL).Msg("Invalid PULSE_PRO_TRIAL_SIGNUP_URL value, ignoring")
 		}
 	}
 

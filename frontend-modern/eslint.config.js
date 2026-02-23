@@ -131,6 +131,17 @@ export default tseslint.config(
                     selector: "TemplateElement[value.raw=/(?:^|\\s)(?:bg|text|border|ring)-(?:slate|gray|zinc|neutral)-(?:50|100|200|700|800)(?:$|\\s)/]",
                     message: "Use semantic design system classes (e.g. bg-surface, text-base-content, border-border) instead of hardcoded tailwind grays. See DESIGN_SYSTEM.md for the token reference.",
                 },
+                // Full-viewport shells must use semantic background tokens.
+                // Hardcoded Tailwind color scales on min-h-screen wrappers are a recurring
+                // source of light/dark mismatches on auth/loading screens.
+                {
+                    selector: "Literal[value=/(?=.*(?:^|\\s)min-h-screen(?:$|\\s))(?=.*(?:^|\\s)bg-(?:white|black|slate-\\d{2,3}|gray-\\d{2,3}|zinc-\\d{2,3}|neutral-\\d{2,3}|stone-\\d{2,3}|red-\\d{2,3}|orange-\\d{2,3}|amber-\\d{2,3}|yellow-\\d{2,3}|lime-\\d{2,3}|green-\\d{2,3}|emerald-\\d{2,3}|teal-\\d{2,3}|cyan-\\d{2,3}|sky-\\d{2,3}|blue-\\d{2,3}|indigo-\\d{2,3}|violet-\\d{2,3}|purple-\\d{2,3}|fuchsia-\\d{2,3}|pink-\\d{2,3}|rose-\\d{2,3})(?:$|\\s))/]",
+                    message: "Full-screen wrappers (min-h-screen) must use semantic backgrounds (bg-base/bg-surface/bg-surface-alt) instead of hardcoded palette classes.",
+                },
+                {
+                    selector: "TemplateElement[value.raw=/(?=.*(?:^|\\s)min-h-screen(?:$|\\s))(?=.*(?:^|\\s)bg-(?:white|black|slate-\\d{2,3}|gray-\\d{2,3}|zinc-\\d{2,3}|neutral-\\d{2,3}|stone-\\d{2,3}|red-\\d{2,3}|orange-\\d{2,3}|amber-\\d{2,3}|yellow-\\d{2,3}|lime-\\d{2,3}|green-\\d{2,3}|emerald-\\d{2,3}|teal-\\d{2,3}|cyan-\\d{2,3}|sky-\\d{2,3}|blue-\\d{2,3}|indigo-\\d{2,3}|violet-\\d{2,3}|purple-\\d{2,3}|fuchsia-\\d{2,3}|pink-\\d{2,3}|rose-\\d{2,3})(?:$|\\s))/]",
+                    message: "Full-screen wrappers (min-h-screen) must use semantic backgrounds (bg-base/bg-surface/bg-surface-alt) instead of hardcoded palette classes.",
+                },
                 // Catch orphaned CSS prefixes (e.g. "hover: " with no utility after it).
                 // These produce no CSS output and are always a bug from bad find-replace.
                 {

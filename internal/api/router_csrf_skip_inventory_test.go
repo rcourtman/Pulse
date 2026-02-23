@@ -77,4 +77,5 @@ var csrfSkipAllowlist = []string{
 	"/api/security/validate-bootstrap-token",
 	"/api/setup-script-url",
 	"/auth/cloud-handoff",
+	"/auth/trial-activate",
 }

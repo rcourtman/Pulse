@@ -233,6 +233,7 @@ Environment variables take precedence over `system.json`.
 | Variable | Description | Default |
 | ---------- | ------------- | --------- |
 | `PULSE_PUBLIC_URL` | URL for UI links, notifications, and OIDC. For reverse proxies, keep this as the public URL and use `PULSE_AGENT_CONNECT_URL` for agent installs if you need a direct/internal address. | Auto-detected |
+| `PULSE_PRO_TRIAL_SIGNUP_URL` | Hosted signup/checkout URL used when users click **Start Free Pro Trial**. Must be absolute `http(s)` URL. | `https://pulserelay.pro/start-pro-trial?...` |
 | `PULSE_AGENT_CONNECT_URL` | Dedicated direct URL for agents (overrides `PULSE_PUBLIC_URL` for agent install commands). Alias: `PULSE_AGENT_URL`. | *(unset)* |
 | `PULSE_AGENT_CONFIG_SIGNING_KEY` | Base64 Ed25519 private key used to sign remote agent config payloads. | *(unset)* |
 | `PULSE_AGENT_CONFIG_PUBLIC_KEYS` | Comma-separated base64 Ed25519 public keys (raw 32-byte or PKIX-encoded) trusted by agents. | *(unset)* |
@@ -340,6 +341,7 @@ These are primarily for development or test harnesses and should not be used in 
 | `PULSE_AI_ALLOW_LOOPBACK` | Allow AI tool HTTP fetches to loopback addresses | `false` |
 | `PULSE_LICENSE_PUBLIC_KEY` | Override embedded license public key (base64, dev only) | *(unset)* |
 | `PULSE_LICENSE_DEV_MODE` | Skip license verification (development only) | `false` |
+| `PULSE_ALLOW_LOCAL_TRIAL_START` | Re-enable legacy local `POST /api/license/trial/start` activation **only when dev mode is enabled** (`PULSE_DEV=true` or `NODE_ENV=development`). Ignored outside development mode. | `false` |
 
 ### Metrics Retention (Tiered)
 

@@ -230,7 +230,7 @@ jobs:
       - backend_tests
     if: ${{ needs.prepare.outputs.is_prerelease != 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     env:
       FRONTEND_DIST: frontend-modern/dist
     steps:
@@ -268,6 +268,12 @@ jobs:
       - name: Build mock GitHub server
         run: docker build -t pulse-mock-github:test tests/integration/mock-github-server
 
+      - name: Install integration test dependencies
+        working-directory: tests/integration
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
       - name: Run integration tests
         working-directory: tests/integration
         env:
@@ -275,6 +281,8 @@ jobs:
           MOCK_NETWORK_ERROR: "false"
           MOCK_RATE_LIMIT: "false"
           MOCK_STALE_RELEASE: "false"
+          PULSE_MULTI_TENANT_ENABLED: "true"
+          PULSE_E2E_BOOTSTRAP_TOKEN: 0123456789abcdef0123456789abcdef0123456789abcdef
         run: |
           docker compose -f docker-compose.test.yml up -d
 
@@ -305,6 +313,10 @@ jobs:
               exit 1
               ;;
           esac
+
+          echo "Running multi-tenant E2E suite..."
+          npx playwright test tests/03-multi-tenant.spec.ts --project=chromium --reporter=list
+
           docker compose -f docker-compose.test.yml down -v
 
       - name: Cleanup

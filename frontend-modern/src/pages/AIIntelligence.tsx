@@ -187,7 +187,13 @@ export function AIIntelligence() {
     if (startingTrial()) return;
     setStartingTrial(true);
     try {
-      await startProTrial();
+      const result = await startProTrial();
+      if (result?.outcome === 'redirect') {
+        if (typeof window !== 'undefined') {
+          window.location.href = result.actionUrl;
+        }
+        return;
+      }
       notificationStore.success('Pro trial started');
     } catch (err) {
       const statusCode = (err as { status?: number } | null)?.status;

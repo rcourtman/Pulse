@@ -123,6 +123,43 @@ func TestBuildEntitlementPayload_TrialState(t *testing.T) {
 	}
 }
 
+func TestBuildEntitlementPayload_CopiesStatusDisplayFields(t *testing.T) {
+	expiresAt := time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339)
+	graceEnd := time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)
+	status := &LicenseStatus{
+		Valid:          true,
+		Tier:           TierPro,
+		Email:          "owner@example.com",
+		ExpiresAt:      &expiresAt,
+		IsLifetime:     false,
+		DaysRemaining:  3,
+		InGracePeriod:  true,
+		GracePeriodEnd: &graceEnd,
+		Features:       append([]string(nil), TierFeatures[TierPro]...),
+	}
+
+	payload := BuildEntitlementPayload(status, string(SubStateGrace))
+
+	if !payload.Valid {
+		t.Fatalf("expected valid=true, got %v", payload.Valid)
+	}
+	if payload.LicensedEmail != "owner@example.com" {
+		t.Fatalf("expected licensed_email %q, got %q", "owner@example.com", payload.LicensedEmail)
+	}
+	if payload.ExpiresAt == nil || *payload.ExpiresAt != expiresAt {
+		t.Fatalf("expected expires_at %q, got %v", expiresAt, payload.ExpiresAt)
+	}
+	if payload.DaysRemaining != 3 {
+		t.Fatalf("expected days_remaining 3, got %d", payload.DaysRemaining)
+	}
+	if !payload.InGracePeriod {
+		t.Fatalf("expected in_grace_period=true, got %v", payload.InGracePeriod)
+	}
+	if payload.GracePeriodEnd == nil || *payload.GracePeriodEnd != graceEnd {
+		t.Fatalf("expected grace_period_end %q, got %v", graceEnd, payload.GracePeriodEnd)
+	}
+}
+
 func TestLimitState(t *testing.T) {
 	tests := []struct {
 		name    string

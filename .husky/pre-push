@@ -1,3 +1,6 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
 # Block pushing version tags directly — releases must go through the GitHub Actions workflow
 # (workflow_dispatch on create-release.yml). Pushing tags manually bypasses the release
 # pipeline which builds binaries, Docker images, and validates assets.
@@ -16,5 +19,11 @@ while read local_ref local_sha remote_ref remote_sha; do
     fi
 done
 
-# TypeScript type-check before push to prevent CI failures
-cd frontend-modern && npm run type-check
+# Frontend quality gates before push to prevent regressions in solo workflow.
+# This includes ESLint + theme audit + TypeScript checks.
+if [ -f frontend-modern/package.json ]; then
+    cd frontend-modern
+    npm run lint
+    npm run type-check
+    cd ..
+fi

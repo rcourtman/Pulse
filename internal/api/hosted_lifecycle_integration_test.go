@@ -88,6 +88,9 @@ func TestHostedLifecycle(t *testing.T) {
 	})
 
 	t.Run("Trial_Start_Countdown_Expiry", func(t *testing.T) {
+		t.Setenv("PULSE_ALLOW_LOCAL_TRIAL_START", "true")
+		t.Setenv("PULSE_DEV", "true")
+
 		baseDir := t.TempDir()
 		mtp := config.NewMultiTenantPersistence(baseDir)
 		handlers := NewLicenseHandlers(mtp, false) // self-hosted trial path
@@ -165,6 +168,9 @@ func TestHostedLifecycle(t *testing.T) {
 	})
 
 	t.Run("One_Trial_Per_Org_Enforcement", func(t *testing.T) {
+		t.Setenv("PULSE_ALLOW_LOCAL_TRIAL_START", "true")
+		t.Setenv("PULSE_DEV", "true")
+
 		baseDir := t.TempDir()
 		mtp := config.NewMultiTenantPersistence(baseDir)
 		handlers := NewLicenseHandlers(mtp, false)

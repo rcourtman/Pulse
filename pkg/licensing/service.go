@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"sort"
 	"strings"
@@ -355,6 +356,13 @@ func (s *Service) Status() *LicenseStatus {
 				if subState == SubStateGrace {
 					status.InGracePeriod = true
 				}
+				if subState == SubStateTrial {
+					if trialEndsAt := s.evaluator.TrialEndsAt(); trialEndsAt != nil {
+						expiresAt := time.Unix(*trialEndsAt, 0).Format(time.RFC3339)
+						status.ExpiresAt = &expiresAt
+						status.DaysRemaining = remainingDaysCeil(*trialEndsAt, time.Now().Unix())
+					}
+				}
 				status.Features = unionFeatures(TierFeatures[TierFree], evaluatorFeatures(s.evaluator))
 
 				if maxNodes, ok := s.evaluator.GetLimit("max_nodes"); ok {
@@ -495,6 +503,14 @@ func safeIntFromInt64(v int64) int {
 		return 0
 	}
 	return int(v)
+}
+
+func remainingDaysCeil(expiresAtUnix, nowUnix int64) int {
+	deltaSeconds := expiresAtUnix - nowUnix
+	if deltaSeconds <= 0 {
+		return 0
+	}
+	return int(math.Ceil(float64(deltaSeconds) / 86400.0))
 }
 
 func cloneLicense(in *License) *License {
