@@ -213,9 +213,35 @@ func (p *Provisioner) maybeStartContainer(ctx context.Context, tenantID, tenantD
 	}
 	id, err := p.docker.CreateAndStart(ctx, tenantID, tenantDataDir)
 	if err != nil {
+		if p.allowDockerless && dockerUnavailableError(err) {
+			log.Warn().
+				Err(err).
+				Str("tenant_id", tenantID).
+				Msg("Docker start failed; continuing because CP_ALLOW_DOCKERLESS_PROVISIONING is enabled")
+			return "", nil
+		}
 		return "", err
 	}
 	return id, nil
+}
+
+func dockerUnavailableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "cannot connect to the docker daemon"):
+		return true
+	case strings.Contains(msg, "dial unix") && strings.Contains(msg, "docker.sock"):
+		return true
+	case strings.Contains(msg, "connection refused"):
+		return true
+	case strings.Contains(msg, "no such file or directory") && strings.Contains(msg, "docker.sock"):
+		return true
+	default:
+		return false
+	}
 }
 
 func (p *Provisioner) ensureAccountOwnerMembership(accountID, email string) error {

@@ -1,4 +1,4 @@
-# Trial E2E on Proxmox LXC (Snapshot-Clean)
+# Trial + Cloud E2E on Proxmox LXC (Snapshot-Clean)
 
 This runbook defines a clean, repeatable end-to-end trial validation loop for a Pulse binary running in Proxmox LXC.
 
@@ -6,10 +6,12 @@ Goal: every eval run starts from the exact same filesystem and runtime state, so
 
 ## Scope
 
-- Validates live trial gate behavior (`trial_signup_required`)
-- Validates hosted signup page rendering
-- Validates checkout redirect contract to Stripe hosted checkout
-- Does **not** complete payment or webhook activation
+- Validates trial gate behavior (`trial_signup_required`)
+- Validates real Stripe sandbox checkout completion for Pulse Pro trial
+- Validates post-trial downgrade behavior by forcing trial expiry and asserting entitlements
+- Validates real Stripe sandbox checkout completion for Pulse Cloud signup
+- Validates cloud post-checkout lifecycle transition to canceled state
+- Validates post-checkout trial activation state in Pulse (`/settings?trial=activated`)
 
 ## Prerequisites
 
@@ -17,6 +19,8 @@ Goal: every eval run starts from the exact same filesystem and runtime state, so
 - LXC with Pulse + control plane binaries and env configured
 - Test credentials set (recommended for deterministic checks): `admin/admin`
 - Required tools inside LXC: `curl`, `jq`, `ca-certificates`
+- Stripe sandbox keys and test recurring prices configured in control-plane env
+- Playwright runner host that can reach both Pulse (`:7655`) and control-plane (`:8443`)
 
 Install required tools inside container:
 
@@ -99,11 +103,35 @@ done
 
 If each run prints `PASS: trial signup contract validated`, state pollution between runs is eliminated.
 
-## Known Limitation
+## Full Sandbox E2E (Playwright)
 
-This runbook validates the real checkout redirect contract, but does not automate full Stripe completion in live mode.
+To prove user-visible end-to-end behavior (including Stripe sandbox checkout completion), run the integration eval pack after each rollback:
 
-To automate final activation end-to-end:
+```bash
+cd tests/integration
+PVE_HOST=<pve-host> PVE_CTID=<ctid> ./scripts/run-lxc-sandbox-evals.sh
+```
 
-- use Stripe test-mode credentials/prices for non-production automation, or
-- complete live checkout manually and verify webhook-driven activation separately.
+### Optional: Inject Latest Control-Plane Binary Per Rollback
+
+If your snapshot contains an older control-plane binary, build a Linux binary from current source and inject it on every rollback:
+
+```bash
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /tmp/pulse-control-plane-e2e-linux-amd64 ./cmd/pulse-control-plane
+cd tests/integration
+PVE_HOST=<pve-host> \
+PVE_CTID=<ctid> \
+PULSE_E2E_CP_BINARY=/tmp/pulse-control-plane-e2e-linux-amd64 \
+./scripts/run-lxc-sandbox-evals.sh
+```
+
+`run-lxc-sandbox-evals.sh` will copy the binary into `/opt/pulse-test/bin/pulse-control-plane` inside the container after each snapshot rollback.
+
+Use Stripe sandbox test card defaults unless overridden:
+
+- `4242 4242 4242 4242`
+- expiry `12/34`
+- CVC `123`
+- postal code `10001`
+
+If any scenario fails, rollback to `pre-eval-baseline` before re-running.

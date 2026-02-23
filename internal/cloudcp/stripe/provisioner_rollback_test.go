@@ -124,3 +124,33 @@ func TestHandleCheckoutRollbackAllowsRetry(t *testing.T) {
 		t.Fatalf("state = %q, want %q", created.State, registry.TenantStateActive)
 	}
 }
+
+func TestHandleCheckoutDockerlessFallbackWhenDockerDaemonUnavailable(t *testing.T) {
+	reg := newStripeTestRegistry(t)
+	tenantsDir := t.TempDir()
+
+	p := NewProvisioner(reg, tenantsDir, newFailingDockerManager(t), nil, "https://cloud.example.com", nil, "", true)
+	session := CheckoutSession{
+		Customer:      "cus_dockerless_123",
+		Subscription:  "sub_dockerless_123",
+		CustomerEmail: "owner@example.com",
+	}
+
+	if err := p.HandleCheckout(context.Background(), session); err != nil {
+		t.Fatalf("HandleCheckout: %v", err)
+	}
+
+	tenant, err := reg.GetByStripeCustomerID(session.Customer)
+	if err != nil {
+		t.Fatalf("GetByStripeCustomerID: %v", err)
+	}
+	if tenant == nil {
+		t.Fatal("expected tenant to be created")
+	}
+	if tenant.State != registry.TenantStateActive {
+		t.Fatalf("state = %q, want %q", tenant.State, registry.TenantStateActive)
+	}
+	if tenant.ContainerID != "" {
+		t.Fatalf("container id = %q, want empty in dockerless fallback mode", tenant.ContainerID)
+	}
+}

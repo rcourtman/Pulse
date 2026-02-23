@@ -29,11 +29,16 @@ End-to-end Playwright tests that validate critical user flows against a running 
   - Authenticated Settings → Authentication page
 - `tests/07-trial-signup-return.spec.ts` — trial workflow contract:
   - Click "Start 14-day Pro Trial" redirects to hosted signup URL
-  - After returning from signup, billing panel shows real trial expiry and countdown (not lifetime)
+  - Complete real Stripe sandbox checkout
+  - Return to Pulse and verify real trial expiry/countdown state (not lifetime)
 - `tests/08-cloud-hosting.spec.ts` — hosted cloud signup contract:
-  - Public `/cloud/signup` form submits workspace creation request
-  - Magic-link request path succeeds
-  - Unavailable hosted mode shows fallback portal link
+  - Public `/cloud/signup` form creates a real Stripe sandbox checkout session
+  - Checkout completes and returns to hosted signup completion page
+  - Magic-link request path succeeds via real public endpoint
+- `tests/09-cloud-billing-lifecycle.spec.ts` — hosted cloud post-checkout lifecycle:
+  - Replays verified Stripe webhook events into control plane
+  - Asserts tenant activation after checkout event processing
+  - Asserts tenant cancellation after subscription deletion event processing
 
 ## Running Tests
 
@@ -45,7 +50,7 @@ npm test
 ```
 
 ### Eval Packs (No Manual Steps)
-Run the curated scenario pack (multi-tenant, trial-signup, cloud-hosting) and emit a report:
+Run the curated scenario pack (multi-tenant, trial-signup, cloud-hosting, cloud-billing-lifecycle) and emit a report:
 ```bash
 cd tests/integration
 npm run evals
@@ -59,6 +64,11 @@ npm run evals -- --scenario trial-signup
 Reports are written to:
 - `tests/integration/eval-results/<timestamp>/report.json`
 - `tests/integration/eval-results/<timestamp>/report.md`
+
+Cloud lifecycle evals require these environment variables (test-mode only):
+- `PULSE_CP_ADMIN_KEY`
+- `PULSE_E2E_STRIPE_API_KEY`
+- `PULSE_E2E_STRIPE_WEBHOOK_SECRET`
 
 ### Agentic Mode (External Browser Agent)
 The eval runner supports external browser-capable agents through a command template:
@@ -103,6 +113,22 @@ For real trial workflow validation against a fresh LXC each run:
 
 - Runbook: `docs/operations/TRIAL_E2E_LXC_SNAPSHOT_RUNBOOK.md`
 - Probe script: `tests/integration/scripts/trial-signup-contract.sh`
+- Full sandbox orchestration (multi-tenant + trial + cloud, with per-scenario snapshot reset):
+  - `tests/integration/scripts/run-lxc-sandbox-evals.sh`
+  - Includes post-trial expiry downgrade verification and cloud subscription cancellation lifecycle verification
+
+Example:
+```bash
+cd tests/integration
+./scripts/run-lxc-sandbox-evals.sh
+```
+
+If the snapshot has stale binaries, inject the latest Linux control-plane build on each rollback:
+```bash
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /tmp/pulse-control-plane-e2e-linux-amd64 ./cmd/pulse-control-plane
+cd tests/integration
+PULSE_E2E_CP_BINARY=/tmp/pulse-control-plane-e2e-linux-amd64 ./scripts/run-lxc-sandbox-evals.sh
+```
 
 ### Run Theme Visual Regression Suite
 ```bash
