@@ -111,6 +111,8 @@ test-results/
 frontend-modern/test-results/
 playwright-report/
 frontend-modern/playwright-report/
+tests/integration/eval-results/
+tests/integration/debug-stripe.png
 
 *.test.js
 *.test.md
