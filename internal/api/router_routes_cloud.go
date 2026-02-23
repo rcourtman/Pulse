@@ -10,6 +10,9 @@ func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers
 	if r.signupRateLimiter == nil {
 		r.signupRateLimiter = NewRateLimiter(5, 1*time.Hour)
 	}
+	if r.handoffExchangeRateLimiter == nil {
+		r.handoffExchangeRateLimiter = NewRateLimiter(20, 1*time.Minute)
+	}
 
 	routerConfig := r.config
 	if routerConfig == nil {
@@ -66,6 +69,7 @@ func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers
 	// Handler self-guards via handoff key file check — returns 404 if not a cloud tenant.
 	r.mux.HandleFunc("/auth/cloud-handoff", HandleCloudHandoff(routerConfig.DataPath))
 	// Workspace switch handoff: control-plane posts a short-lived JWT for session exchange.
-	// Handler is token-authenticated and self-guards with the tenant handoff key.
-	r.mux.HandleFunc("/api/cloud/handoff/exchange", HandleHandoffExchange(routerConfig.DataPath))
+	// Handler is token-authenticated, self-guards with the tenant handoff key, and
+	// is rate-limited independently because the endpoint is public+CSRF-exempt.
+	r.mux.HandleFunc("/api/cloud/handoff/exchange", r.handoffExchangeRateLimiter.Middleware(HandleHandoffExchange(routerConfig.DataPath)))
 }

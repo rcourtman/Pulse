@@ -61,53 +61,54 @@ import (
 
 // Router handles HTTP routing
 type Router struct {
-	mux                       *http.ServeMux
-	config                    *config.Config
-	monitor                   *monitoring.Monitor            // Legacy/Default support
-	mtMonitor                 *monitoring.MultiTenantMonitor // Multi-tenant manager
-	alertHandlers             *AlertHandlers
-	configHandlers            *ConfigHandlers
-	trueNASHandlers           *TrueNASHandlers
-	notificationHandlers      *NotificationHandlers
-	notificationQueueHandlers *NotificationQueueHandlers
-	dockerAgentHandlers       *DockerAgentHandlers
-	kubernetesAgentHandlers   *KubernetesAgentHandlers
-	hostAgentHandlers         *HostAgentHandlers
-	systemSettingsHandler     *SystemSettingsHandler
-	aiSettingsHandler         *AISettingsHandler
-	aiHandler                 *AIHandler // AI chat handler
-	discoveryHandlers         *DiscoveryHandlers
-	resourceHandlers          *ResourceHandlers
-	resourceRegistry          *unifiedresources.ResourceRegistry
-	trueNASPoller             *monitoring.TrueNASPoller
-	monitorResourceAdapter    *unifiedresources.MonitorAdapter
-	aiUnifiedAdapter          *unifiedresources.UnifiedAIAdapter
-	reportingHandlers         *ReportingHandlers
-	configProfileHandler      *ConfigProfileHandler
-	licenseHandlers           *LicenseHandlers
-	recoveryHandlers          *RecoveryHandlers
-	rbacProvider              *TenantRBACProvider
-	logHandlers               *LogHandlers
-	agentExecServer           *agentexec.Server
-	wsHub                     *websocket.Hub
-	reloadFunc                func() error
-	updateManager             *updates.Manager
-	updateHistory             *updates.UpdateHistory
-	exportLimiter             *RateLimiter
-	downloadLimiter           *RateLimiter
-	signupRateLimiter         *RateLimiter
-	tenantRateLimiter         *TenantRateLimiter
-	persistence               *config.ConfigPersistence
-	multiTenant               *config.MultiTenantPersistence
-	oidcMu                    sync.Mutex
-	oidcService               *OIDCService
-	oidcManager               *OIDCServiceManager
-	samlManager               *SAMLServiceManager
-	ssoConfig                 *config.SSOConfig
-	authorizer                auth.Authorizer
-	wrapped                   http.Handler
-	serverVersion             string
-	projectRoot               string
+	mux                        *http.ServeMux
+	config                     *config.Config
+	monitor                    *monitoring.Monitor            // Legacy/Default support
+	mtMonitor                  *monitoring.MultiTenantMonitor // Multi-tenant manager
+	alertHandlers              *AlertHandlers
+	configHandlers             *ConfigHandlers
+	trueNASHandlers            *TrueNASHandlers
+	notificationHandlers       *NotificationHandlers
+	notificationQueueHandlers  *NotificationQueueHandlers
+	dockerAgentHandlers        *DockerAgentHandlers
+	kubernetesAgentHandlers    *KubernetesAgentHandlers
+	hostAgentHandlers          *HostAgentHandlers
+	systemSettingsHandler      *SystemSettingsHandler
+	aiSettingsHandler          *AISettingsHandler
+	aiHandler                  *AIHandler // AI chat handler
+	discoveryHandlers          *DiscoveryHandlers
+	resourceHandlers           *ResourceHandlers
+	resourceRegistry           *unifiedresources.ResourceRegistry
+	trueNASPoller              *monitoring.TrueNASPoller
+	monitorResourceAdapter     *unifiedresources.MonitorAdapter
+	aiUnifiedAdapter           *unifiedresources.UnifiedAIAdapter
+	reportingHandlers          *ReportingHandlers
+	configProfileHandler       *ConfigProfileHandler
+	licenseHandlers            *LicenseHandlers
+	recoveryHandlers           *RecoveryHandlers
+	rbacProvider               *TenantRBACProvider
+	logHandlers                *LogHandlers
+	agentExecServer            *agentexec.Server
+	wsHub                      *websocket.Hub
+	reloadFunc                 func() error
+	updateManager              *updates.Manager
+	updateHistory              *updates.UpdateHistory
+	exportLimiter              *RateLimiter
+	downloadLimiter            *RateLimiter
+	signupRateLimiter          *RateLimiter
+	handoffExchangeRateLimiter *RateLimiter
+	tenantRateLimiter          *TenantRateLimiter
+	persistence                *config.ConfigPersistence
+	multiTenant                *config.MultiTenantPersistence
+	oidcMu                     sync.Mutex
+	oidcService                *OIDCService
+	oidcManager                *OIDCServiceManager
+	samlManager                *SAMLServiceManager
+	ssoConfig                  *config.SSOConfig
+	authorizer                 auth.Authorizer
+	wrapped                    http.Handler
+	serverVersion              string
+	projectRoot                string
 	// Cached system settings to avoid loading from disk on every request
 	settingsMu           sync.RWMutex
 	cachedAllowEmbedding bool
@@ -181,27 +182,28 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	lifecycleCtx, lifecycleCancel := context.WithCancel(context.Background())
 
 	r := &Router{
-		mux:               http.NewServeMux(),
-		config:            cfg,
-		monitor:           monitor,
-		mtMonitor:         mtMonitor,
-		wsHub:             wsHub,
-		reloadFunc:        reloadFunc,
-		updateManager:     updateManager,
-		updateHistory:     updateHistory,
-		exportLimiter:     NewRateLimiter(5, 1*time.Minute),  // 5 attempts per minute
-		downloadLimiter:   NewRateLimiter(60, 1*time.Minute), // downloads/installers per minute per IP
-		signupRateLimiter: NewRateLimiter(5, 1*time.Hour),    // signup attempts per hour per IP
-		persistence:       config.NewConfigPersistence(cfg.DataPath),
-		multiTenant:       config.NewMultiTenantPersistence(cfg.DataPath),
-		authorizer:        auth.GetAuthorizer(),
-		serverVersion:     strings.TrimSpace(serverVersion),
-		projectRoot:       projectRoot,
-		checksumCache:     make(map[string]checksumCacheEntry),
-		lifecycleCtx:      lifecycleCtx,
-		lifecycleCancel:   lifecycleCancel,
-		hostedMode:        os.Getenv("PULSE_HOSTED_MODE") == "true",
-		conversionStore:   store,
+		mux:                        http.NewServeMux(),
+		config:                     cfg,
+		monitor:                    monitor,
+		mtMonitor:                  mtMonitor,
+		wsHub:                      wsHub,
+		reloadFunc:                 reloadFunc,
+		updateManager:              updateManager,
+		updateHistory:              updateHistory,
+		exportLimiter:              NewRateLimiter(5, 1*time.Minute),  // 5 attempts per minute
+		downloadLimiter:            NewRateLimiter(60, 1*time.Minute), // downloads/installers per minute per IP
+		signupRateLimiter:          NewRateLimiter(5, 1*time.Hour),    // signup attempts per hour per IP
+		handoffExchangeRateLimiter: NewRateLimiter(20, 1*time.Minute), // cloud handoff token exchange per minute per IP
+		persistence:                config.NewConfigPersistence(cfg.DataPath),
+		multiTenant:                config.NewMultiTenantPersistence(cfg.DataPath),
+		authorizer:                 auth.GetAuthorizer(),
+		serverVersion:              strings.TrimSpace(serverVersion),
+		projectRoot:                projectRoot,
+		checksumCache:              make(map[string]checksumCacheEntry),
+		lifecycleCtx:               lifecycleCtx,
+		lifecycleCancel:            lifecycleCancel,
+		hostedMode:                 os.Getenv("PULSE_HOSTED_MODE") == "true",
+		conversionStore:            store,
 	}
 	if r.hostedMode {
 		// Use defaults: 2000 req/min per org.
