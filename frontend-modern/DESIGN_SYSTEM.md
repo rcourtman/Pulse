@@ -10,13 +10,18 @@ This document outlines the standard UI primitives, tokens, and components that c
 
 ## Enforcement
 - `npm run lint` is a hard gate for design-system regressions in `src/components` and `src/pages`.
+- `npm run lint:theme` is a hard gate for theme governance across the whole frontend (`src/**` + `index.html`).
 - `npm run lint:headers` audits header composition and page-level header usage policy.
 - Routed surfaces must use shared header primitives (`PageHeader`, `SectionHeader`, `SettingsPanel`, `OperationsPanel`) instead of raw `<h1>` markup.
 - Only explicit non-visual route wrappers are exempt from header primitive requirements.
+- Theme ownership policy:
+  - Only `src/utils/theme.ts` and `index.html` may read/write theme keys (`pulseThemePreference`, `darkMode`, `pulse_dark_mode`) or toggle the root `dark` class.
+  - Full-screen shells (`min-h-screen`) must use semantic backgrounds (`bg-base`, `bg-surface`, `bg-surface-alt`) instead of hardcoded palettes.
 - CI must fail on:
   - orphaned utility prefixes (for example `dark:hover:` or `group-hover:` with no class after them)
   - `dark:bg-white` / `dark:hover:bg-white`
   - low-contrast class combinations like `bg-base` + `text-white`
+  - theme owner violations or non-semantic full-screen backgrounds reported by `lint:theme`
 - If a UI requires exceptional styling, prefer adding a semantic token or shared component rather than bypassing the rule.
 
 ---
@@ -57,11 +62,8 @@ Reusable component classes defined in `index.css` using `@layer base`. Use these
 | Class | What it provides | Use for |
 |:---|:---|:---|
 | `.card` | `bg-surface border border-border shadow-sm rounded-md` | Content panels, dialog boxes |
-| `.card-hover` | `hover:bg-surface-hover transition-colors` | Hoverable list items, clickable rows |
 | `.form-input` | Full input styling (border, bg, text, focus ring, disabled state) | Text inputs, textareas |
 | `.form-select` | Same as `.form-input` + dropdown arrow padding | Select dropdowns |
-| `.btn-secondary` | Bordered ghost button with hover | Cancel buttons, secondary actions |
-| `.table-header` | `text-muted uppercase tracking-wider` | Table column headers |
 | `.table-row` | `border-b border-border hover:bg-surface-hover` | Table body rows |
 
 ```tsx

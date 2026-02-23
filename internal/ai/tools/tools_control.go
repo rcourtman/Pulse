@@ -142,7 +142,7 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 	if routing.AgentID == "" {
 		if targetHost != "" {
 			if routing.TargetType == "container" || routing.TargetType == "vm" {
-				return NewErrorResult(fmt.Errorf("'%s' is a %s but no agent is available on its Proxmox host. Install Pulse Unified Agent on the Proxmox node.", targetHost, routing.TargetType)), nil
+				return NewErrorResult(fmt.Errorf("'%s' is a %s but no agent is available on its Proxmox host; install Pulse Unified Agent on the Proxmox node", targetHost, routing.TargetType)), nil
 			}
 			return NewErrorResult(fmt.Errorf("no agent available for target '%s'. %s", targetHost, formatAvailableAgentHosts(e.agentServer.GetConnectedAgents()))), nil
 		}
@@ -283,14 +283,14 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 
 	guest, err := e.resolveGuest(guestID)
 	if err != nil {
-		return NewErrorResult(fmt.Errorf("Could not find guest '%s': %v", guestID, err)), nil
+		return NewErrorResult(fmt.Errorf("could not find guest '%s': %v", guestID, err)), nil
 	}
 
 	// Check if guest is protected
 	vmidStr := fmt.Sprintf("%d", guest.VMID)
 	for _, protected := range e.protectedGuests {
 		if protected == vmidStr || protected == guest.Name {
-			return NewErrorResult(fmt.Errorf("Guest %s (VMID %d) is protected and cannot be controlled by Pulse Assistant.", guest.Name, guest.VMID)), nil
+			return NewErrorResult(fmt.Errorf("guest %s (VMID %d) is protected and cannot be controlled by Pulse Assistant", guest.Name, guest.VMID)), nil
 		}
 	}
 
@@ -302,7 +302,7 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 
 	// For delete action, verify guest is stopped first
 	if action == "delete" && guest.Status != "stopped" {
-		return NewErrorResult(fmt.Errorf("Cannot delete %s (VMID %d) - it is currently %s. Stop it first, then try deleting again.", guest.Name, guest.VMID, guest.Status)), nil
+		return NewErrorResult(fmt.Errorf("cannot delete %s (VMID %d) - it is currently %s; stop it first, then try deleting again", guest.Name, guest.VMID, guest.Status)), nil
 	}
 
 	var command string
@@ -356,7 +356,7 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 
 	agentID := e.findAgentForNode(guest.Node)
 	if agentID == "" {
-		return NewErrorResult(fmt.Errorf("No agent available on node '%s'. Install Pulse Unified Agent on the Proxmox host to enable control.", guest.Node)), nil
+		return NewErrorResult(fmt.Errorf("no agent available on node '%s'; install Pulse Unified Agent on the Proxmox host to enable control", guest.Node)), nil
 	}
 
 	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
@@ -750,7 +750,7 @@ func (e *PulseToolExecutor) resolveDockerContainer(containerName, hostName strin
 		if len(hostNames) == 0 {
 			return nil, nil, fmt.Errorf("container '%s' exists on multiple Docker hosts; specify host", containerName)
 		}
-		return nil, nil, fmt.Errorf("container '%s' exists on multiple Docker hosts: %s. Specify host.", containerName, strings.Join(hostNames, ", "))
+		return nil, nil, fmt.Errorf("container '%s' exists on multiple Docker hosts: %s. Specify host", containerName, strings.Join(hostNames, ", "))
 	}
 
 	match := matches[0]

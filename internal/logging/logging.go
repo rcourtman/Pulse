@@ -35,7 +35,9 @@ const (
 	logDirPerm  os.FileMode = 0700
 )
 
-// Config controls logger initialization.
+// Config controls logger initialization and behavior.
+// Use this to configure output format, verbosity level, file rotation,
+// and other logging preferences for the application.
 type Config struct {
 	Format     string // "json", "console", or "auto"
 	Level      string // "debug", "info", "warn", "error"

@@ -17,6 +17,8 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// defaultQueueMaxAttempts is the default number of delivery attempts
+// before a notification is moved to the dead-letter queue.
 const defaultQueueMaxAttempts = 3
 
 // NotificationQueueStatus represents the status of a queued notification

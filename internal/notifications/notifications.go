@@ -48,6 +48,8 @@ const (
 	metadataResolvedAt      = "resolvedAt"
 )
 
+// notificationEvent represents the type of notification being processed.
+// It distinguishes between new alerts and resolved/cleared alerts.
 type notificationEvent string
 
 const (

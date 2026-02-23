@@ -35,6 +35,9 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// Config holds all configuration needed to run the Kubernetes agent.
+// It specifies how to connect to the Pulse backend, the Kubernetes cluster,
+// and what resources to include in reports.
 type Config struct {
 	PulseURL           string
 	APIToken           string
@@ -58,6 +61,10 @@ type Config struct {
 	MaxPods               int  // Max pods included in the report
 }
 
+// Agent collects and reports Kubernetes cluster state to Pulse.
+// It periodically gathers pod, deployment, and node metrics, then sends
+// them to the configured Pulse URL. The agent handles authentication,
+// Kubernetes API connection, and automatic retry on failure.
 type Agent struct {
 	cfg        Config
 	logger     zerolog.Logger
