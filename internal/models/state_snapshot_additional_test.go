@@ -114,7 +114,7 @@ func TestStateSnapshotResolveResourceDockerAndKubernetesRouting(t *testing.T) {
 		{
 			name:       "lxc",
 			query:      "lxc-app",
-			wantType:   "lxc",
+			wantType:   "system-container",
 			wantTarget: "lxc-app",
 			wantName:   "lxc-app",
 		},

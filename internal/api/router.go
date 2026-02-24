@@ -81,8 +81,9 @@ type Router struct {
 	resourceRegistry           *unifiedresources.ResourceRegistry
 	trueNASPoller              *monitoring.TrueNASPoller
 	monitorResourceAdapter     *unifiedresources.MonitorAdapter
+	monitorResourceAdapters    map[string]*unifiedresources.MonitorAdapter
+	monitorAdapterMu           sync.Mutex
 	monitorSupplementalRecords map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider
-	aiUnifiedAdapter           *unifiedresources.UnifiedAIAdapter
 	reportingHandlers          *ReportingHandlers
 	configProfileHandler       *ConfigProfileHandler
 	licenseHandlers            *LicenseHandlers
@@ -128,6 +129,8 @@ type Router struct {
 	lifecycleCancel      context.CancelFunc
 	hostedMode           bool
 	conversionStore      *conversionStore
+	patrolLifecycleMu    sync.Mutex
+	startedPatrolOrgs    map[string]bool
 }
 
 func pulseBinDir() string {
@@ -205,7 +208,9 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		lifecycleCancel:            lifecycleCancel,
 		hostedMode:                 os.Getenv("PULSE_HOSTED_MODE") == "true",
 		conversionStore:            store,
+		monitorResourceAdapters:    make(map[string]*unifiedresources.MonitorAdapter),
 		monitorSupplementalRecords: make(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider),
+		startedPatrolOrgs:          make(map[string]bool),
 	}
 	if r.hostedMode {
 		// Use defaults: 2000 req/min per org.
@@ -213,7 +218,6 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	}
 	r.resourceRegistry = unifiedresources.NewRegistry(nil)
 	r.monitorResourceAdapter = unifiedresources.NewMonitorAdapter(r.resourceRegistry)
-	r.aiUnifiedAdapter = unifiedresources.NewUnifiedAIAdapter(r.resourceRegistry)
 
 	// Sync the configured admin user to the authorizer (if supported)
 	if cfg.AuthUser != "" {
@@ -365,6 +369,9 @@ func (r *Router) setupRoutes() {
 	rbacProvider := NewTenantRBACProvider(r.config.DataPath)
 	r.rbacProvider = rbacProvider
 	orgHandlers := NewOrgHandlers(r.multiTenant, r.mtMonitor, rbacProvider)
+	orgHandlers.SetOnDelete(func(ctx context.Context, orgID string) error {
+		return r.CleanupTenant(ctx, orgID)
+	})
 	// Wire license service provider so middleware can access per-tenant license services
 	SetLicenseServiceProvider(r.licenseHandlers)
 	r.reportingHandlers = NewReportingHandlers(r.mtMonitor, recoveryManager)
@@ -441,7 +448,7 @@ func (r *Router) setupRoutes() {
 	// Inject state provider so AI has access to full infrastructure context (VMs, containers, IPs)
 	if r.monitor != nil {
 		r.aiSettingsHandler.SetStateProvider(r.monitor)
-		r.aiSettingsHandler.SetReadState(r.resourceRegistry)
+		r.aiSettingsHandler.SetReadState(r.defaultReadState())
 		// Inject alert provider so AI has awareness of current alerts
 		// Also inject alert resolver so AI Patrol can autonomously resolve alerts when issues are fixed
 		if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
@@ -454,10 +461,10 @@ func (r *Router) setupRoutes() {
 		}
 	}
 	// Inject unified resource provider for AI context and routing.
-	if r.aiUnifiedAdapter != nil {
-		r.aiSettingsHandler.SetUnifiedResourceProvider(r.aiUnifiedAdapter)
+	if provider := r.defaultUnifiedResourceProvider(); provider != nil {
+		r.aiSettingsHandler.SetUnifiedResourceProvider(provider)
 	} else {
-		log.Warn().Msg("[Router] aiUnifiedAdapter is nil, cannot inject unified resource provider")
+		log.Warn().Msg("[Router] unified resource provider is nil, cannot inject unified resource provider")
 	}
 	// Inject metadata provider for AI URL discovery feature
 	// This allows AI to set resource URLs when it discovers web services
@@ -470,8 +477,11 @@ func (r *Router) setupRoutes() {
 
 	// AI chat handler
 	r.aiHandler = NewAIHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
-	r.aiHandler.SetReadState(r.resourceRegistry)
+	r.aiHandler.SetReadState(r.defaultReadState())
 	r.aiHandler.SetRecoveryManager(recoveryManager)
+	r.aiHandler.SetServiceInitializer(func(ctx context.Context, service AIService) {
+		r.wireAIChatDependenciesForService(ctx, service)
+	})
 
 	// AI-powered infrastructure discovery handlers
 	// Note: The actual service is wired up later via SetDiscoveryService
@@ -527,7 +537,18 @@ func (r *Router) setupRoutes() {
 
 // CleanupTenant removes all per-tenant resources (RBAC, AI, License) for a deleted org.
 func (r *Router) CleanupTenant(ctx context.Context, orgID string) error {
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" || orgID == "default" {
+		return nil
+	}
+
 	var errs []error
+
+	r.StopPatrolForOrg(orgID)
+
+	if r.aiSettingsHandler != nil {
+		r.aiSettingsHandler.RemoveTenantService(orgID)
+	}
 
 	if r.rbacProvider != nil {
 		if err := r.rbacProvider.RemoveTenant(orgID); err != nil {
@@ -544,6 +565,9 @@ func (r *Router) CleanupTenant(ctx context.Context, orgID string) error {
 	if r.licenseHandlers != nil {
 		r.licenseHandlers.RemoveTenantService(orgID)
 	}
+	r.monitorAdapterMu.Lock()
+	delete(r.monitorResourceAdapters, orgID)
+	r.monitorAdapterMu.Unlock()
 
 	if len(errs) > 0 {
 		return errors.Join(errs...)
@@ -874,7 +898,8 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 		// (Critical: patrol service is created lazily in SetStateProvider)
 		if r.aiSettingsHandler != nil {
 			r.aiSettingsHandler.SetStateProvider(m)
-			r.aiSettingsHandler.SetReadState(r.resourceRegistry)
+			r.aiSettingsHandler.SetReadState(r.defaultReadState())
+			r.aiSettingsHandler.SetUnifiedResourceProvider(r.defaultUnifiedResourceProvider())
 			// Also inject alert provider and resolver now that monitor is available
 			if alertManager := m.GetAlertManager(); alertManager != nil {
 				alertAdapter := ai.NewAlertManagerAdapter(alertManager)
@@ -884,6 +909,9 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 			if incidentStore := m.GetIncidentStore(); incidentStore != nil {
 				r.aiSettingsHandler.SetIncidentStore(incidentStore)
 			}
+		}
+		if r.aiHandler != nil {
+			r.aiHandler.SetReadState(r.defaultReadState())
 		}
 
 		// Set up Docker detector for automatic Docker detection in LXC containers
@@ -912,14 +940,90 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 	}
 }
 
+func (r *Router) defaultReadState() unifiedresources.ReadState {
+	if r == nil {
+		return nil
+	}
+
+	if r.monitor != nil {
+		if readState := r.monitor.GetUnifiedReadState(); readState != nil {
+			return readState
+		}
+	}
+	if r.monitorResourceAdapter != nil {
+		return r.monitorResourceAdapter
+	}
+	return r.resourceRegistry
+}
+
+func (r *Router) unifiedResourceProviderForMonitor(m *monitoring.Monitor) ai.UnifiedResourceProvider {
+	if r == nil {
+		return nil
+	}
+
+	if m != nil {
+		if readState := m.GetUnifiedReadState(); readState != nil {
+			if provider, ok := readState.(ai.UnifiedResourceProvider); ok && provider != nil {
+				return provider
+			}
+		}
+	}
+
+	if adapter := r.monitorAdapterForMonitor(m); adapter != nil {
+		return adapter
+	}
+	if r.monitorResourceAdapter != nil {
+		return r.monitorResourceAdapter
+	}
+	return nil
+}
+
+func (r *Router) defaultUnifiedResourceProvider() ai.UnifiedResourceProvider {
+	if r == nil {
+		return nil
+	}
+
+	if r.monitor != nil {
+		if provider := r.unifiedResourceProviderForMonitor(r.monitor); provider != nil {
+			return provider
+		}
+	}
+	return r.unifiedResourceProviderForMonitor(nil)
+}
+
+func (r *Router) monitorAdapterForMonitor(m *monitoring.Monitor) *unifiedresources.MonitorAdapter {
+	if r == nil || m == nil {
+		return nil
+	}
+
+	orgID := strings.TrimSpace(m.GetOrgID())
+	if orgID == "" || orgID == "default" {
+		return r.monitorResourceAdapter
+	}
+
+	r.monitorAdapterMu.Lock()
+	defer r.monitorAdapterMu.Unlock()
+
+	if r.monitorResourceAdapters == nil {
+		r.monitorResourceAdapters = make(map[string]*unifiedresources.MonitorAdapter)
+	}
+	if existing := r.monitorResourceAdapters[orgID]; existing != nil {
+		return existing
+	}
+
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	r.monitorResourceAdapters[orgID] = adapter
+	return adapter
+}
+
 func (r *Router) configureMonitorDependencies(m *monitoring.Monitor) {
 	if r == nil || m == nil {
 		return
 	}
 
-	if r.monitorResourceAdapter != nil {
+	if adapter := r.monitorAdapterForMonitor(m); adapter != nil {
 		log.Debug().Msg("[Router] Injecting unified resource adapter into monitor")
-		m.SetResourceStore(r.monitorResourceAdapter)
+		m.SetResourceStore(adapter)
 	}
 
 	if len(r.monitorSupplementalRecords) == 0 {
@@ -966,24 +1070,6 @@ func (r *Router) setMonitorSupplementalRecordsProvider(source unifiedresources.D
 	}
 }
 
-// SetUnifiedResourceProvider forwards the unified-resource-native provider to active AI services.
-func (h *AISettingsHandler) SetUnifiedResourceProvider(urp ai.UnifiedResourceProvider) {
-	if h == nil {
-		return
-	}
-	h.unifiedResourceProvider = urp
-
-	if h.legacyAIService != nil {
-		h.legacyAIService.SetUnifiedResourceProvider(urp)
-	}
-
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
-		svc.SetUnifiedResourceProvider(urp)
-	}
-}
-
 // getTenantMonitor returns the appropriate monitor for the current request's tenant.
 // For non-default orgs, it fails closed when tenant monitor resolution fails.
 func (r *Router) getTenantMonitor(ctx context.Context) *monitoring.Monitor {
@@ -1010,6 +1096,8 @@ func (r *Router) getTenantMonitor(ctx context.Context) *monitoring.Monitor {
 			Msg("Failed to resolve tenant monitor for non-default org request")
 		return nil
 	}
+
+	r.StartPatrolForOrg(ctx, orgID)
 
 	return monitor
 }
@@ -1079,97 +1167,183 @@ func (a *wsHubAdapter) BroadcastDiscoveryProgress(progress *servicediscovery.Dis
 	})
 }
 
+func normalizePatrolOrgID(orgID string) string {
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return "default"
+	}
+	return orgID
+}
+
+func (r *Router) markPatrolStarted(orgID string) bool {
+	if r == nil {
+		return false
+	}
+	orgID = normalizePatrolOrgID(orgID)
+	r.patrolLifecycleMu.Lock()
+	defer r.patrolLifecycleMu.Unlock()
+	if r.startedPatrolOrgs == nil {
+		r.startedPatrolOrgs = make(map[string]bool)
+	}
+	if r.startedPatrolOrgs[orgID] {
+		return false
+	}
+	r.startedPatrolOrgs[orgID] = true
+	return true
+}
+
+func (r *Router) clearPatrolStarted(orgID string) {
+	if r == nil {
+		return
+	}
+	orgID = normalizePatrolOrgID(orgID)
+	r.patrolLifecycleMu.Lock()
+	delete(r.startedPatrolOrgs, orgID)
+	r.patrolLifecycleMu.Unlock()
+}
+
+func (r *Router) patrolCtx(ctx context.Context, orgID string) context.Context {
+	orgID = normalizePatrolOrgID(orgID)
+	if ctx == nil {
+		return context.WithValue(context.Background(), OrgIDContextKey, orgID)
+	}
+	if existing := strings.TrimSpace(GetOrgID(ctx)); existing != "" {
+		return ctx
+	}
+	return context.WithValue(ctx, OrgIDContextKey, orgID)
+}
+
 // StartPatrol starts the AI patrol service for background infrastructure monitoring
 func (r *Router) StartPatrol(ctx context.Context) {
-	if r.aiSettingsHandler != nil {
-		// Connect patrol to user-configured alert thresholds so it warns before alerts fire
-		if r.monitor != nil {
-			if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
-				thresholdAdapter := ai.NewAlertThresholdAdapter(alertManager)
-				r.aiSettingsHandler.SetPatrolThresholdProvider(thresholdAdapter)
-			}
-		}
+	orgID := normalizePatrolOrgID(GetOrgID(ctx))
+	r.StartPatrolForOrg(ctx, orgID)
+}
 
-		// Enable findings persistence (load from disk, auto-save on changes)
-		if r.persistence != nil {
-			findingsPersistence := ai.NewFindingsPersistenceAdapter(r.persistence)
-			if err := r.aiSettingsHandler.SetPatrolFindingsPersistence(findingsPersistence); err != nil {
+// StartPatrolForOrg starts patrol/intelligence lifecycle for a specific org exactly once.
+func (r *Router) StartPatrolForOrg(ctx context.Context, orgID string) {
+	orgID = normalizePatrolOrgID(orgID)
+	if !r.markPatrolStarted(orgID) {
+		return
+	}
+	orgCtx := r.patrolCtx(ctx, orgID)
+	if !r.startPatrolForContext(orgCtx, orgID) {
+		r.clearPatrolStarted(orgID)
+	}
+}
+
+func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
+	if r == nil || r.aiSettingsHandler == nil {
+		return false
+	}
+	ctx = r.patrolCtx(ctx, orgID)
+	aiService := r.aiSettingsHandler.GetAIService(ctx)
+	if aiService == nil || !aiService.IsEnabled() {
+		return false
+	}
+	if orgID != "default" && aiService.GetOrgID() != orgID {
+		log.Warn().
+			Str("org_id", orgID).
+			Str("service_org_id", aiService.GetOrgID()).
+			Msg("Patrol start aborted: AI service org scope mismatch")
+		return false
+	}
+	monitor := r.getTenantMonitor(ctx)
+	if orgID != "default" && monitor == nil {
+		log.Warn().
+			Str("org_id", orgID).
+			Msg("Patrol start aborted: tenant monitor unavailable")
+		return false
+	}
+	persistence := r.persistenceForOrg(ctx)
+
+	// Connect patrol to user-configured alert thresholds so it warns before alerts fire
+	if monitor != nil {
+		if alertManager := monitor.GetAlertManager(); alertManager != nil {
+			thresholdAdapter := ai.NewAlertThresholdAdapter(alertManager)
+			aiService.SetPatrolThresholdProvider(thresholdAdapter)
+		}
+		if incidentStore := monitor.GetIncidentStore(); incidentStore != nil {
+			aiService.SetIncidentStore(incidentStore)
+			r.aiSettingsHandler.SetIncidentStoreForOrg(orgID, incidentStore)
+		}
+	}
+
+	// Enable findings persistence (load from disk, auto-save on changes)
+	if persistence != nil {
+		findingsPersistence := ai.NewFindingsPersistenceAdapter(persistence)
+		historyPersistence := ai.NewPatrolHistoryPersistenceAdapter(persistence)
+		if patrol := aiService.GetPatrolService(); patrol != nil {
+			if err := patrol.SetFindingsPersistence(findingsPersistence); err != nil {
 				log.Error().Err(err).Msg("Failed to initialize AI findings persistence")
 			}
-
 			// Enable patrol run history persistence
-			historyPersistence := ai.NewPatrolHistoryPersistenceAdapter(r.persistence)
-			if err := r.aiSettingsHandler.SetPatrolRunHistoryPersistence(historyPersistence); err != nil {
+			if err := patrol.SetRunHistoryPersistence(historyPersistence); err != nil {
 				log.Error().Err(err).Msg("Failed to initialize AI patrol run history persistence")
 			}
 		}
+	}
 
-		// Connect patrol to metrics history for enriched context (trends, predictions)
-		if r.monitor != nil {
-			if metricsHistory := r.monitor.GetMetricsHistory(); metricsHistory != nil {
-				adapter := ai.NewMetricsHistoryAdapter(metricsHistory)
-				if adapter != nil {
-					r.aiSettingsHandler.SetMetricsHistoryProvider(adapter)
-				}
+	// Connect patrol to metrics history for enriched context (trends, predictions)
+	if monitor != nil {
+		if metricsHistory := monitor.GetMetricsHistory(); metricsHistory != nil {
+			adapter := ai.NewMetricsHistoryAdapter(metricsHistory)
+			if adapter != nil {
+				aiService.SetMetricsHistoryProvider(adapter)
+			}
 
-				// Only initialize baseline learning if AI is enabled
-				// This prevents anomaly data from being collected and displayed when AI is disabled
-				if r.aiSettingsHandler.IsAIEnabled(context.Background()) {
-					// Initialize baseline store for anomaly detection
-					// Uses config dir for persistence
-					baselineCfg := ai.DefaultBaselineConfig()
-					if r.persistence != nil {
-						baselineCfg.DataDir = r.persistence.DataDir()
-					}
-					baselineStore := ai.NewBaselineStore(baselineCfg)
-					if baselineStore != nil {
-						r.aiSettingsHandler.SetBaselineStore(baselineStore)
+			// Initialize baseline store for anomaly detection.
+			baselineCfg := ai.DefaultBaselineConfig()
+			if persistence != nil {
+				baselineCfg.DataDir = persistence.DataDir()
+			}
+			baselineStore := ai.NewBaselineStore(baselineCfg)
+			if baselineStore != nil {
+				aiService.SetBaselineStore(baselineStore)
 
-						// Start background baseline learning loop
-						go r.startBaselineLearning(ctx, baselineStore, metricsHistory)
-					}
-				}
+				// Start background baseline learning loop
+				go r.startBaselineLearning(ctx, baselineStore, metricsHistory)
 			}
 		}
+	}
 
-		// Initialize operational memory (change detection and remediation logging)
-		dataDir := ""
-		if r.persistence != nil {
-			dataDir = r.persistence.DataDir()
-		}
+	// Initialize operational memory (change detection and remediation logging)
+	dataDir := ""
+	if persistence != nil {
+		dataDir = persistence.DataDir()
+	}
 
-		changeDetector := ai.NewChangeDetector(ai.ChangeDetectorConfig{
-			MaxChanges: 1000,
-			DataDir:    dataDir,
+	changeDetector := ai.NewChangeDetector(ai.ChangeDetectorConfig{
+		MaxChanges: 1000,
+		DataDir:    dataDir,
+	})
+	if changeDetector != nil {
+		aiService.SetChangeDetector(changeDetector)
+	}
+
+	remediationLog := ai.NewRemediationLog(ai.RemediationLogConfig{
+		MaxRecords: 500,
+		DataDir:    dataDir,
+	})
+	if remediationLog != nil {
+		aiService.SetRemediationLog(remediationLog)
+	}
+
+	// Initialize pattern and correlation detectors for AI-enabled orgs.
+	if aiService.IsEnabled() {
+		// Initialize pattern detector for failure prediction
+		patternDetector := ai.NewPatternDetector(ai.PatternDetectorConfig{
+			MaxEvents:       5000,
+			MinOccurrences:  3,
+			PatternWindow:   90 * 24 * time.Hour,
+			PredictionLimit: 30 * 24 * time.Hour,
+			DataDir:         dataDir,
 		})
-		if changeDetector != nil {
-			r.aiSettingsHandler.SetChangeDetector(changeDetector)
-		}
+		if patternDetector != nil {
+			aiService.SetPatternDetector(patternDetector)
 
-		remediationLog := ai.NewRemediationLog(ai.RemediationLogConfig{
-			MaxRecords: 500,
-			DataDir:    dataDir,
-		})
-		if remediationLog != nil {
-			r.aiSettingsHandler.SetRemediationLog(remediationLog)
-		}
-
-		// Only initialize pattern and correlation detectors if AI is enabled
-		// This prevents these subsystems from collecting data and displaying findings when AI is disabled
-		if r.aiSettingsHandler.IsAIEnabled(context.Background()) {
-			// Initialize pattern detector for failure prediction
-			patternDetector := ai.NewPatternDetector(ai.PatternDetectorConfig{
-				MaxEvents:       5000,
-				MinOccurrences:  3,
-				PatternWindow:   90 * 24 * time.Hour,
-				PredictionLimit: 30 * 24 * time.Hour,
-				DataDir:         dataDir,
-			})
-			if patternDetector != nil {
-				r.aiSettingsHandler.SetPatternDetector(patternDetector)
-
-				// Wire alert history to pattern detector for event tracking
-				if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
+			// Wire alert history to pattern detector for event tracking
+			if monitor != nil {
+				if alertManager := monitor.GetAlertManager(); alertManager != nil {
 					alertManager.OnAlertHistory(func(alert alerts.Alert) {
 						// Convert alert type to trackable event
 						patternDetector.RecordFromAlert(alert.ResourceID, alert.Type+"_"+string(alert.Level), alert.StartTime)
@@ -1177,20 +1351,22 @@ func (r *Router) StartPatrol(ctx context.Context) {
 					log.Info().Msg("AI Pattern Detector: Wired to alert history for failure prediction")
 				}
 			}
+		}
 
-			// Initialize correlation detector for multi-resource relationships
-			correlationDetector := ai.NewCorrelationDetector(ai.CorrelationConfig{
-				MaxEvents:         10000,
-				CorrelationWindow: 10 * time.Minute,
-				MinOccurrences:    3,
-				RetentionWindow:   30 * 24 * time.Hour,
-				DataDir:           dataDir,
-			})
-			if correlationDetector != nil {
-				r.aiSettingsHandler.SetCorrelationDetector(correlationDetector)
+		// Initialize correlation detector for multi-resource relationships
+		correlationDetector := ai.NewCorrelationDetector(ai.CorrelationConfig{
+			MaxEvents:         10000,
+			CorrelationWindow: 10 * time.Minute,
+			MinOccurrences:    3,
+			RetentionWindow:   30 * 24 * time.Hour,
+			DataDir:           dataDir,
+		})
+		if correlationDetector != nil {
+			aiService.SetCorrelationDetector(correlationDetector)
 
-				// Wire alert history to correlation detector
-				if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
+			// Wire alert history to correlation detector
+			if monitor != nil {
+				if alertManager := monitor.GetAlertManager(); alertManager != nil {
 					alertManager.OnAlertHistory(func(alert alerts.Alert) {
 						// Record as correlation event
 						eventType := ai.CorrelationEventType(ai.CorrelationEventAlert)
@@ -1217,34 +1393,96 @@ func (r *Router) StartPatrol(ctx context.Context) {
 				}
 			}
 		}
+	}
 
-		// Initialize new AI intelligence services (Phase 6)
-		r.initializeAIIntelligenceServices(ctx, dataDir)
+	// Initialize new AI intelligence services (Phase 6)
+	r.initializeAIIntelligenceServices(ctx, orgID, dataDir, monitor)
 
-		// Wire unified finding callback AFTER initializeAIIntelligenceServices
-		// (unified store is created there) and AFTER findings persistence is loaded
-		patrol := r.aiSettingsHandler.GetAIService(ctx).GetPatrolService()
-		if patrol != nil {
-			if unifiedStore := r.aiSettingsHandler.GetUnifiedStore(); unifiedStore != nil {
-				toUnifiedLifecycle := func(events []ai.FindingLifecycleEvent) []unified.UnifiedFindingLifecycleEvent {
-					if len(events) == 0 {
-						return nil
-					}
-					out := make([]unified.UnifiedFindingLifecycleEvent, 0, len(events))
-					for _, e := range events {
-						out = append(out, unified.UnifiedFindingLifecycleEvent{
-							At:       e.At,
-							Type:     e.Type,
-							Message:  e.Message,
-							From:     e.From,
-							To:       e.To,
-							Metadata: e.Metadata,
-						})
-					}
-					return out
+	// Wire unified finding callback AFTER initializeAIIntelligenceServices
+	// (unified store is created there) and AFTER findings persistence is loaded
+	patrol := aiService.GetPatrolService()
+	if patrol != nil {
+		if unifiedStore := r.aiSettingsHandler.GetUnifiedStoreForOrg(orgID); unifiedStore != nil {
+			toUnifiedLifecycle := func(events []ai.FindingLifecycleEvent) []unified.UnifiedFindingLifecycleEvent {
+				if len(events) == 0 {
+					return nil
 				}
-				patrol.SetUnifiedFindingCallback(func(f *ai.Finding) bool {
-					// Convert ai.Finding to unified.UnifiedFinding
+				out := make([]unified.UnifiedFindingLifecycleEvent, 0, len(events))
+				for _, e := range events {
+					out = append(out, unified.UnifiedFindingLifecycleEvent{
+						At:       e.At,
+						Type:     e.Type,
+						Message:  e.Message,
+						From:     e.From,
+						To:       e.To,
+						Metadata: e.Metadata,
+					})
+				}
+				return out
+			}
+			patrol.SetUnifiedFindingCallback(func(f *ai.Finding) bool {
+				// Convert ai.Finding to unified.UnifiedFinding
+				uf := &unified.UnifiedFinding{
+					ID:                     f.ID,
+					Source:                 unified.SourceAIPatrol,
+					Severity:               unified.UnifiedSeverity(f.Severity),
+					Category:               unified.UnifiedCategory(f.Category),
+					ResourceID:             f.ResourceID,
+					ResourceName:           f.ResourceName,
+					ResourceType:           f.ResourceType,
+					Node:                   f.Node,
+					Title:                  f.Title,
+					Description:            f.Description,
+					Recommendation:         f.Recommendation,
+					Evidence:               f.Evidence,
+					DetectedAt:             f.DetectedAt,
+					LastSeenAt:             f.LastSeenAt,
+					ResolvedAt:             f.ResolvedAt,
+					InvestigationSessionID: f.InvestigationSessionID,
+					InvestigationStatus:    f.InvestigationStatus,
+					InvestigationOutcome:   f.InvestigationOutcome,
+					LastInvestigatedAt:     f.LastInvestigatedAt,
+					InvestigationAttempts:  f.InvestigationAttempts,
+					LoopState:              f.LoopState,
+					Lifecycle:              toUnifiedLifecycle(f.Lifecycle),
+					RegressionCount:        f.RegressionCount,
+					LastRegressionAt:       f.LastRegressionAt,
+					AcknowledgedAt:         f.AcknowledgedAt,
+					SnoozedUntil:           f.SnoozedUntil,
+					DismissedReason:        f.DismissedReason,
+					UserNote:               f.UserNote,
+					Suppressed:             f.Suppressed,
+					TimesRaised:            f.TimesRaised,
+				}
+				_, isNew := unifiedStore.AddFromAI(uf)
+				return isNew
+			})
+			patrol.SetUnifiedFindingResolver(func(findingID string) {
+				unifiedStore.Resolve(findingID)
+			})
+
+			// Wire push notifications: patrol findings → relay client (best-effort)
+			patrol.SetPushNotifyCallback(func(n relay.PushNotificationPayload) {
+				r.relayMu.RLock()
+				client := r.relayClient
+				r.relayMu.RUnlock()
+				if client != nil {
+					if err := client.SendPushNotification(n); err != nil {
+						log.Debug().Err(err).Str("type", n.Type).Msg("Push notification send failed")
+					}
+				}
+			})
+
+			log.Info().Msg("AI Intelligence: Patrol findings wired to unified store")
+
+			// Sync existing findings from persistence to the unified store
+			// (findings loaded from disk before the callback was set)
+			existingFindings := patrol.GetFindingsHistory(nil)
+			if len(existingFindings) > 0 {
+				for _, f := range existingFindings {
+					if f == nil {
+						continue
+					}
 					uf := &unified.UnifiedFinding{
 						ID:                     f.ID,
 						Source:                 unified.SourceAIPatrol,
@@ -1277,113 +1515,60 @@ func (r *Router) StartPatrol(ctx context.Context) {
 						Suppressed:             f.Suppressed,
 						TimesRaised:            f.TimesRaised,
 					}
-					_, isNew := unifiedStore.AddFromAI(uf)
-					return isNew
-				})
-				patrol.SetUnifiedFindingResolver(func(findingID string) {
-					unifiedStore.Resolve(findingID)
-				})
-
-				// Wire push notifications: patrol findings → relay client (best-effort)
-				patrol.SetPushNotifyCallback(func(n relay.PushNotificationPayload) {
-					r.relayMu.RLock()
-					client := r.relayClient
-					r.relayMu.RUnlock()
-					if client != nil {
-						if err := client.SendPushNotification(n); err != nil {
-							log.Debug().Err(err).Str("type", n.Type).Msg("Push notification send failed")
+					// Copy resolution timestamp if resolved
+					if f.ResolvedAt != nil || f.AutoResolved {
+						now := time.Now()
+						if f.ResolvedAt != nil {
+							uf.ResolvedAt = f.ResolvedAt
+						} else {
+							uf.ResolvedAt = &now
 						}
 					}
-				})
-
-				log.Info().Msg("AI Intelligence: Patrol findings wired to unified store")
-
-				// Sync existing findings from persistence to the unified store
-				// (findings loaded from disk before the callback was set)
-				existingFindings := patrol.GetFindingsHistory(nil)
-				if len(existingFindings) > 0 {
-					for _, f := range existingFindings {
-						if f == nil {
-							continue
-						}
-						uf := &unified.UnifiedFinding{
-							ID:                     f.ID,
-							Source:                 unified.SourceAIPatrol,
-							Severity:               unified.UnifiedSeverity(f.Severity),
-							Category:               unified.UnifiedCategory(f.Category),
-							ResourceID:             f.ResourceID,
-							ResourceName:           f.ResourceName,
-							ResourceType:           f.ResourceType,
-							Node:                   f.Node,
-							Title:                  f.Title,
-							Description:            f.Description,
-							Recommendation:         f.Recommendation,
-							Evidence:               f.Evidence,
-							DetectedAt:             f.DetectedAt,
-							LastSeenAt:             f.LastSeenAt,
-							ResolvedAt:             f.ResolvedAt,
-							InvestigationSessionID: f.InvestigationSessionID,
-							InvestigationStatus:    f.InvestigationStatus,
-							InvestigationOutcome:   f.InvestigationOutcome,
-							LastInvestigatedAt:     f.LastInvestigatedAt,
-							InvestigationAttempts:  f.InvestigationAttempts,
-							LoopState:              f.LoopState,
-							Lifecycle:              toUnifiedLifecycle(f.Lifecycle),
-							RegressionCount:        f.RegressionCount,
-							LastRegressionAt:       f.LastRegressionAt,
-							AcknowledgedAt:         f.AcknowledgedAt,
-							SnoozedUntil:           f.SnoozedUntil,
-							DismissedReason:        f.DismissedReason,
-							UserNote:               f.UserNote,
-							Suppressed:             f.Suppressed,
-							TimesRaised:            f.TimesRaised,
-						}
-						// Copy resolution timestamp if resolved
-						if f.ResolvedAt != nil || f.AutoResolved {
-							now := time.Now()
-							if f.ResolvedAt != nil {
-								uf.ResolvedAt = f.ResolvedAt
-							} else {
-								uf.ResolvedAt = &now
-							}
-						}
-						unifiedStore.AddFromAI(uf)
-					}
-					log.Info().Int("count", len(existingFindings)).Msg("AI Intelligence: Synced existing patrol findings to unified store")
+					unifiedStore.AddFromAI(uf)
 				}
-
-				// Wire unified store for "Discuss with Assistant" finding context lookup
-				r.aiHandler.SetUnifiedStore(unifiedStore)
+				log.Info().Int("count", len(existingFindings)).Msg("AI Intelligence: Synced existing patrol findings to unified store")
 			}
-		}
 
-		// Finally start the actual patrol loop
-		r.aiSettingsHandler.StartPatrol(ctx)
-
-		// Wire up discovery service to the handlers
-		// This enables the /api/discovery endpoints to trigger discovery scans
-		aiService := r.aiSettingsHandler.GetAIService(ctx)
-		if aiService != nil {
-			if discoveryService := aiService.GetDiscoveryService(); discoveryService != nil {
-				r.SetDiscoveryService(discoveryService)
-				log.Info().Msg("Discovery: Service wired to API handlers")
-			}
-			// Wire up AI config provider for showing AI provider info in discovery UI
-			r.SetDiscoveryAIConfigProvider(aiService)
+			// Wire unified store for "Discuss with Assistant" finding context lookup
+			r.aiHandler.SetUnifiedStoreForOrg(orgID, unifiedStore)
 		}
 	}
+
+	// Finally start the actual patrol loop
+	r.aiSettingsHandler.StartPatrol(ctx)
+
+	// Wire up discovery service to the handlers
+	// This enables the /api/discovery endpoints to trigger discovery scans
+	aiService = r.aiSettingsHandler.GetAIService(ctx)
+	if aiService != nil {
+		if discoveryService := aiService.GetDiscoveryService(); discoveryService != nil {
+			r.SetDiscoveryService(discoveryService)
+			log.Info().Msg("Discovery: Service wired to API handlers")
+		}
+		// Wire up AI config provider for showing AI provider info in discovery UI
+		r.SetDiscoveryAIConfigProvider(aiService)
+	}
+
+	return true
 }
 
 // initializeAIIntelligenceServices sets up the new AI intelligence subsystems
-func (r *Router) initializeAIIntelligenceServices(ctx context.Context, dataDir string) {
-	// Only initialize if AI is enabled
-	if !r.aiSettingsHandler.IsAIEnabled(ctx) {
+func (r *Router) initializeAIIntelligenceServices(ctx context.Context, orgID, dataDir string, monitor *monitoring.Monitor) {
+	aiService := r.aiSettingsHandler.GetAIService(ctx)
+	if aiService == nil || !aiService.IsEnabled() {
+		return
+	}
+	if orgID != "default" && aiService.GetOrgID() != orgID {
+		log.Warn().
+			Str("org_id", orgID).
+			Str("service_org_id", aiService.GetOrgID()).
+			Msg("AI intelligence initialization skipped: AI service org scope mismatch")
 		return
 	}
 
 	// 1. Initialize circuit breaker for resilient patrol
 	circuitBreaker := circuit.NewBreaker("patrol", circuit.DefaultConfig())
-	r.aiSettingsHandler.SetCircuitBreaker(circuitBreaker)
+	r.aiSettingsHandler.SetCircuitBreakerForOrg(orgID, circuitBreaker)
 	log.Info().Msg("AI Intelligence: Circuit breaker initialized")
 
 	// 2. Initialize learning store for feedback learning
@@ -1391,15 +1576,15 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, dataDir s
 		DataDir: dataDir,
 	}
 	learningStore := learning.NewLearningStore(learningCfg)
-	r.aiSettingsHandler.SetLearningStore(learningStore)
+	r.aiSettingsHandler.SetLearningStoreForOrg(orgID, learningStore)
 	log.Info().Msg("AI Intelligence: Learning store initialized")
 
 	// 4. Initialize forecast service for trend forecasting
 	forecastCfg := forecast.DefaultForecastConfig()
 	forecastService := forecast.NewService(forecastCfg)
 	// Wire up data provider adapter
-	if r.monitor != nil {
-		if metricsHistory := r.monitor.GetMetricsHistory(); metricsHistory != nil {
+	if monitor != nil {
+		if metricsHistory := monitor.GetMetricsHistory(); metricsHistory != nil {
 			dataAdapter := adapters.NewForecastDataAdapter(metricsHistory)
 			if dataAdapter != nil {
 				forecastService.SetDataProvider(dataAdapter)
@@ -1407,18 +1592,18 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, dataDir s
 		}
 	}
 	// Wire up state provider for forecast context
-	if r.monitor != nil {
-		forecastStateAdapter := &forecastStateProviderWrapper{monitor: r.monitor}
+	if monitor != nil {
+		forecastStateAdapter := &forecastStateProviderWrapper{monitor: monitor}
 		forecastService.SetStateProvider(forecastStateAdapter)
 	}
-	r.aiSettingsHandler.SetForecastService(forecastService)
+	r.aiSettingsHandler.SetForecastServiceForOrg(orgID, forecastService)
 	log.Info().Msg("AI Intelligence: Forecast service initialized")
 
 	// 5. Initialize Proxmox event correlator
 	proxmoxCfg := proxmox.DefaultEventCorrelatorConfig()
 	proxmoxCfg.DataDir = dataDir
 	proxmoxCorrelator := proxmox.NewEventCorrelator(proxmoxCfg)
-	r.aiSettingsHandler.SetProxmoxCorrelator(proxmoxCorrelator)
+	r.aiSettingsHandler.SetProxmoxCorrelatorForOrg(orgID, proxmoxCorrelator)
 	log.Info().Msg("AI Intelligence: Proxmox event correlator initialized")
 
 	// 7. Initialize remediation engine for AI-guided fixes
@@ -1428,15 +1613,15 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, dataDir s
 	// Wire up command executor (disabled by default for safety)
 	cmdExecutor := adapters.NewCommandExecutorAdapter()
 	remediationEngine.SetCommandExecutor(cmdExecutor)
-	r.aiSettingsHandler.SetRemediationEngine(remediationEngine)
+	r.aiSettingsHandler.SetRemediationEngineForOrg(orgID, remediationEngine)
 	log.Info().Msg("AI Intelligence: Remediation engine initialized (command execution disabled)")
 
 	// 8. Initialize unified alert/finding system and bridge
-	if r.monitor != nil {
-		if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
+	if monitor != nil {
+		if alertManager := monitor.GetAlertManager(); alertManager != nil {
 			// Create unified store
 			unifiedStore := unified.NewUnifiedStore(unified.DefaultAlertToFindingConfig())
-			r.aiSettingsHandler.SetUnifiedStore(unifiedStore)
+			r.aiSettingsHandler.SetUnifiedStoreForOrg(orgID, unifiedStore)
 
 			// Create alert bridge
 			alertBridge := unified.NewAlertBridge(unifiedStore, unified.DefaultBridgeConfig())
@@ -1446,7 +1631,7 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, dataDir s
 			alertBridge.SetAlertProvider(alertAdapter)
 
 			// Set patrol trigger function (triggers mini-patrol on alert events)
-			patrol := r.aiSettingsHandler.GetAIService(ctx).GetPatrolService()
+			patrol := aiService.GetPatrolService()
 			if patrol != nil {
 				alertBridge.SetPatrolTrigger(func(resourceID, resourceType, reason, alertType string) {
 					scope := ai.PatrolScope{
@@ -1477,7 +1662,7 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, dataDir s
 						Str("resource_id", resourceID).
 						Str("reason", reason).
 						Msg("Alert bridge: Triggering mini-patrol")
-					if triggerManager := r.aiSettingsHandler.GetTriggerManager(); triggerManager != nil {
+					if triggerManager := r.aiSettingsHandler.GetTriggerManagerForOrg(orgID); triggerManager != nil {
 						if triggerManager.TriggerPatrol(scope) {
 							log.Debug().
 								Str("resource_id", resourceID).
@@ -1491,20 +1676,20 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, dataDir s
 						}
 						return
 					}
-
-					patrol.TriggerScopedPatrol(context.Background(), scope)
+					orgCtx := context.WithValue(context.Background(), OrgIDContextKey, orgID)
+					patrol.TriggerScopedPatrol(orgCtx, scope)
 				})
 			}
 
 			// Start the bridge
 			alertBridge.Start()
-			r.aiSettingsHandler.SetAlertBridge(alertBridge)
+			r.aiSettingsHandler.SetAlertBridgeForOrg(orgID, alertBridge)
 			log.Info().Msg("AI Intelligence: Unified alert/finding bridge initialized and started")
 		}
 	}
 
 	// 9. Wire up AI intelligence providers to patrol service for context injection
-	patrol := r.aiSettingsHandler.GetAIService(ctx).GetPatrolService()
+	patrol := aiService.GetPatrolService()
 	if patrol != nil {
 		// Wire learning store for user preference context
 		if learningStore != nil {
@@ -1552,7 +1737,7 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, dataDir s
 		patrol.SetTriggerManager(triggerManager)
 
 		// Store reference for shutdown and alert callbacks
-		r.aiSettingsHandler.SetTriggerManager(triggerManager)
+		r.aiSettingsHandler.SetTriggerManagerForOrg(orgID, triggerManager)
 
 		// 11. Wire baseline anomaly callback to TriggerManager
 		if baselineStore := patrol.GetBaselineStore(); baselineStore != nil {
@@ -1591,7 +1776,7 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, dataDir s
 
 		// Create metrics adapter for incident recorder
 		var metricsAdapter *adapters.MetricsAdapter
-		if stateProvider := r.aiSettingsHandler.GetStateProvider(); stateProvider != nil {
+		if stateProvider := aiService.GetStateProvider(); stateProvider != nil {
 			metricsAdapter = adapters.NewMetricsAdapter(stateProvider)
 		}
 
@@ -1603,7 +1788,7 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, dataDir s
 			recorder.SetMetricsProvider(metricsAdapter)
 			recorder.Start()
 			incidentCoordinator.SetRecorder(recorder)
-			r.aiSettingsHandler.SetIncidentRecorder(recorder)
+			r.aiSettingsHandler.SetIncidentRecorderForOrg(orgID, recorder)
 			log.Info().Msg("AI Intelligence: Incident recorder initialized and started")
 		}
 
@@ -1611,7 +1796,7 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, dataDir s
 		incidentCoordinator.Start()
 
 		// Store reference
-		r.aiSettingsHandler.SetIncidentCoordinator(incidentCoordinator)
+		r.aiSettingsHandler.SetIncidentCoordinatorForOrg(orgID, incidentCoordinator)
 
 		log.Info().Msg("AI Intelligence: Incident coordinator initialized and started")
 	}
@@ -1624,6 +1809,18 @@ func (r *Router) StopPatrol() {
 	if r.aiSettingsHandler != nil {
 		r.aiSettingsHandler.StopPatrol()
 	}
+	r.patrolLifecycleMu.Lock()
+	r.startedPatrolOrgs = make(map[string]bool)
+	r.patrolLifecycleMu.Unlock()
+}
+
+// StopPatrolForOrg stops patrol for a single org and clears its lifecycle marker.
+func (r *Router) StopPatrolForOrg(orgID string) {
+	orgID = normalizePatrolOrgID(orgID)
+	if r.aiSettingsHandler != nil {
+		r.aiSettingsHandler.StopPatrolForOrg(orgID)
+	}
+	r.clearPatrolStarted(orgID)
 }
 
 // ShutdownAIIntelligence gracefully shuts down all AI intelligence services (Phase 6)
@@ -1637,10 +1834,13 @@ func (r *Router) ShutdownAIIntelligence() {
 
 	log.Info().Msg("AI Intelligence: Starting graceful shutdown")
 
-	// 1. Stop alert bridge (stop listening for alert events)
-	if alertBridge := r.aiSettingsHandler.GetAlertBridge(); alertBridge != nil {
+	// 1. Stop alert bridges (stop listening for alert events)
+	for orgID, alertBridge := range r.aiSettingsHandler.ListAlertBridges() {
+		if alertBridge == nil {
+			continue
+		}
 		alertBridge.Stop()
-		log.Debug().Msg("AI Intelligence: Alert bridge stopped")
+		log.Debug().Str("org_id", orgID).Msg("AI Intelligence: Alert bridge stopped")
 	}
 
 	// 2. Stop patrol service for all tenants (waits for in-flight investigations, force-saves state)
@@ -1648,28 +1848,40 @@ func (r *Router) ShutdownAIIntelligence() {
 	r.aiSettingsHandler.StopPatrol()
 	log.Debug().Msg("AI Intelligence: All patrol services stopped")
 
-	// 3. Stop trigger manager (stop event-driven patrol scheduling)
-	if triggerManager := r.aiSettingsHandler.GetTriggerManager(); triggerManager != nil {
+	// 3. Stop trigger managers (stop event-driven patrol scheduling)
+	for orgID, triggerManager := range r.aiSettingsHandler.ListTriggerManagers() {
+		if triggerManager == nil {
+			continue
+		}
 		triggerManager.Stop()
-		log.Debug().Msg("AI Intelligence: Trigger manager stopped")
+		log.Debug().Str("org_id", orgID).Msg("AI Intelligence: Trigger manager stopped")
 	}
 
-	// 4. Stop incident coordinator (stop high-frequency recording)
-	if incidentCoordinator := r.aiSettingsHandler.GetIncidentCoordinator(); incidentCoordinator != nil {
+	// 4. Stop incident coordinators (stop high-frequency recording)
+	for orgID, incidentCoordinator := range r.aiSettingsHandler.ListIncidentCoordinators() {
+		if incidentCoordinator == nil {
+			continue
+		}
 		incidentCoordinator.Stop()
-		log.Debug().Msg("AI Intelligence: Incident coordinator stopped")
+		log.Debug().Str("org_id", orgID).Msg("AI Intelligence: Incident coordinator stopped")
 	}
 
-	// 4b. Stop incident recorder (stops background sampling)
-	if incidentRecorder := r.aiSettingsHandler.GetIncidentRecorder(); incidentRecorder != nil {
+	// 4b. Stop incident recorders (stop background sampling)
+	for orgID, incidentRecorder := range r.aiSettingsHandler.ListIncidentRecorders() {
+		if incidentRecorder == nil {
+			continue
+		}
 		incidentRecorder.Stop()
-		log.Debug().Msg("AI Intelligence: Incident recorder stopped")
+		log.Debug().Str("org_id", orgID).Msg("AI Intelligence: Incident recorder stopped")
 	}
 
-	// 5. Cleanup learning store (removes old records, persists if data dir configured)
-	if learningStore := r.aiSettingsHandler.GetLearningStore(); learningStore != nil {
+	// 5. Cleanup learning stores (removes old records, persists if data dir configured)
+	for orgID, learningStore := range r.aiSettingsHandler.ListLearningStores() {
+		if learningStore == nil {
+			continue
+		}
 		learningStore.Cleanup()
-		log.Debug().Msg("AI Intelligence: Learning store cleaned up")
+		log.Debug().Str("org_id", orgID).Msg("AI Intelligence: Learning store cleaned up")
 	}
 
 	log.Info().Msg("AI Intelligence: Graceful shutdown complete")
@@ -1700,11 +1912,11 @@ func (r *Router) StartAIChat(ctx context.Context) {
 		return
 	}
 
-	// Wire up MCP tool providers so AI can access real data
-	r.wireAIChatProviders()
-
-	// Wire chat service to AI service for patrol and investigation
-	r.wireChatServiceToAI()
+	// Ensure default-org chat service has org-scoped dependencies wired.
+	defaultOrgCtx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	if service := r.aiHandler.GetService(defaultOrgCtx); service != nil {
+		r.wireAIChatDependenciesForService(defaultOrgCtx, service)
+	}
 
 	// Wire up investigation orchestrator now that chat service is ready
 	// This must happen after Start() because the orchestrator needs the chat service
@@ -1713,11 +1925,11 @@ func (r *Router) StartAIChat(ctx context.Context) {
 	}
 
 	// Wire circuit breaker for patrol if AI is running
-	if r.aiHandler != nil && r.aiHandler.IsRunning(context.Background()) {
+	if r.aiHandler != nil && r.aiHandler.IsRunning(defaultOrgCtx) {
 		if r.aiSettingsHandler != nil {
-			if patrolSvc := r.aiSettingsHandler.GetAIService(context.Background()).GetPatrolService(); patrolSvc != nil {
+			if patrolSvc := r.aiSettingsHandler.GetAIService(defaultOrgCtx).GetPatrolService(); patrolSvc != nil {
 				// Wire circuit breaker for resilient AI API calls
-				if breaker := r.aiSettingsHandler.GetCircuitBreaker(); breaker != nil {
+				if breaker := r.aiSettingsHandler.GetCircuitBreakerForOrg("default"); breaker != nil {
 					patrolSvc.SetCircuitBreaker(breaker)
 					log.Info().Msg("AI patrol circuit breaker wired")
 				}
@@ -1726,58 +1938,71 @@ func (r *Router) StartAIChat(ctx context.Context) {
 	}
 }
 
-// wireChatServiceToAI wires the chat service adapter to the AI service,
-// enabling patrol and investigation to use the chat service's execution path
-// (50+ MCP tools, FSM safety, sessions) instead of the legacy 3-tool path.
-func (r *Router) wireChatServiceToAI() {
-	if r.aiHandler == nil || r.aiSettingsHandler == nil {
-		return
+func (r *Router) persistenceForOrg(ctx context.Context) *config.ConfigPersistence {
+	if r == nil {
+		return nil
 	}
 
-	// Use default org context for legacy service wiring
-	// Multi-tenant orgs get their services wired via setupInvestigationOrchestrator
-	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
-	chatSvc := r.aiHandler.GetService(ctx)
-	if chatSvc == nil {
-		return
+	orgID := strings.TrimSpace(GetOrgID(ctx))
+	if orgID == "" || orgID == "default" {
+		return r.persistence
 	}
 
-	chatService, ok := chatSvc.(*chat.Service)
-	if !ok {
-		log.Warn().Msg("Chat service is not *chat.Service, cannot create patrol adapter")
-		return
+	if r.multiTenant != nil {
+		if p, err := r.multiTenant.GetPersistence(orgID); err == nil {
+			return p
+		}
 	}
 
-	aiService := r.aiSettingsHandler.GetAIService(ctx)
-	if aiService == nil {
-		return
-	}
-
-	aiService.SetChatService(&chatServiceAdapter{svc: chatService})
-
-	// Wire mid-run budget enforcement from AI service to chat service
-	chatService.SetBudgetChecker(func() error {
-		return aiService.CheckBudget("patrol")
-	})
-
-	log.Info().Msg("Chat service wired to AI service for patrol and investigation")
+	return nil
 }
 
-// wireAIChatProviders wires up all MCP tool providers for AI chat
-func (r *Router) wireAIChatProviders() {
-	if r.aiHandler == nil || !r.aiHandler.IsRunning(context.Background()) {
+// wireAIChatDependenciesForService wires org-scoped MCP tool providers and chat-service
+// integration for a specific chat service instance.
+func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service AIService) {
+	if r == nil || service == nil {
 		return
 	}
 
-	// Use default org context for legacy service wiring
-	service := r.aiHandler.GetService(context.WithValue(context.Background(), OrgIDContextKey, "default"))
-	if service == nil {
-		return
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	orgID := strings.TrimSpace(GetOrgID(ctx))
+	if orgID == "" {
+		orgID = "default"
+		ctx = context.WithValue(context.Background(), OrgIDContextKey, orgID)
+	}
+
+	monitor := r.getTenantMonitor(ctx)
+	aiService := (*ai.Service)(nil)
+	if r.aiSettingsHandler != nil {
+		aiService = r.aiSettingsHandler.GetAIService(ctx)
+		if aiService != nil && orgID != "default" && aiService.GetOrgID() != orgID {
+			log.Warn().
+				Str("org_id", orgID).
+				Str("service_org_id", aiService.GetOrgID()).
+				Msg("AI chat dependency wiring skipped: AI service org scope mismatch")
+			aiService = nil
+		}
+	}
+
+	chatService, ok := service.(*chat.Service)
+	if !ok {
+		log.Warn().Msg("Chat service is not *chat.Service, cannot create patrol adapter")
+	} else if aiService != nil {
+		aiService.SetChatService(&chatServiceAdapter{svc: chatService})
+
+		// Wire mid-run budget enforcement from AI service to chat service.
+		chatService.SetBudgetChecker(func() error {
+			return aiService.CheckBudget("patrol")
+		})
+
+		log.Info().Str("org_id", orgID).Msg("Chat service wired to AI service for patrol and investigation")
 	}
 
 	// Wire alert provider
-	if r.monitor != nil {
-		if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
+	if monitor != nil {
+		if alertManager := monitor.GetAlertManager(); alertManager != nil {
 			alertAdapter := tools.NewAlertManagerMCPAdapter(alertManager)
 			if alertAdapter != nil {
 				service.SetAlertProvider(alertAdapter)
@@ -1786,10 +2011,14 @@ func (r *Router) wireAIChatProviders() {
 		}
 	}
 
-	// Wire findings provider from patrol service (default org for legacy wiring)
-	defaultOrgCtx := context.WithValue(context.Background(), OrgIDContextKey, "default")
-	if r.aiSettingsHandler != nil {
-		if patrolSvc := r.aiSettingsHandler.GetAIService(defaultOrgCtx).GetPatrolService(); patrolSvc != nil {
+	// Wire findings provider from patrol service.
+	if aiService != nil {
+		if patrolSvc := aiService.GetPatrolService(); patrolSvc != nil {
+			if r.aiSettingsHandler != nil {
+				if breaker := r.aiSettingsHandler.GetCircuitBreakerForOrg(orgID); breaker != nil {
+					patrolSvc.SetCircuitBreaker(breaker)
+				}
+			}
 			if findingsStore := patrolSvc.GetFindings(); findingsStore != nil {
 				findingsAdapter := ai.NewFindingsMCPAdapter(findingsStore)
 				if findingsAdapter != nil {
@@ -1800,20 +2029,19 @@ func (r *Router) wireAIChatProviders() {
 		}
 	}
 
-	if r.persistence != nil {
-		// For MCP, we normally use a scoped context or default.
-		// Assuming MCP server is tenant-aware or global.
-		// If global, we might use background context, but if it receives requests, it should have request context.
-		// The MCPAgentProfileManager likely needs refactoring for multi-tenancy too or accepts a helper.
-		// For now, let's use Background context as a temporary fix, assuming default tenant.
-		manager := NewMCPAgentProfileManager(r.persistence, r.licenseHandlers.Service(context.Background()))
+	if persistence := r.persistenceForOrg(ctx); persistence != nil {
+		var licenseSvc licenseFeatureChecker
+		if r.licenseHandlers != nil {
+			licenseSvc = r.licenseHandlers.Service(ctx)
+		}
+		manager := NewMCPAgentProfileManager(persistence, licenseSvc)
 		service.SetAgentProfileManager(manager)
 		log.Debug().Msg("AI chat: Agent profile manager wired")
 	}
 
 	// Wire guest config provider (storage provider wiring removed)
-	if r.monitor != nil {
-		guestConfigAdapter := tools.NewGuestConfigMCPAdapter(r.monitor)
+	if monitor != nil {
+		guestConfigAdapter := tools.NewGuestConfigMCPAdapter(monitor)
 		if guestConfigAdapter != nil {
 			service.SetGuestConfigProvider(guestConfigAdapter)
 			log.Debug().Msg("AI chat: Guest config provider wired")
@@ -1821,8 +2049,8 @@ func (r *Router) wireAIChatProviders() {
 	}
 
 	// Wire backup provider
-	if r.monitor != nil {
-		backupAdapter := tools.NewBackupMCPAdapter(r.monitor)
+	if monitor != nil {
+		backupAdapter := tools.NewBackupMCPAdapter(monitor)
 		if backupAdapter != nil {
 			service.SetBackupProvider(backupAdapter)
 			log.Debug().Msg("AI chat: Backup provider wired")
@@ -1830,8 +2058,8 @@ func (r *Router) wireAIChatProviders() {
 	}
 
 	// Wire disk health provider
-	if r.monitor != nil {
-		diskHealthAdapter := tools.NewDiskHealthMCPAdapter(r.monitor)
+	if monitor != nil {
+		diskHealthAdapter := tools.NewDiskHealthMCPAdapter(monitor)
 		if diskHealthAdapter != nil {
 			service.SetDiskHealthProvider(diskHealthAdapter)
 			log.Debug().Msg("AI chat: Disk health provider wired")
@@ -1839,8 +2067,12 @@ func (r *Router) wireAIChatProviders() {
 	}
 
 	// Wire updates provider for Docker container updates
-	if r.monitor != nil {
-		updatesAdapter := tools.NewUpdatesMCPAdapter(r.monitor, &updatesConfigWrapper{cfg: r.config})
+	if monitor != nil {
+		cfg := r.config
+		if monitorCfg := monitor.GetConfig(); monitorCfg != nil {
+			cfg = monitorCfg
+		}
+		updatesAdapter := tools.NewUpdatesMCPAdapter(monitor, &updatesConfigWrapper{cfg: cfg})
 		if updatesAdapter != nil {
 			service.SetUpdatesProvider(updatesAdapter)
 			log.Debug().Msg("AI chat: Updates provider wired")
@@ -1848,10 +2080,10 @@ func (r *Router) wireAIChatProviders() {
 	}
 
 	// Wire metrics history provider
-	if r.monitor != nil {
-		if metricsHistory := r.monitor.GetMetricsHistory(); metricsHistory != nil {
+	if monitor != nil {
+		if metricsHistory := monitor.GetMetricsHistory(); metricsHistory != nil {
 			metricsAdapter := tools.NewMetricsHistoryMCPAdapter(
-				r.monitor,
+				monitor,
 				&metricsSourceWrapper{history: metricsHistory},
 			)
 			if metricsAdapter != nil {
@@ -1861,9 +2093,9 @@ func (r *Router) wireAIChatProviders() {
 		}
 	}
 
-	// Wire baseline provider (default org for legacy wiring)
-	if r.aiSettingsHandler != nil {
-		if patrolSvc := r.aiSettingsHandler.GetAIService(defaultOrgCtx).GetPatrolService(); patrolSvc != nil {
+	// Wire baseline provider.
+	if aiService != nil {
+		if patrolSvc := aiService.GetPatrolService(); patrolSvc != nil {
 			if baselineStore := patrolSvc.GetBaselineStore(); baselineStore != nil {
 				baselineAdapter := tools.NewBaselineMCPAdapter(&baselineSourceWrapper{store: baselineStore})
 				if baselineAdapter != nil {
@@ -1874,13 +2106,13 @@ func (r *Router) wireAIChatProviders() {
 		}
 	}
 
-	// Wire pattern provider (default org for legacy wiring)
-	if r.aiSettingsHandler != nil {
-		if patrolSvc := r.aiSettingsHandler.GetAIService(defaultOrgCtx).GetPatrolService(); patrolSvc != nil {
+	// Wire pattern provider.
+	if aiService != nil {
+		if patrolSvc := aiService.GetPatrolService(); patrolSvc != nil {
 			if patternDetector := patrolSvc.GetPatternDetector(); patternDetector != nil {
 				patternAdapter := tools.NewPatternMCPAdapter(
 					&patternSourceWrapper{detector: patternDetector},
-					r.monitor,
+					monitor,
 				)
 				if patternAdapter != nil {
 					service.SetPatternProvider(patternAdapter)
@@ -1890,9 +2122,9 @@ func (r *Router) wireAIChatProviders() {
 		}
 	}
 
-	// Wire findings manager (default org for legacy wiring)
-	if r.aiSettingsHandler != nil {
-		if patrolSvc := r.aiSettingsHandler.GetAIService(defaultOrgCtx).GetPatrolService(); patrolSvc != nil {
+	// Wire findings manager.
+	if aiService != nil {
+		if patrolSvc := aiService.GetPatrolService(); patrolSvc != nil {
 			findingsManagerAdapter := tools.NewFindingsManagerMCPAdapter(patrolSvc)
 			if findingsManagerAdapter != nil {
 				service.SetFindingsManager(findingsManagerAdapter)
@@ -1901,9 +2133,9 @@ func (r *Router) wireAIChatProviders() {
 		}
 	}
 
-	// Wire metadata updater (default org for legacy wiring)
-	if r.aiSettingsHandler != nil {
-		metadataAdapter := tools.NewMetadataUpdaterMCPAdapter(r.aiSettingsHandler.GetAIService(defaultOrgCtx))
+	// Wire metadata updater.
+	if aiService != nil {
+		metadataAdapter := tools.NewMetadataUpdaterMCPAdapter(aiService)
 		if metadataAdapter != nil {
 			service.SetMetadataUpdater(metadataAdapter)
 			log.Debug().Msg("AI chat: Metadata updater wired")
@@ -1918,7 +2150,7 @@ func (r *Router) wireAIChatProviders() {
 
 	// Wire incident recorder provider (high-frequency incident data)
 	if r.aiSettingsHandler != nil {
-		if recorder := r.aiSettingsHandler.GetIncidentRecorder(); recorder != nil {
+		if recorder := r.aiSettingsHandler.GetIncidentRecorderForOrg(orgID); recorder != nil {
 			service.SetIncidentRecorderProvider(&incidentRecorderProviderWrapper{recorder: recorder})
 			log.Debug().Msg("AI chat: Incident recorder provider wired")
 		}
@@ -1926,44 +2158,47 @@ func (r *Router) wireAIChatProviders() {
 
 	// Wire event correlator provider (Proxmox events)
 	if r.aiSettingsHandler != nil {
-		if correlator := r.aiSettingsHandler.GetProxmoxCorrelator(); correlator != nil {
+		if correlator := r.aiSettingsHandler.GetProxmoxCorrelatorForOrg(orgID); correlator != nil {
 			service.SetEventCorrelatorProvider(&eventCorrelatorProviderWrapper{correlator: correlator})
 			log.Debug().Msg("AI chat: Event correlator provider wired")
 		}
 	}
 
-	// Wire knowledge store provider for notes (pulse_remember, pulse_recall) (default org for legacy wiring)
-	if r.aiSettingsHandler != nil {
-		if aiSvc := r.aiSettingsHandler.GetAIService(defaultOrgCtx); aiSvc != nil {
-			if patrolSvc := aiSvc.GetPatrolService(); patrolSvc != nil {
-				if knowledgeStore := patrolSvc.GetKnowledgeStore(); knowledgeStore != nil {
-					service.SetKnowledgeStoreProvider(&knowledgeStoreProviderWrapper{store: knowledgeStore})
-					log.Debug().Msg("AI chat: Knowledge store provider wired")
-				}
+	// Wire knowledge store provider for notes (pulse_remember, pulse_recall).
+	if aiService != nil {
+		if patrolSvc := aiService.GetPatrolService(); patrolSvc != nil {
+			if knowledgeStore := patrolSvc.GetKnowledgeStore(); knowledgeStore != nil {
+				service.SetKnowledgeStoreProvider(&knowledgeStoreProviderWrapper{store: knowledgeStore})
+				log.Debug().Msg("AI chat: Knowledge store provider wired")
 			}
 		}
 	}
 
-	// Wire discovery provider for AI-powered infrastructure discovery (pulse_get_discovery, pulse_list_discoveries) (default org for legacy wiring)
-	if r.aiSettingsHandler != nil {
-		if aiSvc := r.aiSettingsHandler.GetAIService(defaultOrgCtx); aiSvc != nil {
-			if discoverySvc := aiSvc.GetDiscoveryService(); discoverySvc != nil {
-				adapter := servicediscovery.NewToolsAdapter(discoverySvc)
-				if adapter != nil {
-					service.SetDiscoveryProvider(tools.NewDiscoveryMCPAdapter(adapter))
-					log.Debug().Msg("AI chat: Discovery provider wired")
-				}
+	// Wire discovery provider for AI-powered infrastructure discovery (pulse_get_discovery, pulse_list_discoveries).
+	if aiService != nil {
+		if discoverySvc := aiService.GetDiscoveryService(); discoverySvc != nil {
+			adapter := servicediscovery.NewToolsAdapter(discoverySvc)
+			if adapter != nil {
+				service.SetDiscoveryProvider(tools.NewDiscoveryMCPAdapter(adapter))
+				log.Debug().Msg("AI chat: Discovery provider wired")
 			}
 		}
 	}
 
 	// Wire unified resource provider for physical disks, Ceph, etc.
-	if r.aiUnifiedAdapter != nil {
-		service.SetUnifiedResourceProvider(r.aiUnifiedAdapter)
-		log.Debug().Msg("AI chat: Unified resource provider wired")
+	if monitor != nil {
+		if provider := r.unifiedResourceProviderForMonitor(monitor); provider != nil {
+			service.SetUnifiedResourceProvider(provider)
+			log.Debug().Msg("AI chat: Unified resource provider wired")
+		}
+	} else if orgID == "default" {
+		if provider := r.defaultUnifiedResourceProvider(); provider != nil {
+			service.SetUnifiedResourceProvider(provider)
+			log.Debug().Msg("AI chat: Unified resource provider wired")
+		}
 	}
 
-	log.Info().Msg("AI chat MCP tool providers wired")
+	log.Info().Str("org_id", orgID).Msg("AI chat MCP tool providers wired")
 }
 
 // forecastStateProviderWrapper wraps monitor to implement forecast.StateProvider
@@ -6782,16 +7017,27 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		return nil
 	}
 
+	physicalDisks := make([]unifiedresources.Resource, 0)
+	for _, resource := range monitor.GetUnifiedResources() {
+		if resource.Type == unifiedresources.ResourceTypePhysicalDisk && resource.PhysicalDisk != nil {
+			physicalDisks = append(physicalDisks, resource)
+		}
+	}
+
 	findDisk := func(id string) *unifiedresources.Resource {
-		if r.aiUnifiedAdapter == nil {
+		target := strings.TrimSpace(id)
+		if target == "" {
 			return nil
 		}
-		for _, res := range r.aiUnifiedAdapter.GetByType(unifiedresources.ResourceTypePhysicalDisk) {
-			if res.PhysicalDisk == nil {
-				continue
-			}
-			if res.PhysicalDisk.Serial == id || res.PhysicalDisk.WWN == id || res.ID == id {
-				return &res
+
+		for i := range physicalDisks {
+			disk := &physicalDisks[i]
+			serial := strings.TrimSpace(disk.PhysicalDisk.Serial)
+			wwn := strings.TrimSpace(disk.PhysicalDisk.WWN)
+			if strings.EqualFold(disk.ID, target) ||
+				(serial != "" && strings.EqualFold(serial, target)) ||
+				(wwn != "" && strings.EqualFold(wwn, target)) {
+				return disk
 			}
 		}
 		return nil

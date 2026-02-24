@@ -1,6 +1,6 @@
 // Package discovery provides AI-powered infrastructure discovery capabilities.
 // It discovers services, versions, configurations, and CLI access methods
-// for VMs, LXCs, Docker containers, Kubernetes pods, and hosts.
+// for VMs, containers, Docker containers, Kubernetes pods, and hosts.
 package servicediscovery
 
 import (

@@ -11,7 +11,7 @@ import (
 // MetadataProvider provides access to resource metadata stores
 // This allows the AI to update resource URLs when it discovers web services
 type MetadataProvider interface {
-	// SetGuestURL sets the custom URL for a Proxmox guest (VM/container)
+	// SetGuestURL sets the custom URL for a guest resource (VM/system container)
 	SetGuestURL(guestID, customURL string) error
 
 	// SetDockerURL sets the custom URL for a Docker container/service

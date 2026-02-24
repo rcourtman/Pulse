@@ -104,8 +104,8 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 				Msg("[Control] Target resource not in resolved context - may indicate model hallucination")
 		}
 
-		// Validate routing context - block if targeting a Proxmox host when child resources exist
-		// This prevents accidentally executing commands on the host when user meant to target an LXC/VM
+		// Validate routing context - block if targeting a host node when child resources exist
+		// This prevents accidentally executing commands on the host when user meant to target a container/VM
 		routingResult := e.validateRoutingContext(targetHost)
 		if routingResult.IsBlocked() {
 			return NewToolResponseResult(routingResult.RoutingError.ToToolResponse()), nil
@@ -136,13 +136,13 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 	}
 
 	// Resolve target to the correct agent and routing info (with full provenance)
-	// If targetHost is an LXC/VM name, this routes to the Proxmox host agent
+	// If targetHost is a container/VM name, this routes to the host node agent
 	// with the correct TargetType and TargetID for pct exec / qm guest exec
 	routing := e.resolveTargetForCommandFull(targetHost)
 	if routing.AgentID == "" {
 		if targetHost != "" {
 			if routing.TargetType == "container" || routing.TargetType == "vm" {
-				return NewErrorResult(fmt.Errorf("'%s' is a %s but no agent is available on its Proxmox host; install Pulse Unified Agent on the Proxmox node", targetHost, routing.TargetType)), nil
+				return NewErrorResult(fmt.Errorf("'%s' is a %s but no agent is available on its host node; install Pulse Unified Agent on the node", targetHost, routing.TargetType)), nil
 			}
 			return NewErrorResult(fmt.Errorf("no agent available for target '%s'. %s", targetHost, formatAvailableAgentHosts(e.agentServer.GetConnectedAgents()))), nil
 		}
@@ -356,7 +356,7 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 
 	agentID := e.findAgentForNode(guest.Node)
 	if agentID == "" {
-		return NewErrorResult(fmt.Errorf("no agent available on node '%s'; install Pulse Unified Agent on the Proxmox host to enable control", guest.Node)), nil
+		return NewErrorResult(fmt.Errorf("no agent available on node '%s'; install Pulse Unified Agent on the node to enable control", guest.Node)), nil
 	}
 
 	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
@@ -463,8 +463,8 @@ type CommandRoutingResult struct {
 
 	// Provenance info
 	AgentHostname string // Hostname of the agent
-	ResolvedKind  string // Technology/transport kind: "node", "lxc", "vm", "docker", "host" (drives routing decisions)
-	ResolvedNode  string // Proxmox node name (if applicable)
+	ResolvedKind  string // Technology/transport kind: "node", "system-container", "vm", "docker", "host" (drives routing decisions)
+	ResolvedNode  string // Hypervisor node name (if applicable)
 	Transport     string // How command will be executed: "direct", "pct_exec", "qm_guest_exec"
 }
 
@@ -510,7 +510,7 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 		// Route based on resource type
 		switch loc.ResourceType {
 		case "node":
-			// Direct Proxmox node
+			// Direct hypervisor node
 			nodeAgentID := e.findAgentForNode(loc.Node)
 			result.AgentID = nodeAgentID
 			result.ResolvedKind = "node"
@@ -523,10 +523,10 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 			}
 			return result
 
-		case "lxc":
-			// LXC container - route through Proxmox node agent via pct exec
+		case "system-container":
+			// System container - route through node agent via pct exec
 			nodeAgentID := e.findAgentForNode(loc.Node)
-			result.ResolvedKind = "lxc"
+			result.ResolvedKind = "system-container"
 			result.ResolvedNode = loc.Node
 			result.TargetType = "container"
 			result.TargetID = fmt.Sprintf("%d", loc.VMID)
@@ -543,7 +543,7 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 			return result
 
 		case "vm":
-			// VM - route through Proxmox node agent via qm guest exec
+			// VM - route through node agent via qm guest exec
 			nodeAgentID := e.findAgentForNode(loc.Node)
 			result.ResolvedKind = "vm"
 			result.ResolvedNode = loc.Node
@@ -566,7 +566,7 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 			result.ResolvedKind = loc.ResourceType
 			result.ResolvedNode = loc.Node
 
-			if loc.DockerHostType == "lxc" {
+			if loc.DockerHostType == "system-container" {
 				nodeAgentID := e.findAgentForNode(loc.Node)
 				result.TargetType = "container"
 				result.TargetID = fmt.Sprintf("%d", loc.DockerHostVMID)
@@ -854,8 +854,8 @@ func (e *PulseToolExecutor) getAgentHostnameForDockerHost(dockerHost *models.Doc
 }
 
 // resolveDockerHostRoutingFull resolves a Docker host to the correct agent and routing info
-// with full provenance metadata. If the Docker host is actually an LXC or VM, it routes
-// through the Proxmox host agent with the correct TargetType and TargetID so commands
+// with full provenance metadata. If the Docker host is actually a system container or VM,
+// it routes through the node agent with the correct TargetType and TargetID so commands
 // are executed inside the guest.
 func (e *PulseToolExecutor) resolveDockerHostRoutingFull(dockerHost *models.DockerHost) CommandRoutingResult {
 	result := CommandRoutingResult{
@@ -867,12 +867,12 @@ func (e *PulseToolExecutor) resolveDockerHostRoutingFull(dockerHost *models.Dock
 		return result
 	}
 
-	// STEP 1: Check topology — is the Docker host actually an LXC or VM?
+	// STEP 1: Check topology — is the Docker host actually a system container or VM?
 	if rs, err := e.readStateForControl(); err == nil {
-		// Check LXCs
+		// Check system containers
 		for _, ct := range rs.Containers() {
 			if ct.Name() == dockerHost.Hostname {
-				result.ResolvedKind = "lxc"
+				result.ResolvedKind = "system-container"
 				result.ResolvedNode = ct.Node()
 				result.TargetType = "container"
 				result.TargetID = fmt.Sprintf("%d", ct.VMID())

@@ -39,7 +39,7 @@ Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,
 					},
 					"resource_id": {
 						Type:        "string",
-						Description: "Resource ID (e.g. node/pve1, qemu/100, lxc/101)",
+						Description: "Resource ID (e.g. node/pve1, vm/100, ct/101)",
 					},
 					"resource_name": {
 						Type:        "string",

@@ -4,12 +4,16 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -166,6 +170,205 @@ func TestAISettingsHandler_GetAIService_MultiTenantProviders(t *testing.T) {
 	}
 }
 
+func TestAISettingsHandler_GetAIService_UsesTenantReadState(t *testing.T) {
+	tmp := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tmp)
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	tenantAdapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	tenantMonitor := &monitoring.Monitor{}
+	tenantMonitor.SetResourceStore(tenantAdapter)
+	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{"tenant-1": tenantMonitor})
+
+	handler := NewAISettingsHandler(mtp, mtm, nil)
+	handler.SetReadState(unifiedresources.NewRegistry(nil))
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "tenant-1")
+	svc := handler.GetAIService(ctx)
+	if svc == nil {
+		t.Fatalf("expected tenant AI service")
+	}
+
+	field := reflect.ValueOf(svc).Elem().FieldByName("readState")
+	ptr := unsafe.Pointer(field.UnsafeAddr())
+	current := reflect.NewAt(field.Type(), ptr).Elem().Interface().(unifiedresources.ReadState)
+	if current != tenantAdapter {
+		t.Fatalf("expected tenant read state adapter, got %#v", current)
+	}
+}
+
+func TestAISettingsHandler_GetAIService_UsesTenantUnifiedResourceProvider(t *testing.T) {
+	tmp := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tmp)
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	tenantAdapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	tenantMonitor := &monitoring.Monitor{}
+	tenantMonitor.SetResourceStore(tenantAdapter)
+	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{"tenant-1": tenantMonitor})
+
+	handler := NewAISettingsHandler(mtp, mtm, nil)
+	handler.SetUnifiedResourceProvider(stubUnifiedResourceProvider{})
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "tenant-1")
+	svc := handler.GetAIService(ctx)
+	if svc == nil {
+		t.Fatalf("expected tenant AI service")
+	}
+
+	field := reflect.ValueOf(svc).Elem().FieldByName("unifiedResourceProvider")
+	ptr := unsafe.Pointer(field.UnsafeAddr())
+	current := reflect.NewAt(field.Type(), ptr).Elem().Interface().(ai.UnifiedResourceProvider)
+	if current != tenantAdapter {
+		t.Fatalf("expected tenant unified provider adapter, got %#v", current)
+	}
+}
+
+func TestAISettingsHandler_GetAIService_NonDefaultWithoutTenantReadStateFailsClosed(t *testing.T) {
+	tmp := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tmp)
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	handler := NewAISettingsHandler(mtp, mtm, nil)
+	handler.SetReadState(unifiedresources.NewRegistry(nil))
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "tenant-1")
+	svc := handler.GetAIService(ctx)
+	if svc == nil {
+		t.Fatalf("expected tenant AI service")
+	}
+
+	field := reflect.ValueOf(svc).Elem().FieldByName("readState")
+	ptr := unsafe.Pointer(field.UnsafeAddr())
+	current := reflect.NewAt(field.Type(), ptr).Elem().Interface()
+	if current != nil {
+		t.Fatalf("expected nil tenant read state when tenant monitor read-state is unavailable, got %#v", current)
+	}
+}
+
+func TestAISettingsHandler_GetAIService_NonDefaultWithoutTenantUnifiedProviderFailsClosed(t *testing.T) {
+	tmp := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tmp)
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	handler := NewAISettingsHandler(mtp, mtm, nil)
+	handler.SetUnifiedResourceProvider(stubUnifiedResourceProvider{})
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "tenant-1")
+	svc := handler.GetAIService(ctx)
+	if svc == nil {
+		t.Fatalf("expected tenant AI service")
+	}
+
+	field := reflect.ValueOf(svc).Elem().FieldByName("unifiedResourceProvider")
+	ptr := unsafe.Pointer(field.UnsafeAddr())
+	current := reflect.NewAt(field.Type(), ptr).Elem().Interface()
+	if current != nil {
+		t.Fatalf("expected nil tenant unified provider when tenant monitor provider is unavailable, got %#v", current)
+	}
+}
+
+func TestAISettingsHandler_SetUnifiedResourceProvider_ReappliesTenantScopedProvider(t *testing.T) {
+	tmp := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tmp)
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	tenantAdapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	tenantMonitor := &monitoring.Monitor{}
+	tenantMonitor.SetResourceStore(tenantAdapter)
+	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{"tenant-1": tenantMonitor})
+
+	handler := NewAISettingsHandler(mtp, mtm, nil)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "tenant-1")
+	svc := handler.GetAIService(ctx)
+	if svc == nil {
+		t.Fatalf("expected tenant AI service")
+	}
+
+	handler.SetUnifiedResourceProvider(stubUnifiedResourceProvider{})
+
+	field := reflect.ValueOf(svc).Elem().FieldByName("unifiedResourceProvider")
+	ptr := unsafe.Pointer(field.UnsafeAddr())
+	current := reflect.NewAt(field.Type(), ptr).Elem().Interface().(ai.UnifiedResourceProvider)
+	if current != tenantAdapter {
+		t.Fatalf("expected tenant scoped provider to be preserved, got %#v", current)
+	}
+}
+
+func TestAISettingsHandler_GetAIService_UsesTenantStateProvider(t *testing.T) {
+	tmp := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tmp)
+
+	defaultMonitor, defaultState, _ := newTestMonitor(t)
+	defaultState.VMs = []models.VM{{ID: "vm-default"}}
+
+	tenantMonitor, tenantState, _ := newTestMonitor(t)
+	tenantState.VMs = []models.VM{{ID: "vm-tenant"}}
+
+	mtm := &monitoring.MultiTenantMonitor{}
+	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{
+		"default":  defaultMonitor,
+		"tenant-1": tenantMonitor,
+	})
+
+	handler := NewAISettingsHandler(mtp, mtm, nil)
+	handler.SetStateProvider(defaultMonitor)
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "tenant-1")
+	svc := handler.GetAIService(ctx)
+	if svc == nil {
+		t.Fatalf("expected tenant AI service")
+	}
+
+	stateProvider := svc.GetStateProvider()
+	if stateProvider == nil {
+		t.Fatalf("expected tenant state provider to be configured")
+	}
+	snapshot := stateProvider.GetState()
+	if len(snapshot.VMs) != 1 || snapshot.VMs[0].ID != "vm-tenant" {
+		t.Fatalf("expected tenant state snapshot, got %#v", snapshot.VMs)
+	}
+}
+
+func TestAISettingsHandler_GetAIService_NonDefaultDoesNotInheritDefaultDiscoveryStore(t *testing.T) {
+	tmp := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tmp)
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	handler := NewAISettingsHandler(mtp, mtm, nil)
+	defaultDiscoveryStore, err := servicediscovery.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("default NewStore: %v", err)
+	}
+	handler.SetDiscoveryStore(defaultDiscoveryStore)
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "tenant-1")
+	svc := handler.GetAIService(ctx)
+	if svc == nil {
+		t.Fatalf("expected tenant AI service")
+	}
+	if got := svc.GetDiscoveryStore(); got == nil {
+		t.Fatalf("expected tenant service to initialize its own discovery store")
+	} else if got == defaultDiscoveryStore {
+		t.Fatalf("expected tenant service discovery store to differ from default store")
+	}
+
+	tenantDiscoveryStore, err := servicediscovery.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("tenant NewStore: %v", err)
+	}
+	handler.SetDiscoveryStoreForOrg("tenant-1", tenantDiscoveryStore)
+	if got := svc.GetDiscoveryStore(); got != tenantDiscoveryStore {
+		t.Fatalf("expected tenant-specific discovery store, got %#v", got)
+	}
+}
+
 func TestAISettingsHandler_DiscoveryStoreAccessors(t *testing.T) {
 	handler := newTestAISettingsHandler(&config.Config{DataPath: t.TempDir()}, config.NewConfigPersistence(t.TempDir()), nil)
 
@@ -177,6 +380,126 @@ func TestAISettingsHandler_DiscoveryStoreAccessors(t *testing.T) {
 
 	if got := handler.GetDiscoveryStore(); got != store {
 		t.Fatalf("expected discovery store to match")
+	}
+}
+
+func TestAISettingsHandler_GetConfig_NonDefaultFallsBackWhenMultiTenantUnavailable(t *testing.T) {
+	handler := newTestAISettingsHandler(&config.Config{APIToken: "token"}, config.NewConfigPersistence(t.TempDir()), nil)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "acme")
+
+	if got := handler.getConfig(ctx); got == nil {
+		t.Fatalf("expected legacy config fallback for non-default org without tenant monitor")
+	}
+}
+
+func TestAISettingsHandler_GetPersistence_NonDefaultFallsBackWhenMultiTenantUnavailable(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	handler := newTestAISettingsHandler(&config.Config{DataPath: t.TempDir()}, persistence, nil)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "acme")
+
+	if got := handler.getPersistence(ctx); got != persistence {
+		t.Fatalf("expected legacy persistence fallback for non-default org without tenant persistence, got %#v", got)
+	}
+}
+
+func TestAISettingsHandler_GetConfig_NonDefaultInvalidOrgFailsClosedWhenMultiTenantAvailable(t *testing.T) {
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	handler := NewAISettingsHandler(mtp, mtm, nil)
+	handler.SetConfig(&config.Config{APIToken: "token"})
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "../bad")
+
+	if got := handler.getConfig(ctx); got != nil {
+		t.Fatalf("expected nil config for invalid non-default org in multi-tenant mode, got %#v", got)
+	}
+}
+
+func TestAISettingsHandler_GetPersistence_NonDefaultInvalidOrgFailsClosedWhenMultiTenantAvailable(t *testing.T) {
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	handler := NewAISettingsHandler(mtp, mtm, nil)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "../bad")
+
+	if got := handler.getPersistence(ctx); got != nil {
+		t.Fatalf("expected nil persistence for invalid non-default org in multi-tenant mode, got %#v", got)
+	}
+}
+
+func TestAISettingsHandler_GetAIService_NonDefaultInvalidOrgReturnsFailClosedTenantService(t *testing.T) {
+	t.Setenv("PULSE_MOCK_MODE", "false")
+
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	handler := NewAISettingsHandler(mtp, mtm, nil)
+	defaultSvc := handler.GetAIService(context.Background())
+	if defaultSvc == nil {
+		t.Fatal("expected default AI service to be available")
+	}
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "../bad")
+	tenantSvc := handler.GetAIService(ctx)
+	if tenantSvc == nil {
+		t.Fatal("expected fail-closed tenant service")
+	}
+	if tenantSvc == defaultSvc {
+		t.Fatal("expected non-default invalid org to not fall back to default legacy service")
+	}
+	if got := tenantSvc.GetOrgID(); got != "../bad" {
+		t.Fatalf("expected tenant org id to be preserved, got %q", got)
+	}
+	if tenantSvc.IsEnabled() {
+		t.Fatal("expected fail-closed tenant service to be disabled")
+	}
+	if tenantSvc.HasLicenseFeature(ai.FeatureAIAutoFix) {
+		t.Fatal("expected fail-closed tenant service license checker to deny features")
+	}
+}
+
+func TestNewAISettingsHandler_DefaultServiceAlwaysInitialized(t *testing.T) {
+	t.Setenv("PULSE_MOCK_MODE", "false")
+
+	handler := NewAISettingsHandler(nil, nil, nil)
+	svc := handler.GetAIService(context.Background())
+	if svc == nil {
+		t.Fatal("expected default AI service to be initialized even without persistence")
+	}
+	if got := svc.GetOrgID(); got != "default" {
+		t.Fatalf("expected default org id, got %q", got)
+	}
+}
+
+func TestAISettingsHandler_GetAIService_NonDefaultWithTenantMonitorWithoutPersistenceFailsClosed(t *testing.T) {
+	t.Setenv("PULSE_MOCK_MODE", "false")
+
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	handler := NewAISettingsHandler(nil, mtm, nil)
+	defaultSvc := handler.GetAIService(context.Background())
+	if defaultSvc == nil {
+		t.Fatal("expected default AI service to be available")
+	}
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "tenant-1")
+	tenantSvc := handler.GetAIService(ctx)
+	if tenantSvc == nil {
+		t.Fatal("expected fail-closed tenant service")
+	}
+	if tenantSvc == defaultSvc {
+		t.Fatal("expected non-default org to not fall back to default service when tenant monitor is present")
+	}
+	if got := tenantSvc.GetOrgID(); got != "tenant-1" {
+		t.Fatalf("expected tenant org id, got %q", got)
+	}
+	if tenantSvc.IsEnabled() {
+		t.Fatal("expected fail-closed tenant service to be disabled")
 	}
 }
 

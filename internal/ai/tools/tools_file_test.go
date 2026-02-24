@@ -131,12 +131,12 @@ func TestValidateWriteExecutionContext_Blocked(t *testing.T) {
 		TargetType:    "host", // Agent matched directly, assuming it's a host
 		AgentHostname: "my-lxc",
 		AgentID:       "agent-1",
-		ResolvedKind:  "lxc", // But resolving matched LXC
+		ResolvedKind:  "system-container", // But resolving matched system container
 		ResolvedNode:  "pve1",
 	})
 
 	assert.NotNil(t, err)
-	assert.Contains(t, err.Message, "write would execute on the Proxmox node instead of inside the lxc")
+	assert.Contains(t, err.Message, "write would execute on the host node instead of inside the system-container")
 }
 
 func TestFormatFileApprovalNeeded_JSONSafe(t *testing.T) {

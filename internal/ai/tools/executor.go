@@ -138,7 +138,7 @@ type BackupProvider interface {
 	GetPBSInstances() []models.PBSInstance
 }
 
-// GuestConfigProvider provides guest configuration data (VM/LXC).
+// GuestConfigProvider provides guest configuration data (VM/system container).
 type GuestConfigProvider interface {
 	GetGuestConfig(guestType, instance, node string, vmID int) (map[string]interface{}, error)
 }

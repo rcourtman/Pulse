@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -29,6 +30,7 @@ type OrgHandlers struct {
 	persistence  *config.MultiTenantPersistence
 	mtMonitor    *monitoring.MultiTenantMonitor
 	rbacProvider *TenantRBACProvider
+	onDelete     func(ctx context.Context, orgID string) error
 }
 
 func NewOrgHandlers(
@@ -46,6 +48,14 @@ func NewOrgHandlers(
 		mtMonitor:    mtMonitor,
 		rbacProvider: provider,
 	}
+}
+
+// SetOnDelete configures an optional callback invoked after org deletion.
+func (h *OrgHandlers) SetOnDelete(callback func(ctx context.Context, orgID string) error) {
+	if h == nil {
+		return
+	}
+	h.onDelete = callback
 }
 
 type createOrganizationRequest struct {
@@ -305,11 +315,19 @@ func (h *OrgHandlers) HandleDeleteOrg(w http.ResponseWriter, r *http.Request) {
 	if h.mtMonitor != nil {
 		h.mtMonitor.RemoveTenant(orgID)
 	}
-	if h.rbacProvider != nil {
+	if h.rbacProvider != nil && h.onDelete == nil {
 		_ = h.rbacProvider.RemoveTenant(orgID)
 	}
 	if mgr := GetTenantAuditManager(); mgr != nil {
 		mgr.RemoveTenantLogger(orgID)
+	}
+	if h.onDelete != nil {
+		if err := h.onDelete(r.Context(), orgID); err != nil {
+			log.Warn().
+				Err(err).
+				Str("org_id", orgID).
+				Msg("Org deletion cleanup callback failed")
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)

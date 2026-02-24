@@ -113,16 +113,16 @@ type ResourceLocation struct {
 	// What was found
 	Found        bool   // True if the resource was found
 	Name         string // The resource name
-	ResourceType string // "node", "vm", "lxc", "dockerhost", "docker", "host", "k8s_cluster", "k8s_pod", "k8s_deployment"
+	ResourceType string // "node", "vm", "system-container", "dockerhost", "docker", "host", "k8s_cluster", "k8s_pod", "k8s_deployment"
 
-	// For VMs and LXCs (Proxmox)
-	VMID int    // VMID if this is a VM or LXC
-	Node string // Proxmox node name
+	// For VMs and system containers (guest resources on a hypervisor node)
+	VMID int    // Guest ID (VMID) if this is a VM or system container
+	Node string // Hypervisor node name (e.g., Proxmox node)
 
 	// For Docker/Podman containers
-	DockerHostName string // Name of the Docker host (LXC/VM/standalone)
-	DockerHostType string // "lxc", "vm", or "standalone"
-	DockerHostVMID int    // VMID if Docker host is an LXC/VM
+	DockerHostName string // Name of the Docker host (system-container/VM/standalone)
+	DockerHostType string // "system-container", "vm", or "standalone"
+	DockerHostVMID int    // Guest ID (VMID) if Docker host is a system container or VM
 
 	// For Kubernetes resources
 	K8sClusterName string // Kubernetes cluster name
@@ -168,21 +168,21 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 		}
 	}
 
-	// Check LXC containers
+	// Check system containers (LXC/Incus)
 	for _, lxc := range s.Containers {
 		if lxc.Name == name {
 			return ResourceLocation{
 				Found:        true,
 				Name:         name,
-				ResourceType: "lxc",
+				ResourceType: "system-container",
 				VMID:         lxc.VMID,
 				Node:         lxc.Node,
-				TargetHost:   lxc.Name, // Route to LXC by name
+				TargetHost:   lxc.Name,
 			}
 		}
 	}
 
-	// Check Docker hosts (LXCs/VMs/standalone hosts running Docker)
+	// Check Docker hosts (system-containers/VMs/standalone hosts running Docker)
 	for _, dh := range s.DockerHosts {
 		if dh.Hostname == name || dh.ID == name {
 			loc := ResourceLocation{
@@ -192,10 +192,10 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 				DockerHostName: dh.Hostname,
 				TargetHost:     dh.Hostname,
 			}
-			// Check if this Docker host is an LXC
+			// Check if this Docker host is a system container
 			for _, lxc := range s.Containers {
 				if lxc.Name == dh.Hostname || lxc.Name == dh.ID {
-					loc.DockerHostType = "lxc"
+					loc.DockerHostType = "system-container"
 					loc.DockerHostVMID = lxc.VMID
 					loc.Node = lxc.Node
 					break
@@ -230,13 +230,13 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 					DockerHostName: dh.Hostname,
 					TargetHost:     dh.Hostname, // Route to the Docker host, not the container
 				}
-				// Resolve the Docker host's parent (LXC/VM/standalone)
+				// Resolve the Docker host's parent (system-container/VM/standalone)
 				for _, lxc := range s.Containers {
 					if lxc.Name == dh.Hostname || lxc.Name == dh.ID {
-						loc.DockerHostType = "lxc"
+						loc.DockerHostType = "system-container"
 						loc.DockerHostVMID = lxc.VMID
 						loc.Node = lxc.Node
-						loc.TargetHost = lxc.Name // Route to the LXC
+						loc.TargetHost = lxc.Name
 						break
 					}
 				}
@@ -246,7 +246,7 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 							loc.DockerHostType = "vm"
 							loc.DockerHostVMID = vm.VMID
 							loc.Node = vm.Node
-							loc.TargetHost = vm.Name // Route to the VM
+							loc.TargetHost = vm.Name
 							break
 						}
 					}

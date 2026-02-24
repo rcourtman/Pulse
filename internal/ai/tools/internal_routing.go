@@ -44,7 +44,7 @@ func (e *PulseToolExecutor) resolveResourceLocation(name string) models.Resource
 			return models.ResourceLocation{
 				Found:        true,
 				Name:         name,
-				ResourceType: "lxc",
+				ResourceType: "system-container",
 				VMID:         lxc.VMID(),
 				Node:         lxc.Node(),
 				TargetHost:   lxc.Name(),
@@ -63,10 +63,10 @@ func (e *PulseToolExecutor) resolveResourceLocation(name string) models.Resource
 				TargetHost:     dhName,
 			}
 
-			// Resolve Docker host parent if lxc
+			// Resolve Docker host parent (system-container or VM)
 			for _, lxc := range rs.Containers() {
 				if lxc.Name() == dhName || lxc.ID() == dh.ID() {
-					loc.DockerHostType = "lxc"
+					loc.DockerHostType = "system-container"
 					loc.DockerHostVMID = lxc.VMID()
 					loc.Node = lxc.Node()
 					break
@@ -110,10 +110,10 @@ func (e *PulseToolExecutor) resolveResourceLocation(name string) models.Resource
 				TargetHost:     dhName,
 			}
 
-			// Resolve docker host parent
+			// Resolve docker host parent (system-container or VM)
 			for _, lxc := range rs.Containers() {
 				if lxc.Name() == dhName || lxc.ID() == dhID || lxc.ID() == dhName {
-					loc.DockerHostType = "lxc"
+					loc.DockerHostType = "system-container"
 					loc.DockerHostVMID = lxc.VMID()
 					loc.Node = lxc.Node()
 					loc.TargetHost = lxc.Name()

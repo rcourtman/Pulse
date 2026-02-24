@@ -230,15 +230,14 @@ func extractQuerySearchFacts(input map[string]interface{}, resultText string) []
 
 func extractQueryTopologyFacts(resultText string) []FactEntry {
 	// TopologyResponse — direct JSON. Has summary + proxmox.nodes array.
-	// Real format: nodes are under "proxmox.nodes", LXC count is "total_lxc_containers".
 	var resp struct {
 		Summary struct {
-			TotalNodes         int `json:"total_nodes"`
-			TotalVMs           int `json:"total_vms"`
-			RunningVMs         int `json:"running_vms"`
-			TotalLXCContainers int `json:"total_lxc_containers"`
-			RunningLXC         int `json:"running_lxc"`
-			TotalDockerHost    int `json:"total_docker_hosts"`
+			TotalNodes            int `json:"total_nodes"`
+			TotalVMs              int `json:"total_vms"`
+			RunningVMs            int `json:"running_vms"`
+			TotalSystemContainers int `json:"total_system_containers"`
+			RunningContainers     int `json:"running_containers"`
+			TotalDockerHost       int `json:"total_docker_hosts"`
 		} `json:"summary"`
 		Proxmox struct {
 			Nodes []struct {
@@ -278,8 +277,8 @@ func extractQueryTopologyFacts(resultText string) []FactEntry {
 	if s.TotalVMs > 0 {
 		parts = append(parts, fmt.Sprintf("%d VMs (%d running)", s.TotalVMs, s.RunningVMs))
 	}
-	if s.TotalLXCContainers > 0 {
-		parts = append(parts, fmt.Sprintf("%d LXC (%d running)", s.TotalLXCContainers, s.RunningLXC))
+	if s.TotalSystemContainers > 0 {
+		parts = append(parts, fmt.Sprintf("%d containers (%d running)", s.TotalSystemContainers, s.RunningContainers))
 	}
 	if s.TotalDockerHost > 0 {
 		parts = append(parts, fmt.Sprintf("%d docker host", s.TotalDockerHost))
@@ -384,10 +383,10 @@ func extractQueryListFacts(resultText string) []FactEntry {
 			runningVMs++
 		}
 	}
-	runningLXC := 0
+	runningContainers := 0
 	for _, ct := range resp.Containers {
 		if ct.Status == "running" {
-			runningLXC++
+			runningContainers++
 		}
 	}
 
@@ -412,7 +411,7 @@ func extractQueryListFacts(resultText string) []FactEntry {
 		parts = append(parts, fmt.Sprintf("%d VMs (%d running)", vmCount, runningVMs))
 	}
 	if ctCount > 0 {
-		parts = append(parts, fmt.Sprintf("%d LXC (%d running)", ctCount, runningLXC))
+		parts = append(parts, fmt.Sprintf("%d containers (%d running)", ctCount, runningContainers))
 	}
 	dockerCount := resp.Total.DockerHosts
 	if dockerCount == 0 {

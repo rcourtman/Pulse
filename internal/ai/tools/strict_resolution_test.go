@@ -1039,8 +1039,8 @@ func TestWriteExecutionContext_BlocksNodeFallbackForLXC(t *testing.T) {
 	if response.Error.Code != "EXECUTION_CONTEXT_UNAVAILABLE" {
 		t.Errorf("Expected EXECUTION_CONTEXT_UNAVAILABLE, got %s", response.Error.Code)
 	}
-	if response.Error.Details["resolved_kind"] != "lxc" {
-		t.Errorf("Expected resolved_kind=lxc, got %v", response.Error.Details["resolved_kind"])
+	if response.Error.Details["resolved_kind"] != "system-container" {
+		t.Errorf("Expected resolved_kind=system-container, got %v", response.Error.Details["resolved_kind"])
 	}
 	if response.Error.Details["auto_recoverable"] != false {
 		t.Error("Expected auto_recoverable=false")
@@ -1072,7 +1072,7 @@ func TestWriteExecutionContext_AllowsProperLXCRouting(t *testing.T) {
 		TargetType:    "container",
 		TargetID:      "141",
 		AgentHostname: "delly",
-		ResolvedKind:  "lxc",
+		ResolvedKind:  "system-container",
 		ResolvedNode:  "delly",
 		Transport:     "pct_exec",
 	}
@@ -1080,10 +1080,10 @@ func TestWriteExecutionContext_AllowsProperLXCRouting(t *testing.T) {
 	// validateWriteExecutionContext should allow this
 	err := executor.validateWriteExecutionContext("homepage-docker", routing)
 	if err != nil {
-		t.Fatalf("Expected no error for proper LXC routing, got: %s", err.Message)
+		t.Fatalf("Expected no error for proper container routing, got: %s", err.Message)
 	}
 
-	t.Log("✓ Write to LXC allowed when routing uses pct_exec")
+	t.Log("✓ Write to system container allowed when routing uses pct_exec")
 }
 
 // TestWriteExecutionContext_AllowsHostWrites verifies that writes directly to a host
@@ -1124,7 +1124,7 @@ func TestCommandRoutingResult_ProvenanceFields(t *testing.T) {
 		TargetType:    "container",
 		TargetID:      "141",
 		AgentHostname: "delly",
-		ResolvedKind:  "lxc",
+		ResolvedKind:  "system-container",
 		ResolvedNode:  "delly",
 		Transport:     "pct_exec",
 	}
@@ -1133,8 +1133,8 @@ func TestCommandRoutingResult_ProvenanceFields(t *testing.T) {
 	if provenance["requested_target_host"] != "homepage-docker" {
 		t.Errorf("Expected requested_target_host=homepage-docker, got %v", provenance["requested_target_host"])
 	}
-	if provenance["resolved_kind"] != "lxc" {
-		t.Errorf("Expected resolved_kind=lxc, got %v", provenance["resolved_kind"])
+	if provenance["resolved_kind"] != "system-container" {
+		t.Errorf("Expected resolved_kind=system-container, got %v", provenance["resolved_kind"])
 	}
 	if provenance["transport"] != "pct_exec" {
 		t.Errorf("Expected transport=pct_exec, got %v", provenance["transport"])
@@ -1207,8 +1207,8 @@ func TestRoutingOrder_TopologyBeatsHostnameMatch(t *testing.T) {
 	if routing.Transport != "pct_exec" {
 		t.Errorf("Transport = %q, want %q (topology must win over hostname match)", routing.Transport, "pct_exec")
 	}
-	if routing.ResolvedKind != "lxc" {
-		t.Errorf("ResolvedKind = %q, want %q", routing.ResolvedKind, "lxc")
+	if routing.ResolvedKind != "system-container" {
+		t.Errorf("ResolvedKind = %q, want %q", routing.ResolvedKind, "system-container")
 	}
 	if routing.TargetType != "container" {
 		t.Errorf("TargetType = %q, want %q", routing.TargetType, "container")

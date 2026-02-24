@@ -108,11 +108,96 @@ func TestExecuteGetTopologySummaryOnly(t *testing.T) {
 	if len(topology.Docker.Hosts) != 0 {
 		t.Fatalf("expected no docker hosts, got: %+v", topology.Docker.Hosts)
 	}
+	if len(topology.Kubernetes.Clusters) != 0 {
+		t.Fatalf("expected no kubernetes clusters, got: %+v", topology.Kubernetes.Clusters)
+	}
 	if topology.Summary.TotalVMs != 1 || topology.Summary.TotalDockerHosts != 1 || topology.Summary.TotalDockerContainers != 1 {
 		t.Fatalf("unexpected summary: %+v", topology.Summary)
 	}
 	if topology.Summary.RunningVMs != 1 || topology.Summary.RunningDocker != 1 {
 		t.Fatalf("unexpected running summary: %+v", topology.Summary)
+	}
+}
+
+func TestExecuteGetTopology_KubernetesInclude(t *testing.T) {
+	state := models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{
+			{
+				ID:     "cluster-1",
+				Name:   "prod-cluster",
+				Status: "online",
+				Nodes: []models.KubernetesNode{
+					{Name: "worker-1", UID: "node-1", Ready: true, Roles: []string{"worker"}},
+				},
+				Pods: []models.KubernetesPod{
+					{
+						UID:       "pod-1",
+						Name:      "api-6f8d5c",
+						Namespace: "default",
+						Phase:     "Running",
+						Restarts:  2,
+						OwnerKind: "Deployment",
+						OwnerName: "api",
+					},
+				},
+				Deployments: []models.KubernetesDeployment{
+					{
+						UID:             "deploy-1",
+						Name:            "api",
+						Namespace:       "default",
+						DesiredReplicas: 3,
+						ReadyReplicas:   2,
+					},
+				},
+			},
+		},
+	}
+
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: state},
+	})
+
+	result, err := executor.executeGetTopology(context.Background(), map[string]interface{}{
+		"include": "kubernetes",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var topology TopologyResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &topology); err != nil {
+		t.Fatalf("decode topology: %v", err)
+	}
+
+	if len(topology.Proxmox.Nodes) != 0 {
+		t.Fatalf("expected no proxmox topology, got: %+v", topology.Proxmox.Nodes)
+	}
+	if len(topology.Docker.Hosts) != 0 {
+		t.Fatalf("expected no docker topology, got: %+v", topology.Docker.Hosts)
+	}
+	if len(topology.Kubernetes.Clusters) != 1 {
+		t.Fatalf("expected one kubernetes cluster, got: %+v", topology.Kubernetes.Clusters)
+	}
+
+	cluster := topology.Kubernetes.Clusters[0]
+	if cluster.Name != "prod-cluster" || cluster.NodeCount != 1 || cluster.DeploymentCount != 1 || cluster.PodCount != 1 {
+		t.Fatalf("unexpected cluster topology: %+v", cluster)
+	}
+	if len(cluster.Nodes) != 1 || cluster.Nodes[0].Name != "worker-1" || !cluster.Nodes[0].Ready {
+		t.Fatalf("unexpected cluster nodes: %+v", cluster.Nodes)
+	}
+	if len(cluster.Deployments) != 1 || cluster.Deployments[0].Name != "api" || cluster.Deployments[0].ReadyReplicas != 2 {
+		t.Fatalf("unexpected cluster deployments: %+v", cluster.Deployments)
+	}
+	if len(cluster.Pods) != 1 || cluster.Pods[0].Name != "api-6f8d5c" || cluster.Pods[0].OwnerName != "api" {
+		t.Fatalf("unexpected cluster pods: %+v", cluster.Pods)
+	}
+
+	if topology.Summary.TotalK8sClusters != 1 || topology.Summary.TotalK8sNodes != 1 || topology.Summary.TotalK8sDeployments != 1 || topology.Summary.TotalK8sPods != 1 {
+		t.Fatalf("unexpected k8s summary totals: %+v", topology.Summary)
+	}
+	if topology.Summary.RunningK8sPods != 1 {
+		t.Fatalf("unexpected k8s running summary: %+v", topology.Summary)
 	}
 }
 
@@ -386,6 +471,114 @@ func TestExecuteListInfrastructurePaginationAndDockerFilter(t *testing.T) {
 	}
 	if len(dockerResp.DockerHosts[0].Containers) != 1 || dockerResp.DockerHosts[0].Containers[0].State != "running" {
 		t.Fatalf("unexpected docker containers: %+v", dockerResp.DockerHosts[0].Containers)
+	}
+}
+
+func TestExecuteListInfrastructure_KubernetesFilters(t *testing.T) {
+	state := models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{
+			{
+				ID:     "cluster-1",
+				Name:   "prod-cluster",
+				Status: "online",
+				Nodes: []models.KubernetesNode{
+					{Name: "worker-1", UID: "node-1", Ready: true, Roles: []string{"worker"}},
+				},
+				Pods: []models.KubernetesPod{
+					{
+						UID:       "pod-1",
+						Name:      "api-123",
+						Namespace: "default",
+						Phase:     "Running",
+						OwnerKind: "Deployment",
+						OwnerName: "api",
+					},
+					{
+						UID:       "pod-2",
+						Name:      "job-123",
+						Namespace: "batch",
+						Phase:     "Succeeded",
+						OwnerKind: "Job",
+						OwnerName: "cleanup",
+					},
+				},
+				Deployments: []models.KubernetesDeployment{
+					{
+						UID:               "dep-1",
+						Name:              "api",
+						Namespace:         "default",
+						DesiredReplicas:   3,
+						ReadyReplicas:     2,
+						AvailableReplicas: 2,
+					},
+				},
+			},
+			{
+				ID:     "cluster-2",
+				Name:   "dev-cluster",
+				Status: "warning",
+				Nodes: []models.KubernetesNode{
+					{Name: "dev-worker-1", UID: "node-2", Ready: false},
+				},
+			},
+		},
+	}
+
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: state},
+	})
+
+	result, err := executor.executeListInfrastructure(context.Background(), map[string]interface{}{
+		"type":         "kubernetes",
+		"cluster_name": "prod-cluster",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var clustersResp InfrastructureResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &clustersResp); err != nil {
+		t.Fatalf("decode kubernetes clusters response: %v", err)
+	}
+	if len(clustersResp.K8sClusters) != 1 || clustersResp.K8sClusters[0].Name != "prod-cluster" {
+		t.Fatalf("unexpected k8s clusters: %+v", clustersResp.K8sClusters)
+	}
+	if clustersResp.K8sClusters[0].NodeCount != 1 || clustersResp.K8sClusters[0].DeploymentCount != 1 || clustersResp.K8sClusters[0].PodCount != 2 {
+		t.Fatalf("unexpected k8s cluster counts: %+v", clustersResp.K8sClusters[0])
+	}
+	if clustersResp.Total.K8sClusters != 2 || clustersResp.Total.K8sNodes != 2 || clustersResp.Total.K8sPods != 2 || clustersResp.Total.K8sDeployments != 1 {
+		t.Fatalf("unexpected k8s totals: %+v", clustersResp.Total)
+	}
+
+	result, err = executor.executeListInfrastructure(context.Background(), map[string]interface{}{
+		"type":         "k8s_pods",
+		"status":       "running",
+		"cluster_name": "prod-cluster",
+		"namespace":    "default",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var podsResp InfrastructureResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &podsResp); err != nil {
+		t.Fatalf("decode k8s pods response: %v", err)
+	}
+	if len(podsResp.K8sPods) != 1 || podsResp.K8sPods[0].Name != "api-123" {
+		t.Fatalf("unexpected k8s pods: %+v", podsResp.K8sPods)
+	}
+
+	result, err = executor.executeListInfrastructure(context.Background(), map[string]interface{}{
+		"type":      "k8s_deployments",
+		"namespace": "default",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var deploymentsResp InfrastructureResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &deploymentsResp); err != nil {
+		t.Fatalf("decode k8s deployments response: %v", err)
+	}
+	if len(deploymentsResp.K8sDeployments) != 1 || deploymentsResp.K8sDeployments[0].Name != "api" {
+		t.Fatalf("unexpected k8s deployments: %+v", deploymentsResp.K8sDeployments)
 	}
 }
 

@@ -106,10 +106,11 @@ func TestMetricsHistoryFallbackMockDiskSynthesizesSeries(t *testing.T) {
 
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestSnapshot(state)
-	adapter := unifiedresources.NewUnifiedAIAdapter(registry)
+	adapter := unifiedresources.NewMonitorAdapter(registry)
 
 	monitor := &monitoring.Monitor{}
-	router := &Router{monitor: monitor, resourceRegistry: registry, aiUnifiedAdapter: adapter}
+	monitor.SetResourceStore(adapter)
+	router := &Router{monitor: monitor}
 
 	req := httptest.NewRequest(
 		http.MethodGet,

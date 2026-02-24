@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -73,6 +74,7 @@ type AIService interface {
 
 // AIHandler handles all AI endpoints using direct AI integration
 type AIHandler struct {
+	stateMu           sync.RWMutex
 	mtPersistence     *config.MultiTenantPersistence
 	mtMonitor         *monitoring.MultiTenantMonitor
 	legacyConfig      *config.Config
@@ -81,10 +83,13 @@ type AIHandler struct {
 	agentServer       *agentexec.Server
 	services          map[string]AIService
 	servicesMu        sync.RWMutex
+	serviceInitMu     sync.RWMutex
+	serviceInit       func(ctx context.Context, svc AIService)
 	stateProviders    map[string]AIStateProvider
 	stateProvidersMu  sync.RWMutex
 	unifiedStoreMu    sync.RWMutex
 	unifiedStore      *unified.UnifiedStore
+	unifiedStores     map[string]*unified.UnifiedStore
 	readState         unifiedresources.ReadState
 	recoveryManager   *recoverymanager.Manager
 }
@@ -119,14 +124,82 @@ func NewAIHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.MultiTenan
 		agentServer:       agentServer,
 		services:          make(map[string]AIService),
 		stateProviders:    make(map[string]AIStateProvider),
+		unifiedStores:     make(map[string]*unified.UnifiedStore),
 	}
 }
 
-// SetUnifiedStore sets the unified store for finding context lookup in the "Discuss" flow
+func (h *AIHandler) stateRefs() (
+	*config.MultiTenantPersistence,
+	*monitoring.MultiTenantMonitor,
+	*config.Config,
+	AIPersistence,
+	unifiedresources.ReadState,
+	*recoverymanager.Manager,
+) {
+	h.stateMu.RLock()
+	defer h.stateMu.RUnlock()
+	return h.mtPersistence, h.mtMonitor, h.legacyConfig, h.legacyPersistence, h.readState, h.recoveryManager
+}
+
+func (h *AIHandler) getLegacyService() AIService {
+	if h == nil {
+		return nil
+	}
+	h.servicesMu.RLock()
+	defer h.servicesMu.RUnlock()
+	return h.legacyService
+}
+
+func normalizeAIChatOrgID(orgID string) string {
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return "default"
+	}
+	return orgID
+}
+
+// SetUnifiedStore sets the unified store for finding context lookup in the default org "Discuss" flow.
 func (h *AIHandler) SetUnifiedStore(store *unified.UnifiedStore) {
+	h.SetUnifiedStoreForOrg("default", store)
+}
+
+// SetUnifiedStoreForOrg sets the unified store for finding context lookup in an org-specific "Discuss" flow.
+func (h *AIHandler) SetUnifiedStoreForOrg(orgID string, store *unified.UnifiedStore) {
+	orgID = normalizeAIChatOrgID(orgID)
 	h.unifiedStoreMu.Lock()
-	h.unifiedStore = store
+	if h.unifiedStores == nil {
+		h.unifiedStores = make(map[string]*unified.UnifiedStore)
+	}
+	if store == nil {
+		delete(h.unifiedStores, orgID)
+	} else {
+		h.unifiedStores[orgID] = store
+	}
+	if orgID == "default" {
+		h.unifiedStore = store
+	}
 	h.unifiedStoreMu.Unlock()
+}
+
+// GetUnifiedStoreForOrg returns the unified store for finding context lookup for a specific org.
+func (h *AIHandler) GetUnifiedStoreForOrg(orgID string) *unified.UnifiedStore {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIChatOrgID(orgID)
+	h.unifiedStoreMu.RLock()
+	if h.unifiedStores != nil {
+		if store := h.unifiedStores[orgID]; store != nil {
+			h.unifiedStoreMu.RUnlock()
+			return store
+		}
+	}
+	store := h.unifiedStore
+	h.unifiedStoreMu.RUnlock()
+	if orgID == "default" {
+		return store
+	}
+	return nil
 }
 
 // SetReadState stores a unified read-state provider for injection into newly created chat services.
@@ -134,6 +207,8 @@ func (h *AIHandler) SetReadState(rs unifiedresources.ReadState) {
 	if h == nil {
 		return
 	}
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
 	h.readState = rs
 }
 
@@ -142,14 +217,77 @@ func (h *AIHandler) SetRecoveryManager(manager *recoverymanager.Manager) {
 	if h == nil {
 		return
 	}
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
 	h.recoveryManager = manager
+}
+
+func (h *AIHandler) applyServiceInitializer(ctx context.Context, svc AIService) {
+	if h == nil || svc == nil {
+		return
+	}
+
+	h.serviceInitMu.RLock()
+	initializer := h.serviceInit
+	h.serviceInitMu.RUnlock()
+	if initializer == nil {
+		return
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	initializer(ctx, svc)
+}
+
+// SetServiceInitializer configures an initializer that runs whenever a chat
+// service is returned or created, allowing router-level org-specific wiring.
+func (h *AIHandler) SetServiceInitializer(initializer func(ctx context.Context, svc AIService)) {
+	if h == nil {
+		return
+	}
+
+	h.serviceInitMu.Lock()
+	h.serviceInit = initializer
+	h.serviceInitMu.Unlock()
+
+	if initializer == nil {
+		return
+	}
+
+	orgServices := make(map[string]AIService)
+	h.servicesMu.RLock()
+	legacy := h.legacyService
+	for orgID, svc := range h.services {
+		if svc != nil {
+			orgServices[orgID] = svc
+		}
+	}
+	h.servicesMu.RUnlock()
+
+	if legacy != nil {
+		defaultCtx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+		initializer(defaultCtx, legacy)
+	}
+	for orgID, svc := range orgServices {
+		ctx := context.WithValue(context.Background(), OrgIDContextKey, orgID)
+		initializer(ctx, svc)
+	}
 }
 
 // GetService returns the AI service for the current context
 func (h *AIHandler) GetService(ctx context.Context) AIService {
 	orgID := GetOrgID(ctx)
 	if orgID == "default" || orgID == "" {
-		return h.legacyService
+		svc := h.getLegacyService()
+		if svc != nil {
+			defaultCtx := ctx
+			if strings.TrimSpace(GetOrgID(defaultCtx)) == "" {
+				defaultCtx = context.WithValue(context.Background(), OrgIDContextKey, "default")
+			}
+			h.applyServiceInitializer(defaultCtx, svc)
+		}
+		return svc
 	}
 
 	h.servicesMu.RLock()
@@ -157,6 +295,7 @@ func (h *AIHandler) GetService(ctx context.Context) AIService {
 	h.servicesMu.RUnlock()
 
 	if exists {
+		h.applyServiceInitializer(ctx, svc)
 		return svc
 	}
 
@@ -171,6 +310,7 @@ func (h *AIHandler) GetService(ctx context.Context) AIService {
 	// Create and start service for this tenant
 	svc = h.initTenantService(ctx, orgID)
 	if svc != nil {
+		h.applyServiceInitializer(ctx, svc)
 		h.services[orgID] = svc
 	}
 	return svc
@@ -179,9 +319,13 @@ func (h *AIHandler) GetService(ctx context.Context) AIService {
 // RemoveTenantService stops and removes the AI service for a specific tenant.
 // This should be called when a tenant is offboarded to free resources.
 func (h *AIHandler) RemoveTenantService(ctx context.Context, orgID string) error {
-	if orgID == "default" || orgID == "" {
+	orgID = normalizeAIChatOrgID(orgID)
+	if orgID == "default" {
 		return nil // Don't remove legacy service
 	}
+
+	// Clear org-scoped finding context store even if the chat service was never created.
+	h.SetUnifiedStoreForOrg(orgID, nil)
 
 	h.servicesMu.Lock()
 	defer h.servicesMu.Unlock()
@@ -198,16 +342,21 @@ func (h *AIHandler) RemoveTenantService(ctx context.Context, orgID string) error
 	}
 
 	delete(h.services, orgID)
+	h.stateProvidersMu.Lock()
+	delete(h.stateProviders, orgID)
+	h.stateProvidersMu.Unlock()
 	log.Info().Str("orgID", orgID).Msg("Removed AI service for tenant")
 	return nil
 }
 
 func (h *AIHandler) initTenantService(ctx context.Context, orgID string) AIService {
-	if h.mtPersistence == nil {
+	mtPersistence, mtMonitor, _, _, _, recoveryManager := h.stateRefs()
+
+	if mtPersistence == nil {
 		return nil
 	}
 
-	persistence, err := h.mtPersistence.GetPersistence(orgID)
+	persistence, err := mtPersistence.GetPersistence(orgID)
 	if err != nil {
 		log.Warn().Str("orgID", orgID).Err(err).Msg("Failed to get persistence for AI service")
 		return nil
@@ -226,17 +375,20 @@ func (h *AIHandler) initTenantService(ctx context.Context, orgID string) AIServi
 		AIConfig:    aiCfg,
 		DataDir:     dataDir,
 		AgentServer: h.agentServer,
-		ReadState:   h.readState,
+		ReadState:   h.readStateForOrg(orgID),
 		OrgID:       orgID,
 	}
-	if h.recoveryManager != nil {
-		chatCfg.RecoveryPointsProvider = tools.NewRecoveryPointsMCPAdapter(h.recoveryManager, orgID)
+	if recoveryManager != nil {
+		chatCfg.RecoveryPointsProvider = tools.NewRecoveryPointsMCPAdapter(recoveryManager, orgID)
 	}
 
 	// Get monitor for state provider
-	if h.mtMonitor != nil {
-		if m, err := h.mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+	if mtMonitor != nil {
+		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
 			chatCfg.StateProvider = m
+			h.stateProvidersMu.Lock()
+			h.stateProviders[orgID] = m
+			h.stateProvidersMu.Unlock()
 		}
 	}
 
@@ -256,24 +408,61 @@ func (h *AIHandler) getDataDir(aiCfg *config.AIConfig, baseDir string) string {
 	return dataDir
 }
 
-func (h *AIHandler) getConfig(ctx context.Context) *config.Config {
-	orgID := GetOrgID(ctx)
-	if h.mtMonitor != nil {
-		if m, err := h.mtMonitor.GetMonitor(orgID); err == nil && m != nil {
-			return m.GetConfig()
+func (h *AIHandler) readStateForOrg(orgID string) unifiedresources.ReadState {
+	if h == nil {
+		return nil
+	}
+	_, mtMonitor, _, _, fallbackReadState, _ := h.stateRefs()
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		orgID = "default"
+	}
+
+	if mtMonitor != nil {
+		if monitor, err := mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
+			if readState := monitor.GetUnifiedReadState(); readState != nil {
+				return readState
+			}
+		}
+		if orgID != "default" {
+			// Security: never fall back to default-org read state for non-default orgs.
+			return nil
 		}
 	}
-	return h.legacyConfig
+
+	return fallbackReadState
+}
+
+func (h *AIHandler) getConfig(ctx context.Context) *config.Config {
+	_, mtMonitor, legacyConfig, _, _, _ := h.stateRefs()
+	orgID := strings.TrimSpace(GetOrgID(ctx))
+	if orgID == "" || orgID == "default" {
+		return legacyConfig
+	}
+	if mtMonitor != nil {
+		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+			return m.GetConfig()
+		}
+		// Security: never fall back to default config for non-default orgs.
+		return nil
+	}
+	return legacyConfig
 }
 
 func (h *AIHandler) getPersistence(ctx context.Context) AIPersistence {
-	orgID := GetOrgID(ctx)
-	if h.mtPersistence != nil {
-		if p, err := h.mtPersistence.GetPersistence(orgID); err == nil {
+	mtPersistence, _, _, legacyPersistence, _, _ := h.stateRefs()
+	orgID := strings.TrimSpace(GetOrgID(ctx))
+	if orgID == "" || orgID == "default" {
+		return legacyPersistence
+	}
+	if mtPersistence != nil {
+		if p, err := mtPersistence.GetPersistence(orgID); err == nil && p != nil {
 			return p
 		}
+		// Security: never fall back to default persistence for non-default orgs.
+		return nil
 	}
-	return h.legacyPersistence
+	return legacyPersistence
 }
 
 // loadAIConfig loads AI config for the current context
@@ -291,11 +480,15 @@ func (h *AIHandler) loadAIConfig(ctx context.Context) *config.AIConfig {
 
 // SetMultiTenantPersistence updates the persistence manager
 func (h *AIHandler) SetMultiTenantPersistence(mtp *config.MultiTenantPersistence) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
 	h.mtPersistence = mtp
 }
 
 // SetMultiTenantMonitor updates the monitor manager
 func (h *AIHandler) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
 	h.mtMonitor = mtm
 }
 
@@ -321,27 +514,40 @@ func (h *AIHandler) Start(ctx context.Context, stateProvider AIStateProvider) er
 	persistence := h.getPersistence(ctx)
 	dataDir := h.getDataDir(aiCfg, persistence.DataDir())
 
+	orgID := GetOrgID(ctx)
+	if orgID == "" {
+		orgID = "default"
+	}
+	h.stateProvidersMu.Lock()
+	if stateProvider == nil {
+		delete(h.stateProviders, orgID)
+	} else {
+		h.stateProviders[orgID] = stateProvider
+	}
+	h.stateProvidersMu.Unlock()
+
 	// Create chat config
 	chatCfg := chat.Config{
 		AIConfig:      aiCfg,
 		DataDir:       dataDir,
 		StateProvider: stateProvider,
 		AgentServer:   h.agentServer,
-		ReadState:     h.readState,
-		OrgID:         GetOrgID(ctx),
+		ReadState:     h.readStateForOrg(orgID),
+		OrgID:         orgID,
 	}
-	if h.recoveryManager != nil {
-		orgID := GetOrgID(ctx)
-		if orgID == "" {
-			orgID = "default"
-		}
-		chatCfg.RecoveryPointsProvider = tools.NewRecoveryPointsMCPAdapter(h.recoveryManager, orgID)
+	_, _, _, _, _, recoveryManager := h.stateRefs()
+	if recoveryManager != nil {
+		chatCfg.RecoveryPointsProvider = tools.NewRecoveryPointsMCPAdapter(recoveryManager, orgID)
 	}
 
-	h.legacyService = newChatService(chatCfg)
-	if err := h.legacyService.Start(ctx); err != nil {
+	svc := newChatService(chatCfg)
+	if err := svc.Start(ctx); err != nil {
 		return fmt.Errorf("start AI chat service: %w", err)
 	}
+	h.servicesMu.Lock()
+	h.legacyService = svc
+	h.servicesMu.Unlock()
+	h.applyServiceInitializer(context.WithValue(context.Background(), OrgIDContextKey, orgID), svc)
 
 	// Initialize approval store for command approval workflow
 	approvalStore, err := approval.NewStore(approval.StoreConfig{
@@ -363,8 +569,8 @@ func (h *AIHandler) Start(ctx context.Context, stateProvider AIStateProvider) er
 
 // Stop stops the AI chat service
 func (h *AIHandler) Stop(ctx context.Context) error {
-	if h.legacyService != nil {
-		return h.legacyService.Stop(ctx)
+	if svc := h.getLegacyService(); svc != nil {
+		return svc.Stop(ctx)
 	}
 	return nil
 }
@@ -375,22 +581,26 @@ func (h *AIHandler) Restart(ctx context.Context) error {
 	// Load fresh config from persistence to get latest settings
 	newCfg := h.loadAIConfig(ctx)
 
-	if h.legacyService == nil {
+	svc := h.getLegacyService()
+	if svc == nil {
 		return nil
 	}
 
-	if !h.legacyService.IsRunning() {
+	if !svc.IsRunning() {
 		// If not running but enabled, try to start
 		if newCfg != nil && newCfg.Enabled {
 			log.Info().Msg("Starting AI service via restart trigger")
 
 			// We need a state provider to start
-			// Try to get default state provider from existing map if available
+			// Prefer default-org provider when available.
 			var sp AIStateProvider
 			h.stateProvidersMu.RLock()
-			for _, p := range h.stateProviders {
-				sp = p
-				break
+			sp = h.stateProviders["default"]
+			if sp == nil {
+				for _, p := range h.stateProviders {
+					sp = p
+					break
+				}
 			}
 			h.stateProvidersMu.RUnlock()
 
@@ -400,7 +610,7 @@ func (h *AIHandler) Restart(ctx context.Context) error {
 		return nil // Not running and not enabled, nothing to do
 	}
 
-	return h.legacyService.Restart(ctx, newCfg)
+	return svc.Restart(ctx, newCfg)
 }
 
 // IsRunning returns whether AI is running
@@ -564,9 +774,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	// Augment prompt with finding context when discussing a specific finding
 	prompt := req.Prompt
 	if req.FindingID != "" {
-		h.unifiedStoreMu.RLock()
-		store := h.unifiedStore
-		h.unifiedStoreMu.RUnlock()
+		store := h.GetUnifiedStoreForOrg(GetOrgID(ctx))
 		if store != nil {
 			if f := store.Get(req.FindingID); f != nil {
 				findingCtx := fmt.Sprintf("[Finding Context]\nID: %s\nTitle: %s\nSeverity: %s\nCategory: %s\nResource: %s (%s)\nDescription: %s",
@@ -944,98 +1152,98 @@ func (h *AIHandler) HandleAnswerQuestion(w http.ResponseWriter, r *http.Request,
 
 // SetAlertProvider sets the alert provider for MCP tools
 func (h *AIHandler) SetAlertProvider(provider chat.MCPAlertProvider) {
-	if h.legacyService != nil {
-		h.legacyService.SetAlertProvider(provider)
+	if svc := h.getLegacyService(); svc != nil {
+		svc.SetAlertProvider(provider)
 	}
 }
 
 // SetFindingsProvider sets the findings provider for MCP tools
 func (h *AIHandler) SetFindingsProvider(provider chat.MCPFindingsProvider) {
-	if h.legacyService != nil {
-		h.legacyService.SetFindingsProvider(provider)
+	if svc := h.getLegacyService(); svc != nil {
+		svc.SetFindingsProvider(provider)
 	}
 }
 
 // SetBaselineProvider sets the baseline provider for MCP tools
 func (h *AIHandler) SetBaselineProvider(provider chat.MCPBaselineProvider) {
-	if h.legacyService != nil {
-		h.legacyService.SetBaselineProvider(provider)
+	if svc := h.getLegacyService(); svc != nil {
+		svc.SetBaselineProvider(provider)
 	}
 }
 
 // SetPatternProvider sets the pattern provider for MCP tools
 func (h *AIHandler) SetPatternProvider(provider chat.MCPPatternProvider) {
-	if h.legacyService != nil {
-		h.legacyService.SetPatternProvider(provider)
+	if svc := h.getLegacyService(); svc != nil {
+		svc.SetPatternProvider(provider)
 	}
 }
 
 // SetMetricsHistory sets the metrics history provider for MCP tools
 func (h *AIHandler) SetMetricsHistory(provider chat.MCPMetricsHistoryProvider) {
-	if h.legacyService != nil {
-		h.legacyService.SetMetricsHistory(provider)
+	if svc := h.getLegacyService(); svc != nil {
+		svc.SetMetricsHistory(provider)
 	}
 }
 
 // SetAgentProfileManager sets the agent profile manager for MCP tools
 func (h *AIHandler) SetAgentProfileManager(manager chat.AgentProfileManager) {
-	if h.legacyService != nil {
-		h.legacyService.SetAgentProfileManager(manager)
+	if svc := h.getLegacyService(); svc != nil {
+		svc.SetAgentProfileManager(manager)
 	}
 }
 
 // SetGuestConfigProvider sets the guest config provider for MCP tools
 func (h *AIHandler) SetGuestConfigProvider(provider chat.MCPGuestConfigProvider) {
-	if h.legacyService != nil {
-		h.legacyService.SetGuestConfigProvider(provider)
+	if svc := h.getLegacyService(); svc != nil {
+		svc.SetGuestConfigProvider(provider)
 	}
 }
 
 // SetBackupProvider sets the backup provider for MCP tools
 func (h *AIHandler) SetBackupProvider(provider chat.MCPBackupProvider) {
-	if h.legacyService != nil {
-		h.legacyService.SetBackupProvider(provider)
+	if svc := h.getLegacyService(); svc != nil {
+		svc.SetBackupProvider(provider)
 	}
 }
 
 // SetDiskHealthProvider sets the disk health provider for MCP tools
 func (h *AIHandler) SetDiskHealthProvider(provider chat.MCPDiskHealthProvider) {
-	if h.legacyService != nil {
-		h.legacyService.SetDiskHealthProvider(provider)
+	if svc := h.getLegacyService(); svc != nil {
+		svc.SetDiskHealthProvider(provider)
 	}
 }
 
 // SetUpdatesProvider sets the updates provider for MCP tools
 func (h *AIHandler) SetUpdatesProvider(provider chat.MCPUpdatesProvider) {
-	if h.legacyService != nil {
-		h.legacyService.SetUpdatesProvider(provider)
+	if svc := h.getLegacyService(); svc != nil {
+		svc.SetUpdatesProvider(provider)
 	}
 }
 
 // SetFindingsManager sets the findings manager for MCP tools
 func (h *AIHandler) SetFindingsManager(manager chat.FindingsManager) {
-	if h.legacyService != nil {
-		h.legacyService.SetFindingsManager(manager)
+	if svc := h.getLegacyService(); svc != nil {
+		svc.SetFindingsManager(manager)
 	}
 }
 
 // SetMetadataUpdater sets the metadata updater for MCP tools
 func (h *AIHandler) SetMetadataUpdater(updater chat.MetadataUpdater) {
-	if h.legacyService != nil {
-		h.legacyService.SetMetadataUpdater(updater)
+	if svc := h.getLegacyService(); svc != nil {
+		svc.SetMetadataUpdater(updater)
 	}
 }
 
 // SetUnifiedResourceProvider sets the unified resource provider for MCP tools
 func (h *AIHandler) SetUnifiedResourceProvider(provider chat.MCPUnifiedResourceProvider) {
-	if h.legacyService != nil {
-		h.legacyService.SetUnifiedResourceProvider(provider)
+	if svc := h.getLegacyService(); svc != nil {
+		svc.SetUnifiedResourceProvider(provider)
 	}
 }
 
 // UpdateControlSettings updates control settings in the service
 func (h *AIHandler) UpdateControlSettings(cfg *config.AIConfig) {
-	if h.legacyService != nil {
-		h.legacyService.UpdateControlSettings(cfg)
+	if svc := h.getLegacyService(); svc != nil {
+		svc.UpdateControlSettings(cfg)
 	}
 }

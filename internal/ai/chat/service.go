@@ -1247,16 +1247,16 @@ func (s *Service) buildSystemPrompt() string {
 ## CAPABILITIES
 - pulse_query: Find resources (VMs, containers, hosts) and their locations
 - pulse_discovery: Get service details, config paths, ports, bind mounts
-- pulse_control: Run commands on hosts/LXCs/VMs
+- pulse_control: Run commands on hosts, containers, and VMs
 - pulse_docker: Manage Docker containers
 - pulse_file_edit: Read and edit configuration files
 - pulse_question: Ask the user for missing information using a structured prompt (interactive only)
 
 ## INFRASTRUCTURE TOPOLOGY
-- Resources are organized hierarchically: Proxmox nodes → VMs/LXCs → Docker containers
-- target_host specifies where commands run (host name, LXC name, or VM name)
-- Commands execute inside the target: target_host="homepage-docker" runs inside that LXC
-- For Docker containers inside LXCs: target the LXC, then use docker commands
+- Resources are organized hierarchically: nodes → VMs/containers → Docker containers
+- target_host specifies where commands run (host name, container name, or VM name)
+- Commands execute inside the target: target_host="homepage-docker" runs inside that container
+- For Docker containers inside system containers: target the container, then use docker commands
 
 ## DOCKER BIND MOUNTS
 - Container files are often mapped to host paths via bind mounts

@@ -68,15 +68,15 @@ func (e *ErrStrictResolution) ToStructuredError() map[string]interface{} {
 	}
 }
 
-// ErrRoutingMismatch is returned when a tool targets a parent host (e.g., Proxmox node)
-// but the session has discovered more specific child resources (LXC/VM) on that host.
+// ErrRoutingMismatch is returned when a tool targets a parent host (e.g., a hypervisor node)
+// but the session has discovered more specific child resources (system containers/VMs) on that host.
 // This prevents accidentally operating on the host filesystem when the user intended
-// to target a container.
+// to target a guest resource.
 type ErrRoutingMismatch struct {
 	TargetHost            string   // The host that was targeted
 	MoreSpecificResources []string // Child resource names that exist on this host
 	MoreSpecificIDs       []string // Canonical resource IDs (kind:host:id) for future ID-based targeting
-	ChildKinds            []string // Resource kinds of children (for telemetry/routing: "lxc", "vm", etc.)
+	ChildKinds            []string // Resource kinds of children (for telemetry/routing: "system-container", "vm", etc.)
 	Message               string   // Human-readable message
 }
 
@@ -108,7 +108,7 @@ func (e *ErrRoutingMismatch) ToToolResponse() ToolResponse {
 	} else {
 		// Fallback if no IDs available
 		details["recovery_hint"] = fmt.Sprintf(
-			"Use target_host='%s' to target the specific resource, not the parent Proxmox host",
+			"Use target_host='%s' to target the specific resource, not the parent host node",
 			e.MoreSpecificResources[0])
 	}
 
@@ -1548,12 +1548,16 @@ func getSQLHint(reason, baseHint string) string {
 }
 
 const (
-	defaultMaxTopologyNodes                   = 5
-	defaultMaxTopologyVMsPerNode              = 5
-	defaultMaxTopologyContainersPerNode       = 5
-	defaultMaxTopologyDockerHosts             = 3
-	defaultMaxTopologyDockerContainersPerHost = 5
-	defaultMaxListDockerContainersPerHost     = 10
+	defaultMaxTopologyNodes                    = 5
+	defaultMaxTopologyVMsPerNode               = 5
+	defaultMaxTopologyContainersPerNode        = 5
+	defaultMaxTopologyDockerHosts              = 3
+	defaultMaxTopologyDockerContainersPerHost  = 5
+	defaultMaxTopologyK8sClusters              = 3
+	defaultMaxTopologyK8sNodesPerCluster       = 5
+	defaultMaxTopologyK8sDeploymentsPerCluster = 5
+	defaultMaxTopologyK8sPodsPerCluster        = 10
+	defaultMaxListDockerContainersPerHost      = 10
 )
 
 // registerResolvedResource adds a discovered resource to the resolved context if available.
@@ -1819,8 +1823,8 @@ func (r *RoutingValidationResult) IsBlocked() bool {
 
 // validateRoutingContext checks if a target_host should be a more specific resource.
 //
-// This validation prevents the model from accidentally operating on a parent Proxmox host
-// when the user clearly intends to target a child resource (LXC/VM) on that host.
+// This validation prevents the model from accidentally operating on a parent host
+// when the user clearly intends to target a child resource (system container/VM) on that host.
 //
 // IMPORTANT: This check is intentionally scoped to RECENTLY ACCESSED resources to avoid
 // false positives. The logic is:
@@ -1893,8 +1897,8 @@ func (e *PulseToolExecutor) validateRoutingContext(targetHost string) RoutingVal
 			MoreSpecificIDs:       childIDs,
 			ChildKinds:            childKinds,
 			Message: fmt.Sprintf(
-				"target_host '%s' is a Proxmox node, but you recently referenced more specific resources on it: %v. "+
-					"Did you mean to target one of these instead? File operations on a Proxmox host do NOT affect files inside LXC/VM guests.",
+				"target_host '%s' is a hypervisor node, but you recently referenced more specific resources on it: %v. "+
+					"Did you mean to target one of these instead? File operations on a host node do NOT affect files inside guest VMs/containers.",
 				targetHost, childNames),
 		},
 	}
@@ -1904,11 +1908,11 @@ func (e *PulseToolExecutor) validateRoutingContext(targetHost string) RoutingVal
 type recentChildInfo struct {
 	Name       string // Human-readable name
 	ResourceID string // Canonical ID (kind:host:id)
-	Kind       string // Resource kind (lxc, vm, docker_container) for telemetry
+	Kind       string // Resource kind (system-container, vm, docker_container) for telemetry
 }
 
-// findRecentlyReferencedChildrenOnNode returns the names and IDs of LXC/VM resources on a
-// specific Proxmox node that were RECENTLY ACCESSED (within RecentAccessWindow).
+// findRecentlyReferencedChildrenOnNode returns the names and IDs of guest resources (system containers/VMs) on a
+// specific hypervisor node that were RECENTLY ACCESSED (within RecentAccessWindow).
 //
 // This is used by validateRoutingContext to detect when the user referenced a child resource
 // in the current turn/exchange, indicating they probably intended to target that child.
@@ -2027,17 +2031,25 @@ func (e *PulseToolExecutor) registerQueryTools() {
 					},
 					"type": {
 						Type:        "string",
-						Description: "Filter by type (for action: list): 'nodes', 'vms', 'containers', 'docker'",
-						Enum:        []string{"nodes", "vms", "containers", "docker"},
+						Description: "Filter by type (for action: list): 'nodes', 'vms', 'containers', 'docker', 'kubernetes', 'k8s_clusters', 'k8s_nodes', 'k8s_pods', 'k8s_deployments'",
+						Enum:        []string{"nodes", "vms", "containers", "docker", "kubernetes", "k8s_clusters", "k8s_nodes", "k8s_pods", "k8s_deployments"},
 					},
 					"status": {
 						Type:        "string",
 						Description: "Filter by status (for action: search, list)",
 					},
+					"cluster_name": {
+						Type:        "string",
+						Description: "Filter Kubernetes list responses by cluster name (for action: list)",
+					},
+					"namespace": {
+						Type:        "string",
+						Description: "Filter Kubernetes pods/deployments by namespace (for action: list)",
+					},
 					"include": {
 						Type:        "string",
-						Description: "Include filter for topology: 'all', 'proxmox', 'docker' (for action: topology)",
-						Enum:        []string{"all", "proxmox", "docker"},
+						Description: "Include filter for topology: 'all', 'proxmox', 'docker', 'kubernetes' (for action: topology)",
+						Enum:        []string{"all", "proxmox", "docker", "kubernetes"},
 					},
 					"summary_only": {
 						Type:        "boolean",
@@ -2045,7 +2057,7 @@ func (e *PulseToolExecutor) registerQueryTools() {
 					},
 					"max_nodes": {
 						Type:        "integer",
-						Description: "Max Proxmox nodes to include (for action: topology)",
+						Description: "Max infrastructure nodes to include (for action: topology)",
 					},
 					"max_vms_per_node": {
 						Type:        "integer",
@@ -2062,6 +2074,22 @@ func (e *PulseToolExecutor) registerQueryTools() {
 					"max_docker_containers_per_host": {
 						Type:        "integer",
 						Description: "Max Docker containers per host (for action: topology, list)",
+					},
+					"max_k8s_clusters": {
+						Type:        "integer",
+						Description: "Max Kubernetes clusters to include (for action: topology)",
+					},
+					"max_k8s_nodes_per_cluster": {
+						Type:        "integer",
+						Description: "Max Kubernetes nodes per cluster (for action: topology)",
+					},
+					"max_k8s_deployments_per_cluster": {
+						Type:        "integer",
+						Description: "Max Kubernetes deployments per cluster (for action: topology)",
+					},
+					"max_k8s_pods_per_cluster": {
+						Type:        "integer",
+						Description: "Max Kubernetes pods per cluster (for action: topology)",
 					},
 					"limit": {
 						Type:        "integer",
@@ -2103,9 +2131,6 @@ func (e *PulseToolExecutor) executeQuery(ctx context.Context, args map[string]in
 }
 
 func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
-		return NewErrorResult(fmt.Errorf("state provider not available")), nil
-	}
 	rs, err := e.readStateForControl()
 	if err != nil {
 		return NewErrorResult(err), nil
@@ -2113,6 +2138,8 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 
 	filterType, _ := args["type"].(string)
 	filterStatus, _ := args["status"].(string)
+	clusterNameFilter, _ := args["cluster_name"].(string)
+	namespaceFilter, _ := args["namespace"].(string)
 	limit := intArg(args, "limit", 100)
 	offset := intArg(args, "offset", 0)
 	maxDockerContainersPerHost := intArg(args, "max_docker_containers_per_host", 0)
@@ -2125,8 +2152,24 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 	if offset < 0 {
 		offset = 0
 	}
+	clusterNameFilter = strings.TrimSpace(clusterNameFilter)
+	namespaceFilter = strings.TrimSpace(namespaceFilter)
 
-	state := e.stateProvider.GetState()
+	matchesCluster := func(clusterName string) bool {
+		if clusterNameFilter == "" {
+			return true
+		}
+		return strings.EqualFold(strings.TrimSpace(clusterName), clusterNameFilter)
+	}
+	matchesNamespace := func(namespace string) bool {
+		if namespaceFilter == "" {
+			return true
+		}
+		return strings.EqualFold(strings.TrimSpace(namespace), namespaceFilter)
+	}
+	normalizeClusterKey := func(clusterName string) string {
+		return strings.ToLower(strings.TrimSpace(clusterName))
+	}
 
 	// Build a set of connected agent hostnames for quick lookup
 	connectedAgentHostnames := make(map[string]bool)
@@ -2138,14 +2181,40 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 
 	response := InfrastructureResponse{
 		Total: TotalCounts{
-			Nodes:       len(rs.Nodes()),
-			VMs:         len(rs.VMs()),
-			Containers:  len(rs.Containers()),
-			DockerHosts: len(state.DockerHosts),
+			Nodes:          len(rs.Nodes()),
+			VMs:            len(rs.VMs()),
+			Containers:     len(rs.Containers()),
+			DockerHosts:    len(rs.DockerHosts()),
+			K8sClusters:    len(rs.K8sClusters()),
+			K8sNodes:       len(rs.K8sNodes()),
+			K8sPods:        len(rs.Pods()),
+			K8sDeployments: len(rs.K8sDeployments()),
 		},
 	}
 
 	totalMatches := 0
+
+	nodeCountByCluster := make(map[string]int)
+	deploymentCountByCluster := make(map[string]int)
+	podCountByCluster := make(map[string]int)
+	for _, node := range rs.K8sNodes() {
+		if node == nil {
+			continue
+		}
+		nodeCountByCluster[normalizeClusterKey(node.ClusterName())]++
+	}
+	for _, deployment := range rs.K8sDeployments() {
+		if deployment == nil {
+			continue
+		}
+		deploymentCountByCluster[normalizeClusterKey(deployment.ClusterName())]++
+	}
+	for _, pod := range rs.Pods() {
+		if pod == nil {
+			continue
+		}
+		podCountByCluster[normalizeClusterKey(pod.ClusterName())]++
+	}
 
 	// Nodes
 	if filterType == "" || filterType == "nodes" {
@@ -2236,8 +2305,24 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 
 	// Docker hosts
 	if filterType == "" || filterType == "docker" {
+		containersByHost := make(map[string][]*unifiedresources.DockerContainerView)
+		for _, container := range rs.DockerContainers() {
+			if container == nil {
+				continue
+			}
+			parentID := strings.TrimSpace(container.ParentID())
+			if parentID == "" {
+				continue
+			}
+			containersByHost[parentID] = append(containersByHost[parentID], container)
+		}
+
 		count := 0
-		for _, host := range state.DockerHosts {
+		for _, host := range rs.DockerHosts() {
+			if host == nil {
+				continue
+			}
+			hostContainers := containersByHost[host.ID()]
 			if count < offset {
 				count++
 				continue
@@ -2246,26 +2331,35 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				count++
 				continue
 			}
-			dockerHost := DockerHostSummary{
-				ID:             host.ID,
-				Hostname:       host.Hostname,
-				DisplayName:    host.DisplayName,
-				ContainerCount: len(host.Containers),
-				AgentConnected: connectedAgentHostnames[host.Hostname],
+			hostname := strings.TrimSpace(host.Hostname())
+			displayName := strings.TrimSpace(host.Name())
+			if hostname == "" {
+				hostname = displayName
 			}
-			for _, c := range host.Containers {
-				if filterStatus != "" && filterStatus != "all" && c.State != filterStatus {
+			dockerHost := DockerHostSummary{
+				ID:             host.ID(),
+				Hostname:       hostname,
+				DisplayName:    displayName,
+				ContainerCount: len(hostContainers),
+				AgentConnected: connectedAgentHostnames[hostname] || connectedAgentHostnames[displayName],
+			}
+			for _, container := range hostContainers {
+				state := strings.TrimSpace(container.ContainerState())
+				if state == "" {
+					state = string(container.Status())
+				}
+				if !statusMatchesFilter(state, filterStatus) {
 					continue
 				}
 				if maxDockerContainersPerHost > 0 && len(dockerHost.Containers) >= maxDockerContainersPerHost {
 					continue
 				}
 				dockerHost.Containers = append(dockerHost.Containers, DockerContainerSummary{
-					ID:     c.ID,
-					Name:   c.Name,
-					State:  c.State,
-					Image:  c.Image,
-					Health: c.Health,
+					ID:     container.ID(),
+					Name:   container.Name(),
+					State:  state,
+					Image:  container.Image(),
+					Health: container.Health(),
 				})
 			}
 			if filterStatus != "" && filterStatus != "all" && len(dockerHost.Containers) == 0 {
@@ -2275,6 +2369,155 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 			count++
 		}
 		if filterType == "docker" {
+			totalMatches = count
+		}
+	}
+
+	// Kubernetes clusters
+	if filterType == "" || filterType == "kubernetes" || filterType == "k8s_clusters" {
+		count := 0
+		for _, cluster := range rs.K8sClusters() {
+			if cluster == nil {
+				continue
+			}
+			if !matchesCluster(cluster.Name()) {
+				continue
+			}
+			if !statusMatchesFilter(string(cluster.Status()), filterStatus) {
+				continue
+			}
+			if count < offset {
+				count++
+				continue
+			}
+			if len(response.K8sClusters) >= limit {
+				count++
+				continue
+			}
+
+			key := normalizeClusterKey(cluster.Name())
+			response.K8sClusters = append(response.K8sClusters, K8sClusterSummary{
+				ID:              cluster.ID(),
+				Name:            cluster.Name(),
+				Status:          string(cluster.Status()),
+				NodeCount:       nodeCountByCluster[key],
+				DeploymentCount: deploymentCountByCluster[key],
+				PodCount:        podCountByCluster[key],
+			})
+			count++
+		}
+		if filterType == "kubernetes" || filterType == "k8s_clusters" {
+			totalMatches = count
+		}
+	}
+
+	// Kubernetes nodes
+	if filterType == "" || filterType == "k8s_nodes" {
+		count := 0
+		for _, node := range rs.K8sNodes() {
+			if node == nil {
+				continue
+			}
+			if !matchesCluster(node.ClusterName()) {
+				continue
+			}
+			if !statusMatchesFilter(string(node.Status()), filterStatus) {
+				continue
+			}
+			if count < offset {
+				count++
+				continue
+			}
+			if len(response.K8sNodes) >= limit {
+				count++
+				continue
+			}
+
+			response.K8sNodes = append(response.K8sNodes, K8sNodeSummary{
+				Name:    node.Name(),
+				Cluster: node.ClusterName(),
+				Status:  string(node.Status()),
+				Ready:   node.Ready(),
+				Roles:   node.Roles(),
+			})
+			count++
+		}
+		if filterType == "k8s_nodes" {
+			totalMatches = count
+		}
+	}
+
+	// Kubernetes pods
+	if filterType == "" || filterType == "k8s_pods" {
+		count := 0
+		for _, pod := range rs.Pods() {
+			if pod == nil {
+				continue
+			}
+			if !matchesCluster(pod.ClusterName()) || !matchesNamespace(pod.Namespace()) {
+				continue
+			}
+			if !statusMatchesFilter(string(pod.Status()), filterStatus) && !statusMatchesFilter(pod.PodPhase(), filterStatus) {
+				continue
+			}
+			if count < offset {
+				count++
+				continue
+			}
+			if len(response.K8sPods) >= limit {
+				count++
+				continue
+			}
+
+			response.K8sPods = append(response.K8sPods, K8sPodSummary{
+				Name:      pod.Name(),
+				Cluster:   pod.ClusterName(),
+				Namespace: pod.Namespace(),
+				Status:    string(pod.Status()),
+				Restarts:  pod.Restarts(),
+				OwnerKind: pod.OwnerKind(),
+				OwnerName: pod.OwnerName(),
+			})
+			count++
+		}
+		if filterType == "k8s_pods" {
+			totalMatches = count
+		}
+	}
+
+	// Kubernetes deployments
+	if filterType == "" || filterType == "k8s_deployments" {
+		count := 0
+		for _, deployment := range rs.K8sDeployments() {
+			if deployment == nil {
+				continue
+			}
+			if !matchesCluster(deployment.ClusterName()) || !matchesNamespace(deployment.Namespace()) {
+				continue
+			}
+			if !statusMatchesFilter(string(deployment.Status()), filterStatus) {
+				continue
+			}
+			if count < offset {
+				count++
+				continue
+			}
+			if len(response.K8sDeployments) >= limit {
+				count++
+				continue
+			}
+
+			response.K8sDeployments = append(response.K8sDeployments, K8sDeploymentSummary{
+				Name:            deployment.Name(),
+				Cluster:         deployment.ClusterName(),
+				Namespace:       deployment.Namespace(),
+				Status:          string(deployment.Status()),
+				DesiredReplicas: deployment.DesiredReplicas(),
+				ReadyReplicas:   deployment.ReadyReplicas(),
+			})
+			count++
+		}
+		if filterType == "k8s_deployments" {
 			totalMatches = count
 		}
 	}
@@ -2291,18 +2534,14 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 }
 
 func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
-		return NewErrorResult(fmt.Errorf("state provider not available")), nil
-	}
-
 	include, _ := args["include"].(string)
 	if include == "" {
 		include = "all"
 	}
 	switch include {
-	case "all", "proxmox", "docker":
+	case "all", "proxmox", "docker", "kubernetes":
 	default:
-		return NewErrorResult(fmt.Errorf("invalid include: %s. Use all, proxmox, or docker", include)), nil
+		return NewErrorResult(fmt.Errorf("invalid include: %s. Use all, proxmox, docker, or kubernetes", include)), nil
 	}
 
 	summaryOnly, summaryProvided := args["summary_only"].(bool)
@@ -2311,11 +2550,19 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 	maxContainersPerNode := intArg(args, "max_containers_per_node", 0)
 	maxDockerHosts := intArg(args, "max_docker_hosts", 0)
 	maxDockerContainersPerHost := intArg(args, "max_docker_containers_per_host", 0)
+	maxK8sClusters := intArg(args, "max_k8s_clusters", 0)
+	maxK8sNodesPerCluster := intArg(args, "max_k8s_nodes_per_cluster", 0)
+	maxK8sDeploymentsPerCluster := intArg(args, "max_k8s_deployments_per_cluster", 0)
+	maxK8sPodsPerCluster := intArg(args, "max_k8s_pods_per_cluster", 0)
 	_, maxNodesProvided := args["max_nodes"]
 	_, maxVMsProvided := args["max_vms_per_node"]
 	_, maxContainersProvided := args["max_containers_per_node"]
 	_, maxDockerHostsProvided := args["max_docker_hosts"]
 	_, maxDockerContainersProvided := args["max_docker_containers_per_host"]
+	_, maxK8sClustersProvided := args["max_k8s_clusters"]
+	_, maxK8sNodesProvided := args["max_k8s_nodes_per_cluster"]
+	_, maxK8sDeploymentsProvided := args["max_k8s_deployments_per_cluster"]
+	_, maxK8sPodsProvided := args["max_k8s_pods_per_cluster"]
 
 	if !summaryProvided {
 		summaryOnly = false
@@ -2336,9 +2583,20 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 		if !maxDockerContainersProvided {
 			maxDockerContainersPerHost = defaultMaxTopologyDockerContainersPerHost
 		}
+		if !maxK8sClustersProvided {
+			maxK8sClusters = defaultMaxTopologyK8sClusters
+		}
+		if !maxK8sNodesProvided {
+			maxK8sNodesPerCluster = defaultMaxTopologyK8sNodesPerCluster
+		}
+		if !maxK8sDeploymentsProvided {
+			maxK8sDeploymentsPerCluster = defaultMaxTopologyK8sDeploymentsPerCluster
+		}
+		if !maxK8sPodsProvided {
+			maxK8sPodsPerCluster = defaultMaxTopologyK8sPodsPerCluster
+		}
 	}
 
-	state := e.stateProvider.GetState()
 	rs, err := e.readStateForControl()
 	if err != nil {
 		return NewErrorResult(err), nil
@@ -2357,13 +2615,19 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 
 	includeProxmox := include == "all" || include == "proxmox"
 	includeDocker := include == "all" || include == "docker"
+	includeKubernetes := include == "all" || include == "kubernetes"
 
 	// Summary counters
 	summary := TopologySummary{
-		TotalNodes:         len(rs.Nodes()),
-		TotalVMs:           len(rs.VMs()),
-		TotalLXCContainers: len(rs.Containers()),
-		TotalDockerHosts:   len(state.DockerHosts),
+		TotalNodes:            len(rs.Nodes()),
+		TotalVMs:              len(rs.VMs()),
+		TotalSystemContainers: len(rs.Containers()),
+		TotalDockerHosts:      len(rs.DockerHosts()),
+		TotalDockerContainers: len(rs.DockerContainers()),
+		TotalK8sClusters:      len(rs.K8sClusters()),
+		TotalK8sNodes:         len(rs.K8sNodes()),
+		TotalK8sDeployments:   len(rs.K8sDeployments()),
+		TotalK8sPods:          len(rs.Pods()),
 	}
 
 	for _, node := range rs.Nodes() {
@@ -2371,13 +2635,26 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 			summary.NodesWithAgents++
 		}
 	}
-	for _, host := range state.DockerHosts {
-		if connectedAgentHostnames[host.Hostname] {
+	for _, host := range rs.DockerHosts() {
+		if host == nil {
+			continue
+		}
+		hostname := strings.TrimSpace(host.Hostname())
+		displayName := strings.TrimSpace(host.Name())
+		if connectedAgentHostnames[hostname] || connectedAgentHostnames[displayName] {
 			summary.DockerHostsWithAgents++
 		}
 	}
+	for _, pod := range rs.Pods() {
+		if pod == nil {
+			continue
+		}
+		if statusMatchesFilter(string(pod.Status()), "running") || statusMatchesFilter(pod.PodPhase(), "running") {
+			summary.RunningK8sPods++
+		}
+	}
 
-	// Build Proxmox topology - group VMs and containers by node
+	// Build node topology - group VMs and containers by hypervisor node
 	nodeMap := make(map[string]*ProxmoxNodeTopology)
 	if includeProxmox && !summaryOnly {
 		for _, node := range rs.Nodes() {
@@ -2392,7 +2669,7 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 				AgentConnected: hasAgent,
 				CanExecute:     hasAgent && controlEnabled,
 				VMs:            []TopologyVM{},
-				Containers:     []TopologyLXC{},
+				Containers:     []TopologyContainer{},
 			}
 		}
 	}
@@ -2414,7 +2691,7 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 			AgentConnected: hasAgent,
 			CanExecute:     hasAgent && controlEnabled,
 			VMs:            []TopologyVM{},
-			Containers:     []TopologyLXC{},
+			Containers:     []TopologyContainer{},
 		}
 		return nodeMap[name]
 	}
@@ -2448,7 +2725,7 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 	for _, ct := range rs.Containers() {
 		status := string(ct.Status())
 		if status == "running" || status == string(unifiedresources.StatusOnline) {
-			summary.RunningLXC++
+			summary.RunningContainers++
 		}
 
 		nodeTopology := ensureNode(ct.Node(), "unknown")
@@ -2458,7 +2735,7 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 
 		nodeTopology.ContainerCount++
 		if maxContainersPerNode <= 0 || len(nodeTopology.Containers) < maxContainersPerNode {
-			nodeTopology.Containers = append(nodeTopology.Containers, TopologyLXC{
+			nodeTopology.Containers = append(nodeTopology.Containers, TopologyContainer{
 				VMID:   ct.VMID(),
 				Name:   ct.Name(),
 				Status: status,
@@ -2475,30 +2752,64 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 		for _, node := range nodeMap {
 			proxmoxNodes = append(proxmoxNodes, *node)
 		}
+		sort.Slice(proxmoxNodes, func(i, j int) bool {
+			return strings.ToLower(proxmoxNodes[i].Name) < strings.ToLower(proxmoxNodes[j].Name)
+		})
+		for i := range proxmoxNodes {
+			sort.Slice(proxmoxNodes[i].VMs, func(a, b int) bool {
+				return strings.ToLower(proxmoxNodes[i].VMs[a].Name) < strings.ToLower(proxmoxNodes[i].VMs[b].Name)
+			})
+			sort.Slice(proxmoxNodes[i].Containers, func(a, b int) bool {
+				return strings.ToLower(proxmoxNodes[i].Containers[a].Name) < strings.ToLower(proxmoxNodes[i].Containers[b].Name)
+			})
+		}
 	}
 
 	// Build Docker topology
+	containersByHost := make(map[string][]*unifiedresources.DockerContainerView)
+	for _, container := range rs.DockerContainers() {
+		if container == nil {
+			continue
+		}
+		parentID := strings.TrimSpace(container.ParentID())
+		if parentID == "" {
+			continue
+		}
+		containersByHost[parentID] = append(containersByHost[parentID], container)
+		if statusMatchesFilter(container.ContainerState(), "running") || statusMatchesFilter(string(container.Status()), "running") {
+			summary.RunningDocker++
+		}
+	}
+
 	dockerHosts := []DockerHostTopology{}
-	for _, host := range state.DockerHosts {
-		hasAgent := connectedAgentHostnames[host.Hostname]
+	for _, host := range rs.DockerHosts() {
+		if host == nil {
+			continue
+		}
+		hostname := strings.TrimSpace(host.Hostname())
+		displayName := strings.TrimSpace(host.Name())
+		hasAgent := connectedAgentHostnames[hostname] || connectedAgentHostnames[displayName]
+		hostContainers := containersByHost[host.ID()]
 		runningCount := 0
 		var containers []DockerContainerSummary
 
-		for _, c := range host.Containers {
-			if c.State == "running" {
-				runningCount++
-				summary.RunningDocker++
+		for _, container := range hostContainers {
+			state := strings.TrimSpace(container.ContainerState())
+			if state == "" {
+				state = string(container.Status())
 			}
-			summary.TotalDockerContainers++
+			if statusMatchesFilter(state, "running") {
+				runningCount++
+			}
 
 			if includeDocker && !summaryOnly {
 				if maxDockerContainersPerHost <= 0 || len(containers) < maxDockerContainersPerHost {
 					containers = append(containers, DockerContainerSummary{
-						ID:     c.ID,
-						Name:   c.Name,
-						State:  c.State,
-						Image:  c.Image,
-						Health: c.Health,
+						ID:     container.ID(),
+						Name:   container.Name(),
+						State:  state,
+						Image:  container.Image(),
+						Health: container.Health(),
 					})
 				}
 			}
@@ -2509,22 +2820,195 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 				continue
 			}
 
+			if hostname == "" {
+				hostname = displayName
+			}
 			dockerHosts = append(dockerHosts, DockerHostTopology{
-				Hostname:       host.Hostname,
-				DisplayName:    host.DisplayName,
+				Hostname:       hostname,
+				DisplayName:    displayName,
 				AgentConnected: hasAgent,
 				CanExecute:     hasAgent && controlEnabled,
 				Containers:     containers,
-				ContainerCount: len(host.Containers),
+				ContainerCount: len(hostContainers),
 				RunningCount:   runningCount,
+			})
+		}
+	}
+	sort.Slice(dockerHosts, func(i, j int) bool {
+		return strings.ToLower(dockerHosts[i].Hostname) < strings.ToLower(dockerHosts[j].Hostname)
+	})
+
+	// Build Kubernetes topology
+	k8sClusters := []KubernetesClusterTopology{}
+	clusterMap := make(map[string]*KubernetesClusterTopology)
+	clusterKeyByID := make(map[string]string)
+	clusterKeyByName := make(map[string]string)
+
+	ensureCluster := func(name, id, status string) *KubernetesClusterTopology {
+		if !includeKubernetes || summaryOnly {
+			return nil
+		}
+		name = strings.TrimSpace(name)
+		id = strings.TrimSpace(id)
+		status = strings.TrimSpace(status)
+		if status == "" {
+			status = "unknown"
+		}
+
+		key := strings.ToLower(id)
+		if key == "" {
+			key = strings.ToLower(name)
+		}
+		if key == "" {
+			return nil
+		}
+
+		if existing, ok := clusterMap[key]; ok {
+			if existing.Name == "" && name != "" {
+				existing.Name = name
+			}
+			if existing.ID == "" && id != "" {
+				existing.ID = id
+			}
+			if existing.Status == "unknown" && status != "" {
+				existing.Status = status
+			}
+			return existing
+		}
+		if maxK8sClusters > 0 && len(clusterMap) >= maxK8sClusters {
+			return nil
+		}
+
+		cluster := &KubernetesClusterTopology{
+			Name:   name,
+			ID:     id,
+			Status: status,
+		}
+		if cluster.Name == "" {
+			cluster.Name = cluster.ID
+		}
+		clusterMap[key] = cluster
+		if cluster.ID != "" {
+			clusterKeyByID[cluster.ID] = key
+		}
+		if cluster.Name != "" {
+			clusterKeyByName[strings.ToLower(cluster.Name)] = key
+		}
+		return cluster
+	}
+
+	resolveCluster := func(parentID, clusterName string) *KubernetesClusterTopology {
+		parentID = strings.TrimSpace(parentID)
+		clusterName = strings.TrimSpace(clusterName)
+		if parentID != "" {
+			if key, ok := clusterKeyByID[parentID]; ok {
+				return clusterMap[key]
+			}
+		}
+		if clusterName != "" {
+			if key, ok := clusterKeyByName[strings.ToLower(clusterName)]; ok {
+				return clusterMap[key]
+			}
+		}
+		return ensureCluster(clusterName, parentID, "unknown")
+	}
+
+	if includeKubernetes && !summaryOnly {
+		for _, cluster := range rs.K8sClusters() {
+			if cluster == nil {
+				continue
+			}
+			ensureCluster(cluster.Name(), cluster.ID(), string(cluster.Status()))
+		}
+	}
+
+	for _, node := range rs.K8sNodes() {
+		if node == nil {
+			continue
+		}
+		cluster := resolveCluster(node.ParentID(), node.ClusterName())
+		if cluster == nil {
+			continue
+		}
+		cluster.NodeCount++
+		if includeKubernetes && !summaryOnly && (maxK8sNodesPerCluster <= 0 || len(cluster.Nodes) < maxK8sNodesPerCluster) {
+			cluster.Nodes = append(cluster.Nodes, KubernetesNodeTopology{
+				Name:   node.Name(),
+				Status: string(node.Status()),
+				Ready:  node.Ready(),
+				Roles:  node.Roles(),
+				CPU:    node.CPUPercent(),
+				Memory: node.MemoryPercent(),
+			})
+		}
+	}
+
+	for _, deployment := range rs.K8sDeployments() {
+		if deployment == nil {
+			continue
+		}
+		cluster := resolveCluster(deployment.ParentID(), deployment.ClusterName())
+		if cluster == nil {
+			continue
+		}
+		cluster.DeploymentCount++
+		if includeKubernetes && !summaryOnly && (maxK8sDeploymentsPerCluster <= 0 || len(cluster.Deployments) < maxK8sDeploymentsPerCluster) {
+			cluster.Deployments = append(cluster.Deployments, KubernetesDeploymentDetail{
+				Name:            deployment.Name(),
+				Namespace:       deployment.Namespace(),
+				Status:          string(deployment.Status()),
+				DesiredReplicas: deployment.DesiredReplicas(),
+				ReadyReplicas:   deployment.ReadyReplicas(),
+			})
+		}
+	}
+
+	for _, pod := range rs.Pods() {
+		if pod == nil {
+			continue
+		}
+		cluster := resolveCluster(pod.ParentID(), pod.ClusterName())
+		if cluster == nil {
+			continue
+		}
+		cluster.PodCount++
+		if includeKubernetes && !summaryOnly && (maxK8sPodsPerCluster <= 0 || len(cluster.Pods) < maxK8sPodsPerCluster) {
+			cluster.Pods = append(cluster.Pods, KubernetesPodDetail{
+				Name:      pod.Name(),
+				Namespace: pod.Namespace(),
+				Status:    string(pod.Status()),
+				Restarts:  pod.Restarts(),
+				OwnerKind: pod.OwnerKind(),
+				OwnerName: pod.OwnerName(),
+			})
+		}
+	}
+
+	if includeKubernetes && !summaryOnly {
+		for _, cluster := range clusterMap {
+			k8sClusters = append(k8sClusters, *cluster)
+		}
+		sort.Slice(k8sClusters, func(i, j int) bool {
+			return strings.ToLower(k8sClusters[i].Name) < strings.ToLower(k8sClusters[j].Name)
+		})
+		for i := range k8sClusters {
+			sort.Slice(k8sClusters[i].Nodes, func(a, b int) bool {
+				return strings.ToLower(k8sClusters[i].Nodes[a].Name) < strings.ToLower(k8sClusters[i].Nodes[b].Name)
+			})
+			sort.Slice(k8sClusters[i].Deployments, func(a, b int) bool {
+				return strings.ToLower(k8sClusters[i].Deployments[a].Name) < strings.ToLower(k8sClusters[i].Deployments[b].Name)
+			})
+			sort.Slice(k8sClusters[i].Pods, func(a, b int) bool {
+				return strings.ToLower(k8sClusters[i].Pods[a].Name) < strings.ToLower(k8sClusters[i].Pods[b].Name)
 			})
 		}
 	}
 
 	response := TopologyResponse{
-		Proxmox: ProxmoxTopology{Nodes: proxmoxNodes},
-		Docker:  DockerTopology{Hosts: dockerHosts},
-		Summary: summary,
+		Proxmox:    ProxmoxTopology{Nodes: proxmoxNodes},
+		Docker:     DockerTopology{Hosts: dockerHosts},
+		Kubernetes: KubernetesTopology{Clusters: k8sClusters},
+		Summary:    summary,
 	}
 
 	return NewJSONResult(response), nil

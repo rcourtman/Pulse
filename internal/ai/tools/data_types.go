@@ -130,12 +130,16 @@ type FeatureFlags struct {
 
 // InfrastructureResponse is returned by pulse_list_infrastructure
 type InfrastructureResponse struct {
-	Nodes       []NodeSummary       `json:"nodes,omitempty"`
-	VMs         []VMSummary         `json:"vms,omitempty"`
-	Containers  []ContainerSummary  `json:"containers,omitempty"`
-	DockerHosts []DockerHostSummary `json:"docker_hosts,omitempty"`
-	Total       TotalCounts         `json:"total"`
-	Pagination  *PaginationInfo     `json:"pagination,omitempty"`
+	Nodes          []NodeSummary          `json:"nodes,omitempty"`
+	VMs            []VMSummary            `json:"vms,omitempty"`
+	Containers     []ContainerSummary     `json:"containers,omitempty"`
+	DockerHosts    []DockerHostSummary    `json:"docker_hosts,omitempty"`
+	K8sClusters    []K8sClusterSummary    `json:"k8s_clusters,omitempty"`
+	K8sNodes       []K8sNodeSummary       `json:"k8s_nodes,omitempty"`
+	K8sPods        []K8sPodSummary        `json:"k8s_pods,omitempty"`
+	K8sDeployments []K8sDeploymentSummary `json:"k8s_deployments,omitempty"`
+	Total          TotalCounts            `json:"total"`
+	Pagination     *PaginationInfo        `json:"pagination,omitempty"`
 }
 
 // ResourceSearchResponse is returned by pulse_search_resources
@@ -152,8 +156,8 @@ type ResourceMatch struct {
 	ID             string `json:"id,omitempty"`
 	Name           string `json:"name"`
 	Status         string `json:"status,omitempty"`
-	Node           string `json:"node,omitempty"`           // Proxmox node this resource is on
-	NodeHasAgent   bool   `json:"node_has_agent,omitempty"` // True if the Proxmox node has a connected agent
+	Node           string `json:"node,omitempty"`           // Hypervisor node this resource is on
+	NodeHasAgent   bool   `json:"node_has_agent,omitempty"` // True if the node has a connected agent
 	Host           string `json:"host,omitempty"`           // Docker host for docker containers
 	VMID           int    `json:"vmid,omitempty"`
 	Image          string `json:"image,omitempty"`
@@ -207,12 +211,56 @@ type DockerContainerSummary struct {
 	Health string `json:"health,omitempty"`
 }
 
+// K8sClusterSummary is a summarized Kubernetes cluster for list responses
+type K8sClusterSummary struct {
+	ID              string `json:"id,omitempty"`
+	Name            string `json:"name"`
+	Status          string `json:"status"`
+	NodeCount       int    `json:"node_count"`
+	DeploymentCount int    `json:"deployment_count"`
+	PodCount        int    `json:"pod_count"`
+}
+
+// K8sNodeSummary is a summarized Kubernetes node for list responses
+type K8sNodeSummary struct {
+	Name    string   `json:"name"`
+	Cluster string   `json:"cluster"`
+	Status  string   `json:"status"`
+	Ready   bool     `json:"ready"`
+	Roles   []string `json:"roles,omitempty"`
+}
+
+// K8sPodSummary is a summarized Kubernetes pod for list responses
+type K8sPodSummary struct {
+	Name      string `json:"name"`
+	Cluster   string `json:"cluster"`
+	Namespace string `json:"namespace"`
+	Status    string `json:"status"`
+	Restarts  int    `json:"restarts,omitempty"`
+	OwnerKind string `json:"owner_kind,omitempty"`
+	OwnerName string `json:"owner_name,omitempty"`
+}
+
+// K8sDeploymentSummary is a summarized Kubernetes deployment for list responses
+type K8sDeploymentSummary struct {
+	Name            string `json:"name"`
+	Cluster         string `json:"cluster"`
+	Namespace       string `json:"namespace"`
+	Status          string `json:"status"`
+	DesiredReplicas int32  `json:"desired_replicas,omitempty"`
+	ReadyReplicas   int32  `json:"ready_replicas,omitempty"`
+}
+
 // TotalCounts for infrastructure response
 type TotalCounts struct {
-	Nodes       int `json:"nodes"`
-	VMs         int `json:"vms"`
-	Containers  int `json:"containers"`
-	DockerHosts int `json:"docker_hosts"`
+	Nodes          int `json:"nodes"`
+	VMs            int `json:"vms"`
+	Containers     int `json:"containers"`
+	DockerHosts    int `json:"docker_hosts"`
+	K8sClusters    int `json:"k8s_clusters"`
+	K8sNodes       int `json:"k8s_nodes"`
+	K8sPods        int `json:"k8s_pods"`
+	K8sDeployments int `json:"k8s_deployments"`
 }
 
 // PaginationInfo describes pagination state
@@ -227,9 +275,10 @@ type PaginationInfo struct {
 // TopologyResponse provides a fully hierarchical view of infrastructure
 // This is the recommended tool for understanding infrastructure relationships
 type TopologyResponse struct {
-	Proxmox ProxmoxTopology `json:"proxmox"`
-	Docker  DockerTopology  `json:"docker"`
-	Summary TopologySummary `json:"summary"`
+	Proxmox    ProxmoxTopology    `json:"proxmox"`
+	Docker     DockerTopology     `json:"docker"`
+	Kubernetes KubernetesTopology `json:"kubernetes"`
+	Summary    TopologySummary    `json:"summary"`
 }
 
 // ProxmoxTopology shows Proxmox nodes with their nested VMs and containers
@@ -239,15 +288,15 @@ type ProxmoxTopology struct {
 
 // ProxmoxNodeTopology represents a Proxmox node with its guests
 type ProxmoxNodeTopology struct {
-	Name           string        `json:"name"`
-	ID             string        `json:"id,omitempty"`
-	Status         string        `json:"status"`
-	AgentConnected bool          `json:"agent_connected"`
-	CanExecute     bool          `json:"can_execute"` // True if commands can be executed on this node
-	VMs            []TopologyVM  `json:"vms,omitempty"`
-	Containers     []TopologyLXC `json:"containers,omitempty"`
-	VMCount        int           `json:"vm_count"`
-	ContainerCount int           `json:"container_count"`
+	Name           string              `json:"name"`
+	ID             string              `json:"id,omitempty"`
+	Status         string              `json:"status"`
+	AgentConnected bool                `json:"agent_connected"`
+	CanExecute     bool                `json:"can_execute"` // True if commands can be executed on this node
+	VMs            []TopologyVM        `json:"vms,omitempty"`
+	Containers     []TopologyContainer `json:"containers,omitempty"`
+	VMCount        int                 `json:"vm_count"`
+	ContainerCount int                 `json:"container_count"`
 }
 
 // TopologyVM represents a VM in the topology
@@ -261,8 +310,8 @@ type TopologyVM struct {
 	Tags   []string `json:"tags,omitempty"`
 }
 
-// TopologyLXC represents an LXC container in the topology
-type TopologyLXC struct {
+// TopologyContainer represents a system container in the topology
+type TopologyContainer struct {
 	VMID      int      `json:"vmid"`
 	Name      string   `json:"name"`
 	Status    string   `json:"status"`
@@ -289,18 +338,70 @@ type DockerHostTopology struct {
 	RunningCount   int                      `json:"running_count"`
 }
 
+// KubernetesTopology shows Kubernetes clusters with their nested resources.
+type KubernetesTopology struct {
+	Clusters []KubernetesClusterTopology `json:"clusters"`
+}
+
+// KubernetesClusterTopology represents a Kubernetes cluster and selected children.
+type KubernetesClusterTopology struct {
+	Name            string                       `json:"name"`
+	ID              string                       `json:"id,omitempty"`
+	Status          string                       `json:"status"`
+	Nodes           []KubernetesNodeTopology     `json:"nodes,omitempty"`
+	Deployments     []KubernetesDeploymentDetail `json:"deployments,omitempty"`
+	Pods            []KubernetesPodDetail        `json:"pods,omitempty"`
+	NodeCount       int                          `json:"node_count"`
+	DeploymentCount int                          `json:"deployment_count"`
+	PodCount        int                          `json:"pod_count"`
+}
+
+// KubernetesNodeTopology represents a Kubernetes node in topology output.
+type KubernetesNodeTopology struct {
+	Name   string   `json:"name"`
+	Status string   `json:"status"`
+	Ready  bool     `json:"ready"`
+	Roles  []string `json:"roles,omitempty"`
+	CPU    float64  `json:"cpu_percent,omitempty"`
+	Memory float64  `json:"memory_percent,omitempty"`
+}
+
+// KubernetesDeploymentDetail represents a deployment under a cluster.
+type KubernetesDeploymentDetail struct {
+	Name            string `json:"name"`
+	Namespace       string `json:"namespace"`
+	Status          string `json:"status"`
+	DesiredReplicas int32  `json:"desired_replicas,omitempty"`
+	ReadyReplicas   int32  `json:"ready_replicas,omitempty"`
+}
+
+// KubernetesPodDetail represents a pod under a cluster.
+type KubernetesPodDetail struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Status    string `json:"status"`
+	Restarts  int    `json:"restarts,omitempty"`
+	OwnerKind string `json:"owner_kind,omitempty"`
+	OwnerName string `json:"owner_name,omitempty"`
+}
+
 // TopologySummary provides aggregate counts and status
 type TopologySummary struct {
 	TotalNodes            int `json:"total_nodes"`
 	TotalVMs              int `json:"total_vms"`
-	TotalLXCContainers    int `json:"total_lxc_containers"`
+	TotalSystemContainers int `json:"total_system_containers"`
 	TotalDockerHosts      int `json:"total_docker_hosts"`
 	TotalDockerContainers int `json:"total_docker_containers"`
+	TotalK8sClusters      int `json:"total_k8s_clusters"`
+	TotalK8sNodes         int `json:"total_k8s_nodes"`
+	TotalK8sDeployments   int `json:"total_k8s_deployments"`
+	TotalK8sPods          int `json:"total_k8s_pods"`
 	NodesWithAgents       int `json:"nodes_with_agents"`
 	DockerHostsWithAgents int `json:"docker_hosts_with_agents"`
 	RunningVMs            int `json:"running_vms"`
-	RunningLXC            int `json:"running_lxc"`
+	RunningContainers     int `json:"running_containers"`
 	RunningDocker         int `json:"running_docker"`
+	RunningK8sPods        int `json:"running_k8s_pods"`
 }
 
 // ResourceResponse is returned by pulse_get_resource

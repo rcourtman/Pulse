@@ -22,9 +22,9 @@ type ResourceMention struct {
 	BindMounts []MountInfo
 	// Full routing chain (for Docker containers)
 	DockerHostName string // Name of system-container/VM/host running Docker (e.g., "homepage-docker")
-	DockerHostType string // "lxc", "vm", or "host" (technology-level, from state.ResolveResource)
-	DockerHostVMID int    // VMID if DockerHost is an LXC/VM
-	ProxmoxNode    string // Proxmox node name (e.g., "delly")
+	DockerHostType string // "system-container", "vm", or "standalone" (from state.ResolveResource)
+	DockerHostVMID int    // Guest ID (VMID) if DockerHost is a system container or VM
+	NodeName       string // Hypervisor node name (e.g., "delly")
 	TargetHost     string // The correct target_host to use for commands
 }
 
@@ -257,7 +257,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 						DockerHostName: loc.DockerHostName,
 						DockerHostType: loc.DockerHostType,
 						DockerHostVMID: loc.DockerHostVMID,
-						ProxmoxNode:    loc.Node,
+						NodeName:       loc.Node,
 						TargetHost:     loc.TargetHost,
 					})
 				}
@@ -453,7 +453,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				DockerHostName: loc.DockerHostName,
 				DockerHostType: loc.DockerHostType,
 				DockerHostVMID: loc.DockerHostVMID,
-				ProxmoxNode:    loc.Node,
+				NodeName:       loc.Node,
 				TargetHost:     loc.TargetHost,
 			})
 
@@ -614,12 +614,12 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 			sb.WriteString(fmt.Sprintf("## %s (Docker container)\n", mention.Name))
 
 			// Show the full routing chain unambiguously
-			if mention.DockerHostType == "lxc" {
-				sb.WriteString(fmt.Sprintf("Location: Docker on \"%s\" (LXC %d) on Proxmox node \"%s\"\n",
-					mention.DockerHostName, mention.DockerHostVMID, mention.ProxmoxNode))
+			if mention.DockerHostType == "system-container" {
+				sb.WriteString(fmt.Sprintf("Location: Docker on \"%s\" (container %d) on node \"%s\"\n",
+					mention.DockerHostName, mention.DockerHostVMID, mention.NodeName))
 			} else if mention.DockerHostType == "vm" {
-				sb.WriteString(fmt.Sprintf("Location: Docker on \"%s\" (VM %d) on Proxmox node \"%s\"\n",
-					mention.DockerHostName, mention.DockerHostVMID, mention.ProxmoxNode))
+				sb.WriteString(fmt.Sprintf("Location: Docker on \"%s\" (VM %d) on node \"%s\"\n",
+					mention.DockerHostName, mention.DockerHostVMID, mention.NodeName))
 			} else {
 				sb.WriteString(fmt.Sprintf("Location: Docker on host \"%s\"\n", mention.DockerHostName))
 			}
@@ -721,7 +721,7 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 				sb.WriteString(fmt.Sprintf("Ports: %v\n", portStrs))
 			}
 
-			// Docker bind mounts for LXCs/VMs running Docker
+			// Docker bind mounts for containers/VMs running Docker
 			if len(discovery.BindMounts) > 0 {
 				sb.WriteString("Docker containers on this host:\n")
 				containerMounts := make(map[string][]tools.DiscoveryMount)

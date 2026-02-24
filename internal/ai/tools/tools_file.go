@@ -22,8 +22,8 @@ type ExecutionProvenance struct {
 	RequestedTargetHost string `json:"requested_target_host"`
 
 	// What we resolved it to
-	ResolvedKind string `json:"resolved_kind"` // "host", "lxc", "vm", "docker"
-	ResolvedNode string `json:"resolved_node"` // Proxmox node name (if applicable)
+	ResolvedKind string `json:"resolved_kind"` // "host", "system-container", "vm", "docker"
+	ResolvedNode string `json:"resolved_node"` // Hypervisor node name (if applicable)
 	ResolvedUID  string `json:"resolved_uid"`  // VMID or container ID
 
 	// How we executed it
@@ -36,7 +36,7 @@ func (e *PulseToolExecutor) registerFileTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
 			Name: "pulse_file_edit",
-			Description: `Read and edit files on remote hosts, LXC containers, VMs, and Docker containers safely.
+			Description: `Read and edit files on remote hosts, containers, VMs, and Docker containers safely.
 
 Actions:
 - read: Read the contents of a file
@@ -46,12 +46,12 @@ Actions:
 This tool handles escaping automatically - just provide the content as-is.
 Use this instead of shell commands for editing config files (YAML, JSON, etc.)
 
-Routing: target_host can be a Proxmox host (delly), an LXC name (homepage-docker), or a VM name. Commands are automatically routed through the appropriate agent.
+Routing: target_host can be a node (delly), a container name (homepage-docker), or a VM name. Commands are automatically routed through the appropriate agent.
 
 Docker container support: Use docker_container to access files INSIDE a Docker container. The target_host specifies where Docker is running.
 
 Examples:
-- Read from LXC: action="read", path="/opt/app/config.yaml", target_host="homepage-docker"
+- Read from container: action="read", path="/opt/app/config.yaml", target_host="homepage-docker"
 - Write to host: action="write", path="/tmp/test.txt", content="hello", target_host="delly"
 - Read from Docker: action="read", path="/config/settings.json", target_host="tower", docker_container="jellyfin"
 - Write to Docker: action="write", path="/tmp/test.txt", content="hello", target_host="tower", docker_container="nginx"`,
@@ -160,8 +160,8 @@ func (e *PulseToolExecutor) executeFileRead(ctx context.Context, path, targetHos
 		)), nil
 	}
 
-	// Validate routing context - block if targeting a Proxmox host when child resources exist
-	// This prevents accidentally reading files from the host when user meant to read from an LXC/VM
+	// Validate routing context - block if targeting a host node when child resources exist
+	// This prevents accidentally reading files from the host when user meant to read from an container/VM
 	routingResult := e.validateRoutingContext(targetHost)
 	if routingResult.IsBlocked() {
 		return NewToolResponseResult(routingResult.RoutingError.ToToolResponse()), nil
@@ -171,7 +171,7 @@ func (e *PulseToolExecutor) executeFileRead(ctx context.Context, path, targetHos
 	routing := e.resolveTargetForCommandFull(targetHost)
 	if routing.AgentID == "" {
 		if routing.TargetType == "container" || routing.TargetType == "vm" {
-			return NewTextResult(fmt.Sprintf("'%s' is a %s but no agent is available on its Proxmox host. Install Pulse Unified Agent on the Proxmox node.", targetHost, routing.TargetType)), nil
+			return NewTextResult(fmt.Sprintf("'%s' is a %s but no agent is available on its host node. Install Pulse Unified Agent on the node.", targetHost, routing.TargetType)), nil
 		}
 		return NewTextResult(fmt.Sprintf("No agent found for host '%s'. Check that the hostname is correct and an agent is connected.", targetHost)), nil
 	}
@@ -242,8 +242,8 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 		)), nil
 	}
 
-	// Validate routing context - block if targeting a Proxmox host when child resources exist
-	// This prevents accidentally writing files to the host when user meant to write to an LXC/VM
+	// Validate routing context - block if targeting a host node when child resources exist
+	// This prevents accidentally writing files to the host when user meant to write to an container/VM
 	routingResult := e.validateRoutingContext(targetHost)
 	if routingResult.IsBlocked() {
 		return NewToolResponseResult(routingResult.RoutingError.ToToolResponse()), nil
@@ -262,12 +262,12 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 	routing := e.resolveTargetForCommandFull(targetHost)
 	if routing.AgentID == "" {
 		if routing.TargetType == "container" || routing.TargetType == "vm" {
-			return NewTextResult(fmt.Sprintf("'%s' is a %s but no agent is available on its Proxmox host. Install Pulse Unified Agent on the Proxmox node.", targetHost, routing.TargetType)), nil
+			return NewTextResult(fmt.Sprintf("'%s' is a %s but no agent is available on its host node. Install Pulse Unified Agent on the node.", targetHost, routing.TargetType)), nil
 		}
 		return NewTextResult(fmt.Sprintf("No agent found for host '%s'. Check that the hostname is correct and an agent is connected.", targetHost)), nil
 	}
 
-	// INVARIANT: If the target resolves to a child resource (LXC/VM), writes MUST execute
+	// INVARIANT: If the target resolves to a child resource (container/VM), writes MUST execute
 	// inside that context via pct_exec/qm_guest_exec. No silent node fallback.
 	if err := e.validateWriteExecutionContext(targetHost, routing); err != nil {
 		return NewToolResponseResult(err.ToToolResponse()), nil
@@ -304,7 +304,7 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 		innerCommand := fmt.Sprintf("echo %s | base64 -d >> %s", shellEscape(encoded), shellEscape(path))
 		command = fmt.Sprintf("docker exec %s sh -c %s", shellEscape(dockerContainer), shellEscape(innerCommand))
 	} else {
-		// For host/LXC/VM targets - agent handles sh -c wrapping for LXC/VM
+		// For host/container/VM targets - agent handles sh -c wrapping for container/VM
 		command = fmt.Sprintf("echo %s | base64 -d >> %s", shellEscape(encoded), shellEscape(path))
 	}
 
@@ -379,8 +379,8 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 		)), nil
 	}
 
-	// Validate routing context - block if targeting a Proxmox host when child resources exist
-	// This prevents accidentally writing files to the host when user meant to write to an LXC/VM
+	// Validate routing context - block if targeting a host node when child resources exist
+	// This prevents accidentally writing files to the host when user meant to write to an container/VM
 	routingResult := e.validateRoutingContext(targetHost)
 	if routingResult.IsBlocked() {
 		return NewToolResponseResult(routingResult.RoutingError.ToToolResponse()), nil
@@ -399,12 +399,12 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 	routing := e.resolveTargetForCommandFull(targetHost)
 	if routing.AgentID == "" {
 		if routing.TargetType == "container" || routing.TargetType == "vm" {
-			return NewTextResult(fmt.Sprintf("'%s' is a %s but no agent is available on its Proxmox host. Install Pulse Unified Agent on the Proxmox node.", targetHost, routing.TargetType)), nil
+			return NewTextResult(fmt.Sprintf("'%s' is a %s but no agent is available on its host node. Install Pulse Unified Agent on the node.", targetHost, routing.TargetType)), nil
 		}
 		return NewTextResult(fmt.Sprintf("No agent found for host '%s'. Check that the hostname is correct and an agent is connected.", targetHost)), nil
 	}
 
-	// INVARIANT: If the target resolves to a child resource (LXC/VM), writes MUST execute
+	// INVARIANT: If the target resolves to a child resource (container/VM), writes MUST execute
 	// inside that context via pct_exec/qm_guest_exec. No silent node fallback.
 	if err := e.validateWriteExecutionContext(targetHost, routing); err != nil {
 		return NewToolResponseResult(err.ToToolResponse()), nil
@@ -441,7 +441,7 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 		innerCommand := fmt.Sprintf("echo %s | base64 -d > %s", shellEscape(encoded), shellEscape(path))
 		command = fmt.Sprintf("docker exec %s sh -c %s", shellEscape(dockerContainer), shellEscape(innerCommand))
 	} else {
-		// For host/LXC/VM targets - agent handles sh -c wrapping for LXC/VM
+		// For host/container/VM targets - agent handles sh -c wrapping for container/VM
 		command = fmt.Sprintf("echo %s | base64 -d > %s", shellEscape(encoded), shellEscape(path))
 	}
 
@@ -581,13 +581,13 @@ func (e *PulseToolExecutor) verifyFileTailHash(ctx context.Context, routing Comm
 }
 
 // ErrExecutionContextUnavailable is returned when a write operation targets a child resource
-// (LXC/VM) but the execution cannot be properly routed into that resource context.
+// (container/VM) but the execution cannot be properly routed into that resource context.
 // This prevents silent fallback to node-level execution, which would write files on the
-// Proxmox host instead of inside the LXC/VM.
+// host node instead of inside the container/VM.
 type ErrExecutionContextUnavailable struct {
 	TargetHost   string // What the model requested
-	ResolvedKind string // What the state says it is (lxc, vm)
-	ResolvedNode string // Which Proxmox node it's on
+	ResolvedKind string // What the state says it is (system-container, vm)
+	ResolvedNode string // Which hypervisor node it's on
 	Transport    string // What transport we got (should be pct_exec but might be "direct")
 	Message      string
 }
@@ -603,18 +603,18 @@ func (e *ErrExecutionContextUnavailable) ToToolResponse() ToolResponse {
 		"resolved_node":    e.ResolvedNode,
 		"transport":        e.Transport,
 		"auto_recoverable": false,
-		"recovery_hint":    "Cannot write files to this target. The execution context (LXC/VM) is not reachable via pct exec/qm guest exec. Verify the agent is installed on the Proxmox node and the target is running.",
+		"recovery_hint":    "Cannot write files to this target. The execution context (container/VM) is not reachable via pct exec/qm guest exec. Verify the agent is installed on the host node and the target is running.",
 	})
 }
 
 // validateWriteExecutionContext ensures write operations execute inside the correct context.
 //
-// INVARIANT: If state.ResolveResource says the target is an LXC/VM, writes MUST use
+// INVARIANT: If state.ResolveResource says the target is an container/VM, writes MUST use
 // pct_exec/qm_guest_exec to run inside that container. A "direct" transport on a child
-// resource means we'd write to the Proxmox host's filesystem instead — which is always wrong.
+// resource means we'd write to the host node's filesystem instead — which is always wrong.
 //
 // This catches the scenario where:
-// 1. target_host="homepage-docker" (an LXC)
+// 1. target_host="homepage-docker" (a system container)
 // 2. An agent on the node matches "homepage-docker" as a direct hostname
 // 3. Command runs on the node without pct exec → writes to node filesystem
 func (e *PulseToolExecutor) validateWriteExecutionContext(targetHost string, routing CommandRoutingResult) *ErrExecutionContextUnavailable {
@@ -627,14 +627,14 @@ func (e *PulseToolExecutor) validateWriteExecutionContext(targetHost string, rou
 		return nil // Unknown resource, nothing to validate
 	}
 
-	// Only validate for child resources (LXC/VM)
-	isChildResource := loc.ResourceType == "lxc" || loc.ResourceType == "vm"
+	// Only validate for child resources (system containers / VMs)
+	isChildResource := loc.ResourceType == "system-container" || loc.ResourceType == "vm"
 	if !isChildResource {
 		return nil
 	}
 
 	// For child resources, the routing MUST use pct_exec or qm_guest_exec
-	// If it resolved as "direct" (host type), that means we'd execute on the node, not inside the LXC/VM
+	// If it resolved as "direct" (host type), that means we'd execute on the node, not inside the container/VM
 	if routing.Transport == "direct" && routing.TargetType == "host" {
 		log.Warn().
 			Str("target_host", targetHost).
@@ -643,7 +643,7 @@ func (e *PulseToolExecutor) validateWriteExecutionContext(targetHost string, rou
 			Str("agent_hostname", routing.AgentHostname).
 			Str("transport", routing.Transport).
 			Msg("[FileWrite] BLOCKED: Write would execute on node, not inside child resource. " +
-				"Agent matched target hostname directly, but state says target is LXC/VM.")
+				"Agent matched target hostname directly, but state says target is container/VM.")
 
 		return &ErrExecutionContextUnavailable{
 			TargetHost:   targetHost,
@@ -651,14 +651,14 @@ func (e *PulseToolExecutor) validateWriteExecutionContext(targetHost string, rou
 			ResolvedNode: loc.Node,
 			Transport:    routing.Transport,
 			Message: fmt.Sprintf(
-				"'%s' is a %s on node '%s', but the write would execute on the Proxmox node instead of inside the %s. "+
+				"'%s' is a %s on node '%s', but the write would execute on the host node instead of inside the %s. "+
 					"This happens when an agent matches the hostname directly instead of routing via pct exec. "+
 					"The file would be written to the node's filesystem, not the %s's filesystem.",
 				targetHost, loc.ResourceType, loc.Node, loc.ResourceType, loc.ResourceType),
 		}
 	}
 
-	// Also validate: if resolved as LXC but no agent found for the node
+	// Also validate: if resolved as a guest but no agent found for the node
 	if routing.AgentID == "" {
 		return &ErrExecutionContextUnavailable{
 			TargetHost:   targetHost,
@@ -666,7 +666,7 @@ func (e *PulseToolExecutor) validateWriteExecutionContext(targetHost string, rou
 			ResolvedNode: loc.Node,
 			Transport:    "none",
 			Message: fmt.Sprintf(
-				"'%s' is a %s on node '%s', but no agent is available on that Proxmox node. "+
+				"'%s' is a %s on node '%s', but no agent is available on that node. "+
 					"Install the Pulse Unified Agent on '%s' to enable file operations inside the %s.",
 				targetHost, loc.ResourceType, loc.Node, loc.Node, loc.ResourceType),
 		}

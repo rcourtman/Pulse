@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -873,15 +874,143 @@ func TestGetService_MultiTenantInitAndCache(t *testing.T) {
 	mockSvc.AssertExpectations(t)
 }
 
+func TestGetService_MultiTenantUsesTenantReadState(t *testing.T) {
+	oldNewService := newChatService
+	defer func() { newChatService = oldNewService }()
+
+	tempDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tempDir)
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	tenantAdapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	tenantMonitor := &monitoring.Monitor{}
+	tenantMonitor.SetResourceStore(tenantAdapter)
+	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{"acme": tenantMonitor})
+
+	h := NewAIHandler(mtp, mtm, nil)
+	globalReadState := unifiedresources.NewRegistry(nil)
+	h.SetReadState(globalReadState)
+
+	mockSvc := new(MockAIService)
+	mockSvc.On("Start", mock.Anything).Return(nil).Once()
+
+	var gotCfg chat.Config
+	newChatService = func(cfg chat.Config) AIService {
+		gotCfg = cfg
+		return mockSvc
+	}
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "acme")
+	svc := h.GetService(ctx)
+	assert.Same(t, mockSvc, svc)
+
+	if gotCfg.ReadState != tenantAdapter {
+		t.Fatalf("expected tenant read state adapter, got %#v", gotCfg.ReadState)
+	}
+	if gotCfg.ReadState == globalReadState {
+		t.Fatalf("expected tenant read state to override global read state")
+	}
+
+	mockSvc.AssertExpectations(t)
+}
+
+func TestSetServiceInitializer_AppliesToExistingServices(t *testing.T) {
+	h := NewAIHandler(nil, nil, nil)
+	legacySvc := new(MockAIService)
+	tenantSvc := new(MockAIService)
+	h.legacyService = legacySvc
+	h.services["acme"] = tenantSvc
+
+	calls := map[string]int{}
+	h.SetServiceInitializer(func(ctx context.Context, svc AIService) {
+		calls[GetOrgID(ctx)]++
+	})
+
+	if calls["default"] != 1 {
+		t.Fatalf("expected initializer for default service, got %d", calls["default"])
+	}
+	if calls["acme"] != 1 {
+		t.Fatalf("expected initializer for tenant service, got %d", calls["acme"])
+	}
+}
+
+func TestGetService_DefaultAppliesServiceInitializer(t *testing.T) {
+	h := NewAIHandler(nil, nil, nil)
+	mockSvc := new(MockAIService)
+	h.legacyService = mockSvc
+
+	calls := 0
+	lastOrg := ""
+	h.SetServiceInitializer(func(ctx context.Context, svc AIService) {
+		calls++
+		lastOrg = GetOrgID(ctx)
+	})
+
+	svc := h.GetService(context.Background())
+	assert.Same(t, mockSvc, svc)
+	if calls == 0 {
+		t.Fatal("expected service initializer to be called")
+	}
+	if lastOrg != "default" {
+		t.Fatalf("expected initializer org default, got %q", lastOrg)
+	}
+}
+
+func TestGetService_MultiTenantAppliesServiceInitializerOnCreate(t *testing.T) {
+	oldNewService := newChatService
+	defer func() { newChatService = oldNewService }()
+
+	tempDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tempDir)
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	tenantMonitor := &monitoring.Monitor{}
+	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{"acme": tenantMonitor})
+
+	mockSvc := new(MockAIService)
+	mockSvc.On("Start", mock.Anything).Return(nil).Once()
+	newChatService = func(cfg chat.Config) AIService {
+		return mockSvc
+	}
+
+	h := NewAIHandler(mtp, mtm, nil)
+	calls := 0
+	var seenOrg string
+	h.SetServiceInitializer(func(ctx context.Context, svc AIService) {
+		calls++
+		seenOrg = GetOrgID(ctx)
+		if svc != mockSvc {
+			t.Fatalf("expected initializer to receive tenant service")
+		}
+	})
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "acme")
+	svc := h.GetService(ctx)
+	assert.Same(t, mockSvc, svc)
+	if calls != 1 {
+		t.Fatalf("expected initializer called once for tenant service, got %d", calls)
+	}
+	if seenOrg != "acme" {
+		t.Fatalf("expected initializer org acme, got %q", seenOrg)
+	}
+
+	mockSvc.AssertExpectations(t)
+}
+
 func TestRemoveTenantService(t *testing.T) {
 	h := NewAIHandler(nil, nil, nil)
 	mockSvc := new(MockAIService)
 	mockSvc.On("Stop", mock.Anything).Return(assert.AnError).Once()
 	h.services["acme"] = mockSvc
+	h.stateProviders["acme"] = &MockAIStateProvider{}
 
 	err := h.RemoveTenantService(context.Background(), "acme")
 	assert.NoError(t, err)
 	_, exists := h.services["acme"]
+	assert.False(t, exists)
+	_, exists = h.stateProviders["acme"]
 	assert.False(t, exists)
 
 	mockSvc.AssertExpectations(t)
@@ -898,13 +1027,60 @@ func TestRemoveTenantService_DefaultNoop(t *testing.T) {
 	assert.True(t, exists)
 }
 
-func TestGetConfig_DefaultFallback(t *testing.T) {
+func TestGetConfig_NonDefaultFallsBackWhenMultiTenantUnavailable(t *testing.T) {
 	cfg := &config.Config{APIToken: "token"}
 	h := newTestAIHandler(cfg, nil, nil)
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, "acme")
 
 	result := h.getConfig(ctx)
 	assert.Same(t, cfg, result)
+}
+
+func TestGetPersistence_NonDefaultFallsBackWhenMultiTenantUnavailable(t *testing.T) {
+	mockPersist := new(MockAIPersistence)
+	h := newTestAIHandler(nil, mockPersist, nil)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "acme")
+
+	result := h.getPersistence(ctx)
+	assert.Same(t, mockPersist, result)
+}
+
+func TestGetConfig_NonDefaultInvalidOrgFailsClosedWhenMultiTenantAvailable(t *testing.T) {
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	defer mtm.Stop()
+
+	h := NewAIHandler(mtp, mtm, nil)
+	h.legacyConfig = &config.Config{APIToken: "token"}
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "../bad")
+
+	result := h.getConfig(ctx)
+	assert.Nil(t, result)
+}
+
+func TestGetPersistence_NonDefaultInvalidOrgFailsClosedWhenMultiTenantAvailable(t *testing.T) {
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	defer mtm.Stop()
+
+	h := NewAIHandler(mtp, mtm, nil)
+	h.legacyPersistence = config.NewConfigPersistence(t.TempDir())
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "../bad")
+
+	result := h.getPersistence(ctx)
+	assert.Nil(t, result)
+}
+
+func TestReadStateForOrg_NonDefaultMissingTenantReadStateFailsClosed(t *testing.T) {
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	defer mtm.Stop()
+
+	h := NewAIHandler(mtp, mtm, nil)
+	h.SetReadState(unifiedresources.NewRegistry(nil))
+
+	result := h.readStateForOrg("tenant-1")
+	assert.Nil(t, result)
 }
 
 func TestGetDataDirDefault(t *testing.T) {

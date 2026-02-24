@@ -140,6 +140,13 @@ type tenantMonitorStateProvider struct {
 	orgID     string
 }
 
+type failClosedLicenseChecker struct{}
+
+func (failClosedLicenseChecker) HasFeature(string) bool { return false }
+func (failClosedLicenseChecker) GetLicenseStateString() (string, bool) {
+	return string(ai.LicenseStateNone), false
+}
+
 func (p *tenantMonitorStateProvider) GetState() models.StateSnapshot {
 	if p == nil || p.mtMonitor == nil {
 		return models.StateSnapshot{}
@@ -176,6 +183,13 @@ func (h *AISettingsHandler) providerSnapshot() aiSettingsProviderSnapshot {
 	}
 }
 
+func (h *AISettingsHandler) newFailClosedTenantService(orgID string) *ai.Service {
+	svc := ai.NewService(nil, h.agentServer)
+	svc.SetOrgID(orgID)
+	svc.SetLicenseChecker(failClosedLicenseChecker{})
+	return svc
+}
+
 // NewAISettingsHandler creates a new AI settings handler
 func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.MultiTenantMonitor, agentServer *agentexec.Server) *AISettingsHandler {
 	var defaultConfig *config.Config
@@ -193,9 +207,9 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 		}
 	}
 
+	defaultAIService = ai.NewService(defaultPersistence, agentServer)
+	defaultAIService.SetOrgID("default")
 	if defaultPersistence != nil {
-		defaultAIService = ai.NewService(defaultPersistence, agentServer)
-		defaultAIService.SetOrgID("default")
 		if err := defaultAIService.LoadConfig(); err != nil {
 			log.Warn().Err(err).Msg("Failed to load AI config on startup")
 		}
@@ -226,7 +240,7 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 
 // GetAIService returns the underlying AI service
 func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
-	mtPersistence, _, _, _, _, _ := h.stateRefs()
+	mtPersistence, mtMonitor, _, _, _, _ := h.stateRefs()
 	providers := h.providerSnapshot()
 	legacyAIService := providers.legacyAIService
 
@@ -235,6 +249,10 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 		return legacyAIService
 	}
 	if mtPersistence == nil {
+		if mtMonitor != nil {
+			log.Warn().Str("orgID", orgID).Msg("Failed to get persistence manager for tenant AI service")
+			return h.newFailClosedTenantService(orgID)
+		}
 		return legacyAIService
 	}
 
@@ -258,7 +276,11 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	persistence, err := mtPersistence.GetPersistence(orgID)
 	if err != nil {
 		log.Warn().Str("orgID", orgID).Err(err).Msg("Failed to get persistence for AI service")
-		return legacyAIService
+		return h.newFailClosedTenantService(orgID)
+	}
+	if persistence == nil {
+		log.Warn().Str("orgID", orgID).Msg("Tenant persistence unavailable for AI service")
+		return h.newFailClosedTenantService(orgID)
 	}
 
 	svc = ai.NewService(persistence, h.agentServer)
@@ -310,7 +332,9 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 			svc.SetCorrelationDetector(providers.correlationDetector)
 		}
 	}
-	if providers.discoveryStore != nil {
+	if discoveryStore := h.GetDiscoveryStoreForOrg(orgID); discoveryStore != nil {
+		svc.SetDiscoveryStore(discoveryStore)
+	} else if orgID == "default" && providers.discoveryStore != nil {
 		svc.SetDiscoveryStore(providers.discoveryStore)
 	}
 
@@ -369,7 +393,7 @@ func (h *AISettingsHandler) getConfig(ctx context.Context) *config.Config {
 		// Security: never fall back to default config for non-default orgs.
 		return nil
 	}
-	return nil
+	return legacyConfig
 }
 
 // GetPersistence returns the persistence for the current context
@@ -386,7 +410,7 @@ func (h *AISettingsHandler) getPersistence(ctx context.Context) *config.ConfigPe
 		// Security: never fall back to default persistence for non-default orgs.
 		return nil
 	}
-	return nil
+	return legacyPersistence
 }
 
 // SetMultiTenantPersistence updates the persistence manager
@@ -504,6 +528,10 @@ func (h *AISettingsHandler) readStateForOrg(orgID string) unifiedresources.ReadS
 				return readState
 			}
 		}
+		if orgID != "default" {
+			// Security: never fall back to default-org read state for non-default orgs.
+			return nil
+		}
 	}
 
 	return fallbackReadState
@@ -526,6 +554,10 @@ func (h *AISettingsHandler) unifiedResourceProviderForOrg(orgID string) ai.Unifi
 					return provider
 				}
 			}
+		}
+		if orgID != "default" {
+			// Security: never fall back to default-org unified provider for non-default orgs.
+			return nil
 		}
 	}
 

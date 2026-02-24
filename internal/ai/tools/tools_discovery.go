@@ -103,9 +103,9 @@ type CommandContext struct {
 func getCLIAccessPattern(resourceType, hostID, resourceID string) string {
 	switch resourceType {
 	case "system-container", "lxc":
-		return fmt.Sprintf("System container on Proxmox node '%s' (VMID %s)", hostID, resourceID)
+		return fmt.Sprintf("System container on node '%s' (VMID %s)", hostID, resourceID)
 	case "vm":
-		return fmt.Sprintf("VM on Proxmox node '%s' (VMID %s)", hostID, resourceID)
+		return fmt.Sprintf("VM on node '%s' (VMID %s)", hostID, resourceID)
 	case "docker":
 		return fmt.Sprintf("Docker container '%s' on host '%s'", resourceID, hostID)
 	case "host":

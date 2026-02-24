@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,40 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
+
+func TestOrgHandlersDeleteInvokesOnDeleteCallback(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	var callbackOrgID string
+	h.SetOnDelete(func(_ context.Context, orgID string) error {
+		callbackOrgID = orgID
+		return nil
+	})
+
+	createBody := bytes.NewBufferString(`{"id":"acme","displayName":"Acme Corp"}`)
+	createReq := withUser(httptest.NewRequest(http.MethodPost, "/api/orgs", createBody), "alice")
+	createRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 from create, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+
+	deleteReq := withUser(httptest.NewRequest(http.MethodDelete, "/api/orgs/acme", nil), "alice")
+	deleteReq.SetPathValue("id", "acme")
+	deleteRec := httptest.NewRecorder()
+	h.HandleDeleteOrg(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 from delete, got %d: %s", deleteRec.Code, deleteRec.Body.String())
+	}
+	if callbackOrgID != "acme" {
+		t.Fatalf("expected delete callback org ID acme, got %q", callbackOrgID)
+	}
+}
 
 func TestOrgHandlersCRUDLifecycle(t *testing.T) {
 	t.Setenv("PULSE_DEV", "true")

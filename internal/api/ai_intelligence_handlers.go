@@ -920,7 +920,7 @@ func (h *AISettingsHandler) HandleGetForecast(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	forecastSvc := h.GetForecastService()
+	forecastSvc := h.GetForecastServiceForOrg(GetOrgID(r.Context()))
 	if forecastSvc == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"forecast": nil,
@@ -984,7 +984,7 @@ func (h *AISettingsHandler) HandleGetForecastOverview(w http.ResponseWriter, r *
 		return
 	}
 
-	forecastSvc := h.GetForecastService()
+	forecastSvc := h.GetForecastServiceForOrg(GetOrgID(r.Context()))
 	if forecastSvc == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"forecasts":     []interface{}{},
@@ -1049,7 +1049,7 @@ func (h *AISettingsHandler) HandleGetLearningPreferences(w http.ResponseWriter, 
 		return
 	}
 
-	learningStore := h.GetLearningStore()
+	learningStore := h.GetLearningStoreForOrg(GetOrgID(r.Context()))
 	if learningStore == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"preferences": nil,
@@ -1092,7 +1092,7 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 		return
 	}
 
-	store := h.GetUnifiedStore()
+	store := h.GetUnifiedStoreForOrg(GetOrgID(r.Context()))
 	if store == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"findings": []interface{}{},
@@ -1260,7 +1260,7 @@ func (h *AISettingsHandler) HandleGetProxmoxEvents(w http.ResponseWriter, r *htt
 		return
 	}
 
-	correlator := h.GetProxmoxCorrelator()
+	correlator := h.GetProxmoxCorrelatorForOrg(GetOrgID(r.Context()))
 	if correlator == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"events":  []interface{}{},
@@ -1311,7 +1311,7 @@ func (h *AISettingsHandler) HandleGetProxmoxCorrelations(w http.ResponseWriter, 
 		return
 	}
 
-	correlator := h.GetProxmoxCorrelator()
+	correlator := h.GetProxmoxCorrelatorForOrg(GetOrgID(r.Context()))
 	if correlator == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"correlations": []interface{}{},
@@ -1354,7 +1354,7 @@ func (h *AISettingsHandler) HandleGetRemediationPlans(w http.ResponseWriter, r *
 		return
 	}
 
-	engine := h.GetRemediationEngine()
+	engine := h.GetRemediationEngineForOrg(GetOrgID(r.Context()))
 	if engine == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"plans":   []interface{}{},
@@ -1466,7 +1466,7 @@ func (h *AISettingsHandler) HandleGetRemediationPlan(w http.ResponseWriter, r *h
 		return
 	}
 
-	engine := h.GetRemediationEngine()
+	engine := h.GetRemediationEngineForOrg(GetOrgID(r.Context()))
 	if engine == nil {
 		http.Error(w, "Remediation engine not available", http.StatusServiceUnavailable)
 		return
@@ -1496,7 +1496,7 @@ func (h *AISettingsHandler) HandleApproveRemediationPlan(w http.ResponseWriter, 
 		return
 	}
 
-	engine := h.GetRemediationEngine()
+	engine := h.GetRemediationEngineForOrg(GetOrgID(r.Context()))
 	if engine == nil {
 		http.Error(w, "Remediation engine not available", http.StatusServiceUnavailable)
 		return
@@ -1543,7 +1543,7 @@ func (h *AISettingsHandler) HandleExecuteRemediationPlan(w http.ResponseWriter, 
 		return
 	}
 
-	engine := h.GetRemediationEngine()
+	engine := h.GetRemediationEngineForOrg(GetOrgID(r.Context()))
 	if engine == nil {
 		http.Error(w, "Remediation engine not available", http.StatusServiceUnavailable)
 		return
@@ -1636,7 +1636,7 @@ func (h *AISettingsHandler) HandleRollbackRemediationPlan(w http.ResponseWriter,
 		return
 	}
 
-	engine := h.GetRemediationEngine()
+	engine := h.GetRemediationEngineForOrg(GetOrgID(r.Context()))
 	if engine == nil {
 		http.Error(w, "Remediation engine not available", http.StatusServiceUnavailable)
 		return
@@ -1676,7 +1676,7 @@ func (h *AISettingsHandler) HandleGetCircuitBreakerStatus(w http.ResponseWriter,
 		return
 	}
 
-	breaker := h.GetCircuitBreaker()
+	breaker := h.GetCircuitBreakerForOrg(GetOrgID(r.Context()))
 	if breaker == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"status":  "unknown",
@@ -1720,7 +1720,7 @@ func (h *AISettingsHandler) HandleGetRecentIncidents(w http.ResponseWriter, r *h
 	}
 
 	// Get coordinator status
-	coordinator := h.GetIncidentCoordinator()
+	coordinator := h.GetIncidentCoordinatorForOrg(GetOrgID(r.Context()))
 	var activeCount int
 	if coordinator != nil {
 		activeCount = coordinator.GetActiveIncidentCount()

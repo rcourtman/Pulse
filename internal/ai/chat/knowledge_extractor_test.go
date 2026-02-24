@@ -422,7 +422,7 @@ func TestPredictFactKeys_LogsDistinct(t *testing.T) {
 
 func TestExtractFacts_QueryTopology(t *testing.T) {
 	input := map[string]interface{}{"action": "topology"}
-	result := `{"summary":{"total_nodes":3,"total_vms":3,"running_vms":1,"total_lxc_containers":22,"running_lxc":22,"total_docker_hosts":1},"proxmox":{"nodes":[{"name":"delly","status":"online"},{"name":"minipc","status":"online"},{"name":"pi","status":"online"}]}}`
+	result := `{"summary":{"total_nodes":3,"total_vms":3,"running_vms":1,"total_system_containers":22,"running_containers":22,"total_docker_hosts":1},"proxmox":{"nodes":[{"name":"delly","status":"online"},{"name":"minipc","status":"online"},{"name":"pi","status":"online"}]}}`
 
 	facts := ExtractFacts("pulse_query", input, result)
 	require.Len(t, facts, 1)
@@ -435,7 +435,7 @@ func TestExtractFacts_QueryTopology(t *testing.T) {
 	assert.Contains(t, f.Value, "minipc=online")
 	assert.Contains(t, f.Value, "pi=online")
 	assert.Contains(t, f.Value, "3 VMs (1 running)")
-	assert.Contains(t, f.Value, "22 LXC (22 running)")
+	assert.Contains(t, f.Value, "22 containers (22 running)")
 	assert.Contains(t, f.Value, "1 docker host")
 }
 
@@ -844,7 +844,7 @@ func TestExtractFacts_QueryList(t *testing.T) {
 	assert.Equal(t, "inventory:summary", f.Key)
 	assert.Contains(t, f.Value, "2 nodes")
 	assert.Contains(t, f.Value, "2 VMs (1 running)")
-	assert.Contains(t, f.Value, "3 LXC (2 running)")
+	assert.Contains(t, f.Value, "3 containers (2 running)")
 	assert.Contains(t, f.Value, "1 docker hosts (5 containers)")
 }
 

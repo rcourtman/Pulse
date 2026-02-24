@@ -73,7 +73,7 @@ func (e *PulseToolExecutor) registerStorageTools() {
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "Filter by type: vm or lxc (for resource_disks)",
+						Description: "Filter by type: vm or system-container (for resource_disks)",
 					},
 					"min_usage": {
 						Type:        "number",
