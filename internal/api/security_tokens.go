@@ -145,6 +145,20 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	// Scope escalation prevention: if the caller is an API token, the new token's
+	// scopes must be a subset of the caller's scopes. Session-based (browser) requests
+	// bypass this check since sessions have implicit full access.
+	if callerToken := getAPITokenRecordFromRequest(req); callerToken != nil {
+		for _, requested := range scopes {
+			if !callerToken.HasScope(requested) {
+				r.auditTokenEvent(req, "token_created", false,
+					fmt.Sprintf("Scope escalation denied: caller missing scope %q", requested))
+				http.Error(w, fmt.Sprintf("Cannot grant scope %q: your token does not have this scope", requested), http.StatusForbidden)
+				return
+			}
+		}
+	}
+
 	rawToken, err := internalauth.GenerateAPIToken()
 	if err != nil {
 		r.auditTokenEvent(req, "token_created", false, "Failed to generate API token")
@@ -302,6 +316,20 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 		r.auditTokenEvent(req, "token_rotated", false, fmt.Sprintf("API token id=%s not found for rotation", tokenID))
 		http.Error(w, "Token not found", http.StatusNotFound)
 		return
+	}
+
+	// Scope escalation prevention: if the caller is an API token, they can only
+	// rotate tokens whose scopes are a subset of their own. This prevents a
+	// limited-scope token from rotating a wildcard token to obtain its raw value.
+	if callerToken := getAPITokenRecordFromRequest(req); callerToken != nil {
+		for _, targetScope := range oldRecord.Scopes {
+			if !callerToken.HasScope(targetScope) {
+				r.auditTokenEvent(req, "token_rotated", false,
+					fmt.Sprintf("Scope escalation denied: caller missing scope %q on target token id=%s", targetScope, tokenID))
+				http.Error(w, fmt.Sprintf("Cannot rotate token with scope %q: your token does not have this scope", targetScope), http.StatusForbidden)
+				return
+			}
+		}
 	}
 
 	// Generate new token
