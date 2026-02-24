@@ -9,6 +9,8 @@ export type WorkloadGuest = (VM | Container) & {
   image?: string;
   namespace?: string;
   contextLabel?: string;
+  /** Cluster name from Proxmox (for badge display in workloads table). */
+  clusterName?: string;
   platformType?: string;
   // For "docker" workloads, this is the underlying runtime ("docker", "podman", etc.)
   containerRuntime?: string;

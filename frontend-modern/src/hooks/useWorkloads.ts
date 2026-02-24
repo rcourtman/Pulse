@@ -436,6 +436,8 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
           : workloadType === 'k8s'
             ? resource.kubernetes?.clusterName || resource.kubernetes?.context
             : undefined,
+    clusterName:
+      (resource.proxmox?.clusterName || resource.identity?.clusterName || '').trim() || undefined,
     containerRuntime:
       workloadType === 'docker' ? (resource.docker?.runtime || '').trim() || undefined : undefined,
     updateStatus: resource.docker?.updateStatus as WorkloadGuest['updateStatus'] | undefined,

@@ -4,7 +4,14 @@ import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { useNavigate } from '@solidjs/router';
 import type { VM, Container, GuestNetworkInterface } from '@/types/api';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
-import { formatBytes, formatUptime, formatSpeed, getBackupInfo, getShortImageName, type BackupStatus } from '@/utils/format';
+import {
+  formatBytes,
+  formatUptime,
+  formatSpeed,
+  getBackupInfo,
+  getShortImageName,
+  type BackupStatus,
+} from '@/utils/format';
 import { TagBadges } from './TagBadges';
 import { StackedDiskBar } from './StackedDiskBar';
 import { StackedMemoryBar } from './StackedMemoryBar';
@@ -12,17 +19,21 @@ import { StackedMemoryBar } from './StackedMemoryBar';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getGuestPowerIndicator, isGuestRunning } from '@/utils/status';
 import { buildMetricKey } from '@/utils/metricsKeys';
-import { getCanonicalWorkloadId, getWorkloadMetricsKind, resolveWorkloadType } from '@/utils/workloads';
+import {
+  getCanonicalWorkloadId,
+  getWorkloadMetricsKind,
+  resolveWorkloadType,
+} from '@/utils/workloads';
 import { getWorkloadTypeBadge } from '@/components/shared/workloadTypeBadges';
 import { buildInfrastructureHrefForWorkload } from './infrastructureLink';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
+import { getWorkloadDockerHostId } from './workloadSelectors';
 
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { useAnomalyForMetric } from '@/hooks/useAnomalies';
-
 
 type Guest = WorkloadGuest;
 
@@ -40,7 +51,14 @@ export interface WorkloadIOEmphasis {
   diskIO: IODistributionStats;
 }
 
-const EMPTY_IO_DISTRIBUTION: IODistributionStats = { median: 0, mad: 0, max: 0, p97: 0, p99: 0, count: 0 };
+const EMPTY_IO_DISTRIBUTION: IODistributionStats = {
+  median: 0,
+  mad: 0,
+  max: 0,
+  p97: 0,
+  p99: 0,
+  count: 0,
+};
 const EMPTY_IO_EMPHASIS: WorkloadIOEmphasis = {
   network: EMPTY_IO_DISTRIBUTION,
   diskIO: EMPTY_IO_DISTRIBUTION,
@@ -75,13 +93,13 @@ const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphas
     return { className: 'text-muted', showOutlierHint: false };
   }
 
-  if (value >= stats.p99) return { className: 'text-base-content font-semibold', showOutlierHint: true };
-  if (value >= stats.p97) return { className: 'text-base-content font-medium', showOutlierHint: true };
+  if (value >= stats.p99)
+    return { className: 'text-base-content font-semibold', showOutlierHint: true };
+  if (value >= stats.p97)
+    return { className: 'text-base-content font-medium', showOutlierHint: true };
   if (value > 0) return { className: 'text-muted', showOutlierHint: false };
   return { className: 'text-muted', showOutlierHint: false };
-}
-
-
+};
 
 const GROUPED_FIRST_CELL_INDENT = 'pl-3 sm:pl-5 lg:pl-8';
 const DEFAULT_FIRST_CELL_INDENT = 'pl-2 sm:pl-3';
@@ -96,19 +114,39 @@ const isVM = (guest: Guest): guest is VM => {
 };
 
 // Backup status indicator colors and icons
-const BACKUP_STATUS_CONFIG: Record<BackupStatus, { color: string; bgColor: string; icon: 'check' | 'warning' | 'x' }> = {
-  fresh: { color: 'text-green-600 dark:text-green-400', bgColor: 'bg-green-100 dark:bg-green-900', icon: 'check' },
-  stale: { color: 'text-yellow-600 dark:text-yellow-400', bgColor: 'bg-yellow-100 dark:bg-yellow-900', icon: 'warning' },
-  critical: { color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-100 dark:bg-red-900', icon: 'x' },
+const BACKUP_STATUS_CONFIG: Record<
+  BackupStatus,
+  { color: string; bgColor: string; icon: 'check' | 'warning' | 'x' }
+> = {
+  fresh: {
+    color: 'text-green-600 dark:text-green-400',
+    bgColor: 'bg-green-100 dark:bg-green-900',
+    icon: 'check',
+  },
+  stale: {
+    color: 'text-yellow-600 dark:text-yellow-400',
+    bgColor: 'bg-yellow-100 dark:bg-yellow-900',
+    icon: 'warning',
+  },
+  critical: {
+    color: 'text-red-600 dark:text-red-400',
+    bgColor: 'bg-red-100 dark:bg-red-900',
+    icon: 'x',
+  },
   never: { color: 'text-muted', bgColor: 'bg-surface-alt', icon: 'x' },
 };
 
-function BackupIndicator(props: { lastBackup: string | number | null | undefined; isTemplate: boolean }) {
+function BackupIndicator(props: {
+  lastBackup: string | number | null | undefined;
+  isTemplate: boolean;
+}) {
   // Don't show for templates
   if (props.isTemplate) return null;
 
   const alertsActivation = useAlertsActivation();
-  const backupInfo = createMemo(() => getBackupInfo(props.lastBackup, alertsActivation.getBackupThresholds()));
+  const backupInfo = createMemo(() =>
+    getBackupInfo(props.lastBackup, alertsActivation.getBackupThresholds()),
+  );
   const config = createMemo(() => BACKUP_STATUS_CONFIG[backupInfo().status]);
 
   // Only show when there's a problem (stale, critical, or never)
@@ -127,19 +165,37 @@ function BackupIndicator(props: { lastBackup: string | number | null | undefined
 
   return (
     <Show when={shouldShow()}>
-      <span
-        class={`flex-shrink-0 ${config().color}`}
-        title={tooltipText()}
-      >
+      <span class={`flex-shrink-0 ${config().color}`} title={tooltipText()}>
         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
           {/* Shield shape */}
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path
+            d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
           {/* Inner icon based on status */}
           <Show when={config().icon === 'warning'}>
-            <path d="M12 8v4M12 16h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path
+              d="M12 8v4M12 16h.01"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
           </Show>
           <Show when={config().icon === 'x'}>
-            <path d="M10 10l4 4M14 10l-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path
+              d="M10 10l4 4M14 10l-4 4"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
           </Show>
         </svg>
       </span>
@@ -148,11 +204,15 @@ function BackupIndicator(props: { lastBackup: string | number | null | undefined
 }
 
 // Network info cell with rich tooltip showing interfaces, IPs, and MACs
-function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: GuestNetworkInterface[] }) {
+function NetworkInfoCell(props: {
+  ipAddresses: string[];
+  networkInterfaces: GuestNetworkInterface[];
+}) {
   const tip = useTooltip();
 
   const hasInterfaces = () => props.networkInterfaces.length > 0;
-  const primaryIp = () => props.ipAddresses[0] || props.networkInterfaces[0]?.addresses?.[0] || null;
+  const primaryIp = () =>
+    props.ipAddresses[0] || props.networkInterfaces[0]?.addresses?.[0] || null;
   const totalIps = () => {
     if (props.ipAddresses.length > 0) return props.ipAddresses.length;
     return props.networkInterfaces.reduce((sum, iface) => sum + (iface.addresses?.length || 0), 0);
@@ -167,14 +227,28 @@ function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: Gues
       >
         <Show when={primaryIp()} fallback="-">
           {/* Network icon */}
-          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+          <svg
+            class="w-3.5 h-3.5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="1.5"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418"
+            />
           </svg>
           <span class="text-[10px] font-medium">{totalIps()}</span>
         </Show>
       </span>
 
-      <TooltipPortal when={tip.show() && (hasInterfaces() || props.ipAddresses.length > 0)} x={tip.pos().x} y={tip.pos().y}>
+      <TooltipPortal
+        when={tip.show() && (hasInterfaces() || props.ipAddresses.length > 0)}
+        x={tip.pos().x}
+        y={tip.pos().y}
+      >
         <div class="min-w-[180px] max-w-[280px]">
           <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
             Network Interfaces
@@ -193,9 +267,7 @@ function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: Gues
                   <Show when={iface.addresses && iface.addresses.length > 0}>
                     <div class="mt-0.5 flex flex-wrap gap-1">
                       <For each={iface.addresses}>
-                        {(ip) => (
-                          <span class="text-slate-300 font-mono">{ip}</span>
-                        )}
+                        {(ip) => <span class="text-slate-300 font-mono">{ip}</span>}
                       </For>
                     </div>
                   </Show>
@@ -220,9 +292,7 @@ function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: Gues
               </div>
               <div class="mt-0.5 flex flex-wrap gap-1">
                 <For each={props.ipAddresses}>
-                  {(ip) => (
-                    <span class="text-slate-300 font-mono">{ip}</span>
-                  )}
+                  {(ip) => <span class="text-slate-300 font-mono">{ip}</span>}
                 </For>
               </div>
             </div>
@@ -240,17 +310,30 @@ function detectOSType(osName: string): OSType {
   const lower = osName.toLowerCase();
   if (lower.includes('windows')) return 'windows';
   // All Linux distros, BSDs, and Unix-likes -> linux
-  if (lower.includes('linux') || lower.includes('debian') || lower.includes('ubuntu') ||
-    lower.includes('alpine') || lower.includes('centos') || lower.includes('fedora') ||
-    lower.includes('arch') || lower.includes('nixos') || lower.includes('suse') ||
-    lower.includes('gentoo') || lower.includes('rhel') || lower.includes('rocky') ||
-    lower.includes('alma') || lower.includes('devuan') || lower.includes('gnu') ||
-    lower.includes('freebsd') || lower.includes('openbsd') || lower.includes('netbsd')) {
+  if (
+    lower.includes('linux') ||
+    lower.includes('debian') ||
+    lower.includes('ubuntu') ||
+    lower.includes('alpine') ||
+    lower.includes('centos') ||
+    lower.includes('fedora') ||
+    lower.includes('arch') ||
+    lower.includes('nixos') ||
+    lower.includes('suse') ||
+    lower.includes('gentoo') ||
+    lower.includes('rhel') ||
+    lower.includes('rocky') ||
+    lower.includes('alma') ||
+    lower.includes('devuan') ||
+    lower.includes('gnu') ||
+    lower.includes('freebsd') ||
+    lower.includes('openbsd') ||
+    lower.includes('netbsd')
+  ) {
     return 'linux';
   }
   return 'unknown';
 }
-
 
 // OS info cell with icon and Portal tooltip
 function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: string }) {
@@ -273,7 +356,15 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
       case 'linux':
         // Terminal prompt icon
         return (
-          <svg class={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg
+            class={iconClass}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <polyline points="4 17 10 11 4 5" />
             <line x1="12" y1="19" x2="20" y2="19" />
           </svg>
@@ -320,7 +411,9 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
   const tip = useTooltip();
 
   const alertsActivation = useAlertsActivation();
-  const info = createMemo(() => getBackupInfo(props.lastBackup, alertsActivation.getBackupThresholds()));
+  const info = createMemo(() =>
+    getBackupInfo(props.lastBackup, alertsActivation.getBackupThresholds()),
+  );
   const config = createMemo(() => BACKUP_STATUS_CONFIG[info().status]);
 
   return (
@@ -331,7 +424,15 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
         onMouseLeave={tip.onMouseLeave}
         aria-label={`Backup status: ${info().status}`}
       >
-        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg
+          class="w-4 h-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           {/* Shield shape */}
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
 
@@ -364,18 +465,14 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
                   day: 'numeric',
                 })}
               </div>
-              <div class="text-slate-300">
-                {new Date(props.lastBackup!).toLocaleTimeString()}
-              </div>
+              <div class="text-slate-300">{new Date(props.lastBackup!).toLocaleTimeString()}</div>
             </div>
             <div class="pt-1 mt-1 border-t border-border">
               <span class={config().color}>{info().ageFormatted} ago</span>
             </div>
           </Show>
           <Show when={info().status === 'never'}>
-            <div class="py-0.5 text-red-400">
-              No backup has ever been recorded for this guest.
-            </div>
+            <div class="py-0.5 text-red-400">No backup has ever been recorded for this guest.</div>
           </Show>
         </div>
       </TooltipPortal>
@@ -405,12 +502,8 @@ function InfoTooltipCell(props: { value: string; tooltip: string; type: string }
 
       <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
         <div class="max-w-[280px]">
-          <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
-            {label()}
-          </div>
-          <div class="py-0.5 text-base-content break-all">
-            {props.tooltip}
-          </div>
+          <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">{label()}</div>
+          <div class="py-0.5 text-base-content break-all">{props.tooltip}</div>
         </div>
       </TooltipPortal>
     </>
@@ -421,7 +514,7 @@ function InfoTooltipCell(props: { value: string; tooltip: string; type: string }
 export const GUEST_COLUMNS: ColumnDef[] = [
   { id: 'name', label: 'Name', width: '200px', sortKey: 'name' },
   { id: 'type', label: 'Type', width: '60px', sortKey: 'type' },
-  { id: 'info', label: 'Info', width: '100px' },  // Merged identifier: VMID for VMs/LXCs, image for Docker, namespace for K8s
+  { id: 'info', label: 'Info', width: '100px' }, // Merged identifier: VMID for VMs/LXCs, image for Docker, namespace for K8s
   { id: 'vmid', label: 'ID', width: '45px', sortKey: 'vmid' },
 
   // Core metrics
@@ -430,18 +523,162 @@ export const GUEST_COLUMNS: ColumnDef[] = [
   { id: 'disk', label: 'Disk', width: '140px', sortKey: 'disk' },
 
   // Toggleable columns
-  { id: 'ip', label: 'IP', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>, width: '45px', toggleable: true },
-  { id: 'uptime', label: 'Uptime', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>, width: '60px', toggleable: true, sortKey: 'uptime' },
-  { id: 'node', label: 'Node', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" /></svg>, width: '70px', toggleable: true, sortKey: 'node' },
-  { id: 'image', label: 'Image', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 6v12M13 6v12" /></svg>, width: '140px', minWidth: '120px', toggleable: true, sortKey: 'image' },
-  { id: 'namespace', label: 'Namespace', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2l7 4v8l-7 4-7-4V6l7-4z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12" /></svg>, width: '110px', minWidth: '90px', toggleable: true, sortKey: 'namespace' },
-  { id: 'context', label: 'Context', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 6h.01M4 6a8 8 0 018-4 8 8 0 018 4M4 18a8 8 0 008 4 8 8 0 008-4" /></svg>, width: '120px', minWidth: '100px', toggleable: true, sortKey: 'contextLabel' },
-  { id: 'backup', label: 'Backup', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>, width: '50px', toggleable: true },
-  { id: 'tags', label: 'Tags', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>, width: '60px', toggleable: true },
+  {
+    id: 'ip',
+    label: 'IP',
+    icon: (
+      <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
+        />
+      </svg>
+    ),
+    width: '45px',
+    toggleable: true,
+  },
+  {
+    id: 'uptime',
+    label: 'Uptime',
+    icon: (
+      <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+    ),
+    width: '60px',
+    toggleable: true,
+    sortKey: 'uptime',
+  },
+  {
+    id: 'node',
+    label: 'Node',
+    icon: (
+      <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
+        />
+      </svg>
+    ),
+    width: '70px',
+    toggleable: true,
+    sortKey: 'node',
+  },
+  {
+    id: 'image',
+    label: 'Image',
+    icon: (
+      <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <rect x="3" y="6" width="18" height="12" rx="2" />
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M3 10h18M7 6v12M13 6v12"
+        />
+      </svg>
+    ),
+    width: '140px',
+    minWidth: '120px',
+    toggleable: true,
+    sortKey: 'image',
+  },
+  {
+    id: 'namespace',
+    label: 'Namespace',
+    icon: (
+      <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M12 2l7 4v8l-7 4-7-4V6l7-4z"
+        />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12" />
+      </svg>
+    ),
+    width: '110px',
+    minWidth: '90px',
+    toggleable: true,
+    sortKey: 'namespace',
+  },
+  {
+    id: 'context',
+    label: 'Context',
+    icon: (
+      <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M12 6v6m0 6h.01M4 6a8 8 0 018-4 8 8 0 018 4M4 18a8 8 0 008 4 8 8 0 008-4"
+        />
+      </svg>
+    ),
+    width: '120px',
+    minWidth: '100px',
+    toggleable: true,
+    sortKey: 'contextLabel',
+  },
+  {
+    id: 'backup',
+    label: 'Backup',
+    icon: (
+      <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+        />
+      </svg>
+    ),
+    width: '50px',
+    toggleable: true,
+  },
+  {
+    id: 'tags',
+    label: 'Tags',
+    icon: (
+      <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+        />
+      </svg>
+    ),
+    width: '60px',
+    toggleable: true,
+  },
   { id: 'update', label: 'Update', width: '60px', toggleable: true },
   { id: 'os', label: 'OS', width: '45px', toggleable: true },
-  { id: 'netIo', label: 'Net I/O', width: '130px', minWidth: '120px', toggleable: true, sortKey: 'netIo' },
-  { id: 'diskIo', label: 'Disk I/O', width: '130px', minWidth: '120px', toggleable: true, sortKey: 'diskIo' },
+  {
+    id: 'netIo',
+    label: 'Net I/O',
+    width: '130px',
+    minWidth: '120px',
+    toggleable: true,
+    sortKey: 'netIo',
+  },
+  {
+    id: 'diskIo',
+    label: 'Disk I/O',
+    width: '130px',
+    minWidth: '120px',
+    toggleable: true,
+    sortKey: 'diskIo',
+  },
 
   // Link column
   { id: 'link', label: '', width: '28px' },
@@ -453,10 +690,66 @@ export const GUEST_COLUMNS: ColumnDef[] = [
  * - Type-specific views use the dedicated columns for that type
  */
 export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
-  all: new Set(['name', 'type', 'info', 'cpu', 'memory', 'disk', 'ip', 'uptime', 'node', 'backup', 'tags', 'os', 'diskIo', 'netIo', 'link']),
-  vm: new Set(['name', 'vmid', 'cpu', 'memory', 'disk', 'ip', 'uptime', 'node', 'backup', 'tags', 'os', 'diskIo', 'netIo', 'link']),
-  lxc: new Set(['name', 'vmid', 'cpu', 'memory', 'disk', 'ip', 'uptime', 'node', 'backup', 'tags', 'os', 'diskIo', 'netIo', 'link']),
-  docker: new Set(['name', 'cpu', 'memory', 'uptime', 'image', 'context', 'tags', 'update', 'link']),
+  all: new Set([
+    'name',
+    'type',
+    'info',
+    'cpu',
+    'memory',
+    'disk',
+    'ip',
+    'uptime',
+    'node',
+    'backup',
+    'tags',
+    'os',
+    'diskIo',
+    'netIo',
+    'link',
+  ]),
+  vm: new Set([
+    'name',
+    'vmid',
+    'cpu',
+    'memory',
+    'disk',
+    'ip',
+    'uptime',
+    'node',
+    'backup',
+    'tags',
+    'os',
+    'diskIo',
+    'netIo',
+    'link',
+  ]),
+  lxc: new Set([
+    'name',
+    'vmid',
+    'cpu',
+    'memory',
+    'disk',
+    'ip',
+    'uptime',
+    'node',
+    'backup',
+    'tags',
+    'os',
+    'diskIo',
+    'netIo',
+    'link',
+  ]),
+  docker: new Set([
+    'name',
+    'cpu',
+    'memory',
+    'uptime',
+    'image',
+    'context',
+    'tags',
+    'update',
+    'link',
+  ]),
   k8s: new Set(['name', 'cpu', 'memory', 'image', 'namespace', 'context', 'link']),
 };
 
@@ -504,7 +797,7 @@ export function GuestRow(props: GuestRowProps) {
 
   // PERFORMANCE: Use memoized Set for O(1) column visibility lookups instead of O(n) array.includes()
   const visibleColumnIdSet = createMemo(() =>
-    props.visibleColumnIds ? new Set(props.visibleColumnIds) : null
+    props.visibleColumnIds ? new Set(props.visibleColumnIds) : null,
   );
 
   // Helper to check if a column is visible
@@ -518,7 +811,9 @@ export function GuestRow(props: GuestRowProps) {
   const workloadType = createMemo(() => resolveWorkloadType(props.guest));
 
   // Create a stable key for per-resource metric correlation.
-  const metricsKey = createMemo(() => buildMetricKey(getWorkloadMetricsKind(props.guest), guestId()));
+  const metricsKey = createMemo(() =>
+    buildMetricKey(getWorkloadMetricsKind(props.guest), guestId()),
+  );
 
   // Get anomalies for this guest's metrics (deterministic, no LLM)
   const cpuAnomaly = useAnomalyForMetric(guestId, () => 'cpu');
@@ -546,6 +841,11 @@ export function GuestRow(props: GuestRowProps) {
   const dockerImage = createMemo(() => props.guest.image?.trim() ?? '');
   const namespace = createMemo(() => props.guest.namespace?.trim() ?? '');
   const contextLabel = createMemo(() => props.guest.contextLabel?.trim() ?? '');
+  const clusterName = createMemo(() => props.guest.clusterName?.trim() ?? '');
+  const isPveWorkload = createMemo(() => {
+    const t = workloadType();
+    return t === 'vm' || t === 'lxc';
+  });
 
   // Merged identifier for the "all" view — shows the most relevant ID per type
   const infoValue = createMemo(() => {
@@ -628,9 +928,7 @@ export function GuestRow(props: GuestRowProps) {
   const ioEmphasis = createMemo(() => props.ioEmphasis ?? EMPTY_IO_EMPHASIS);
   const diskIOTotal = createMemo(() => diskRead() + diskWrite());
   const networkTotal = createMemo(() => networkIn() + networkOut());
-  const diskIOEmphasis = createMemo(() =>
-    getOutlierEmphasis(diskIOTotal(), ioEmphasis().diskIO),
-  );
+  const diskIOEmphasis = createMemo(() => getOutlierEmphasis(diskIOTotal(), ioEmphasis().diskIO));
   const networkEmphasis = createMemo(() =>
     getOutlierEmphasis(networkTotal(), ioEmphasis().network),
   );
@@ -661,8 +959,6 @@ export function GuestRow(props: GuestRowProps) {
     if (!Number.isFinite(usage) || usage <= 0) return undefined;
     return Math.max(0, Math.min(usage, 100));
   });
-
-
 
   const diskPercent = createMemo(() => {
     if (!props.guest.disk || props.guest.disk.total === 0) return 0;
@@ -722,8 +1018,6 @@ export function GuestRow(props: GuestRowProps) {
     return '#9ca3af';
   });
 
-
-
   const rowClass = createMemo(() => {
     const base = 'transition-all duration-200 relative group cursor-pointer';
 
@@ -737,9 +1031,7 @@ export function GuestRow(props: GuestRowProps) {
         ? 'bg-red-50 dark:bg-red-950'
         : 'bg-yellow-50 dark:bg-yellow-950'
       : '';
-    const defaultHover = hasUnacknowledgedAlert()
-      ? ''
-      : 'hover:bg-surface-hover';
+    const defaultHover = hasUnacknowledgedAlert() ? '' : 'hover:bg-surface-hover';
     const stoppedDimming = !isRunning() ? 'opacity-60' : '';
 
     return [base, hover, defaultHover, alertBg, stoppedDimming].filter(Boolean).join(' ');
@@ -761,10 +1053,6 @@ export function GuestRow(props: GuestRowProps) {
     return styles;
   });
 
-
-
-
-
   return (
     <>
       <tr
@@ -781,33 +1069,43 @@ export function GuestRow(props: GuestRowProps) {
         >
           <div class="flex items-center gap-2 min-w-0">
             <div class={`transition-transform duration-200 ${props.isExpanded ? 'rotate-90' : ''}`}>
- <svg class="w-3.5 h-3.5 text-muted group-hover:text-base-content" fill="none" viewBox="0 0 24 24" stroke="currentColor">
- <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
- </svg>
- </div>
- <div class="flex items-center gap-1.5 min-w-0">
- <StatusDot
- variant={guestStatus().variant}
- title={guestStatus().label}
- ariaLabel={guestStatus().label}
- size="xs"
- />
- <div class="flex items-center gap-1.5 min-w-0 group/name">
- <span
- class="text-[11px] font-medium text-base-content select-none truncate"
- title={props.guest.name}
- >
- {props.guest.name}
- </span>
- {/* Show backup indicator in name cell only if backup column is hidden */}
- <Show when={!isColVisible('backup') && supportsBackup()}>
-                  <BackupIndicator lastBackup={props.guest.lastBackup} isTemplate={props.guest.template} />
+              <svg
+                class="w-3.5 h-3.5 text-muted group-hover:text-base-content"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </div>
+            <div class="flex items-center gap-1.5 min-w-0">
+              <StatusDot
+                variant={guestStatus().variant}
+                title={guestStatus().label}
+                ariaLabel={guestStatus().label}
+                size="xs"
+              />
+              <div class="flex items-center gap-1.5 min-w-0 group/name">
+                <span
+                  class="text-[11px] font-medium text-base-content select-none truncate"
+                  title={props.guest.name}
+                >
+                  {props.guest.name}
+                </span>
+                {/* Show backup indicator in name cell only if backup column is hidden */}
+                <Show when={!isColVisible('backup') && supportsBackup()}>
+                  <BackupIndicator
+                    lastBackup={props.guest.lastBackup}
+                    isTemplate={props.guest.template}
+                  />
                 </Show>
-
               </div>
             </div>
-
-
 
             <Show when={lockLabel()}>
               <span
@@ -836,29 +1134,40 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Info - merged identifier (VMID / image / namespace) for mixed-type views */}
         <Show when={isColVisible('info')}>
- <td class="px-1.5 sm:px-2 py-0.5 align-middle">
- <div class="flex justify-center text-xs text-muted whitespace-nowrap">
- <Show when={infoValue()} fallback={<span class="">—</span>}>
- <InfoTooltipCell value={infoValue()} tooltip={infoTooltip()} type={workloadType()} />
- </Show>
- </div>
- </td>
- </Show>
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
+            <div class="flex justify-center text-xs text-muted whitespace-nowrap">
+              <Show when={infoValue()} fallback={<span class="">—</span>}>
+                <InfoTooltipCell
+                  value={infoValue()}
+                  tooltip={infoTooltip()}
+                  type={workloadType()}
+                />
+              </Show>
+            </div>
+          </td>
+        </Show>
 
- {/* VMID */}
- <Show when={isColVisible('vmid')}>
- <td class="px-1.5 sm:px-2 py-0.5 align-middle">
- <div class="flex justify-center text-xs text-muted whitespace-nowrap">
- <Show when={displayId()} fallback={<span class="">—</span>}>
- {displayId()}
- </Show>
- </div>
- </td>
- </Show>
+        {/* VMID */}
+        <Show when={isColVisible('vmid')}>
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
+            <div class="flex justify-center text-xs text-muted whitespace-nowrap">
+              <Show when={displayId()} fallback={<span class="">—</span>}>
+                {displayId()}
+              </Show>
+            </div>
+          </td>
+        </Show>
 
- {/* CPU */}
- <Show when={isColVisible('cpu')}>
-          <td class="px-1.5 sm:px-2 py-0.5 align-middle" style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}>
+        {/* CPU */}
+        <Show when={isColVisible('cpu')}>
+          <td
+            class="px-1.5 sm:px-2 py-0.5 align-middle"
+            style={
+              isMobile()
+                ? { 'min-width': '60px' }
+                : { width: '140px', 'min-width': '140px', 'max-width': '140px' }
+            }
+          >
             <div class="h-4">
               <EnhancedCPUBar
                 usage={cpuPercent()}
@@ -872,7 +1181,14 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Memory */}
         <Show when={isColVisible('memory')}>
-          <td class="px-1.5 sm:px-2 py-0.5 align-middle" style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}>
+          <td
+            class="px-1.5 sm:px-2 py-0.5 align-middle"
+            style={
+              isMobile()
+                ? { 'min-width': '60px' }
+                : { width: '140px', 'min-width': '140px', 'max-width': '140px' }
+            }
+          >
             <div title={memoryTooltip() ?? undefined}>
               <StackedMemoryBar
                 used={props.guest.memory?.used || 0}
@@ -890,7 +1206,14 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Disk */}
         <Show when={isColVisible('disk')}>
-          <td class="px-1.5 sm:px-2 py-0.5 align-middle" style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}>
+          <td
+            class="px-1.5 sm:px-2 py-0.5 align-middle"
+            style={
+              isMobile()
+                ? { 'min-width': '60px' }
+                : { width: '140px', 'min-width': '140px', 'max-width': '140px' }
+            }
+          >
             <Show
               when={hasDiskUsage()}
               fallback={
@@ -914,7 +1237,10 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('ip')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
-              <Show when={ipAddresses().length > 0 || hasNetworkInterfaces()} fallback={<span class="text-xs text-slate-400">—</span>}>
+              <Show
+                when={ipAddresses().length > 0 || hasNetworkInterfaces()}
+                fallback={<span class="text-xs text-slate-400">—</span>}
+              >
                 <NetworkInfoCell
                   ipAddresses={ipAddresses()}
                   networkInterfaces={networkInterfaces()}
@@ -929,7 +1255,9 @@ export function GuestRow(props: GuestRowProps) {
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show when={isRunning()} fallback={<span class="text-xs text-slate-400">—</span>}>
-                <span class={`text-xs whitespace-nowrap ${props.guest.uptime > 0 && props.guest.uptime < 3600 ? 'text-orange-500' : 'text-muted'}`}>
+                <span
+                  class={`text-xs whitespace-nowrap ${props.guest.uptime > 0 && props.guest.uptime < 3600 ? 'text-orange-500' : 'text-muted'}`}
+                >
                   <Show when={isMobile()} fallback={formatUptime(props.guest.uptime)}>
                     {formatUptime(props.guest.uptime, true)}
                   </Show>
@@ -943,7 +1271,10 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('node')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
-              <Show when={props.guest.node} fallback={<span class="text-xs text-slate-400">—</span>}>
+              <Show
+                when={props.guest.node}
+                fallback={<span class="text-xs text-slate-400">—</span>}
+              >
                 <button
                   type="button"
                   class="text-xs text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[80px]"
@@ -965,63 +1296,66 @@ export function GuestRow(props: GuestRowProps) {
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show
-                when={workloadType() === 'docker'&& dockerImage()}
- fallback={<span class="text-xs ">—</span>}
- >
- <span
- class="text-xs text-muted truncate max-w-[140px]"
- title={dockerImage()}
- >
- {getShortImageName(dockerImage())}
- </span>
- </Show>
- </div>
- </td>
- </Show>
+                when={workloadType() === 'docker' && dockerImage()}
+                fallback={<span class="text-xs ">—</span>}
+              >
+                <span class="text-xs text-muted truncate max-w-[140px]" title={dockerImage()}>
+                  {getShortImageName(dockerImage())}
+                </span>
+              </Show>
+            </div>
+          </td>
+        </Show>
 
- {/* Namespace */}
- <Show when={isColVisible('namespace')}>
+        {/* Namespace */}
+        <Show when={isColVisible('namespace')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show
-                when={workloadType() === 'k8s'&& namespace()}
- fallback={<span class="text-xs ">—</span>}
- >
- <span
- class="text-xs text-muted truncate max-w-[120px]"
- title={namespace()}
- >
- {namespace()}
- </span>
- </Show>
- </div>
- </td>
- </Show>
+                when={workloadType() === 'k8s' && namespace()}
+                fallback={<span class="text-xs ">—</span>}
+              >
+                <span class="text-xs text-muted truncate max-w-[120px]" title={namespace()}>
+                  {namespace()}
+                </span>
+              </Show>
+            </div>
+          </td>
+        </Show>
 
- {/* Context */}
- <Show when={isColVisible('context')}>
- <td class="px-1.5 sm:px-2 py-0.5 align-middle">
- <div class="flex justify-center">
- <Show
- when={contextLabel()}
- fallback={<span class="text-xs ">—</span>}
- >
- <span
- class="text-xs text-muted truncate max-w-[140px]"
- title={contextLabel()}
- >
- {contextLabel()}
- </span>
- </Show>
- </div>
- </td>
- </Show>
+        {/* Context */}
+        <Show when={isColVisible('context')}>
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
+            <div class="flex items-center justify-center gap-1.5">
+              <Show when={contextLabel()} fallback={<span class="text-xs ">—</span>}>
+                <Show
+                  when={isPveWorkload() && clusterName()}
+                  fallback={
+                    <span class="text-xs text-muted truncate max-w-[140px]" title={contextLabel()}>
+                      {contextLabel()}
+                    </span>
+                  }
+                >
+                  <span class="text-xs text-muted truncate max-w-[80px]" title={props.guest.node}>
+                    {props.guest.node}
+                  </span>
+                  <span class="rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                    {clusterName()}
+                  </span>
+                </Show>
+              </Show>
+            </div>
+          </td>
+        </Show>
 
- {/* Backup Status */}
- <Show when={isColVisible('backup')}>
+        {/* Backup Status */}
+        <Show when={isColVisible('backup')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
-              <Show when={supportsBackup()} fallback={<span class="text-xs text-slate-400">—</span>}>
+              <Show
+                when={supportsBackup()}
+                fallback={<span class="text-xs text-slate-400">—</span>}
+              >
                 <Show when={!props.guest.template}>
                   <BackupStatusCell lastBackup={props.guest.lastBackup} />
                 </Show>
@@ -1054,10 +1388,7 @@ export function GuestRow(props: GuestRowProps) {
               <Show
                 when={hasOsInfo()}
                 fallback={
-                  <Show
-                    when={ociImage()}
-                    fallback={<span class="text-xs text-slate-400">—</span>}
-                  >
+                  <Show when={ociImage()} fallback={<span class="text-xs text-slate-400">—</span>}>
                     {/* For OCI containers without guest agent, show image name in OS column */}
                     <span
                       class="text-xs text-purple-600 dark:text-purple-400 truncate max-w-[100px]"
@@ -1081,19 +1412,34 @@ export function GuestRow(props: GuestRowProps) {
         {/* Net I/O */}
         <Show when={isColVisible('netIo')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
-            <Show when={isRunning()} fallback={<div class="text-center"><span class="text-xs text-slate-400">—</span></div>}>
+            <Show
+              when={isRunning()}
+              fallback={
+                <div class="text-center">
+                  <span class="text-xs text-slate-400">—</span>
+                </div>
+              }
+            >
               <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
                 <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
                 <span
                   class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
-                  title={networkEmphasis().showOutlierHint ? `${formatSpeed(networkIn())} (Top outlier)` : formatSpeed(networkIn())}
+                  title={
+                    networkEmphasis().showOutlierHint
+                      ? `${formatSpeed(networkIn())} (Top outlier)`
+                      : formatSpeed(networkIn())
+                  }
                 >
                   {formatSpeed(networkIn())}
                 </span>
                 <span class="inline-flex w-3 justify-center text-orange-400">↑</span>
                 <span
                   class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
-                  title={networkEmphasis().showOutlierHint ? `${formatSpeed(networkOut())} (Top outlier)` : formatSpeed(networkOut())}
+                  title={
+                    networkEmphasis().showOutlierHint
+                      ? `${formatSpeed(networkOut())} (Top outlier)`
+                      : formatSpeed(networkOut())
+                  }
                 >
                   {formatSpeed(networkOut())}
                 </span>
@@ -1105,19 +1451,34 @@ export function GuestRow(props: GuestRowProps) {
         {/* Disk I/O */}
         <Show when={isColVisible('diskIo')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
-            <Show when={isRunning()} fallback={<div class="text-center"><span class="text-xs text-slate-400">—</span></div>}>
+            <Show
+              when={isRunning()}
+              fallback={
+                <div class="text-center">
+                  <span class="text-xs text-slate-400">—</span>
+                </div>
+              }
+            >
               <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
                 <span class="inline-flex w-3 justify-center font-mono text-blue-500">R</span>
                 <span
                   class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
-                  title={diskIOEmphasis().showOutlierHint ? `${formatSpeed(diskRead())} (Top outlier)` : formatSpeed(diskRead())}
+                  title={
+                    diskIOEmphasis().showOutlierHint
+                      ? `${formatSpeed(diskRead())} (Top outlier)`
+                      : formatSpeed(diskRead())
+                  }
                 >
                   {formatSpeed(diskRead())}
                 </span>
                 <span class="inline-flex w-3 justify-center font-mono text-amber-500">W</span>
                 <span
                   class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
-                  title={diskIOEmphasis().showOutlierHint ? `${formatSpeed(diskWrite())} (Top outlier)` : formatSpeed(diskWrite())}
+                  title={
+                    diskIOEmphasis().showOutlierHint
+                      ? `${formatSpeed(diskWrite())} (Top outlier)`
+                      : formatSpeed(diskWrite())
+                  }
                 >
                   {formatSpeed(diskWrite())}
                 </span>
@@ -1130,10 +1491,10 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('update')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
-              <Show when={props.guest.type === 'docker'}>
+              <Show when={props.guest.type === 'docker' && getWorkloadDockerHostId(props.guest)}>
                 <UpdateButton
                   updateStatus={props.guest.updateStatus}
-                  hostId={props.guest.dockerHostId ?? ''}
+                  hostId={getWorkloadDockerHostId(props.guest)}
                   containerId={props.guest.id ?? ''}
                   containerName={props.guest.name}
                   compact={true}
@@ -1158,7 +1519,15 @@ export function GuestRow(props: GuestRowProps) {
                     navigate(infrastructureHref());
                   }}
                 >
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" stroke-width="2">
+                  <svg
+                    class="w-3.5 h-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                  >
                     <rect x="2" y="2" width="20" height="8" rx="2" ry="2" />
                     <rect x="2" y="14" width="20" height="8" rx="2" ry="2" />
                     <line x1="6" y1="6" x2="6.01" y2="6" />
@@ -1176,14 +1545,18 @@ export function GuestRow(props: GuestRowProps) {
                 onClick={(event) => event.stopPropagation()}
               >
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                  />
                 </svg>
               </a>
             </Show>
           </td>
         </Show>
       </tr>
-
     </>
   );
 }
