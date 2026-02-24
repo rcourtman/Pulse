@@ -8,8 +8,11 @@ import {
   computeWorkloadStats,
   createWorkloadSortComparator,
   filterWorkloads,
+  getDiscoveryHostIdForWorkload,
+  getDiscoveryResourceIdForWorkload,
   getDiskUsagePercent,
   getKubernetesContextKey,
+  getWorkloadDockerHostId,
   getWorkloadGroupKey,
   groupWorkloads,
   workloadNodeScopeId,
@@ -124,7 +127,13 @@ describe('workloadSelectors', () => {
     it('applies text and metric search filters, and supports combined filtering', () => {
       const guests = [
         makeGuest(1, { name: 'alpha-api', vmid: 201, cpu: 0.8, node: 'node-a', status: 'running' }),
-        makeGuest(2, { name: 'beta-worker', vmid: 202, cpu: 0.25, node: 'node-b', status: 'running' }),
+        makeGuest(2, {
+          name: 'beta-worker',
+          vmid: 202,
+          cpu: 0.25,
+          node: 'node-b',
+          status: 'running',
+        }),
         makeGuest(3, { name: 'gamma-db', vmid: 303, cpu: 0.9, node: 'node-c', status: 'stopped' }),
       ];
 
@@ -343,20 +352,39 @@ describe('workloadSelectors', () => {
 
   describe('getDiskUsagePercent', () => {
     it('handles ratio and percentage disk usage with clamping', () => {
-      expect(getDiskUsagePercent(makeGuest(1, { disk: { total: 100, used: 42, free: 58, usage: 0.42 } }))).toBe(42);
-      expect(getDiskUsagePercent(makeGuest(2, { disk: { total: 100, used: 85, free: 15, usage: 85 } }))).toBe(85);
-      expect(getDiskUsagePercent(makeGuest(3, { disk: { total: 100, used: 120, free: 0, usage: 120 } }))).toBe(100);
+      expect(
+        getDiskUsagePercent(
+          makeGuest(1, { disk: { total: 100, used: 42, free: 58, usage: 0.42 } }),
+        ),
+      ).toBe(42);
+      expect(
+        getDiskUsagePercent(makeGuest(2, { disk: { total: 100, used: 85, free: 15, usage: 85 } })),
+      ).toBe(85);
+      expect(
+        getDiskUsagePercent(makeGuest(3, { disk: { total: 100, used: 120, free: 0, usage: 120 } })),
+      ).toBe(100);
     });
 
     it('falls back to used/total and returns null for invalid inputs', () => {
-      expect(getDiskUsagePercent(makeGuest(1, { disk: { total: 200, used: 50, free: 150, usage: NaN } }))).toBe(25);
-      expect(getDiskUsagePercent(makeGuest(2, { disk: null as unknown as WorkloadGuest['disk'] }))).toBeNull();
+      expect(
+        getDiskUsagePercent(
+          makeGuest(1, { disk: { total: 200, used: 50, free: 150, usage: NaN } }),
+        ),
+      ).toBe(25);
+      expect(
+        getDiskUsagePercent(makeGuest(2, { disk: null as unknown as WorkloadGuest['disk'] })),
+      ).toBeNull();
     });
   });
 
   describe('getWorkloadGroupKey', () => {
     it('uses instance-node for vm/lxc, and type:context for docker/k8s', () => {
-      const vm = makeGuest(1, { type: 'vm', workloadType: 'vm', instance: 'inst-a', node: 'node-a' });
+      const vm = makeGuest(1, {
+        type: 'vm',
+        workloadType: 'vm',
+        instance: 'inst-a',
+        node: 'node-a',
+      });
       const docker = makeGuest(2, {
         type: 'docker',
         workloadType: 'docker',
@@ -447,6 +475,60 @@ describe('workloadSelectors', () => {
         namespace: 'default',
       });
       expect(getKubernetesContextKey(guest)).toBe('cluster-a');
+    });
+  });
+
+  describe('workload discovery/action IDs', () => {
+    it('prefers docker hostSourceId and falls back to node/instance', () => {
+      const dockerWithHostId = makeGuest(1, {
+        type: 'docker',
+        workloadType: 'docker',
+        dockerHostId: 'docker-host-1',
+        node: 'node-a',
+        instance: 'inst-a',
+      });
+      const dockerFallback = makeGuest(2, {
+        type: 'docker',
+        workloadType: 'docker',
+        dockerHostId: '',
+        node: 'node-b',
+        instance: 'inst-b',
+      });
+      expect(getWorkloadDockerHostId(dockerWithHostId)).toBe('docker-host-1');
+      expect(getWorkloadDockerHostId(dockerFallback)).toBe('node-b');
+    });
+
+    it('maps discovery host/resource IDs for docker, k8s, and vm', () => {
+      const docker = makeGuest(1, {
+        id: 'container-abc123',
+        type: 'docker',
+        workloadType: 'docker',
+        dockerHostId: 'docker-host-1',
+      });
+      const k8s = makeGuest(2, {
+        id: 'k8s:cluster-a:pod:pod-uid-1',
+        type: 'k8s',
+        workloadType: 'k8s',
+        kubernetesAgentId: 'k8s-agent-1',
+        instance: 'cluster-a',
+        node: 'worker-a',
+      });
+      const vm = makeGuest(3, {
+        id: 'vm-resource-hash',
+        vmid: 103,
+        type: 'vm',
+        workloadType: 'vm',
+        node: 'pve1',
+      });
+
+      expect(getDiscoveryHostIdForWorkload(docker)).toBe('docker-host-1');
+      expect(getDiscoveryResourceIdForWorkload(docker)).toBe('container-abc123');
+
+      expect(getDiscoveryHostIdForWorkload(k8s)).toBe('k8s-agent-1');
+      expect(getDiscoveryResourceIdForWorkload(k8s)).toBe('pod-uid-1');
+
+      expect(getDiscoveryHostIdForWorkload(vm)).toBe('pve1');
+      expect(getDiscoveryResourceIdForWorkload(vm)).toBe('103');
     });
   });
 

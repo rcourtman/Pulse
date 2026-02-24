@@ -47,6 +47,39 @@ export const getKubernetesContextKey = (guest: WorkloadGuest): string => {
   return '';
 };
 
+export const getWorkloadDockerHostId = (guest: WorkloadGuest): string => {
+  const type = resolveWorkloadType(guest);
+  if (type !== 'docker') return '';
+  return (guest.dockerHostId || guest.node || guest.instance || '').trim();
+};
+
+export const getDiscoveryHostIdForWorkload = (guest: WorkloadGuest): string => {
+  const type = resolveWorkloadType(guest);
+  if (type === 'docker') {
+    return getWorkloadDockerHostId(guest);
+  }
+  if (type === 'k8s') {
+    return (guest.kubernetesAgentId || guest.instance || guest.node || '').trim();
+  }
+  return (guest.node || '').trim();
+};
+
+export const getDiscoveryResourceIdForWorkload = (guest: WorkloadGuest): string => {
+  const type = resolveWorkloadType(guest);
+  if (type === 'docker') {
+    return (guest.id || '').trim();
+  }
+  if (type === 'k8s') {
+    const rawId = (guest.id || '').trim();
+    const match = rawId.match(/^k8s:[^:]+:pod:(.+)$/);
+    return (match?.[1] || rawId || String(guest.vmid)).trim();
+  }
+  if (Number.isFinite(guest.vmid) && guest.vmid > 0) {
+    return String(guest.vmid);
+  }
+  return (guest.id || '').trim();
+};
+
 export const filterWorkloads = ({
   guests: allGuests,
   viewMode,
