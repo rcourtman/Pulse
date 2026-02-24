@@ -2391,6 +2391,9 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		h.onControlSettingsChange()
 	}
 
+	LogAuditEventForTenant(GetOrgID(r.Context()), "ai_settings_updated", getAuthUsername(h.getConfig(r.Context()), r), GetClientIP(r), r.URL.Path, true,
+		fmt.Sprintf("AI settings updated: enabled=%t provider=%s model=%s", settings.Enabled, settings.Provider, settings.GetModel()))
+
 	log.Info().
 		Bool("enabled", settings.Enabled).
 		Str("provider", settings.Provider).

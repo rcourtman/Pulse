@@ -55,10 +55,15 @@ func (h *ConfigHandlers) handleExportConfig(w http.ResponseWriter, r *http.Reque
 	// Export configuration
 	exportedData, err := h.getPersistence(r.Context()).ExportConfig(req.Passphrase)
 	if err != nil {
+		LogAuditEventForTenant(GetOrgID(r.Context()), "config_exported", getAuthUsername(h.getConfig(r.Context()), r), GetClientIP(r), r.URL.Path, false,
+			"Export failed")
 		log.Error().Err(err).Msg("Failed to export configuration")
 		http.Error(w, "Failed to export configuration", http.StatusInternalServerError)
 		return
 	}
+
+	LogAuditEventForTenant(GetOrgID(r.Context()), "config_exported", getAuthUsername(h.getConfig(r.Context()), r), GetClientIP(r), r.URL.Path, true,
+		"Configuration exported")
 
 	log.Info().Msg("Configuration exported successfully")
 
@@ -97,8 +102,13 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Capture actor identity before config swap (config replacement changes auth resolution)
+	importUser := getAuthUsername(h.getConfig(r.Context()), r)
+
 	// Import configuration.
 	if err := h.getPersistence(r.Context()).ImportConfig(req.Data, req.Passphrase); err != nil {
+		LogAuditEventForTenant(GetOrgID(r.Context()), "config_imported", importUser, GetClientIP(r), r.URL.Path, false,
+			"Import failed")
 		log.Error().Err(err).Msg("Failed to import configuration")
 		http.Error(w, "Failed to import configuration: "+err.Error(), http.StatusBadRequest)
 		return
@@ -107,6 +117,8 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 	// Reload configuration from disk.
 	newConfig, err := config.Load()
 	if err != nil {
+		LogAuditEventForTenant(GetOrgID(r.Context()), "config_imported", importUser, GetClientIP(r), r.URL.Path, false,
+			"Import succeeded but config reload failed")
 		log.Error().Err(err).Msg("Failed to reload configuration after import")
 		http.Error(w, "Configuration imported but failed to reload", http.StatusInternalServerError)
 		return
@@ -118,6 +130,8 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 	// Reload monitor with new configuration.
 	if h.reloadFunc != nil {
 		if err := h.reloadFunc(); err != nil {
+			LogAuditEventForTenant(GetOrgID(r.Context()), "config_imported", importUser, GetClientIP(r), r.URL.Path, false,
+				"Import succeeded but monitor reload failed")
 			log.Error().Err(err).Msg("Failed to reload monitor after import")
 			http.Error(w, "Configuration imported but failed to apply changes", http.StatusInternalServerError)
 			return
@@ -171,6 +185,9 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 			log.Info().Msg("Reloaded guest metadata after import")
 		}
 	}
+
+	LogAuditEventForTenant(GetOrgID(r.Context()), "config_imported", importUser, GetClientIP(r), r.URL.Path, true,
+		"Configuration imported")
 
 	log.Info().Msg("Configuration imported successfully")
 

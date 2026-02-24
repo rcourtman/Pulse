@@ -662,6 +662,9 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	LogAuditEventForTenant(GetOrgID(r.Context()), "node_added", getAuthUsername(h.getConfig(r.Context()), r), GetClientIP(r), r.URL.Path, true,
+		fmt.Sprintf("Added %s node %q", req.Type, req.Name))
+
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
@@ -1339,6 +1342,9 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	LogAuditEventForTenant(GetOrgID(r.Context()), "node_updated", getAuthUsername(h.getConfig(r.Context()), r), GetClientIP(r), r.URL.Path, true,
+		fmt.Sprintf("Updated node %s", nodeID))
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
@@ -1461,6 +1467,9 @@ func (h *ConfigHandlers) handleDeleteNode(w http.ResponseWriter, r *http.Request
 
 	if deletedNodeType == "pve" && deletedNodeHost != "" {
 	}
+
+	LogAuditEventForTenant(GetOrgID(r.Context()), "node_deleted", getAuthUsername(h.getConfig(r.Context()), r), GetClientIP(r), r.URL.Path, true,
+		fmt.Sprintf("Deleted %s node %s", nodeType, nodeID))
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
