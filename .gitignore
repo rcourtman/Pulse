@@ -160,6 +160,7 @@ mock.env.backup
 # Claude Code Safety Hooks (local only)
 .claudecode-settings.json
 .claudecode-hooks/
+.validation_marker
 
 # Sensitive files - DO NOT COMMIT
 secrets.env
