@@ -109,7 +109,14 @@ func (rr *ResourceRegistry) loadOverrides() {
 
 // IngestSnapshot ingests all resources from the current state snapshot.
 func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
+	// Build instance→clusterName lookup from nodes so we can propagate
+	// cluster names to VMs/Containers (their parent-ID lookup may fail
+	// when the node ID uses clusterName instead of instanceName).
+	clusterByInstance := make(map[string]string)
 	for _, node := range snapshot.Nodes {
+		if node.ClusterName != "" && node.Instance != "" {
+			clusterByInstance[node.Instance] = node.ClusterName
+		}
 		rr.ingestProxmoxNode(node)
 	}
 	for _, host := range snapshot.Hosts {
@@ -125,10 +132,10 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 		rr.ingestPMGInstance(instance)
 	}
 	for _, vm := range snapshot.VMs {
-		rr.ingestVM(vm)
+		rr.ingestVM(vm, clusterByInstance)
 	}
 	for _, ct := range snapshot.Containers {
-		rr.ingestContainer(ct)
+		rr.ingestContainer(ct, clusterByInstance)
 	}
 	for _, storage := range snapshot.Storage {
 		rr.ingestStorage(storage)
@@ -399,20 +406,26 @@ func (rr *ResourceRegistry) ingestPMGInstance(instance models.PMGInstance) {
 	rr.ingest(SourcePMG, sourceID, resource, identity)
 }
 
-func (rr *ResourceRegistry) ingestVM(vm models.VM) {
+func (rr *ResourceRegistry) ingestVM(vm models.VM, clusterByInstance map[string]string) {
 	resource, identity := resourceFromVM(vm)
 	parentSourceID := proxmoxNodeSourceID(vm.Instance, vm.Node)
 	if parentID, ok := rr.bySource[SourceProxmox][parentSourceID]; ok {
 		resource.ParentID = &parentID
 	}
+	if clusterName := clusterByInstance[vm.Instance]; clusterName != "" && resource.Proxmox != nil {
+		resource.Proxmox.ClusterName = clusterName
+	}
 	rr.ingest(SourceProxmox, vm.ID, resource, identity)
 }
 
-func (rr *ResourceRegistry) ingestContainer(ct models.Container) {
+func (rr *ResourceRegistry) ingestContainer(ct models.Container, clusterByInstance map[string]string) {
 	resource, identity := resourceFromContainer(ct)
 	parentSourceID := proxmoxNodeSourceID(ct.Instance, ct.Node)
 	if parentID, ok := rr.bySource[SourceProxmox][parentSourceID]; ok {
 		resource.ParentID = &parentID
+	}
+	if clusterName := clusterByInstance[ct.Instance]; clusterName != "" && resource.Proxmox != nil {
+		resource.Proxmox.ClusterName = clusterName
 	}
 	rr.ingest(SourceProxmox, ct.ID, resource, identity)
 }

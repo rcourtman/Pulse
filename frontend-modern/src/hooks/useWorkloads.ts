@@ -1,4 +1,11 @@
-import { createMemo, createResource, onCleanup, createEffect, createSignal, type Accessor } from 'solid-js';
+import {
+  createMemo,
+  createResource,
+  onCleanup,
+  createEffect,
+  createSignal,
+  type Accessor,
+} from 'solid-js';
 import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
 import { normalizeDiskArray } from '@/utils/format';
@@ -225,7 +232,11 @@ const resolveWorkloadType = (value?: string | null): WorkloadType | null => {
   const normalized = (value || '').trim().toLowerCase();
   if (normalized === 'vm' || normalized === 'qemu') return 'vm';
   if (normalized === 'lxc') return 'lxc';
-  if (normalized === 'container' || normalized === 'docker-container' || normalized === 'docker_container') {
+  if (
+    normalized === 'container' ||
+    normalized === 'docker-container' ||
+    normalized === 'docker_container'
+  ) {
     return 'docker';
   }
   if (normalized === 'pod' || normalized === 'k8s' || normalized === 'kubernetes') return 'k8s';
@@ -246,9 +257,8 @@ const resolvePlatformType = (sources?: string[]): string | undefined => {
 const buildMetric = (metric?: APIMetricValue) => {
   const total = metric?.total ?? 0;
   const used = metric?.used ?? 0;
-  const free = metric?.total !== undefined && metric?.used !== undefined
-    ? Math.max(0, total - used)
-    : 0;
+  const free =
+    metric?.total !== undefined && metric?.used !== undefined ? Math.max(0, total - used) : 0;
   const usage = metric?.percent ?? metric?.value ?? (total > 0 ? (used / total) * 100 : 0);
   return { total, used, free, usage };
 };
@@ -307,9 +317,11 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     resource.identity?.clusterName ??
     '';
   const vmid =
-    typeof resource.vmid === 'number' ? resource.vmid
-    : typeof resource.proxmox?.vmid === 'number' ? resource.proxmox.vmid
-    : 0;
+    typeof resource.vmid === 'number'
+      ? resource.vmid
+      : typeof resource.proxmox?.vmid === 'number'
+        ? resource.proxmox.vmid
+        : 0;
   const rawDisplayId = resource.id;
   const displayId =
     workloadType === 'vm' || workloadType === 'lxc'
@@ -382,7 +394,12 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     networkOut: resource.metrics?.netOut?.value ?? 0,
     diskRead: resource.metrics?.diskRead?.value ?? 0,
     diskWrite: resource.metrics?.diskWrite?.value ?? 0,
-    uptime: resource.proxmox?.uptime ?? resource.agent?.uptimeSeconds ?? resource.docker?.uptimeSeconds ?? resource.kubernetes?.uptimeSeconds ?? 0,
+    uptime:
+      resource.proxmox?.uptime ??
+      resource.agent?.uptimeSeconds ??
+      resource.docker?.uptimeSeconds ??
+      resource.kubernetes?.uptimeSeconds ??
+      0,
     template: resource.proxmox?.template ?? false,
     lastBackup: (() => {
       if (!resource.proxmox?.lastBackup) return 0;
@@ -402,27 +419,25 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
         ? resource.docker?.image || resource.docker?.imageName || resource.docker?.imageRef
         : workloadType === 'k8s'
           ? resource.kubernetes?.image
-        : undefined,
-    namespace:
-      workloadType === 'k8s'
-        ? resource.kubernetes?.namespace
-        : undefined,
+          : undefined,
+    namespace: workloadType === 'k8s' ? resource.kubernetes?.namespace : undefined,
     contextLabel:
       workloadType === 'vm' || workloadType === 'lxc'
         ? node
-          ? instance && instance !== node
-            ? `${node} (${instance})`
-            : node
+          ? (() => {
+              const cluster = resource.proxmox?.clusterName || resource.identity?.clusterName || '';
+              if (cluster && cluster !== node) return `${node} (${cluster})`;
+              if (instance && instance !== node) return `${node} (${instance})`;
+              return node;
+            })()
           : undefined
         : workloadType === 'docker'
-        ? resource.parentName || resource.docker?.hostname
-        : workloadType === 'k8s'
-          ? resource.kubernetes?.clusterName || resource.kubernetes?.context
-          : undefined,
+          ? resource.parentName || resource.docker?.hostname
+          : workloadType === 'k8s'
+            ? resource.kubernetes?.clusterName || resource.kubernetes?.context
+            : undefined,
     containerRuntime:
-      workloadType === 'docker'
-        ? (resource.docker?.runtime || '').trim() || undefined
-        : undefined,
+      workloadType === 'docker' ? (resource.docker?.runtime || '').trim() || undefined : undefined,
     updateStatus: resource.docker?.updateStatus as WorkloadGuest['updateStatus'] | undefined,
     dockerHostId: resource.docker?.hostSourceId,
     platformType: resolvePlatformType(resource.sources),
@@ -462,12 +477,19 @@ const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const hasFreshWorkloadsCache = (entry: WorkloadsCacheEntry) =>
   entry.workloads.length > 0 && Date.now() - entry.cachedAt <= WORKLOADS_CACHE_MAX_AGE_MS;
 
-const setWorkloadsCache = (entry: WorkloadsCacheEntry, workloads: WorkloadGuest[], at = Date.now()) => {
+const setWorkloadsCache = (
+  entry: WorkloadsCacheEntry,
+  workloads: WorkloadGuest[],
+  at = Date.now(),
+) => {
   entry.workloads = workloads;
   entry.cachedAt = at;
 };
 
-const fetchWorkloadsShared = async (entry: WorkloadsCacheEntry, force = false): Promise<WorkloadGuest[]> => {
+const fetchWorkloadsShared = async (
+  entry: WorkloadsCacheEntry,
+  force = false,
+): Promise<WorkloadGuest[]> => {
   if (!force && hasFreshWorkloadsCache(entry)) {
     return entry.workloads;
   }
