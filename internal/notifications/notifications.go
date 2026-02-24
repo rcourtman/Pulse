@@ -1973,31 +1973,102 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 		return n.sendResolvedWebhookNtfy(webhook, alertList, resolvedAt)
 	}
 
-	payload := map[string]interface{}{
-		"event":         string(eventResolved),
-		"alerts":        alertList,
-		"count":         len(alertList),
-		"resolvedAt":    resolvedAt.Unix(),
-		"resolvedAtIso": resolvedAt.Format(time.RFC3339),
-		"source":        "pulse-monitoring",
+	// Use the first non-nil alert for template data (most common case is single-alert recovery)
+	var alert *alerts.Alert
+	for _, a := range alertList {
+		if a != nil {
+			alert = a
+			break
+		}
+	}
+	if alert == nil {
+		return fmt.Errorf("all alerts in resolved list are nil")
 	}
 
-	if n.publicURL != "" {
-		payload["dashboard"] = n.publicURL
+	// Prepare template data using the same pipeline as the firing path
+	customFields := convertWebhookCustomFields(webhook.CustomFields)
+	data := n.prepareWebhookData(alert, customFields)
+
+	// Override fields for resolved context
+	data.Event = "resolved"
+	data.ResolvedAt = resolvedAt.Format(time.RFC3339)
+	data.ResolvedAtISO = resolvedAt.Format(time.RFC3339)
+	data.Duration = formatWebhookDuration(resolvedAt.Sub(alert.StartTime))
+	data.Message = fmt.Sprintf("%s on %s is now healthy", alert.ResourceName, alert.Node)
+
+	// Render URL template if placeholders are present
+	renderedURL, renderErr := renderWebhookURL(webhook.URL, data)
+	if renderErr != nil {
+		return fmt.Errorf("failed to render resolved webhook URL template: %w", renderErr)
+	}
+	webhook.URL = renderedURL
+
+	// Service-specific data enrichment (same as firing path)
+	if webhook.Service == "telegram" {
+		chatID, chatErr := extractTelegramChatID(renderedURL)
+		if chatErr != nil {
+			return fmt.Errorf("failed to extract Telegram chat_id for resolved webhook: %w", chatErr)
+		}
+		if chatID != "" {
+			data.ChatID = chatID
+		}
+	} else if webhook.Service == "pagerduty" {
+		if data.CustomFields == nil {
+			data.CustomFields = make(map[string]interface{})
+		}
+		if routingKey, ok := webhook.Headers["routing_key"]; ok {
+			data.CustomFields["routing_key"] = routingKey
+		}
+	} else if webhook.Service == "pushover" {
+		data.CustomFields = ensurePushoverCustomFieldAliases(data.CustomFields)
 	}
 
-	if len(alertList) == 1 && alertList[0] != nil {
-		payload["alertId"] = alertList[0].ID
+	var jsonData []byte
+	var err error
+
+	// Tier 1: Custom template provided by user
+	if webhook.Template != "" && strings.TrimSpace(webhook.Template) != "" {
+		jsonData, err = n.generatePayloadFromTemplateWithService(webhook.Template, data, webhook.Service)
+		if err != nil {
+			return fmt.Errorf("failed to generate resolved webhook payload from custom template: %w", err)
+		}
+	} else if webhook.Service != "" && webhook.Service != "generic" {
+		// Tier 2: Service-specific resolved template (skip "generic" — it uses the legacy fallback)
+		templates := GetWebhookTemplates()
+		for _, tmpl := range templates {
+			if tmpl.Service == webhook.Service && tmpl.ResolvedPayloadTemplate != "" {
+				jsonData, err = n.generatePayloadFromTemplateWithService(tmpl.ResolvedPayloadTemplate, data, webhook.Service)
+				if err != nil {
+					return fmt.Errorf("failed to generate resolved webhook payload for service %s: %w", webhook.Service, err)
+				}
+				break
+			}
+		}
 	}
 
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("webhook", webhook.Name).
-			Int("alertCount", len(alertList)).
-			Msg("failed to marshal resolved webhook payload")
-		return fmt.Errorf("failed to marshal resolved webhook payload: %w", err)
+	// Tier 3: Generic JSON fallback (backward compatible for service="" and service="generic")
+	if jsonData == nil {
+		payload := map[string]interface{}{
+			"event":         string(eventResolved),
+			"alerts":        alertList,
+			"count":         len(alertList),
+			"resolvedAt":    resolvedAt.Unix(),
+			"resolvedAtIso": resolvedAt.Format(time.RFC3339),
+			"source":        "pulse-monitoring",
+		}
+
+		if n.publicURL != "" {
+			payload["dashboard"] = n.publicURL
+		}
+
+		if len(alertList) == 1 {
+			payload["alertId"] = alert.ID
+		}
+
+		jsonData, err = json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("failed to marshal resolved webhook payload: %w", err)
+		}
 	}
 
 	return n.sendWebhookRequest(webhook, jsonData, "resolved")
@@ -2549,6 +2620,7 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 		Acknowledged:       alert.Acknowledged,
 		AckTime:            ackTime,
 		AckUser:            alert.AckUser,
+		Event:              "alert",
 		Metadata:           metadataCopy,
 		CustomFields:       customFields,
 		AlertCount:         1,

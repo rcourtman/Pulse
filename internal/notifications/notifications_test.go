@@ -3258,6 +3258,360 @@ func TestSendResolvedWebhook(t *testing.T) {
 	}
 }
 
+func TestSendResolvedWebhookServiceTemplates(t *testing.T) {
+	// Regression test for #1259: recovery webhook notifications must use
+	// service-specific templates that each platform accepts.
+	testAlert := &alerts.Alert{
+		ID:           "resolve-1",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelWarning,
+		ResourceName: "web-vm-01",
+		ResourceID:   "100",
+		Node:         "pve1",
+		Instance:     "https://pve.local:8006",
+		Message:      "CPU high on web-vm-01",
+		Value:        85.0,
+		Threshold:    80.0,
+		StartTime:    time.Now().Add(-10 * time.Minute),
+	}
+	resolvedAt := time.Now()
+
+	t.Run("telegram resolved includes chat_id and text", func(t *testing.T) {
+		var gotBody []byte
+		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			gotBody = body
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		nm := NewNotificationManager("https://pulse.local")
+		_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+		webhook := WebhookConfig{
+			Name:    "tg-test",
+			URL:     server.URL + "/bot123/sendMessage?chat_id=-1001234",
+			Enabled: true,
+			Service: "telegram",
+		}
+
+		err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{testAlert}, resolvedAt)
+		if err != nil {
+			t.Fatalf("sendResolvedWebhook telegram: %v", err)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(gotBody, &payload); err != nil {
+			t.Fatalf("unmarshal telegram payload: %v", err)
+		}
+		if payload["chat_id"] != "-1001234" {
+			t.Errorf("expected chat_id '-1001234', got %v", payload["chat_id"])
+		}
+		text, _ := payload["text"].(string)
+		if !strings.Contains(text, "Resolved") {
+			t.Errorf("expected 'Resolved' in text, got %q", text)
+		}
+	})
+
+	t.Run("discord resolved uses green embed color", func(t *testing.T) {
+		var gotBody []byte
+		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			gotBody = body
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer server.Close()
+
+		nm := NewNotificationManager("https://pulse.local")
+		_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+		webhook := WebhookConfig{
+			Name:    "discord-test",
+			URL:     server.URL + "/webhooks/123/token",
+			Enabled: true,
+			Service: "discord",
+		}
+
+		err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{testAlert}, resolvedAt)
+		if err != nil {
+			t.Fatalf("sendResolvedWebhook discord: %v", err)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(gotBody, &payload); err != nil {
+			t.Fatalf("unmarshal discord payload: %v", err)
+		}
+		embeds, _ := payload["embeds"].([]any)
+		if len(embeds) == 0 {
+			t.Fatal("expected at least one embed")
+		}
+		embed := embeds[0].(map[string]any)
+		// Green color = 3066993
+		if embed["color"] != float64(3066993) {
+			t.Errorf("expected green embed color 3066993, got %v", embed["color"])
+		}
+		title, _ := embed["title"].(string)
+		if !strings.Contains(title, "Resolved") {
+			t.Errorf("expected 'Resolved' in title, got %q", title)
+		}
+	})
+
+	t.Run("pagerduty resolved uses resolve action", func(t *testing.T) {
+		var gotBody []byte
+		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			gotBody = body
+			w.WriteHeader(http.StatusAccepted)
+		}))
+		defer server.Close()
+
+		nm := NewNotificationManager("https://pulse.local")
+		_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+		webhook := WebhookConfig{
+			Name:    "pd-test",
+			URL:     server.URL + "/v2/enqueue",
+			Enabled: true,
+			Service: "pagerduty",
+			Headers: map[string]string{"routing_key": "test-routing-key"},
+			CustomFields: map[string]string{
+				"routing_key": "test-routing-key",
+			},
+		}
+
+		err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{testAlert}, resolvedAt)
+		if err != nil {
+			t.Fatalf("sendResolvedWebhook pagerduty: %v", err)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(gotBody, &payload); err != nil {
+			t.Fatalf("unmarshal pagerduty payload: %v", err)
+		}
+		if payload["event_action"] != "resolve" {
+			t.Errorf("expected event_action 'resolve', got %v", payload["event_action"])
+		}
+		if payload["dedup_key"] != testAlert.ID {
+			t.Errorf("expected dedup_key %q, got %v", testAlert.ID, payload["dedup_key"])
+		}
+	})
+
+	t.Run("slack resolved uses header block", func(t *testing.T) {
+		var gotBody []byte
+		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			gotBody = body
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		nm := NewNotificationManager("https://pulse.local")
+		_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+		webhook := WebhookConfig{
+			Name:    "slack-test",
+			URL:     server.URL + "/services/T123/B456/xyz",
+			Enabled: true,
+			Service: "slack",
+		}
+
+		err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{testAlert}, resolvedAt)
+		if err != nil {
+			t.Fatalf("sendResolvedWebhook slack: %v", err)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(gotBody, &payload); err != nil {
+			t.Fatalf("unmarshal slack payload: %v", err)
+		}
+		blocks, _ := payload["blocks"].([]any)
+		if len(blocks) == 0 {
+			t.Fatal("expected blocks in slack payload")
+		}
+		header := blocks[0].(map[string]any)
+		if header["type"] != "header" {
+			t.Errorf("expected first block to be header, got %v", header["type"])
+		}
+		text := header["text"].(map[string]any)["text"].(string)
+		if !strings.Contains(text, "Resolved") {
+			t.Errorf("expected 'Resolved' in header text, got %q", text)
+		}
+	})
+
+	t.Run("generic fallback is backward compatible with no service", func(t *testing.T) {
+		// When no service is set, the generic JSON fallback should still work
+		var gotBody []byte
+		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			gotBody = body
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		nm := NewNotificationManager("https://pulse.local")
+		_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+		webhook := WebhookConfig{
+			Name:    "generic-test",
+			URL:     server.URL + "/hook",
+			Enabled: true,
+			// No service set — triggers generic fallback
+		}
+
+		err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{testAlert}, resolvedAt)
+		if err != nil {
+			t.Fatalf("sendResolvedWebhook generic: %v", err)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(gotBody, &payload); err != nil {
+			t.Fatalf("unmarshal generic payload: %v", err)
+		}
+		if payload["event"] != "resolved" {
+			t.Errorf("expected event 'resolved', got %v", payload["event"])
+		}
+		if payload["alertId"] != testAlert.ID {
+			t.Errorf("expected alertId %q, got %v", testAlert.ID, payload["alertId"])
+		}
+	})
+
+	t.Run("generic service also uses backward compatible fallback", func(t *testing.T) {
+		// When service is explicitly "generic", it should use the same legacy payload
+		var gotBody []byte
+		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			gotBody = body
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		nm := NewNotificationManager("https://pulse.local")
+		_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+		webhook := WebhookConfig{
+			Name:    "generic-explicit-test",
+			URL:     server.URL + "/hook",
+			Enabled: true,
+			Service: "generic",
+		}
+
+		err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{testAlert}, resolvedAt)
+		if err != nil {
+			t.Fatalf("sendResolvedWebhook generic explicit: %v", err)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(gotBody, &payload); err != nil {
+			t.Fatalf("unmarshal generic explicit payload: %v", err)
+		}
+		if payload["event"] != "resolved" {
+			t.Errorf("expected event 'resolved', got %v", payload["event"])
+		}
+		if payload["alertId"] != testAlert.ID {
+			t.Errorf("expected alertId %q, got %v", testAlert.ID, payload["alertId"])
+		}
+	})
+
+	t.Run("custom template overrides service template", func(t *testing.T) {
+		var gotBody []byte
+		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			gotBody = body
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		nm := NewNotificationManager("https://pulse.local")
+		_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+		webhook := WebhookConfig{
+			Name:     "custom-test",
+			URL:      server.URL + "/custom",
+			Enabled:  true,
+			Service:  "discord",
+			Template: `{"custom": true, "event": "{{.Event}}", "alert_id": "{{.ID}}"}`,
+		}
+
+		err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{testAlert}, resolvedAt)
+		if err != nil {
+			t.Fatalf("sendResolvedWebhook custom template: %v", err)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(gotBody, &payload); err != nil {
+			t.Fatalf("unmarshal custom payload: %v", err)
+		}
+		if payload["custom"] != true {
+			t.Errorf("expected custom=true, got %v", payload["custom"])
+		}
+		if payload["event"] != "resolved" {
+			t.Errorf("expected event 'resolved', got %v", payload["event"])
+		}
+	})
+}
+
+func TestSendResolvedWebhookSkipsNilLeadingAlerts(t *testing.T) {
+	// Regression: sendResolvedWebhook should find the first non-nil alert
+	// even if leading entries are nil.
+	var gotBody []byte
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		gotBody = body
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	nm := NewNotificationManager("https://pulse.local")
+	_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+	validAlert := &alerts.Alert{
+		ID:        "sparse-1",
+		Type:      "cpu",
+		Level:     alerts.AlertLevelWarning,
+		Node:      "pve1",
+		StartTime: time.Now().Add(-5 * time.Minute),
+	}
+
+	webhook := WebhookConfig{
+		Name:    "sparse-test",
+		URL:     server.URL + "/hook",
+		Enabled: true,
+	}
+
+	// Leading nil entries — should still work
+	err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{nil, nil, validAlert}, time.Now())
+	if err != nil {
+		t.Fatalf("sendResolvedWebhook with nil-leading list: %v", err)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(gotBody, &payload); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if payload["event"] != "resolved" {
+		t.Errorf("expected event 'resolved', got %v", payload["event"])
+	}
+
+	// All-nil list should return error
+	err = nm.sendResolvedWebhook(webhook, []*alerts.Alert{nil, nil}, time.Now())
+	if err == nil {
+		t.Fatal("expected error for all-nil alert list")
+	}
+}
+
+func TestPrepareWebhookDataSetsEventField(t *testing.T) {
+	nm := &NotificationManager{publicURL: "http://example.com"}
+	alert := &alerts.Alert{
+		ID:        "test-1",
+		StartTime: time.Now(),
+	}
+
+	data := nm.prepareWebhookData(alert, nil)
+	if data.Event != "alert" {
+		t.Fatalf("expected Event to be 'alert', got %q", data.Event)
+	}
+}
+
 func TestGetQueueStatsNotifications(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	nm := NewNotificationManager("")
