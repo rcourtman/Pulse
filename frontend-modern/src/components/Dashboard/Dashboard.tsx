@@ -1,4 +1,14 @@
-import { createSignal, createMemo, createEffect, For, Index, Show, onMount, onCleanup, untrack } from 'solid-js';
+import {
+  createSignal,
+  createMemo,
+  createEffect,
+  For,
+  Index,
+  Show,
+  onMount,
+  onCleanup,
+  untrack,
+} from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
@@ -13,7 +23,14 @@ import { DashboardFilter } from './DashboardFilter';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import type { GuestMetadata } from '@/api/guestMetadata';
 import { Card } from '@/components/shared/Card';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
 import { MigrationNoticeBanner } from '@/components/shared/MigrationNoticeBanner';
@@ -34,9 +51,7 @@ import {
   WorkloadsSummary,
   type WorkloadSummarySnapshot,
 } from '@/components/Workloads/WorkloadsSummary';
-import {
-  isSummaryTimeRange,
-} from '@/components/shared/summaryTimeRange';
+import { isSummaryTimeRange } from '@/components/shared/summaryTimeRange';
 import {
   dismissMigrationNotice,
   isMigrationNoticeDismissed,
@@ -71,7 +86,10 @@ type GuestMetadataRecord = Record<string, GuestMetadata>;
 type IdleCallbackHandle = number;
 type IdleCallback = (deadline?: { didTimeout: boolean; timeRemaining: () => number }) => void;
 type IdleCapableWindow = Window & {
-  requestIdleCallback?: (callback: IdleCallback, options?: { timeout?: number }) => IdleCallbackHandle;
+  requestIdleCallback?: (
+    callback: IdleCallback,
+    options?: { timeout?: number },
+  ) => IdleCallbackHandle;
   cancelIdleCallback?: (handle: IdleCallbackHandle) => void;
 };
 
@@ -102,8 +120,7 @@ const workloadMetricPercent = (value: number | null | undefined): number => {
   return Math.max(0, value);
 };
 
-const workloadSummaryGuestId = (guest: WorkloadGuest): string =>
-  getCanonicalWorkloadId(guest);
+const workloadSummaryGuestId = (guest: WorkloadGuest): string => getCanonicalWorkloadId(guest);
 
 const readGuestMetadataCache = (storageKey: string): GuestMetadataRecord => {
   if (cachedGuestMetadata && cachedGuestMetadataStorageKey === storageKey) {
@@ -308,8 +325,12 @@ export function Dashboard(props: DashboardProps) {
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
-  const [selectedKubernetesContext, setSelectedKubernetesContext] = createSignal<string | null>(null);
-  const [selectedKubernetesNamespace, setSelectedKubernetesNamespace] = createSignal<string | null>(null);
+  const [selectedKubernetesContext, setSelectedKubernetesContext] = createSignal<string | null>(
+    null,
+  );
+  const [selectedKubernetesNamespace, setSelectedKubernetesNamespace] = createSignal<string | null>(
+    null,
+  );
   const [selectedGuestId, setSelectedGuestIdRaw] = createSignal<string | null>(null);
   const [hoveredWorkloadId, setHoveredWorkloadId] = createSignal<string | null>(null);
   const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
@@ -383,7 +404,6 @@ export function Dashboard(props: DashboardProps) {
     setHandledResourceId(resourceId);
   });
 
-
   // Wrap setSelectedGuestId to preserve scroll position. Opening/closing the
   // drawer mounts/unmounts GuestDrawer (which contains DiscoveryTab). The
   // DiscoveryTab initialization triggers SolidJS to recreate the <For> row,
@@ -396,7 +416,10 @@ export function Dashboard(props: DashboardProps) {
     let scroller: HTMLElement | null = tableRef ?? null;
     while (scroller) {
       const { overflowY } = getComputedStyle(scroller);
-      if ((overflowY === 'auto' || overflowY === 'scroll') && scroller.scrollHeight > scroller.clientHeight) {
+      if (
+        (overflowY === 'auto' || overflowY === 'scroll') &&
+        scroller.scrollHeight > scroller.clientHeight
+      ) {
         break;
       }
       scroller = scroller.parentElement;
@@ -554,10 +577,14 @@ export function Dashboard(props: DashboardProps) {
         : 'all',
   });
 
-  const [containerRuntime, setContainerRuntime] = usePersistentSignal<string>('dashboardContainerRuntime', '', {
-    deserialize: (raw) => (typeof raw === 'string' ? raw : ''),
-    serialize: (value) => value,
-  });
+  const [containerRuntime, setContainerRuntime] = usePersistentSignal<string>(
+    'dashboardContainerRuntime',
+    '',
+    {
+      deserialize: (raw) => (typeof raw === 'string' ? raw : ''),
+      serialize: (value) => value,
+    },
+  );
 
   createEffect(() => {
     if (!isWorkloadsRoute()) return;
@@ -602,7 +629,8 @@ export function Dashboard(props: DashboardProps) {
     if (normalized === 'all') return 'all';
     if (normalized === 'vm' || normalized === 'qemu') return 'vm';
     if (normalized === 'lxc') return 'lxc';
-    if (normalized === 'docker' || normalized === 'container' || normalized === 'containers') return 'docker';
+    if (normalized === 'docker' || normalized === 'container' || normalized === 'containers')
+      return 'docker';
     if (normalized === 'k8s' || normalized === 'kubernetes' || normalized === 'pod') return 'k8s';
     return null;
   };
@@ -619,7 +647,8 @@ export function Dashboard(props: DashboardProps) {
     }
 
     // Context/namespace implies k8s view; ignore conflicting type params.
-    const hasK8sScope = Boolean((parsed.context ?? '').trim()) || Boolean((parsed.namespace ?? '').trim());
+    const hasK8sScope =
+      Boolean((parsed.context ?? '').trim()) || Boolean((parsed.namespace ?? '').trim());
     const nextMode = normalizeTypeParam(normalizedType);
     if (!nextMode) {
       setHandledTypeParam(normalizedType);
@@ -707,7 +736,8 @@ export function Dashboard(props: DashboardProps) {
     const hasNamespace = Boolean((parsed.namespace ?? '').trim());
     const urlType = parsed.type ?? '';
     const nextMode = normalizeTypeParam(urlType);
-    const runtimeRelevant = !hasContext && !hasNamespace && (nextMode === 'docker' || !urlType.trim());
+    const runtimeRelevant =
+      !hasContext && !hasNamespace && (nextMode === 'docker' || !urlType.trim());
 
     // Ignore runtime param outside of container views, but still mark it handled so URL-sync can clean it up.
     if (!runtimeRelevant) {
@@ -754,9 +784,9 @@ export function Dashboard(props: DashboardProps) {
     const nextParams = new URLSearchParams(location.search);
     const nextType = viewMode() === 'all' ? '' : viewMode();
     const nextRuntime = viewMode() === 'docker' ? containerRuntime().trim() : '';
-    const nextContext = viewMode() === 'k8s' ? selectedKubernetesContext() ?? '' : '';
-    const nextNamespace = viewMode() === 'k8s' ? selectedKubernetesNamespace() ?? '' : '';
-    const nextHost = viewMode() === 'k8s' ? '' : selectedNode() ?? selectedHostHint() ?? '';
+    const nextContext = viewMode() === 'k8s' ? (selectedKubernetesContext() ?? '') : '';
+    const nextNamespace = viewMode() === 'k8s' ? (selectedKubernetesNamespace() ?? '') : '';
+    const nextHost = viewMode() === 'k8s' ? '' : (selectedNode() ?? selectedHostHint() ?? '');
 
     const managedPath = buildWorkloadsPath({
       type: nextType || null,
@@ -782,12 +812,16 @@ export function Dashboard(props: DashboardProps) {
     }
   });
 
-  const [statusMode, setStatusMode] = usePersistentSignal<StatusMode>('dashboardStatusMode', 'all', {
-    deserialize: (raw) =>
-      raw === 'all' || raw === 'running' || raw === 'degraded' || raw === 'stopped'
-        ? (raw as StatusMode)
-        : 'all',
-  });
+  const [statusMode, setStatusMode] = usePersistentSignal<StatusMode>(
+    'dashboardStatusMode',
+    'all',
+    {
+      deserialize: (raw) =>
+        raw === 'all' || raw === 'running' || raw === 'degraded' || raw === 'stopped'
+          ? (raw as StatusMode)
+          : 'all',
+    },
+  );
 
   // Grouping mode - grouped by node or flat list
   const [groupingMode, setGroupingMode] = usePersistentSignal<GroupingMode>(
@@ -839,21 +873,19 @@ export function Dashboard(props: DashboardProps) {
   const columnVisibility = useColumnVisibility(
     STORAGE_KEYS.DASHBOARD_HIDDEN_COLUMNS,
     GUEST_COLUMNS,
-    ['os', 'ip'],  // Default hidden columns for cleaner first-run experience
-    relevantColumns
+    ['os', 'ip'], // Default hidden columns for cleaner first-run experience
+    relevantColumns,
   );
   const visibleColumns = columnVisibility.visibleColumns;
-  const visibleColumnIds = createMemo(() => visibleColumns().map(c => c.id));
+  const visibleColumnIds = createMemo(() => visibleColumns().map((c) => c.id));
   // Mobile: restrict to the essential columns only so the table fits without horizontal scroll.
   // Secondary data (uptime, IP, node, I/O, etc.) is accessible via the row detail drawer.
   const MOBILE_ESSENTIAL_COLS = new Set(['name', 'cpu', 'memory', 'disk', 'link']);
   const mobileVisibleColumns = createMemo(() =>
-    isMobile()
-      ? visibleColumns().filter(c => MOBILE_ESSENTIAL_COLS.has(c.id))
-      : visibleColumns()
+    isMobile() ? visibleColumns().filter((c) => MOBILE_ESSENTIAL_COLS.has(c.id)) : visibleColumns(),
   );
   const mobileVisibleColumnIds = createMemo(() =>
-    isMobile() ? mobileVisibleColumns().map(c => c.id) : visibleColumnIds()
+    isMobile() ? mobileVisibleColumns().map((c) => c.id) : visibleColumnIds(),
   );
 
   // Total columns for colspan calculations
@@ -891,7 +923,10 @@ export function Dashboard(props: DashboardProps) {
               const [instance, _node, vmid] = parts;
               // Construct frontend ID format
               guestId = `${instance}-${vmid}`;
-              logger.debug('[Dashboard] Normalized optimistic guestId', { original: customEvent.detail.payload.guestId, normalized: guestId });
+              logger.debug('[Dashboard] Normalized optimistic guestId', {
+                original: customEvent.detail.payload.guestId,
+                normalized: guestId,
+              });
             }
           }
 
@@ -987,7 +1022,9 @@ export function Dashboard(props: DashboardProps) {
 
   // PERFORMANCE: Pre-compute guest- mapping for faster lookups
   // This avoids repeated node lookups for each guest during render
-  const guestParentNodeMap = createMemo(() => buildGuestParentNodeMap(allGuests(), nodeByInstance()));
+  const guestParentNodeMap = createMemo(() =>
+    buildGuestParentNodeMap(allGuests(), nodeByInstance()),
+  );
 
   // Sort handler
   const handleSort = (key: WorkloadSortKey) => {
@@ -1090,7 +1127,9 @@ export function Dashboard(props: DashboardProps) {
 
   const workloadsSummaryFallbackCounts = createMemo(() => {
     const guests = filteredGuests();
-    const running = guests.filter((guest) => guest.status === 'running' || guest.status === 'online').length;
+    const running = guests.filter(
+      (guest) => guest.status === 'running' || guest.status === 'online',
+    ).length;
     return {
       total: guests.length,
       running,
@@ -1137,7 +1176,10 @@ export function Dashboard(props: DashboardProps) {
     }
   });
 
-  const getGroupLabel = (groupKey: string, guests: WorkloadGuest[]): { type: string; name: string } => {
+  const getGroupLabel = (
+    groupKey: string,
+    guests: WorkloadGuest[],
+  ): { type: string; name: string } => {
     const node = nodeByInstance()[groupKey];
     if (node) return { type: '', name: getNodeDisplayName(node) };
     const normalizedGroupKey = guests.length > 0 ? getWorkloadGroupKey(guests[0]) : groupKey;
@@ -1147,11 +1189,21 @@ export function Dashboard(props: DashboardProps) {
     if (prefix === 'k8s') return { type: 'K8s', name: context };
     if (prefix === 'vm') return { type: 'VM', name: context };
     if (prefix === 'lxc') return { type: 'LXC', name: context };
-    return { type: '', name: guests[0]?.contextLabel || context };
+    // For PVE workload groups (instance-node key), show node name + cluster badge
+    const first = guests[0];
+    if (first) {
+      const cluster = (first.clusterName || '').trim();
+      const nodeName = (first.node || '').trim();
+      if (nodeName && cluster) return { type: cluster, name: nodeName };
+      if (nodeName) return { type: '', name: nodeName };
+    }
+    return { type: '', name: context };
   };
 
   // Group by node or return flat list based on grouping mode
-  const groupedGuests = createMemo(() => groupWorkloads(filteredGuests(), groupingMode(), guestSortComparator()));
+  const groupedGuests = createMemo(() =>
+    groupWorkloads(filteredGuests(), groupingMode(), guestSortComparator()),
+  );
 
   // Stable sorted group keys for <For> — strings compare by value so DOM stays stable across data updates
   const sortedGroupKeys = createMemo(() => {
@@ -1242,9 +1294,10 @@ export function Dashboard(props: DashboardProps) {
   const bottomSpacerHeight = createMemo(() =>
     groupedWindowing.isWindowed()
       ? Math.max(
-        0,
-        (filteredGuests().length - groupedWindowing.endIndex()) * DASHBOARD_TABLE_ESTIMATED_ROW_HEIGHT,
-      )
+          0,
+          (filteredGuests().length - groupedWindowing.endIndex()) *
+            DASHBOARD_TABLE_ESTIMATED_ROW_HEIGHT,
+        )
       : 0,
   );
 
@@ -1342,8 +1395,6 @@ export function Dashboard(props: DashboardProps) {
       }
     }
   };
-
-
 
   return (
     <div class="space-y-3">
@@ -1523,7 +1574,9 @@ export function Dashboard(props: DashboardProps) {
           onColumnToggle={columnVisibility.toggle}
           onColumnReset={columnVisibility.resetToDefaults}
           chartsCollapsed={isWorkloadsRoute() ? workloadsSummaryCollapsed : undefined}
-          onChartsToggle={isWorkloadsRoute() ? () => setWorkloadsSummaryCollapsed((c) => !c) : undefined}
+          onChartsToggle={
+            isWorkloadsRoute() ? () => setWorkloadsSummaryCollapsed((c) => !c) : undefined
+          }
           containerRuntimeFilter={(() => {
             if (!isWorkloadsRoute()) return undefined;
             if (viewMode() !== 'docker') return undefined;
@@ -1561,10 +1614,7 @@ export function Dashboard(props: DashboardProps) {
               id: 'workloads-node-filter',
               label: 'Host',
               value: selectedNode() ?? '',
-              options: [
-                { value: '', label: 'All nodes' },
-                ...workloadNodeOptions(),
-              ],
+              options: [{ value: '', label: 'All nodes' }, ...workloadNodeOptions()],
               onChange: (value: string) => {
                 setSelectedHostHint(null);
                 handleNodeSelect(value || null, value ? 'pve' : null);
@@ -1601,7 +1651,10 @@ export function Dashboard(props: DashboardProps) {
               <Table
                 wrapperRef={(el) => (tableRef = el)}
                 class="whitespace-nowrap min-w-[max-content]"
-                style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : 'max-content' }}
+                style={{
+                  'table-layout': 'fixed',
+                  'min-width': isMobile() ? '100%' : 'max-content',
+                }}
               >
                 <TableHeader>
                   <TableRow class="bg-surface-alt text-muted border-b border-border">
@@ -1618,19 +1671,24 @@ export function Dashboard(props: DashboardProps) {
  ${isFirst() ? 'pl-2 sm:pl-3 pr-1.5 sm:pr-2 text-left' : 'px-1.5 sm:px-2 text-center'}
  ${isSortable ? 'cursor-pointer hover:bg-surface-hover' : ''}`}
                             style={{
-                              ...((['cpu', 'memory', 'disk'].includes(col.id))
-                                ? { "width": isMobile() ? "70px" : "140px" }
-                                : (['netIo', 'diskIo'].includes(col.id))
-                                  ? { "width": isMobile() ? "170px" : "170px" }
-                                  : (isMobile() && col.id === 'name')
-                                    ? { "width": "100%", "min-width": "120px" }
-                                    : (col.width ? { "width": col.width } : {})),
-                              "vertical-align": 'middle',
+                              ...(['cpu', 'memory', 'disk'].includes(col.id)
+                                ? { width: isMobile() ? '70px' : '140px' }
+                                : ['netIo', 'diskIo'].includes(col.id)
+                                  ? { width: isMobile() ? '170px' : '170px' }
+                                  : isMobile() && col.id === 'name'
+                                    ? { width: '100%', 'min-width': '120px' }
+                                    : col.width
+                                      ? { width: col.width }
+                                      : {}),
+                              'vertical-align': 'middle',
                             }}
                             onClick={() => isSortable && handleSort(sortKeyForCol!)}
                             title={col.icon ? col.label : undefined}
                           >
-                            <div class={`flex items-center gap-0.5 ${isFirst() ? 'justify-start' : 'justify-center'}`} style={{ "min-height": "14px" }}>
+                            <div
+                              class={`flex items-center gap-0.5 ${isFirst() ? 'justify-start' : 'justify-center'}`}
+                              style={{ 'min-height': '14px' }}
+                            >
                               {col.icon ? (
                                 <span class="flex items-center">{col.icon}</span>
                               ) : (
@@ -1647,7 +1705,10 @@ export function Dashboard(props: DashboardProps) {
                 <TableBody ref={setTableBodyRef} class="divide-y divide-border">
                   <Show when={groupedWindowing.isWindowed() && topSpacerHeight() > 0}>
                     <TableRow aria-hidden="true">
-                      <TableCell colspan={totalColumns()} style={{ height: `${topSpacerHeight()}px`, padding: '0', border: '0' }} />
+                      <TableCell
+                        colspan={totalColumns()}
+                        style={{ height: `${topSpacerHeight()}px`, padding: '0', border: '0' }}
+                      />
                     </TableRow>
                   </Show>
                   {/* Outer <For> uses string keys — strings compare by value so DOM is stable across data updates */}
@@ -1684,7 +1745,11 @@ export function Dashboard(props: DashboardProps) {
                                 </TableRow>
                               }
                             >
-                              <NodeGroupHeader node={node()!} renderAs="tr" colspan={totalColumns()} />
+                              <NodeGroupHeader
+                                node={node()!}
+                                renderAs="tr"
+                                colspan={totalColumns()}
+                              />
                             </Show>
                           </Show>
                           {/* Inner <Index> tracks by position — updates props reactively instead of recreating DOM */}
@@ -1696,7 +1761,9 @@ export function Dashboard(props: DashboardProps) {
                               };
                               const getMetadata = () =>
                                 guestMetadata()[guestId()] ||
-                                guestMetadata()[`${guest().instance}:${guest().node}:${guest().vmid}`];
+                                guestMetadata()[
+                                  `${guest().instance}:${guest().node}:${guest().vmid}`
+                                ];
                               const parentNode = () => node() ?? guestParentNodeMap()[guestId()];
                               const parentNodeOnline = () => {
                                 const pn = parentNode();
@@ -1707,7 +1774,11 @@ export function Dashboard(props: DashboardProps) {
                                 <ComponentErrorBoundary name="GuestRow">
                                   <GuestRow
                                     guest={guest()}
-                                    alertStyles={getAlertStyles(guestId(), activeAlerts, alertsEnabled())}
+                                    alertStyles={getAlertStyles(
+                                      guestId(),
+                                      activeAlerts,
+                                      alertsEnabled(),
+                                    )}
                                     customUrl={getMetadata()?.customUrl}
                                     onTagClick={handleTagClick}
                                     activeSearch={search()}
@@ -1715,15 +1786,25 @@ export function Dashboard(props: DashboardProps) {
                                     onCustomUrlUpdate={handleCustomUrlUpdate}
                                     isGroupedView={groupingMode() === 'grouped'}
                                     visibleColumnIds={mobileVisibleColumnIds()}
-                                    onClick={() => setSelectedGuestId(selectedGuestId() === guestId() ? null : guestId())}
+                                    onClick={() =>
+                                      setSelectedGuestId(
+                                        selectedGuestId() === guestId() ? null : guestId(),
+                                      )
+                                    }
                                     isExpanded={selectedGuestId() === guestId()}
                                     ioEmphasis={workloadIOEmphasis()}
                                     onHoverChange={setHoveredWorkloadId}
                                   />
                                   <Show when={selectedGuestId() === guestId()}>
                                     <TableRow>
-                                      <TableCell colspan={totalColumns()} class="p-0 border-b border-border bg-surface-alt">
-                                        <div class="px-2 sm:px-4 py-3 sm:py-4" onClick={(e) => e.stopPropagation()}>
+                                      <TableCell
+                                        colspan={totalColumns()}
+                                        class="p-0 border-b border-border bg-surface-alt"
+                                      >
+                                        <div
+                                          class="px-2 sm:px-4 py-3 sm:py-4"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
                                           <GuestDrawer
                                             guest={guest()}
                                             onClose={() => setSelectedGuestId(null)}
@@ -1744,7 +1825,10 @@ export function Dashboard(props: DashboardProps) {
                   </For>
                   <Show when={groupedWindowing.isWindowed() && bottomSpacerHeight() > 0}>
                     <TableRow aria-hidden="true">
-                      <TableCell colspan={totalColumns()} style={{ height: `${bottomSpacerHeight()}px`, padding: '0', border: '0' }} />
+                      <TableCell
+                        colspan={totalColumns()}
+                        style={{ height: `${bottomSpacerHeight()}px`, padding: '0', border: '0' }}
+                      />
                     </TableRow>
                   </Show>
                 </TableBody>
