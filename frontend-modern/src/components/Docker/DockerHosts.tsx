@@ -21,6 +21,7 @@ import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES } from '@/utils/statu
 import { MonitoringAPI } from '@/api/monitoring';
 import { showSuccess, showError, showToast } from '@/utils/toast';
 import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
+import { getContainerUpdateState, markContainerQueued } from '@/stores/containerUpdates';
 
 
 
@@ -275,6 +276,46 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
   // Track batch update status: key is hostId:containerId
   const [batchUpdateState, setBatchUpdateState] = createStore<Record<string, 'updating' | 'queued' | 'error'>>({});
 
+  // Wait for a container update command to reach a terminal state (success/error)
+  // so the next command for the same host can be queued.
+  const waitForCommandCompletion = (hostId: string, containerId: string): Promise<void> => {
+    return new Promise((resolve) => {
+      const pollInterval = 2000; // 2 seconds
+      const timeout = 5 * 60 * 1000; // 5 minute safety limit
+      const start = Date.now();
+      let seenEntry = false;
+
+      const check = () => {
+        if (Date.now() - start > timeout) {
+          logger.warn(`Timed out waiting for update on host ${hostId}, container ${containerId}`);
+          resolve();
+          return;
+        }
+
+        const state = getContainerUpdateState(hostId, containerId);
+
+        if (state) {
+          seenEntry = true;
+          // Terminal states — safe to queue next command
+          if (state.state === 'success' || state.state === 'error') {
+            resolve();
+            return;
+          }
+        } else if (seenEntry) {
+          // Entry was cleaned up (auto-clear after success/error) — treat as done
+          resolve();
+          return;
+        }
+        // If !state && !seenEntry: WebSocket hasn't synced yet, keep waiting
+
+        setTimeout(check, pollInterval);
+      };
+
+      // Start checking after a short initial delay
+      setTimeout(check, pollInterval);
+    });
+  };
+
   const handleUpdateAll = async () => {
     const targets = updateableContainers();
     if (targets.length === 0) return;
@@ -292,31 +333,47 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
       setBatchUpdateState(`${t.hostId}:${t.containerId}`, 'updating');
     });
 
+    // Group targets by hostId so we can serialize per host
+    const byHost = new Map<string, typeof targets>();
+    for (const t of targets) {
+      const list = byHost.get(t.hostId) || [];
+      list.push(t);
+      byHost.set(t.hostId, list);
+    }
+
     let successCount = 0;
     let failCount = 0;
 
-    // Process in chunks of 5 to avoid overloading the browser/network
-    const chunkSize = 5;
-    for (let i = 0; i < targets.length; i += chunkSize) {
-      const chunk = targets.slice(i, i + chunkSize);
+    // Process all hosts in parallel, but serialize containers within each host.
+    // The backend only allows one command per host at a time (#1289).
+    await Promise.all(
+      Array.from(byHost.entries()).map(async ([_hostId, hostTargets]) => {
+        for (const target of hostTargets) {
+          const key = `${target.hostId}:${target.containerId}`;
+          try {
+            const result = await MonitoringAPI.updateDockerContainer(
+              target.hostId,
+              target.containerId,
+              target.containerName,
+            );
+            setBatchUpdateState(key, 'queued');
+            // Register in containerUpdates store so WebSocket sync tracks completion
+            markContainerQueued(target.hostId, target.containerId, result.commandId);
+            successCount++;
 
-      await Promise.all(chunk.map(async (target) => {
-        const key = `${target.hostId}:${target.containerId}`;
-        try {
-          await MonitoringAPI.updateDockerContainer(
-            target.hostId,
-            target.containerId,
-            target.containerName,
-          );
-          setBatchUpdateState(key, 'queued');
-          successCount++;
-        } catch (err) {
-          failCount++;
-          setBatchUpdateState(key, 'error');
-          logger.error(`Failed to trigger update for ${target.containerName}`, err);
+            // Wait for this command to finish before queuing the next
+            // container on the same host (backend rejects concurrent commands).
+            if (hostTargets.indexOf(target) < hostTargets.length - 1) {
+              await waitForCommandCompletion(target.hostId, target.containerId);
+            }
+          } catch (err) {
+            failCount++;
+            setBatchUpdateState(key, 'error');
+            logger.error(`Failed to trigger update for ${target.containerName}`, err);
+          }
         }
-      }));
-    }
+      }),
+    );
 
     if (failCount === 0) {
       showSuccess(`Successfully queued updates for all ${targets.length} containers.`);
