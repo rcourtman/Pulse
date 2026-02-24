@@ -1812,6 +1812,84 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 		return n.sendResolvedWebhookNtfy(webhook, alertList, resolvedAt)
 	}
 
+	// Use custom or service-specific templates for resolved webhooks (mirrors sendWebhook logic).
+	// Custom template takes precedence, then service template.
+	// For service webhooks, return an error on failure rather than sending a generic payload
+	// that the service endpoint would reject anyway.
+	hasCustomTemplate := webhook.Template != "" && strings.TrimSpace(webhook.Template) != ""
+	hasServiceTemplate := webhook.Service != "" && webhook.Service != "generic"
+
+	if hasCustomTemplate || hasServiceTemplate {
+		alert := alertList[0]
+		if alert == nil {
+			return fmt.Errorf("first alert in resolved list is nil for service webhook %s", webhook.Name)
+		}
+
+		data := n.prepareResolvedWebhookData(alert, webhook, resolvedAt)
+		data.AlertCount = len(alertList)
+		if len(alertList) > 1 {
+			data.Message = fmt.Sprintf("Resolved: %d alerts cleared", len(alertList))
+		}
+		data.Alerts = alertList
+
+		// Render URL template if placeholders are present
+		renderedURL, renderErr := renderWebhookURL(webhook.URL, data)
+		if renderErr != nil {
+			return fmt.Errorf("failed to render resolved webhook URL template for %s: %w", webhook.Name, renderErr)
+		}
+		webhook.URL = renderedURL
+
+		// Service-specific data enrichment (mirrors sendWebhook logic)
+		if webhook.Service == "telegram" {
+			chatID, chatErr := extractTelegramChatID(renderedURL)
+			if chatErr != nil {
+				return fmt.Errorf("failed to extract Telegram chat_id for resolved webhook %s: %w", webhook.Name, chatErr)
+			}
+			if chatID != "" {
+				data.ChatID = chatID
+			}
+		} else if webhook.Service == "pagerduty" {
+			if data.CustomFields == nil {
+				data.CustomFields = make(map[string]interface{})
+			}
+			if routingKey, ok := webhook.Headers["routing_key"]; ok {
+				data.CustomFields["routing_key"] = routingKey
+			}
+		}
+
+		// Try custom template first, then service template
+		if hasCustomTemplate {
+			jsonData, err := n.generatePayloadFromTemplateWithService(webhook.Template, data, webhook.Service)
+			if err == nil {
+				return n.sendWebhookRequest(webhook, jsonData, "resolved")
+			}
+			log.Warn().Err(err).Str("webhook", webhook.Name).Msg("Failed to render resolved custom template, trying service template")
+			// Fall through to service template if available
+		}
+
+		if hasServiceTemplate {
+			templates := GetWebhookTemplates()
+			templateFound := false
+			for _, tmpl := range templates {
+				if tmpl.Service == webhook.Service {
+					templateFound = true
+					jsonData, err := n.generatePayloadFromTemplateWithService(tmpl.PayloadTemplate, data, webhook.Service)
+					if err == nil {
+						return n.sendWebhookRequest(webhook, jsonData, "resolved")
+					}
+					return fmt.Errorf("failed to render resolved %s template for %s: %w", webhook.Service, webhook.Name, err)
+				}
+			}
+			if !templateFound {
+				return fmt.Errorf("no template found for service %s on webhook %s", webhook.Service, webhook.Name)
+			}
+		}
+
+		// Had a custom template but no service template, and custom template failed
+		return fmt.Errorf("failed to render resolved custom template for %s and no service template available", webhook.Name)
+	}
+
+	// Generic payload for webhooks with no service and no custom template
 	payload := map[string]interface{}{
 		"event":         string(eventResolved),
 		"alerts":        alertList,
@@ -2354,6 +2432,72 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 		Metadata:           metadataCopy,
 		CustomFields:       customFields,
 		AlertCount:         1,
+	}
+}
+
+// prepareResolvedWebhookData builds a WebhookPayloadData for a resolved alert,
+// suitable for rendering through service-specific templates (Discord, Slack, Teams, etc.).
+func (n *NotificationManager) prepareResolvedWebhookData(alert *alerts.Alert, webhook WebhookConfig, resolvedAt time.Time) WebhookPayloadData {
+	duration := resolvedAt.Sub(alert.StartTime)
+
+	instance := ""
+	if n.publicURL != "" {
+		instance = strings.TrimRight(n.publicURL, "/")
+	} else if alert.Instance != "" && (strings.HasPrefix(alert.Instance, "http://") || strings.HasPrefix(alert.Instance, "https://")) {
+		instance = alert.Instance
+	}
+
+	resourceType := ""
+	if alert.Metadata != nil {
+		if rt, ok := alert.Metadata["resourceType"].(string); ok {
+			resourceType = rt
+		}
+	}
+
+	var metadataCopy map[string]interface{}
+	if alert.Metadata != nil {
+		metadataCopy = make(map[string]interface{}, len(alert.Metadata))
+		for k, v := range alert.Metadata {
+			metadataCopy[k] = v
+		}
+	}
+
+	var ackTime string
+	if alert.AckTime != nil {
+		ackTime = alert.AckTime.Format(time.RFC3339)
+	}
+
+	roundedValue := math.Round(alert.Value*10) / 10
+	roundedThreshold := math.Round(alert.Threshold*10) / 10
+
+	// Build a human-readable resolved message
+	message := fmt.Sprintf("Resolved: %s on %s is now healthy", alert.ResourceName, alertNodeDisplay(alert))
+
+	return WebhookPayloadData{
+		ID:                 alert.ID,
+		Level:              "resolved",
+		Type:               alert.Type,
+		ResourceName:       alert.ResourceName,
+		ResourceID:         alert.ResourceID,
+		Node:               alert.Node,
+		NodeDisplayName:    alertNodeDisplay(alert),
+		Instance:           instance,
+		Message:            message,
+		Value:              roundedValue,
+		Threshold:          roundedThreshold,
+		ValueFormatted:     formatMetricValue(alert.Type, alert.Value),
+		ThresholdFormatted: formatMetricThreshold(alert.Type, alert.Threshold),
+		StartTime:          alert.StartTime.Format(time.RFC3339),
+		Duration:           formatWebhookDuration(duration),
+		Timestamp:          resolvedAt.Format(time.RFC3339),
+		ResourceType:       resourceType,
+		Acknowledged:       alert.Acknowledged,
+		AckTime:            ackTime,
+		AckUser:            alert.AckUser,
+		Metadata:           metadataCopy,
+		CustomFields:       convertWebhookCustomFields(webhook.CustomFields),
+		AlertCount:         1,
+		Mention:            webhook.Mention,
 	}
 }
 

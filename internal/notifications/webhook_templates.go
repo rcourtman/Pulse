@@ -160,7 +160,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 			},
 			PayloadTemplate: `{
 				"routing_key": "{{.CustomFields.routing_key}}",
-				"event_action": "trigger",
+				"event_action": "{{if eq .Level "resolved"}}resolve{{else}}trigger{{end}}",
 				"dedup_key": "{{.ID}}",
 				"payload": {
 					"summary": "{{.Message}}",
