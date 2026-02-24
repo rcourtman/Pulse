@@ -14,6 +14,7 @@ import { getUpgradeActionUrlOrFallback, loadLicenseStatus, entitlements } from '
 import { LicenseAPI } from '@/api/license';
 import { showToast } from '@/utils/toast';
 import { logger } from '@/utils/logger';
+import { IS_V6_PUBLIC_RELEASE } from '@/config/publicRelease';
 
 type TierColumn = 'community' | 'pro' | 'cloud';
 
@@ -24,6 +25,33 @@ type FeatureRow = {
   pro: boolean;
   cloud: boolean;
 };
+
+type PublicPricingView = {
+  proPrice: string;
+  proSubline: string;
+  cloudPrice: string;
+  cloudSubline: string;
+  cloudHref: string;
+  cloudCtaLabel: string;
+};
+
+const PUBLIC_PRICING_VIEW: PublicPricingView = IS_V6_PUBLIC_RELEASE
+  ? {
+      proPrice: '$15/month',
+      proSubline: 'or $129/year (save 28%)',
+      cloudPrice: '$29/month',
+      cloudSubline: 'Hosted rollout starts soon',
+      cloudHref: '/cloud/signup',
+      cloudCtaLabel: 'Start Hosted Signup',
+    }
+  : {
+      proPrice: '$9/month',
+      proSubline: 'or $79/year (save 27%)',
+      cloudPrice: 'Coming soon',
+      cloudSubline: 'Hosted rollout starts soon; join the waitlist',
+      cloudHref: 'mailto:hello@pulserelay.pro?subject=Pulse%20Cloud%20Waitlist',
+      cloudCtaLabel: 'Join Waitlist',
+    };
 
 // Feature list copied from docs/architecture/ENTITLEMENT_MATRIX.md (capability keys + display names).
 const FEATURE_ROWS: FeatureRow[] = [
@@ -281,8 +309,10 @@ export default function Pricing() {
           </div>
 
           <h2 class="text-lg font-semibold text-base-content">Pro</h2>
-          <div class="mt-2 text-3xl font-semibold tracking-tight text-base-content">$15/month</div>
-          <div class="mt-1 text-sm text-muted">or $129/year (save 28%)</div>
+          <div class="mt-2 text-3xl font-semibold tracking-tight text-base-content">
+            {PUBLIC_PRICING_VIEW.proPrice}
+          </div>
+          <div class="mt-1 text-sm text-muted">{PUBLIC_PRICING_VIEW.proSubline}</div>
 
           <ul class="mt-4 space-y-2 text-sm text-base-content">
             <li class="flex gap-2">
@@ -329,8 +359,10 @@ export default function Pricing() {
 
         <Card padding="lg" class="relative">
           <h2 class="text-lg font-semibold text-base-content">Cloud</h2>
-          <div class="mt-2 text-3xl font-semibold tracking-tight text-base-content">$29/month</div>
-          <div class="mt-1 text-sm text-muted">Founding price: $19/mo for first 100 signups</div>
+          <div class="mt-2 text-3xl font-semibold tracking-tight text-base-content">
+            {PUBLIC_PRICING_VIEW.cloudPrice}
+          </div>
+          <div class="mt-1 text-sm text-muted">{PUBLIC_PRICING_VIEW.cloudSubline}</div>
           <ul class="mt-4 space-y-2 text-sm text-base-content">
             <li class="flex gap-2">
               <span class="text-blue-700 dark:text-blue-300">•</span>
@@ -352,9 +384,9 @@ export default function Pricing() {
           <div class="mt-6">
             <a
               class="w-full inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
-              href="/cloud/signup"
+              href={PUBLIC_PRICING_VIEW.cloudHref}
             >
-              Start Hosted Signup
+              {PUBLIC_PRICING_VIEW.cloudCtaLabel}
             </a>
           </div>
         </Card>
