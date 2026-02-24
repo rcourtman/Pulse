@@ -7,7 +7,7 @@ export interface ColumnDef {
   label: string;
   icon?: JSX.Element; // Optional icon for compact column headers
   toggleable?: boolean;
-  width?: string;      // Fixed width for consistent column sizing
+  width?: string; // Fixed width for consistent column sizing
   minWidth?: string;
   maxWidth?: string;
   flex?: number;
@@ -31,13 +31,14 @@ export function useColumnVisibility(
   storageKey: string,
   columns: ColumnDef[],
   defaultHidden: string[] = [],
-  relevantColumns?: Accessor<Set<string> | null>
+  relevantColumns?: Accessor<Set<string> | null>,
 ) {
   // Get list of toggleable column IDs
-  const toggleableIds = columns.filter(c => c.toggleable).map(c => c.id);
+  const toggleableIds = columns.filter((c) => c.toggleable).map((c) => c.id);
 
   // Check if user has any saved preference
-  const hasUserPreference = typeof window !== 'undefined' && window.localStorage.getItem(storageKey) !== null;
+  const hasUserPreference =
+    typeof window !== 'undefined' && window.localStorage.getItem(storageKey) !== null;
 
   // Persist hidden columns to localStorage
   // Use defaultHidden only if no user preference exists yet
@@ -54,7 +55,7 @@ export function useColumnVisibility(
           return [];
         }
       },
-    }
+    },
   );
 
   // Check if a column is hidden by user preference
@@ -66,7 +67,7 @@ export function useColumnVisibility(
   const toggle = (id: string) => {
     const current = hiddenColumns();
     if (current.includes(id)) {
-      setHiddenColumns(current.filter(c => c !== id));
+      setHiddenColumns(current.filter((c) => c !== id));
     } else {
       setHiddenColumns([...current, id]);
     }
@@ -74,7 +75,7 @@ export function useColumnVisibility(
 
   // Show a column (remove from hidden)
   const show = (id: string) => {
-    setHiddenColumns(hiddenColumns().filter(c => c !== id));
+    setHiddenColumns(hiddenColumns().filter((c) => c !== id));
   };
 
   // Hide a column (add to hidden)
@@ -92,7 +93,7 @@ export function useColumnVisibility(
   // Compute visible columns based on user preferences and view-mode relevance
   const visibleColumns: Accessor<ColumnDef[]> = createMemo(() => {
     const relevant = relevantColumns?.();
-    return columns.filter(col => {
+    return columns.filter((col) => {
       // If a relevance set is active, exclude columns not in it
       if (relevant && !relevant.has(col.id)) return false;
 
@@ -106,7 +107,7 @@ export function useColumnVisibility(
   // Get columns that could be toggled (relevant to the current view)
   const availableToggles: Accessor<ColumnDef[]> = createMemo(() => {
     const relevant = relevantColumns?.();
-    return columns.filter(col => {
+    return columns.filter((col) => {
       if (!col.toggleable) return false;
       if (relevant && !relevant.has(col.id)) return false;
       return true;
@@ -115,7 +116,7 @@ export function useColumnVisibility(
 
   // Check if a specific column is currently visible
   const isColumnVisible = (id: string): boolean => {
-    return visibleColumns().some(col => col.id === id);
+    return visibleColumns().some((col) => col.id === id);
   };
 
   return {

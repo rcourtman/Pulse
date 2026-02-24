@@ -40,17 +40,25 @@ export function OrgSwitcher(props: OrgSwitcherProps) {
           class="h-7 max-w-44 rounded-md border border-border bg-surface px-2 text-xs text-base-content shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <For each={props.orgs}>
-            {(org) => (
-              <option value={org.id}>
-                {org.displayName || org.id}
-              </option>
-            )}
+            {(org) => <option value={org.id}>{org.displayName || org.id}</option>}
           </For>
         </select>
       </Show>
       <Show when={props.loading}>
-        <svg class="h-3.5 w-3.5 animate-spin text-slate-400" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+        <svg
+          class="h-3.5 w-3.5 animate-spin text-slate-400"
+          fill="none"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <circle
+            class="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            stroke-width="4"
+          />
           <path
             class="opacity-75"
             fill="currentColor"

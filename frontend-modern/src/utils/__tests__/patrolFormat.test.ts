@@ -101,7 +101,9 @@ describe('patrolFormat', () => {
     });
 
     it('returns type list for scope_resource_types', () => {
-      expect(formatScope({ scope_resource_types: ['vm', 'container'] })).toBe('Scoped to vm, container');
+      expect(formatScope({ scope_resource_types: ['vm', 'container'] })).toBe(
+        'Scoped to vm, container',
+      );
     });
 
     it('returns Scoped for scoped type', () => {
@@ -164,9 +166,7 @@ describe('patrolFormat', () => {
     });
 
     it('handles models without provider prefix', () => {
-      const models = [
-        { id: 'no-provider', name: 'Model', description: '', notable: false },
-      ];
+      const models = [{ id: 'no-provider', name: 'Model', description: '', notable: false }];
 
       const groups = groupModelsByProvider(models);
       expect(groups.get('no-provider')).toHaveLength(1);

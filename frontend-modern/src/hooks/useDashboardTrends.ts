@@ -6,7 +6,11 @@ import {
   type ResourceType as HistoryResourceType,
 } from '@/api/charts';
 import type { DashboardOverview } from '@/hooks/useDashboardOverview';
-import { isStorage, type Resource, type ResourceType as UnifiedResourceType } from '@/types/resource';
+import {
+  isStorage,
+  type Resource,
+  type ResourceType as UnifiedResourceType,
+} from '@/types/resource';
 
 export type TrendPoint = {
   timestamp: number;
@@ -85,9 +89,7 @@ function toErrorMessage(error: unknown): string {
 
 function normalizeTrendPoints(points: Array<{ timestamp: number; value: number }>): TrendPoint[] {
   const normalized = points.filter(
-    (point) =>
-      Number.isFinite(point.timestamp) &&
-      Number.isFinite(point.value),
+    (point) => Number.isFinite(point.timestamp) && Number.isFinite(point.value),
   );
   normalized.sort((a, b) => a.timestamp - b.timestamp);
   return normalized;
@@ -246,7 +248,9 @@ export function extractTrendData(points: Array<{ timestamp: number; value: numbe
   };
 }
 
-async function fetchDashboardTrendSnapshot(request: DashboardTrendRequest): Promise<DashboardTrendSnapshot> {
+async function fetchDashboardTrendSnapshot(
+  request: DashboardTrendRequest,
+): Promise<DashboardTrendSnapshot> {
   let firstError: string | null = null;
   const captureError = (error: unknown) => {
     if (firstError === null) {
@@ -292,7 +296,13 @@ async function fetchDashboardTrendSnapshot(request: DashboardTrendRequest): Prom
     Promise.all(
       request.storage.map(async (resourceId) => {
         try {
-          return await fetchMetricPoints('storage', resourceId, 'disk', STORAGE_RANGE, SPARKLINE_POINTS);
+          return await fetchMetricPoints(
+            'storage',
+            resourceId,
+            'disk',
+            STORAGE_RANGE,
+            SPARKLINE_POINTS,
+          );
         } catch (error) {
           captureError(error);
           return [];
@@ -302,9 +312,7 @@ async function fetchDashboardTrendSnapshot(request: DashboardTrendRequest): Prom
   ]);
 
   const storageCapacity =
-    request.storage.length > 0
-      ? extractTrendData(aggregateStoragePoints(storageSeries))
-      : null;
+    request.storage.length > 0 ? extractTrendData(aggregateStoragePoints(storageSeries)) : null;
 
   return {
     infrastructure: {
@@ -328,7 +336,9 @@ export function useDashboardTrends(
   const trendRequest = createMemo<DashboardTrendRequest>(() => {
     const currentOverview = overview();
     const currentResources = resources();
-    const unifiedTypeById = new Map(currentResources.map((resource) => [resource.id, resource.type] as const));
+    const unifiedTypeById = new Map(
+      currentResources.map((resource) => [resource.id, resource.type] as const),
+    );
     const metricsTargetById = new Map<string, { resourceType: string; resourceId: string }>();
     for (const resource of currentResources) {
       if (resource.metricsTarget) {
@@ -347,10 +357,12 @@ export function useDashboardTrends(
       metricsTargetById,
     );
     const storageTargets = dedupeValues(
-      currentResources.filter((resource) => isStorage(resource)).map((resource) => {
-        const mt = resource.metricsTarget;
-        return mt ? mt.resourceId : resource.id;
-      }),
+      currentResources
+        .filter((resource) => isStorage(resource))
+        .map((resource) => {
+          const mt = resource.metricsTarget;
+          return mt ? mt.resourceId : resource.id;
+        }),
     ).sort();
 
     return {
@@ -389,7 +401,8 @@ export function useDashboardTrends(
     const request = trendRequest();
 
     // Skip empty requests (no targets yet).
-    if (request.cpu.length === 0 && request.memory.length === 0 && request.storage.length === 0) return;
+    if (request.cpu.length === 0 && request.memory.length === 0 && request.storage.length === 0)
+      return;
 
     const requestId = ++latestRequestId;
     setTrendLoading(true);

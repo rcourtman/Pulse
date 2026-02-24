@@ -144,7 +144,16 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
         label: 'Go to Containers (v5 entry point)',
         description: classicContainersPath,
         shortcut: 'g c',
-        keywords: ['containers', 'docker', 'podman', 'workloads', 'legacy', 'v5', 'migration', 'entry'],
+        keywords: [
+          'containers',
+          'docker',
+          'podman',
+          'workloads',
+          'legacy',
+          'v5',
+          'migration',
+          'entry',
+        ],
         action: () => navigate(classicContainersPath),
       },
       {
@@ -152,7 +161,16 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
         label: 'Go to LXC Containers (v5 entry point)',
         description: classicLxcPath,
         shortcut: 'g l',
-        keywords: ['lxc', 'containers', 'proxmox', 'workloads', 'legacy', 'v5', 'migration', 'entry'],
+        keywords: [
+          'lxc',
+          'containers',
+          'proxmox',
+          'workloads',
+          'legacy',
+          'v5',
+          'migration',
+          'entry',
+        ],
         action: () => navigate(classicLxcPath),
       },
       {
@@ -167,12 +185,7 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
     ];
   });
 
-  const normalizedQuery = createMemo(() =>
-    query()
-      .toLowerCase()
-      .trim()
-      .replace(/\s+/g, '')
-  );
+  const normalizedQuery = createMemo(() => query().toLowerCase().trim().replace(/\s+/g, ''));
 
   const filteredCommands = createMemo(() => {
     const q = normalizedQuery();
@@ -215,7 +228,12 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
       <div class="border-b border-border px-5 py-4">
         <div class="flex items-center gap-2 rounded-md border border-border bg-base px-3 py-2 text-sm text-base-content focus-within:border-blue-500">
           <svg class="h-4 w-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
           </svg>
           <input
             ref={(el) => (inputRef = el)}
@@ -241,11 +259,7 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
       <div class="max-h-[320px] overflow-y-auto px-3 py-3">
         <Show
           when={filteredCommands().length > 0}
-          fallback={
-            <div class="px-3 py-8 text-center text-sm text-muted">
-              No matches found.
-            </div>
-          }
+          fallback={<div class="px-3 py-8 text-center text-sm text-muted">No matches found.</div>}
         >
           <For each={filteredCommands()}>
             {(command) => (
@@ -257,9 +271,7 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
                 <div>
                   <div class="font-medium">{command.label}</div>
                   <Show when={command.description}>
-                    <div class="text-xs text-muted">
-                      {command.description}
-                    </div>
+                    <div class="text-xs text-muted">{command.description}</div>
                   </Show>
                 </div>
                 <Show when={command.shortcut}>

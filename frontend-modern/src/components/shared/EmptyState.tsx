@@ -61,10 +61,10 @@ export function EmptyState(props: EmptyStateProps) {
   return (
     <div class={containerClass} {...others}>
       <Show when={local.icon}>
-        <div class={`w-16 h-16 sm:w-20 sm:h-20 mb-6 rounded-md flex items-center justify-center ${iconBgClass[tone]}`}>
-          <div class="scale-125">
-            {local.icon}
-          </div>
+        <div
+          class={`w-16 h-16 sm:w-20 sm:h-20 mb-6 rounded-md flex items-center justify-center ${iconBgClass[tone]}`}
+        >
+          <div class="scale-125">{local.icon}</div>
         </div>
       </Show>
 
@@ -73,7 +73,9 @@ export function EmptyState(props: EmptyStateProps) {
       </h3>
 
       <Show when={local.description}>
-        <p class={`text-sm max-w-sm sm:max-w-md ${descriptionToneClass[tone]} mb-6 leading-relaxed`}>
+        <p
+          class={`text-sm max-w-sm sm:max-w-md ${descriptionToneClass[tone]} mb-6 leading-relaxed`}
+        >
           {local.description}
         </p>
       </Show>

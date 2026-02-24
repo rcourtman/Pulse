@@ -58,9 +58,7 @@ export const RelayOnboardingCard: Component = () => {
     return st.active_channels > 0;
   });
 
-  const shouldShowPaywall = createMemo(
-    () => licenseReady() && !dismissed() && !hasRelay(),
-  );
+  const shouldShowPaywall = createMemo(() => licenseReady() && !dismissed() && !hasRelay());
 
   const shouldShowSetup = createMemo(
     () =>
@@ -150,52 +148,51 @@ export const RelayOnboardingCard: Component = () => {
       showError('Unable to start trial. Redirecting to upgrade options...');
       const upgradeUrl = getUpgradeActionUrlOrFallback('relay');
       if (typeof window !== 'undefined') {
- window.location.href = upgradeUrl;
- }
- } finally {
- setTrialStarting(false);
- }
- };
+        window.location.href = upgradeUrl;
+      }
+    } finally {
+      setTrialStarting(false);
+    }
+  };
 
- return (
- <Show when={shouldShow()}>
- <Card padding="lg" class="relative overflow-hidden">
- <div class="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-blue-100 dark:bg-blue-900" />
- <div class="absolute -right-16 -bottom-16 h-40 w-40 rounded-full bg-surface-alt" />
+  return (
+    <Show when={shouldShow()}>
+      <Card padding="lg" class="relative overflow-hidden">
+        <div class="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-blue-100 dark:bg-blue-900" />
+        <div class="absolute -right-16 -bottom-16 h-40 w-40 rounded-full bg-surface-alt" />
 
- <button
- type="button"
- class="absolute right-3 top-3 inline-flex items-center justify-center rounded-md p-1 hover:text-base-content hover:bg-surface-hover"
- onClick={dismiss}
- aria-label="Dismiss relay onboarding"
- >
- <X size={16} strokeWidth={2} />
- </button>
+        <button
+          type="button"
+          class="absolute right-3 top-3 inline-flex items-center justify-center rounded-md p-1 hover:text-base-content hover:bg-surface-hover"
+          onClick={dismiss}
+          aria-label="Dismiss relay onboarding"
+        >
+          <X size={16} strokeWidth={2} />
+        </button>
 
- <div class="relative flex items-start gap-3">
- <div class="flex h-10 w-10 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm">
- <Smartphone size={20} strokeWidth={2} />
- </div>
+        <div class="relative flex items-start gap-3">
+          <div class="flex h-10 w-10 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm">
+            <Smartphone size={20} strokeWidth={2} />
+          </div>
 
- <div class="min-w-0 flex-1">
- <h2 class="text-base font-semibold text-base-content">
- Pair Your Mobile Device
- </h2>
- <p class="mt-1 text-sm text-muted">
- Pulse Relay lets your phone securely connect to this Pulse instance for remote monitoring.
- </p>
+          <div class="min-w-0 flex-1">
+            <h2 class="text-base font-semibold text-base-content">Pair Your Mobile Device</h2>
+            <p class="mt-1 text-sm text-muted">
+              Pulse Relay lets your phone securely connect to this Pulse instance for remote
+              monitoring.
+            </p>
 
- <div class="mt-4 flex flex-wrap items-center gap-2">
- <Show
- when={hasRelay()}
- fallback={
- <button
- type="button"
- class="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
- onClick={() => void handleStartTrial()}
- disabled={trialStarting()}
- >
- {trialStarting() ?'Starting trial...' : 'Requires Pro \u2014 Start free trial'}
+            <div class="mt-4 flex flex-wrap items-center gap-2">
+              <Show
+                when={hasRelay()}
+                fallback={
+                  <button
+                    type="button"
+                    class="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+                    onClick={() => void handleStartTrial()}
+                    disabled={trialStarting()}
+                  >
+                    {trialStarting() ? 'Starting trial...' : 'Requires Pro \u2014 Start free trial'}
                   </button>
                 }
               >
@@ -209,9 +206,7 @@ export const RelayOnboardingCard: Component = () => {
               </Show>
 
               <Show when={hasRelay() && statusLoaded() && status()?.connected === false}>
-                <span class="text-xs text-muted">
-                  Relay is currently disconnected.
-                </span>
+                <span class="text-xs text-muted">Relay is currently disconnected.</span>
               </Show>
             </div>
           </div>

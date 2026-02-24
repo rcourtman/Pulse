@@ -6,7 +6,11 @@ import { describe, expect, it } from 'vitest';
 const storageDir = path.dirname(fileURLToPath(import.meta.url));
 
 const STORAGE_SHELL_FILES = ['Storage.tsx'] as const;
-const FORBIDDEN_STORAGE_HELPERS = ['isCephType', 'getCephHealthLabel', 'getCephHealthStyles'] as const;
+const FORBIDDEN_STORAGE_HELPERS = [
+  'isCephType',
+  'getCephHealthLabel',
+  'getCephHealthStyles',
+] as const;
 
 const findInlineDefinitionLine = (source: string, symbol: string): number | null => {
   const patterns = [

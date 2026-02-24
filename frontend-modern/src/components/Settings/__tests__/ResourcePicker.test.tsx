@@ -65,7 +65,13 @@ afterEach(() => {
 describe('ResourcePicker', () => {
   it('renders reportable resources from useResources()', async () => {
     mockResources = [
-      makeResource({ id: 'node-1', type: 'node', name: 'Node One', displayName: 'Node One', status: 'online' }),
+      makeResource({
+        id: 'node-1',
+        type: 'node',
+        name: 'Node One',
+        displayName: 'Node One',
+        status: 'online',
+      }),
       makeResource({ id: 'vm-1', type: 'vm', name: 'Alpha VM', displayName: 'Alpha VM' }),
       makeResource({ id: 'truenas-1', type: 'truenas', name: 'TrueNAS', displayName: 'TrueNAS' }),
     ];
@@ -79,10 +85,28 @@ describe('ResourcePicker', () => {
 
   it('applies type filter buttons', async () => {
     mockResources = [
-      makeResource({ id: 'node-1', type: 'node', name: 'Node One', displayName: 'Node One', status: 'online' }),
+      makeResource({
+        id: 'node-1',
+        type: 'node',
+        name: 'Node One',
+        displayName: 'Node One',
+        status: 'online',
+      }),
       makeResource({ id: 'vm-1', type: 'vm', name: 'Workload VM', displayName: 'Workload VM' }),
-      makeResource({ id: 'storage-1', type: 'storage', name: 'Storage Main', displayName: 'Storage Main', status: 'online' }),
-      makeResource({ id: 'pbs-1', type: 'pbs', name: 'Backup Server', displayName: 'Backup Server', status: 'online' }),
+      makeResource({
+        id: 'storage-1',
+        type: 'storage',
+        name: 'Storage Main',
+        displayName: 'Storage Main',
+        status: 'online',
+      }),
+      makeResource({
+        id: 'pbs-1',
+        type: 'pbs',
+        name: 'Backup Server',
+        displayName: 'Backup Server',
+        status: 'online',
+      }),
     ];
 
     renderPicker();
@@ -110,8 +134,19 @@ describe('ResourcePicker', () => {
 
   it('filters resources by search on display name and ID', async () => {
     mockResources = [
-      makeResource({ id: 'vm-prod-101', type: 'vm', name: 'Production VM', displayName: 'Production VM' }),
-      makeResource({ id: 'host-dev-55', type: 'host', name: 'Edge Host', displayName: 'Edge Host', status: 'online' }),
+      makeResource({
+        id: 'vm-prod-101',
+        type: 'vm',
+        name: 'Production VM',
+        displayName: 'Production VM',
+      }),
+      makeResource({
+        id: 'host-dev-55',
+        type: 'host',
+        name: 'Edge Host',
+        displayName: 'Edge Host',
+        status: 'online',
+      }),
     ];
 
     renderPicker();
@@ -141,9 +176,7 @@ describe('ResourcePicker', () => {
     await waitFor(() => {
       expect(screen.getByText('1 selected')).toBeInTheDocument();
     });
-    expect(onSelectionChange).toHaveBeenCalledWith([
-      { id: 'vm-1', type: 'vm', name: 'Alpha VM' },
-    ]);
+    expect(onSelectionChange).toHaveBeenCalledWith([{ id: 'vm-1', type: 'vm', name: 'Alpha VM' }]);
 
     fireEvent.click(resourceButton!);
     await waitFor(() => {
@@ -169,9 +202,21 @@ describe('ResourcePicker', () => {
 
   it('supports select-all-visible and clear-all', async () => {
     mockResources = [
-      makeResource({ id: 'node-1', type: 'node', name: 'Node One', displayName: 'Node One', status: 'online' }),
+      makeResource({
+        id: 'node-1',
+        type: 'node',
+        name: 'Node One',
+        displayName: 'Node One',
+        status: 'online',
+      }),
       makeResource({ id: 'vm-1', type: 'vm', name: 'Alpha VM', displayName: 'Alpha VM' }),
-      makeResource({ id: 'storage-1', type: 'storage', name: 'Storage Main', displayName: 'Storage Main', status: 'online' }),
+      makeResource({
+        id: 'storage-1',
+        type: 'storage',
+        name: 'Storage Main',
+        displayName: 'Storage Main',
+        status: 'online',
+      }),
     ];
 
     renderPicker();

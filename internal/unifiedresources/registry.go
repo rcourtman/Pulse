@@ -510,6 +510,9 @@ func (rr *ResourceRegistry) ingestKubernetesDeployment(cluster models.Kubernetes
 func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource Resource, identity ResourceIdentity) string {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
+	if _, ok := rr.bySource[source]; !ok {
+		rr.bySource[source] = make(map[string]string)
+	}
 
 	resource.Identity = identity
 	resource.Sources = []DataSource{source}

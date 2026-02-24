@@ -37,9 +37,7 @@ describe('AlertsAPI', () => {
 
       await AlertsAPI.getHistory({ limit: 50, severity: 'critical' });
 
-      expect(apiFetchJSON).toHaveBeenCalledWith(
-        '/api/alerts/history?limit=50&severity=critical'
-      );
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/alerts/history?limit=50&severity=critical');
     });
 
     it('handles undefined params', async () => {
@@ -82,7 +80,7 @@ describe('AlertsAPI', () => {
         expect.objectContaining({
           method: 'PUT',
           body: JSON.stringify(config),
-        })
+        }),
       );
       expect(result).toEqual({ success: true });
     });
@@ -96,7 +94,7 @@ describe('AlertsAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/alerts/activate',
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
       expect(result).toEqual({ success: true, state: 'active' });
     });
@@ -110,7 +108,7 @@ describe('AlertsAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/alerts/history',
-        expect.objectContaining({ method: 'DELETE' })
+        expect.objectContaining({ method: 'DELETE' }),
       );
       expect(result).toEqual({ success: true });
     });
@@ -133,7 +131,7 @@ describe('AlertsAPI', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ alertIds: ['alert-1', 'alert-2'], user: 'user1' }),
-        })
+        }),
       );
       expect(result).toEqual(results);
     });

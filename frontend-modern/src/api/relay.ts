@@ -20,7 +20,9 @@ export class RelayAPI {
     return apiFetchJSON(this.baseUrl) as Promise<RelayConfig>;
   }
 
-  static async updateConfig(update: Partial<Pick<RelayConfig, 'enabled' | 'server_url'>>): Promise<void> {
+  static async updateConfig(
+    update: Partial<Pick<RelayConfig, 'enabled' | 'server_url'>>,
+  ): Promise<void> {
     await apiFetchJSON(this.baseUrl, {
       method: 'PUT',
       body: JSON.stringify(update),

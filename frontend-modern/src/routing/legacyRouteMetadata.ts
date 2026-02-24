@@ -13,12 +13,16 @@ export interface LegacyRouteMigrationMetadata {
 
 const DEPRECATION_STATUS = 'Deprecated compatibility alias (update bookmarks)';
 
-export const LEGACY_ROUTE_MIGRATION_METADATA: Record<LegacyRouteSource, LegacyRouteMigrationMetadata> = {
+export const LEGACY_ROUTE_MIGRATION_METADATA: Record<
+  LegacyRouteSource,
+  LegacyRouteMigrationMetadata
+> = {
   'proxmox-overview': {
     id: 'proxmox-overview',
     target: 'infrastructure',
     title: 'Overview moved to Infrastructure',
-    message: 'Hosts and nodes now live in Infrastructure. VMs, containers, and pods are in Workloads.',
+    message:
+      'Hosts and nodes now live in Infrastructure. VMs, containers, and pods are in Workloads.',
     rationale: 'Infrastructure now contains all hosts and nodes.',
     status: 'Legacy compatibility alias',
   },

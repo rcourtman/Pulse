@@ -3,11 +3,7 @@ import type { SettingsTab } from './settingsRouting';
 
 export type { SettingsTab } from './settingsRouting';
 
-export type SettingsNavGroupId =
-  | 'resources'
-  | 'organization'
-  | 'integrations'
-  | 'platform';
+export type SettingsNavGroupId = 'resources' | 'organization' | 'integrations' | 'platform';
 
 export interface SettingsNavItem {
   id: SettingsTab;

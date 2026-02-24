@@ -243,10 +243,7 @@ const refreshIntervalForRange = (range: TimeRange): number => {
   }
 };
 
-const adaptiveRefreshIntervalForRange = (
-  range: TimeRange,
-  lastInteractionAt: number,
-): number => {
+const adaptiveRefreshIntervalForRange = (range: TimeRange, lastInteractionAt: number): number => {
   const base = refreshIntervalForRange(range);
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
     return Math.max(base * 6, 120_000);
@@ -332,7 +329,10 @@ const mergeNetworkPoints = (
     if (!points) return;
     for (const point of points) {
       if (!Number.isFinite(point.timestamp)) continue;
-      totals.set(point.timestamp, (totals.get(point.timestamp) || 0) + clampNonNegative(point.value));
+      totals.set(
+        point.timestamp,
+        (totals.get(point.timestamp) || 0) + clampNonNegative(point.value),
+      );
     }
   };
   append(netIn);
@@ -387,7 +387,9 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
   const [orgScope, setOrgScope] = createSignal(normalizeOrgScope(getOrgID()));
   const selectedRange = createMemo<TimeRange>(() => props.timeRange || '1h');
   const selectedNodeScope = createMemo(() => props.selectedNodeId?.trim() || '');
-  const activeScopeKey = createMemo(() => `${orgScope()}::${selectedRange()}::${selectedNodeScope()}`);
+  const activeScopeKey = createMemo(
+    () => `${orgScope()}::${selectedRange()}::${selectedNodeScope()}`,
+  );
   const hasCurrentRangeData = createMemo(() => loadedScopeKey() === activeScopeKey());
 
   let refreshTimer: ReturnType<typeof setTimeout> | undefined;
@@ -495,7 +497,12 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
       scheduleNextFetch(pollingToken);
     };
 
-    const activityEvents: Array<keyof WindowEventMap> = ['pointerdown', 'keydown', 'touchstart', 'wheel'];
+    const activityEvents: Array<keyof WindowEventMap> = [
+      'pointerdown',
+      'keydown',
+      'touchstart',
+      'wheel',
+    ];
     for (const eventName of activityEvents) {
       window.addEventListener(eventName, markInteraction, { passive: true });
     }
@@ -540,7 +547,10 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
     }
     const chartResponse = charts();
     if (!chartResponse) return 0;
-    return Object.keys(chartResponse.data || {}).length + Object.keys(chartResponse.dockerData || {}).length;
+    return (
+      Object.keys(chartResponse.data || {}).length +
+      Object.keys(chartResponse.dockerData || {}).length
+    );
   });
 
   const workloadPointLimit = createMemo<number>(() =>
@@ -563,14 +573,12 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
       : new Map<string, WorkloadSeries>();
     const nodeFilterIdsRaw = selectedNodeWorkloadIds();
     const visibleIdsRaw = visibleWorkloadIdSet();
-    const nodeFilterIds =
-      nodeFilterIdsRaw
-        ? new Set(Array.from(nodeFilterIdsRaw.values()).map((id) => normalizeWorkloadId(id)))
-        : null;
-    const visibleIds =
-      visibleIdsRaw
-        ? new Set(Array.from(visibleIdsRaw.values()).map((id) => normalizeWorkloadId(id)))
-        : null;
+    const nodeFilterIds = nodeFilterIdsRaw
+      ? new Set(Array.from(nodeFilterIdsRaw.values()).map((id) => normalizeWorkloadId(id)))
+      : null;
+    const visibleIds = visibleIdsRaw
+      ? new Set(Array.from(visibleIdsRaw.values()).map((id) => normalizeWorkloadId(id)))
+      : null;
     let candidateIds = new Set<string>();
 
     if (nodeFilterIds && nodeFilterIds.size > 0) {
@@ -659,43 +667,46 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
   const hasCpuData = createMemo(() => cpuSeries().some((series) => series.data.length >= 2));
   const hasMemoryData = createMemo(() => memorySeries().some((series) => series.data.length >= 2));
   const hasDiskData = createMemo(() => diskSeries().some((series) => series.data.length >= 2));
-  const hasNetworkData = createMemo(() => networkSeries().some((series) => series.data.length >= 2));
+  const hasNetworkData = createMemo(() =>
+    networkSeries().some((series) => series.data.length >= 2),
+  );
 
   const fallbackTrendMessage = () => {
     if (guestCounts().total === 0) return 'No workloads';
     if (!hasCurrentRangeData()) return '';
     if (fetchFailed()) return 'Trend data unavailable';
     return 'No history yet';
- };
+  };
 
- return (
- <div
- data-testid="workloads-summary"
- class="overflow-hidden rounded-md border border-border bg-surface p-2 shadow-sm sm:p-3"
- >
- <div class="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle px-1 pb-2 text-[11px]">
- <div class="flex items-center gap-3">
- <span class="font-medium text-base-content">
- {guestCounts().total} workloads
- </span>
- <Show when={guestCounts().running > 0}>
- <span class="text-emerald-600 dark:text-emerald-400">{guestCounts().running} running</span>
- </Show>
- <Show when={guestCounts().stopped > 0}>
- <span class="text-muted">{guestCounts().stopped} stopped</span>
- </Show>
- </div>
- <Show when={props.onTimeRangeChange}>
- <div class="inline-flex shrink-0 rounded border bg-surface p-0.5 text-xs ">
- <For each={SUMMARY_TIME_RANGES}>
- {(range) => (
- <button
- type="button"
- onClick={() => props.onTimeRangeChange?.(range)}
- class={`rounded px-2 py-1 ${selectedRange() === range
- ?'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
- : 'text-muted hover:bg-surface-hover'
- }`}
+  return (
+    <div
+      data-testid="workloads-summary"
+      class="overflow-hidden rounded-md border border-border bg-surface p-2 shadow-sm sm:p-3"
+    >
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle px-1 pb-2 text-[11px]">
+        <div class="flex items-center gap-3">
+          <span class="font-medium text-base-content">{guestCounts().total} workloads</span>
+          <Show when={guestCounts().running > 0}>
+            <span class="text-emerald-600 dark:text-emerald-400">
+              {guestCounts().running} running
+            </span>
+          </Show>
+          <Show when={guestCounts().stopped > 0}>
+            <span class="text-muted">{guestCounts().stopped} stopped</span>
+          </Show>
+        </div>
+        <Show when={props.onTimeRangeChange}>
+          <div class="inline-flex shrink-0 rounded border bg-surface p-0.5 text-xs ">
+            <For each={SUMMARY_TIME_RANGES}>
+              {(range) => (
+                <button
+                  type="button"
+                  onClick={() => props.onTimeRangeChange?.(range)}
+                  class={`rounded px-2 py-1 ${
+                    selectedRange() === range
+                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                      : 'text-muted hover:bg-surface-hover'
+                  }`}
                 >
                   {SUMMARY_TIME_RANGE_LABEL[range]}
                 </button>
@@ -710,9 +721,13 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           <div class="flex flex-col h-full">
             <div class="flex items-center justify-between mb-1.5">
               <div class="flex items-center min-w-0">
-                <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">CPU</span>
+                <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
+                  CPU
+                </span>
                 <Show when={focusedWorkloadName()}>
-                  <span class="text-xs text-muted ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
+                  <span class="text-xs text-muted ml-1.5 truncate">
+                    &mdash; {focusedWorkloadName()}
+                  </span>
                 </Show>
               </div>
             </div>
@@ -744,9 +759,13 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           <div class="flex flex-col h-full">
             <div class="flex items-center justify-between mb-1.5">
               <div class="flex items-center min-w-0">
-                <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">Memory</span>
+                <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
+                  Memory
+                </span>
                 <Show when={focusedWorkloadName()}>
-                  <span class="text-xs text-muted ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
+                  <span class="text-xs text-muted ml-1.5 truncate">
+                    &mdash; {focusedWorkloadName()}
+                  </span>
                 </Show>
               </div>
             </div>
@@ -778,9 +797,13 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           <div class="flex flex-col h-full">
             <div class="flex items-center justify-between mb-1.5">
               <div class="flex items-center min-w-0">
-                <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">Storage</span>
+                <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
+                  Storage
+                </span>
                 <Show when={focusedWorkloadName()}>
-                  <span class="text-xs text-muted ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
+                  <span class="text-xs text-muted ml-1.5 truncate">
+                    &mdash; {focusedWorkloadName()}
+                  </span>
                 </Show>
               </div>
             </div>
@@ -812,9 +835,13 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           <div class="flex flex-col h-full">
             <div class="flex items-center justify-between mb-1.5">
               <div class="flex items-center min-w-0">
-                <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">Network</span>
+                <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
+                  Network
+                </span>
                 <Show when={focusedWorkloadName()}>
-                  <span class="text-xs text-muted ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
+                  <span class="text-xs text-muted ml-1.5 truncate">
+                    &mdash; {focusedWorkloadName()}
+                  </span>
                 </Show>
               </div>
             </div>

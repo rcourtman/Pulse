@@ -46,7 +46,9 @@ const buildKubernetesResource = (): Resource => ({
 
 describe('ResourceDetailDrawer kubernetes capabilities', () => {
   it('renders Kubernetes capability badges when metric capabilities are present', () => {
-    const { getByText } = render(() => <ResourceDetailDrawer resource={buildKubernetesResource()} />);
+    const { getByText } = render(() => (
+      <ResourceDetailDrawer resource={buildKubernetesResource()} />
+    ));
 
     expect(getByText('K8s Node CPU/Memory')).toBeInTheDocument();
     expect(getByText('Node Telemetry (Agent)')).toBeInTheDocument();

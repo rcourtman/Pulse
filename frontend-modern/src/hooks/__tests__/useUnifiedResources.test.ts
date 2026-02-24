@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type UseUnifiedResourcesModule = typeof import('@/hooks/useUnifiedResources');
 
 type TestWsState = {
-  resources: typeof v2Resource[];
+  resources: (typeof v2Resource)[];
   nodes: unknown[];
   hosts: unknown[];
   dockerHosts: unknown[];
@@ -184,7 +184,12 @@ describe('useUnifiedResources', () => {
             ...v2Resource,
             sources: ['proxmox'],
             agent: undefined,
-            proxmox: { nodeName: 'pve1', clusterName: 'mock-cluster', uptime: 1234, temperature: 58.4 },
+            proxmox: {
+              nodeName: 'pve1',
+              clusterName: 'mock-cluster',
+              uptime: 1234,
+              temperature: 58.4,
+            },
           },
         ],
       }),
@@ -254,7 +259,10 @@ describe('useUnifiedResources', () => {
 
     const resources = result!.resources();
     expect(resources).toHaveLength(2);
-    expect(resources.map((resource) => resource.id)).toEqual(['k8s-cluster-native', 'k8s-node-native']);
+    expect(resources.map((resource) => resource.id)).toEqual([
+      'k8s-cluster-native',
+      'k8s-node-native',
+    ]);
 
     dispose();
   });
@@ -265,7 +273,12 @@ describe('useUnifiedResources', () => {
         { id: 'legacy-host-1', hostname: 'legacy-host', status: 'online', lastSeen: 1738929600000 },
       ]);
       setWsState('dockerHosts', [
-        { id: 'legacy-docker-1', hostname: 'legacy-docker', status: 'online', lastSeen: 1738929600000 },
+        {
+          id: 'legacy-docker-1',
+          hostname: 'legacy-docker',
+          status: 'online',
+          lastSeen: 1738929600000,
+        },
       ]);
       setWsState('pbs', [{ id: 'legacy-pbs-1', name: 'legacy-pbs' }]);
       setWsState('pmg', [{ id: 'legacy-pmg-1', name: 'legacy-pmg' }]);

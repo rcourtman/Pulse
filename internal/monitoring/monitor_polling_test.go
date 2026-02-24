@@ -1,14 +1,152 @@
 package monitoring
 
 import (
+	"context"
 	"errors"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 )
+
+type testPollProvider struct {
+	providerType      InstanceType
+	instances         []string
+	describeInstances []PollProviderInstanceInfo
+	connectionStatus  map[string]bool
+	connectionKey     string
+	interval          time.Duration
+	buildPollTask     func(instanceName string) (PollTask, error)
+}
+
+func (p testPollProvider) Type() InstanceType { return p.providerType }
+
+func (p testPollProvider) ListInstances(_ *Monitor) []string {
+	out := make([]string, len(p.instances))
+	copy(out, p.instances)
+	return out
+}
+
+func (p testPollProvider) DescribeInstances(_ *Monitor) []PollProviderInstanceInfo {
+	out := make([]PollProviderInstanceInfo, len(p.describeInstances))
+	for i := range p.describeInstances {
+		out[i] = PollProviderInstanceInfo{
+			Name:        p.describeInstances[i].Name,
+			DisplayName: p.describeInstances[i].DisplayName,
+			Connection:  p.describeInstances[i].Connection,
+			Metadata:    cloneProviderMetadata(p.describeInstances[i].Metadata),
+		}
+	}
+	return out
+}
+
+func (p testPollProvider) ConnectionStatuses(_ *Monitor) map[string]bool {
+	if len(p.connectionStatus) == 0 {
+		return nil
+	}
+	out := make(map[string]bool, len(p.connectionStatus))
+	for key, healthy := range p.connectionStatus {
+		out[key] = healthy
+	}
+	return out
+}
+
+func (p testPollProvider) ConnectionHealthKey(_ *Monitor, instanceName string) string {
+	if strings.TrimSpace(p.connectionKey) != "" {
+		return strings.TrimSpace(p.connectionKey)
+	}
+	return ""
+}
+
+func (p testPollProvider) BaseInterval(_ *Monitor) time.Duration { return p.interval }
+
+func (p testPollProvider) BuildPollTask(_ *Monitor, instanceName string) (PollTask, error) {
+	if p.buildPollTask == nil {
+		return PollTask{
+			InstanceName: instanceName,
+			InstanceType: string(p.providerType),
+		}, nil
+	}
+	return p.buildPollTask(instanceName)
+}
+
+type testSupplementalPollProvider struct {
+	testPollProvider
+	source           unifiedresources.DataSource
+	ownedSources     []unifiedresources.DataSource
+	recordsByOrg     map[string][]unifiedresources.IngestRecord
+	lastRequestedOrg string
+}
+
+func (p *testSupplementalPollProvider) SupplementalSource() unifiedresources.DataSource {
+	return p.source
+}
+
+func (p *testSupplementalPollProvider) SupplementalRecords(_ *Monitor, orgID string) []unifiedresources.IngestRecord {
+	p.lastRequestedOrg = orgID
+	records := p.recordsByOrg[orgID]
+	out := make([]unifiedresources.IngestRecord, len(records))
+	copy(out, records)
+	return out
+}
+
+func (p *testSupplementalPollProvider) SnapshotOwnedSources(_ *Monitor) []unifiedresources.DataSource {
+	out := make([]unifiedresources.DataSource, len(p.ownedSources))
+	copy(out, p.ownedSources)
+	return out
+}
+
+type testMonitorSupplementalProvider struct {
+	recordsByOrg     map[string][]unifiedresources.IngestRecord
+	ownedSources     []unifiedresources.DataSource
+	lastRequestedOrg string
+}
+
+func (p *testMonitorSupplementalProvider) SupplementalRecords(_ *Monitor, orgID string) []unifiedresources.IngestRecord {
+	p.lastRequestedOrg = orgID
+	records := p.recordsByOrg[orgID]
+	out := make([]unifiedresources.IngestRecord, len(records))
+	copy(out, records)
+	return out
+}
+
+func (p *testMonitorSupplementalProvider) SnapshotOwnedSources() []unifiedresources.DataSource {
+	out := make([]unifiedresources.DataSource, len(p.ownedSources))
+	copy(out, p.ownedSources)
+	return out
+}
+
+type testSupplementalResourceStore struct {
+	snapshotCalls   int
+	lastSnapshot    models.StateSnapshot
+	recordsBySource map[unifiedresources.DataSource][]unifiedresources.IngestRecord
+}
+
+func (s *testSupplementalResourceStore) ShouldSkipAPIPolling(string) bool { return false }
+
+func (s *testSupplementalResourceStore) GetPollingRecommendations() map[string]float64 { return nil }
+
+func (s *testSupplementalResourceStore) GetAll() []unifiedresources.Resource { return nil }
+
+func (s *testSupplementalResourceStore) PopulateFromSnapshot(snapshot models.StateSnapshot) {
+	s.lastSnapshot = snapshot
+	s.snapshotCalls++
+}
+
+func (s *testSupplementalResourceStore) PopulateSupplementalRecords(source unifiedresources.DataSource, records []unifiedresources.IngestRecord) {
+	if s.recordsBySource == nil {
+		s.recordsBySource = make(map[unifiedresources.DataSource][]unifiedresources.IngestRecord)
+	}
+	cloned := make([]unifiedresources.IngestRecord, len(records))
+	copy(cloned, records)
+	s.recordsBySource[source] = append(s.recordsBySource[source], cloned...)
+}
 
 func TestBuildScheduledTasksUsesConfiguredIntervals(t *testing.T) {
 	now := time.Now()
@@ -778,5 +916,384 @@ func TestRescheduleTask_UsesExistingIntervalWhenSet(t *testing.T) {
 	// Should use the existing interval when it's already set
 	if entry.task.Interval != customInterval {
 		t.Errorf("expected existing interval %v to be preserved, got %v", customInterval, entry.task.Interval)
+	}
+}
+
+func TestCustomPollProviderIntegration(t *testing.T) {
+	const customType InstanceType = "xcp"
+	const customName = "xcp-cluster-1"
+	customInterval := 42 * time.Second
+
+	var executed atomic.Bool
+
+	monitor := &Monitor{
+		taskQueue: NewTaskQueue(),
+	}
+	if err := monitor.RegisterPollProvider(testPollProvider{
+		providerType: customType,
+		instances:    []string{customName},
+		interval:     customInterval,
+		buildPollTask: func(instanceName string) (PollTask, error) {
+			return PollTask{
+				InstanceName: instanceName,
+				InstanceType: string(customType),
+				Run: func(context.Context) {
+					executed.Store(true)
+				},
+			}, nil
+		},
+	}); err != nil {
+		t.Fatalf("RegisterPollProvider failed: %v", err)
+	}
+	monitor.SetExecutor(nil) // restore default executor
+
+	tasks := monitor.buildScheduledTasks(time.Now())
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 scheduled task for custom provider, got %d", len(tasks))
+	}
+	task := tasks[0]
+	if task.InstanceType != customType {
+		t.Fatalf("expected custom instance type %q, got %q", customType, task.InstanceType)
+	}
+	if task.InstanceName != customName {
+		t.Fatalf("expected custom instance name %q, got %q", customName, task.InstanceName)
+	}
+	if task.Interval != customInterval {
+		t.Fatalf("expected custom interval %v, got %v", customInterval, task.Interval)
+	}
+
+	monitor.executeScheduledTask(context.Background(), task)
+	if !executed.Load() {
+		t.Fatal("expected custom provider poll task callback to execute")
+	}
+}
+
+func TestUpdateResourceStore_IngestsSupplementalRecords(t *testing.T) {
+	store := &testSupplementalResourceStore{}
+	provider := &testSupplementalPollProvider{
+		testPollProvider: testPollProvider{
+			providerType: InstanceType("xcp"),
+			instances:    []string{"xcp-cluster-1"},
+			interval:     30 * time.Second,
+		},
+		source: unifiedresources.DataSource("xcp"),
+		recordsByOrg: map[string][]unifiedresources.IngestRecord{
+			"default": {
+				{
+					SourceID: "xcp-host-1",
+					Resource: unifiedresources.Resource{
+						Type:     unifiedresources.ResourceTypeHost,
+						Name:     "xcp-host-1",
+						Status:   unifiedresources.StatusOnline,
+						LastSeen: time.Now().UTC(),
+					},
+					Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"xcp-host-1"}},
+				},
+			},
+		},
+	}
+
+	monitor := &Monitor{
+		resourceStore: store,
+	}
+	if err := monitor.RegisterPollProvider(provider); err != nil {
+		t.Fatalf("RegisterPollProvider failed: %v", err)
+	}
+
+	monitor.updateResourceStore(models.StateSnapshot{})
+
+	if store.snapshotCalls != 1 {
+		t.Fatalf("expected PopulateFromSnapshot to be called once, got %d", store.snapshotCalls)
+	}
+	if provider.lastRequestedOrg != "default" {
+		t.Fatalf("expected default org lookup, got %q", provider.lastRequestedOrg)
+	}
+	records := store.recordsBySource[unifiedresources.DataSource("xcp")]
+	if len(records) != 1 {
+		t.Fatalf("expected 1 supplemental record ingested, got %d", len(records))
+	}
+	if records[0].SourceID != "xcp-host-1" {
+		t.Fatalf("expected supplemental source ID xcp-host-1, got %q", records[0].SourceID)
+	}
+}
+
+func TestUpdateResourceStore_SuppressesProviderOwnedSnapshotSources(t *testing.T) {
+	store := &testSupplementalResourceStore{}
+	provider := &testSupplementalPollProvider{
+		testPollProvider: testPollProvider{
+			providerType: InstanceType("xcp"),
+			instances:    []string{"xcp-cluster-1"},
+			interval:     30 * time.Second,
+		},
+		source:       unifiedresources.SourceProxmox,
+		ownedSources: []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+		recordsByOrg: map[string][]unifiedresources.IngestRecord{
+			"default": {
+				{
+					SourceID: "xcp-host-1",
+					Resource: unifiedresources.Resource{
+						Type:     unifiedresources.ResourceTypeHost,
+						Name:     "xcp-host-1",
+						Status:   unifiedresources.StatusOnline,
+						LastSeen: time.Now().UTC(),
+					},
+					Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"xcp-host-1"}},
+				},
+			},
+		},
+	}
+
+	monitor := &Monitor{
+		resourceStore: store,
+	}
+	if err := monitor.RegisterPollProvider(provider); err != nil {
+		t.Fatalf("RegisterPollProvider failed: %v", err)
+	}
+
+	monitor.updateResourceStore(models.StateSnapshot{
+		Nodes:         []models.Node{{}},
+		VMs:           []models.VM{{}},
+		Containers:    []models.Container{{}},
+		Storage:       []models.Storage{{}},
+		PhysicalDisks: []models.PhysicalDisk{{}},
+		CephClusters:  []models.CephCluster{{}},
+		Hosts:         []models.Host{{}},
+	})
+
+	if store.snapshotCalls != 1 {
+		t.Fatalf("expected PopulateFromSnapshot to be called once, got %d", store.snapshotCalls)
+	}
+	if len(store.lastSnapshot.Nodes) != 0 || len(store.lastSnapshot.VMs) != 0 || len(store.lastSnapshot.Containers) != 0 {
+		t.Fatalf("expected proxmox compute slices to be suppressed before snapshot ingest")
+	}
+	if len(store.lastSnapshot.Storage) != 0 || len(store.lastSnapshot.PhysicalDisks) != 0 || len(store.lastSnapshot.CephClusters) != 0 {
+		t.Fatalf("expected proxmox storage slices to be suppressed before snapshot ingest")
+	}
+	if len(store.lastSnapshot.Hosts) != 1 {
+		t.Fatalf("expected host-agent slice to remain in snapshot ingest")
+	}
+
+	records := store.recordsBySource[unifiedresources.SourceProxmox]
+	if len(records) != 1 {
+		t.Fatalf("expected 1 provider-owned supplemental record, got %d", len(records))
+	}
+}
+
+func TestUpdateResourceStore_IngestsRegisteredSupplementalProvider(t *testing.T) {
+	store := &testSupplementalResourceStore{}
+	provider := &testMonitorSupplementalProvider{
+		recordsByOrg: map[string][]unifiedresources.IngestRecord{
+			"default": {
+				{
+					SourceID: "tn-host-1",
+					Resource: unifiedresources.Resource{
+						Type:     unifiedresources.ResourceTypeHost,
+						Name:     "tn-host-1",
+						Status:   unifiedresources.StatusOnline,
+						LastSeen: time.Now().UTC(),
+					},
+					Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"tn-host-1"}},
+				},
+			},
+		},
+	}
+
+	monitor := &Monitor{
+		resourceStore: store,
+	}
+	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
+	monitor.updateResourceStore(models.StateSnapshot{})
+
+	if store.snapshotCalls != 1 {
+		t.Fatalf("expected PopulateFromSnapshot to be called once, got %d", store.snapshotCalls)
+	}
+	if provider.lastRequestedOrg != "default" {
+		t.Fatalf("expected default org lookup, got %q", provider.lastRequestedOrg)
+	}
+	records := store.recordsBySource[unifiedresources.SourceTrueNAS]
+	if len(records) != 1 {
+		t.Fatalf("expected 1 supplemental record from direct provider, got %d", len(records))
+	}
+	if records[0].SourceID != "tn-host-1" {
+		t.Fatalf("expected source ID tn-host-1, got %q", records[0].SourceID)
+	}
+}
+
+func TestUpdateResourceStore_SuppressesSnapshotForRegisteredSupplementalOwnership(t *testing.T) {
+	store := &testSupplementalResourceStore{}
+	provider := &testMonitorSupplementalProvider{
+		ownedSources: []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+		recordsByOrg: map[string][]unifiedresources.IngestRecord{
+			"default": {
+				{
+					SourceID: "tn-host-1",
+					Resource: unifiedresources.Resource{
+						Type:     unifiedresources.ResourceTypeHost,
+						Name:     "tn-host-1",
+						Status:   unifiedresources.StatusOnline,
+						LastSeen: time.Now().UTC(),
+					},
+					Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"tn-host-1"}},
+				},
+			},
+		},
+	}
+
+	monitor := &Monitor{
+		resourceStore: store,
+	}
+	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
+	monitor.updateResourceStore(models.StateSnapshot{
+		Nodes:      []models.Node{{}},
+		VMs:        []models.VM{{}},
+		Containers: []models.Container{{}},
+		Hosts:      []models.Host{{}},
+	})
+
+	if len(store.lastSnapshot.Nodes) != 0 || len(store.lastSnapshot.VMs) != 0 || len(store.lastSnapshot.Containers) != 0 {
+		t.Fatalf("expected proxmox slices to be suppressed for direct provider ownership")
+	}
+	if len(store.lastSnapshot.Hosts) != 1 {
+		t.Fatalf("expected non-owned host slice to remain")
+	}
+	records := store.recordsBySource[unifiedresources.SourceTrueNAS]
+	if len(records) != 1 {
+		t.Fatalf("expected 1 supplemental record from direct provider, got %d", len(records))
+	}
+}
+
+func TestSchedulerHealth_UsesProviderInstanceDescriptions(t *testing.T) {
+	const customType InstanceType = "xcp"
+	monitor := &Monitor{
+		config:            &config.Config{},
+		instanceInfoCache: make(map[string]*instanceInfo),
+	}
+
+	if err := monitor.RegisterPollProvider(testPollProvider{
+		providerType: customType,
+		instances:    []string{"xcp-a"},
+		describeInstances: []PollProviderInstanceInfo{
+			{
+				Name:        "xcp-a",
+				DisplayName: "XCP Cluster A",
+				Connection:  "https://xcp-a.example",
+			},
+		},
+		interval: 30 * time.Second,
+	}); err != nil {
+		t.Fatalf("RegisterPollProvider failed: %v", err)
+	}
+
+	resp := monitor.SchedulerHealth()
+
+	key := schedulerKey(customType, "xcp-a")
+	for _, inst := range resp.Instances {
+		if inst.Key != key {
+			continue
+		}
+		if inst.DisplayName != "XCP Cluster A" {
+			t.Fatalf("expected display name %q, got %q", "XCP Cluster A", inst.DisplayName)
+		}
+		if inst.Connection != "https://xcp-a.example" {
+			t.Fatalf("expected connection %q, got %q", "https://xcp-a.example", inst.Connection)
+		}
+		return
+	}
+
+	t.Fatalf("expected instance %q in scheduler health", key)
+}
+
+func TestGetConnectionStatuses_CustomProviderStatuses(t *testing.T) {
+	const customType InstanceType = "xcp"
+	monitor := &Monitor{
+		state: models.NewState(),
+	}
+	if err := monitor.RegisterPollProvider(testPollProvider{
+		providerType: customType,
+		instances:    []string{"xcp-a"},
+		connectionStatus: map[string]bool{
+			"xcp-xcp-a": true,
+		},
+	}); err != nil {
+		t.Fatalf("RegisterPollProvider failed: %v", err)
+	}
+
+	statuses := monitor.GetConnectionStatuses()
+	if connected, ok := statuses["xcp-xcp-a"]; !ok || !connected {
+		t.Fatalf("expected xcp-xcp-a to be connected, got exists=%v value=%v", ok, connected)
+	}
+}
+
+func TestGetConnectionStatuses_CustomProviderFallbackToState(t *testing.T) {
+	const customType InstanceType = "xcp"
+	monitor := &Monitor{
+		state: models.NewState(),
+	}
+	monitor.state.SetConnectionHealth("xcp-xcp-a", true)
+
+	if err := monitor.RegisterPollProvider(pollProviderAdapter{
+		instanceType: customType,
+		listInstances: func(*Monitor) []string {
+			return []string{"xcp-a"}
+		},
+		baseInterval: func(*Monitor) time.Duration { return 30 * time.Second },
+		buildPollTask: func(*Monitor, string) (PollTask, error) {
+			return PollTask{}, nil
+		},
+	}); err != nil {
+		t.Fatalf("RegisterPollProvider failed: %v", err)
+	}
+
+	statuses := monitor.GetConnectionStatuses()
+	if connected, ok := statuses["xcp-xcp-a"]; !ok || !connected {
+		t.Fatalf("expected xcp-xcp-a to be connected via fallback, got exists=%v value=%v", ok, connected)
+	}
+}
+
+func TestGetConnectionStatuses_BuiltInPMGSupport(t *testing.T) {
+	monitor := &Monitor{
+		config: &config.Config{
+			PMGInstances: []config.PMGInstance{
+				{Name: "pmg-1"},
+				{Name: "pmg-2"},
+			},
+		},
+		state:      models.NewState(),
+		pmgClients: map[string]*pmg.Client{"pmg-1": {}},
+	}
+	monitor.state.SetConnectionHealth("pmg-pmg-1", true)
+
+	statuses := monitor.GetConnectionStatuses()
+	if connected, ok := statuses["pmg-pmg-1"]; !ok || !connected {
+		t.Fatalf("expected pmg-pmg-1 connected, got exists=%v value=%v", ok, connected)
+	}
+	if connected, ok := statuses["pmg-pmg-2"]; !ok || connected {
+		t.Fatalf("expected pmg-pmg-2 disconnected, got exists=%v value=%v", ok, connected)
+	}
+}
+
+func TestSetProviderConnectionHealth_UsesProviderConnectionKey(t *testing.T) {
+	const customType InstanceType = "xcp"
+	const instanceName = "xcp-a"
+	const providerKey = "provider/xcp-a"
+
+	monitor := &Monitor{
+		state: models.NewState(),
+	}
+	if err := monitor.RegisterPollProvider(testPollProvider{
+		providerType:  customType,
+		instances:     []string{instanceName},
+		connectionKey: providerKey,
+	}); err != nil {
+		t.Fatalf("RegisterPollProvider failed: %v", err)
+	}
+
+	monitor.setProviderConnectionHealth(customType, instanceName, true)
+
+	if !monitor.state.ConnectionHealth[providerKey] {
+		t.Fatalf("expected provider key %q to be marked healthy", providerKey)
+	}
+	if _, exists := monitor.state.ConnectionHealth["xcp-"+instanceName]; exists {
+		t.Fatalf("did not expect fallback key %q when provider key override is set", "xcp-"+instanceName)
 	}
 }

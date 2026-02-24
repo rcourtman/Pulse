@@ -1,4 +1,13 @@
-import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount, untrack } from 'solid-js';
+import {
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+  untrack,
+} from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Card } from '@/components/shared/Card';
@@ -18,9 +27,7 @@ import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { segmentedButtonClass } from '@/utils/segmentedButton';
 import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
-import {
-  isSummaryTimeRange,
-} from '@/components/shared/summaryTimeRange';
+import { isSummaryTimeRange } from '@/components/shared/summaryTimeRange';
 import {
   tokenizeSearch,
   filterResources,
@@ -68,11 +75,10 @@ export function Infrastructure() {
   const [selectedSource, setSelectedSource] = createSignal('');
   const [selectedStatus, setSelectedStatus] = createSignal('');
   const [searchQuery, setSearchQuery] = createSignal('');
-  const [infrastructureSummaryRange, setInfrastructureSummaryRange] = usePersistentSignal<TimeRange>(
-    STORAGE_KEYS.INFRASTRUCTURE_SUMMARY_RANGE,
-    '1h',
-    { deserialize: (raw) => (isSummaryTimeRange(raw) ? raw : '1h') },
-  );
+  const [infrastructureSummaryRange, setInfrastructureSummaryRange] =
+    usePersistentSignal<TimeRange>(STORAGE_KEYS.INFRASTRUCTURE_SUMMARY_RANGE, '1h', {
+      deserialize: (raw) => (isSummaryTimeRange(raw) ? raw : '1h'),
+    });
   const [summaryCollapsed, setSummaryCollapsed] = usePersistentSignal<boolean>(
     STORAGE_KEYS.INFRASTRUCTURE_SUMMARY_COLLAPSED,
     false,
@@ -93,7 +99,9 @@ export function Infrastructure() {
   const [hideMigrationNotice, setHideMigrationNotice] = createSignal(true);
   const { isMobile } = useBreakpoint();
   const [filtersOpen, setFiltersOpen] = createSignal(false);
-  const activeFilterCount = createMemo(() => (selectedSource() !== '' ? 1 : 0) + (selectedStatus() !== '' ? 1 : 0));
+  const activeFilterCount = createMemo(
+    () => (selectedSource() !== '' ? 1 : 0) + (selectedStatus() !== '' ? 1 : 0),
+  );
   let highlightTimer: number | undefined;
 
   // URL sync can require multiple reactive updates (canonicalizing legacy params,
@@ -229,9 +237,7 @@ export function Infrastructure() {
     const currentLinkedResource = parseInfrastructureLinkSearch(location.search).resource;
     const selectedResourceId = expandedResourceId();
     const shouldPreserveIncomingResource =
-      !selectedResourceId &&
-      Boolean(currentLinkedResource) &&
-      !initialLoadComplete();
+      !selectedResourceId && Boolean(currentLinkedResource) && !initialLoadComplete();
     const nextResource = shouldPreserveIncomingResource
       ? currentLinkedResource
       : (selectedResourceId ?? '');
@@ -320,170 +326,189 @@ export function Infrastructure() {
     filterResources(
       resources(),
       selectedSource() !== '' ? new Set([selectedSource()]) : new Set(),
-      selectedStatus() !== ''? new Set([selectedStatus()]) : new Set(),
- searchTerms(),
- ),
- );
+      selectedStatus() !== '' ? new Set([selectedStatus()]) : new Set(),
+      searchTerms(),
+    ),
+  );
 
- const hasFilteredResources = createMemo(() => filteredResources().length > 0);
+  const hasFilteredResources = createMemo(() => filteredResources().length > 0);
 
- createEffect(() => {
- const hoveredId = hoveredResourceId();
- if (!hoveredId) return;
- const exists = filteredResources().some((resource) => resource.id === hoveredId);
- if (!exists) {
- setHoveredResourceId(null);
- }
- });
+  createEffect(() => {
+    const hoveredId = hoveredResourceId();
+    if (!hoveredId) return;
+    const exists = filteredResources().some((resource) => resource.id === hoveredId);
+    if (!exists) {
+      setHoveredResourceId(null);
+    }
+  });
 
- return (
- <div data-testid="infrastructure-page" class="space-y-4">
- <PageHeader
- id="infrastructure-title"
- title="Infrastructure"
- description="Unified inventory across platforms with filtering, grouping, and health context."
- />
- <Show when={!loading() || initialLoadComplete()} fallback={
- <div class="space-y-3 animate-pulse pointer-events-none select-none">
- <div class="hidden lg:block h-[124px] w-full bg-surface-alt rounded-md border border-border"></div>
- <Card padding="sm" class="h-[52px] bg-surface-alt"></Card>
- <Card padding="none" tone="card" class="h-[600px] overflow-hidden">
- <div class="h-8 border-b"></div>
- <div class="space-y-4 p-4">
- <div class="h-4 w-1/4 rounded bg-surface-hover"></div>
- <div class="h-4 w-1/2 rounded bg-surface-hover"></div>
- <div class="h-4 w-1/3 rounded bg-surface-hover"></div>
- </div>
- </Card>
- </div>
- }>
- <Show
- when={!error()}
- fallback={
- <Card class="p-6">
- <EmptyState
- icon={<ServerIcon class="w-6 h-6 text-slate-400" />}
- title="Unable to load infrastructure"
- description="We couldn’t fetch unified resources. Check connectivity or retry."
- actions={
- <button
- type="button"
- onClick={() => refetch()}
- class="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:"
- >
- <RefreshCwIcon class="h-3.5 w-3.5" />
- Retry
- </button>
- }
- />
- </Card>
- }
- >
- <Show
- when={!showNoResources()}
- fallback={
- <Card class="p-6">
- <EmptyState
- icon={<ServerIcon class="w-6 h-6 text-slate-400" />}
- title="No infrastructure resources yet"
- description="Once resources are reporting, they will appear here."
- />
- </Card>
- }
- >
- <div class="space-y-3">
- <Show when={migrationNotice() && !hideMigrationNotice()}>
- <MigrationNoticeBanner
- title={migrationNotice()!.title}
- message={migrationNotice()!.message}
- learnMoreHref={migrationNotice()!.learnMoreHref}
- onDismiss={handleDismissMigrationNotice}
- />
- </Show>
+  return (
+    <div data-testid="infrastructure-page" class="space-y-4">
+      <PageHeader
+        id="infrastructure-title"
+        title="Infrastructure"
+        description="Unified inventory across platforms with filtering, grouping, and health context."
+      />
+      <Show
+        when={!loading() || initialLoadComplete()}
+        fallback={
+          <div class="space-y-3 animate-pulse pointer-events-none select-none">
+            <div class="hidden lg:block h-[124px] w-full bg-surface-alt rounded-md border border-border"></div>
+            <Card padding="sm" class="h-[52px] bg-surface-alt"></Card>
+            <Card padding="none" tone="card" class="h-[600px] overflow-hidden">
+              <div class="h-8 border-b"></div>
+              <div class="space-y-4 p-4">
+                <div class="h-4 w-1/4 rounded bg-surface-hover"></div>
+                <div class="h-4 w-1/2 rounded bg-surface-hover"></div>
+                <div class="h-4 w-1/3 rounded bg-surface-hover"></div>
+              </div>
+            </Card>
+          </div>
+        }
+      >
+        <Show
+          when={!error()}
+          fallback={
+            <Card class="p-6">
+              <EmptyState
+                icon={<ServerIcon class="w-6 h-6 text-slate-400" />}
+                title="Unable to load infrastructure"
+                description="We couldn’t fetch unified resources. Check connectivity or retry."
+                actions={
+                  <button
+                    type="button"
+                    onClick={() => refetch()}
+                    class="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:"
+                  >
+                    <RefreshCwIcon class="h-3.5 w-3.5" />
+                    Retry
+                  </button>
+                }
+              />
+            </Card>
+          }
+        >
+          <Show
+            when={!showNoResources()}
+            fallback={
+              <Card class="p-6">
+                <EmptyState
+                  icon={<ServerIcon class="w-6 h-6 text-slate-400" />}
+                  title="No infrastructure resources yet"
+                  description="Once resources are reporting, they will appear here."
+                />
+              </Card>
+            }
+          >
+            <div class="space-y-3">
+              <Show when={migrationNotice() && !hideMigrationNotice()}>
+                <MigrationNoticeBanner
+                  title={migrationNotice()!.title}
+                  message={migrationNotice()!.message}
+                  learnMoreHref={migrationNotice()!.learnMoreHref}
+                  onDismiss={handleDismissMigrationNotice}
+                />
+              </Show>
 
- <Show when={!summaryCollapsed()}>
- <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-surface">
- <InfrastructureSummary
- hosts={filteredResources()}
- timeRange={infrastructureSummaryRange()}
- onTimeRangeChange={setInfrastructureSummaryRange}
- hoveredHostId={hoveredResourceId()}
- focusedHostId={expandedResourceId()}
- />
- </div>
- </Show>
+              <Show when={!summaryCollapsed()}>
+                <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-surface">
+                  <InfrastructureSummary
+                    hosts={filteredResources()}
+                    timeRange={infrastructureSummaryRange()}
+                    onTimeRangeChange={setInfrastructureSummaryRange}
+                    hoveredHostId={hoveredResourceId()}
+                    focusedHostId={expandedResourceId()}
+                  />
+                </div>
+              </Show>
 
- <Show when={!kioskMode()}>
- <Card padding="sm" class="mb-4">
- <div class="flex flex-col gap-2">
- <SearchInput
- value={searchQuery}
- onChange={setSearchQuery}
- placeholder="Search resources, IDs, IPs, or tags..."
- class="w-full"
- autoFocus
- history={{
- storageKey: STORAGE_KEYS.RESOURCES_SEARCH_HISTORY,
- emptyMessage:'Recent infrastructure searches appear here.',
- }}
- />
+              <Show when={!kioskMode()}>
+                <Card padding="sm" class="mb-4">
+                  <div class="flex flex-col gap-2">
+                    <SearchInput
+                      value={searchQuery}
+                      onChange={setSearchQuery}
+                      placeholder="Search resources, IDs, IPs, or tags..."
+                      class="w-full"
+                      autoFocus
+                      history={{
+                        storageKey: STORAGE_KEYS.RESOURCES_SEARCH_HISTORY,
+                        emptyMessage: 'Recent infrastructure searches appear here.',
+                      }}
+                    />
 
- <Show when={isMobile()}>
- <button
- type="button"
- onClick={() => setFiltersOpen((o) => !o)}
- class="flex items-center gap-1.5 rounded-md bg-surface-hover px-2.5 py-1.5 text-xs font-medium text-muted"
- >
- <ListFilterIcon class="w-3.5 h-3.5" />
- Filters
- <Show when={activeFilterCount() > 0}>
- <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
- {activeFilterCount()}
- </span>
- </Show>
- </button>
- </Show>
+                    <Show when={isMobile()}>
+                      <button
+                        type="button"
+                        onClick={() => setFiltersOpen((o) => !o)}
+                        class="flex items-center gap-1.5 rounded-md bg-surface-hover px-2.5 py-1.5 text-xs font-medium text-muted"
+                      >
+                        <ListFilterIcon class="w-3.5 h-3.5" />
+                        Filters
+                        <Show when={activeFilterCount() > 0}>
+                          <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
+                            {activeFilterCount()}
+                          </span>
+                        </Show>
+                      </button>
+                    </Show>
 
- <Show when={!isMobile() || filtersOpen()}>
- <div class="flex flex-wrap items-center gap-2 text-xs text-muted lg:flex-nowrap">
- <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
- <label for="infra-source-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Source</label>
- <select
- id="infra-source-filter"
- value={selectedSource()}
- onChange={(e) => setSelectedSource(e.currentTarget.value)}
- class="min-w-[8rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
- >
- <option value="">All</option>
- <For each={sourceOptions.filter((s) => availableSources().has(s.key))}>
- {(source) => <option value={source.key}>{source.label}</option>}
- </For>
- </select>
- </div>
+                    <Show when={!isMobile() || filtersOpen()}>
+                      <div class="flex flex-wrap items-center gap-2 text-xs text-muted lg:flex-nowrap">
+                        <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
+                          <label
+                            for="infra-source-filter"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
+                          >
+                            Source
+                          </label>
+                          <select
+                            id="infra-source-filter"
+                            value={selectedSource()}
+                            onChange={(e) => setSelectedSource(e.currentTarget.value)}
+                            class="min-w-[8rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">All</option>
+                            <For each={sourceOptions.filter((s) => availableSources().has(s.key))}>
+                              {(source) => <option value={source.key}>{source.label}</option>}
+                            </For>
+                          </select>
+                        </div>
 
- <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
- <label for="infra-status-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Status</label>
- <select
- id="infra-status-filter"
- value={selectedStatus()}
- onChange={(e) => setSelectedStatus(e.currentTarget.value)}
- class="min-w-[7rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
- >
- <option value="">All</option>
- <For each={statusOptions()}>
- {(status) => <option value={status.key}>{status.label}</option>}
- </For>
- </select>
- </div>
+                        <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
+                          <label
+                            for="infra-status-filter"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
+                          >
+                            Status
+                          </label>
+                          <select
+                            id="infra-status-filter"
+                            value={selectedStatus()}
+                            onChange={(e) => setSelectedStatus(e.currentTarget.value)}
+                            class="min-w-[7rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">All</option>
+                            <For each={statusOptions()}>
+                              {(status) => <option value={status.key}>{status.label}</option>}
+                            </For>
+                          </select>
+                        </div>
 
- <div class="inline-flex rounded-md bg-surface-hover p-0.5">
- <button
- type="button"
- onClick={() => setGroupingMode('grouped')}
+                        <div class="inline-flex rounded-md bg-surface-hover p-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setGroupingMode('grouped')}
                             class={segmentedButtonClass(groupingMode() === 'grouped')}
                             title="Group by cluster"
                           >
-                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg
+                              class="w-3 h-3"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                            >
                               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z" />
                             </svg>
                             Grouped
@@ -494,7 +519,13 @@ export function Infrastructure() {
                             class={segmentedButtonClass(groupingMode() === 'flat')}
                             title="Flat list view"
                           >
-                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg
+                              class="w-3 h-3"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                            >
                               <line x1="8" y1="6" x2="21" y2="6" />
                               <line x1="8" y1="12" x2="21" y2="12" />
                               <line x1="8" y1="18" x2="21" y2="18" />
@@ -513,7 +544,13 @@ export function Infrastructure() {
                             class={segmentedButtonClass(!summaryCollapsed())}
                             title={summaryCollapsed() ? 'Show charts' : 'Hide charts'}
                           >
-                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg
+                              class="w-3 h-3"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                            >
                               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                             </svg>
                             Charts

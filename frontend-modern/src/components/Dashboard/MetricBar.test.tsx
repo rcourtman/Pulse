@@ -119,7 +119,10 @@ describe('MetricBar', () => {
     render(() => <MetricBar value={50} label="Label" sublabel="Sub" />);
     expect(screen.queryByText('(Sub)')).not.toBeInTheDocument();
 
-    resizeCallback?.([{ contentRect: { width: 200 } } as ResizeObserverEntry], {} as ResizeObserver);
+    resizeCallback?.(
+      [{ contentRect: { width: 200 } } as ResizeObserverEntry],
+      {} as ResizeObserver,
+    );
     expect(await screen.findByText('(Sub)')).toBeInTheDocument();
   });
 });

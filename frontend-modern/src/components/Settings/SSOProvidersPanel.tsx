@@ -5,7 +5,12 @@ import { Toggle } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
-import { getUpgradeActionUrlOrFallback, hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
+import {
+  getUpgradeActionUrlOrFallback,
+  hasFeature,
+  loadLicenseStatus,
+  licenseLoaded,
+} from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
@@ -157,12 +162,16 @@ const splitList = (input: string) =>
     .filter(Boolean);
 
 const mappingsToString = (mappings?: Record<string, string>) =>
-  mappings ? Object.entries(mappings).map(([k, v]) => `${k}=${v}`).join(', ') : '';
+  mappings
+    ? Object.entries(mappings)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(', ')
+    : '';
 
 const stringToMappings = (input: string) => {
   const result: Record<string, string> = {};
-  splitList(input).forEach(pair => {
-    const [k, v] = pair.split('=').map(s => s.trim());
+  splitList(input).forEach((pair) => {
+    const [k, v] = pair.split('=').map((s) => s.trim());
     if (k && v) result[k] = v;
   });
   return result;
@@ -516,49 +525,49 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
       setShowMetadataPreview(true);
     } catch (error) {
       logger.error('[SSOProvidersPanel] Metadata preview error:', error);
- notificationStore.error(`Failed to fetch metadata: ${error}`);
- } finally {
- setLoadingPreview(false);
- }
- };
+      notificationStore.error(`Failed to fetch metadata: ${error}`);
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
 
- return (
- <div class="space-y-6">
- <Show when={showSamlUpsell()}>
- <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
- <div class="w-full max-w-lg bg-surface rounded-md shadow-sm border border-border mx-4">
- <div class="flex items-center justify-between px-6 py-4 border-b border-border">
- <div>
- <h3 class="text-lg font-semibold text-base-content">Add SAML Provider</h3>
- <p class="text-xs text-muted mt-0.5">Pro feature</p>
- </div>
- <button
- type="button"
- onClick={() => setShowSamlUpsell(false)}
- class="p-1.5 rounded-md hover:text-base-content hover:bg-surface-hover"
- aria-label="Close"
- >
- <X class="w-5 h-5" />
- </button>
- </div>
- <div class="px-6 py-5 space-y-4">
- <p class="text-sm text-muted">
- SAML 2.0 and multi-provider SSO requires Pro.
- </p>
- <div class="flex items-center justify-end gap-2">
- <button
- type="button"
- onClick={() => setShowSamlUpsell(false)}
- class="px-4 py-2 text-sm font-medium text-base-content border border-border rounded-md"
- >
- Not now
- </button>
- <a
- href={getUpgradeActionUrlOrFallback('advanced_sso')}
+  return (
+    <div class="space-y-6">
+      <Show when={showSamlUpsell()}>
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
+          <div class="w-full max-w-lg bg-surface rounded-md shadow-sm border border-border mx-4">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div>
+                <h3 class="text-lg font-semibold text-base-content">Add SAML Provider</h3>
+                <p class="text-xs text-muted mt-0.5">Pro feature</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSamlUpsell(false)}
+                class="p-1.5 rounded-md hover:text-base-content hover:bg-surface-hover"
+                aria-label="Close"
+              >
+                <X class="w-5 h-5" />
+              </button>
+            </div>
+            <div class="px-6 py-5 space-y-4">
+              <p class="text-sm text-muted">SAML 2.0 and multi-provider SSO requires Pro.</p>
+              <div class="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSamlUpsell(false)}
+                  class="px-4 py-2 text-sm font-medium text-base-content border border-border rounded-md"
+                >
+                  Not now
+                </button>
+                <a
+                  href={getUpgradeActionUrlOrFallback('advanced_sso')}
                   target="_blank"
                   rel="noopener noreferrer"
                   class="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
-                  onClick={() => trackUpgradeClicked('settings_sso_providers_add_saml_gate', 'advanced_sso')}
+                  onClick={() =>
+                    trackUpgradeClicked('settings_sso_providers_add_saml_gate', 'advanced_sso')
+                  }
                 >
                   Upgrade to Pro
                   <ExternalLink class="w-4 h-4" />
@@ -576,7 +585,8 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
             <div class="flex-1">
               <h4 class="text-base font-semibold text-base-content">Advanced SSO</h4>
               <p class="text-sm text-muted mt-1">
-                SAML 2.0 and multi-provider SSO requires Pro. Basic OIDC is available in the free tier.
+                SAML 2.0 and multi-provider SSO requires Pro. Basic OIDC is available in the free
+                tier.
               </p>
             </div>
             <a
@@ -652,27 +662,29 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
           <div class="space-y-3">
             <For each={providers()}>
               {(provider) => (
-                <div class={`p-4 rounded-md border ${provider.enabled ? 'bg-surface border-border' : 'bg-surface-alt border-border opacity-60'}`}>
+                <div
+                  class={`p-4 rounded-md border ${provider.enabled ? 'bg-surface border-border' : 'bg-surface-alt border-border opacity-60'}`}
+                >
                   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div class="flex items-center gap-3 min-w-0">
                       <div class="p-2 rounded-md bg-surface-hover">
-                        {provider.type === 'oidc'? (
- <Globe class="w-5 h-5 text-muted" />
- ) : (
- <Key class="w-5 h-5 text-muted" />
- )}
- </div>
- <div class="min-w-0">
- <div class="flex items-center gap-2">
- <span class="font-medium text-base-content truncate">
- {provider.name}
- </span>
- <span class="px-1.5 py-0.5 text-xs font-medium rounded bg-surface-hover">
- {provider.type.toUpperCase()}
- </span>
- </div>
- <p class="text-xs text-muted truncate">
- {provider.type ==='oidc'
+                        {provider.type === 'oidc' ? (
+                          <Globe class="w-5 h-5 text-muted" />
+                        ) : (
+                          <Key class="w-5 h-5 text-muted" />
+                        )}
+                      </div>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="font-medium text-base-content truncate">
+                            {provider.name}
+                          </span>
+                          <span class="px-1.5 py-0.5 text-xs font-medium rounded bg-surface-hover">
+                            {provider.type.toUpperCase()}
+                          </span>
+                        </div>
+                        <p class="text-xs text-muted truncate">
+                          {provider.type === 'oidc'
                             ? provider.oidcIssuerUrl
                             : provider.samlIdpEntityId || provider.samlMetadataUrl}
                         </p>
@@ -711,7 +723,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           <span class="text-slate-500">SP Metadata:</span>
                           <button
                             type="button"
-                            onClick={() => copyToClipboard(provider.samlMetadataUrl || '', 'Metadata URL')}
+                            onClick={() =>
+                              copyToClipboard(provider.samlMetadataUrl || '', 'Metadata URL')
+                            }
                             class="text-blue-600 hover:underline flex items-center gap-1"
                           >
                             {provider.samlMetadataUrl}
@@ -741,7 +755,10 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
 
       {/* Add/Edit Modal */}
       <Show when={showModal()}>
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50 p-4" onClick={() => setShowModal(false)}>
+        <div
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50 p-4"
+          onClick={() => setShowModal(false)}
+        >
           <div
             class="bg-surface rounded-md shadow-sm max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
@@ -823,7 +840,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         type="password"
                         value={form.oidcClientSecret}
                         onInput={(e) => setForm('oidcClientSecret', e.currentTarget.value)}
-                        placeholder={editingProvider() ? '•••••••• (leave blank to keep)' : 'Optional for PKCE'}
+                        placeholder={
+                          editingProvider() ? '•••••••• (leave blank to keep)' : 'Optional for PKCE'
+                        }
                         class={controlClass()}
                       />
                     </div>
@@ -846,8 +865,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 <div class="space-y-4">
                   <div class="bg-surface-alt border border-border rounded-md p-3">
                     <p class="text-xs text-base-content">
-                      <strong>Setup:</strong> Provide either IdP Metadata URL (preferred) or configure SSO URL + Certificate manually.
-                      Use the SP Metadata URL below to configure your Identity Provider.
+                      <strong>Setup:</strong> Provide either IdP Metadata URL (preferred) or
+                      configure SSO URL + Certificate manually. Use the SP Metadata URL below to
+                      configure your Identity Provider.
                     </p>
                     <Show when={publicUrl()}>
                       <div class="mt-2 flex items-center gap-2">
@@ -978,10 +998,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               {/* Test result display */}
               <Show when={testResult()}>
                 <div
-                  class={`p-4 rounded-md border ${testResult()?.success
- ? 'bg-green-50 dark:bg-green-900 border-green-200 dark:border-green-800'
- : 'bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800'
- }`}
+                  class={`p-4 rounded-md border ${
+                    testResult()?.success
+                      ? 'bg-green-50 dark:bg-green-900 border-green-200 dark:border-green-800'
+                      : 'bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800'
+                  }`}
                 >
                   <div class="flex items-start gap-3">
                     {testResult()?.success ? (
@@ -991,48 +1012,68 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     )}
                     <div class="flex-1 min-w-0">
                       <p
-                        class={`text-sm font-medium ${testResult()?.success
- ? 'text-green-800 dark:text-green-200'
- : 'text-red-800 dark:text-red-200'
- }`}
+                        class={`text-sm font-medium ${
+                          testResult()?.success
+                            ? 'text-green-800 dark:text-green-200'
+                            : 'text-red-800 dark:text-red-200'
+                        }`}
                       >
                         {testResult()?.message}
                       </p>
                       <Show when={testResult()?.error}>
-                        <p class="text-xs text-red-600 dark:text-red-400 mt-1">{testResult()?.error}</p>
+                        <p class="text-xs text-red-600 dark:text-red-400 mt-1">
+                          {testResult()?.error}
+                        </p>
                       </Show>
                       <Show when={testResult()?.success && testResult()?.details}>
                         <dl class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
                           <Show when={testResult()?.details?.entityId}>
                             <div class="flex gap-2">
                               <dt class="text-muted">Entity ID:</dt>
-                              <dd class="text-base-content truncate">{testResult()?.details?.entityId}</dd>
+                              <dd class="text-base-content truncate">
+                                {testResult()?.details?.entityId}
+                              </dd>
                             </div>
                           </Show>
                           <Show when={testResult()?.details?.ssoUrl}>
                             <div class="flex gap-2">
                               <dt class="text-muted">SSO URL:</dt>
-                              <dd class="text-base-content truncate">{testResult()?.details?.ssoUrl}</dd>
+                              <dd class="text-base-content truncate">
+                                {testResult()?.details?.ssoUrl}
+                              </dd>
                             </div>
                           </Show>
                           <Show when={testResult()?.details?.tokenEndpoint}>
                             <div class="flex gap-2">
                               <dt class="text-muted">Token Endpoint:</dt>
-                              <dd class="text-base-content truncate">{testResult()?.details?.tokenEndpoint}</dd>
+                              <dd class="text-base-content truncate">
+                                {testResult()?.details?.tokenEndpoint}
+                              </dd>
                             </div>
                           </Show>
-                          <Show when={testResult()?.details?.certificates && testResult()!.details!.certificates!.length > 0}>
+                          <Show
+                            when={
+                              testResult()?.details?.certificates &&
+                              testResult()!.details!.certificates!.length > 0
+                            }
+                          >
                             <div class="col-span-2 mt-1">
                               <dt class="text-muted mb-1">Certificates:</dt>
                               <dd class="space-y-1">
                                 <For each={testResult()?.details?.certificates}>
                                   {(cert) => (
-                                    <div class={`text-xs px-2 py-1 rounded ${cert.isExpired ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300' : 'bg-surface-hover text-base-content'}`}>
+                                    <div
+                                      class={`text-xs px-2 py-1 rounded ${cert.isExpired ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300' : 'bg-surface-hover text-base-content'}`}
+                                    >
                                       <span class="font-medium">{cert.subject}</span>
                                       <span class="mx-1">•</span>
-                                      <span>Expires: {new Date(cert.notAfter).toLocaleDateString()}</span>
+                                      <span>
+                                        Expires: {new Date(cert.notAfter).toLocaleDateString()}
+                                      </span>
                                       <Show when={cert.isExpired}>
-                                        <span class="ml-1 text-red-600 dark:text-red-400 font-medium">(Expired!)</span>
+                                        <span class="ml-1 text-red-600 dark:text-red-400 font-medium">
+                                          (Expired!)
+                                        </span>
                                       </Show>
                                     </div>
                                   )}
@@ -1140,14 +1181,18 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
 
       {/* Delete confirmation modal */}
       <Show when={deleteConfirm()}>
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50 p-4" onClick={() => setDeleteConfirm(null)}>
+        <div
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50 p-4"
+          onClick={() => setDeleteConfirm(null)}
+        >
           <div
             class="bg-surface rounded-md shadow-sm max-w-md w-full p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 class="text-lg font-semibold text-base-content mb-2">Delete Provider?</h3>
             <p class="text-sm text-muted mb-4">
-              This will permanently delete this SSO provider. Users will no longer be able to sign in using this provider.
+              This will permanently delete this SSO provider. Users will no longer be able to sign
+              in using this provider.
             </p>
             <div class="flex justify-end gap-3">
               <button
@@ -1171,7 +1216,10 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
 
       {/* Metadata Preview modal */}
       <Show when={showMetadataPreview() && metadataPreview()}>
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50 p-4" onClick={() => setShowMetadataPreview(false)}>
+        <div
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50 p-4"
+          onClick={() => setShowMetadataPreview(false)}
+        >
           <div
             class="bg-surface rounded-md shadow-sm max-w-4xl w-full max-h-[90vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
@@ -1212,18 +1260,27 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     </dd>
                   </div>
                 </Show>
-                <Show when={metadataPreview()?.parsed.certificates && metadataPreview()!.parsed.certificates!.length > 0}>
+                <Show
+                  when={
+                    metadataPreview()?.parsed.certificates &&
+                    metadataPreview()!.parsed.certificates!.length > 0
+                  }
+                >
                   <div class="sm:col-span-2">
                     <dt class="text-muted text-xs uppercase tracking-wide mb-1">Certificates</dt>
                     <dd class="space-y-1">
                       <For each={metadataPreview()?.parsed.certificates}>
                         {(cert) => (
-                          <div class={`text-xs px-2 py-1 rounded ${cert.isExpired ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300' : 'bg-surface-hover text-base-content'}`}>
+                          <div
+                            class={`text-xs px-2 py-1 rounded ${cert.isExpired ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300' : 'bg-surface-hover text-base-content'}`}
+                          >
                             <span class="font-medium">{cert.subject}</span>
                             <span class="mx-1">•</span>
                             <span>Expires: {new Date(cert.notAfter).toLocaleDateString()}</span>
                             <Show when={cert.isExpired}>
-                              <span class="ml-1 text-red-600 dark:text-red-400 font-medium">(Expired!)</span>
+                              <span class="ml-1 text-red-600 dark:text-red-400 font-medium">
+                                (Expired!)
+                              </span>
                             </Show>
                           </div>
                         )}

@@ -3,7 +3,13 @@ import { createStore, reconcile } from 'solid-js/store';
 import { readAPIErrorMessage } from '@/api/responseUtils';
 import { apiFetch, getOrgID } from '@/utils/apiClient';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
-import type { Resource, PlatformType, SourceType, ResourceStatus, ResourceType } from '@/types/resource';
+import type {
+  Resource,
+  PlatformType,
+  SourceType,
+  ResourceStatus,
+  ResourceType,
+} from '@/types/resource';
 import { normalizeDiskArray } from '@/utils/format';
 import { logger } from '@/utils/logger';
 import { eventBus } from '@/stores/events';
@@ -461,27 +467,30 @@ const metricToResourceMetric = (metric?: APIMetricValue) => {
 };
 
 const toResource = (v2: APIResource): Resource => {
-  const sources = (v2.sources || []).filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
+  const sources = (v2.sources || []).filter(
+    (s): s is string => typeof s === 'string' && s.trim().length > 0,
+  );
   const sourceFlags = readSourceFlags(sources);
   const lastSeen = v2.lastSeen ? Date.parse(v2.lastSeen) : NaN;
   const name = v2.name || v2.id;
   const platformId =
-    v2.proxmox?.nodeName ||
-    v2.agent?.hostname ||
-    v2.docker?.hostname ||
-    name ||
-    v2.id;
+    v2.proxmox?.nodeName || v2.agent?.hostname || v2.docker?.hostname || name || v2.id;
 
   const discoveryTarget =
-    v2.discoveryTarget?.resourceType &&
-      v2.discoveryTarget?.hostId &&
-      v2.discoveryTarget?.resourceId
+    v2.discoveryTarget?.resourceType && v2.discoveryTarget?.hostId && v2.discoveryTarget?.resourceId
       ? {
-        resourceType: v2.discoveryTarget.resourceType as 'host' | 'vm' | 'lxc' | 'docker' | 'k8s' | 'disk' | 'ceph',
-        hostId: v2.discoveryTarget.hostId,
-        resourceId: v2.discoveryTarget.resourceId,
-        hostname: v2.discoveryTarget.hostname,
-      }
+          resourceType: v2.discoveryTarget.resourceType as
+            | 'host'
+            | 'vm'
+            | 'lxc'
+            | 'docker'
+            | 'k8s'
+            | 'disk'
+            | 'ceph',
+          hostId: v2.discoveryTarget.hostId,
+          resourceId: v2.discoveryTarget.resourceId,
+          hostname: v2.discoveryTarget.hostname,
+        }
       : undefined;
 
   const metricsTarget =
@@ -502,33 +511,35 @@ const toResource = (v2: APIResource): Resource => {
     status: resolveStatus(v2.status),
     agent: v2.agent,
     kubernetes: v2.kubernetes,
-    proxmox: v2.proxmox ? {
-      vmid: v2.proxmox.vmid,
-      node: v2.proxmox.nodeName,
-      instance: v2.proxmox.instance,
-      cpus: v2.proxmox.cpus,
-      template: v2.proxmox.template,
-      disks: normalizeDiskArray(v2.proxmox.disks),
-      swapUsed: v2.proxmox.swapUsed,
-      swapTotal: v2.proxmox.swapTotal,
-      balloon: v2.proxmox.balloon,
-    } : undefined,
+    proxmox: v2.proxmox
+      ? {
+          vmid: v2.proxmox.vmid,
+          node: v2.proxmox.nodeName,
+          instance: v2.proxmox.instance,
+          cpus: v2.proxmox.cpus,
+          template: v2.proxmox.template,
+          disks: normalizeDiskArray(v2.proxmox.disks),
+          swapUsed: v2.proxmox.swapUsed,
+          swapTotal: v2.proxmox.swapTotal,
+          balloon: v2.proxmox.balloon,
+        }
+      : undefined,
     cpu: metricToResourceMetric(v2.metrics?.cpu),
     memory: metricToResourceMetric(v2.metrics?.memory),
     disk: metricToResourceMetric(v2.metrics?.disk),
     network:
       v2.metrics?.netIn || v2.metrics?.netOut
         ? {
-          rxBytes: v2.metrics?.netIn?.value ?? 0,
-          txBytes: v2.metrics?.netOut?.value ?? 0,
-        }
+            rxBytes: v2.metrics?.netIn?.value ?? 0,
+            txBytes: v2.metrics?.netOut?.value ?? 0,
+          }
         : undefined,
     diskIO:
       v2.metrics?.diskRead || v2.metrics?.diskWrite
         ? {
-          readRate: v2.metrics?.diskRead?.value ?? 0,
-          writeRate: v2.metrics?.diskWrite?.value ?? 0,
-        }
+            readRate: v2.metrics?.diskRead?.value ?? 0,
+            writeRate: v2.metrics?.diskWrite?.value ?? 0,
+          }
         : undefined,
     uptime:
       v2.agent?.uptimeSeconds ??
@@ -568,7 +579,8 @@ const toResource = (v2: APIResource): Resource => {
   };
 };
 
-const normalizeUnifiedResourcesQuery = (query?: string): string => (query || '').trim().replace(/^\?+/, '');
+const normalizeUnifiedResourcesQuery = (query?: string): string =>
+  (query || '').trim().replace(/^\?+/, '');
 
 const buildUnifiedResourcesUrl = (query: string, page: number): string => {
   const params = new URLSearchParams(query);
@@ -640,7 +652,9 @@ async function fetchUnifiedResources(query: string): Promise<Resource[]> {
   let totalPages = 1;
 
   for (let page = 1; page <= totalPages && page <= UNIFIED_RESOURCES_MAX_PAGES; page += 1) {
-    const response = await apiFetch(buildUnifiedResourcesUrl(normalizedQuery, page), { cache: 'no-store' });
+    const response = await apiFetch(buildUnifiedResourcesUrl(normalizedQuery, page), {
+      cache: 'no-store',
+    });
     if (!response.ok) {
       const message = await readAPIErrorMessage(
         response,
@@ -721,7 +735,10 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   let lastWsUpdateToken = '';
   let scopeVersion = 0;
 
-  const applyResources = (next: Resource[], targetEntry: UnifiedResourcesCacheEntry = cacheEntry) => {
+  const applyResources = (
+    next: Resource[],
+    targetEntry: UnifiedResourcesCacheEntry = cacheEntry,
+  ) => {
     setUnifiedResourcesCache(targetEntry, next);
     if (targetEntry !== cacheEntry) {
       return;
@@ -729,7 +746,10 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     setResources(reconcile(next, { key: 'id' }));
   };
 
-  const runRefetch = async (options?: { force?: boolean; source?: 'initial' | 'ws' | 'manual' }) => {
+  const runRefetch = async (options?: {
+    force?: boolean;
+    source?: 'initial' | 'ws' | 'manual';
+  }) => {
     if (inFlightRefetch) {
       return inFlightRefetch;
     }
@@ -751,7 +771,11 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     const entryForRequest = cacheEntry;
     const request = (async () => {
       try {
-        const fetched = await fetchUnifiedResourcesShared(entryForRequest, query, shouldForceNetwork);
+        const fetched = await fetchUnifiedResourcesShared(
+          entryForRequest,
+          query,
+          shouldForceNetwork,
+        );
         if (requestVersion !== scopeVersion || entryForRequest !== cacheEntry) {
           return resources as unknown as Resource[];
         }
@@ -797,7 +821,10 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     }
 
     const elapsedSinceFetch = Date.now() - cacheEntry.lastFetchAt;
-    const minIntervalDelay = Math.max(0, UNIFIED_RESOURCES_WS_MIN_REFETCH_INTERVAL_MS - elapsedSinceFetch);
+    const minIntervalDelay = Math.max(
+      0,
+      UNIFIED_RESOURCES_WS_MIN_REFETCH_INTERVAL_MS - elapsedSinceFetch,
+    );
     const delay = Math.max(UNIFIED_RESOURCES_WS_DEBOUNCE_MS, minIntervalDelay);
 
     refreshHandle = setTimeout(() => {

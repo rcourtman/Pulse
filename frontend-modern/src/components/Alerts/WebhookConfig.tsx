@@ -60,7 +60,9 @@ const customFieldPresets: Record<string, CustomFieldPreset[]> = {
   ],
 };
 
-const buildMapFromInputs = (inputs: Array<{ key: string; value: string }>): Record<string, string> => {
+const buildMapFromInputs = (
+  inputs: Array<{ key: string; value: string }>,
+): Record<string, string> => {
   const map: Record<string, string> = {};
   inputs.forEach(({ key, value }) => {
     if (key) {
@@ -138,9 +140,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
     }));
   };
 
-  const updateCustomFieldInputs = (
-    updater: (inputs: CustomFieldInput[]) => CustomFieldInput[],
-  ) => {
+  const updateCustomFieldInputs = (updater: (inputs: CustomFieldInput[]) => CustomFieldInput[]) => {
     _setCustomFieldInputs((prev) => {
       const next = updater(prev);
       setFormData((prevForm) => ({
@@ -324,80 +324,80 @@ export function WebhookConfig(props: WebhookConfigProps) {
       pushover: 'Pushover',
       gotify: 'Gotify',
       ntfy: 'ntfy',
- };
- return names[service] || service;
- };
+    };
+    return names[service] || service;
+  };
 
- const toggleAllWebhooks = (enabled: boolean) => {
- props.webhooks.forEach((webhook) => {
- props.onUpdate({ ...webhook, enabled });
- });
- };
+  const toggleAllWebhooks = (enabled: boolean) => {
+    props.webhooks.forEach((webhook) => {
+      props.onUpdate({ ...webhook, enabled });
+    });
+  };
 
- const allEnabled = () => props.webhooks.every((w) => w.enabled);
- const someEnabled = () => props.webhooks.some((w) => w.enabled);
+  const allEnabled = () => props.webhooks.every((w) => w.enabled);
+  const someEnabled = () => props.webhooks.some((w) => w.enabled);
 
- return (
- <div class="space-y-6 min-w-0 w-full">
- {/* Existing Webhooks List */}
- <Show when={props.webhooks.length > 0}>
- <div class="space-y-3 w-full">
- {/* Quick Actions Bar */}
- <div class="flex flex-col gap-2 rounded border border-border px-3 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
- <div class="text-muted sm:text-sm">
- {props.webhooks.filter((w) => w.enabled).length} of {props.webhooks.length} webhooks
- enabled
- </div>
- <div class="flex flex-wrap gap-2 sm:flex-nowrap">
- <button
- onClick={() => toggleAllWebhooks(false)}
- disabled={!someEnabled()}
- class="w-full rounded border px-3 py-1 text-xs transition-colors hover:bg-surface-hover sm:w-auto"
- >
- Disable All
- </button>
- <button
- onClick={() => toggleAllWebhooks(true)}
- disabled={allEnabled()}
- class="w-full rounded border border-green-500 px-3 py-1 text-xs text-green-700 transition-colors hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900 sm:w-auto"
- >
- Enable All
- </button>
- </div>
- </div>
- <For each={props.webhooks}>
- {(webhook) => (
- <div class="w-full px-3 py-3 border border-border text-xs sm:text-sm">
- <div class="flex flex-wrap items-center justify-between gap-2">
- <span class="font-medium text-base-content">{webhook.name}</span>
- <button
- onClick={() => props.onUpdate({ ...webhook, enabled: !webhook.enabled })}
- class={`rounded border px-3 py-1 text-xs font-medium transition-colors ${webhook.enabled ?'border-green-500 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900' : 'border-border text-muted hover:bg-surface-hover' }`}
+  return (
+    <div class="space-y-6 min-w-0 w-full">
+      {/* Existing Webhooks List */}
+      <Show when={props.webhooks.length > 0}>
+        <div class="space-y-3 w-full">
+          {/* Quick Actions Bar */}
+          <div class="flex flex-col gap-2 rounded border border-border px-3 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
+            <div class="text-muted sm:text-sm">
+              {props.webhooks.filter((w) => w.enabled).length} of {props.webhooks.length} webhooks
+              enabled
+            </div>
+            <div class="flex flex-wrap gap-2 sm:flex-nowrap">
+              <button
+                onClick={() => toggleAllWebhooks(false)}
+                disabled={!someEnabled()}
+                class="w-full rounded border px-3 py-1 text-xs transition-colors hover:bg-surface-hover sm:w-auto"
+              >
+                Disable All
+              </button>
+              <button
+                onClick={() => toggleAllWebhooks(true)}
+                disabled={allEnabled()}
+                class="w-full rounded border border-green-500 px-3 py-1 text-xs text-green-700 transition-colors hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900 sm:w-auto"
+              >
+                Enable All
+              </button>
+            </div>
+          </div>
+          <For each={props.webhooks}>
+            {(webhook) => (
+              <div class="w-full px-3 py-3 border border-border text-xs sm:text-sm">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <span class="font-medium text-base-content">{webhook.name}</span>
+                  <button
+                    onClick={() => props.onUpdate({ ...webhook, enabled: !webhook.enabled })}
+                    class={`rounded border px-3 py-1 text-xs font-medium transition-colors ${webhook.enabled ? 'border-green-500 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900' : 'border-border text-muted hover:bg-surface-hover'}`}
                   >
                     {webhook.enabled ? 'Enabled' : 'Disabled'}
- </button>
- </div>
- <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-muted sm:text-xs">
- <span class="rounded bg-surface-alt px-2 py-0.5 text-base-content">
- {serviceName(webhook.service ||'generic')}
+                  </button>
+                </div>
+                <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-muted sm:text-xs">
+                  <span class="rounded bg-surface-alt px-2 py-0.5 text-base-content">
+                    {serviceName(webhook.service || 'generic')}
                   </span>
                   <span class="rounded bg-surface-alt px-2 py-0.5 text-base-content">
                     {webhook.method}
                   </span>
                   <span class="rounded bg-surface-alt px-2 py-0.5 text-base-content">
                     ID: {webhook.id || '—'}
- </span>
- </div>
- <p class="mt-2 break-all text-[11px] font-mono text-muted sm:text-xs">
- {webhook.url}
- </p>
- <div class="mt-3 flex flex-wrap gap-2 border-t border-border-subtle pt-2 sm:justify-end w-full">
- <button
- onClick={() => webhook.id && props.onTest(webhook.id)}
- disabled={props.testing === webhook.id || !webhook.enabled}
- class="rounded border px-3 py-1 text-xs text-base-content transition-colors hover:bg-surface-hover disabled:opacity-50"
- >
- {props.testing === webhook.id ?'Testing…' : 'Test'}
+                  </span>
+                </div>
+                <p class="mt-2 break-all text-[11px] font-mono text-muted sm:text-xs">
+                  {webhook.url}
+                </p>
+                <div class="mt-3 flex flex-wrap gap-2 border-t border-border-subtle pt-2 sm:justify-end w-full">
+                  <button
+                    onClick={() => webhook.id && props.onTest(webhook.id)}
+                    disabled={props.testing === webhook.id || !webhook.enabled}
+                    class="rounded border px-3 py-1 text-xs text-base-content transition-colors hover:bg-surface-hover disabled:opacity-50"
+                  >
+                    {props.testing === webhook.id ? 'Testing…' : 'Test'}
                   </button>
                   <button
                     onClick={() => editWebhook(webhook)}
@@ -424,9 +424,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
           {/* Service Selection */}
           <div>
             <div class="flex items-center justify-between mb-4">
-              <label class="text-sm font-medium text-base-content">
-                Service Type
-              </label>
+              <label class="text-sm font-medium text-base-content">Service Type</label>
               <button
                 type="button"
                 onClick={() => setShowServiceDropdown(!showServiceDropdown())}
@@ -457,10 +455,11 @@ export function WebhookConfig(props: WebhookConfigProps) {
                     <button
                       type="button"
                       onClick={() => selectService(service)}
-                      class={`px-2 py-1.5 text-left border transition-colors text-xs ${formData().service === service
- ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
- : 'border-border hover:bg-surface-hover'
- }`}
+                      class={`px-2 py-1.5 text-left border transition-colors text-xs ${
+                        formData().service === service
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
+                          : 'border-border hover:bg-surface-hover'
+                      }`}
                     >
                       <div class="font-medium text-xs text-base-content">
                         {serviceName(service)}
@@ -542,48 +541,50 @@ export function WebhookConfig(props: WebhookConfigProps) {
             />
             <p class={formHelpText + ' mt-1'}>
               Supports template variables like{' '}
-              <code class="font-mono text-[11px] text-muted">
-                {'{{.Message}}'}
-              </code>
-              . Use{' '}
-              <code class="font-mono text-[11px] text-muted">
-                {'{{urlpath ...}}'}
-              </code>{' '}
-              or{' '}
-              <code class="font-mono text-[11px] text-muted">
-                {'{{urlquery ...}}'}
-              </code>{' '}
-              to keep dynamic values URL-safe.
+              <code class="font-mono text-[11px] text-muted">{'{{.Message}}'}</code>. Use{' '}
+              <code class="font-mono text-[11px] text-muted">{'{{urlpath ...}}'}</code> or{' '}
+              <code class="font-mono text-[11px] text-muted">{'{{urlquery ...}}'}</code> to keep
+              dynamic values URL-safe.
             </p>
           </div>
 
           {/* Mention Field - show for supported services */}
-          <Show when={['discord', 'slack', 'teams', 'teams-adaptive', 'mattermost'].includes(formData().service)}>
+          <Show
+            when={['discord', 'slack', 'teams', 'teams-adaptive', 'mattermost'].includes(
+              formData().service,
+            )}
+          >
             <div class={formField}>
               <label class={labelClass('flex items-center gap-2')}>
                 Mention
-                <span class="text-xs text-muted">
-                  Optional — tag users or groups
-                </span>
+                <span class="text-xs text-muted">Optional — tag users or groups</span>
               </label>
               <input
                 type="text"
                 value={formData().mention || ''}
                 onInput={(e) => setFormData({ ...formData(), mention: e.currentTarget.value })}
                 placeholder={
-                  formData().service === 'discord' ? '@everyone or <@USER_ID> or <@&ROLE_ID>' :
-                    formData().service === 'slack' ? '@channel, @here, or <@USER_ID>' :
-                      formData().service === 'teams' || formData().service === 'teams-adaptive' ? '@General or user email' :
-                        formData().service === 'mattermost' ? '@channel, @all, or @username' :
-                          '@everyone'
+                  formData().service === 'discord'
+                    ? '@everyone or <@USER_ID> or <@&ROLE_ID>'
+                    : formData().service === 'slack'
+                      ? '@channel, @here, or <@USER_ID>'
+                      : formData().service === 'teams' || formData().service === 'teams-adaptive'
+                        ? '@General or user email'
+                        : formData().service === 'mattermost'
+                          ? '@channel, @all, or @username'
+                          : '@everyone'
                 }
                 class={controlClass('px-2 py-1.5')}
               />
               <p class={formHelpText + ' mt-1'}>
-                {formData().service === 'discord' && 'Discord: Use @everyone, @here, <@USER_ID>, or <@&ROLE_ID>'}
-                {formData().service === 'slack' && 'Slack: Use @channel, @here, <@USER_ID>, or <!subteam^ID>'}
-                {(formData().service === 'teams' || formData().service === 'teams-adaptive') && 'Teams: Use channel names like @General'}
-                {formData().service === 'mattermost' && 'Mattermost: Use @channel, @all, or @username'}
+                {formData().service === 'discord' &&
+                  'Discord: Use @everyone, @here, <@USER_ID>, or <@&ROLE_ID>'}
+                {formData().service === 'slack' &&
+                  'Slack: Use @channel, @here, <@USER_ID>, or <!subteam^ID>'}
+                {(formData().service === 'teams' || formData().service === 'teams-adaptive') &&
+                  'Teams: Use channel names like @General'}
+                {formData().service === 'mattermost' &&
+                  'Mattermost: Use @channel, @all, or @username'}
               </p>
             </div>
           </Show>
@@ -593,9 +594,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
             <div class={formField}>
               <label class={labelClass('flex items-center gap-2')}>
                 Custom payload template (JSON)
-                <span class="text-xs text-muted">
-                  Optional — leave empty to use default
-                </span>
+                <span class="text-xs text-muted">Optional — leave empty to use default</span>
               </label>
               <textarea
                 value={formData().payloadTemplate || ''}
@@ -627,9 +626,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                 Custom fields
                 <span class="text-xs text-muted">
                   Available as{' '}
-                  <code class="font-mono text-[11px] text-muted">
-                    {'{{.CustomFields.<name>}}'}
-                  </code>{' '}
+                  <code class="font-mono text-[11px] text-muted">{'{{.CustomFields.<name>}}'}</code>{' '}
                   in templates
                 </span>
               </label>
@@ -639,9 +636,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                     <div class="flex gap-2 text-xs">
                       <div class="flex flex-1 flex-col gap-1">
                         <Show when={field().label}>
-                          <span class="text-[11px] text-muted">
-                            {field().label}
-                          </span>
+                          <span class="text-[11px] text-muted">{field().label}</span>
                         </Show>
                         <input
                           type="text"
@@ -699,27 +694,25 @@ export function WebhookConfig(props: WebhookConfigProps) {
                         id: newId,
                         key: '',
                         value: '',
- },
- ]);
- }}
- class="w-full border border-dashed border-border px-2 py-1 text-xs hover:bg-surface-hover"
- >
- + Add custom field
- </button>
- </div>
- <p class="mt-2 text-xs text-muted">
- Need Pushover? Provide your Application Token and User Key here.
- </p>
- </div>
- </Show>
+                      },
+                    ]);
+                  }}
+                  class="w-full border border-dashed border-border px-2 py-1 text-xs hover:bg-surface-hover"
+                >
+                  + Add custom field
+                </button>
+              </div>
+              <p class="mt-2 text-xs text-muted">
+                Need Pushover? Provide your Application Token and User Key here.
+              </p>
+            </div>
+          </Show>
 
- {/* Custom Headers Section */}
- <div class={formField}>
- <label class={labelClass('flex items-center gap-2')}>
+          {/* Custom Headers Section */}
+          <div class={formField}>
+            <label class={labelClass('flex items-center gap-2')}>
               Custom headers
-              <span class="text-xs text-muted">
-                Add authentication tokens or custom headers
-              </span>
+              <span class="text-xs text-muted">Add authentication tokens or custom headers</span>
             </label>
             <div class="space-y-2 text-xs">
               <Index each={headerInputs()}>
@@ -775,56 +768,56 @@ export function WebhookConfig(props: WebhookConfigProps) {
                       id: newId,
                       key: '',
                       value: '',
- },
- ]);
- }}
- class="w-full border border-dashed border-border px-2 py-1 text-xs hover:bg-surface-hover"
- >
- + Add header
- </button>
- </div>
- <p class="mt-2 text-xs text-muted">
- Common headers: Authorization (Bearer token), X-API-Key, X-Auth-Token
- </p>
- </div>
+                    },
+                  ]);
+                }}
+                class="w-full border border-dashed border-border px-2 py-1 text-xs hover:bg-surface-hover"
+              >
+                + Add header
+              </button>
+            </div>
+            <p class="mt-2 text-xs text-muted">
+              Common headers: Authorization (Bearer token), X-API-Key, X-Auth-Token
+            </p>
+          </div>
 
- <div>
- <label class="flex items-center gap-2 text-sm text-base-content">
- <input
- type="checkbox"
- checked={formData().enabled}
- onChange={(e) => setFormData({ ...formData(), enabled: e.currentTarget.checked })}
- class={formCheckbox}
- />
- <span>Enable this webhook</span>
- </label>
- </div>
+          <div>
+            <label class="flex items-center gap-2 text-sm text-base-content">
+              <input
+                type="checkbox"
+                checked={formData().enabled}
+                onChange={(e) => setFormData({ ...formData(), enabled: e.currentTarget.checked })}
+                class={formCheckbox}
+              />
+              <span>Enable this webhook</span>
+            </label>
+          </div>
 
- <div class="flex justify-end gap-2 text-xs">
- <button
- onClick={cancelForm}
- class="px-3 py-1.5 border border-border rounded text-xs hover:"
- >
- Cancel
- </button>
- <Show when={formData().url && formData().name}>
- <button
- onClick={() => {
- // Test the webhook with current form data
- // Build headers from headerInputs
- const headers: Record<string, string> = {};
- headerInputs().forEach((input) => {
- if (input.key) {
- headers[input.key] = input.value;
- }
- });
- const customFields = buildMapFromInputs(customFieldInputs());
- const { payloadTemplate, ...restFormData } = formData();
- const testPayload = {
- ...restFormData,
- headers,
- customFields,
- template: payloadTemplate ?? restFormData.template ??'',
+          <div class="flex justify-end gap-2 text-xs">
+            <button
+              onClick={cancelForm}
+              class="px-3 py-1.5 border border-border rounded text-xs hover:"
+            >
+              Cancel
+            </button>
+            <Show when={formData().url && formData().name}>
+              <button
+                onClick={() => {
+                  // Test the webhook with current form data
+                  // Build headers from headerInputs
+                  const headers: Record<string, string> = {};
+                  headerInputs().forEach((input) => {
+                    if (input.key) {
+                      headers[input.key] = input.value;
+                    }
+                  });
+                  const customFields = buildMapFromInputs(customFieldInputs());
+                  const { payloadTemplate, ...restFormData } = formData();
+                  const testPayload = {
+                    ...restFormData,
+                    headers,
+                    customFields,
+                    template: payloadTemplate ?? restFormData.template ?? '',
                   };
                   // Use a consistent temporary ID for this form session
                   const tempId = editingId() || 'temp-new-webhook';

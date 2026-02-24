@@ -1,72 +1,91 @@
 import { JSX, splitProps } from 'solid-js';
 
 export interface TableProps extends JSX.HTMLAttributes<HTMLTableElement> {
-    wrapperClass?: string;
-    wrapperRef?: (el: HTMLDivElement) => void;
+  wrapperClass?: string;
+  wrapperRef?: (el: HTMLDivElement) => void;
 }
 
 export function Table(props: TableProps) {
-    const [local, rest] = splitProps(props, ['class', 'children', 'wrapperClass', 'wrapperRef']);
-    return (
-        <div ref={local.wrapperRef} class={`w-full overflow-x-auto ${local.wrapperClass || ''}`} style={{ "-webkit-overflow-scrolling": "touch" }}>
-            <table class={`w-full border-collapse text-left whitespace-nowrap ${local.class || ''}`} {...rest}>
-                {local.children}
-            </table>
-        </div>
-    );
+  const [local, rest] = splitProps(props, ['class', 'children', 'wrapperClass', 'wrapperRef']);
+  return (
+    <div
+      ref={local.wrapperRef}
+      class={`w-full overflow-x-auto ${local.wrapperClass || ''}`}
+      style={{ '-webkit-overflow-scrolling': 'touch' }}
+    >
+      <table
+        class={`w-full border-collapse text-left whitespace-nowrap ${local.class || ''}`}
+        {...rest}
+      >
+        {local.children}
+      </table>
+    </div>
+  );
 }
 
 export type TableHeaderProps = JSX.HTMLAttributes<HTMLTableSectionElement>;
 
 export function TableHeader(props: TableHeaderProps) {
-    const [local, rest] = splitProps(props, ['class', 'children']);
-    return (
-        <thead class={`bg-surface text-muted border-b border-border ${local.class || ''}`} {...rest}>
-            {local.children}
-        </thead>
-    );
+  const [local, rest] = splitProps(props, ['class', 'children']);
+  return (
+    <thead class={`bg-surface text-muted border-b border-border ${local.class || ''}`} {...rest}>
+      {local.children}
+    </thead>
+  );
 }
 
 export type TableBodyProps = JSX.HTMLAttributes<HTMLTableSectionElement>;
 
 export function TableBody(props: TableBodyProps) {
-    const [local, rest] = splitProps(props, ['class', 'children']);
-    return (
-        <tbody class={`divide-y divide-border ${local.class || ''}`} {...rest}>
-            {local.children}
-        </tbody>
-    );
+  const [local, rest] = splitProps(props, ['class', 'children']);
+  return (
+    <tbody class={`divide-y divide-border ${local.class || ''}`} {...rest}>
+      {local.children}
+    </tbody>
+  );
 }
 
 export type TableRowProps = JSX.HTMLAttributes<HTMLTableRowElement>;
 
 export function TableRow(props: TableRowProps) {
-    const [local, rest] = splitProps(props, ['class', 'children']);
-    return (
-        <tr class={`group transition-colors duration-150 hover:bg-surface-hover ${local.class || ''}`} {...rest}>
-            {local.children}
-        </tr>
-    );
+  const [local, rest] = splitProps(props, ['class', 'children']);
+  return (
+    <tr
+      class={`group transition-colors duration-150 hover:bg-surface-hover ${local.class || ''}`}
+      {...rest}
+    >
+      {local.children}
+    </tr>
+  );
 }
 
-export type TableHeadProps = JSX.HTMLAttributes<HTMLTableCellElement> & { colSpan?: number, colspan?: number };
+export type TableHeadProps = JSX.HTMLAttributes<HTMLTableCellElement> & {
+  colSpan?: number;
+  colspan?: number;
+};
 
 export function TableHead(props: TableHeadProps) {
-    const [local, rest] = splitProps(props, ['class', 'children']);
-    return (
-        <th class={`px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-semibold uppercase tracking-wider align-middle ${local.class || ''}`} {...rest}>
-            {local.children}
-        </th>
-    );
+  const [local, rest] = splitProps(props, ['class', 'children']);
+  return (
+    <th
+      class={`px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-semibold uppercase tracking-wider align-middle ${local.class || ''}`}
+      {...rest}
+    >
+      {local.children}
+    </th>
+  );
 }
 
-export type TableCellProps = JSX.HTMLAttributes<HTMLTableCellElement> & { colSpan?: number, colspan?: number };
+export type TableCellProps = JSX.HTMLAttributes<HTMLTableCellElement> & {
+  colSpan?: number;
+  colspan?: number;
+};
 
 export function TableCell(props: TableCellProps) {
-    const [local, rest] = splitProps(props, ['class', 'children']);
-    return (
-        <td class={`px-2 sm:px-3 py-0.5 align-middle ${local.class || ''}`} {...rest}>
-            {local.children}
-        </td>
-    );
+  const [local, rest] = splitProps(props, ['class', 'children']);
+  return (
+    <td class={`px-2 sm:px-3 py-0.5 align-middle ${local.class || ''}`} {...rest}>
+      {local.children}
+    </td>
+  );
 }

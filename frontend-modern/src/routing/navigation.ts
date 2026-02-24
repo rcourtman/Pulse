@@ -34,7 +34,8 @@ export function getActiveTabForPath(path: string): AppTabId {
   if (path.startsWith('/services')) return 'infrastructure';
   if (path.startsWith('/mail')) return 'infrastructure';
   if (path.startsWith('/proxmox/ceph') || path.startsWith('/proxmox/storage')) return 'storage';
-  if (path.startsWith('/proxmox/replication') || path.startsWith('/proxmox/backups')) return 'recovery';
+  if (path.startsWith('/proxmox/replication') || path.startsWith('/proxmox/backups'))
+    return 'recovery';
   if (path.startsWith('/proxmox/mail')) return 'infrastructure';
   if (path.startsWith('/proxmox')) return 'infrastructure';
   if (path.startsWith('/kubernetes')) return 'workloads';

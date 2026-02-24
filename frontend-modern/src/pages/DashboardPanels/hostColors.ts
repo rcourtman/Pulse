@@ -8,4 +8,3 @@ export const HOST_COLORS = [
   '#f59e0b', // amber
   '#ef4444', // red
 ];
-

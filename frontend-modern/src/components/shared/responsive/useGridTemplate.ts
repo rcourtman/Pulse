@@ -37,28 +37,30 @@ export interface GridTemplateResult {
  * Generate a CSS grid-template-columns value from column configs
  */
 function generateGridTemplate(columns: ColumnConfig[]): string {
-  return columns.map(col => {
-    const min = col.minWidth || '50px';
-    const max = col.maxWidth || `${col.flex || 1}fr`;
+  return columns
+    .map((col) => {
+      const min = col.minWidth || '50px';
+      const max = col.maxWidth || `${col.flex || 1}fr`;
 
-    // If both min and max are 'auto', use just 'auto' for content-based sizing
-    if (min === 'auto' && max === 'auto') {
-      return 'auto';
-    }
+      // If both min and max are 'auto', use just 'auto' for content-based sizing
+      if (min === 'auto' && max === 'auto') {
+        return 'auto';
+      }
 
-    // If only max is 'auto', use minmax with auto
-    if (max === 'auto') {
-      return `minmax(${min}, auto)`;
-    }
+      // If only max is 'auto', use minmax with auto
+      if (max === 'auto') {
+        return `minmax(${min}, auto)`;
+      }
 
-    // If we have both min and max as fixed values, use the appropriate one
-    if (col.maxWidth && !col.maxWidth.includes('fr')) {
-      return `minmax(${min}, ${col.maxWidth})`;
-    }
+      // If we have both min and max as fixed values, use the appropriate one
+      if (col.maxWidth && !col.maxWidth.includes('fr')) {
+        return `minmax(${min}, ${col.maxWidth})`;
+      }
 
-    // Use minmax for flexible columns
-    return `minmax(${min}, ${max})`;
-  }).join(' ');
+      // Use minmax for flexible columns
+      return `minmax(${min}, ${max})`;
+    })
+    .join(' ');
 }
 
 /**
@@ -68,7 +70,7 @@ function getVisibleColumns(columns: ColumnConfig[], breakpoint: Breakpoint): Col
   const breakpointOrder: Breakpoint[] = ['xs', 'sm', 'md', 'lg', 'xl', '2xl'];
   const currentIndex = breakpointOrder.indexOf(breakpoint);
 
-  return columns.filter(col => {
+  return columns.filter((col) => {
     const colBreakpoint = PRIORITY_BREAKPOINTS[col.priority];
     const colIndex = breakpointOrder.indexOf(colBreakpoint);
     return colIndex <= currentIndex;
@@ -134,7 +136,7 @@ export function useGridTemplate(options: GridTemplateOptions): GridTemplateResul
   });
 
   const isColumnVisible = (columnId: string): boolean => {
-    return visibleColumns().some(col => col.id === columnId);
+    return visibleColumns().some((col) => col.id === columnId);
   };
 
   return {
@@ -151,7 +153,7 @@ export function useGridTemplate(options: GridTemplateOptions): GridTemplateResul
  */
 export function generateStaticGridTemplate(
   columns: ColumnConfig[],
-  breakpoint: Breakpoint = 'xl'
+  breakpoint: Breakpoint = 'xl',
 ): string {
   const visible = getVisibleColumns(columns, breakpoint);
   return generateGridTemplate(visible);
@@ -165,7 +167,7 @@ export function generateResponsiveTemplates(columns: ColumnConfig[]): Record<Bre
   const breakpoints: Breakpoint[] = ['xs', 'sm', 'md', 'lg', 'xl', '2xl'];
 
   return Object.fromEntries(
-    breakpoints.map(bp => [bp, generateStaticGridTemplate(columns, bp)])
+    breakpoints.map((bp) => [bp, generateStaticGridTemplate(columns, bp)]),
   ) as Record<Breakpoint, string>;
 }
 
@@ -174,7 +176,7 @@ export function generateResponsiveTemplates(columns: ColumnConfig[]): Record<Bre
  */
 export function getColumnVisibilityClass(
   priority: ColumnConfig['priority'],
-  displayType: 'flex' | 'block' | 'table-cell' | 'grid' = 'flex'
+  displayType: 'flex' | 'block' | 'table-cell' | 'grid' = 'flex',
 ): string {
   const bp = PRIORITY_BREAKPOINTS[priority];
 

@@ -54,9 +54,12 @@ export const ResponsiveHeader: Component<ResponsiveHeaderProps> = (props) => {
 
   const alignmentClass = () => {
     switch (props.column.align) {
-      case 'center': return 'justify-center text-center';
-      case 'right': return 'justify-end text-right';
-      default: return 'justify-start text-left';
+      case 'center':
+        return 'justify-center text-center';
+      case 'right':
+        return 'justify-end text-right';
+      default:
+        return 'justify-start text-left';
     }
   };
 
@@ -88,9 +91,10 @@ export const ResponsiveHeader: Component<ResponsiveHeaderProps> = (props) => {
       onKeyDown={handleKeyDown}
       tabIndex={props.column.sortable ? 0 : undefined}
       role={props.column.sortable ? 'button' : undefined}
-      aria-label={props.column.sortable
-        ? `Sort by ${props.column.label} ${isSorted() ? (props.sortState?.direction === 'asc' ? 'ascending' : 'descending') : ''}`
-        : undefined
+      aria-label={
+        props.column.sortable
+          ? `Sort by ${props.column.label} ${isSorted() ? (props.sortState?.direction === 'asc' ? 'ascending' : 'descending') : ''}`
+          : undefined
       }
     >
       {/* Mobile: Show icon if available */}
@@ -101,9 +105,7 @@ export const ResponsiveHeader: Component<ResponsiveHeaderProps> = (props) => {
       </Show>
 
       {/* Desktop: Show label (or always if no icon) */}
-      <span class={props.showMobile && Icon ? 'hidden md:inline' : ''}>
-        {props.column.label}
-      </span>
+      <span class={props.showMobile && Icon ? 'hidden md:inline' : ''}>{props.column.label}</span>
 
       {/* Sort indicator */}
       <Show when={sortIndicator()}>

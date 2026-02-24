@@ -95,7 +95,11 @@ export function getNodeStatusIndicator(node: Partial<Node> | undefined | null): 
   const status = normalize(node.status);
   const uptime = node.uptime ?? 0;
 
-  if (OFFLINE_HEALTH_STATUSES.has(connection) || OFFLINE_HEALTH_STATUSES.has(status) || uptime <= 0) {
+  if (
+    OFFLINE_HEALTH_STATUSES.has(connection) ||
+    OFFLINE_HEALTH_STATUSES.has(status) ||
+    uptime <= 0
+  ) {
     return { variant: 'danger', label: formatStatusLabel(connection || status, 'Offline') };
   }
 

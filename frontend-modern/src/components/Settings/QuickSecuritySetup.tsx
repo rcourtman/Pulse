@@ -73,7 +73,6 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
 
     setIsSettingUp(true);
 
-
     try {
       // Generate or use custom credentials
       const newCredentials: SecurityCredentials = {
@@ -83,19 +82,22 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
       };
 
       // Call API to enable security
-      const result = await apiFetchJSON<{ skipped?: boolean; message?: string }>('/api/security/quick-setup', {
-        method: 'POST',
-        body: JSON.stringify({
-          ...newCredentials,
-          force: isRotation,
-        }),
-      });
+      const result = await apiFetchJSON<{ skipped?: boolean; message?: string }>(
+        '/api/security/quick-setup',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            ...newCredentials,
+            force: isRotation,
+          }),
+        },
+      );
 
       if (result.skipped) {
         // Security was already configured, don't show credentials
         showError(
           result.message ||
-          'Security is already configured. Please remove existing security first if you want to reconfigure.',
+            'Security is already configured. Please remove existing security first if you want to reconfigure.',
         );
         if (props.onConfigured) {
           props.onConfigured();
@@ -216,20 +218,22 @@ Important:
                 <button
                   type="button"
                   onClick={() => setUseCustomPassword(false)}
-                  class={`px-3 py-1 text-xs rounded-md transition-colors ${!useCustomPassword()
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-surface-hover text-base-content hover:bg-surface-hover'
-                    }`}
+                  class={`px-3 py-1 text-xs rounded-md transition-colors ${
+                    !useCustomPassword()
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-surface-hover text-base-content hover:bg-surface-hover'
+                  }`}
                 >
                   Auto-Generate
                 </button>
                 <button
                   type="button"
                   onClick={() => setUseCustomPassword(true)}
-                  class={`px-3 py-1 text-xs rounded-md transition-colors ${useCustomPassword()
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-surface-hover text-base-content hover:bg-surface-hover'
-                    }`}
+                  class={`px-3 py-1 text-xs rounded-md transition-colors ${
+                    useCustomPassword()
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-surface-hover text-base-content hover:bg-surface-hover'
+                  }`}
                 >
                   Custom
                 </button>

@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  getNodeDisplayName,
-  hasAlternateDisplayName,
-} from '@/utils/nodes';
+import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
 
 describe('getNodeDisplayName', () => {
   it('returns displayName when present and non-empty', () => {
@@ -26,7 +23,10 @@ describe('getNodeDisplayName', () => {
   });
 
   it('returns name when displayName is undefined', () => {
-    const node = { name: 'node1', displayName: undefined } as { name: string; displayName?: string };
+    const node = { name: 'node1', displayName: undefined } as {
+      name: string;
+      displayName?: string;
+    };
     expect(getNodeDisplayName(node)).toBe('node1');
   });
 
@@ -78,7 +78,10 @@ describe('hasAlternateDisplayName', () => {
   });
 
   it('returns false when displayName is undefined', () => {
-    const node = { name: 'node1', displayName: undefined } as { name: string; displayName?: string };
+    const node = { name: 'node1', displayName: undefined } as {
+      name: string;
+      displayName?: string;
+    };
     expect(hasAlternateDisplayName(node)).toBe(false);
   });
 

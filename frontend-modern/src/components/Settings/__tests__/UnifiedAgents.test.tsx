@@ -3,7 +3,13 @@ import { render, fireEvent, screen, waitFor, cleanup, within } from '@solidjs/te
 import { createStore } from 'solid-js/store';
 import { Router, Route } from '@solidjs/router';
 import { UnifiedAgents } from '../UnifiedAgents';
-import type { Host, DockerHost, KubernetesCluster, RemovedDockerHost, RemovedKubernetesCluster } from '@/types/api';
+import type {
+  Host,
+  DockerHost,
+  KubernetesCluster,
+  RemovedDockerHost,
+  RemovedKubernetesCluster,
+} from '@/types/api';
 
 let mockWsStore: {
   state: {
@@ -66,12 +72,31 @@ vi.mock('@/hooks/useResources', () => ({
         return (mockWsStore?.state?.hosts || []).map((h: any) => ({
           id: h.id,
           type: 'host',
+          platformType: 'host-agent',
+          sourceType: 'agent',
           name: h.hostname || h.id,
           displayName: h.displayName,
           status: h.status || 'unknown',
           lastSeen: h.lastSeen,
           identity: { hostname: h.hostname },
+          discoveryTarget: {
+            resourceType: 'host',
+            hostId: h.id,
+            resourceId: h.id,
+          },
+          agent: {
+            agentId: h.id,
+            agentVersion: h.agentVersion,
+            commandsEnabled: h.commandsEnabled,
+            tokenName: h.tokenName,
+          },
           platformData: {
+            agent: {
+              agentId: h.id,
+              agentVersion: h.agentVersion,
+              commandsEnabled: h.commandsEnabled,
+              tokenName: h.tokenName,
+            },
             agentVersion: h.agentVersion,
             isLegacy: h.isLegacy,
             linkedNodeId: h.linkedNodeId,
@@ -84,16 +109,63 @@ vi.mock('@/hooks/useResources', () => ({
         return (mockWsStore?.state?.dockerHosts || []).map((d: any) => ({
           id: d.id,
           type: 'docker-host',
+          platformType: 'docker',
+          sourceType: 'agent',
           name: d.hostname || d.id,
           displayName: d.displayName,
           status: d.status || 'unknown',
           lastSeen: d.lastSeen,
           identity: { hostname: d.hostname },
+          discoveryTarget: {
+            resourceType: 'docker',
+            hostId: d.agentId || d.id,
+            resourceId: d.id,
+          },
           platformData: {
+            agent: {
+              agentId: d.agentId || d.id,
+              agentVersion: d.agentVersion,
+            },
+            docker: {
+              hostSourceId: d.id,
+              agentVersion: d.agentVersion,
+              dockerVersion: d.dockerVersion,
+            },
             agentId: d.agentId || d.id,
             agentVersion: d.agentVersion,
             dockerVersion: d.dockerVersion,
             isLegacy: d.isLegacy,
+          },
+        }));
+      }
+      if (type === 'k8s-cluster') {
+        return (mockWsStore?.state?.kubernetesClusters || []).map((k: any) => ({
+          id: k.id,
+          type: 'k8s-cluster',
+          platformType: 'kubernetes',
+          sourceType: 'agent',
+          name: k.name || k.id,
+          displayName: k.customDisplayName || k.displayName || k.name || k.id,
+          status: k.status || 'unknown',
+          lastSeen: k.lastSeen,
+          discoveryTarget: {
+            resourceType: 'k8s',
+            hostId: k.agentId || k.id,
+            resourceId: k.id,
+          },
+          platformData: {
+            kubernetes: {
+              clusterId: k.id,
+              clusterName: k.name,
+              context: k.context,
+              server: k.server,
+              agentId: k.agentId,
+            },
+            agent: {
+              agentId: k.agentId,
+              agentVersion: k.agentVersion,
+              tokenName: k.tokenName,
+            },
           },
         }));
       }
@@ -284,10 +356,9 @@ describe('UnifiedAgents token generation', () => {
     fireEvent.click(generateButton);
 
     await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
-    await waitFor(
-      () => expect(screen.getByText(/Token.*created/i)).toBeInTheDocument(),
-      { interval: 0 },
-    );
+    await waitFor(() => expect(screen.getByText(/Token.*created/i)).toBeInTheDocument(), {
+      interval: 0,
+    });
     expect(trackAgentInstallTokenGeneratedMock).toHaveBeenCalledWith(
       'settings_unified_agents',
       'manual',
@@ -350,10 +421,7 @@ describe('UnifiedAgents host lookup', () => {
     fireEvent.click(checkButton);
 
     await waitFor(() => expect(lookupMock).toHaveBeenCalled(), { interval: 0 });
-    await waitFor(
-      () => expect(screen.getByText('Connected')).toBeInTheDocument(),
-      { interval: 0 },
-    );
+    await waitFor(() => expect(screen.getByText('Connected')).toBeInTheDocument(), { interval: 0 });
   });
 
   it('shows error message when host is not found', async () => {

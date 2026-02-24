@@ -144,7 +144,9 @@ describe('SuggestProfileModal', () => {
 
     const { onSuggestionAccepted } = renderModal();
 
-    const promptInput = screen.getByPlaceholderText('Describe the agents and use case for this profile...');
+    const promptInput = screen.getByPlaceholderText(
+      'Describe the agents and use case for this profile...',
+    );
     fireEvent.input(promptInput, { target: { value: 'Production profile' } });
     fireEvent.click(screen.getByRole('button', { name: /get ideas/i }));
 

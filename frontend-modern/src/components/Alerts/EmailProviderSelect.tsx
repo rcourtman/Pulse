@@ -81,7 +81,8 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
   };
 
   const currentProvider = () => providers().find((p) => p.name === props.config.provider);
-  const instructionBoxClass = "mt-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200";
+  const instructionBoxClass =
+    'mt-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200';
 
   return (
     <div class="space-y-4 text-sm overflow-hidden">
@@ -127,15 +128,11 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
             {showInstructions() ? 'Hide setup instructions' : 'Show setup instructions'}
           </button>
           <Show when={showInstructions()}>
-            <div class={instructionBoxClass}>
-              {currentProvider()!.instructions}
-            </div>
+            <div class={instructionBoxClass}>{currentProvider()!.instructions}</div>
           </Show>
         </div>
         <div class="hidden w-full sm:block">
-          <div class={instructionBoxClass}>
-            {currentProvider()!.instructions}
-          </div>
+          <div class={instructionBoxClass}>{currentProvider()!.instructions}</div>
         </div>
       </Show>
 

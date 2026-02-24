@@ -442,6 +442,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
       workloadType === 'docker' ? (resource.docker?.runtime || '').trim() || undefined : undefined,
     updateStatus: resource.docker?.updateStatus as WorkloadGuest['updateStatus'] | undefined,
     dockerHostId: resource.docker?.hostSourceId,
+    kubernetesAgentId: workloadType === 'k8s' ? resource.kubernetes?.agentId : undefined,
     platformType: resolvePlatformType(resource.sources),
   };
 };

@@ -12,9 +12,9 @@ import {
 // Stub ResizeObserver for jsdom
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class ResizeObserver {
-    observe() { }
-    unobserve() { }
-    disconnect() { }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
   } as unknown as typeof ResizeObserver;
 }
 
@@ -60,20 +60,19 @@ const PROFILES = {
   L: 3000,
 } as const;
 
-const makeResources = (
-  count: number,
-  overrides?: (i: number) => Partial<Resource>,
-): Resource[] => Array.from({ length: count }, (_, i) => makeResource(i, overrides?.(i)));
+const makeResources = (count: number, overrides?: (i: number) => Partial<Resource>): Resource[] =>
+  Array.from({ length: count }, (_, i) => makeResource(i, overrides?.(i)));
 
-const getTypeDistribution = (resources: Resource[]) => resources.reduce(
-  (acc, resource) => {
-    if (resource.type === 'node') acc.node += 1;
-    if (resource.type === 'docker-host') acc.dockerHost += 1;
-    if (resource.type === 'host') acc.host += 1;
-    return acc;
-  },
-  { node: 0, dockerHost: 0, host: 0 },
-);
+const getTypeDistribution = (resources: Resource[]) =>
+  resources.reduce(
+    (acc, resource) => {
+      if (resource.type === 'node') acc.node += 1;
+      if (resource.type === 'docker-host') acc.dockerHost += 1;
+      if (resource.type === 'host') acc.host += 1;
+      return acc;
+    },
+    { node: 0, dockerHost: 0, host: 0 },
+  );
 
 const expectedTypeDistribution = (count: number) => {
   const node = Math.floor((count - 1) / 5) + 1;

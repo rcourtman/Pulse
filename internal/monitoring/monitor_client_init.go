@@ -46,7 +46,7 @@ func (m *Monitor) initPVEClients(cfg *config.Config) {
 				Int("endpoints", len(endpoints)).
 				Msg("Cluster client created successfully")
 			// Set initial connection health to true for cluster
-			m.state.SetConnectionHealth(pve.Name, true)
+			m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, true)
 			continue
 		}
 
@@ -65,13 +65,13 @@ func (m *Monitor) initPVEClients(cfg *config.Config) {
 				Bool("hasToken", pve.TokenValue != "").
 				Msg("Failed to create PVE client - node will show as disconnected")
 			// Set initial connection health to false for this node
-			m.state.SetConnectionHealth(pve.Name, false)
+			m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, false)
 			continue
 		}
 		m.pveClients[pve.Name] = client
 		log.Info().Str("instance", pve.Name).Msg("PVE client created successfully")
 		// Set initial connection health to true
-		m.state.SetConnectionHealth(pve.Name, true)
+		m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, true)
 	}
 }
 
@@ -99,13 +99,13 @@ func (m *Monitor) initPBSClients(cfg *config.Config) {
 				Bool("hasToken", pbsInst.TokenValue != "").
 				Msg("Failed to create PBS client - node will show as disconnected")
 			// Set initial connection health to false for this node
-			m.state.SetConnectionHealth("pbs-"+pbsInst.Name, false)
+			m.setProviderConnectionHealth(InstanceTypePBS, pbsInst.Name, false)
 			continue
 		}
 		m.pbsClients[pbsInst.Name] = client
 		log.Info().Str("instance", pbsInst.Name).Msg("PBS client created successfully")
 		// Set initial connection health to true
-		m.state.SetConnectionHealth("pbs-"+pbsInst.Name, true)
+		m.setProviderConnectionHealth(InstanceTypePBS, pbsInst.Name, true)
 	}
 }
 
@@ -135,12 +135,12 @@ func (m *Monitor) initPMGClients(cfg *config.Config) {
 				Bool("hasPassword", pmgInst.Password != "").
 				Bool("hasToken", pmgInst.TokenValue != "").
 				Msg("Failed to create PMG client - gateway will show as disconnected")
-			m.state.SetConnectionHealth("pmg-"+pmgInst.Name, false)
+			m.setProviderConnectionHealth(InstanceTypePMG, pmgInst.Name, false)
 			continue
 		}
 
 		m.pmgClients[pmgInst.Name] = client
 		log.Info().Str("instance", pmgInst.Name).Msg("PMG client created successfully")
-		m.state.SetConnectionHealth("pmg-"+pmgInst.Name, true)
+		m.setProviderConnectionHealth(InstanceTypePMG, pmgInst.Name, true)
 	}
 }

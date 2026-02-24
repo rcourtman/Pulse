@@ -95,14 +95,10 @@ describe('extractTrendData', () => {
     const trend = extractTrendData(rawPoints);
 
     expect(trend.points.map((point) => point.timestamp)).toEqual([
-      1_700_000_000_000,
-      1_700_000_180_000,
-      1_700_000_360_000,
-      1_700_000_540_000,
+      1_700_000_000_000, 1_700_000_180_000, 1_700_000_360_000, 1_700_000_540_000,
     ]);
     expect(trend.currentValue).toBe(72);
     expect(trend.delta).not.toBeNull();
     expect(trend.delta ?? 0).toBeGreaterThan(0);
   });
 });
-

@@ -197,7 +197,11 @@ export class NotificationsAPI {
   static async testNotification(
     request: NotificationTestRequest,
   ): Promise<{ success: boolean; message?: string }> {
-    const body: { method: string; config?: Record<string, unknown> | AppriseConfig; webhookId?: string } = {
+    const body: {
+      method: string;
+      config?: Record<string, unknown> | AppriseConfig;
+      webhookId?: string;
+    } = {
       method: request.type,
     };
 

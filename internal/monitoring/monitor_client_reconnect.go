@@ -103,7 +103,7 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 
 				m.mu.Lock()
 				m.pveClients[pve.Name] = clusterClient
-				m.state.SetConnectionHealth(pve.Name, true)
+				m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, true)
 				m.mu.Unlock()
 
 				log.Info().
@@ -127,7 +127,7 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 
 			m.mu.Lock()
 			m.pveClients[pve.Name] = client
-			m.state.SetConnectionHealth(pve.Name, true)
+			m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, true)
 			m.mu.Unlock()
 
 			log.Info().
@@ -150,7 +150,7 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 
 			m.mu.Lock()
 			m.pbsClients[pbsInst.Name] = client
-			m.state.SetConnectionHealth("pbs-"+pbsInst.Name, true)
+			m.setProviderConnectionHealth(InstanceTypePBS, pbsInst.Name, true)
 			m.mu.Unlock()
 
 			log.Info().

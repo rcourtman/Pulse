@@ -3,7 +3,11 @@ import type { Node } from '@/types/api';
 type DisplayableNode = Pick<Node, 'name'> &
   Partial<Pick<Node, 'displayName' | 'instance' | 'host'>>;
 
-const sanitize = (value: string): string => value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+const sanitize = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
 
 const escapeRegExp = (value: string): string => value.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\$&');
 

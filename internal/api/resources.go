@@ -46,6 +46,19 @@ type TenantSupplementalRecordsProvider interface {
 	GetCurrentRecordsForOrg(orgID string) []unified.IngestRecord
 }
 
+// SupplementalSnapshotSourceOwner is an optional interface for providers that
+// own source-native resource ingestion and want matching legacy snapshot slices
+// suppressed during registry construction.
+type SupplementalSnapshotSourceOwner interface {
+	SnapshotOwnedSources() []unified.DataSource
+}
+
+// TenantSupplementalSnapshotSourceOwner is the tenant-aware variant of
+// SupplementalSnapshotSourceOwner.
+type TenantSupplementalSnapshotSourceOwner interface {
+	SnapshotOwnedSourcesForOrg(orgID string) []unified.DataSource
+}
+
 // NewResourceHandlers creates a new ResourceHandlers.
 func NewResourceHandlers(cfg *config.Config) *ResourceHandlers {
 	return &ResourceHandlers{
@@ -543,14 +556,17 @@ func (h *ResourceHandlers) buildRegistry(orgID string) (*unified.ResourceRegistr
 	}
 	h.cacheMu.Unlock()
 
-	registry := unified.NewRegistry(store)
-	registry.IngestSnapshot(snapshot)
 	h.supplementalMu.RLock()
 	supplementalProviders := make(map[unified.DataSource]SupplementalRecordsProvider, len(h.supplementalRecords))
 	for source, provider := range h.supplementalRecords {
 		supplementalProviders[source] = provider
 	}
 	h.supplementalMu.RUnlock()
+
+	registry := unified.NewRegistry(store)
+	ownedSources := supplementalSnapshotOwnedSources(supplementalProviders, orgID)
+	registry.IngestSnapshot(unified.SnapshotWithoutSources(snapshot, ownedSources))
+
 	for source, provider := range supplementalProviders {
 		if provider == nil {
 			continue
@@ -572,6 +588,50 @@ func (h *ResourceHandlers) buildRegistry(orgID string) (*unified.ResourceRegistr
 	h.cacheMu.Unlock()
 
 	return registry, nil
+}
+
+func supplementalSnapshotOwnedSources(providers map[unified.DataSource]SupplementalRecordsProvider, orgID string) []unified.DataSource {
+	if len(providers) == 0 {
+		return nil
+	}
+
+	owned := make(map[string]unified.DataSource)
+	for _, provider := range providers {
+		if provider == nil {
+			continue
+		}
+
+		var sources []unified.DataSource
+		if tenantOwner, ok := any(provider).(TenantSupplementalSnapshotSourceOwner); ok {
+			sources = tenantOwner.SnapshotOwnedSourcesForOrg(orgID)
+		} else if owner, ok := any(provider).(SupplementalSnapshotSourceOwner); ok {
+			sources = owner.SnapshotOwnedSources()
+		}
+
+		for _, source := range sources {
+			key := strings.ToLower(strings.TrimSpace(string(source)))
+			if key == "" {
+				continue
+			}
+			owned[key] = unified.DataSource(key)
+		}
+	}
+
+	if len(owned) == 0 {
+		return nil
+	}
+
+	keys := make([]string, 0, len(owned))
+	for key := range owned {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	out := make([]unified.DataSource, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, owned[key])
+	}
+	return out
 }
 
 func (h *ResourceHandlers) getStore(orgID string) (unified.ResourceStore, error) {

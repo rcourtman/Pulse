@@ -30,10 +30,7 @@ export const updatesHelpContent: HelpContent[] = [
       '- Stable: Production-ready releases only\n' +
       '- Release Candidate (RC): Preview upcoming features before stable release\n\n' +
       'RC builds are tested but may have rough edges. Use stable for production.',
-    examples: [
-      'stable - v5.0.11, v5.0.12, etc.',
-      'rc - v5.1.0-rc.1, v5.1.0-rc.2, etc.',
-    ],
+    examples: ['stable - v5.0.11, v5.0.12, etc.', 'rc - v5.1.0-rc.1, v5.1.0-rc.2, etc.'],
     addedInVersion: 'v4.0.0',
   },
   {

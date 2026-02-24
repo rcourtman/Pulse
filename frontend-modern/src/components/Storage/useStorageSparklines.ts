@@ -9,10 +9,7 @@ const sparklineCache = new Map<string, MetricPoint[]>();
  * Only fetches when `enabled` is true (i.e., the pool's group is expanded and visible).
  * Re-fetches every 60 seconds while enabled.
  */
-export function useStorageSparkline(
-  resourceId: () => string,
-  enabled: () => boolean,
-) {
+export function useStorageSparkline(resourceId: () => string, enabled: () => boolean) {
   const [data, setData] = createSignal<MetricPoint[]>(sparklineCache.get(resourceId()) ?? []);
   const [loading, setLoading] = createSignal(false);
 

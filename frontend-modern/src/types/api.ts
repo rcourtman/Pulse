@@ -477,14 +477,14 @@ export interface HostSensorSummary {
 }
 
 export interface HostDiskSMART {
-  device: string;        // Device name (e.g., sda)
-  model?: string;        // Disk model
-  serial?: string;       // Serial number
-  wwn?: string;          // World Wide Name
-  type?: string;         // Transport type: sata, sas, nvme
-  temperature: number;   // Temperature in Celsius
-  health?: string;       // PASSED, FAILED, UNKNOWN
-  standby?: boolean;     // True if disk was in standby
+  device: string; // Device name (e.g., sda)
+  model?: string; // Disk model
+  serial?: string; // Serial number
+  wwn?: string; // World Wide Name
+  type?: string; // Transport type: sata, sas, nvme
+  temperature: number; // Temperature in Celsius
+  health?: string; // PASSED, FAILED, UNKNOWN
+  standby?: boolean; // True if disk was in standby
 }
 
 export interface HostRAIDArray {
@@ -1035,60 +1035,60 @@ export type WSMessage =
   | { type: 'alertResolved'; data: { alertId: string } }
   | { type: 'settingsUpdate'; data: { theme?: string } }
   | {
-    type: 'update:progress';
-    data: {
-      phase: string;
-      progress: number;
-      message: string;
-    };
-  }
+      type: 'update:progress';
+      data: {
+        phase: string;
+        progress: number;
+        message: string;
+      };
+    }
   | {
-    type: 'node_auto_registered';
-    data: {
-      type: string;
-      host: string;
-      name: string;
-      tokenId: string;
-      hasToken: boolean;
-      verifySSL?: boolean;
-      status?: string;
-    };
-  }
+      type: 'node_auto_registered';
+      data: {
+        type: string;
+        host: string;
+        name: string;
+        tokenId: string;
+        hasToken: boolean;
+        verifySSL?: boolean;
+        status?: string;
+      };
+    }
   | { type: 'node_deleted'; data: { nodeType: string } }
   | { type: 'nodes_changed'; data?: unknown }
   | {
-    type: 'discovery_update';
-    data: {
-      servers: Array<{
-        ip: string;
-        port: number;
-        type: string;
-        version: string;
-        hostname?: string;
-        release?: string;
-      }>;
-      errors?: string[];
-      timestamp?: number;
-      immediate?: boolean;
-      scanning?: boolean;
-      cached?: boolean;
-    };
-  }
+      type: 'discovery_update';
+      data: {
+        servers: Array<{
+          ip: string;
+          port: number;
+          type: string;
+          version: string;
+          hostname?: string;
+          release?: string;
+        }>;
+        errors?: string[];
+        timestamp?: number;
+        immediate?: boolean;
+        scanning?: boolean;
+        cached?: boolean;
+      };
+    }
   | {
-    type: 'discovery_started';
-    data?: {
-      subnet?: string;
-      timestamp?: number;
-      scanning?: boolean;
-    };
-  }
+      type: 'discovery_started';
+      data?: {
+        subnet?: string;
+        timestamp?: number;
+        scanning?: boolean;
+      };
+    }
   | {
-    type: 'discovery_complete';
-    data?: {
-      timestamp?: number;
-      scanning?: boolean;
+      type: 'discovery_complete';
+      data?: {
+        timestamp?: number;
+        scanning?: boolean;
+      };
     };
-  };
 
 // Utility types
 export type Status = 'running' | 'stopped' | 'paused' | 'unknown';

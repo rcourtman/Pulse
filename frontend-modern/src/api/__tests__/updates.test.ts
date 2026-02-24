@@ -18,7 +18,9 @@ describe('UpdatesAPI', () => {
     apiFetchJSONMock.mockResolvedValueOnce({ available: false } as any);
     await UpdatesAPI.checkForUpdates('beta channel/rc+1');
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/updates/check?channel=beta+channel%2Frc%2B1');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith(
+      '/api/updates/check?channel=beta+channel%2Frc%2B1',
+    );
   });
 
   it('omits blank channel for update checks', async () => {

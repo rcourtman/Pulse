@@ -80,7 +80,7 @@ describe('alerts helpers', () => {
   describe('createDefaultQuietHours', () => {
     it('creates default quiet hours config', () => {
       const result = createDefaultQuietHours();
-      
+
       expect(result.enabled).toBe(false);
       expect(result.start).toBe('22:00');
       expect(result.end).toBe('08:00');
@@ -89,7 +89,7 @@ describe('alerts helpers', () => {
 
     it('has correct weekday defaults', () => {
       const result = createDefaultQuietHours();
-      
+
       expect(result.days.monday).toBe(true);
       expect(result.days.tuesday).toBe(true);
       expect(result.days.wednesday).toBe(true);
@@ -99,14 +99,14 @@ describe('alerts helpers', () => {
 
     it('has correct weekend defaults', () => {
       const result = createDefaultQuietHours();
-      
+
       expect(result.days.saturday).toBe(false);
       expect(result.days.sunday).toBe(false);
     });
 
     it('has correct suppress defaults', () => {
       const result = createDefaultQuietHours();
-      
+
       expect(result.suppress.performance).toBe(false);
       expect(result.suppress.storage).toBe(false);
       expect(result.suppress.offline).toBe(false);
@@ -116,7 +116,7 @@ describe('alerts helpers', () => {
   describe('createDefaultCooldown', () => {
     it('creates default cooldown config', () => {
       const result = createDefaultCooldown();
-      
+
       expect(result.enabled).toBe(true);
       expect(result.minutes).toBe(30);
       expect(result.maxAlerts).toBe(3);
@@ -126,7 +126,7 @@ describe('alerts helpers', () => {
   describe('createDefaultGrouping', () => {
     it('creates default grouping config', () => {
       const result = createDefaultGrouping();
-      
+
       expect(result.enabled).toBe(true);
       expect(result.window).toBe(1);
       expect(result.byNode).toBe(true);
@@ -143,7 +143,7 @@ describe('alerts helpers', () => {
   describe('createDefaultAppriseConfig', () => {
     it('creates default apprise config', () => {
       const result = createDefaultAppriseConfig();
-      
+
       expect(result.enabled).toBe(false);
       expect(result.mode).toBe('cli');
       expect(result.targetsText).toBe('');
@@ -155,7 +155,7 @@ describe('alerts helpers', () => {
   describe('createDefaultEmailConfig', () => {
     it('creates default email config', () => {
       const result = createDefaultEmailConfig();
-      
+
       expect(result.enabled).toBe(false);
       expect(result.from).toBe('');
       expect(result.to).toEqual([]);

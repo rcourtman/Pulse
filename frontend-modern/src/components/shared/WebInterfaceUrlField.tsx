@@ -45,8 +45,8 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
   let urlSuccessTimer: ReturnType<typeof setTimeout> | undefined;
 
   const metadataId = createMemo(() => (props.metadataId || '').trim());
-  const targetLabel = createMemo(() =>
-    (props.targetLabel || '').trim() || (props.metadataKind === 'host' ? 'host' : 'guest'),
+  const targetLabel = createMemo(
+    () => (props.targetLabel || '').trim() || (props.metadataKind === 'host' ? 'host' : 'guest'),
   );
   const currentCustomUrl = createMemo(() => props.customUrl ?? fetchedCustomUrl());
   const normalizedCurrentUrl = createMemo(() => currentCustomUrl().trim());

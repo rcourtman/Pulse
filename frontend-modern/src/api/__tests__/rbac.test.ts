@@ -51,7 +51,7 @@ describe('RBACAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/admin/roles',
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
     });
 
@@ -62,7 +62,7 @@ describe('RBACAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/admin/roles/role-1',
-        expect.objectContaining({ method: 'PUT' })
+        expect.objectContaining({ method: 'PUT' }),
       );
     });
   });
@@ -75,7 +75,7 @@ describe('RBACAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/admin/roles/role-1',
-        expect.objectContaining({ method: 'DELETE' })
+        expect.objectContaining({ method: 'DELETE' }),
       );
     });
   });
@@ -115,7 +115,7 @@ describe('RBACAPI', () => {
         expect.objectContaining({
           method: 'PUT',
           body: JSON.stringify({ roleIds: ['role-1', 'role-2'] }),
-        })
+        }),
       );
     });
   });

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { getSourcePlatformBadge, getSourcePlatformLabel } from '@/components/shared/sourcePlatformBadges';
+import {
+  getSourcePlatformBadge,
+  getSourcePlatformLabel,
+} from '@/components/shared/sourcePlatformBadges';
 
 describe('sourcePlatformBadges', () => {
   describe('getSourcePlatformBadge', () => {

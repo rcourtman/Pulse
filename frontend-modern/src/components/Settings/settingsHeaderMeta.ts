@@ -37,7 +37,8 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   },
   'system-relay': {
     title: 'Remote Access',
-    description: 'Configure Pulse relay connectivity for secure remote access (mobile rollout coming soon).',
+    description:
+      'Configure Pulse relay connectivity for secure remote access (mobile rollout coming soon).',
   },
   'system-pro': {
     title: 'Pro',
@@ -61,12 +62,12 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   },
   'organization-billing-admin': {
     title: 'Billing Admin',
-    description: 'Review and manage tenant billing state across all organizations (hosted mode only).',
+    description:
+      'Review and manage tenant billing state across all organizations (hosted mode only).',
   },
   api: {
     title: 'API Access',
-    description:
-      'Generate and manage scoped tokens for agents, automation, and integrations.',
+    description: 'Generate and manage scoped tokens for agents, automation, and integrations.',
   },
   'security-overview': {
     title: 'Security Overview',

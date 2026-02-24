@@ -5,7 +5,12 @@ import { Toggle } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
-import { getUpgradeActionUrlOrFallback, hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
+import {
+  getUpgradeActionUrlOrFallback,
+  hasFeature,
+  loadLicenseStatus,
+  licenseLoaded,
+} from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import Globe from 'lucide-solid/icons/globe';
 
@@ -37,12 +42,16 @@ const splitList = (input: string) =>
     .filter(Boolean);
 
 const mappingsToString = (mappings?: Record<string, string>) =>
-  mappings ? Object.entries(mappings).map(([k, v]) => `${k}=${v}`).join(', ') : '';
+  mappings
+    ? Object.entries(mappings)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(', ')
+    : '';
 
 const stringToMappings = (input: string) => {
   const result: Record<string, string> = {};
-  splitList(input).forEach(pair => {
-    const [k, v] = pair.split('=').map(s => s.trim());
+  splitList(input).forEach((pair) => {
+    const [k, v] = pair.split('=').map((s) => s.trim());
     if (k && v) result[k] = v;
   });
   return result;
@@ -375,7 +384,8 @@ export const OIDCPanel: Component<OIDCPanelProps> = (props) => {
                 disabled={isEnvLocked() || saving()}
               />
               <p class={formHelpText}>
-                Optional - Leave blank if your provider supports PKCE (Zitadel, Authentik, etc). Otherwise, enter your client secret.
+                Optional - Leave blank if your provider supports PKCE (Zitadel, Authentik, etc).
+                Otherwise, enter your client secret.
               </p>
             </div>
             <div class={formField}>
@@ -405,7 +415,8 @@ export const OIDCPanel: Component<OIDCPanelProps> = (props) => {
                 disabled={isEnvLocked() || saving()}
               />
               <p class={formHelpText}>
-                Optional - OIDC end-session URL for proper logout (e.g., Authentik's end-session endpoint). Leave blank to use local logout only.
+                Optional - OIDC end-session URL for proper logout (e.g., Authentik's end-session
+                endpoint). Leave blank to use local logout only.
               </p>
             </div>
           </div>
@@ -444,8 +455,8 @@ export const OIDCPanel: Component<OIDCPanelProps> = (props) => {
                     disabled={isEnvLocked() || saving()}
                   />
                   <p class={formHelpText}>
-                    Optional path to a PEM bundle containing your IdP&apos;s root certificates. Mount
-                    the file into the container; leave blank to use the system trust store.
+                    Optional path to a PEM bundle containing your IdP&apos;s root certificates.
+                    Mount the file into the container; leave blank to use the system trust store.
                   </p>
                 </div>
                 <div class={formField}>
@@ -545,8 +556,7 @@ export const OIDCPanel: Component<OIDCPanelProps> = (props) => {
           <div class="flex flex-wrap items-center justify-between gap-3 pt-4">
             <Show when={config()?.defaultRedirect}>
               <div class="text-xs text-muted">
-                Redirect URL registered with your IdP must match Pulse:{' '}
-                {config()?.defaultRedirect}
+                Redirect URL registered with your IdP must match Pulse: {config()?.defaultRedirect}
               </div>
             </Show>
             <div class="flex w-full sm:w-auto gap-3">

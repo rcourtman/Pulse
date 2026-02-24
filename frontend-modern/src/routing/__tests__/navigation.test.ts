@@ -51,7 +51,10 @@ describe('navigation routing helpers', () => {
     ).toBe('/workloads?type=k8s&migrated=1&from=kubernetes&context=cluster-a');
 
     expect(
-      mergeRedirectQueryParams('/infrastructure?source=pmg&migrated=1&from=services', '?search=mail'),
+      mergeRedirectQueryParams(
+        '/infrastructure?source=pmg&migrated=1&from=services',
+        '?search=mail',
+      ),
     ).toBe('/infrastructure?source=pmg&migrated=1&from=services&search=mail');
   });
 });

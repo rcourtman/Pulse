@@ -39,7 +39,8 @@ const DefaultErrorFallback: Component<{ error: Error; reset: () => void }> = (pr
 
         <div class="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded p-3 mb-4">
           <p class="text-sm text-red-800 dark:text-red-200">
-            Please try again or reload the page. If the problem persists, contact your administrator.
+            Please try again or reload the page. If the problem persists, contact your
+            administrator.
           </p>
         </div>
 

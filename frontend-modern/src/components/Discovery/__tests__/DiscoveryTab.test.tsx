@@ -24,12 +24,7 @@ describe('DiscoveryTab', () => {
 
   it('keeps run action visible while discovery lookup is still loading', async () => {
     render(() => (
-      <DiscoveryTab
-        resourceType="host"
-        hostId="host-1"
-        resourceId="host-1"
-        hostname="pve1"
-      />
+      <DiscoveryTab resourceType="host" hostId="host-1" resourceId="host-1" hostname="pve1" />
     ));
 
     expect(await screen.findByRole('button', { name: 'Run Discovery Now' })).toBeInTheDocument();

@@ -100,7 +100,10 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
                   }
                 })
                 .catch((error) => {
-                  logger.warn('Update completed but health check failed, assuming restart...', error);
+                  logger.warn(
+                    'Update completed but health check failed, assuming restart...',
+                    error,
+                  );
                   setIsRestarting(true);
                   startHealthCheckPolling();
                 });
@@ -306,7 +309,12 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
     if (hasError()) {
       return (
         <svg class="w-12 h-12 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
         </svg>
       );
     }
@@ -314,15 +322,31 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
     if (isComplete() && !hasError()) {
       return (
         <svg class="w-12 h-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
         </svg>
       );
     }
 
     return (
       <svg class="w-12 h-12 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        <circle
+          class="opacity-25"
+          cx="12"
+          cy="12"
+          r="10"
+          stroke="currentColor"
+          stroke-width="4"
+        ></circle>
+        <path
+          class="opacity-75"
+          fill="currentColor"
+          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+        ></path>
       </svg>
     );
   };
@@ -345,43 +369,41 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
     }
 
     return currentStatus.message || 'Updating...';
- };
+  };
 
- return (
- <Show when={props.isOpen}>
- <div class="fixed inset-0 bg-black flex items-center justify-center z-50 p-4">
- <div class="bg-surface rounded-md shadow-sm max-w-2xl w-full">
- {/* Header */}
- <div class="px-6 py-4 border-b border-border">
- <div class="flex items-center justify-between">
- <h2 class="text-xl font-semibold text-base-content">
- Updating Pulse
- </h2>
- <Show when={isComplete()}>
- <button
- onClick={props.onClose}
- class=" hover:text-base-content"
- >
- <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
- <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
- </svg>
- </button>
- </Show>
- </div>
- </div>
+  return (
+    <Show when={props.isOpen}>
+      <div class="fixed inset-0 bg-black flex items-center justify-center z-50 p-4">
+        <div class="bg-surface rounded-md shadow-sm max-w-2xl w-full">
+          {/* Header */}
+          <div class="px-6 py-4 border-b border-border">
+            <div class="flex items-center justify-between">
+              <h2 class="text-xl font-semibold text-base-content">Updating Pulse</h2>
+              <Show when={isComplete()}>
+                <button onClick={props.onClose} class=" hover:text-base-content">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </Show>
+            </div>
+          </div>
 
- {/* Body */}
- <div class="px-6 py-8">
- {/* Icon and Status */}
- <div class="flex flex-col items-center text-center space-y-4">
- {getStageIcon()}
- <div>
- <div class="text-lg font-medium text-base-content">
- {getStatusText()}
- </div>
- <Show when={status()?.status && !isComplete()}>
- <div class="text-sm text-muted mt-1 capitalize">
- {status()!.status.replace('-', ' ')}
+          {/* Body */}
+          <div class="px-6 py-8">
+            {/* Icon and Status */}
+            <div class="flex flex-col items-center text-center space-y-4">
+              {getStageIcon()}
+              <div>
+                <div class="text-lg font-medium text-base-content">{getStatusText()}</div>
+                <Show when={status()?.status && !isComplete()}>
+                  <div class="text-sm text-muted mt-1 capitalize">
+                    {status()!.status.replace('-', ' ')}
                   </div>
                 </Show>
               </div>
@@ -418,15 +440,29 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
               <Show when={isRestarting()}>
                 <div class="mt-6 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md p-3">
                   <div class="flex items-start gap-2">
-                    <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <svg
+                      class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
                     </svg>
                     <div class="flex-1">
                       <div class="text-sm text-blue-800 dark:text-blue-200">
-                        <Show when={wsDisconnected()} fallback={
-                          <span>Pulse is restarting with the new version...</span>
-                        }>
-                          <span>Waiting for Pulse to complete restart. This page will reload automatically.</span>
+                        <Show
+                          when={wsDisconnected()}
+                          fallback={<span>Pulse is restarting with the new version...</span>}
+                        >
+                          <span>
+                            Waiting for Pulse to complete restart. This page will reload
+                            automatically.
+                          </span>
                         </Show>
                       </div>
                       <Show when={wsDisconnected() && healthCheckAttempts() > 5}>
@@ -444,8 +480,18 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
               <Show when={!isRestarting()}>
                 <div class="mt-6 bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
                   <div class="flex items-start gap-2">
-                    <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    <svg
+                      class="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                      />
                     </svg>
                     <div class="text-sm text-yellow-800 dark:text-yellow-200">
                       Please do not close this window or refresh the page during the update.

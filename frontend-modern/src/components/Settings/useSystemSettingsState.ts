@@ -217,16 +217,26 @@ export function useSystemSettingsState({
 
   const temperatureMonitoringLocked = () =>
     Boolean(
-      envOverrides().temperatureMonitoringEnabled || envOverrides()['ENABLE_TEMPERATURE_MONITORING'],
+      envOverrides().temperatureMonitoringEnabled ||
+      envOverrides()['ENABLE_TEMPERATURE_MONITORING'],
     );
   const hideLocalLoginLocked = () =>
     Boolean(envOverrides().hideLocalLogin || envOverrides()['PULSE_AUTH_HIDE_LOCAL_LOGIN']);
   const disableDockerUpdateActionsLocked = () =>
-    Boolean(envOverrides().disableDockerUpdateActions || envOverrides()['PULSE_DISABLE_DOCKER_UPDATE_ACTIONS']);
+    Boolean(
+      envOverrides().disableDockerUpdateActions ||
+      envOverrides()['PULSE_DISABLE_DOCKER_UPDATE_ACTIONS'],
+    );
   const disableLegacyRouteRedirectsLocked = () =>
-    Boolean(envOverrides().disableLegacyRouteRedirects || envOverrides()['PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS']);
+    Boolean(
+      envOverrides().disableLegacyRouteRedirects ||
+      envOverrides()['PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS'],
+    );
   const disableLocalUpgradeMetricsLocked = () =>
-    Boolean(envOverrides().disableLocalUpgradeMetrics || envOverrides()['PULSE_DISABLE_LOCAL_UPGRADE_METRICS']);
+    Boolean(
+      envOverrides().disableLocalUpgradeMetrics ||
+      envOverrides()['PULSE_DISABLE_LOCAL_UPGRADE_METRICS'],
+    );
   const pvePollingEnvLocked = () =>
     Boolean(envOverrides().pvePollingInterval || envOverrides().PVE_POLLING_INTERVAL);
   const backupPollingEnvLocked = () =>
@@ -527,10 +537,7 @@ export function useSystemSettingsState({
     try {
       await SettingsAPI.updateSystemSettings({ reduceProUpsellNoise: enabled });
       updateReduceProUpsellNoiseSetting(enabled);
-      notificationStore.success(
-        enabled ? 'Pro prompts reduced' : 'Pro prompts restored',
-        2000,
-      );
+      notificationStore.success(enabled ? 'Pro prompts reduced' : 'Pro prompts restored', 2000);
     } catch (error) {
       logger.error('Failed to update reduce upsell noise setting', error);
       notificationStore.error(

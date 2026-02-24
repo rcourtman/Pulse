@@ -1,6 +1,13 @@
 import { Component, Show, createMemo, createSignal, onMount, For } from 'solid-js';
 import { Card } from '@/components/shared/Card';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/shared/Table';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { AIAPI } from '@/api/ai';
 import { formatNumber } from '@/utils/format';
@@ -54,7 +61,14 @@ const TinySparkline: Component<{
 
   return (
     <svg width={width()} height={height()} viewBox={`0 0 ${width()} ${height()}`} class="block">
-      <path d={pathD()} fill="none" stroke={stroke()} stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+      <path
+        d={pathD()}
+        fill="none"
+        stroke={stroke()}
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
     </svg>
   );
 };
@@ -76,7 +90,9 @@ export const AICostDashboard: Component = () => {
   const unpricedProviderModels = createMemo(() => {
     const data = summary();
     if (!data) return [];
-    return (data.provider_models ?? []).filter((pm) => !pm.pricing_known && (pm.total_tokens ?? 0) > 0);
+    return (data.provider_models ?? []).filter(
+      (pm) => !pm.pricing_known && (pm.total_tokens ?? 0) > 0,
+    );
   });
 
   const estimatedTotalUSD = createMemo(() => {
@@ -181,11 +197,18 @@ export const AICostDashboard: Component = () => {
   });
 
   const resetHistory = async () => {
-    if (!confirm('Reset Pulse Assistant usage history? A backup will be created in the Pulse config directory.')) return;
+    if (
+      !confirm(
+        'Reset Pulse Assistant usage history? A backup will be created in the Pulse config directory.',
+      )
+    )
+      return;
     try {
       const result = await AIAPI.resetCostHistory();
       if (result.backup_file) {
-        notificationStore.success(`Pulse Assistant usage history reset (backup: ${result.backup_file})`);
+        notificationStore.success(
+          `Pulse Assistant usage history reset (backup: ${result.backup_file})`,
+        );
       } else {
         notificationStore.success('Pulse Assistant usage history reset');
       }
@@ -228,8 +251,18 @@ export const AICostDashboard: Component = () => {
       <div class="bg-blue-50 dark:bg-blue-900 px-6 py-4 border-b border-border">
         <div class="flex items-center gap-3">
           <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
-            <svg class="w-5 h-5 text-blue-600 dark:text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 1.343-3 3v1a3 3 0 006 0v-1c0-1.657-1.343-3-3-3zM5 12a7 7 0 0114 0v3a2 2 0 01-2 2H7a2 2 0 01-2-2v-3z" />
+            <svg
+              class="w-5 h-5 text-blue-600 dark:text-blue-300"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 8c-1.657 0-3 1.343-3 3v1a3 3 0 006 0v-1c0-1.657-1.343-3-3-3zM5 12a7 7 0 0114 0v3a2 2 0 01-2 2H7a2 2 0 01-2-2v-3z"
+              />
             </svg>
           </div>
           <SectionHeader
@@ -246,10 +279,11 @@ export const AICostDashboard: Component = () => {
               type="button"
               disabled={loading()}
               onClick={() => handleRangeClick(1)}
-              class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 1
-                ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-border hover:bg-surface-hover'
-                } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+              class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${
+                days() === 1
+                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                  : 'border-border hover:bg-surface-hover'
+              } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               1d
             </button>
@@ -257,10 +291,11 @@ export const AICostDashboard: Component = () => {
               type="button"
               disabled={loading()}
               onClick={() => handleRangeClick(7)}
-              class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 7
-                ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-border hover:bg-surface-hover'
-                } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+              class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${
+                days() === 7
+                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                  : 'border-border hover:bg-surface-hover'
+              } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               7d
             </button>
@@ -268,10 +303,11 @@ export const AICostDashboard: Component = () => {
               type="button"
               disabled={loading()}
               onClick={() => handleRangeClick(30)}
-              class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 30
-                ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-border hover:bg-surface-hover'
-                } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+              class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${
+                days() === 30
+                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                  : 'border-border hover:bg-surface-hover'
+              } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               30d
             </button>
@@ -279,10 +315,11 @@ export const AICostDashboard: Component = () => {
               type="button"
               disabled={loading()}
               onClick={() => handleRangeClick(90)}
-              class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 90
-                ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-border hover:bg-surface-hover'
-                } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+              class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${
+                days() === 90
+                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                  : 'border-border hover:bg-surface-hover'
+              } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               90d
             </button>
@@ -290,10 +327,11 @@ export const AICostDashboard: Component = () => {
               type="button"
               disabled={loading()}
               onClick={() => handleRangeClick(365)}
-              class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 365
-                ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-border hover:bg-surface-hover'
-                } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+              class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${
+                days() === 365
+                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                  : 'border-border hover:bg-surface-hover'
+              } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               1y
             </button>
@@ -308,21 +346,21 @@ export const AICostDashboard: Component = () => {
 
         <Show when={summary()?.truncated}>
           <div class="text-xs px-3 py-2 rounded border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900 text-blue-900 dark:text-blue-100">
-            Showing the last {summary()?.effective_days} days due to a {summary()?.retention_days}-day retention window.
+            Showing the last {summary()?.effective_days} days due to a {summary()?.retention_days}
+            -day retention window.
           </div>
         </Show>
 
         <Show when={isOverBudget()}>
           <div class="text-xs px-3 py-2 rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100">
-            Estimated spend ({formatUSD(estimatedTotalUSD() ?? 0)}) is above your budget ({formatUSD(budgetForRange() ?? 0)}).
+            Estimated spend ({formatUSD(estimatedTotalUSD() ?? 0)}) is above your budget (
+            {formatUSD(budgetForRange() ?? 0)}).
           </div>
         </Show>
 
         <Show when={loadError() && summary()}>
           <div class="flex items-center justify-between gap-3 text-xs px-3 py-2 rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100">
-            <div class="truncate">
-              Couldn’t refresh. Showing last loaded data. {loadError()}
-            </div>
+            <div class="truncate">Couldn’t refresh. Showing last loaded data. {loadError()}</div>
             <button
               type="button"
               disabled={loading()}
@@ -378,10 +416,7 @@ export const AICostDashboard: Component = () => {
                     {formatNumber(useCaseMap().get('chat')?.tokens ?? 0)} tokens
                   </div>
                   <div class="text-xs text-muted">
-                    <Show
-                      when={useCaseMap().get('chat')?.pricingKnown}
-                      fallback={<span>—</span>}
-                    >
+                    <Show when={useCaseMap().get('chat')?.pricingKnown} fallback={<span>—</span>}>
                       {formatUSD(useCaseMap().get('chat')?.usd ?? 0)}
                     </Show>
                   </div>
@@ -392,10 +427,7 @@ export const AICostDashboard: Component = () => {
                     {formatNumber(useCaseMap().get('patrol')?.tokens ?? 0)} tokens
                   </div>
                   <div class="text-xs text-muted">
-                    <Show
-                      when={useCaseMap().get('patrol')?.pricingKnown}
-                      fallback={<span>—</span>}
-                    >
+                    <Show when={useCaseMap().get('patrol')?.pricingKnown} fallback={<span>—</span>}>
                       {formatUSD(useCaseMap().get('patrol')?.usd ?? 0)}
                     </Show>
                   </div>
@@ -403,7 +435,10 @@ export const AICostDashboard: Component = () => {
                 <div class="p-3 rounded-md bg-surface-alt border border-border">
                   <div class="text-xs text-muted">Budget alert (USD per 30d)</div>
                   <div class="text-sm font-semibold text-base-content mt-1">
-                    <Show when={parsedBudgetUSD30d() != null} fallback={<span class="text-muted">—</span>}>
+                    <Show
+                      when={parsedBudgetUSD30d() != null}
+                      fallback={<span class="text-muted">—</span>}
+                    >
                       {formatUSD(parsedBudgetUSD30d() ?? 0)}
                     </Show>
                   </div>
@@ -421,7 +456,10 @@ export const AICostDashboard: Component = () => {
                   <div class="flex items-center justify-between">
                     <div class="text-xs text-muted">Daily estimated USD</div>
                     <div class="text-xs text-muted">
-                      <Show when={anyPricingKnown() && lastDailyUSD() != null} fallback={<span>—</span>}>
+                      <Show
+                        when={anyPricingKnown() && lastDailyUSD() != null}
+                        fallback={<span>—</span>}
+                      >
                         {formatUSD(lastDailyUSD() ?? 0)}
                       </Show>
                     </div>
@@ -567,7 +605,8 @@ export const AICostDashboard: Component = () => {
                       {(pm) => (
                         <TableRow class="border-b border-border-subtle">
                           <TableCell class="py-2 pr-4 font-medium text-base-content">
-                            {PROVIDER_NAMES[pm.provider as keyof typeof PROVIDER_NAMES] || pm.provider}
+                            {PROVIDER_NAMES[pm.provider as keyof typeof PROVIDER_NAMES] ||
+                              pm.provider}
                           </TableCell>
                           <TableCell class="py-2 pr-4 text-base-content font-mono text-xs">
                             {pm.model}

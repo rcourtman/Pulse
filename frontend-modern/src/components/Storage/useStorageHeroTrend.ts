@@ -1,7 +1,11 @@
 import { type Accessor, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 
 import { ChartsAPI as ChartService, type HistoryTimeRange } from '@/api/charts';
-import { aggregateStoragePoints, extractTrendData, type TrendData } from '@/hooks/useDashboardTrends';
+import {
+  aggregateStoragePoints,
+  extractTrendData,
+  type TrendData,
+} from '@/hooks/useDashboardTrends';
 import type { StorageRecord } from '@/features/storageBackups/models';
 
 type TrendPoint = { timestamp: number; value: number };
@@ -18,9 +22,10 @@ function normalizeTrendPoints(points: Array<{ timestamp: number; value: number }
   return normalized;
 }
 
-export function useStorageHeroTrend(
-  records: Accessor<StorageRecord[]>,
-): { trend: Accessor<TrendData | null>; loading: Accessor<boolean> } {
+export function useStorageHeroTrend(records: Accessor<StorageRecord[]>): {
+  trend: Accessor<TrendData | null>;
+  loading: Accessor<boolean>;
+} {
   // Stabilize the request key so record reordering doesn't refetch.
   const resourceIdsKey = createMemo(() => {
     const ids = records()
@@ -93,4 +98,3 @@ export function useStorageHeroTrend(
 
   return { trend, loading };
 }
-

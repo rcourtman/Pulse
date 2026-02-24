@@ -91,8 +91,7 @@ const targetOrg = {
   ownerUserId: 'user-2',
 };
 
-const renderPanel = () =>
-  render(() => <OrganizationSharingPanel currentUser="user-1" />);
+const renderPanel = () => render(() => <OrganizationSharingPanel currentUser="user-1" />);
 
 const deferred = <T,>() => {
   let resolve!: (value: T) => void;
@@ -179,12 +178,7 @@ describe('OrganizationSharingPanel', () => {
     const quickPick = screen.getByLabelText('Quick Pick Resource') as HTMLSelectElement;
     const labels = Array.from(quickPick.options).map((option) => option.textContent?.trim());
 
-    expect(labels).toEqual([
-      'Select resource',
-      'Alpha VM (vm)',
-      'host-1 (host)',
-      'Zulu VM (vm)',
-    ]);
+    expect(labels).toEqual(['Select resource', 'Alpha VM (vm)', 'host-1 (host)', 'Zulu VM (vm)']);
     expect(labels).not.toContain('Hidden (vm)');
   });
 

@@ -19,22 +19,22 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
 
   // Lazy-load tool calls when expanded — fetch small batch since the run is likely recent
   const [toolCalls] = createResource(
-    () => expanded() ? props.runId : null,
+    () => (expanded() ? props.runId : null),
     async (runId) => {
       if (!runId) return [];
       try {
         // Start with a small fetch; if not found, widen the search
         let runs = await getPatrolRunHistoryWithToolCalls(10);
-        let run = runs.find(r => r.id === runId);
+        let run = runs.find((r) => r.id === runId);
         if (!run) {
           runs = await getPatrolRunHistoryWithToolCalls(50);
-          run = runs.find(r => r.id === runId);
+          run = runs.find((r) => r.id === runId);
         }
         return run?.tool_calls || [];
       } catch {
         return [];
       }
-    }
+    },
   );
 
   const truncate = (text: string, max: number = 200) =>
@@ -54,7 +54,12 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9 5l7 7-7 7"
+            />
           </svg>
           Tool calls ({props.toolCallCount})
         </button>
@@ -86,16 +91,16 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
                         </span>
                       </div>
                       <div class="flex items-center gap-2 flex-shrink-0">
-                        <span class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                          call.success
-                            ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                            : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                        }`}>
+                        <span
+                          class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                            call.success
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                              : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                          }`}
+                        >
                           {call.success ? 'success' : 'failed'}
                         </span>
-                        <span class="text-muted font-mono">
-                          {call.duration_ms}ms
-                        </span>
+                        <span class="text-muted font-mono">{call.duration_ms}ms</span>
                       </div>
                     </button>
 
@@ -126,9 +131,7 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
           </Show>
 
           <Show when={!toolCalls.loading && (!toolCalls() || toolCalls()!.length === 0)}>
-            <p class="text-xs text-muted mt-2">
-              Tool call details not available for this run.
-            </p>
+            <p class="text-xs text-muted mt-2">Tool call details not available for this run.</p>
           </Show>
         </Show>
       </div>

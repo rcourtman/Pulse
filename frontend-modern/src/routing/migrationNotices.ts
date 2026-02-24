@@ -1,9 +1,6 @@
 import type { LegacyRouteSource } from './navigation';
 import { readLegacyMigrationSource } from './navigation';
-import {
-  LEGACY_ROUTE_MIGRATION_METADATA,
-  type MigrationNoticeTarget,
-} from './legacyRouteMetadata';
+import { LEGACY_ROUTE_MIGRATION_METADATA, type MigrationNoticeTarget } from './legacyRouteMetadata';
 
 export interface MigrationNotice {
   id: LegacyRouteSource;

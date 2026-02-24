@@ -231,16 +231,13 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
               </p>
 
               <div class="mt-4 bg-surface rounded-md p-3 border border-amber-200 dark:border-amber-700">
-                <p class="text-xs font-semibold text-base-content mb-2">
-                  How to restart Pulse:
-                </p>
+                <p class="text-xs font-semibold text-base-content mb-2">How to restart Pulse:</p>
 
                 <Show when={props.versionInfo()?.deploymentType === 'proxmoxve'}>
                   <div class="space-y-2">
                     <p class="text-xs text-base-content">
-                      Type{' '}
-                      <code class="px-1 py-0.5 bg-surface-hover rounded">update</code>{' '}
-                      in your ProxmoxVE console
+                      Type <code class="px-1 py-0.5 bg-surface-hover rounded">update</code> in your
+                      ProxmoxVE console
                     </p>
                     <p class="text-xs text-muted italic">
                       Or restart manually with: <code class="text-xs">systemctl restart pulse</code>
@@ -250,9 +247,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
 
                 <Show when={props.versionInfo()?.deploymentType === 'docker'}>
                   <div class="space-y-1">
-                    <p class="text-xs text-base-content">
-                      Restart your Docker container:
-                    </p>
+                    <p class="text-xs text-base-content">Restart your Docker container:</p>
                     <code class="block text-xs bg-surface-hover p-2 rounded mt-1">
                       docker restart pulse
                     </code>
@@ -275,9 +270,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
 
                 <Show when={props.versionInfo()?.deploymentType === 'development'}>
                   <div class="space-y-1">
-                    <p class="text-xs text-base-content">
-                      Restart the development server:
-                    </p>
+                    <p class="text-xs text-base-content">Restart the development server:</p>
                     <code class="block text-xs bg-surface-hover p-2 rounded mt-1">
                       sudo systemctl restart pulse-hot-dev
                     </code>
@@ -302,6 +295,6 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
           </div>
         </div>
       </Show>
-    </div >
+    </div>
   );
 };

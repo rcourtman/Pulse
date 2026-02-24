@@ -34,9 +34,7 @@ describe('useAnomalies', () => {
       },
     }));
 
-    ({
-      useAllAnomalies,
-    } = await import('@/hooks/useAnomalies'));
+    ({ useAllAnomalies } = await import('@/hooks/useAnomalies'));
   });
 
   afterEach(() => {

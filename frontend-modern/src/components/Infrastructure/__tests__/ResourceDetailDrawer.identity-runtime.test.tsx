@@ -104,7 +104,9 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       },
     });
 
-    const { getByText, getAllByText, queryByText } = render(() => <ResourceDetailDrawer resource={resource} />);
+    const { getByText, getAllByText, queryByText } = render(() => (
+      <ResourceDetailDrawer resource={resource} />
+    ));
 
     expect(getByText('Identity')).toBeInTheDocument();
     expect(getByText('Aliases')).toBeInTheDocument();

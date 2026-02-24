@@ -35,6 +35,8 @@ export const buildLinuxAmd64DownloadCommand = (version?: string | null): string 
   }
 
   const tarball = buildLinuxAmd64TarballName(version);
-  return `curl -fL --retry 3 --retry-delay 2 -o ${tarball} ${GITHUB_RELEASES_BASE_URL}/download/${tag}/${tarball}\n` +
-    `sudo tar -xzf ${tarball} -C /usr/local/bin pulse`;
+  return (
+    `curl -fL --retry 3 --retry-delay 2 -o ${tarball} ${GITHUB_RELEASES_BASE_URL}/download/${tag}/${tarball}\n` +
+    `sudo tar -xzf ${tarball} -C /usr/local/bin pulse`
+  );
 };

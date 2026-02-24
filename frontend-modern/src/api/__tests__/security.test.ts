@@ -35,7 +35,9 @@ describe('SecurityAPI', () => {
 
   describe('listTokens', () => {
     it('fetches all tokens', async () => {
-      const mockTokens: APITokenRecord[] = [{ id: 't1', name: 'Token 1', prefix: 'pmp_', suffix: 'abc', createdAt: '' }];
+      const mockTokens: APITokenRecord[] = [
+        { id: 't1', name: 'Token 1', prefix: 'pmp_', suffix: 'abc', createdAt: '' },
+      ];
       vi.mocked(apiFetchJSON).mockResolvedValueOnce({ tokens: mockTokens });
 
       const result = await SecurityAPI.listTokens();
@@ -55,7 +57,10 @@ describe('SecurityAPI', () => {
 
   describe('createToken', () => {
     it('creates token with name and scopes', async () => {
-      const mockResponse: CreateAPITokenResponse = { token: 'pmp_xxx', record: { id: 't1', name: 'Token', prefix: 'pmp_', suffix: 'xxx', createdAt: '' } };
+      const mockResponse: CreateAPITokenResponse = {
+        token: 'pmp_xxx',
+        record: { id: 't1', name: 'Token', prefix: 'pmp_', suffix: 'xxx', createdAt: '' },
+      };
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockResponse);
 
       const result = await SecurityAPI.createToken('My Token', ['read', 'write']);
@@ -65,13 +70,16 @@ describe('SecurityAPI', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ name: 'My Token', scopes: ['read', 'write'] }),
-        })
+        }),
       );
       expect(result).toEqual(mockResponse);
     });
 
     it('creates token without optional params', async () => {
-      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ token: 'pmp_xxx', record: {} } as CreateAPITokenResponse);
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+        token: 'pmp_xxx',
+        record: {},
+      } as CreateAPITokenResponse);
 
       await SecurityAPI.createToken();
 
@@ -79,7 +87,7 @@ describe('SecurityAPI', () => {
         '/api/security/tokens',
         expect.objectContaining({
           body: JSON.stringify({}),
-        })
+        }),
       );
     });
   });
@@ -92,7 +100,7 @@ describe('SecurityAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/security/tokens/token-1',
-        expect.objectContaining({ method: 'DELETE' })
+        expect.objectContaining({ method: 'DELETE' }),
       );
     });
 
@@ -103,7 +111,7 @@ describe('SecurityAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/security/tokens/token%2F1',
-        expect.objectContaining({ method: 'DELETE' })
+        expect.objectContaining({ method: 'DELETE' }),
       );
     });
   });

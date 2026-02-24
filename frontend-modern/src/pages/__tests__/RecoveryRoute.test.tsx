@@ -30,7 +30,8 @@ describe('RecoveryRoute', () => {
   afterEach(() => cleanup());
 
   it('redirects legacy query params to the canonical v6 Recovery URL and does not render the page during redirect', async () => {
-    mockLocationSearch = '?view=artifacts&backupType=remote&group=guest&search=vm-101&source=pbs&type=vm';
+    mockLocationSearch =
+      '?view=artifacts&backupType=remote&group=guest&search=vm-101&source=pbs&type=vm';
     render(() => <RecoveryRoute />);
 
     await waitFor(() => {

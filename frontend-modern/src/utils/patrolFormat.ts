@@ -57,7 +57,8 @@ export function formatScope(run?: PartialRunRecord | null): string {
 
 export function sanitizeAnalysis(text: string | undefined): string {
   if (!text) return '';
-  return text.replace(/<｜DSML｜[^>]*>[\s\S]*?<\/｜DSML｜[^>]*>/g, '')
+  return text
+    .replace(/<｜DSML｜[^>]*>[\s\S]*?<\/｜DSML｜[^>]*>/g, '')
     .replace(/<｜DSML｜[^>]*>/g, '')
     .trim();
 }

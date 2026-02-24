@@ -12,7 +12,13 @@ const normalize = (value?: string): string => (value || '').trim().toLowerCase()
 const raidStateVariant = (state?: string) => {
   const s = normalize(state);
   if (s === 'active' || s === 'clean') return 'success';
-  if (s.includes('fail') || s.includes('inactive') || s.includes('offline') || s.includes('stopped')) return 'danger';
+  if (
+    s.includes('fail') ||
+    s.includes('inactive') ||
+    s.includes('offline') ||
+    s.includes('stopped')
+  )
+    return 'danger';
   return 'warning';
 };
 
@@ -46,17 +52,24 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
       <div class="max-h-[160px] overflow-y-auto custom-scrollbar space-y-2">
         <For each={props.arrays}>
           {(array) => {
-            const label = () => (array.name || '').trim() || (array.device || '').trim() || 'RAID array';
+            const label = () =>
+              (array.name || '').trim() || (array.device || '').trim() || 'RAID array';
             const variant = () => raidStateVariant(array.state);
             const stateText = () => (array.state || '').trim() || 'unknown';
             const levelText = () => (array.level || '').trim() || 'unknown';
-            const rebuilding = () => Number.isFinite(array.rebuildPercent) && array.rebuildPercent > 0 && array.rebuildPercent < 100;
+            const rebuilding = () =>
+              Number.isFinite(array.rebuildPercent) &&
+              array.rebuildPercent > 0 &&
+              array.rebuildPercent < 100;
 
             return (
               <div class="rounded border border-dashed border-border p-2 overflow-hidden">
                 <div class="flex items-start justify-between gap-2 min-w-0">
                   <div class="min-w-0">
-                    <div class="text-[11px] font-semibold text-base-content truncate" title={label()}>
+                    <div
+                      class="text-[11px] font-semibold text-base-content truncate"
+                      title={label()}
+                    >
                       {label()}
                     </div>
                     <div class="mt-0.5 text-[10px] text-muted truncate" title={levelText()}>
@@ -65,7 +78,11 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
                   </div>
 
                   <div class="flex items-center gap-1.5 shrink-0" title={stateText()}>
-                    <StatusDot variant={variant()} size="xs" ariaLabel={`RAID state: ${stateText()}`} />
+                    <StatusDot
+                      variant={variant()}
+                      size="xs"
+                      ariaLabel={`RAID state: ${stateText()}`}
+                    />
                     <span class={`text-[10px] font-medium ${raidStateTextClass(array.state)}`}>
                       {stateText()}
                     </span>
@@ -74,7 +91,10 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
 
                 <Show when={rebuilding()}>
                   <div class="mt-2 text-[10px] text-muted">
-                    Rebuild: <span class="font-medium text-base-content">{Math.round(array.rebuildPercent)}%</span>
+                    Rebuild:{' '}
+                    <span class="font-medium text-base-content">
+                      {Math.round(array.rebuildPercent)}%
+                    </span>
                     <Show when={array.rebuildSpeed}>
                       <span class="text-muted"> · </span>
                       <span class="font-medium text-base-content">{array.rebuildSpeed}</span>
@@ -106,4 +126,3 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
 };
 
 export default RaidCard;
-

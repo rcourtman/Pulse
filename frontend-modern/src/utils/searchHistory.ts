@@ -73,10 +73,7 @@ export function clearSearchHistory(key: string): HistoryEntry[] {
   return [];
 }
 
-export function createSearchHistoryManager(
-  key: string,
-  options?: { maxEntries?: number },
-) {
+export function createSearchHistoryManager(key: string, options?: { maxEntries?: number }) {
   const maxEntries = options?.maxEntries ?? DEFAULT_MAX_HISTORY;
 
   const read = () => getSearchHistory(key);

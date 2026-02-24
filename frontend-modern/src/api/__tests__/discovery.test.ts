@@ -21,8 +21,8 @@ describe('discovery api', () => {
           discoveries: [],
           total: 0,
         }),
-        { status: 200 }
-      )
+        { status: 200 },
+      ),
     );
 
     const result = await getDiscovery('host', 'host-1', 'host-1');
@@ -54,8 +54,8 @@ describe('discovery api', () => {
           ],
           total: 1,
         }),
-        { status: 200 }
-      )
+        { status: 200 },
+      ),
     );
     apiFetchMock.mockResolvedValueOnce(
       new Response(
@@ -83,8 +83,8 @@ describe('discovery api', () => {
           updated_at: '2026-02-06T00:00:00Z',
           scan_duration: 1,
         }),
-        { status: 200 }
-      )
+        { status: 200 },
+      ),
     );
 
     const result = await getDiscovery('host', 'host-1', 'host-1');
@@ -122,8 +122,8 @@ describe('discovery api', () => {
           updated_at: '2026-02-06T00:00:00Z',
           scan_duration: 1,
         }),
-        { status: 200 }
-      )
+        { status: 200 },
+      ),
     );
 
     const result = await getDiscovery('vm', 'node-1', '100');
@@ -140,8 +140,8 @@ describe('discovery api', () => {
           discoveries: [],
           total: 0,
         }),
-        { status: 200 }
-      )
+        { status: 200 },
+      ),
     );
 
     await listDiscoveriesByType('vm/root' as any);
@@ -154,8 +154,8 @@ describe('discovery api', () => {
           ai_provider: '',
           notes: '',
         }),
-        { status: 200 }
-      )
+        { status: 200 },
+      ),
     );
     await getDiscoveryInfo('host/root' as any);
     expect(apiFetchMock).toHaveBeenCalledWith('/api/discovery/info/host%2Froot');

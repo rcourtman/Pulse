@@ -37,7 +37,7 @@ import type {
   OfflineState,
   Override,
   ThresholdsTableProps,
-} from "@/features/alerts/thresholds/types";
+} from '@/features/alerts/thresholds/types';
 import {
   PMG_THRESHOLD_COLUMNS,
   PMG_NORMALIZED_TO_KEY,
@@ -50,8 +50,11 @@ import {
   DEFAULT_BACKUP_CRITICAL,
   DEFAULT_BACKUP_FRESH_HOURS,
   DEFAULT_BACKUP_STALE_HOURS,
-} from "@/features/alerts/thresholds/constants";
-import { normalizeDockerIgnoredInput, formatMetricValue } from "@/features/alerts/thresholds/helpers";
+} from '@/features/alerts/thresholds/constants';
+import {
+  normalizeDockerIgnoredInput,
+  formatMetricValue,
+} from '@/features/alerts/thresholds/helpers';
 
 export function ThresholdsTable(props: ThresholdsTableProps) {
   const navigate = useNavigate();
@@ -61,6 +64,67 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
   const pd = (r: Resource): Record<string, unknown> | undefined =>
     r.platformData ? (unwrap(r.platformData) as Record<string, unknown>) : undefined;
+  const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+    value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
+  const asString = (value: unknown): string | undefined =>
+    typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+  const uniqueIds = (...values: unknown[]): string[] => {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    values.forEach((value) => {
+      const normalized = asString(value);
+      if (!normalized || seen.has(normalized)) return;
+      seen.add(normalized);
+      ids.push(normalized);
+    });
+    return ids;
+  };
+  const hostOverrideIdCandidates = (resource: Resource): string[] => {
+    const platformData = pd(resource);
+    const agent = asRecord(platformData?.agent);
+    return uniqueIds(
+      resource.discoveryTarget?.resourceType === 'host'
+        ? resource.discoveryTarget.resourceId
+        : undefined,
+      resource.discoveryTarget?.hostId,
+      resource.agent?.agentId,
+      agent?.agentId,
+      platformData?.agentId,
+      resource.id,
+    );
+  };
+  const hostActionId = (resource: Resource): string =>
+    hostOverrideIdCandidates(resource)[0] || resource.id;
+  const dockerHostOverrideIdCandidates = (resource: Resource): string[] => {
+    const platformData = pd(resource);
+    const docker = asRecord(platformData?.docker);
+    return uniqueIds(
+      resource.discoveryTarget?.resourceType === 'docker'
+        ? resource.discoveryTarget.resourceId
+        : undefined,
+      docker?.hostSourceId,
+      platformData?.hostSourceId,
+      resource.discoveryTarget?.hostId,
+      resource.id,
+    );
+  };
+  const dockerContainerOverrideIdCandidates = (host: Resource, shortId: string): string[] => {
+    return uniqueIds(
+      ...dockerHostOverrideIdCandidates(host).map((hostId) => `docker:${hostId}/${shortId}`),
+    );
+  };
+  const findOverrideByCandidates = (
+    overridesMap: Map<string, Override>,
+    candidates: string[],
+  ): Override | undefined => {
+    for (const candidate of candidates) {
+      const override = overridesMap.get(candidate);
+      if (override) {
+        return override;
+      }
+    }
+    return undefined;
+  };
 
   // Collapsible section state management
   const { isCollapsed, toggleSection, expandAll, collapseAll } = useCollapsedSections();
@@ -68,7 +132,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   // Help banner dismiss state (persisted to localStorage)
   const HELP_BANNER_KEY = 'pulse-thresholds-help-dismissed';
   const [helpBannerDismissed, setHelpBannerDismissed] = createSignal(
-    typeof window !== 'undefined' && localStorage.getItem(HELP_BANNER_KEY) === 'true'
+    typeof window !== 'undefined' && localStorage.getItem(HELP_BANNER_KEY) === 'true',
   );
   const dismissHelpBanner = () => {
     setHelpBannerDismissed(true);
@@ -180,8 +244,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     props.setHasUnsavedChanges(true);
   };
 
-
-
   // Set up keyboard shortcuts
   onMount(() => {
     const isEditableElement = (el: HTMLElement | null | undefined): boolean => {
@@ -237,8 +299,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       document.removeEventListener('keydown', handleKeyDown);
     });
   });
-
-
 
   // Check if there's an active alert for a resource/metric
   const hasActiveAlert = (resourceId: string, metric: string): boolean => {
@@ -378,7 +438,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         (typeof data?.host === 'string' ? (data.host as string).trim() : '') || rawName;
       let normalizedHost: string;
       if (guestUrlValue && guestUrlValue !== '') {
-        normalizedHost = guestUrlValue.startsWith('http') ? guestUrlValue : `https://${guestUrlValue}`;
+        normalizedHost = guestUrlValue.startsWith('http')
+          ? guestUrlValue
+          : `https://${guestUrlValue}`;
       } else {
         normalizedHost =
           hostValue.startsWith('http://') || hostValue.startsWith('https://')
@@ -427,7 +489,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const seen = new Set<string>();
 
     const hosts: TableResource[] = (props.hosts ?? []).map((host) => {
-      const override = overridesMap.get(host.id);
+      const idCandidates = hostOverrideIdCandidates(host);
+      const override = findOverrideByCandidates(overridesMap, idCandidates);
+      const resourceId = override?.id || idCandidates[0] || host.id;
       const hasCustomThresholds =
         override?.thresholds &&
         Object.keys(override.thresholds).some((key) => {
@@ -438,13 +502,14 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           );
         });
 
-      const displayName = host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
+      const displayName =
+        host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
       const status = host.status;
 
-      seen.add(host.id);
+      seen.add(resourceId);
 
       return {
-        id: host.id,
+        id: resourceId,
         name: displayName,
         displayName,
         rawName: host.identity?.hostname ?? host.name,
@@ -498,7 +563,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     // Use mountpoint if available, otherwise device
     let label = (mountpoint?.trim() || device?.trim() || 'disk').toLowerCase();
     // Replicate backend sanitizeHostComponent: keep a-z 0-9, replace everything else with '-', collapse consecutive hyphens
-    label = label.replace(/[^a-z0-9]/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '');
+    label = label
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-{2,}/g, '-')
+      .replace(/^-|-$/g, '');
     if (!label) label = 'unknown';
     return `host:${hostId}/disk:${label}`;
   };
@@ -518,20 +586,27 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     (props.hosts ?? []).forEach((host) => {
       const hostDisplayName =
         host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
+      const hostIdCandidates = hostOverrideIdCandidates(host);
+      const hostIdForActions = hostActionId(host);
 
-      const disksForHost =
-        (pd(host)?.disks ?? []) as Array<{
-          mountpoint?: string;
-          device?: string;
-          used?: number;
-          total?: number;
-          type?: string;
-        }>;
+      const disksForHost = (pd(host)?.disks ?? []) as Array<{
+        mountpoint?: string;
+        device?: string;
+        used?: number;
+        total?: number;
+        type?: string;
+      }>;
 
       disksForHost.forEach((disk) => {
         const diskLabel = disk.mountpoint?.trim() || disk.device?.trim() || 'disk';
-        const resourceId = hostDiskResourceID(host.id, disk.mountpoint || '', disk.device);
-        const override = overridesMap.get(resourceId);
+        const resourceIdCandidates = uniqueIds(
+          ...hostIdCandidates.map((hostId) =>
+            hostDiskResourceID(hostId, disk.mountpoint || '', disk.device),
+          ),
+        );
+        const override = findOverrideByCandidates(overridesMap, resourceIdCandidates);
+        const resourceId = override?.id || resourceIdCandidates[0];
+        if (!resourceId) return;
 
         const hasCustomThresholds =
           override?.thresholds?.disk !== undefined &&
@@ -546,7 +621,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           rawName: disk.device || diskLabel,
           type: 'hostDisk' as const,
           resourceType: 'Host Disk',
-          host: host.id,
+          host: hostIdForActions,
           node: hostDisplayName,
           instance: disk.type || '',
           status: host.status,
@@ -621,16 +696,19 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const seen = new Set<string>();
 
     const hosts: TableResource[] = (props.dockerHosts ?? []).map((host) => {
-      const originalName = host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
+      const idCandidates = dockerHostOverrideIdCandidates(host);
+      const originalName =
+        host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
       const friendlyName = getFriendlyNodeName(originalName);
-      const override = overridesMap.get(host.id);
+      const override = findOverrideByCandidates(overridesMap, idCandidates);
+      const resourceId = override?.id || idCandidates[0] || host.id;
       const disableConnectivity = override?.disableConnectivity || false;
       const status = host.status;
 
-      seen.add(host.id);
+      seen.add(resourceId);
 
       return {
-        id: host.id,
+        id: resourceId,
         name: friendlyName,
         displayName: friendlyName,
         rawName: originalName,
@@ -705,6 +783,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const seen = new Set<string>();
 
     (props.dockerHosts ?? []).forEach((host) => {
+      const dockerHostIds = dockerHostOverrideIdCandidates(host);
+      const dockerHostIdForActions = dockerHostIds[0] || host.id;
       const hostLabel = host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
       const friendlyHostName = getFriendlyNodeName(hostLabel);
       const hostLabelLower = hostLabel.toLowerCase();
@@ -714,9 +794,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       const containers = dockerContainersByHostId().get(host.id) ?? [];
 
       containers.forEach((container) => {
-        const shortId = container.id.includes('/') ? (container.id.split('/').pop() ?? container.id) : container.id;
-        const resourceId = `docker:${host.id}/${shortId}`;
-        const override = overridesMap.get(resourceId);
+        const shortId = container.id.includes('/')
+          ? (container.id.split('/').pop() ?? container.id)
+          : container.id;
+        const resourceIdCandidates = dockerContainerOverrideIdCandidates(host, shortId);
+        const override = findOverrideByCandidates(overridesMap, resourceIdCandidates);
+        const resourceId =
+          override?.id || resourceIdCandidates[0] || `docker:${dockerHostIdForActions}/${shortId}`;
         const overrideSeverity = override?.poweredOffSeverity;
 
         const defaults = props.dockerDefaults as Record<string, number | undefined>;
@@ -768,7 +852,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           disableConnectivity: override?.disableConnectivity || false,
           thresholds: override?.thresholds || {},
           defaults: props.dockerDefaults,
-          hostId: host.id,
+          hostId: dockerHostIdForActions,
           image,
           poweredOffSeverity: overrideSeverity,
         };
@@ -837,7 +921,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const dockerHostGroupMeta = createMemo<Record<string, GroupHeaderMeta>>(() => {
     const meta: Record<string, GroupHeaderMeta> = {};
     (props.dockerHosts ?? []).forEach((host) => {
-      const originalName = host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
+      const originalName =
+        host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
       const friendlyName = getFriendlyNodeName(originalName);
       const headerMeta: GroupHeaderMeta = {
         displayName: friendlyName,
@@ -970,9 +1055,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const alertOrphaned = config.alertOrphaned ?? true;
     const ignoreVMIDs = Array.from(
       new Set(
-        (config.ignoreVMIDs ?? [])
-          .map((value) => value.trim())
-          .filter((value) => value.length > 0),
+        (config.ignoreVMIDs ?? []).map((value) => value.trim()).filter((value) => value.length > 0),
       ),
     );
 
@@ -1038,13 +1121,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const differs =
       current.enabled !== factory.enabled ||
       (current.warningDays ?? DEFAULT_SNAPSHOT_WARNING) !==
-      (factory.warningDays ?? DEFAULT_SNAPSHOT_WARNING) ||
+        (factory.warningDays ?? DEFAULT_SNAPSHOT_WARNING) ||
       (current.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL) !==
-      (factory.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL) ||
+        (factory.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL) ||
       (current.warningSizeGiB ?? DEFAULT_SNAPSHOT_WARNING_SIZE) !==
-      (factory.warningSizeGiB ?? DEFAULT_SNAPSHOT_WARNING_SIZE) ||
+        (factory.warningSizeGiB ?? DEFAULT_SNAPSHOT_WARNING_SIZE) ||
       (current.criticalSizeGiB ?? DEFAULT_SNAPSHOT_CRITICAL_SIZE) !==
-      (factory.criticalSizeGiB ?? DEFAULT_SNAPSHOT_CRITICAL_SIZE);
+        (factory.criticalSizeGiB ?? DEFAULT_SNAPSHOT_CRITICAL_SIZE);
     return differs ? 1 : 0;
   });
 
@@ -1058,13 +1141,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       currentIgnore.some((value, index) => value !== factoryIgnore[index]);
     return backupCurrent.enabled !== backupFactory.enabled ||
       (backupCurrent.warningDays ?? DEFAULT_BACKUP_WARNING) !==
-      (backupFactory.warningDays ?? DEFAULT_BACKUP_WARNING) ||
+        (backupFactory.warningDays ?? DEFAULT_BACKUP_WARNING) ||
       (backupCurrent.criticalDays ?? DEFAULT_BACKUP_CRITICAL) !==
-      (backupFactory.criticalDays ?? DEFAULT_BACKUP_CRITICAL) ||
+        (backupFactory.criticalDays ?? DEFAULT_BACKUP_CRITICAL) ||
       (backupCurrent.freshHours ?? DEFAULT_BACKUP_FRESH_HOURS) !==
-      (backupFactory.freshHours ?? DEFAULT_BACKUP_FRESH_HOURS) ||
+        (backupFactory.freshHours ?? DEFAULT_BACKUP_FRESH_HOURS) ||
       (backupCurrent.staleHours ?? DEFAULT_BACKUP_STALE_HOURS) !==
-      (backupFactory.staleHours ?? DEFAULT_BACKUP_STALE_HOURS) ||
+        (backupFactory.staleHours ?? DEFAULT_BACKUP_STALE_HOURS) ||
       (backupCurrent.alertOrphaned ?? true) !== (backupFactory.alertOrphaned ?? true) ||
       ignoreDiff
       ? 1
@@ -1082,7 +1165,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const overridesMap = new Map((props.overrides() ?? []).map((o) => [o.id, o]));
 
     const guests = (props.allGuests() ?? []).map((guest) => {
-      const gpd = guest.platformData ? (unwrap(guest.platformData) as Record<string, unknown>) : undefined;
+      const gpd = guest.platformData
+        ? (unwrap(guest.platformData) as Record<string, unknown>)
+        : undefined;
       const vmid = (gpd?.vmid as number | undefined) ?? undefined;
       const node = (gpd?.node as string | undefined) ?? '';
       const instance = (gpd?.instance as string | undefined) ?? guest.platformId ?? '';
@@ -1131,11 +1216,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
     const filteredGuests = search
       ? guests.filter(
-        (g) =>
-          g.name.toLowerCase().includes(search) ||
-          g.vmid?.toString().includes(search) ||
-          g.node?.toLowerCase().includes(search),
-      )
+          (g) =>
+            g.name.toLowerCase().includes(search) ||
+            g.vmid?.toString().includes(search) ||
+            g.node?.toLowerCase().includes(search),
+        )
       : guests;
 
     // Group by instance (not node - node is just the hostname which may be duplicated)
@@ -1202,7 +1287,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           // PBS uses pbsDefaults for CPU/Memory (not nodeDefaults)
           return (
             override.thresholds[k] !== undefined &&
-            override.thresholds[k] !== (props.pbsDefaults?.[k as keyof typeof props.pbsDefaults] ?? (k === 'cpu' ? 80 : 85))
+            override.thresholds[k] !==
+              (props.pbsDefaults?.[k as keyof typeof props.pbsDefaults] ?? (k === 'cpu' ? 80 : 85))
           );
         });
 
@@ -1761,7 +1847,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     ];
 
     for (const id of bulkEditIds()) {
-      const resource = allResources.find(r => r.id === id);
+      const resource = allResources.find((r) => r.id === id);
       if (!resource) continue;
 
       const defaultThresholds = (resource.defaults ?? {}) as Record<string, number | undefined>;
@@ -1773,7 +1859,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       const newThresholds: Record<string, number | undefined> = { ...currentOverrides };
 
       // Update with new bulk thresholds
-      Object.keys(thresholds).forEach(key => {
+      Object.keys(thresholds).forEach((key) => {
         if (thresholds[key] !== undefined) {
           const val = thresholds[key];
           if (val === defaultThresholds[key as keyof typeof defaultThresholds]) {
@@ -1796,7 +1882,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       // If no override fields remain, remove entirely
       if (Object.keys(newThresholds).length === 0 && !hasStateOnlyOverride) {
         if (resource.hasOverride) {
-          const idx = newOverrides.findIndex(o => o.id === id);
+          const idx = newOverrides.findIndex((o) => o.id === id);
           if (idx !== -1) newOverrides.splice(idx, 1);
           delete newRawConfig[id];
         }
@@ -1832,12 +1918,16 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       // Update raw config
       const hysteresisThresholds: RawOverrideConfig = {};
       if (previousRaw) {
-        if (previousRaw.disabled !== undefined) hysteresisThresholds.disabled = previousRaw.disabled;
-        if (previousRaw.disableConnectivity !== undefined) hysteresisThresholds.disableConnectivity = previousRaw.disableConnectivity;
-        if (previousRaw.poweredOffSeverity !== undefined) hysteresisThresholds.poweredOffSeverity = previousRaw.poweredOffSeverity;
+        if (previousRaw.disabled !== undefined)
+          hysteresisThresholds.disabled = previousRaw.disabled;
+        if (previousRaw.disableConnectivity !== undefined)
+          hysteresisThresholds.disableConnectivity = previousRaw.disableConnectivity;
+        if (previousRaw.poweredOffSeverity !== undefined)
+          hysteresisThresholds.poweredOffSeverity = previousRaw.poweredOffSeverity;
         if (previousRaw.note !== undefined) hysteresisThresholds.note = previousRaw.note;
         if (previousRaw.backup !== undefined) hysteresisThresholds.backup = previousRaw.backup;
-        if (previousRaw.snapshot !== undefined) hysteresisThresholds.snapshot = previousRaw.snapshot;
+        if (previousRaw.snapshot !== undefined)
+          hysteresisThresholds.snapshot = previousRaw.snapshot;
       }
 
       Object.entries(newThresholds).forEach(([metric, value]) => {
@@ -2385,43 +2475,43 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           (alert) =>
             alert.resourceId === resourceId &&
             (alert.type === 'docker-container-state' || alert.type === 'docker-container-health'),
- );
- }
- }
- };
+        );
+      }
+    }
+  };
 
- return (
- <div class="space-y-4">
- {/* Search Bar */}
- <div class="relative">
- <input
- ref={searchInputRef}
- type="text"
- placeholder="Search resources... (Ctrl+F)"
- value={searchTerm()}
- onInput={(e) => setSearchTerm(e.currentTarget.value)}
- class="w-full pl-10 pr-20 py-2 text-sm border border-border rounded-md bg-surface text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
- />
- <kbd class="absolute right-10 top-2 hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-muted bg-surface-hover rounded border border-border">
- ⌘F
- </kbd>
- <svg
- class="absolute left-3 top-2.5 w-5 h-5"
- fill="none"
- stroke="currentColor"
- viewBox="0 0 24 24"
- >
- <path
- stroke-linecap="round"
- stroke-linejoin="round"
- stroke-width="2"
- d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
- />
- </svg>
- <Show when={searchTerm()}>
- <button
- type="button"
- onClick={() => setSearchTerm('')}
+  return (
+    <div class="space-y-4">
+      {/* Search Bar */}
+      <div class="relative">
+        <input
+          ref={searchInputRef}
+          type="text"
+          placeholder="Search resources... (Ctrl+F)"
+          value={searchTerm()}
+          onInput={(e) => setSearchTerm(e.currentTarget.value)}
+          class="w-full pl-10 pr-20 py-2 text-sm border border-border rounded-md bg-surface text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        />
+        <kbd class="absolute right-10 top-2 hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-muted bg-surface-hover rounded border border-border">
+          ⌘F
+        </kbd>
+        <svg
+          class="absolute left-3 top-2.5 w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          />
+        </svg>
+        <Show when={searchTerm()}>
+          <button
+            type="button"
+            onClick={() => setSearchTerm('')}
             class="absolute right-3 top-2.5 text-slate-400 hover:text-muted"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2447,7 +2537,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
             aria-label="Dismiss tips"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
           <div class="flex items-start gap-2 pr-6">
@@ -2470,11 +2565,15 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 0
               </code>{' '}
               to disable alerts for that metric. Click on disabled thresholds showing{' '}
-              <span class="italic">Off</span> to re-enable them. Resources with custom settings show a{' '}
+              <span class="italic">Off</span> to re-enable them. Resources with custom settings show
+              a{' '}
               <span class="inline-flex items-center px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs">
                 Custom
               </span>{' '}
-              badge. <span class="text-blue-600 dark:text-blue-400">Click sections to collapse/expand.</span>
+              badge.{' '}
+              <span class="text-blue-600 dark:text-blue-400">
+                Click sections to collapse/expand.
+              </span>
             </div>
           </div>
         </div>
@@ -2486,7 +2585,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={() => handleTabClick('proxmox')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'proxmox' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300' }`}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'proxmox' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300'}`}
           >
             <Server class="w-4 h-4" />
             <span class="hidden sm:inline">Proxmox / PBS</span>
@@ -2495,7 +2594,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={() => handleTabClick('pmg')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'pmg' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300' }`}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'pmg' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300'}`}
           >
             <Mail class="w-4 h-4" />
             <span class="hidden sm:inline">Mail Gateway</span>
@@ -2504,7 +2603,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={() => handleTabClick('hosts')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'hosts' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300' }`}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'hosts' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300'}`}
           >
             <Users class="w-4 h-4" />
             <span class="hidden sm:inline">Host Agents</span>
@@ -2513,7 +2612,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={() => handleTabClick('docker')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'docker' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300' }`}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'docker' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300'}`}
           >
             <Boxes class="w-4 h-4" />
             <span>Containers</span>
@@ -2574,7 +2673,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingThresholds={setEditingThresholds}
                   editingNote={editingNote}
                   setEditingNote={setEditingNote}
-                  onBulkEdit={(ids) => handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %', 'Temp °C'])}
+                  onBulkEdit={(ids) =>
+                    handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %', 'Temp °C'])
+                  }
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
                   globalDefaults={props.nodeDefaults}
@@ -2627,7 +2728,16 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingThresholds={setEditingThresholds}
                   editingNote={editingNote}
                   setEditingNote={setEditingNote}
-                  onBulkEdit={(ids) => handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk R MB/s', 'Disk W MB/s', 'Net In MB/s', 'Net Out MB/s'])}
+                  onBulkEdit={(ids) =>
+                    handleBulkEdit(ids, [
+                      'CPU %',
+                      'Memory %',
+                      'Disk R MB/s',
+                      'Disk W MB/s',
+                      'Net In MB/s',
+                      'Net Out MB/s',
+                    ])
+                  }
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
                   globalDefaults={props.pbsDefaults ?? { cpu: 80, memory: 85 }}
@@ -2693,7 +2803,17 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingThresholds={setEditingThresholds}
                   editingNote={editingNote}
                   setEditingNote={setEditingNote}
-                  onBulkEdit={(ids) => handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %', 'Disk R MB/s', 'Disk W MB/s', 'Net In MB/s', 'Net Out MB/s'])}
+                  onBulkEdit={(ids) =>
+                    handleBulkEdit(ids, [
+                      'CPU %',
+                      'Memory %',
+                      'Disk %',
+                      'Disk R MB/s',
+                      'Disk W MB/s',
+                      'Net In MB/s',
+                      'Net Out MB/s',
+                    ])
+                  }
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
                   globalDefaults={props.guestDefaults}
@@ -2711,7 +2831,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                       props.setGuestDisableConnectivity(true);
                     } else {
                       props.setGuestDisableConnectivity(false);
-                      props.setGuestPoweredOffSeverity(state === 'critical' ? 'critical' : 'warning');
+                      props.setGuestPoweredOffSeverity(
+                        state === 'critical' ? 'critical' : 'warning',
+                      );
                     }
                     props.setHasUnsavedChanges(true);
                   }}
@@ -2754,7 +2876,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 <Card padding="md" tone="card">
                   <div class="mb-2">
                     <h3 class="text-sm font-semibold text-base-content">Tag Whitelist</h3>
-                    <p class="text-xs text-muted">Only monitor guests with at least one of these tags (leave empty to disable whitelist):</p>
+                    <p class="text-xs text-muted">
+                      Only monitor guests with at least one of these tags (leave empty to disable
+                      whitelist):
+                    </p>
                   </div>
                   <TagInput
                     tags={props.guestTagWhitelist()}
@@ -2899,9 +3024,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                       }
                       label={<span class="text-sm font-medium text-base-content">Alerts</span>}
                       description={
-                        <span class="text-xs text-muted">
-                          Toggle orphaned VM/CT backup alerts
-                        </span>
+                        <span class="text-xs text-muted">Toggle orphaned VM/CT backup alerts</span>
                       }
                       size="sm"
                     />
@@ -3066,11 +3189,15 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   }}
                   setHasUnsavedChanges={props.setHasUnsavedChanges}
                   globalDisableFlag={props.disableAllStorage}
-                  onToggleGlobalDisable={() => props.setDisableAllStorage(!props.disableAllStorage())}
+                  onToggleGlobalDisable={() =>
+                    props.setDisableAllStorage(!props.disableAllStorage())
+                  }
                   showDelayColumn={true}
                   globalDelaySeconds={props.timeThresholds().storage}
                   metricDelaySeconds={props.metricTimeThresholds().storage ?? {}}
-                  onMetricDelayChange={(metric, value) => updateMetricDelay('storage', metric, value)}
+                  onMetricDelayChange={(metric, value) =>
+                    updateMetricDelay('storage', metric, value)
+                  }
                   factoryDefaults={
                     props.factoryStorageDefault !== undefined
                       ? { usage: props.factoryStorageDefault }
@@ -3167,7 +3294,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 setEditingThresholds={setEditingThresholds}
                 editingNote={editingNote}
                 setEditingNote={setEditingNote}
-                onBulkEdit={(ids) => handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %', 'Temp °C'])}
+                onBulkEdit={(ids) =>
+                  handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %', 'Temp °C'])
+                }
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDefaults={props.hostDefaults}
@@ -3219,7 +3348,16 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingThresholds={setEditingThresholds}
                   editingNote={editingNote}
                   setEditingNote={setEditingNote}
-                  onBulkEdit={(ids) => handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk R MB/s', 'Disk W MB/s', 'Net In MB/s', 'Net Out MB/s'])}
+                  onBulkEdit={(ids) =>
+                    handleBulkEdit(ids, [
+                      'CPU %',
+                      'Memory %',
+                      'Disk R MB/s',
+                      'Disk W MB/s',
+                      'Net In MB/s',
+                      'Net Out MB/s',
+                    ])
+                  }
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
                   globalDefaults={{ disk: props.hostDefaults.disk }}
@@ -3239,33 +3377,31 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         </Show>
 
         <Show when={activeTab() === 'docker'}>
- <Card padding="md" tone="card" class="mb-6">
- <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
- <div>
- <h3 class="text-sm font-semibold text-base-content">
- Ignored container prefixes
- </h3>
- <p class="mt-1 text-xs text-muted">
- Containers whose name or ID starts with any prefix below are skipped for container
- alerts. Enter one prefix per line; matching is case-insensitive.
- </p>
- </div>
- <Show when={(props.dockerIgnoredPrefixes().length ?? 0) > 0}>
- <button
- type="button"
- class="inline-flex items-center justify-center rounded-md border border-transparent px-3 py-1 text-xs font-medium transition hover:bg-surface-alt"
- onClick={handleResetDockerIgnored}
- >
- Reset
- </button>
- </Show>
- </div>
- <textarea
- value={dockerIgnoredInput()}
- onInput={(event) => handleDockerIgnoredChange(event.currentTarget.value)}
- onKeyDown={(event) => {
- // Ensure Enter key works in textarea for creating new lines
- if (event.key ==='Enter') {
+          <Card padding="md" tone="card" class="mb-6">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 class="text-sm font-semibold text-base-content">Ignored container prefixes</h3>
+                <p class="mt-1 text-xs text-muted">
+                  Containers whose name or ID starts with any prefix below are skipped for container
+                  alerts. Enter one prefix per line; matching is case-insensitive.
+                </p>
+              </div>
+              <Show when={(props.dockerIgnoredPrefixes().length ?? 0) > 0}>
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center rounded-md border border-transparent px-3 py-1 text-xs font-medium transition hover:bg-surface-alt"
+                  onClick={handleResetDockerIgnored}
+                >
+                  Reset
+                </button>
+              </Show>
+            </div>
+            <textarea
+              value={dockerIgnoredInput()}
+              onInput={(event) => handleDockerIgnoredChange(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                // Ensure Enter key works in textarea for creating new lines
+                if (event.key === 'Enter') {
                   // Don't prevent default - allow the newline to be inserted
                   event.stopPropagation();
                 }
@@ -3281,7 +3417,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               <div>
                 <h3 class="text-sm font-semibold text-base-content">Swarm service alerts</h3>
                 <p class="mt-1 text-xs text-muted">
-                  Pulse raises alerts when running replicas fall behind the desired count or a rollout gets stuck. Adjust the gap thresholds below or disable service alerts entirely.
+                  Pulse raises alerts when running replicas fall behind the desired count or a
+                  rollout gets stuck. Adjust the gap thresholds below or disable service alerts
+                  entirely.
                 </p>
               </div>
               <Toggle
@@ -3291,7 +3429,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   props.setHasUnsavedChanges(true);
                 }}
                 label={<span class="text-sm font-medium text-base-content">Alerts</span>}
-                description={<span class="text-xs text-muted">Toggle Swarm service replica monitoring</span>}
+                description={
+                  <span class="text-xs text-muted">Toggle Swarm service replica monitoring</span>
+                }
                 size="sm"
               />
             </div>
@@ -3312,7 +3452,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   value={props.dockerDefaults.serviceWarnGapPercent}
                   onInput={(event) => {
                     const value = Number(event.currentTarget.value);
-                    const normalized = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
+                    const normalized = Number.isFinite(value)
+                      ? Math.max(0, Math.min(100, value))
+                      : 0;
                     props.setDockerDefaults((prev) => ({
                       ...prev,
                       serviceWarnGapPercent: normalized,
@@ -3340,7 +3482,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   value={props.dockerDefaults.serviceCriticalGapPercent}
                   onInput={(event) => {
                     const value = Number(event.currentTarget.value);
-                    const normalized = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
+                    const normalized = Number.isFinite(value)
+                      ? Math.max(0, Math.min(100, value))
+                      : 0;
                     props.setDockerDefaults((prev) => ({
                       ...prev,
                       serviceCriticalGapPercent: normalized,
@@ -3381,7 +3525,19 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 setEditingThresholds={setEditingThresholds}
                 editingNote={editingNote}
                 setEditingNote={setEditingNote}
-                onBulkEdit={(ids) => handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %', 'Disk R MB/s', 'Disk W MB/s', 'Net In MB/s', 'Net Out MB/s', 'Restart Count', 'Restart Window (s)'])}
+                onBulkEdit={(ids) =>
+                  handleBulkEdit(ids, [
+                    'CPU %',
+                    'Memory %',
+                    'Disk %',
+                    'Disk R MB/s',
+                    'Disk W MB/s',
+                    'Net In MB/s',
+                    'Net Out MB/s',
+                    'Restart Count',
+                    'Restart Window (s)',
+                  ])
+                }
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDisableFlag={props.disableAllDockerHosts}
@@ -3424,7 +3580,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 setEditingThresholds={setEditingThresholds}
                 editingNote={editingNote}
                 setEditingNote={setEditingNote}
-                onBulkEdit={(ids) => handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %', 'Temp °C'])}
+                onBulkEdit={(ids) =>
+                  handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %', 'Temp °C'])
+                }
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDefaults={{
@@ -3479,7 +3637,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     props.setDockerDisableConnectivity(true);
                   } else {
                     props.setDockerDisableConnectivity(false);
-                    props.setDockerPoweredOffSeverity(state === 'critical' ? 'critical' : 'warning');
+                    props.setDockerPoweredOffSeverity(
+                      state === 'critical' ? 'critical' : 'warning',
+                    );
                   }
                   props.setHasUnsavedChanges(true);
                 }}

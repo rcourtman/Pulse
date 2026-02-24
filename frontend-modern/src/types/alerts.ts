@@ -26,7 +26,14 @@ export interface AlertThresholds {
   networkInLegacy?: number;
   networkOutLegacy?: number;
   // Allow indexing with string
-  [key: string]: HysteresisThreshold | BackupAlertConfig | SnapshotAlertConfig | number | boolean | string | undefined;
+  [key: string]:
+    | HysteresisThreshold
+    | BackupAlertConfig
+    | SnapshotAlertConfig
+    | number
+    | boolean
+    | string
+    | undefined;
 }
 
 export type RawOverrideConfig = AlertThresholds & {

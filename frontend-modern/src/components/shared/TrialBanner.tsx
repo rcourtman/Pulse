@@ -28,7 +28,11 @@ export const TrialBanner: Component = () => {
 
   return (
     <Show when={isTrial()}>
-      <div class={`mb-2 rounded-md border px-3 py-2 text-sm ${tone()}`} role="status" aria-live="polite">
+      <div
+        class={`mb-2 rounded-md border px-3 py-2 text-sm ${tone()}`}
+        role="status"
+        aria-live="polite"
+      >
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div class="font-medium">
             Pro Trial:

@@ -7,9 +7,9 @@ import Storage from '@/components/Storage/Storage';
 // Stub ResizeObserver for jsdom (used by HistoryChart in pool detail panels)
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class ResizeObserver {
-    observe() { }
-    unobserve() { }
-    disconnect() { }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
   } as unknown as typeof ResizeObserver;
 }
 
@@ -47,15 +47,29 @@ let alertsActivationState: 'active' | 'pending_review' | 'snoozed' | null = 'act
 
 let nodeResources: Resource[] = [
   {
-    id: 'node-1', type: 'node', name: 'pve1', displayName: 'pve1',
-    platformId: 'cluster-main', platformType: 'proxmox-pve', sourceType: 'api',
-    status: 'online', uptime: 1000, lastSeen: Date.now(),
+    id: 'node-1',
+    type: 'node',
+    name: 'pve1',
+    displayName: 'pve1',
+    platformId: 'cluster-main',
+    platformType: 'proxmox-pve',
+    sourceType: 'api',
+    status: 'online',
+    uptime: 1000,
+    lastSeen: Date.now(),
     platformData: { proxmox: { instance: 'cluster-main' } },
   },
   {
-    id: 'node-2', type: 'node', name: 'pve2', displayName: 'pve2',
-    platformId: 'cluster-main', platformType: 'proxmox-pve', sourceType: 'api',
-    status: 'online', uptime: 1000, lastSeen: Date.now(),
+    id: 'node-2',
+    type: 'node',
+    name: 'pve2',
+    displayName: 'pve2',
+    platformId: 'cluster-main',
+    platformType: 'proxmox-pve',
+    sourceType: 'api',
+    status: 'online',
+    uptime: 1000,
+    lastSeen: Date.now(),
     platformData: { proxmox: { instance: 'cluster-main' } },
   },
 ];
@@ -179,10 +193,10 @@ vi.mock('@/hooks/useResources', () => ({
     resources: () => nodeResources,
     infra: () => nodeResources,
     workloads: () => [],
-    byType: (type: ResourceType) => nodeResources.filter(r => r.type === type),
+    byType: (type: ResourceType) => nodeResources.filter((r) => r.type === type),
     byPlatform: () => [],
     filtered: () => [],
-    get: (id: string) => nodeResources.find(r => r.id === id),
+    get: (id: string) => nodeResources.find((r) => r.id === id),
     children: () => [],
     statusCounts: () => ({}),
     topByCpu: () => [],
@@ -218,15 +232,29 @@ describe('Storage', () => {
     };
     nodeResources = [
       {
-        id: 'node-1', type: 'node', name: 'pve1', displayName: 'pve1',
-        platformId: 'cluster-main', platformType: 'proxmox-pve', sourceType: 'api',
-        status: 'online', uptime: 1000, lastSeen: Date.now(),
+        id: 'node-1',
+        type: 'node',
+        name: 'pve1',
+        displayName: 'pve1',
+        platformId: 'cluster-main',
+        platformType: 'proxmox-pve',
+        sourceType: 'api',
+        status: 'online',
+        uptime: 1000,
+        lastSeen: Date.now(),
         platformData: { proxmox: { instance: 'cluster-main' } },
       },
       {
-        id: 'node-2', type: 'node', name: 'pve2', displayName: 'pve2',
-        platformId: 'cluster-main', platformType: 'proxmox-pve', sourceType: 'api',
-        status: 'online', uptime: 1000, lastSeen: Date.now(),
+        id: 'node-2',
+        type: 'node',
+        name: 'pve2',
+        displayName: 'pve2',
+        platformId: 'cluster-main',
+        platformType: 'proxmox-pve',
+        sourceType: 'api',
+        status: 'online',
+        uptime: 1000,
+        lastSeen: Date.now(),
         platformData: { proxmox: { instance: 'cluster-main' } },
       },
     ];
@@ -306,7 +334,9 @@ describe('Storage', () => {
   });
 
   it('round-trips managed storage query params through canonical URL state', async () => {
-    hookResources = [buildStorageResource('storage-1', 'Ceph-Store', 'pve1', { storageType: 'cephfs' })];
+    hookResources = [
+      buildStorageResource('storage-1', 'Ceph-Store', 'pve1', { storageType: 'cephfs' }),
+    ];
     mockLocationSearch =
       '?tab=disks&search=ceph&group=status&source=proxmox-pve&status=warning&node=node-2&sort=usage&order=desc&from=proxmox-overview';
 
@@ -316,7 +346,10 @@ describe('Storage', () => {
       expect(navigateSpy).toHaveBeenCalled();
     });
 
-    const [initialPath, initialOptions] = navigateSpy.mock.calls.at(-1) as [string, { replace?: boolean }];
+    const [initialPath, initialOptions] = navigateSpy.mock.calls.at(-1) as [
+      string,
+      { replace?: boolean },
+    ];
     const initialParams = new URLSearchParams(initialPath.split('?')[1] || '');
     expect(initialParams.get('tab')).toBe('disks');
     expect(initialParams.get('q')).toBe('ceph');
@@ -329,7 +362,10 @@ describe('Storage', () => {
     expect(initialParams.get('from')).toBe('proxmox-overview');
     expect(initialParams.get('search')).toBeNull();
     expect(initialOptions?.replace).toBe(true);
-    expect(screen.getByRole('button', { name: 'Physical Disks' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Physical Disks' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('node-2');
     expect((screen.getByLabelText('Sort By') as HTMLSelectElement).value).toBe('usage');
     expect((screen.getByLabelText('Source') as HTMLSelectElement).value).toBe('proxmox-pve');
@@ -337,7 +373,10 @@ describe('Storage', () => {
 
     // Grouping controls are only shown on the Pools view.
     fireEvent.click(screen.getByRole('button', { name: 'Pools' }));
-    expect(screen.getByRole('button', { name: 'By Status' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'By Status' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'By Type' }));
 
@@ -355,7 +394,10 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     expect(screen.getByTestId('disk-list')).toHaveTextContent('disk-view:node-2:ceph');
-    expect(screen.getByRole('button', { name: 'Physical Disks' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Physical Disks' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('node-2');
     expect((screen.getByLabelText('Source') as HTMLSelectElement).value).toBe('proxmox-pve');
   });
@@ -524,7 +566,9 @@ describe('Storage', () => {
 
     render(() => <Storage />);
 
-    expect(screen.getByText('Waiting for storage data from connected platforms.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Waiting for storage data from connected platforms.'),
+    ).toBeInTheDocument();
   });
 
   it('shows reconnect banner and retries on demand', () => {
@@ -544,7 +588,9 @@ describe('Storage', () => {
 
     render(() => <Storage />);
 
-    expect(screen.getByText('Storage data stream disconnected. Data may be stale.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Storage data stream disconnected. Data may be stale.'),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
     expect(reconnectSpy).toHaveBeenCalledTimes(1);
   });
@@ -576,7 +622,9 @@ describe('Storage', () => {
   });
 
   it('GA contract: Storage served at /storage is the only canonical path', async () => {
-    hookResources = [buildStorageResource('storage-ga', 'GA-Store', 'pve1', { status: 'degraded' })];
+    hookResources = [
+      buildStorageResource('storage-ga', 'GA-Store', 'pve1', { status: 'degraded' }),
+    ];
     mockLocationPath = '/storage';
     mockLocationSearch = '?source=proxmox-pve&status=warning';
 

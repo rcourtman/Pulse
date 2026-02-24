@@ -9,7 +9,13 @@ import type { MetricSeverity } from '@/utils/metricThresholds';
 
 export interface StorageHeroProps {
   summary: { count: number; totalBytes: number; usedBytes: number; usagePercent: number };
-  healthBreakdown: { healthy: number; warning: number; critical: number; offline: number; unknown: number };
+  healthBreakdown: {
+    healthy: number;
+    warning: number;
+    critical: number;
+    offline: number;
+    unknown: number;
+  };
   diskCount?: number;
   trend?: { delta: number | null } | null;
 }
@@ -21,8 +27,12 @@ const GAUGE_COLOR_BY_SEVERITY: Record<MetricSeverity, string> = {
 };
 
 export const StorageHero: Component<StorageHeroProps> = (props) => {
-  const freeBytes = createMemo(() => Math.max(0, props.summary.totalBytes - props.summary.usedBytes));
-  const gaugeColor = createMemo(() => GAUGE_COLOR_BY_SEVERITY[getMetricSeverity(props.summary.usagePercent, 'disk')]);
+  const freeBytes = createMemo(() =>
+    Math.max(0, props.summary.totalBytes - props.summary.usedBytes),
+  );
+  const gaugeColor = createMemo(
+    () => GAUGE_COLOR_BY_SEVERITY[getMetricSeverity(props.summary.usagePercent, 'disk')],
+  );
 
   const donutData = createMemo(() => [
     { value: props.healthBreakdown.healthy, color: 'text-emerald-500 dark:text-emerald-400' },
@@ -36,29 +46,54 @@ export const StorageHero: Component<StorageHeroProps> = (props) => {
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {/* Pools + Health donut */}
         <div class="flex items-center gap-3 rounded-md border border-border bg-surface-alt px-3 py-2.5">
-          <MiniDonut size={32} strokeWidth={4} data={donutData()} centerText={String(props.summary.count)} />
+          <MiniDonut
+            size={32}
+            strokeWidth={4}
+            data={donutData()}
+            centerText={String(props.summary.count)}
+          />
           <div class="min-w-0">
             <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Pools</div>
             <div class="text-sm font-bold text-base-content">{props.summary.count}</div>
             <div class="text-[10px] text-muted">
               {props.healthBreakdown.healthy} healthy
-              {props.healthBreakdown.warning > 0 && <span class="text-amber-600 dark:text-amber-400"> · {props.healthBreakdown.warning} warn</span>}
-              {props.healthBreakdown.critical > 0 && <span class="text-red-600 dark:text-red-400"> · {props.healthBreakdown.critical} crit</span>}
+              {props.healthBreakdown.warning > 0 && (
+                <span class="text-amber-600 dark:text-amber-400">
+                  {' '}
+                  · {props.healthBreakdown.warning} warn
+                </span>
+              )}
+              {props.healthBreakdown.critical > 0 && (
+                <span class="text-red-600 dark:text-red-400">
+                  {' '}
+                  · {props.healthBreakdown.critical} crit
+                </span>
+              )}
             </div>
           </div>
         </div>
 
         {/* Capacity gauge */}
         <div class="flex items-center gap-3 rounded-md border border-border bg-surface-alt px-3 py-2.5">
-          <MiniGauge percent={props.summary.usagePercent} size={32} strokeWidth={4} color={gaugeColor()} />
+          <MiniGauge
+            percent={props.summary.usagePercent}
+            size={32}
+            strokeWidth={4}
+            color={gaugeColor()}
+          />
           <div class="min-w-0">
             <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Capacity</div>
-            <div class="text-sm font-bold text-base-content">{formatBytes(props.summary.totalBytes)}</div>
+            <div class="text-sm font-bold text-base-content">
+              {formatBytes(props.summary.totalBytes)}
+            </div>
             <div class={`text-[10px] font-medium ${gaugeColor()}`}>
               {formatPercent(props.summary.usagePercent)} used
               <Show when={props.trend?.delta != null}>
-                <span class={`text-[10px] font-medium ${deltaColorClass(props.trend?.delta ?? null)}`}>
-                  {' '}{formatDelta(props.trend?.delta ?? null)} / 7d
+                <span
+                  class={`text-[10px] font-medium ${deltaColorClass(props.trend?.delta ?? null)}`}
+                >
+                  {' '}
+                  {formatDelta(props.trend?.delta ?? null)} / 7d
                 </span>
               </Show>
             </div>
@@ -68,7 +103,15 @@ export const StorageHero: Component<StorageHeroProps> = (props) => {
         {/* Disks (replaces redundant Used card) */}
         <div class="flex items-center gap-3 rounded-md border border-border bg-surface-alt px-3 py-2.5">
           <div class="flex items-center justify-center w-8 h-8 rounded-full bg-surface-alt flex-shrink-0">
-            <svg class="w-4 h-4 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg
+              class="w-4 h-4 text-muted"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <rect x="2" y="2" width="20" height="8" rx="2" ry="2" />
               <rect x="2" y="14" width="20" height="8" rx="2" ry="2" />
               <circle cx="6" cy="6" r="1" fill="currentColor" />
@@ -90,11 +133,13 @@ export const StorageHero: Component<StorageHeroProps> = (props) => {
         {/* Used / Free summary (replaces separate Used + Free cards) */}
         <div class="flex items-center gap-3 rounded-md border border-border bg-surface-alt px-3 py-2.5">
           <div class="min-w-0">
-            <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Allocation</div>
-            <div class="text-sm font-bold text-base-content">{formatBytes(props.summary.usedBytes)}</div>
-            <div class="text-[10px] text-muted">
-              {formatBytes(freeBytes())} free
+            <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
+              Allocation
             </div>
+            <div class="text-sm font-bold text-base-content">
+              {formatBytes(props.summary.usedBytes)}
+            </div>
+            <div class="text-[10px] text-muted">{formatBytes(freeBytes())} free</div>
           </div>
         </div>
       </div>

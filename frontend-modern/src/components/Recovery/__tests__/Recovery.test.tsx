@@ -148,7 +148,9 @@ describe('Recovery', () => {
     fireEvent.click(subject);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events&rollupId=res%3Avm-123', { replace: true });
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events&rollupId=res%3Avm-123', {
+        replace: true,
+      });
     });
 
     const tablesItems = await screen.findAllByText('VM 123');
@@ -185,14 +187,22 @@ describe('Recovery', () => {
     fireEvent.change(clusterSelect, { target: { value: 'dev-cluster' } });
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events&cluster=dev-cluster', { replace: true });
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events&cluster=dev-cluster', {
+        replace: true,
+      });
     });
 
     await waitFor(() => {
       const urls = apiFetchMock.mock.calls.map((call) => String(call[0] || ''));
-      const hasPoints = urls.some((url) => url.includes('/api/recovery/points') && url.includes('cluster=dev-cluster'));
-      const hasSeries = urls.some((url) => url.includes('/api/recovery/series') && url.includes('cluster=dev-cluster'));
-      const hasFacets = urls.some((url) => url.includes('/api/recovery/facets') && url.includes('cluster=dev-cluster'));
+      const hasPoints = urls.some(
+        (url) => url.includes('/api/recovery/points') && url.includes('cluster=dev-cluster'),
+      );
+      const hasSeries = urls.some(
+        (url) => url.includes('/api/recovery/series') && url.includes('cluster=dev-cluster'),
+      );
+      const hasFacets = urls.some(
+        (url) => url.includes('/api/recovery/facets') && url.includes('cluster=dev-cluster'),
+      );
       expect(hasPoints && hasSeries && hasFacets).toBe(true);
     });
   });

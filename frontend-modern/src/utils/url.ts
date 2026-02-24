@@ -7,7 +7,7 @@ type KioskListener = (enabled: boolean) => void;
 const kioskListeners = new Set<KioskListener>();
 
 function notifyKioskListeners(enabled: boolean): void {
-  kioskListeners.forEach(listener => listener(enabled));
+  kioskListeners.forEach((listener) => listener(enabled));
 }
 
 /**
@@ -142,7 +142,8 @@ export function isPulseHttps(): boolean {
 
 function sanitizeApiToken(token: string): string {
   // Reject tokens containing control characters (potential injection)
-  if (/[\x00-\x1f\x7f]/.test(token)) { // eslint-disable-line no-control-regex -- intentional sanitization
+  // eslint-disable-next-line no-control-regex -- intentional sanitization
+  if (/[\x00-\x1f\x7f]/.test(token)) {
     return '';
   }
   const trimmed = token.trim();

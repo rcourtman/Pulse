@@ -12,9 +12,9 @@ import {
 // Stub ResizeObserver for jsdom
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class ResizeObserver {
-    observe() { }
-    unobserve() { }
-    disconnect() { }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
   } as unknown as typeof ResizeObserver;
 }
 
@@ -163,25 +163,24 @@ const PROFILES = {
   L: 5000,
 } as const;
 
-const makeGuests = (
-  count: number,
-  overrides?: (i: number) => Record<string, unknown>,
-) => Array.from({ length: count }, (_, i) => makeGuest(i, overrides?.(i)));
+const makeGuests = (count: number, overrides?: (i: number) => Record<string, unknown>) =>
+  Array.from({ length: count }, (_, i) => makeGuest(i, overrides?.(i)));
 
-const getTypeDistribution = (guests: Array<Record<string, unknown>>) => guests.reduce<{
-  vm: number;
-  lxc: number;
-  docker: number;
-}>(
-  (acc, guest) => {
-    const type = guest.type;
-    if (type === 'vm') acc.vm += 1;
-    if (type === 'lxc') acc.lxc += 1;
-    if (type === 'docker') acc.docker += 1;
-    return acc;
-  },
-  { vm: 0, lxc: 0, docker: 0 },
-);
+const getTypeDistribution = (guests: Array<Record<string, unknown>>) =>
+  guests.reduce<{
+    vm: number;
+    lxc: number;
+    docker: number;
+  }>(
+    (acc, guest) => {
+      const type = guest.type;
+      if (type === 'vm') acc.vm += 1;
+      if (type === 'lxc') acc.lxc += 1;
+      if (type === 'docker') acc.docker += 1;
+      return acc;
+    },
+    { vm: 0, lxc: 0, docker: 0 },
+  );
 
 const expectedTypeDistribution = (count: number) => {
   const lxc = Math.floor((count - 1) / 4) + 1;

@@ -60,73 +60,67 @@ export const TokenRevealDialog: Component = () => {
         const hint =
           info.note ||
           'Copy this token now; Pulse will not display it again after you close this dialog.';
- const tokenHint =
- info.record?.prefix && info.record?.suffix
- ? `${info.record.prefix}…${info.record.suffix}`
- : info.record?.prefix
- ? `${info.record.prefix}…`
- : info.record?.suffix
- ? `…${info.record.suffix}`
- : null;
+        const tokenHint =
+          info.record?.prefix && info.record?.suffix
+            ? `${info.record.prefix}…${info.record.suffix}`
+            : info.record?.prefix
+              ? `${info.record.prefix}…`
+              : info.record?.suffix
+                ? `…${info.record.suffix}`
+                : null;
 
- return (
- <div class="fixed inset-0 z-[60] flex items-center justify-center px-4 py-6">
- <div
- class="absolute inset-0 bg-base"
- role="presentation"
- onClick={handleDismiss}
- />
- <div class="relative z-[61] w-full max-w-xl">
- <Card padding="lg" class="shadow-sm relative">
- <button
- type="button"
- class="absolute top-3 right-3 rounded-md px-2 py-1 text-xs font-medium hover:text-base-content transition-colors"
- onClick={handleDismiss}
- aria-label="Close token dialog"
- >
- Close
- </button>
+        return (
+          <div class="fixed inset-0 z-[60] flex items-center justify-center px-4 py-6">
+            <div class="absolute inset-0 bg-base" role="presentation" onClick={handleDismiss} />
+            <div class="relative z-[61] w-full max-w-xl">
+              <Card padding="lg" class="shadow-sm relative">
+                <button
+                  type="button"
+                  class="absolute top-3 right-3 rounded-md px-2 py-1 text-xs font-medium hover:text-base-content transition-colors"
+                  onClick={handleDismiss}
+                  aria-label="Close token dialog"
+                >
+                  Close
+                </button>
 
- <div class="flex items-start gap-3">
- <div class="flex-shrink-0 rounded-full bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 p-2">
- <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
- <path
- stroke-linecap="round"
- stroke-linejoin="round"
- stroke-width="2"
- d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
- />
- </svg>
- </div>
- <div class="space-y-2 flex-1">
- <div class="flex flex-wrap items-center gap-2">
- <h2 class="text-lg font-semibold text-base-content">
- API token ready
- </h2>
- <Show when={sourceLabel}>
- <span class="inline-flex items-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide">
- {sourceLabel}
- </span>
- </Show>
- </div>
- <p class="text-sm text-base-content leading-snug">{hint}</p>
- </div>
- </div>
+                <div class="flex items-start gap-3">
+                  <div class="flex-shrink-0 rounded-full bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 p-2">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  </div>
+                  <div class="space-y-2 flex-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <h2 class="text-lg font-semibold text-base-content">API token ready</h2>
+                      <Show when={sourceLabel}>
+                        <span class="inline-flex items-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide">
+                          {sourceLabel}
+                        </span>
+                      </Show>
+                    </div>
+                    <p class="text-sm text-base-content leading-snug">{hint}</p>
+                  </div>
+                </div>
 
- <div class="mt-5 space-y-3">
- <div class="text-xs font-semibold uppercase tracking-wide text-muted">
- Token value
- </div>
- <div class="flex flex-col sm:flex-row sm:items-center gap-2">
- <code class="flex-1 rounded-md border border-green-300 dark:border-green-700 bg-surface px-4 py-3 font-mono text-base font-semibold text-base-content break-all">
- {info.token}
- </code>
- <button
- type="button"
- onClick={() => handleCopy(info.token)}
- class="inline-flex items-center justify-center rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 transition-colors shadow-sm"
- >
- {copied() ?'Copied!' : 'Copy token'}
+                <div class="mt-5 space-y-3">
+                  <div class="text-xs font-semibold uppercase tracking-wide text-muted">
+                    Token value
+                  </div>
+                  <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <code class="flex-1 rounded-md border border-green-300 dark:border-green-700 bg-surface px-4 py-3 font-mono text-base font-semibold text-base-content break-all">
+                      {info.token}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(info.token)}
+                      class="inline-flex items-center justify-center rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 transition-colors shadow-sm"
+                    >
+                      {copied() ? 'Copied!' : 'Copy token'}
                     </button>
                   </div>
                   <div class="text-xs text-muted">

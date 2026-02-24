@@ -30,10 +30,14 @@ describe('updateVersion helpers', () => {
     expect(buildDockerImageTag('v5.1.0')).toBe('5.1.0');
 
     const command = buildLinuxAmd64DownloadCommand('v5.1.0');
-    expect(command).toContain('curl -fL --retry 3 --retry-delay 2 -o pulse-v5.1.0-linux-amd64.tar.gz');
+    expect(command).toContain(
+      'curl -fL --retry 3 --retry-delay 2 -o pulse-v5.1.0-linux-amd64.tar.gz',
+    );
     expect(command).toContain(
       'https://github.com/rcourtman/Pulse/releases/download/v5.1.0/pulse-v5.1.0-linux-amd64.tar.gz',
     );
-    expect(command).toContain('sudo tar -xzf pulse-v5.1.0-linux-amd64.tar.gz -C /usr/local/bin pulse');
+    expect(command).toContain(
+      'sudo tar -xzf pulse-v5.1.0-linux-amd64.tar.gz -C /usr/local/bin pulse',
+    );
   });
 });

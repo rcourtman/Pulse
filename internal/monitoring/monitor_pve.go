@@ -405,7 +405,7 @@ func (m *Monitor) fetchPVENodes(ctx context.Context, instanceName string, instan
 
 		monErr := errors.WrapConnectionError("poll_nodes", instanceName, err)
 		log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to get nodes")
-		m.state.SetConnectionHealth(instanceName, false)
+		m.setProviderConnectionHealth(InstanceTypePVE, instanceName, false)
 
 		// Track auth failure if it's an authentication error
 		if errors.IsAuthError(err) {
@@ -436,7 +436,7 @@ func (m *Monitor) updatePVEConnectionHealth(ctx context.Context, instanceName st
 		if healthyCount == 0 {
 			// All endpoints are down
 			connectionHealthStr = "error"
-			m.state.SetConnectionHealth(instanceName, false)
+			m.setProviderConnectionHealth(InstanceTypePVE, instanceName, false)
 		} else if healthyCount < totalCount {
 			// Some endpoints are down - check if cluster still has quorum
 			// A cluster with quorum is healthy even if some nodes are intentionally offline
@@ -454,7 +454,7 @@ func (m *Monitor) updatePVEConnectionHealth(ctx context.Context, instanceName st
 			if isQuorate {
 				// Cluster has quorum - healthy even with some nodes offline
 				connectionHealthStr = "healthy"
-				m.state.SetConnectionHealth(instanceName, true)
+				m.setProviderConnectionHealth(InstanceTypePVE, instanceName, true)
 				log.Debug().
 					Str("instance", instanceName).
 					Int("healthy", healthyCount).
@@ -463,7 +463,7 @@ func (m *Monitor) updatePVEConnectionHealth(ctx context.Context, instanceName st
 			} else {
 				// Cluster lost quorum - this is actually degraded/critical
 				connectionHealthStr = "degraded"
-				m.state.SetConnectionHealth(instanceName, true) // Still functional but degraded
+				m.setProviderConnectionHealth(InstanceTypePVE, instanceName, true) // Still functional but degraded
 				log.Warn().
 					Str("instance", instanceName).
 					Int("healthy", healthyCount).
@@ -473,11 +473,11 @@ func (m *Monitor) updatePVEConnectionHealth(ctx context.Context, instanceName st
 		} else {
 			// All endpoints are healthy
 			connectionHealthStr = "healthy"
-			m.state.SetConnectionHealth(instanceName, true)
+			m.setProviderConnectionHealth(InstanceTypePVE, instanceName, true)
 		}
 	} else {
 		// Regular client - simple healthy/unhealthy
-		m.state.SetConnectionHealth(instanceName, true)
+		m.setProviderConnectionHealth(InstanceTypePVE, instanceName, true)
 	}
 	return connectionHealthStr
 }
@@ -561,7 +561,7 @@ func (m *Monitor) preserveNodesWhenEmpty(instanceName string, modelNodes []model
 		Msg("No Proxmox nodes returned this cycle - preserving previous state")
 
 	// Mark connection health as degraded to reflect polling failure
-	m.state.SetConnectionHealth(instanceName, false)
+	m.setProviderConnectionHealth(InstanceTypePVE, instanceName, false)
 
 	preserved := make([]models.Node, 0, len(prevInstanceNodes))
 	now := time.Now()

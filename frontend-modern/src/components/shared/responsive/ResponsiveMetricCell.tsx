@@ -37,8 +37,8 @@ export interface ResponsiveMetricCellProps {
 /** Map metric severity to text color + weight for compact metric display */
 const METRIC_TEXT_STYLES: Record<MetricSeverity, string> = {
   critical: 'text-red-600 dark:text-red-400 font-bold',
-  warning:  'text-orange-600 dark:text-orange-400 font-medium',
-  normal:   'text-muted',
+  warning: 'text-orange-600 dark:text-orange-400 font-medium',
+  normal: 'text-muted',
 };
 
 function metricTextClass(value: number, type: 'cpu' | 'memory' | 'disk'): string {
@@ -119,7 +119,9 @@ export const ResponsiveMetricCell: Component<ResponsiveMetricCellProps> = (props
       <div class={props.class}>
         {/* Mobile: Colored percentage text */}
         <Show when={showMobileText()}>
-          <div class={`md:hidden text-xs text-center ${colorClass()} whitespace-nowrap overflow-hidden text-ellipsis`}>
+          <div
+            class={`md:hidden text-xs text-center ${colorClass()} whitespace-nowrap overflow-hidden text-ellipsis`}
+          >
             {displayLabel()}
           </div>
         </Show>
@@ -154,9 +156,7 @@ export const MetricText: Component<{
   const colorClass = createMemo(() => metricTextClass(props.value, props.type));
 
   return (
-    <span class={`text-xs text-center ${colorClass()} ${props.class || ''}`}>
-      {displayLabel()}
-    </span>
+    <span class={`text-xs text-center ${colorClass()} ${props.class || ''}`}>{displayLabel()}</span>
   );
 };
 
@@ -188,9 +188,7 @@ export const DualMetricCell: Component<{
   );
 
   const defaultMobileContent = (
-    <div class={`text-xs text-center ${colorClass()}`}>
-      {displayLabel()}
-    </div>
+    <div class={`text-xs text-center ${colorClass()}`}>{displayLabel()}</div>
   );
 
   const defaultDesktopContent = (

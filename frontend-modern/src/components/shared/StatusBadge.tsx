@@ -39,10 +39,10 @@ export function StatusBadge(props: StatusBadgeProps): JSX.Element {
     : '';
 
   const title = disabled
-    ? titleWhenDisabled ?? titleDisabled ?? titleEnabled ?? ''
+    ? (titleWhenDisabled ?? titleDisabled ?? titleEnabled ?? '')
     : isEnabled
-      ? titleEnabled ?? ''
-      : titleDisabled ?? '';
+      ? (titleEnabled ?? '')
+      : (titleDisabled ?? '');
 
   return (
     <button

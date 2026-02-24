@@ -62,7 +62,9 @@ describe('AIAPI', () => {
     });
 
     await AIAPI.getRemediationPlan('plan/1?x=1');
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/remediation/plan?plan_id=plan%2F1%3Fx%3D1');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith(
+      '/api/ai/remediation/plan?plan_id=plan%2F1%3Fx%3D1',
+    );
 
     await AIAPI.approveInvestigationFix('approval/root');
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/approvals/approval%2Froot/approve', {
@@ -115,8 +117,8 @@ describe('AIAPI', () => {
           message: 'msg',
           duration: '1m',
         },
-        () => undefined
-      )
+        () => undefined,
+      ),
     ).rejects.toThrow('backend error');
   });
 
@@ -136,8 +138,8 @@ describe('AIAPI', () => {
           message: 'msg',
           duration: '1m',
         },
-        () => undefined
-      )
+        () => undefined,
+      ),
     ).rejects.toThrow('No response body');
   });
 
@@ -166,7 +168,7 @@ describe('AIAPI', () => {
         message: 'msg',
         duration: '1m',
       },
-      () => undefined
+      () => undefined,
     );
 
     expect(read).toHaveBeenCalledTimes(1);

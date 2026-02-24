@@ -7,7 +7,8 @@ export type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' |
 export const ALERT_HEADER_META: Record<AlertTab, { title: string; description: string }> = {
   overview: {
     title: 'Alerts Overview',
-    description: 'Monitor active alerts, acknowledgements, and recent status changes across platforms.',
+    description:
+      'Monitor active alerts, acknowledgements, and recent status changes across platforms.',
   },
   thresholds: {
     title: 'Alert Thresholds',
@@ -19,7 +20,8 @@ export const ALERT_HEADER_META: Record<AlertTab, { title: string; description: s
   },
   schedule: {
     title: 'Maintenance Schedule',
-    description: 'Set quiet hours and maintenance windows to suppress alerts when expected changes occur.',
+    description:
+      'Set quiet hours and maintenance windows to suppress alerts when expected changes occur.',
   },
   history: {
     title: 'Alert History',
@@ -59,8 +61,9 @@ export const tabFromPath = (
     return 'overview';
   }
 
-  const entry = (Object.entries(segments) as [AlertTab, string][])
-    .find(([, value]) => value === segment);
+  const entry = (Object.entries(segments) as [AlertTab, string][]).find(
+    ([, value]) => value === segment,
+  );
 
   if (entry) {
     return entry[0];
@@ -248,4 +251,3 @@ export const filterIncidentEvents = (
   }
   return events.filter((event) => filters.has(event.type));
 };
-

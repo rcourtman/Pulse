@@ -1,10 +1,22 @@
-import { Component, For, Show, createEffect, createMemo, createSignal, onMount, untrack } from 'solid-js';
+import {
+  Component,
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  onMount,
+  untrack,
+} from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { SearchInput } from '@/components/shared/SearchInput';
-import { getSourcePlatformBadge, getSourcePlatformLabel } from '@/components/shared/sourcePlatformBadges';
+import {
+  getSourcePlatformBadge,
+  getSourcePlatformLabel,
+} from '@/components/shared/sourcePlatformBadges';
 import { hideTooltip, showTooltip } from '@/components/shared/Tooltip';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -21,7 +33,14 @@ import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import { RecoveryPointDetails } from '@/components/Recovery/RecoveryPointDetails';
 import { ProtectionHero } from './ProtectionHero';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/shared/Table';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import ListFilterIcon from 'lucide-solid/icons/list-filter';
 import { segmentedButtonClass } from '@/utils/segmentedButton';
@@ -80,7 +99,6 @@ const titleize = (value: string): string =>
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
-
 
 const dateKeyFromTimestamp = (timestamp: number): string => {
   const date = new Date(timestamp);
@@ -142,11 +160,15 @@ const niceAxisMax = (value: number): number => {
 
 const normalizeOutcome = (value: string | null | undefined): KnownOutcome => {
   const v = (value || '').trim().toLowerCase();
-  if (v === 'success' || v === 'warning' || v === 'failed' || v === 'running' || v === 'unknown') return v;
+  if (v === 'success' || v === 'warning' || v === 'failed' || v === 'running' || v === 'unknown')
+    return v;
   return 'unknown';
 };
 
-const rollupSubjectLabel = (rollup: ProtectionRollup, resourcesById: Map<string, Resource>): string => {
+const rollupSubjectLabel = (
+  rollup: ProtectionRollup,
+  resourcesById: Map<string, Resource>,
+): string => {
   const subjectRID = (rollup.subjectResourceId || '').trim();
   if (subjectRID) {
     const res = resourcesById.get(subjectRID);
@@ -167,7 +189,10 @@ const pointTimestampMs = (p: RecoveryPoint): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const buildSubjectLabelForPoint = (p: RecoveryPoint, resourcesById: Map<string, Resource>): string => {
+const buildSubjectLabelForPoint = (
+  p: RecoveryPoint,
+  resourcesById: Map<string, Resource>,
+): string => {
   const subjectRID = (p.subjectResourceId || '').trim();
   if (subjectRID) {
     const res = resourcesById.get(subjectRID);
@@ -226,9 +251,11 @@ const ISSUE_RAIL_CLASS: Record<Exclude<IssueTone, 'none'>, string> = {
 
 const isRollupStale = (r: ProtectionRollup, nowMs: number): boolean => {
   const successMs = r.lastSuccessAt ? Date.parse(r.lastSuccessAt) : 0;
-  if (Number.isFinite(successMs) && successMs > 0) return nowMs - successMs >= STALE_ISSUE_THRESHOLD_MS;
+  if (Number.isFinite(successMs) && successMs > 0)
+    return nowMs - successMs >= STALE_ISSUE_THRESHOLD_MS;
   const attemptMs = r.lastAttemptAt ? Date.parse(r.lastAttemptAt) : 0;
-  if (Number.isFinite(attemptMs) && attemptMs > 0) return nowMs - attemptMs >= STALE_ISSUE_THRESHOLD_MS;
+  if (Number.isFinite(attemptMs) && attemptMs > 0)
+    return nowMs - attemptMs >= STALE_ISSUE_THRESHOLD_MS;
   return false;
 };
 
@@ -248,8 +275,6 @@ const rollupAgeTextClass = (r: ProtectionRollup, nowMs: number): string => {
   if (ageMs >= AGING_THRESHOLD_MS) return 'text-amber-700 dark:text-amber-300';
   return 'text-muted';
 };
-
-
 
 const Recovery: Component = () => {
   const navigate = useNavigate();
@@ -428,8 +453,13 @@ const Recovery: Component = () => {
     if (nextNode !== untrack(nodeFilter)) setNodeFilter(nextNode);
     if (nextNamespace !== untrack(namespaceFilter)) setNamespaceFilter(nextNamespace);
 
-    if (verificationValue === 'verified' || verificationValue === 'unverified' || verificationValue === 'unknown') {
-      if (verificationValue !== untrack(verificationFilter)) setVerificationFilter(verificationValue as VerificationFilter);
+    if (
+      verificationValue === 'verified' ||
+      verificationValue === 'unverified' ||
+      verificationValue === 'unknown'
+    ) {
+      if (verificationValue !== untrack(verificationFilter))
+        setVerificationFilter(verificationValue as VerificationFilter);
       if (untrack(outcomeFilter) !== 'all') setOutcomeFilter('all');
     } else {
       if (untrack(verificationFilter) !== 'all') setVerificationFilter('all');
@@ -481,7 +511,8 @@ const Recovery: Component = () => {
     const v = view();
 
     const status = outcomeFilter() !== 'all' ? outcomeFilter() : null;
-    const verification = v === 'events' && verificationFilter() !== 'all' ? verificationFilter() : null;
+    const verification =
+      v === 'events' && verificationFilter() !== 'all' ? verificationFilter() : null;
 
     const nextPath = buildRecoveryPath({
       view: v,
@@ -515,7 +546,9 @@ const Recovery: Component = () => {
       const v = String(p?.provider || '').trim();
       if (v) providers.add(v);
     }
-    const values = Array.from(providers).sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b)));
+    const values = Array.from(providers).sort((a, b) =>
+      sourceLabel(a).localeCompare(sourceLabel(b)),
+    );
     return ['all', ...values];
   });
 
@@ -595,7 +628,8 @@ const Recovery: Component = () => {
     const staleThreshold = nowMs - STALE_ISSUE_THRESHOLD_MS;
 
     return (baseRollups() || []).filter((r) => {
-      if (selectedOutcome !== 'all' && normalizeOutcome(r.lastOutcome) !== selectedOutcome) return false;
+      if (selectedOutcome !== 'all' && normalizeOutcome(r.lastOutcome) !== selectedOutcome)
+        return false;
       if (!staleOnly) return true;
 
       const attemptMs = r.lastAttemptAt ? Date.parse(r.lastAttemptAt) : 0;
@@ -621,8 +655,14 @@ const Recovery: Component = () => {
           return mul * la.localeCompare(lb);
         }
         case 'source': {
-          const sa = (a.providers || []).map((p) => sourceLabel(String(p))).sort().join(',');
-          const sb = (b.providers || []).map((p) => sourceLabel(String(p))).sort().join(',');
+          const sa = (a.providers || [])
+            .map((p) => sourceLabel(String(p)))
+            .sort()
+            .join(',');
+          const sb = (b.providers || [])
+            .map((p) => sourceLabel(String(p)))
+            .sort()
+            .join(',');
           return mul * sa.localeCompare(sb);
         }
         case 'lastBackup': {
@@ -652,30 +692,48 @@ const Recovery: Component = () => {
   const facets = createMemo(() => recoveryFacets.facets() || {});
 
   const clusterOptions = createMemo(() => {
-    const values = (facets().clusters || []).slice().map((v) => String(v || '').trim()).filter(Boolean).sort();
+    const values = (facets().clusters || [])
+      .slice()
+      .map((v) => String(v || '').trim())
+      .filter(Boolean)
+      .sort();
     const selected = clusterFilter().trim();
     if (selected && selected !== 'all' && !values.includes(selected)) values.unshift(selected);
     return ['all', ...values];
   });
 
   const nodeOptions = createMemo(() => {
-    const values = (facets().nodesHosts || []).slice().map((v) => String(v || '').trim()).filter(Boolean).sort();
+    const values = (facets().nodesHosts || [])
+      .slice()
+      .map((v) => String(v || '').trim())
+      .filter(Boolean)
+      .sort();
     const selected = nodeFilter().trim();
     if (selected && selected !== 'all' && !values.includes(selected)) values.unshift(selected);
     return ['all', ...values];
   });
 
   const namespaceOptions = createMemo(() => {
-    const values = (facets().namespaces || []).slice().map((v) => String(v || '').trim()).filter(Boolean).sort();
+    const values = (facets().namespaces || [])
+      .slice()
+      .map((v) => String(v || '').trim())
+      .filter(Boolean)
+      .sort();
     const selected = namespaceFilter().trim();
     if (selected && selected !== 'all' && !values.includes(selected)) values.unshift(selected);
     return ['all', ...values];
   });
 
-  const showClusterFilter = createMemo(() => clusterOptions().length > 1 || clusterFilter() !== 'all');
+  const showClusterFilter = createMemo(
+    () => clusterOptions().length > 1 || clusterFilter() !== 'all',
+  );
   const showNodeFilter = createMemo(() => nodeOptions().length > 1 || nodeFilter() !== 'all');
-  const showNamespaceFilter = createMemo(() => namespaceOptions().length > 1 || namespaceFilter() !== 'all');
-  const showVerificationFilter = createMemo(() => Boolean(facets().hasVerification) || verificationFilter() !== 'all');
+  const showNamespaceFilter = createMemo(
+    () => namespaceOptions().length > 1 || namespaceFilter() !== 'all',
+  );
+  const showVerificationFilter = createMemo(
+    () => Boolean(facets().hasVerification) || verificationFilter() !== 'all',
+  );
   const activeAdvancedFilterCount = createMemo(() => {
     let count = 0;
     if (modeFilter() !== 'all') count += 1;
@@ -727,7 +785,12 @@ const Recovery: Component = () => {
   });
 
   const groupedByDay = createMemo(() => {
-    const groups: Array<{ key: string; label: string; tone: 'recent' | 'default'; items: RecoveryPoint[] }> = [];
+    const groups: Array<{
+      key: string;
+      label: string;
+      tone: 'recent' | 'default';
+      items: RecoveryPoint[];
+    }> = [];
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const yesterday = today - 24 * 60 * 60 * 1000;
@@ -811,12 +874,12 @@ const Recovery: Component = () => {
   const MOBILE_RECOVERY_COLS = new Set(['time', 'subject', 'outcome']);
   const mobileVisibleArtifactColumns = createMemo(() =>
     isMobile()
-      ? visibleArtifactColumns().filter(c => MOBILE_RECOVERY_COLS.has(c.id))
-      : visibleArtifactColumns()
+      ? visibleArtifactColumns().filter((c) => MOBILE_RECOVERY_COLS.has(c.id))
+      : visibleArtifactColumns(),
   );
   const tableColumnCount = createMemo(() => mobileVisibleArtifactColumns().length);
   const tableMinWidth = createMemo(() =>
-    isMobile() ? 'auto' : `${Math.max(980, tableColumnCount() * 140)}px`
+    isMobile() ? 'auto' : `${Math.max(980, tableColumnCount() * 140)}px`,
   );
 
   createEffect(() => {
@@ -857,7 +920,9 @@ const Recovery: Component = () => {
 
   const activeClusterLabel = createMemo(() => (clusterFilter() === 'all' ? '' : clusterFilter()));
   const activeNodeLabel = createMemo(() => (nodeFilter() === 'all' ? '' : nodeFilter()));
-  const activeNamespaceLabel = createMemo(() => (namespaceFilter() === 'all' ? '' : namespaceFilter()));
+  const activeNamespaceLabel = createMemo(() =>
+    namespaceFilter() === 'all' ? '' : namespaceFilter(),
+  );
 
   const hasActiveArtifactFilters = createMemo(
     () =>
@@ -911,10 +976,17 @@ const Recovery: Component = () => {
               />
               {/* Mobile-only: toggle + Filters button */}
               <div class="flex items-center justify-between gap-2 sm:hidden">
-                <div class="inline-flex rounded-md bg-surface-hover p-0.5" role="group" aria-label="View">
+                <div
+                  class="inline-flex rounded-md bg-surface-hover p-0.5"
+                  role="group"
+                  aria-label="View"
+                >
                   <button
                     type="button"
-                    onClick={() => { setView('protected'); setRollupId(''); }}
+                    onClick={() => {
+                      setView('protected');
+                      setRollupId('');
+                    }}
                     aria-pressed={view() === 'protected'}
                     class={segmentedButtonClass(view() === 'protected')}
                   >
@@ -949,10 +1021,17 @@ const Recovery: Component = () => {
               <Show when={!isMobile() || protectedFiltersOpen()}>
                 <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
                   {/* Toggle — desktop only, first in filter row */}
-                  <div class="hidden sm:inline-flex rounded-md bg-surface-hover p-0.5" role="group" aria-label="View">
+                  <div
+                    class="hidden sm:inline-flex rounded-md bg-surface-hover p-0.5"
+                    role="group"
+                    aria-label="View"
+                  >
                     <button
                       type="button"
-                      onClick={() => { setView('protected'); setRollupId(''); }}
+                      onClick={() => {
+                        setView('protected');
+                        setRollupId('');
+                      }}
                       aria-pressed={view() === 'protected'}
                       class={segmentedButtonClass(view() === 'protected')}
                     >
@@ -983,7 +1062,11 @@ const Recovery: Component = () => {
                       class="min-w-[10rem] max-w-[14rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
                     >
                       <For each={providerOptions()}>
-                        {(p) => <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>}
+                        {(p) => (
+                          <option value={p}>
+                            {p === 'all' ? 'All Providers' : sourceLabel(p)}
+                          </option>
+                        )}
                       </For>
                     </select>
                   </div>
@@ -1053,12 +1136,21 @@ const Recovery: Component = () => {
             <div class="p-6">
               <EmptyState
                 title="Failed to load protected items"
-                description={String((recoveryRollups.rollups.error as Error)?.message || recoveryRollups.rollups.error)}
+                description={String(
+                  (recoveryRollups.rollups.error as Error)?.message ||
+                    recoveryRollups.rollups.error,
+                )}
               />
             </div>
           </Show>
 
-          <Show when={!recoveryRollups.rollups.loading && !recoveryRollups.rollups.error && (filteredRollups()?.length ?? 0) === 0}>
+          <Show
+            when={
+              !recoveryRollups.rollups.loading &&
+              !recoveryRollups.rollups.error &&
+              (filteredRollups()?.length ?? 0) === 0
+            }
+          >
             <div class="p-6">
               <EmptyState
                 title="No protected items yet"
@@ -1069,10 +1161,20 @@ const Recovery: Component = () => {
 
           <Show when={(filteredRollups()?.length ?? 0) > 0}>
             <div class="overflow-x-auto">
-              <Table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : '500px' }}>
+              <Table
+                class="w-full border-collapse whitespace-nowrap"
+                style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : '500px' }}
+              >
                 <TableHeader>
                   <TableRow class="bg-surface-alt text-muted border-b border-border">
-                    {([['subject', 'Subject'], ['source', 'Source'], ['lastBackup', 'Last Backup'], ['outcome', 'Outcome']] as const).map(([col, label]) => (
+                    {(
+                      [
+                        ['subject', 'Subject'],
+                        ['source', 'Source'],
+                        ['lastBackup', 'Last Backup'],
+                        ['outcome', 'Outcome'],
+                      ] as const
+                    ).map(([col, label]) => (
                       <TableHead
                         class={`py-0.5 px-3 whitespace-nowrap text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer select-none hover:text-base-content transition-colors${col === 'source' ? ' hidden md:table-cell w-[110px]' : col === 'lastBackup' ? ' w-[120px]' : col === 'outcome' ? ' w-[70px]' : ''}`}
                         onClick={() => toggleProtectedSort(col)}
@@ -1081,9 +1183,11 @@ const Recovery: Component = () => {
                           {label}
                           <Show when={protectedSortCol() === col}>
                             <svg class="h-3 w-3" viewBox="0 0 12 12" fill="currentColor">
-                              {protectedSortDir() === 'asc'
-                                ? <path d="M6 3l3.5 5h-7z" />
-                                : <path d="M6 9l3.5-5h-7z" />}
+                              {protectedSortDir() === 'asc' ? (
+                                <path d="M6 3l3.5 5h-7z" />
+                              ) : (
+                                <path d="M6 9l3.5-5h-7z" />
+                              )}
                             </svg>
                           </Show>
                         </span>
@@ -1106,9 +1210,13 @@ const Recovery: Component = () => {
                         .sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b)));
                       const nowMs = Date.now();
                       const issueTone = deriveRollupIssueTone(r, nowMs);
-                      const issueRailClass = issueTone === 'none' ? '' : ISSUE_RAIL_CLASS[issueTone];
+                      const issueRailClass =
+                        issueTone === 'none' ? '' : ISSUE_RAIL_CLASS[issueTone];
                       const stale = isRollupStale(r, nowMs);
-                      const neverSucceeded = (!Number.isFinite(successMs) || successMs <= 0) && Number.isFinite(attemptMs) && attemptMs > 0;
+                      const neverSucceeded =
+                        (!Number.isFinite(successMs) || successMs <= 0) &&
+                        Number.isFinite(attemptMs) &&
+                        attemptMs > 0;
                       return (
                         <TableRow
                           class="cursor-pointer border-b border-border hover:bg-surface-hover"
@@ -1118,10 +1226,9 @@ const Recovery: Component = () => {
                           }}
                         >
                           <TableCell
-                            class={`relative max-w-[420px] truncate whitespace-nowrap px-3 py-0.5 text-base-content ${issueTone === 'rose' || issueTone === 'blue'
-                              ? 'font-medium'
-                              : ''
-                              }`}
+                            class={`relative max-w-[420px] truncate whitespace-nowrap px-3 py-0.5 text-base-content ${
+                              issueTone === 'rose' || issueTone === 'blue' ? 'font-medium' : ''
+                            }`}
                             title={label}
                           >
                             <Show when={issueTone !== 'none'}>
@@ -1130,10 +1237,14 @@ const Recovery: Component = () => {
                             <div class="flex items-center gap-2">
                               <span class="truncate">{label}</span>
                               <Show when={neverSucceeded}>
-                                <span class="whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-medium text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-900">never succeeded</span>
+                                <span class="whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-medium text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-900">
+                                  never succeeded
+                                </span>
                               </Show>
                               <Show when={!neverSucceeded && stale}>
-                                <span class="whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-medium text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-900">stale</span>
+                                <span class="whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-medium text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-900">
+                                  stale
+                                </span>
                               </Show>
                             </div>
                           </TableCell>
@@ -1142,18 +1253,32 @@ const Recovery: Component = () => {
                               <For each={providers}>
                                 {(p) => {
                                   const badge = getSourcePlatformBadge(String(p));
-                                  return <span class={badge?.classes || ''}>{badge?.label || sourceLabel(String(p))}</span>;
+                                  return (
+                                    <span class={badge?.classes || ''}>
+                                      {badge?.label || sourceLabel(String(p))}
+                                    </span>
+                                  );
                                 }}
                               </For>
                             </div>
                           </TableCell>
                           <TableCell
                             class={`whitespace-nowrap px-3 py-0.5 ${rollupAgeTextClass(r, nowMs)}`}
-                            title={successMs > 0 ? formatAbsoluteTime(successMs) : attemptMs > 0 ? formatAbsoluteTime(attemptMs) : undefined}
+                            title={
+                              successMs > 0
+                                ? formatAbsoluteTime(successMs)
+                                : attemptMs > 0
+                                  ? formatAbsoluteTime(attemptMs)
+                                  : undefined
+                            }
                           >
-                            {successMs > 0 ? formatRelativeTime(successMs) : neverSucceeded ? (
+                            {successMs > 0 ? (
+                              formatRelativeTime(successMs)
+                            ) : neverSucceeded ? (
                               <span class="text-amber-600 dark:text-amber-400">never</span>
-                            ) : '—'}
+                            ) : (
+                              '—'
+                            )}
                           </TableCell>
                           <TableCell class="whitespace-nowrap px-3 py-0.5">
                             <span
@@ -1184,14 +1309,23 @@ const Recovery: Component = () => {
           <Card padding="sm">
             <EmptyState
               title="Failed to load recovery points"
-              description={String((recoveryPoints.response.error as Error)?.message || recoveryPoints.response.error)}
+              description={String(
+                (recoveryPoints.response.error as Error)?.message || recoveryPoints.response.error,
+              )}
             />
           </Card>
         </Show>
 
         <Show when={!recoveryPoints.response.loading && !recoveryPoints.response.error}>
           <Card padding="sm" class="h-full">
-            <Show when={selectedDateKey() || activeClusterLabel() || activeNodeLabel() || activeNamespaceLabel()}>
+            <Show
+              when={
+                selectedDateKey() ||
+                activeClusterLabel() ||
+                activeNodeLabel() ||
+                activeNamespaceLabel()
+              }
+            >
               <div class="mb-1 flex flex-wrap items-center gap-1.5">
                 <Show when={selectedDateKey()}>
                   <div class="inline-flex max-w-full items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] text-blue-700 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200">
@@ -1309,10 +1443,11 @@ const Recovery: Component = () => {
                           setSelectedDateKey(null);
                           setCurrentPage(1);
                         }}
-                        class={`rounded px-2 py-1 ${chartRangeDays() === range
-                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                          : 'text-muted hover:bg-surface-hover'
-                          }`}
+                        class={`rounded px-2 py-1 ${
+                          chartRangeDays() === range
+                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                            : 'text-muted hover:bg-surface-hover'
+                        }`}
                       >
                         {range === 365 ? '1y' : `${range}d`}
                       </button>
@@ -1324,7 +1459,9 @@ const Recovery: Component = () => {
               <div class="relative h-32 overflow-hidden rounded bg-surface-alt">
                 <div class="absolute bottom-8 left-0 top-2 w-6 text-[10px] text-muted">
                   <div class="flex h-full flex-col justify-between pr-1 text-right">
-                    <For each={[...timeline().axisTicks].reverse()}>{(tick) => <span>{tick}</span>}</For>
+                    <For each={[...timeline().axisTicks].reverse()}>
+                      {(tick) => <span>{tick}</span>}
+                    </For>
                   </div>
                 </div>
                 <div
@@ -1335,7 +1472,8 @@ const Recovery: Component = () => {
                     <div class="absolute inset-x-0 bottom-6 top-0">
                       <For each={timeline().axisTicks}>
                         {(tick) => {
-                          const bottom = timeline().axisMax > 0 ? (tick / timeline().axisMax) * 100 : 0;
+                          const bottom =
+                            timeline().axisMax > 0 ? (tick / timeline().axisMax) * 100 : 0;
                           return (
                             <div
                               class="pointer-events-none absolute inset-x-0 border-t border-border"
@@ -1353,24 +1491,40 @@ const Recovery: Component = () => {
                         const rect = e.currentTarget.getBoundingClientRect();
                         const x = Math.max(0, e.touches[0].clientX - rect.left);
                         const pts = timeline().points;
-                        const idx = Math.min(Math.floor((x / rect.width) * pts.length), pts.length - 1);
+                        const idx = Math.min(
+                          Math.floor((x / rect.width) * pts.length),
+                          pts.length - 1,
+                        );
                         const pt = pts[idx];
-                        if (pt) { setSelectedDateKey(pt.key); setCurrentPage(1); }
+                        if (pt) {
+                          setSelectedDateKey(pt.key);
+                          setCurrentPage(1);
+                        }
                       }}
                       onTouchMove={(e) => {
                         e.preventDefault();
                         const rect = e.currentTarget.getBoundingClientRect();
-                        const x = Math.max(0, Math.min(e.touches[0].clientX - rect.left, rect.width - 1));
+                        const x = Math.max(
+                          0,
+                          Math.min(e.touches[0].clientX - rect.left, rect.width - 1),
+                        );
                         const pts = timeline().points;
-                        const idx = Math.min(Math.floor((x / rect.width) * pts.length), pts.length - 1);
+                        const idx = Math.min(
+                          Math.floor((x / rect.width) * pts.length),
+                          pts.length - 1,
+                        );
                         const pt = pts[idx];
-                        if (pt && pt.key !== selectedDateKey()) { setSelectedDateKey(pt.key); setCurrentPage(1); }
+                        if (pt && pt.key !== selectedDateKey()) {
+                          setSelectedDateKey(pt.key);
+                          setCurrentPage(1);
+                        }
                       }}
                     >
                       <For each={timeline().points}>
                         {(point) => {
                           const total = point.total;
-                          const heightPct = timeline().axisMax > 0 ? (total / timeline().axisMax) * 100 : 0;
+                          const heightPct =
+                            timeline().axisMax > 0 ? (total / timeline().axisMax) * 100 : 0;
                           const columnHeight = Math.max(0, Math.min(100, heightPct));
                           const snapshotHeight = total > 0 ? (point.snapshot / total) * 100 : 0;
                           const localHeight = total > 0 ? (point.local / total) * 100 : 0;
@@ -1381,17 +1535,23 @@ const Recovery: Component = () => {
                             <div class="flex-1">
                               <button
                                 type="button"
-                                class={`h-full w-full rounded-sm ${isSelected ? 'bg-blue-100 dark:bg-blue-900' : 'hover:bg-surface-hover'
-                                  }`}
+                                class={`h-full w-full rounded-sm ${
+                                  isSelected
+                                    ? 'bg-blue-100 dark:bg-blue-900'
+                                    : 'hover:bg-surface-hover'
+                                }`}
                                 aria-label={`${prettyDateLabel(point.key)}: ${total} recovery points`}
                                 onClick={() => {
-                                  setSelectedDateKey((prev) => (prev === point.key ? null : point.key));
+                                  setSelectedDateKey((prev) =>
+                                    prev === point.key ? null : point.key,
+                                  );
                                   setCurrentPage(1);
                                 }}
                                 onMouseEnter={(event) => {
                                   const rect = event.currentTarget.getBoundingClientRect();
                                   const breakdown: string[] = [];
-                                  if (point.snapshot > 0) breakdown.push(`Snapshots: ${point.snapshot}`);
+                                  if (point.snapshot > 0)
+                                    breakdown.push(`Snapshots: ${point.snapshot}`);
                                   if (point.local > 0) breakdown.push(`Local: ${point.local}`);
                                   if (point.remote > 0) breakdown.push(`Remote: ${point.remote}`);
                                   const tooltipText =
@@ -1416,15 +1576,27 @@ const Recovery: Component = () => {
                               >
                                 <div class="relative h-full w-full">
                                   <Show when={total > 0}>
-                                    <div class="absolute inset-x-0 bottom-0" style={{ height: `${columnHeight}%` }}>
+                                    <div
+                                      class="absolute inset-x-0 bottom-0"
+                                      style={{ height: `${columnHeight}%` }}
+                                    >
                                       <Show when={remoteHeight > 0}>
-                                        <div class={`w-full ${CHART_SEGMENT_CLASS.remote}`} style={{ height: `${remoteHeight}%` }} />
+                                        <div
+                                          class={`w-full ${CHART_SEGMENT_CLASS.remote}`}
+                                          style={{ height: `${remoteHeight}%` }}
+                                        />
                                       </Show>
                                       <Show when={localHeight > 0}>
-                                        <div class={`w-full ${CHART_SEGMENT_CLASS.local}`} style={{ height: `${localHeight}%` }} />
+                                        <div
+                                          class={`w-full ${CHART_SEGMENT_CLASS.local}`}
+                                          style={{ height: `${localHeight}%` }}
+                                        />
                                       </Show>
                                       <Show when={snapshotHeight > 0}>
-                                        <div class={`w-full ${CHART_SEGMENT_CLASS.snapshot}`} style={{ height: `${snapshotHeight}%` }} />
+                                        <div
+                                          class={`w-full ${CHART_SEGMENT_CLASS.snapshot}`}
+                                          style={{ height: `${snapshotHeight}%` }}
+                                        />
                                       </Show>
                                     </div>
                                   </Show>
@@ -1439,17 +1611,28 @@ const Recovery: Component = () => {
                     <div class="pointer-events-none absolute inset-x-0 bottom-0 h-4 flex items-end gap-[3px]">
                       <For each={timeline().points}>
                         {(point, index) => {
-                          const showLabel = index() % timeline().labelEvery === 0 || index() === timeline().points.length - 1;
+                          const showLabel =
+                            index() % timeline().labelEvery === 0 ||
+                            index() === timeline().points.length - 1;
                           const isSelected = selectedDateKey() === point.key;
                           const barMinWidth = isMobile()
                             ? ''
-                            : chartRangeDays() === 7 ? 'min-w-[28px]' : chartRangeDays() === 30 ? 'min-w-[14px]' : 'min-w-[8px]';
+                            : chartRangeDays() === 7
+                              ? 'min-w-[28px]'
+                              : chartRangeDays() === 30
+                                ? 'min-w-[14px]'
+                                : 'min-w-[8px]';
                           return (
-                            <div class={`relative flex-1 ${isMobile() ? '' : 'shrink-0'} ${barMinWidth}`}>
+                            <div
+                              class={`relative flex-1 ${isMobile() ? '' : 'shrink-0'} ${barMinWidth}`}
+                            >
                               <Show when={showLabel}>
                                 <span
-                                  class={`absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] ${isSelected ? 'font-semibold text-blue-700 dark:text-blue-300' : 'text-muted'
-                                    }`}
+                                  class={`absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] ${
+                                    isSelected
+                                      ? 'font-semibold text-blue-700 dark:text-blue-300'
+                                      : 'text-muted'
+                                  }`}
                                 >
                                   {compactAxisLabel(point.key, chartRangeDays())}
                                 </span>
@@ -1489,7 +1672,10 @@ const Recovery: Component = () => {
                       <div class="flex items-center gap-1.5">
                         <button
                           type="button"
-                          onClick={() => { setRollupId(''); setView('protected'); }}
+                          onClick={() => {
+                            setRollupId('');
+                            setView('protected');
+                          }}
                           class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
                         >
                           Protected
@@ -1503,10 +1689,17 @@ const Recovery: Component = () => {
                       </div>
                     }
                   >
-                    <div class="inline-flex rounded-md bg-surface-hover p-0.5" role="group" aria-label="View">
+                    <div
+                      class="inline-flex rounded-md bg-surface-hover p-0.5"
+                      role="group"
+                      aria-label="View"
+                    >
                       <button
                         type="button"
-                        onClick={() => { setView('protected'); setRollupId(''); }}
+                        onClick={() => {
+                          setView('protected');
+                          setRollupId('');
+                        }}
                         aria-pressed={view() === 'protected'}
                         class={segmentedButtonClass(view() === 'protected')}
                       >
@@ -1548,7 +1741,10 @@ const Recovery: Component = () => {
                         <div class="hidden sm:flex items-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => { setRollupId(''); setView('protected'); }}
+                            onClick={() => {
+                              setRollupId('');
+                              setView('protected');
+                            }}
                             class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
                           >
                             Protected
@@ -1562,10 +1758,17 @@ const Recovery: Component = () => {
                         </div>
                       }
                     >
-                      <div class="hidden sm:inline-flex rounded-md bg-surface-hover p-0.5" role="group" aria-label="View">
+                      <div
+                        class="hidden sm:inline-flex rounded-md bg-surface-hover p-0.5"
+                        role="group"
+                        aria-label="View"
+                      >
                         <button
                           type="button"
-                          onClick={() => { setView('protected'); setRollupId(''); }}
+                          onClick={() => {
+                            setView('protected');
+                            setRollupId('');
+                          }}
                           aria-pressed={view() === 'protected'}
                           class={segmentedButtonClass(view() === 'protected')}
                         >
@@ -1600,7 +1803,11 @@ const Recovery: Component = () => {
                         class="min-w-[10rem] max-w-[14rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
                       >
                         <For each={providerOptions()}>
-                          {(p) => <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>}
+                          {(p) => (
+                            <option value={p}>
+                              {p === 'all' ? 'All Providers' : sourceLabel(p)}
+                            </option>
+                          )}
                         </For>
                       </select>
                     </div>
@@ -1634,7 +1841,9 @@ const Recovery: Component = () => {
                     </div>
 
                     <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                      <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Scope</span>
+                      <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">
+                        Scope
+                      </span>
                       <button
                         type="button"
                         onClick={() => {
@@ -1693,10 +1902,15 @@ const Recovery: Component = () => {
                   </div>
 
                   <Show when={moreFiltersOpen()}>
-                    <div id="recovery-more-filters" class="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
+                    <div
+                      id="recovery-more-filters"
+                      class="flex flex-wrap items-center gap-2 pt-2 border-t border-border"
+                    >
                       <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                        <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Method</span>
-                        <For each={(['all', 'snapshot', 'local', 'remote'] as const)}>
+                        <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">
+                          Method
+                        </span>
+                        <For each={['all', 'snapshot', 'local', 'remote'] as const}>
                           {(mode) => (
                             <button
                               type="button"
@@ -1725,7 +1939,9 @@ const Recovery: Component = () => {
                             id="recovery-verification-filter"
                             value={verificationFilter()}
                             onChange={(event) => {
-                              setVerificationFilter(event.currentTarget.value as VerificationFilter);
+                              setVerificationFilter(
+                                event.currentTarget.value as VerificationFilter,
+                              );
                               if (event.currentTarget.value !== 'all') setOutcomeFilter('all');
                               setCurrentPage(1);
                             }}
@@ -1847,10 +2063,19 @@ const Recovery: Component = () => {
               }
             >
               <div class="overflow-x-auto">
-                <Table class="w-full border-collapse text-xs whitespace-nowrap" style={{ 'min-width': tableMinWidth() }}>
+                <Table
+                  class="w-full border-collapse text-xs whitespace-nowrap"
+                  style={{ 'min-width': tableMinWidth() }}
+                >
                   <TableHeader>
                     <TableRow class="bg-surface-alt text-muted border-b border-border">
-                      <For each={mobileVisibleArtifactColumns()}>{(col) => <TableHead class="py-0.5 px-3 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap">{col.label}</TableHead>}</For>
+                      <For each={mobileVisibleArtifactColumns()}>
+                        {(col) => (
+                          <TableHead class="py-0.5 px-3 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap">
+                            {col.label}
+                          </TableHead>
+                        )}
+                      </For>
                     </TableRow>
                   </TableHeader>
                   <TableBody class="divide-y divide-border">
@@ -1874,7 +2099,10 @@ const Recovery: Component = () => {
                             {(p) => {
                               const resIndex = resourcesById();
                               const subject = buildSubjectLabelForPoint(p, resIndex);
-                              const mode = (String(p.mode || '').trim().toLowerCase() as ArtifactMode) || 'local';
+                              const mode =
+                                (String(p.mode || '')
+                                  .trim()
+                                  .toLowerCase() as ArtifactMode) || 'local';
                               const repoLabel = buildRepositoryLabelForPoint(p);
                               const provider = String(p.provider || '').trim();
                               const outcome = normalizeOutcome(p.outcome);
@@ -1888,12 +2116,13 @@ const Recovery: Component = () => {
                               const nodeHost = String(p.node || '').trim();
                               const namespace = String(p.namespace || '').trim();
 
-
                               return (
                                 <>
                                   <TableRow
                                     class={`cursor-pointer border-b ${selectedPoint()?.id === p.id ? 'bg-blue-50 border-blue-200 dark:bg-blue-900 dark:border-blue-800' : 'border-border hover:bg-surface-hover'}`}
-                                    onClick={() => setSelectedPoint(selectedPoint()?.id === p.id ? null : p)}
+                                    onClick={() =>
+                                      setSelectedPoint(selectedPoint()?.id === p.id ? null : p)
+                                    }
                                   >
                                     <For each={mobileVisibleArtifactColumns()}>
                                       {(col) => {
@@ -1920,7 +2149,12 @@ const Recovery: Component = () => {
                                                       viewBox="0 0 24 24"
                                                       aria-hidden="true"
                                                     >
-                                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l7 4v5c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V7l7-4z" />
+                                                      <path
+                                                        stroke-linecap="round"
+                                                        stroke-linejoin="round"
+                                                        stroke-width="2"
+                                                        d="M12 3l7 4v5c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V7l7-4z"
+                                                      />
                                                     </svg>
                                                   </Show>
                                                 </span>
@@ -1954,7 +2188,9 @@ const Recovery: Component = () => {
                                             const badge = getSourcePlatformBadge(provider);
                                             return (
                                               <TableCell class="whitespace-nowrap px-3 py-0.5">
-                                                <span class={badge?.classes || ''}>{badge?.label || sourceLabel(provider)}</span>
+                                                <span class={badge?.classes || ''}>
+                                                  {badge?.label || sourceLabel(provider)}
+                                                </span>
                                               </TableCell>
                                             );
                                           }
@@ -1963,15 +2199,41 @@ const Recovery: Component = () => {
                                               <TableCell class="whitespace-nowrap px-3 py-0.5">
                                                 {typeof p.verified === 'boolean' ? (
                                                   p.verified ? (
-                                                    <span class="inline-flex items-center gap-1 text-green-600 dark:text-green-400" title="Verified">
-                                                      <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                                                    <span
+                                                      class="inline-flex items-center gap-1 text-green-600 dark:text-green-400"
+                                                      title="Verified"
+                                                    >
+                                                      <svg
+                                                        class="h-3.5 w-3.5"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                      >
+                                                        <path
+                                                          stroke-linecap="round"
+                                                          stroke-linejoin="round"
+                                                          stroke-width="2.5"
+                                                          d="M5 13l4 4L19 7"
+                                                        />
                                                       </svg>
                                                     </span>
                                                   ) : (
-                                                    <span class="inline-flex items-center gap-1 text-amber-500 dark:text-amber-400" title="Unverified">
-                                                      <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z" />
+                                                    <span
+                                                      class="inline-flex items-center gap-1 text-amber-500 dark:text-amber-400"
+                                                      title="Unverified"
+                                                    >
+                                                      <svg
+                                                        class="h-3.5 w-3.5"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                      >
+                                                        <path
+                                                          stroke-linecap="round"
+                                                          stroke-linejoin="round"
+                                                          stroke-width="2.5"
+                                                          d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z"
+                                                        />
                                                       </svg>
                                                     </span>
                                                   )
@@ -1983,7 +2245,9 @@ const Recovery: Component = () => {
                                           case 'size':
                                             return (
                                               <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted">
-                                                {p.sizeBytes && p.sizeBytes > 0 ? formatBytes(p.sizeBytes) : '—'}
+                                                {p.sizeBytes && p.sizeBytes > 0
+                                                  ? formatBytes(p.sizeBytes)
+                                                  : '—'}
                                               </TableCell>
                                             );
                                           case 'method':
@@ -2009,8 +2273,9 @@ const Recovery: Component = () => {
                                             return (
                                               <TableCell class="whitespace-nowrap px-3 py-0.5">
                                                 <span
-                                                  class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${OUTCOME_BADGE_CLASS[outcome]
-                                                    }`}
+                                                  class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                                    OUTCOME_BADGE_CLASS[outcome]
+                                                  }`}
                                                 >
                                                   {titleize(outcome)}
                                                 </span>
@@ -2018,7 +2283,9 @@ const Recovery: Component = () => {
                                             );
                                           default:
                                             return (
-                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted">-</TableCell>
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted">
+                                                -
+                                              </TableCell>
                                             );
                                         }
                                       }}
@@ -2026,17 +2293,35 @@ const Recovery: Component = () => {
                                   </TableRow>
                                   <Show when={selectedPoint()?.id === p.id}>
                                     <TableRow>
-                                      <TableCell colSpan={tableColumnCount()} class="bg-surface-alt px-0 sm:px-4 py-4 border-b border-border relative">
+                                      <TableCell
+                                        colSpan={tableColumnCount()}
+                                        class="bg-surface-alt px-0 sm:px-4 py-4 border-b border-border relative"
+                                      >
                                         <div class="flex items-center justify-between px-4 pb-2 mb-2 border-b border-border">
-                                          <h2 class="text-sm font-semibold text-base-content">Recovery Point Details</h2>
+                                          <h2 class="text-sm font-semibold text-base-content">
+                                            Recovery Point Details
+                                          </h2>
                                           <button
                                             type="button"
-                                            onClick={(e) => { e.stopPropagation(); setSelectedPoint(null); }}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setSelectedPoint(null);
+                                            }}
                                             class="rounded-md p-1 hover:text-base-content hover:bg-surface-hover"
                                             aria-label="Close details"
                                           >
-                                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                            <svg
+                                              class="h-5 w-5"
+                                              fill="none"
+                                              stroke="currentColor"
+                                              viewBox="0 0 24 24"
+                                            >
+                                              <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M6 18L18 6M6 6l12 12"
+                                              />
                                             </svg>
                                           </button>
                                         </div>
@@ -2059,11 +2344,17 @@ const Recovery: Component = () => {
 
               <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted border-t border-border">
                 <div>
-                  <Show when={(recoveryPoints.meta().total || 0) > 0} fallback={<span>Showing 0 of 0 events</span>}>
+                  <Show
+                    when={(recoveryPoints.meta().total || 0) > 0}
+                    fallback={<span>Showing 0 of 0 events</span>}
+                  >
                     <span>
                       Showing {(recoveryPoints.meta().page - 1) * recoveryPoints.meta().limit + 1} -{' '}
-                      {Math.min(recoveryPoints.meta().page * recoveryPoints.meta().limit, recoveryPoints.meta().total)} of{' '}
-                      {recoveryPoints.meta().total} events
+                      {Math.min(
+                        recoveryPoints.meta().page * recoveryPoints.meta().limit,
+                        recoveryPoints.meta().total,
+                      )}{' '}
+                      of {recoveryPoints.meta().total} events
                     </span>
                   </Show>
                 </div>
@@ -2076,7 +2367,9 @@ const Recovery: Component = () => {
                   >
                     Prev
                   </button>
-                  <span>Page {currentPage()} / {totalPages()}</span>
+                  <span>
+                    Page {currentPage()} / {totalPages()}
+                  </span>
                   <button
                     type="button"
                     disabled={currentPage() >= totalPages()}
@@ -2089,8 +2382,6 @@ const Recovery: Component = () => {
               </div>
             </Show>
           </Card>
-
-
         </Show>
       </Show>
     </div>

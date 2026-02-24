@@ -30,8 +30,8 @@ const canonicalTabPaths = {
 
 const hasFeatures =
   (features: string[]) =>
-    (feature: string): boolean =>
-      features.includes(feature);
+  (feature: string): boolean =>
+    features.includes(feature);
 
 const gatedTabs: Array<[SettingsTab, string]> = [
   ['system-relay', 'relay'],

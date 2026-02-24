@@ -36,7 +36,7 @@ describe('OrgsAPI', () => {
           method: 'POST',
           body: JSON.stringify({ id: 'org-new', displayName: 'New Org' }),
           skipOrgContext: true,
-        })
+        }),
       );
       expect(result).toEqual(newOrg);
     });
@@ -66,7 +66,7 @@ describe('OrgsAPI', () => {
           method: 'PUT',
           body: JSON.stringify({ displayName: 'Updated' }),
           skipOrgContext: true,
-        })
+        }),
       );
     });
   });
@@ -79,7 +79,7 @@ describe('OrgsAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/orgs/org-1',
-        expect.objectContaining({ method: 'DELETE', skipOrgContext: true })
+        expect.objectContaining({ method: 'DELETE', skipOrgContext: true }),
       );
     });
   });
@@ -91,7 +91,9 @@ describe('OrgsAPI', () => {
 
       const result = await OrgsAPI.listMembers('org-1');
 
-      expect(apiFetchJSON).toHaveBeenCalledWith('/api/orgs/org-1/members', { skipOrgContext: true });
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/orgs/org-1/members', {
+        skipOrgContext: true,
+      });
       expect(result).toEqual(mockMembers);
     });
   });
@@ -109,7 +111,7 @@ describe('OrgsAPI', () => {
           method: 'POST',
           body: JSON.stringify({ userId: 'user-1', role: 'viewer' }),
           skipOrgContext: true,
-        })
+        }),
       );
       expect(result).toEqual(mockMember);
     });
@@ -123,7 +125,7 @@ describe('OrgsAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/orgs/org-1/members/user-1',
-        expect.objectContaining({ method: 'DELETE', skipOrgContext: true })
+        expect.objectContaining({ method: 'DELETE', skipOrgContext: true }),
       );
     });
   });
@@ -147,7 +149,9 @@ describe('OrgsAPI', () => {
 
       const result = await OrgsAPI.listIncomingShares('org-1');
 
-      expect(apiFetchJSON).toHaveBeenCalledWith('/api/orgs/org-1/shares/incoming', { skipOrgContext: true });
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/orgs/org-1/shares/incoming', {
+        skipOrgContext: true,
+      });
       expect(result).toEqual(mockShares);
     });
   });
@@ -169,7 +173,7 @@ describe('OrgsAPI', () => {
         expect.objectContaining({
           method: 'POST',
           skipOrgContext: true,
-        })
+        }),
       );
       expect(result).toEqual(mockShare);
     });
@@ -183,7 +187,7 @@ describe('OrgsAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/orgs/org-1/shares/share-1',
-        expect.objectContaining({ method: 'DELETE', skipOrgContext: true })
+        expect.objectContaining({ method: 'DELETE', skipOrgContext: true }),
       );
     });
   });

@@ -1,9 +1,7 @@
 import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
 import { readAPIErrorMessage } from './responseUtils';
 import { logger } from '@/utils/logger';
-import type {
-  AIChatStreamEvent,
-} from './generated/aiChatEvents';
+import type { AIChatStreamEvent } from './generated/aiChatEvents';
 
 // AI Chat API - Simplified AI interface
 
@@ -98,7 +96,9 @@ export class AIChatAPI {
 
   // Get messages for a session
   static async getMessages(sessionId: string): Promise<ChatMessage[]> {
-    return apiFetchJSON(`${this.baseUrl}/sessions/${this.encodeSegment(sessionId)}/messages`) as Promise<ChatMessage[]>;
+    return apiFetchJSON(
+      `${this.baseUrl}/sessions/${this.encodeSegment(sessionId)}/messages`,
+    ) as Promise<ChatMessage[]>;
   }
 
   // Abort a session
@@ -116,7 +116,10 @@ export class AIChatAPI {
   }
 
   // Deny a pending command
-  static async denyCommand(approvalId: string, reason?: string): Promise<{ denied: boolean; message: string }> {
+  static async denyCommand(
+    approvalId: string,
+    reason?: string,
+  ): Promise<{ denied: boolean; message: string }> {
     return apiFetchJSON(`${this.baseUrl}/approvals/${this.encodeSegment(approvalId)}/deny`, {
       method: 'POST',
       body: JSON.stringify({ reason: reason || 'User skipped' }),
@@ -124,7 +127,10 @@ export class AIChatAPI {
   }
 
   // Answer a pending question from the AI chat
-  static async answerQuestion(questionId: string, answers: Array<{ id: string; value: string }>): Promise<void> {
+  static async answerQuestion(
+    questionId: string,
+    answers: Array<{ id: string; value: string }>,
+  ): Promise<void> {
     await apiFetch(`${this.baseUrl}/question/${this.encodeSegment(questionId)}/answer`, {
       method: 'POST',
       body: JSON.stringify({ answers }),
@@ -141,7 +147,9 @@ export class AIChatAPI {
   }
 
   // Summarize a session (compress context when nearing limits)
-  static async summarizeSession(sessionId: string): Promise<{ success: boolean; message?: string }> {
+  static async summarizeSession(
+    sessionId: string,
+  ): Promise<{ success: boolean; message?: string }> {
     return apiFetchJSON(`${this.baseUrl}/sessions/${this.encodeSegment(sessionId)}/summarize`, {
       method: 'POST',
     }) as Promise<{ success: boolean; message?: string }>;
@@ -149,7 +157,9 @@ export class AIChatAPI {
 
   // Get file changes/diff for a session
   static async getSessionDiff(sessionId: string): Promise<SessionDiff> {
-    return apiFetchJSON(`${this.baseUrl}/sessions/${this.encodeSegment(sessionId)}/diff`) as Promise<SessionDiff>;
+    return apiFetchJSON(
+      `${this.baseUrl}/sessions/${this.encodeSegment(sessionId)}/diff`,
+    ) as Promise<SessionDiff>;
   }
 
   // Fork a session (create a branch point)
@@ -181,7 +191,7 @@ export class AIChatAPI {
     onEvent: (event: StreamEvent) => void,
     signal?: AbortSignal,
     mentions?: Array<{ id: string; name: string; type: string; node?: string }>,
-    findingId?: string
+    findingId?: string,
   ): Promise<void> {
     logger.debug('[AI Chat] Starting chat stream', { prompt: prompt.substring(0, 50) });
 
@@ -202,13 +212,15 @@ export class AIChatAPI {
       body: JSON.stringify(body),
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'text/event-stream',
+        Accept: 'text/event-stream',
       },
       signal,
     });
 
     if (!response.ok) {
-      throw new Error(await readAPIErrorMessage(response, `Request failed with status ${response.status}`));
+      throw new Error(
+        await readAPIErrorMessage(response, `Request failed with status ${response.status}`),
+      );
     }
 
     const reader = response.body?.getReader();
@@ -237,7 +249,7 @@ export class AIChatAPI {
     };
 
     try {
-      for (; ;) {
+      for (;;) {
         if (Date.now() - lastEventTime > STREAM_TIMEOUT_MS) {
           logger.warn('[AI Chat] Stream timeout');
           break;
@@ -266,7 +278,7 @@ export class AIChatAPI {
         for (const message of messages) {
           if (!message.trim() || message.trim().startsWith(':')) continue;
 
-          const dataLines = message.split('\n').filter(line => line.startsWith('data: '));
+          const dataLines = message.split('\n').filter((line) => line.startsWith('data: '));
           for (const line of dataLines) {
             try {
               const jsonStr = line.slice(6);

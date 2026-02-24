@@ -1834,6 +1834,7 @@ func (m *Monitor) cleanupTrackingMaps(now time.Time) {
 	const staleThreshold = 24 * time.Hour
 	cutoff := now.Add(-staleThreshold)
 	cleaned := 0
+	activeKeys := m.activeSchedulerKeys()
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -1877,20 +1878,6 @@ func (m *Monitor) cleanupTrackingMaps(now time.Time) {
 			delete(m.lastPBSBackupPoll, instanceID)
 			cleaned++
 		}
-	}
-
-	// Clean up circuit breakers for keys not in active clients.
-	// Circuit breaker keys are typed ("{instanceType}::{instance}"), so the
-	// active set must use the same shape to avoid evicting healthy live entries.
-	activeKeys := make(map[string]struct{})
-	for key := range m.pveClients {
-		activeKeys[schedulerKey(InstanceTypePVE, key)] = struct{}{}
-	}
-	for key := range m.pbsClients {
-		activeKeys[schedulerKey(InstanceTypePBS, key)] = struct{}{}
-	}
-	for key := range m.pmgClients {
-		activeKeys[schedulerKey(InstanceTypePMG, key)] = struct{}{}
 	}
 
 	// Only clean up circuit breakers for inactive keys that have been idle

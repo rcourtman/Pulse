@@ -25,6 +25,8 @@ describe('patrol api', () => {
 
   it('builds tool-call history query with normalized limit', async () => {
     await getPatrolRunHistoryWithToolCalls(25.9);
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/patrol/runs?include=tool_calls&limit=25');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith(
+      '/api/ai/patrol/runs?include=tool_calls&limit=25',
+    );
   });
 });

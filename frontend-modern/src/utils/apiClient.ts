@@ -543,7 +543,7 @@ class ApiClient {
       '/api/charts/infrastructure',
       '/api/charts/infrastructure-summary',
     ];
-    const shouldSkipRedirect = skipRedirectUrls.some(path => url.includes(path));
+    const shouldSkipRedirect = skipRedirectUrls.some((path) => url.includes(path));
     if (response.status === 401 && !shouldSkipRedirect) {
       logger.warn('Authentication expired - redirecting to login');
       // Clear auth and redirect to login
@@ -682,7 +682,6 @@ class ApiClient {
       throw new Error('Invalid JSON response from server');
     }
   }
-
 }
 
 // Create singleton instance

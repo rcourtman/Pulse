@@ -34,7 +34,7 @@ describe('RelayAPI', () => {
         expect.objectContaining({
           method: 'PUT',
           body: JSON.stringify({ enabled: false }),
-        })
+        }),
       );
     });
 
@@ -48,7 +48,7 @@ describe('RelayAPI', () => {
         expect.objectContaining({
           method: 'PUT',
           body: JSON.stringify({ server_url: 'https://new-server.com' }),
-        })
+        }),
       );
     });
   });

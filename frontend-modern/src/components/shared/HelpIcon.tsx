@@ -94,10 +94,16 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
       }
 
       // Clamp horizontal position to viewport
-      left = Math.max(viewportPadding, Math.min(left, window.innerWidth - popoverRect.width - viewportPadding));
+      left = Math.max(
+        viewportPadding,
+        Math.min(left, window.innerWidth - popoverRect.width - viewportPadding),
+      );
 
       // Clamp vertical position to viewport
-      top = Math.max(viewportPadding, Math.min(top, window.innerHeight - popoverRect.height - viewportPadding));
+      top = Math.max(
+        viewportPadding,
+        Math.min(top, window.innerHeight - popoverRect.height - viewportPadding),
+      );
 
       setPopoverPosition({ top, left });
     });

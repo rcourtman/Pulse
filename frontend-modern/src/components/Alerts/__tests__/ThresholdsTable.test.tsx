@@ -13,7 +13,9 @@ const mockNavigate = vi.fn();
 vi.mock('@solidjs/router', () => ({
   useNavigate: () => mockNavigate,
   useLocation: () => ({
-    get pathname() { return getPathname(); }
+    get pathname() {
+      return getPathname();
+    },
   }),
 }));
 
@@ -24,7 +26,9 @@ vi.mock('../ResourceTable', () => ({
     groupedResources?: Record<string, any[]>;
     formatMetricValue?: (metric: string, value: number | undefined) => string;
   }) => {
-    const resources = props.resources || (props.groupedResources ? Object.values(props.groupedResources).flat() : []);
+    const resources =
+      props.resources ||
+      (props.groupedResources ? Object.values(props.groupedResources).flat() : []);
     const title = props.title ?? 'unnamed';
     return (
       <div data-testid={`resource-table-${title}`}>
@@ -33,7 +37,9 @@ vi.mock('../ResourceTable', () => ({
           <div data-testid={`resource-row-${r.id}`}>
             <div data-testid={`resource-name-${r.id}`}>{r.name}</div>
             <div data-testid={`resource-cpu-${r.id}`}>
-              {props.formatMetricValue && r.thresholds ? props.formatMetricValue('cpu', r.thresholds.cpu) : (r.thresholds?.cpu ?? '')}
+              {props.formatMetricValue && r.thresholds
+                ? props.formatMetricValue('cpu', r.thresholds.cpu)
+                : (r.thresholds?.cpu ?? '')}
             </div>
           </div>
         ))}
@@ -46,9 +52,7 @@ vi.mock('../ResourceTable', () => ({
 
 vi.mock('../Thresholds/sections/CollapsibleSection', () => ({
   CollapsibleSection: (props: any) => (
-    <div data-testid={`section-${props.title}`}>
-      {props.children}
-    </div>
+    <div data-testid={`section-${props.title}`}>{props.children}</div>
   ),
 }));
 
@@ -231,17 +235,24 @@ describe('ThresholdsTable navigation and redirection', () => {
   it('redirects legacy docker path to containers', () => {
     setPathname('/alerts/thresholds/docker');
     render(() => <ThresholdsTable {...(baseProps() as any)} />);
-    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/containers', { replace: true, scroll: false });
+    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/containers', {
+      replace: true,
+      scroll: false,
+    });
   });
 
   it('navigates to correct route when tabs are clicked', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} />);
 
-    const hostsTab = screen.getAllByRole('button').find(el => el.textContent?.includes('Host Agents'));
+    const hostsTab = screen
+      .getAllByRole('button')
+      .find((el) => el.textContent?.includes('Host Agents'));
     if (hostsTab) fireEvent.click(hostsTab);
     expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/hosts');
 
-    const mailTab = screen.getAllByRole('button').find(el => el.textContent?.includes('Mail Gateway'));
+    const mailTab = screen
+      .getAllByRole('button')
+      .find((el) => el.textContent?.includes('Mail Gateway'));
     if (mailTab) fireEvent.click(mailTab);
     expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/mail-gateway');
   });
@@ -285,11 +296,9 @@ describe('ThresholdsTable Resource Rendering', () => {
       node: 'pve1',
     };
 
-    render(() => <ThresholdsTable
-      {...(baseProps() as any)}
-      nodes={[node]}
-      allGuests={() => [guest]}
-    />);
+    render(() => (
+      <ThresholdsTable {...(baseProps() as any)} nodes={[node]} allGuests={() => [guest]} />
+    ));
 
     await waitFor(() => {
       expect(screen.getByTestId('section-Proxmox Nodes')).toBeInTheDocument();
@@ -300,7 +309,6 @@ describe('ThresholdsTable Resource Rendering', () => {
     expect(screen.getByTestId('section-VMs & Containers')).toBeInTheDocument();
     expect(screen.getByTestId('resource-name-guest1')).toHaveTextContent('vm1');
   });
-
 });
 
 describe('ThresholdsTable Metric Formatting', () => {
@@ -320,18 +328,141 @@ describe('ThresholdsTable Metric Formatting', () => {
       name: 'host1',
       type: 'hostAgent' as const,
       thresholds: {
-        cpu: 85
-      }
+        cpu: 85,
+      },
     };
 
-    render(() => <ThresholdsTable
-      {...(baseProps() as any)}
-      hosts={[host]}
-      overrides={() => [override]}
-    />);
+    render(() => (
+      <ThresholdsTable {...(baseProps() as any)} hosts={[host]} overrides={() => [override]} />
+    ));
 
     await waitFor(() => {
       expect(screen.getByTestId('resource-cpu-h1')).toHaveTextContent('85%');
     });
+  });
+});
+
+describe('ThresholdsTable V6 ID compatibility', () => {
+  it('matches host-agent overrides keyed by actionable agent ID', async () => {
+    setPathname('/alerts/thresholds/hosts');
+    const host = {
+      id: 'resource:host:abc123',
+      type: 'host',
+      name: 'host-v6',
+      displayName: 'Host V6',
+      platformId: 'host-platform-1',
+      platformType: 'host-agent',
+      sourceType: 'agent',
+      status: 'online',
+      lastSeen: 123,
+      agent: { agentId: 'agent-host-123' },
+      platformData: { agent: { agentId: 'agent-host-123' } },
+    } as any;
+    const override = {
+      id: 'agent-host-123',
+      name: 'Host V6',
+      type: 'hostAgent' as const,
+      thresholds: { cpu: 88 },
+    };
+
+    render(() => (
+      <ThresholdsTable {...(baseProps() as any)} hosts={[host]} overrides={() => [override]} />
+    ));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-row-agent-host-123')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId('resource-row-resource:host:abc123')).not.toBeInTheDocument();
+  });
+
+  it('matches docker-host overrides keyed by actionable hostSourceId', async () => {
+    setPathname('/alerts/thresholds/containers');
+    const dockerHost = {
+      id: 'resource:docker:xyz789',
+      type: 'docker-host',
+      name: 'docker-v6',
+      displayName: 'Docker Host V6',
+      platformId: 'docker-platform-1',
+      platformType: 'docker',
+      sourceType: 'agent',
+      status: 'online',
+      lastSeen: 456,
+      platformData: { docker: { hostSourceId: 'docker-source-123' } },
+    } as any;
+    const override = {
+      id: 'docker-source-123',
+      name: 'Docker Host V6',
+      type: 'dockerHost' as const,
+      disableConnectivity: true,
+      thresholds: {},
+    };
+
+    render(() => (
+      <ThresholdsTable
+        {...(baseProps() as any)}
+        dockerHosts={[dockerHost]}
+        overrides={() => [override]}
+      />
+    ));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-row-docker-source-123')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId('resource-row-resource:docker:xyz789')).not.toBeInTheDocument();
+  });
+
+  it('matches docker-container overrides keyed by actionable docker host ID', async () => {
+    setPathname('/alerts/thresholds/containers');
+    const dockerHost = {
+      id: 'resource:docker:parent1',
+      type: 'docker-host',
+      name: 'docker-parent',
+      displayName: 'Docker Parent',
+      platformId: 'docker-platform-parent',
+      platformType: 'docker',
+      sourceType: 'agent',
+      status: 'online',
+      lastSeen: 789,
+      platformData: { docker: { hostSourceId: 'docker-source-parent' } },
+    } as any;
+    const container = {
+      id: 'container-hash-1',
+      parentId: 'resource:docker:parent1',
+      type: 'docker-container',
+      name: '/nginx',
+      displayName: 'nginx',
+      platformId: 'docker-platform-parent',
+      platformType: 'docker',
+      sourceType: 'agent',
+      status: 'running',
+      lastSeen: 789,
+    } as any;
+    const override = {
+      id: 'docker:docker-source-parent/container-hash-1',
+      name: 'nginx',
+      type: 'dockerContainer' as const,
+      thresholds: { cpu: 92 },
+    };
+
+    render(() => (
+      <ThresholdsTable
+        {...(baseProps() as any)}
+        dockerHosts={[dockerHost]}
+        allResources={[container]}
+        overrides={() => [override]}
+      />
+    ));
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-row-docker:docker-source-parent/container-hash-1'),
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByTestId('resource-row-docker:resource:docker:parent1/container-hash-1'),
+    ).not.toBeInTheDocument();
   });
 });

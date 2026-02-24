@@ -24,7 +24,7 @@ export class MonitoringAPI {
 
   static async deleteDockerHost(
     hostId: string,
-    options: { hide?: boolean; force?: boolean } = {}
+    options: { hide?: boolean; force?: boolean } = {},
   ): Promise<DeleteDockerHostResponse> {
     const params = new URLSearchParams();
     if (options.hide) params.set('hide', 'true');
@@ -117,7 +117,9 @@ export class MonitoringAPI {
     }
   }
 
-  static async deleteKubernetesCluster(clusterId: string): Promise<DeleteKubernetesClusterResponse> {
+  static async deleteKubernetesCluster(
+    clusterId: string,
+  ): Promise<DeleteKubernetesClusterResponse> {
     const url = `${this.baseUrl}/agents/kubernetes/clusters/${encodeURIComponent(clusterId)}`;
 
     const response = await apiFetch(url, {
@@ -171,7 +173,10 @@ export class MonitoringAPI {
     }
   }
 
-  static async setKubernetesClusterDisplayName(clusterId: string, displayName: string): Promise<void> {
+  static async setKubernetesClusterDisplayName(
+    clusterId: string,
+    displayName: string,
+  ): Promise<void> {
     const url = `${this.baseUrl}/agents/kubernetes/clusters/${encodeURIComponent(clusterId)}/display-name`;
 
     const response = await apiFetch(url, {
@@ -223,7 +228,10 @@ export class MonitoringAPI {
     }
   }
 
-  static async updateHostAgentConfig(hostId: string, config: { commandsEnabled?: boolean }): Promise<void> {
+  static async updateHostAgentConfig(
+    hostId: string,
+    config: { commandsEnabled?: boolean },
+  ): Promise<void> {
     if (!hostId) {
       throw new Error('Host ID is required to update agent config.');
     }
@@ -261,7 +269,10 @@ export class MonitoringAPI {
     }
   }
 
-  static async lookupHost(params: { id?: string; hostname?: string }): Promise<HostLookupResponse | null> {
+  static async lookupHost(params: {
+    id?: string;
+    hostname?: string;
+  }): Promise<HostLookupResponse | null> {
     const search = new URLSearchParams();
     if (params.id) search.set('id', params.id);
     if (params.hostname) search.set('hostname', params.hostname);
@@ -278,7 +289,9 @@ export class MonitoringAPI {
     }
 
     if (!response.ok) {
-      throw new Error(await readAPIErrorMessage(response, `Lookup failed with status ${response.status}`));
+      throw new Error(
+        await readAPIErrorMessage(response, `Lookup failed with status ${response.status}`),
+      );
     }
 
     const text = await response.text();
@@ -308,7 +321,7 @@ export class MonitoringAPI {
   static async updateDockerContainer(
     hostId: string,
     containerId: string,
-    containerName: string
+    containerName: string,
   ): Promise<UpdateDockerContainerResponse> {
     const url = `${this.baseUrl}/agents/docker/containers/update`;
 
@@ -324,13 +337,19 @@ export class MonitoringAPI {
       throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
     }
 
-    return parseOptionalJSON(response, { success: true }, 'Failed to parse update container response');
+    return parseOptionalJSON(
+      response,
+      { success: true },
+      'Failed to parse update container response',
+    );
   }
 
   /**
    * Triggers an immediate update check for all containers on a specific Docker host.
    */
-  static async checkDockerUpdates(hostId: string): Promise<{ success: boolean; commandId?: string }> {
+  static async checkDockerUpdates(
+    hostId: string,
+  ): Promise<{ success: boolean; commandId?: string }> {
     const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(hostId)}/check-updates`;
 
     const response = await apiFetch(url, {
@@ -347,7 +366,9 @@ export class MonitoringAPI {
   /**
    * Triggers a batch update for all containers with updates available on a specific Docker host.
    */
-  static async updateAllDockerContainers(hostId: string): Promise<{ success: boolean; commandId?: string }> {
+  static async updateAllDockerContainers(
+    hostId: string,
+  ): Promise<{ success: boolean; commandId?: string }> {
     const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(hostId)}/update-all`;
 
     const response = await apiFetch(url, {
@@ -361,7 +382,6 @@ export class MonitoringAPI {
     return parseOptionalJSON(response, { success: true }, 'Failed to parse update all response');
   }
 }
-
 
 export interface DeleteDockerHostResponse {
   success?: boolean;

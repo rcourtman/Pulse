@@ -28,7 +28,11 @@ export const getCephHealthStyles = (health?: string | null): string => {
   if (normalized === 'HEALTH_WARN' || normalized === 'HEALTH_WARNING') {
     return CEPH_HEALTH_WARNING_STYLES;
   }
-  if (normalized === 'HEALTH_ERR' || normalized === 'HEALTH_ERROR' || normalized === 'HEALTH_CRIT') {
+  if (
+    normalized === 'HEALTH_ERR' ||
+    normalized === 'HEALTH_ERROR' ||
+    normalized === 'HEALTH_CRIT'
+  ) {
     return CEPH_HEALTH_CRITICAL_STYLES;
   }
   return CEPH_HEALTH_DEFAULT_STYLES;

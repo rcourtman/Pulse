@@ -44,7 +44,7 @@ export async function readAPIErrorMessage(response: Response, fallback: string):
 export async function parseOptionalJSON<T>(
   response: Response,
   emptyValue: T,
-  parseErrorMessage: string
+  parseErrorMessage: string,
 ): Promise<T> {
   const text = await response.text();
   if (!text.trim()) {

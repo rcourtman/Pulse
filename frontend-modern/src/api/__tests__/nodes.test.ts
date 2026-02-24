@@ -36,7 +36,7 @@ describe('NodesAPI', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify(node),
-        })
+        }),
       );
     });
   });
@@ -53,7 +53,7 @@ describe('NodesAPI', () => {
         expect.objectContaining({
           method: 'PUT',
           body: JSON.stringify(node),
-        })
+        }),
       );
     });
 
@@ -64,7 +64,7 @@ describe('NodesAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/config/nodes/node%2F1',
-        expect.objectContaining({ method: 'PUT' })
+        expect.objectContaining({ method: 'PUT' }),
       );
     });
   });
@@ -77,7 +77,7 @@ describe('NodesAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/config/nodes/node1',
-        expect.objectContaining({ method: 'DELETE' })
+        expect.objectContaining({ method: 'DELETE' }),
       );
     });
   });
@@ -91,7 +91,7 @@ describe('NodesAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/config/nodes/test-connection',
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
     });
   });
@@ -104,7 +104,7 @@ describe('NodesAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/config/nodes/node1/test',
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
       expect(result.latency).toBe(10);
     });
@@ -118,7 +118,7 @@ describe('NodesAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/config/nodes/node1/refresh-cluster',
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
       expect(result.newNodeCount).toBe(3);
     });
@@ -135,7 +135,7 @@ describe('NodesAPI', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ type: 'pve', enableProxmox: true }),
-        })
+        }),
       );
       expect(result.command).toBe('curl ...');
     });

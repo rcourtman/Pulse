@@ -92,6 +92,8 @@ describe('parseOptionalJSON', () => {
 
   it('throws error for invalid JSON', async () => {
     const response = new Response('not valid json');
-    await expect(parseOptionalJSON(response, {}, 'Custom parse error')).rejects.toThrow('Custom parse error');
+    await expect(parseOptionalJSON(response, {}, 'Custom parse error')).rejects.toThrow(
+      'Custom parse error',
+    );
   });
 });

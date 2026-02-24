@@ -68,16 +68,22 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
           <div class="flex items-center gap-3 min-w-0">
             {/* Animated theme icon */}
-            <div class={`shrink-0 relative p-2.5 rounded-md border border-border bg-surface transition-all duration-300`}>
+            <div
+              class={`shrink-0 relative p-2.5 rounded-md border border-border bg-surface transition-all duration-300`}
+            >
               <div class="relative w-5 h-5">
-                <Sun class={`absolute inset-0 w-5 h-5 text-slate-500 transition-all duration-300 ${props.darkMode() ? 'opacity-0 rotate-90 scale-50' : 'opacity-100 rotate-0 scale-100'}`} strokeWidth={2} />
-                <Moon class={`absolute inset-0 w-5 h-5 text-slate-500 transition-all duration-300 ${props.darkMode() ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-50'}`} strokeWidth={2} />
+                <Sun
+                  class={`absolute inset-0 w-5 h-5 text-slate-500 transition-all duration-300 ${props.darkMode() ? 'opacity-0 rotate-90 scale-50' : 'opacity-100 rotate-0 scale-100'}`}
+                  strokeWidth={2}
+                />
+                <Moon
+                  class={`absolute inset-0 w-5 h-5 text-slate-500 transition-all duration-300 ${props.darkMode() ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-50'}`}
+                  strokeWidth={2}
+                />
               </div>
             </div>
             <div class="text-sm text-muted min-w-0">
-              <p class="font-medium text-base-content truncate">
-                Theme preference
-              </p>
+              <p class="font-medium text-base-content truncate">Theme preference</p>
               <p class="text-xs text-muted line-clamp-2">
                 Choose light, dark, or sync with your system theme.
               </p>
@@ -86,10 +92,11 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           <div class="shrink-0 flex self-start sm:self-auto items-center gap-1 bg-surface-alt rounded-md p-1 ml-12 sm:ml-0">
             <button
               type="button"
-              class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${props.themePreference() === 'light'
- ? 'bg-surface text-base-content shadow-sm'
- : 'text-muted hover:text-base-content'
- }`}
+              class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${
+                props.themePreference() === 'light'
+                  ? 'bg-surface text-base-content shadow-sm'
+                  : 'text-muted hover:text-base-content'
+              }`}
               onClick={() => props.setThemePreference('light')}
             >
               <Sun class="w-4 h-4" strokeWidth={2.5} />
@@ -97,10 +104,11 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             </button>
             <button
               type="button"
-              class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${props.themePreference() === 'dark'
- ? 'bg-surface text-base-content shadow-sm'
- : 'text-muted hover:text-base-content'
- }`}
+              class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${
+                props.themePreference() === 'dark'
+                  ? 'bg-surface text-base-content shadow-sm'
+                  : 'text-muted hover:text-base-content'
+              }`}
               onClick={() => props.setThemePreference('dark')}
             >
               <Moon class="w-4 h-4" strokeWidth={2.5} />
@@ -108,50 +116,51 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             </button>
             <button
               type="button"
-              class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${props.themePreference() === 'system'
- ? 'bg-surface text-base-content shadow-sm'
- : 'text-muted hover:text-base-content'
- }`}
+              class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${
+                props.themePreference() === 'system'
+                  ? 'bg-surface text-base-content shadow-sm'
+                  : 'text-muted hover:text-base-content'
+              }`}
               onClick={() => props.setThemePreference('system')}
- >
- <Laptop class="w-4 h-4" strokeWidth={2.5} />
- <span class="hidden lg:inline">System</span>
- </button>
- </div>
- </div>
+            >
+              <Laptop class="w-4 h-4" strokeWidth={2.5} />
+              <span class="hidden lg:inline">System</span>
+            </button>
+          </div>
+        </div>
 
- {/* Temperature Unit Selector */}
- <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
- <div class="flex items-center gap-3 min-w-0">
- <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
- <Thermometer class="w-5 h-5" strokeWidth={2} />
- </div>
- <div class="text-sm text-muted min-w-0">
- <p class="font-medium text-base-content truncate">
- Temperature unit
- </p>
- <p class="text-xs text-muted line-clamp-2">
- Display temperatures in Celsius or Fahrenheit
- </p>
- </div>
- </div>
- <div class="shrink-0 flex items-center gap-1 bg-surface-alt rounded-md p-1">
- <button
- type="button"
- class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 text-sm rounded-md transition-all ${temperatureStore.unit() ==='celsius'
- ? 'bg-surface text-base-content shadow-sm'
- : 'text-muted hover:text-base-content'
- }`}
+        {/* Temperature Unit Selector */}
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
+              <Thermometer class="w-5 h-5" strokeWidth={2} />
+            </div>
+            <div class="text-sm text-muted min-w-0">
+              <p class="font-medium text-base-content truncate">Temperature unit</p>
+              <p class="text-xs text-muted line-clamp-2">
+                Display temperatures in Celsius or Fahrenheit
+              </p>
+            </div>
+          </div>
+          <div class="shrink-0 flex items-center gap-1 bg-surface-alt rounded-md p-1">
+            <button
+              type="button"
+              class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 text-sm rounded-md transition-all ${
+                temperatureStore.unit() === 'celsius'
+                  ? 'bg-surface text-base-content shadow-sm'
+                  : 'text-muted hover:text-base-content'
+              }`}
               onClick={() => temperatureStore.setUnit('celsius')}
             >
               °C
             </button>
             <button
               type="button"
-              class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 text-sm rounded-md transition-all ${temperatureStore.unit() === 'fahrenheit'
- ? 'bg-surface text-base-content shadow-sm'
- : 'text-muted hover:text-base-content'
- }`}
+              class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 text-sm rounded-md transition-all ${
+                temperatureStore.unit() === 'fahrenheit'
+                  ? 'bg-surface text-base-content shadow-sm'
+                  : 'text-muted hover:text-base-content'
+              }`}
               onClick={() => temperatureStore.setUnit('fahrenheit')}
             >
               °F
@@ -166,9 +175,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               <Maximize2 class="w-5 h-5 text-slate-500" strokeWidth={2} />
             </div>
             <div class="text-sm text-muted min-w-0">
-              <p class="font-medium text-base-content truncate">
-                Full-width mode
-              </p>
+              <p class="font-medium text-base-content truncate">Full-width mode</p>
               <p class="text-xs text-muted line-clamp-2">
                 Expand content to use all available screen width on large monitors
               </p>
@@ -206,24 +213,26 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               </Show>
             </div>
             <p class="text-xs text-muted line-clamp-2">
-              When enabled, Pulse will not redirect old bookmarks like <code class="px-1 py-0.5 rounded bg-surface-hover">/services</code>.
+              When enabled, Pulse will not redirect old bookmarks like{' '}
+              <code class="px-1 py-0.5 rounded bg-surface-hover">/services</code>.
             </p>
           </div>
           <Toggle
             checked={props.disableLegacyRouteRedirects()}
             class="shrink-0"
             disabled={props.disableLegacyRouteRedirectsLocked() || props.savingLegacyRedirects()}
-            onChange={() => props.handleDisableLegacyRouteRedirectsChange(!props.disableLegacyRouteRedirects())}
+            onChange={() =>
+              props.handleDisableLegacyRouteRedirectsChange(!props.disableLegacyRouteRedirects())
+            }
           />
         </div>
 
         <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
           <div class="flex-1 min-w-0 space-y-1">
-            <div class="text-sm font-medium text-base-content truncate">
-              Reduce Pro prompts
-            </div>
+            <div class="text-sm font-medium text-base-content truncate">Reduce Pro prompts</div>
             <p class="text-xs text-muted line-clamp-2">
-              Hides proactive upgrade prompts (for example, the relay onboarding card). Paywalls still appear if you try to use a gated feature.
+              Hides proactive upgrade prompts (for example, the relay onboarding card). Paywalls
+              still appear if you try to use a gated feature.
             </p>
           </div>
           <Toggle
@@ -250,14 +259,18 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               </Show>
             </div>
             <p class="text-xs text-muted line-clamp-2">
-              Records local-only events like "paywall viewed" and "trial started" to help debug and improve upgrade flows. These events are stored locally and are not exported to third parties.
+              Records local-only events like "paywall viewed" and "trial started" to help debug and
+              improve upgrade flows. These events are stored locally and are not exported to third
+              parties.
             </p>
           </div>
           <Toggle
             checked={props.disableLocalUpgradeMetrics()}
             class="shrink-0"
             disabled={props.disableLocalUpgradeMetricsLocked() || props.savingUpgradeMetrics()}
-            onChange={() => props.handleDisableLocalUpgradeMetricsChange(!props.disableLocalUpgradeMetrics())}
+            onChange={() =>
+              props.handleDisableLocalUpgradeMetricsChange(!props.disableLocalUpgradeMetrics())
+            }
           />
         </div>
 
@@ -277,7 +290,17 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               </Show>
             </div>
             <p class="text-xs text-muted line-clamp-3">
-              Help improve Pulse by sharing anonymous usage data: a random install ID, version, platform, resource counts, and feature flags. No hostnames, credentials, or personal information is ever sent. <a href="https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md" target="_blank" rel="noopener noreferrer" class="underline hover:text-base-content">Full details</a>
+              Help improve Pulse by sharing anonymous usage data: a random install ID, version,
+              platform, resource counts, and feature flags. No hostnames, credentials, or personal
+              information is ever sent.{' '}
+              <a
+                href="https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="underline hover:text-base-content"
+              >
+                Full details
+              </a>
             </p>
           </div>
           <Toggle
@@ -304,8 +327,8 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                 Current cadence: {props.pvePollingInterval()} seconds (
                 {props.pvePollingInterval() >= 60
                   ? `${(props.pvePollingInterval() / 60).toFixed(
-                    props.pvePollingInterval() % 60 === 0 ? 0 : 1
-                  )} minute${props.pvePollingInterval() / 60 === 1 ? '' : 's'}`
+                      props.pvePollingInterval() % 60 === 0 ? 0 : 1,
+                    )} minute${props.pvePollingInterval() / 60 === 1 ? '' : 's'}`
                   : 'under a minute'}
                 )
               </p>
@@ -322,7 +345,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                   {(option) => (
                     <button
                       type="button"
-                      class={`min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-center text-sm font-medium transition-colors ${props.pvePollingSelection() === option.value ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900 dark:text-blue-200' : 'border-border bg-surface text-base-content hover:border-border hover:bg-surface-hover' } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      class={`min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-center text-sm font-medium transition-colors ${props.pvePollingSelection() === option.value ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900 dark:text-blue-200' : 'border-border bg-surface text-base-content hover:border-border hover:bg-surface-hover'} ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
                       disabled={props.pvePollingEnvLocked()}
                       onClick={() => {
                         if (props.pvePollingEnvLocked()) return;
@@ -337,7 +360,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                 </For>
                 <button
                   type="button"
-                  class={`min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-center text-sm font-medium transition-colors ${props.pvePollingSelection() === 'custom' ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900 dark:text-blue-200' : 'border-border bg-surface text-base-content hover:border-border hover:bg-surface-hover' } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  class={`min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-center text-sm font-medium transition-colors ${props.pvePollingSelection() === 'custom' ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900 dark:text-blue-200' : 'border-border bg-surface text-base-content hover:border-border hover:bg-surface-hover'} ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
                   disabled={props.pvePollingEnvLocked()}
                   onClick={() => {
                     if (props.pvePollingEnvLocked()) return;
@@ -358,7 +381,8 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                       Custom polling interval
                     </label>
                     <p class="text-xs text-muted mt-0.5 line-clamp-2">
-                      Enter seconds ({PVE_POLLING_MIN_SECONDS}-{PVE_POLLING_MAX_SECONDS}). Applies to all clusters.
+                      Enter seconds ({PVE_POLLING_MIN_SECONDS}-{PVE_POLLING_MAX_SECONDS}). Applies
+                      to all clusters.
                     </p>
                   </div>
                   <input
@@ -376,7 +400,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                       }
                       const clamped = Math.min(
                         PVE_POLLING_MAX_SECONDS,
-                        Math.max(PVE_POLLING_MIN_SECONDS, parsed)
+                        Math.max(PVE_POLLING_MIN_SECONDS, parsed),
                       );
                       props.setPVEPollingCustomSeconds(clamped);
                       props.setPVEPollingInterval(clamped);
@@ -389,12 +413,20 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               {/* Env override warning */}
               <Show when={props.pvePollingEnvLocked()}>
                 <div class="flex items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-200">
-                  <svg class="h-4 w-4 shrink-0 mt-0.5 self-start" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <svg
+                    class="h-4 w-4 shrink-0 mt-0.5 self-start"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
                     <circle cx="12" cy="12" r="10" />
                     <line x1="12" y1="8" x2="12" y2="12" />
                     <circle cx="12" cy="16" r="0.5" />
                   </svg>
-                  <span class="leading-relaxed">Managed via environment variable <strong>ENV_PVE_POLLING_INTERVAL</strong>.</span>
+                  <span class="leading-relaxed">
+                    Managed via environment variable <strong>ENV_PVE_POLLING_INTERVAL</strong>.
+                  </span>
                 </div>
               </Show>
             </div>

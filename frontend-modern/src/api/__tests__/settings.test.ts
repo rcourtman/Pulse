@@ -22,7 +22,7 @@ describe('SettingsAPI', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ fullWidthMode: true }),
-        })
+        }),
       );
     });
   });

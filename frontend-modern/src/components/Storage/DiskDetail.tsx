@@ -47,27 +47,24 @@ function extractDiskData(resource: Resource): PhysicalDiskData {
     temperature: pd.temperature ?? 0,
     smartAttributes: pd.smart
       ? {
-        powerOnHours: smart.powerOnHours,
-        powerCycles: smart.powerCycles,
-        reallocatedSectors: smart.reallocatedSectors,
-        pendingSectors: smart.pendingSectors,
-        offlineUncorrectable: smart.offlineUncorrectable,
-        udmaCrcErrors: smart.udmaCrcErrors,
-        percentageUsed: smart.percentageUsed,
-        availableSpare: smart.availableSpare,
-        mediaErrors: smart.mediaErrors,
-        unsafeShutdowns: smart.unsafeShutdowns,
-      }
+          powerOnHours: smart.powerOnHours,
+          powerCycles: smart.powerCycles,
+          reallocatedSectors: smart.reallocatedSectors,
+          pendingSectors: smart.pendingSectors,
+          offlineUncorrectable: smart.offlineUncorrectable,
+          udmaCrcErrors: smart.udmaCrcErrors,
+          percentageUsed: smart.percentageUsed,
+          availableSpare: smart.availableSpare,
+          mediaErrors: smart.mediaErrors,
+          unsafeShutdowns: smart.unsafeShutdowns,
+        }
       : undefined,
   };
 }
 
-
 /** Color class for attribute values. */
 function attrColor(ok: boolean): string {
-  return ok
-    ? 'text-green-600 dark:text-green-400'
-    : 'text-red-600 dark:text-red-400';
+  return ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
 }
 
 interface DiskDetailProps {
@@ -120,47 +117,63 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
   });
 
   const readData = createMemo<AggregatedMetricPoint[]>(() =>
-    historyData().map(d => ({ timestamp: d.timestamp, value: d.readBps, min: d.readBps, max: d.readBps }))
+    historyData().map((d) => ({
+      timestamp: d.timestamp,
+      value: d.readBps,
+      min: d.readBps,
+      max: d.readBps,
+    })),
   );
   const writeData = createMemo<AggregatedMetricPoint[]>(() =>
-    historyData().map(d => ({ timestamp: d.timestamp, value: d.writeBps, min: d.writeBps, max: d.writeBps }))
+    historyData().map((d) => ({
+      timestamp: d.timestamp,
+      value: d.writeBps,
+      min: d.writeBps,
+      max: d.writeBps,
+    })),
   );
   const ioData = createMemo<AggregatedMetricPoint[]>(() =>
     // Convert util% (0-100)
-    historyData().map(d => ({ timestamp: d.timestamp, value: d.ioTime, min: d.ioTime, max: d.ioTime }))
+    historyData().map((d) => ({
+      timestamp: d.timestamp,
+      value: d.ioTime,
+      min: d.ioTime,
+      max: d.ioTime,
+    })),
   );
 
   return (
     <div class="space-y-3">
       {/* Disk info */}
-          {/* Header: Info & Selector */}
+      {/* Header: Info & Selector */}
       <div class="flex flex-wrap items-end justify-between gap-3 border-b border-border-subtle pb-3">
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
           <span class="font-semibold text-base-content text-sm">
             {diskData().model || 'Unknown Disk'}
- </span>
- <span class="text-muted font-mono bg-surface-alt px-1.5 py-0.5 rounded border border-border">
- {diskData().devPath}
- </span>
- <span class="text-muted">
- {diskData().node}
- </span>
- <Show when={diskData().serial}>
- <span class="font-mono">
- S/N: {diskData().serial}
- </span>
- </Show>
- </div>
+          </span>
+          <span class="text-muted font-mono bg-surface-alt px-1.5 py-0.5 rounded border border-border">
+            {diskData().devPath}
+          </span>
+          <span class="text-muted">{diskData().node}</span>
+          <Show when={diskData().serial}>
+            <span class="font-mono">S/N: {diskData().serial}</span>
+          </Show>
+        </div>
 
- {/* Global Time Range Selector */}
- <div class="flex items-center gap-2">
- <span class="text-[10px] font-medium text-muted uppercase tracking-wide">History:</span>
- <div class="relative">
- <select
- value={chartRange()}
- onChange={(e) => setChartRange(e.currentTarget.value as HistoryTimeRange)}
- class="text-[11px] font-medium pl-2 pr-6 py-1 rounded-md border border-border bg-surface text-base-content cursor-pointer focus:ring-1 focus:ring-blue-500 focus:border-blue-500 appearance-none shadow-sm hover:border-border transition-colors"
- style={{ "background-image": "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")", "background-repeat": "no-repeat", "background-position": "right 6px center" }}
+        {/* Global Time Range Selector */}
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] font-medium text-muted uppercase tracking-wide">History:</span>
+          <div class="relative">
+            <select
+              value={chartRange()}
+              onChange={(e) => setChartRange(e.currentTarget.value as HistoryTimeRange)}
+              class="text-[11px] font-medium pl-2 pr-6 py-1 rounded-md border border-border bg-surface text-base-content cursor-pointer focus:ring-1 focus:ring-blue-500 focus:border-blue-500 appearance-none shadow-sm hover:border-border transition-colors"
+              style={{
+                'background-image':
+                  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
+                'background-repeat': 'no-repeat',
+                'background-position': 'right 6px center',
+              }}
             >
               <option value="1h">Last 1 hour</option>
               <option value="6h">Last 6 hours</option>
@@ -267,28 +280,51 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
         <div class="space-y-2">
           <h4 class="text-xs font-semibold text-base-content flex items-center gap-2">
             Live I/O (30m)
-            <span class="text-[10px] font-normal text-slate-400 bg-surface-alt px-1.5 py-0.5 rounded">Real-time</span>
+            <span class="text-[10px] font-normal text-slate-400 bg-surface-alt px-1.5 py-0.5 rounded">
+              Real-time
+            </span>
           </h4>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div class="rounded border border-border bg-surface p-3 shadow-sm">
               <HistoryChart
-                resourceType="host" resourceId="dummy" metric="disk"
-                label="Read" unit="B/s"
-                data={readData()} hideSelector hideLock height={120} compact={true}
+                resourceType="host"
+                resourceId="dummy"
+                metric="disk"
+                label="Read"
+                unit="B/s"
+                data={readData()}
+                hideSelector
+                hideLock
+                height={120}
+                compact={true}
               />
             </div>
             <div class="rounded border border-border bg-surface p-3 shadow-sm">
               <HistoryChart
-                resourceType="host" resourceId="dummy" metric="disk"
-                label="Write" unit="B/s"
-                data={writeData()} hideSelector hideLock height={120} compact={true}
+                resourceType="host"
+                resourceId="dummy"
+                metric="disk"
+                label="Write"
+                unit="B/s"
+                data={writeData()}
+                hideSelector
+                hideLock
+                height={120}
+                compact={true}
               />
             </div>
             <div class="rounded border border-border bg-surface p-3 shadow-sm">
               <HistoryChart
-                resourceType="host" resourceId="dummy" metric="disk"
-                label="Busy" unit="%"
-                data={ioData()} hideSelector hideLock height={120} compact={true}
+                resourceType="host"
+                resourceId="dummy"
+                metric="disk"
+                label="Busy"
+                unit="%"
+                data={ioData()}
+                hideSelector
+                hideLock
+                height={120}
+                compact={true}
               />
             </div>
           </div>
@@ -305,8 +341,6 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
         }
       >
         <div class="space-y-2">
-
-
           {/* Charts grid */}
           <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(33.333%-0.5rem)] [&>*]:min-w-[250px]">
             {/* Temperature chart (all disk types) */}
@@ -396,9 +430,7 @@ const AttrCard: Component<{ label: string; value: string; ok: boolean }> = (prop
       <div class="text-[10px] font-medium text-muted uppercase tracking-wide mb-0.5">
         {props.label}
       </div>
-      <div class={`text-sm font-semibold ${attrColor(props.ok)}`}>
-        {props.value}
-      </div>
+      <div class={`text-sm font-semibold ${attrColor(props.ok)}`}>{props.value}</div>
     </div>
   );
 };

@@ -16,9 +16,9 @@ const DASHBOARD_WIDGET_LAYOUT_STORAGE_KEY = 'dashboardWidgetLayout_v2';
 const DEFAULT_ORDER = [...DASHBOARD_WIDGETS]
   .sort((a, b) => a.defaultOrder - b.defaultOrder)
   .map((widget) => widget.id);
-const DEFAULT_HIDDEN = DASHBOARD_WIDGETS
-  .filter((widget) => !widget.defaultVisible)
-  .map((widget) => widget.id);
+const DEFAULT_HIDDEN = DASHBOARD_WIDGETS.filter((widget) => !widget.defaultVisible).map(
+  (widget) => widget.id,
+);
 const WIDGET_IDS = new Set<DashboardWidgetId>(DASHBOARD_WIDGETS.map((widget) => widget.id));
 const DEFAULT_LAYOUT: DashboardLayoutState = {
   order: [...DEFAULT_ORDER],
@@ -74,15 +74,15 @@ export function useDashboardLayout() {
 
   const visibleWidgets = createMemo<DashboardWidgetDef[]>(() => {
     const hidden = new Set(layout().hidden);
-    return layout().order
-      .filter((id) => !hidden.has(id))
+    return layout()
+      .order.filter((id) => !hidden.has(id))
       .map((id) => getDashboardWidget(id))
       .filter((widget): widget is DashboardWidgetDef => widget !== undefined);
   });
 
   const allWidgetsOrdered = createMemo<DashboardWidgetDef[]>(() =>
-    layout().order
-      .map((id) => getDashboardWidget(id))
+    layout()
+      .order.map((id) => getDashboardWidget(id))
       .filter((widget): widget is DashboardWidgetDef => widget !== undefined),
   );
 

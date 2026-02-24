@@ -25,9 +25,7 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
     const q = props.query.toLowerCase();
     if (!q) return props.resources.slice(0, 10); // Show first 10 if no query
 
-    return props.resources
-      .filter(r => r.name.toLowerCase().includes(q))
-      .slice(0, 10); // Limit to 10 results
+    return props.resources.filter((r) => r.name.toLowerCase().includes(q)).slice(0, 10); // Limit to 10 results
   };
 
   // Reset selection when query changes
@@ -45,11 +43,11 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setSelectedIndex(i => Math.min(i + 1, resources.length - 1));
+        setSelectedIndex((i) => Math.min(i + 1, resources.length - 1));
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setSelectedIndex(i => Math.max(i - 1, 0));
+        setSelectedIndex((i) => Math.max(i - 1, 0));
         break;
       case 'Enter':
       case 'Tab':
@@ -79,13 +77,23 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
       case 'vm':
         return (
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"
+            />
           </svg>
         );
       case 'container':
         return (
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+            />
           </svg>
         );
       case 'docker':
@@ -97,19 +105,34 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
       case 'node':
         return (
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
+            />
           </svg>
         );
       case 'host':
         return (
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
+            />
           </svg>
         );
       default:
         return (
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
+            />
           </svg>
         );
     }
@@ -138,9 +161,7 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
           left: `${props.position.left}px`,
         }}
       >
-        <div class="px-3 py-2 border-b border-border text-xs font-medium text-muted">
-          Resources
-        </div>
+        <div class="px-3 py-2 border-b border-border text-xs font-medium text-muted">Resources</div>
         <div class="max-h-[240px] overflow-y-auto">
           <For each={filteredResources()}>
             {(resource, index) => (
@@ -152,14 +173,10 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
                 onClick={() => props.onSelect(resource)}
                 onMouseEnter={() => setSelectedIndex(index())}
               >
-                <span class="text-muted">
-                  {getTypeIcon(resource.type)}
-                </span>
+                <span class="text-muted">{getTypeIcon(resource.type)}</span>
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2">
-                    <span class="font-medium text-base-content truncate">
-                      {resource.name}
-                    </span>
+                    <span class="font-medium text-base-content truncate">{resource.name}</span>
                     <Show when={resource.status}>
                       <span class={`w-2 h-2 rounded-full ${getStatusColor(resource.status)}`} />
                     </Show>
@@ -167,7 +184,8 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
                   <div class="text-xs text-muted">
                     {resource.type}
                     <Show when={resource.node}>
-                      {' · '}{resource.node}
+                      {' · '}
+                      {resource.node}
                     </Show>
                   </div>
                 </div>

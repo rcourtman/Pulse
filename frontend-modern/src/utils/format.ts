@@ -183,7 +183,7 @@ export interface BackupThresholds {
  */
 export function getBackupInfo(
   lastBackup: string | number | null | undefined,
-  thresholds?: BackupThresholds
+  thresholds?: BackupThresholds,
 ): BackupInfo {
   if (!lastBackup) {
     return { status: 'never', ageMs: null, ageFormatted: 'Never' };
@@ -263,7 +263,9 @@ export const ANOMALY_SEVERITY_CLASS: Record<string, string> = {
   low: 'text-blue-400',
 };
 
-export function formatAnomalyRatio(anomaly: { baseline_mean: number; current_value: number } | null | undefined): string | null {
+export function formatAnomalyRatio(
+  anomaly: { baseline_mean: number; current_value: number } | null | undefined,
+): string | null {
   if (!anomaly || anomaly.baseline_mean === 0) return null;
   const ratio = anomaly.current_value / anomaly.baseline_mean;
   if (ratio >= 2) return `${ratio.toFixed(1)}x`;
@@ -291,7 +293,15 @@ export function getShortImageName(fullImage: string | undefined): string {
  * Calculates `usage` from used/total and defaults missing fields.
  */
 export function normalizeDiskArray(
-  disks?: Array<{ device?: string; mountpoint?: string; filesystem?: string; type?: string; total?: number; used?: number; free?: number }>,
+  disks?: Array<{
+    device?: string;
+    mountpoint?: string;
+    filesystem?: string;
+    type?: string;
+    total?: number;
+    used?: number;
+    free?: number;
+  }>,
 ): Disk[] | undefined {
   if (!disks || disks.length === 0) return undefined;
   return disks.map((d) => {

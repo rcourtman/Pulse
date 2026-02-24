@@ -40,13 +40,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
 
   const orderedPlatformTabs = createMemo(() => {
     const tabs = props.platformTabs();
-    const priority = [
-      'dashboard',
-      'infrastructure',
-      'workloads',
-      'storage',
-      'recovery',
-    ];
+    const priority = ['dashboard', 'infrastructure', 'workloads', 'storage', 'recovery'];
     const prioritySet = new Set(priority);
     const byId = new Map(tabs.map((tab) => [tab.id, tab]));
     const ordered: PlatformTab[] = [];
@@ -142,9 +136,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
   return (
     <>
       {/* Bottom navigation bar */}
-      <nav
-        class="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface md:hidden pb-safe"
-      >
+      <nav class="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface md:hidden pb-safe">
         <div class="relative">
           <div
             ref={(el) => (navRef = el)}
@@ -159,14 +151,13 @@ export function MobileNavBar(props: MobileNavBarProps) {
                   data-tab-id={platform.id}
                   onClick={() => handlePlatformClick(platform)}
                   title={platform.tooltip}
-                  class={`relative flex min-h-10 shrink-0 flex-col items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors ${props.activeTab() === platform.id
-                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                    : 'text-muted'
-                    } ${platform.enabled ? '' : 'opacity-70'}`}
+                  class={`relative flex min-h-10 shrink-0 flex-col items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors ${
+                    props.activeTab() === platform.id
+                      ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                      : 'text-muted'
+                  } ${platform.enabled ? '' : 'opacity-70'}`}
                 >
-                  <span class="relative flex items-center justify-center">
-                    {platform.icon}
-                  </span>
+                  <span class="relative flex items-center justify-center">{platform.icon}</span>
                   <span class="whitespace-nowrap">{platform.label}</span>
                   <Show when={!platform.enabled}>
                     <span class="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-900 dark:text-amber-200">
@@ -189,10 +180,11 @@ export function MobileNavBar(props: MobileNavBarProps) {
                   data-tab-id={tab.id}
                   onClick={() => handleUtilityClick(tab)}
                   title={tab.tooltip}
-                  class={`relative flex min-h-10 shrink-0 flex-col items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors ${props.activeTab() === tab.id
-                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                    : 'text-muted'
-                    }`}
+                  class={`relative flex min-h-10 shrink-0 flex-col items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors ${
+                    props.activeTab() === tab.id
+                      ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                      : 'text-muted'
+                  }`}
                 >
                   <span class="relative flex items-center justify-center">
                     {tab.icon}

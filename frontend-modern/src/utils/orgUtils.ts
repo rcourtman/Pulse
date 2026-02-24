@@ -18,7 +18,9 @@ export const normalizeRole = (role: OrganizationRole): Exclude<OrganizationRole,
 export const canManageOrg = (org: Organization | null, currentUser?: string): boolean => {
   if (!org || !currentUser) return false;
   if (org.ownerUserId === currentUser) return true;
-  const role = normalizeRole(org.members?.find((member) => member.userId === currentUser)?.role ?? 'viewer');
+  const role = normalizeRole(
+    org.members?.find((member) => member.userId === currentUser)?.role ?? 'viewer',
+  );
   return role === 'admin' || role === 'owner';
 };
 

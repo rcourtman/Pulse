@@ -1,6 +1,10 @@
 import { Component, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
-import { BillingAdminAPI, type BillingState, type HostedOrganizationSummary } from '@/api/billingAdmin';
+import {
+  BillingAdminAPI,
+  type BillingState,
+  type HostedOrganizationSummary,
+} from '@/api/billingAdmin';
 import { isHostedModeEnabled, isMultiTenantEnabled } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
@@ -37,7 +41,7 @@ async function promisePool<T>(items: T[], concurrency: number, fn: (item: T) => 
   const limit = Math.max(1, Math.min(concurrency, items.length));
   let idx = 0;
   const workers = Array.from({ length: limit }).map(async () => {
-    for (; ;) {
+    for (;;) {
       const current = idx;
       idx += 1;
       if (current >= items.length) return;
@@ -108,7 +112,8 @@ export const BillingAdminPanel: Component = () => {
   const updateSubscriptionState = async (orgID: string, nextState: 'suspended' | 'active') => {
     setSaving(orgID, true);
     try {
-      const current = (await ensureBillingState(orgID)) ?? (await BillingAdminAPI.getBillingState(orgID));
+      const current =
+        (await ensureBillingState(orgID)) ?? (await BillingAdminAPI.getBillingState(orgID));
       const payload: BillingState = {
         ...current,
         subscription_state: nextState,
@@ -121,7 +126,9 @@ export const BillingAdminPanel: Component = () => {
       const saved = await BillingAdminAPI.putBillingState(orgID, payload);
       setBillingByOrgID((prev) => ({ ...prev, [orgID]: saved }));
       notificationStore.success(
-        nextState === 'suspended' ? 'Organization billing suspended' : 'Organization billing activated',
+        nextState === 'suspended'
+          ? 'Organization billing suspended'
+          : 'Organization billing activated',
         2500,
       );
     } catch (err) {
@@ -231,12 +238,16 @@ export const BillingAdminPanel: Component = () => {
                       </div>
                     </button>
                   );
-                }
+                },
               },
               {
                 key: 'owner',
                 label: 'Owner',
-                render: (org) => <span class="font-mono text-xs text-base-content">{org.owner_user_id || 'N/A'}</span>
+                render: (org) => (
+                  <span class="font-mono text-xs text-base-content">
+                    {org.owner_user_id || 'N/A'}
+                  </span>
+                ),
               },
               {
                 key: 'subscription',
@@ -244,9 +255,12 @@ export const BillingAdminPanel: Component = () => {
                 render: (org) => {
                   const orgID = () => (org.org_id || '').trim();
                   const billing = () => billingByOrgID()[orgID()];
-                  const currentSubState = () => (billing()?.subscription_state || '').toLowerCase() || 'unknown';
-                  return <span class="font-mono text-xs text-base-content">{currentSubState()}</span>;
-                }
+                  const currentSubState = () =>
+                    (billing()?.subscription_state || '').toLowerCase() || 'unknown';
+                  return (
+                    <span class="font-mono text-xs text-base-content">{currentSubState()}</span>
+                  );
+                },
               },
               {
                 key: 'trial',
@@ -255,7 +269,7 @@ export const BillingAdminPanel: Component = () => {
                   const orgID = () => (org.org_id || '').trim();
                   const billing = () => billingByOrgID()[orgID()];
                   return <span class="text-xs text-base-content">{trialStatus(billing())}</span>;
-                }
+                },
               },
               {
                 key: 'stripeCustomer',
@@ -264,11 +278,14 @@ export const BillingAdminPanel: Component = () => {
                   const orgID = () => (org.org_id || '').trim();
                   const billing = () => billingByOrgID()[orgID()];
                   return (
-                    <span class="font-mono text-xs text-base-content" title={stripeCustomerCell(billing())}>
+                    <span
+                      class="font-mono text-xs text-base-content"
+                      title={stripeCustomerCell(billing())}
+                    >
                       {stripeCustomerCell(billing())}
                     </span>
                   );
-                }
+                },
               },
               {
                 key: 'actions',
@@ -277,7 +294,8 @@ export const BillingAdminPanel: Component = () => {
                 render: (org) => {
                   const orgID = () => (org.org_id || '').trim();
                   const billing = () => billingByOrgID()[orgID()];
-                  const currentSubState = () => (billing()?.subscription_state || '').toLowerCase() || 'unknown';
+                  const currentSubState = () =>
+                    (billing()?.subscription_state || '').toLowerCase() || 'unknown';
                   return (
                     <div class="inline-flex flex-col sm:flex-row sm:items-center gap-2">
                       <button
@@ -314,8 +332,8 @@ export const BillingAdminPanel: Component = () => {
                       </button>
                     </div>
                   );
-                }
-              }
+                },
+              },
             ]}
             keyExtractor={(org) => org.org_id}
             isRowExpanded={(org) => expandedOrgID() === (org.org_id || '').trim()}
@@ -326,9 +344,7 @@ export const BillingAdminPanel: Component = () => {
                 <div class="px-3 pb-3 bg-surface-alt">
                   <div class="rounded-md border border-border bg-surface-alt p-3">
                     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
-                      <div class="text-xs font-semibold text-muted">
-                        Billing state JSON
-                      </div>
+                      <div class="text-xs font-semibold text-muted">Billing state JSON</div>
                       <button
                         type="button"
                         onClick={() => {

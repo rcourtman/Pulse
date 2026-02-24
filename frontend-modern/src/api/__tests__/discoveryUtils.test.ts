@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  formatDiscoveryAge,
-  getCategoryDisplayName,
-  getConfidenceLevel,
-} from '@/api/discovery';
+import { formatDiscoveryAge, getCategoryDisplayName, getConfidenceLevel } from '@/api/discovery';
 
 describe('discovery utilities', () => {
   describe('formatDiscoveryAge', () => {

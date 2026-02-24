@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { apiFetch, clearApiToken, getApiToken, getOrgID, setApiToken, setOrgID } from '@/utils/apiClient';
+import {
+  apiFetch,
+  clearApiToken,
+  getApiToken,
+  getOrgID,
+  setApiToken,
+  setOrgID,
+} from '@/utils/apiClient';
 
 const mockFetch = vi.fn();
 
@@ -98,7 +105,9 @@ describe('apiClient org context', () => {
     const retryAfter = new Date(Date.now() + 5000).toUTCString();
 
     mockFetch
-      .mockResolvedValueOnce(new Response('rate limited', { status: 429, headers: { 'Retry-After': retryAfter } }))
+      .mockResolvedValueOnce(
+        new Response('rate limited', { status: 429, headers: { 'Retry-After': retryAfter } }),
+      )
       .mockResolvedValueOnce(new Response('{}', { status: 200 }));
 
     const pending = apiFetch('/api/state');

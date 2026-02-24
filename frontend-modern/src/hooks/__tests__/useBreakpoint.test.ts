@@ -29,8 +29,7 @@ const isVisible = (width: number, priority: ColumnPriority): boolean => {
 };
 
 const isMobile = (width: number): boolean => width < BREAKPOINTS.md;
-const isTablet = (width: number): boolean =>
-  width >= BREAKPOINTS.md && width < BREAKPOINTS.xl;
+const isTablet = (width: number): boolean => width >= BREAKPOINTS.md && width < BREAKPOINTS.xl;
 const isDesktop = (width: number): boolean => width >= BREAKPOINTS.xl;
 
 describe('useBreakpoint (pure functions)', () => {

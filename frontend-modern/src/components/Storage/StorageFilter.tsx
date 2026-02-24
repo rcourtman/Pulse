@@ -9,7 +9,13 @@ import ListFilterIcon from 'lucide-solid/icons/list-filter';
 import { segmentedButtonClass } from '@/utils/segmentedButton';
 import type { StorageSourceOption } from './storageSourceOptions';
 
-export type StorageStatusFilter = 'all' | 'available' | 'warning' | 'critical' | 'offline' | 'unknown';
+export type StorageStatusFilter =
+  | 'all'
+  | 'available'
+  | 'warning'
+  | 'critical'
+  | 'offline'
+  | 'unknown';
 export type StorageGroupByFilter = 'node' | 'type' | 'status';
 
 interface StorageFilterProps {
@@ -128,7 +134,11 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
             {/* Group By Filter */}
             <Show when={props.groupBy && props.setGroupBy}>
               <div class="max-w-full overflow-x-auto scrollbar-hide">
-                <div class="inline-flex rounded-md bg-surface-hover p-0.5" role="group" aria-label="Group By">
+                <div
+                  class="inline-flex rounded-md bg-surface-hover p-0.5"
+                  role="group"
+                  aria-label="Group By"
+                >
                   <button
                     type="button"
                     onClick={() => props.setGroupBy!('node')}
@@ -161,7 +171,12 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
             {/* Source Filter */}
             <Show when={props.sourceFilter && props.setSourceFilter}>
               <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                <label for="storage-source-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Source</label>
+                <label
+                  for="storage-source-filter"
+                  class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
+                >
+                  Source
+                </label>
                 <select
                   id="storage-source-filter"
                   value={props.sourceFilter!()}
@@ -178,11 +193,18 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
 
             {/* Status Filter */}
             <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-              <label for="storage-status-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Status</label>
+              <label
+                for="storage-status-filter"
+                class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
+              >
+                Status
+              </label>
               <select
                 id="storage-status-filter"
                 value={props.statusFilter?.() ?? 'all'}
-                onChange={(e) => props.setStatusFilter?.(e.currentTarget.value as StorageStatusFilter)}
+                onChange={(e) =>
+                  props.setStatusFilter?.(e.currentTarget.value as StorageStatusFilter)
+                }
                 class="min-w-[8rem] rounded-md border px-2 py-1 text-xs font-medium shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">All</option>
@@ -212,7 +234,9 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
               <button
                 type="button"
                 title={`Sort ${props.sortDirection() === 'asc' ? 'descending' : 'ascending'}`}
-                onClick={() => props.setSortDirection(props.sortDirection() === 'asc' ? 'desc' : 'asc')}
+                onClick={() =>
+                  props.setSortDirection(props.sortDirection() === 'asc' ? 'desc' : 'asc')
+                }
                 disabled={props.sortDisabled}
                 aria-label="Sort Direction"
                 class="inline-flex items-center justify-center h-7 w-7 rounded-md border border-border text-muted hover:bg-surface-hover transition-colors"

@@ -138,4 +138,3 @@ export function trackAgentFirstConnected(surface: string, capability?: string): 
     capability,
   });
 }
-

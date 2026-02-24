@@ -78,9 +78,12 @@ const getRecordAlertResourceIds = (record: StorageRecord): string[] => {
   const refs = record.refs || {};
   const details = (record.details || {}) as Record<string, unknown>;
   const detailNode = typeof details.node === 'string' ? details.node.trim() : '';
-  const detailInstance = typeof refs.platformEntityId === 'string' ? refs.platformEntityId.trim() : '';
+  const detailInstance =
+    typeof refs.platformEntityId === 'string' ? refs.platformEntityId.trim() : '';
   const derivedLegacyId =
-    detailInstance && detailNode && record.name ? `${detailInstance}-${detailNode}-${record.name}` : '';
+    detailInstance && detailNode && record.name
+      ? `${detailInstance}-${detailNode}-${record.name}`
+      : '';
 
   return Array.from(
     new Set(

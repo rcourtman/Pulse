@@ -28,4 +28,3 @@ const RecoveryRoute: Component = () => {
 };
 
 export default RecoveryRoute;
-

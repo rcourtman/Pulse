@@ -1,5 +1,9 @@
 import { createSignal, createEffect, Show } from 'solid-js';
-import { createLocalStorageBooleanSignal, createLocalStorageStringSignal, STORAGE_KEYS } from '@/utils/localStorage';
+import {
+  createLocalStorageBooleanSignal,
+  createLocalStorageStringSignal,
+  STORAGE_KEYS,
+} from '@/utils/localStorage';
 import { useResources } from '@/hooks/useResources';
 import GithubIcon from 'lucide-solid/icons/github';
 import StarIcon from 'lucide-solid/icons/star';
@@ -17,19 +21,19 @@ export function GitHubStarBanner() {
   // Track if user has dismissed the modal (permanent)
   const [dismissed, setDismissed] = createLocalStorageBooleanSignal(
     STORAGE_KEYS.GITHUB_STAR_DISMISSED,
-    false
+    false,
   );
 
   // Track the first date user had infrastructure connected
   const [firstSeenDate, setFirstSeenDate] = createLocalStorageStringSignal(
     STORAGE_KEYS.GITHUB_STAR_FIRST_SEEN,
-    ''
+    '',
   );
 
   // Track snooze date (when "Maybe later" was clicked, don't show again until this date)
   const [snoozedUntil, setSnoozedUntil] = createLocalStorageStringSignal(
     STORAGE_KEYS.GITHUB_STAR_SNOOZED_UNTIL,
-    ''
+    '',
   );
 
   const [showModal, setShowModal] = createSignal(false);
@@ -124,11 +128,10 @@ export function GitHubStarBanner() {
             </div>
 
             {/* Text */}
-            <h2 class="text-xl font-semibold text-base-content mb-2">
-              Enjoying Pulse?
-            </h2>
+            <h2 class="text-xl font-semibold text-base-content mb-2">Enjoying Pulse?</h2>
             <p class="text-muted mb-6 leading-relaxed">
-              Pulse is built and maintained by an independent developer. If it's been useful for monitoring your infrastructure, a GitHub star helps more than you'd think.
+              Pulse is built and maintained by an independent developer. If it's been useful for
+              monitoring your infrastructure, a GitHub star helps more than you'd think.
             </p>
 
             {/* Buttons */}

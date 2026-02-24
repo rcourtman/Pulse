@@ -47,7 +47,7 @@ describe('alertsActivation', () => {
     it('dispatches custom event when state changes', () => {
       const dispatchEventSpy = vi.spyOn(window, 'dispatchEvent');
       setGlobalActivationState('active');
-      
+
       expect(dispatchEventSpy).toHaveBeenCalled();
       const event = dispatchEventSpy.mock.calls[0][0] as CustomEvent;
       expect(event.type).toBe(ALERTS_ACTIVATION_EVENT);

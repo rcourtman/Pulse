@@ -39,7 +39,9 @@ export function UpdateBanner() {
       });
   });
 
-  const releaseNotesUrl = createMemo(() => buildReleaseNotesUrl(updateStore.updateInfo()?.latestVersion));
+  const releaseNotesUrl = createMemo(() =>
+    buildReleaseNotesUrl(updateStore.updateInfo()?.latestVersion),
+  );
 
   const handleApplyUpdate = () => {
     setShowConfirmModal(true);
@@ -65,7 +67,10 @@ export function UpdateBanner() {
   const handleCopy = async (text: string, index: number) => {
     const success = await copyToClipboard(text);
     if (!success) {
-      logger.error('Failed to copy update instruction to clipboard', new Error('clipboard copy failed'));
+      logger.error(
+        'Failed to copy update instruction to clipboard',
+        new Error('clipboard copy failed'),
+      );
       return;
     }
     setCopiedIndex(index);
@@ -99,7 +104,10 @@ export function UpdateBanner() {
 
   return (
     <Show when={updateStore.isUpdateVisible()}>
-      <div class="bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 relative animate-slideDown">
+      <div
+        data-testid="update-banner"
+        class="update-banner bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 relative animate-slideDown"
+      >
         <div class="px-4 py-1.5">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
@@ -224,7 +232,9 @@ export function UpdateBanner() {
                 </Show>
 
                 {/* Manual Update Instructions */}
-                <Show when={updatePlan()?.instructions && (updatePlan()?.instructions?.length ?? 0) > 0}>
+                <Show
+                  when={updatePlan()?.instructions && (updatePlan()?.instructions?.length ?? 0) > 0}
+                >
                   <div class="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
                     <div class="font-medium mb-2">Update Instructions:</div>
                     <div class="space-y-2">
@@ -240,13 +250,36 @@ export function UpdateBanner() {
                                 class="flex-shrink-0 p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded transition-colors"
                                 title="Copy to clipboard"
                               >
-                                <Show when={copiedIndex() === index()} fallback={
-                                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                  </svg>
-                                }>
-                                  <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                <Show
+                                  when={copiedIndex() === index()}
+                                  fallback={
+                                    <svg
+                                      class="w-4 h-4"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                                      />
+                                    </svg>
+                                  }
+                                >
+                                  <svg
+                                    class="w-4 h-4 text-green-600 dark:text-green-400"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      stroke-width="2"
+                                      d="M5 13l4 4L19 7"
+                                    />
                                   </svg>
                                 </Show>
                               </button>
@@ -299,11 +332,13 @@ export function UpdateBanner() {
         onConfirm={handleConfirmUpdate}
         currentVersion={updateStore.versionInfo()?.version || 'Unknown'}
         latestVersion={updateStore.updateInfo()?.latestVersion || ''}
-        plan={updatePlan() || {
-          canAutoUpdate: false,
-          requiresRoot: false,
-          rollbackSupport: false,
-        }}
+        plan={
+          updatePlan() || {
+            canAutoUpdate: false,
+            requiresRoot: false,
+            rollbackSupport: false,
+          }
+        }
         isApplying={isApplying()}
       />
     </Show>

@@ -39,20 +39,30 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
       <button
         type="button"
         class={`inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-xs font-medium rounded-md transition-all ${
- open()
- ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
- : 'bg-surface-hover text-muted hover:bg-surface-hover'
- }`}
+          open()
+            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+            : 'bg-surface-hover text-muted hover:bg-surface-hover'
+        }`}
         title="Customize dashboard widgets"
         onClick={() => setOpen(!open())}
       >
-        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <svg
+          class="w-3.5 h-3.5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <path
             stroke-linecap="round"
             stroke-linejoin="round"
             d="M11.983 5.25a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5zM11.983 23.25a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5zM3.862 8.113a2.25 2.25 0 10-3.182-3.182 2.25 2.25 0 003.182 3.182zM23.286 19.355a2.25 2.25 0 10-3.182-3.182 2.25 2.25 0 003.182 3.182zM5.25 11.983a2.25 2.25 0 10-4.5 0 2.25 2.25 0 004.5 0zM23.25 11.983a2.25 2.25 0 10-4.5 0 2.25 2.25 0 004.5 0zM3.862 15.855a2.25 2.25 0 10-3.182 3.182 2.25 2.25 0 003.182-3.182zM23.286 4.611a2.25 2.25 0 10-3.182 3.182 2.25 2.25 0 003.182-3.182z"
           />
-          <path stroke-linecap="round" stroke-linejoin="round" d="M11.983 6.75v10.5M6.75 11.983h10.5M16.868 7.098l-9.77 9.77M16.868 16.868l-9.77-9.77" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M11.983 6.75v10.5M6.75 11.983h10.5M16.868 7.098l-9.77 9.77M16.868 16.868l-9.77-9.77"
+          />
         </svg>
         <span>Customize</span>
       </button>
@@ -91,9 +101,7 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
                         onChange={() => props.toggleWidget(widget.id)}
                       />
                       <span
-                        class={`truncate text-sm ${
- visible() ? 'text-base-content' : 'text-muted'
- }`}
+                        class={`truncate text-sm ${visible() ? 'text-base-content' : 'text-muted'}`}
                       >
                         {widget.label}
                       </span>
@@ -108,7 +116,13 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
                         disabled={isFirst()}
                         onClick={() => props.moveUp(widget.id)}
                       >
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <svg
+                          class="w-4 h-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
                           <path stroke-linecap="round" stroke-linejoin="round" d="m18 15-6-6-6 6" />
                         </svg>
                       </button>
@@ -120,7 +134,13 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
                         disabled={isLast()}
                         onClick={() => props.moveDown(widget.id)}
                       >
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <svg
+                          class="w-4 h-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
                           <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
                         </svg>
                       </button>

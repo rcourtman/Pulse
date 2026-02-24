@@ -6,93 +6,48 @@ import (
 )
 
 func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
-	m.mu.RLock()
-	pveNames := make([]string, 0, len(m.pveClients))
-	for name := range m.pveClients {
-		pveNames = append(pveNames, name)
+	providers := m.pollProviderSnapshotWithBuiltins()
+	if len(providers) == 0 {
+		return nil
 	}
 
-	pbsNames := make([]string, 0, len(m.pbsClients))
-	for name := range m.pbsClients {
-		pbsNames = append(pbsNames, name)
+	total := 0
+	for _, provider := range providers {
+		if provider == nil {
+			continue
+		}
+		total += len(provider.ListInstances(m))
 	}
-
-	pmgNames := make([]string, 0, len(m.pmgClients))
-	for name := range m.pmgClients {
-		pmgNames = append(pmgNames, name)
-	}
-	m.mu.RUnlock()
-
-	total := len(pveNames) + len(pbsNames) + len(pmgNames)
 	if total == 0 {
 		return nil
 	}
 
 	descriptors := make([]InstanceDescriptor, 0, total)
-
-	if len(pveNames) > 0 {
-		sort.Strings(pveNames)
-		for _, name := range pveNames {
-			desc := InstanceDescriptor{
-				Name: name,
-				Type: InstanceTypePVE,
-			}
-			if m.scheduler != nil {
-				if last, ok := m.scheduler.LastScheduled(InstanceTypePVE, name); ok {
-					desc.LastScheduled = last.NextRun
-					desc.LastInterval = last.Interval
-				}
-			}
-			if m.stalenessTracker != nil {
-				if snap, ok := m.stalenessTracker.snapshot(InstanceTypePVE, name); ok {
-					desc.LastSuccess = snap.LastSuccess
-					desc.LastFailure = snap.LastError
-					desc.Metadata = TaskMetadata{ChangeHash: snap.ChangeHash}
-				}
-			}
-			descriptors = append(descriptors, desc)
+	for _, provider := range providers {
+		if provider == nil {
+			continue
 		}
-	}
 
-	if len(pbsNames) > 0 {
-		sort.Strings(pbsNames)
-		for _, name := range pbsNames {
-			desc := InstanceDescriptor{
-				Name: name,
-				Type: InstanceTypePBS,
-			}
-			if m.scheduler != nil {
-				if last, ok := m.scheduler.LastScheduled(InstanceTypePBS, name); ok {
-					desc.LastScheduled = last.NextRun
-					desc.LastInterval = last.Interval
-				}
-			}
-			if m.stalenessTracker != nil {
-				if snap, ok := m.stalenessTracker.snapshot(InstanceTypePBS, name); ok {
-					desc.LastSuccess = snap.LastSuccess
-					desc.LastFailure = snap.LastError
-					desc.Metadata = TaskMetadata{ChangeHash: snap.ChangeHash}
-				}
-			}
-			descriptors = append(descriptors, desc)
+		names := append([]string(nil), provider.ListInstances(m)...)
+		if len(names) == 0 {
+			continue
 		}
-	}
+		sort.Strings(names)
 
-	if len(pmgNames) > 0 {
-		sort.Strings(pmgNames)
-		for _, name := range pmgNames {
+		providerType := provider.Type()
+		for _, name := range names {
 			desc := InstanceDescriptor{
 				Name: name,
-				Type: InstanceTypePMG,
+				Type: providerType,
 			}
 			if m.scheduler != nil {
-				if last, ok := m.scheduler.LastScheduled(InstanceTypePMG, name); ok {
+				if last, ok := m.scheduler.LastScheduled(providerType, name); ok {
 					desc.LastScheduled = last.NextRun
 					desc.LastInterval = last.Interval
 				}
 			}
 			if m.stalenessTracker != nil {
-				if snap, ok := m.stalenessTracker.snapshot(InstanceTypePMG, name); ok {
+				if snap, ok := m.stalenessTracker.snapshot(providerType, name); ok {
 					desc.LastSuccess = snap.LastSuccess
 					desc.LastFailure = snap.LastError
 					desc.Metadata = TaskMetadata{ChangeHash: snap.ChangeHash}

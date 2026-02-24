@@ -19,7 +19,8 @@ function computeCapacityPercent(used: number, total: number): number {
 }
 
 export function StoragePanel(props: StoragePanelProps) {
-  const capacityPercent = () => computeCapacityPercent(props.storage.totalUsed, props.storage.totalCapacity);
+  const capacityPercent = () =>
+    computeCapacityPercent(props.storage.totalUsed, props.storage.totalCapacity);
   const hasTrend = () => !!props.storageTrend && props.storageTrend.points.length >= 2;
 
   return (
@@ -71,7 +72,9 @@ export function StoragePanel(props: StoragePanelProps) {
                 </span>
               )}
               {hasTrend() && (
-                <span class={`font-mono font-medium ${deltaColorClass(props.storageTrend?.delta ?? null)}`}>
+                <span
+                  class={`font-mono font-medium ${deltaColorClass(props.storageTrend?.delta ?? null)}`}
+                >
                   24h: {formatDelta(props.storageTrend?.delta ?? null) ?? '—'}
                 </span>
               )}

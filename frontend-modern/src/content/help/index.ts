@@ -11,11 +11,7 @@ import { aiHelpContent } from './ai';
 import { updatesHelpContent } from './updates';
 
 // Combine all help content sources
-const allContent: HelpContent[] = [
-  ...alertsHelpContent,
-  ...aiHelpContent,
-  ...updatesHelpContent,
-];
+const allContent: HelpContent[] = [...alertsHelpContent, ...aiHelpContent, ...updatesHelpContent];
 
 // Build registry for O(1) lookups
 const registry: HelpContentRegistry = {};

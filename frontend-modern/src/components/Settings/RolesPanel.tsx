@@ -4,7 +4,12 @@ import { RBACAPI } from '@/api/rbac';
 import type { Role, Permission } from '@/types/rbac';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
-import { getUpgradeActionUrlOrFallback, hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
+import {
+  getUpgradeActionUrlOrFallback,
+  hasFeature,
+  loadLicenseStatus,
+  licenseLoaded,
+} from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
@@ -18,401 +23,396 @@ const ACTIONS = ['read', 'write', 'delete', 'admin', '*'];
 const RESOURCES = ['settings', 'audit_logs', 'nodes', 'users', 'license', '*'];
 
 export const RolesPanel: Component = () => {
-    const [roles, setRoles] = createSignal<Role[]>([]);
-    const [loading, setLoading] = createSignal(true);
-    const [showModal, setShowModal] = createSignal(false);
-    const [editingRole, setEditingRole] = createSignal<Role | null>(null);
-    const [saving, setSaving] = createSignal(false);
+  const [roles, setRoles] = createSignal<Role[]>([]);
+  const [loading, setLoading] = createSignal(true);
+  const [showModal, setShowModal] = createSignal(false);
+  const [editingRole, setEditingRole] = createSignal<Role | null>(null);
+  const [saving, setSaving] = createSignal(false);
 
-    // Form state
-    const [formId, setFormId] = createSignal('');
-    const [formName, setFormName] = createSignal('');
-    const [formDescription, setFormDescription] = createSignal('');
-    const [formPermissions, setFormPermissions] = createSignal<Permission[]>([]);
-    const rbacEnabled = createMemo(() => licenseLoaded() && hasFeature('rbac'));
+  // Form state
+  const [formId, setFormId] = createSignal('');
+  const [formName, setFormName] = createSignal('');
+  const [formDescription, setFormDescription] = createSignal('');
+  const [formPermissions, setFormPermissions] = createSignal<Permission[]>([]);
+  const rbacEnabled = createMemo(() => licenseLoaded() && hasFeature('rbac'));
 
-    const loadRoles = async () => {
-        if (!rbacEnabled()) {
-            setRoles([]);
-            setLoading(false);
-            return;
+  const loadRoles = async () => {
+    if (!rbacEnabled()) {
+      setRoles([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = await RBACAPI.getRoles();
+      setRoles(data || []);
+    } catch (err) {
+      if (err instanceof Error && /feature not included in license/i.test(err.message)) {
+        setRoles([]);
+        return;
+      }
+      logger.error('Failed to load roles', err);
+      notificationStore.error('Failed to load roles');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  onMount(() => {
+    void loadLicenseStatus();
+  });
+
+  createEffect(() => {
+    if (!licenseLoaded()) {
+      setLoading(true);
+      return;
+    }
+    if (!hasFeature('rbac')) {
+      setRoles([]);
+      setLoading(false);
+      return;
+    }
+    void loadRoles();
+  });
+
+  createEffect((wasPaywallVisible) => {
+    const isPaywallVisible = licenseLoaded() && !hasFeature('rbac') && !loading();
+    if (isPaywallVisible && !wasPaywallVisible) {
+      trackPaywallViewed('rbac', 'settings_roles_panel');
+    }
+    return isPaywallVisible;
+  }, false);
+
+  const handleCreate = () => {
+    setEditingRole(null);
+    setFormId('');
+    setFormName('');
+    setFormDescription('');
+    setFormPermissions([{ action: 'read', resource: 'nodes' }]);
+    setShowModal(true);
+  };
+
+  const handleEdit = (role: Role) => {
+    if (role.isBuiltIn) return;
+    setEditingRole(role);
+    setFormId(role.id);
+    setFormName(role.name);
+    setFormDescription(role.description);
+    setFormPermissions([...role.permissions]);
+    setShowModal(true);
+  };
+
+  const handleDelete = async (role: Role) => {
+    if (role.isBuiltIn) return;
+    if (!confirm(`Are you sure you want to delete the role "${role.name}"?`)) return;
+
+    try {
+      await RBACAPI.deleteRole(role.id);
+      notificationStore.success(`Role "${role.name}" deleted`);
+      await loadRoles();
+    } catch (err) {
+      logger.error('Failed to delete role', err);
+      notificationStore.error('Failed to delete role');
+    }
+  };
+
+  const handleSave = async () => {
+    const id = formId().trim().toLowerCase().replace(/\s+/g, '-');
+    const name = formName().trim();
+    if (!id || !name) {
+      notificationStore.error('ID and Name are required');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const role: Role = {
+        id,
+        name,
+        description: formDescription(),
+        permissions: formPermissions(),
+        createdAt: editingRole()?.createdAt,
+      };
+      await RBACAPI.saveRole(role);
+      notificationStore.success(`Role "${name}" saved`);
+      setShowModal(false);
+      await loadRoles();
+    } catch (err) {
+      logger.error('Failed to save role', err);
+      notificationStore.error('Failed to save role');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addPermission = () => {
+    setFormPermissions([...formPermissions(), { action: 'read', resource: 'nodes' }]);
+  };
+
+  const removePermission = (index: number) => {
+    const perms = [...formPermissions()];
+    perms.splice(index, 1);
+    setFormPermissions(perms);
+  };
+
+  const updatePermission = (index: number, field: keyof Permission, value: string) => {
+    const perms = [...formPermissions()];
+    perms[index] = { ...perms[index], [field]: value };
+    setFormPermissions(perms);
+  };
+
+  return (
+    <div class="space-y-6">
+      <SettingsPanel
+        title="Roles"
+        description="Manage built-in and custom roles with granular permissions."
+        icon={<Shield class="w-5 h-5" />}
+        action={
+          <button
+            type="button"
+            onClick={handleCreate}
+            disabled={!rbacEnabled()}
+            class="inline-flex w-full sm:w-auto min-h-10 sm:min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+          >
+            <Plus class="w-4 h-4" />
+            New Role
+          </button>
         }
+        noPadding
+        bodyClass="divide-y divide-border"
+      >
+        <Show when={licenseLoaded() && !hasFeature('rbac') && !loading()}>
+          <div class="bg-surface-alt p-4 sm:p-6 transition-colors border-b border-border-subtle">
+            <div class="flex flex-col sm:flex-row items-center gap-4">
+              <div class="flex-1 text-center sm:text-left">
+                <h4 class="text-base font-semibold text-base-content">Custom Roles (Pro)</h4>
+                <p class="text-sm text-muted mt-1">
+                  Define granular permissions and custom access tiers for your team.
+                </p>
+              </div>
+              <a
+                href={getUpgradeActionUrlOrFallback('rbac')}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="w-full sm:w-auto min-h-10 text-center sm:min-h-9 px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                onClick={() => trackUpgradeClicked('settings_roles_panel', 'rbac')}
+              >
+                Upgrade to Pro
+              </a>
+            </div>
+          </div>
+        </Show>
 
-        setLoading(true);
-        try {
-            const data = await RBACAPI.getRoles();
-            setRoles(data || []);
-        } catch (err) {
-            if (err instanceof Error && /feature not included in license/i.test(err.message)) {
-                setRoles([]);
-                return;
-            }
-            logger.error('Failed to load roles', err);
-            notificationStore.error('Failed to load roles');
-        } finally {
-            setLoading(false);
-        }
-    };
+        <Show when={loading()}>
+          <div class="flex items-center justify-center py-8">
+            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
+          </div>
+        </Show>
 
-    onMount(() => {
-        void loadLicenseStatus();
-    });
-
-    createEffect(() => {
-        if (!licenseLoaded()) {
-            setLoading(true);
-            return;
-        }
-        if (!hasFeature('rbac')) {
-            setRoles([]);
-            setLoading(false);
-            return;
-        }
-        void loadRoles();
-    });
-
-    createEffect((wasPaywallVisible) => {
-        const isPaywallVisible = licenseLoaded() && !hasFeature('rbac') && !loading();
-        if (isPaywallVisible && !wasPaywallVisible) {
-            trackPaywallViewed('rbac', 'settings_roles_panel');
-        }
-        return isPaywallVisible;
-    }, false);
-
-    const handleCreate = () => {
-        setEditingRole(null);
-        setFormId('');
-        setFormName('');
-        setFormDescription('');
-        setFormPermissions([{ action: 'read', resource: 'nodes' }]);
-        setShowModal(true);
-    };
-
-    const handleEdit = (role: Role) => {
-        if (role.isBuiltIn) return;
-        setEditingRole(role);
-        setFormId(role.id);
-        setFormName(role.name);
-        setFormDescription(role.description);
-        setFormPermissions([...role.permissions]);
-        setShowModal(true);
-    };
-
-    const handleDelete = async (role: Role) => {
-        if (role.isBuiltIn) return;
-        if (!confirm(`Are you sure you want to delete the role "${role.name}"?`)) return;
-
-        try {
-            await RBACAPI.deleteRole(role.id);
-            notificationStore.success(`Role "${role.name}" deleted`);
-            await loadRoles();
-        } catch (err) {
-            logger.error('Failed to delete role', err);
-            notificationStore.error('Failed to delete role');
-        }
-    };
-
-    const handleSave = async () => {
-        const id = formId().trim().toLowerCase().replace(/\s+/g, '-');
-        const name = formName().trim();
-        if (!id || !name) {
-            notificationStore.error('ID and Name are required');
-            return;
-        }
-
-        setSaving(true);
-        try {
-            const role: Role = {
-                id,
-                name,
-                description: formDescription(),
-                permissions: formPermissions(),
-                createdAt: editingRole()?.createdAt,
-            };
-            await RBACAPI.saveRole(role);
-            notificationStore.success(`Role "${name}" saved`);
-            setShowModal(false);
-            await loadRoles();
-        } catch (err) {
-            logger.error('Failed to save role', err);
-            notificationStore.error('Failed to save role');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const addPermission = () => {
-        setFormPermissions([...formPermissions(), { action: 'read', resource: 'nodes' }]);
-    };
-
-    const removePermission = (index: number) => {
-        const perms = [...formPermissions()];
-        perms.splice(index, 1);
-        setFormPermissions(perms);
-    };
-
-    const updatePermission = (index: number, field: keyof Permission, value: string) => {
-        const perms = [...formPermissions()];
-        perms[index] = { ...perms[index], [field]: value };
-        setFormPermissions(perms);
-    };
-
-    return (
-        <div class="space-y-6">
-            <SettingsPanel
-                title="Roles"
-                description="Manage built-in and custom roles with granular permissions."
-                icon={<Shield class="w-5 h-5" />}
-                action={
-                    <button
-                        type="button"
-                        onClick={handleCreate}
-                        disabled={!rbacEnabled()}
-                        class="inline-flex w-full sm:w-auto min-h-10 sm:min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-                    >
-                        <Plus class="w-4 h-4" />
-                        New Role
-                    </button>
-                }
-                noPadding
-                bodyClass="divide-y divide-border"
-            >
-
-                <Show when={licenseLoaded() && !hasFeature('rbac') && !loading()}>
-                    <div class="bg-surface-alt p-4 sm:p-6 transition-colors border-b border-border-subtle">
-                        <div class="flex flex-col sm:flex-row items-center gap-4">
-                            <div class="flex-1 text-center sm:text-left">
-                                <h4 class="text-base font-semibold text-base-content">Custom Roles (Pro)</h4>
-                                <p class="text-sm text-muted mt-1">
-                                    Define granular permissions and custom access tiers for your team.
-                                </p>
-                            </div>
-                            <a
-                                href={getUpgradeActionUrlOrFallback('rbac')}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="w-full sm:w-auto min-h-10 text-center sm:min-h-9 px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                                onClick={() => trackUpgradeClicked('settings_roles_panel', 'rbac')}
-                            >
-                                Upgrade to Pro
-                            </a>
-                        </div>
+        <Show when={!loading() && rbacEnabled()}>
+          <div class="w-full overflow-x-auto">
+            <PulseDataGrid
+              data={roles()}
+              columns={[
+                {
+                  key: 'role',
+                  label: 'Role',
+                  render: (role) => (
+                    <div class="flex flex-col">
+                      <span class="font-medium text-base-content flex items-center gap-1">
+                        {role.name}
+                        <Show when={role.isBuiltIn}>
+                          <BadgeCheck class="w-4 h-4 text-blue-500" />
+                        </Show>
+                      </span>
+                      <span class="text-xs text-muted">{role.description}</span>
                     </div>
-                </Show>
-
-                <Show when={loading()}>
-                    <div class="flex items-center justify-center py-8">
-                        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
+                  ),
+                },
+                {
+                  key: 'permissions',
+                  label: 'Permissions',
+                  render: (role) => (
+                    <div class="flex flex-wrap gap-1">
+                      <For each={role.permissions}>
+                        {(perm) => (
+                          <span class="inline-flex items-center rounded-md bg-surface-alt px-2 py-0.5 text-xs font-medium text-muted border border-border">
+                            {perm.action}:{perm.resource}
+                          </span>
+                        )}
+                      </For>
                     </div>
-                </Show>
-
-                <Show when={!loading() && rbacEnabled()}>
-                    <div class="w-full overflow-x-auto">
-                        <PulseDataGrid
-                            data={roles()}
-                            columns={[
-                                {
-                                    key: 'role',
-                                    label: 'Role',
-                                    render: (role) => (
-                                        <div class="flex flex-col">
-                                            <span class="font-medium text-base-content flex items-center gap-1">
-                                                {role.name}
-                                                <Show when={role.isBuiltIn}>
-                                                    <BadgeCheck class="w-4 h-4 text-blue-500" />
-                                                </Show>
-                                            </span>
-                                            <span class="text-xs text-muted">{role.description}</span>
-                                        </div>
-                                    )
-                                },
-                                {
-                                    key: 'permissions',
-                                    label: 'Permissions',
-                                    render: (role) => (
-                                        <div class="flex flex-wrap gap-1">
-                                            <For each={role.permissions}>
-                                                {(perm) => (
-                                                    <span class="inline-flex items-center rounded-md bg-surface-alt px-2 py-0.5 text-xs font-medium text-muted border border-border">
-                                                        {perm.action}:{perm.resource}
-                                                    </span>
-                                                )}
-                                            </For>
-                                        </div>
-                                    )
-                                },
-                                {
-                                    key: 'actions',
-                                    label: 'Actions',
-                                    align: 'right',
- render: (role) => (
- <div class="inline-flex items-center gap-1">
- <Show when={!role.isBuiltIn}>
- <button
- type="button"
- onClick={() => handleEdit(role)}
- class="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-surface-hover dark:hover:text-blue-300"
- title="Edit role"
- >
- <Pencil class="w-4 h-4" />
- </button>
- <button
- type="button"
- onClick={() => handleDelete(role)}
- class="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
- title="Delete role"
- >
- <Trash2 class="w-4 h-4" />
- </button>
- </Show>
- <Show when={role.isBuiltIn}>
- <span class="text-xs text-slate-400 italic">Read-only</span>
- </Show>
- </div>
- )
- }
- ]}
- keyExtractor={(role) => role.id}
- emptyState="No roles available."
- desktopMinWidth="620px"
- class="border-x-0 sm:border-x"
- />
- </div>
- </Show>
- </SettingsPanel>
-
- {/* Role Modal */}
- <Show when={showModal()}>
- <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
- <div class="w-full max-w-2xl bg-surface rounded-md shadow-sm border border-border mx-4 max-h-[92vh] overflow-hidden">
- <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
- <h3 class="text-lg font-semibold text-base-content">
- {editingRole() ?'Edit Role' : 'New Role'}
- </h3>
- <button
- type="button"
- onClick={() => setShowModal(false)}
- class="p-1.5 rounded-md text-slate-500 hover:text-base-content hover:bg-surface-hover"
- >
- <X class="w-5 h-5" />
- </button>
- </div>
-
- <div class="px-4 sm:px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
- <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
- <div class="space-y-1">
- <label class="block text-sm font-medium text-base-content">
- Role ID
- </label>
- <input
- type="text"
- value={formId()}
- onInput={(e) => setFormId(e.currentTarget.value)}
- placeholder="e.g., custom-auditor"
- disabled={!!editingRole()}
- class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900 disabled:opacity-50"
- />
- </div>
- <div class="space-y-1">
- <label class="block text-sm font-medium text-base-content">
- Role Name
- </label>
- <input
- type="text"
- value={formName()}
- onInput={(e) => setFormName(e.currentTarget.value)}
- placeholder="e.g., Custom Auditor"
- class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900"
- />
- </div>
- </div>
- <div class="space-y-1">
- <label class="block text-sm font-medium text-base-content">
- Description
- </label>
- <input
- type="text"
- value={formDescription()}
- onInput={(e) => setFormDescription(e.currentTarget.value)}
- placeholder="Brief description of this role's purpose"
-                                    class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900"
-                                />
-                            </div>
-
-                            <div class="space-y-3 pt-2">
-                                <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                    <label class="block text-sm font-medium text-base-content">
-                                        Permissions
-                                    </label>
-                                    <button
-                                        type="button"
-                                        onClick={addPermission}
-                                        class="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-300 flex items-center gap-1"
-                                    >
-                                        <Plus class="w-3 h-3" /> Add Permission
-                                    </button>
-                                </div>
-
-                                <div class="space-y-2">
-                                    <For each={formPermissions()}>
-                                        {(perm, index) => (
-                                            <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-                                                <select
-                                                    value={perm.action}
-                                                    onChange={(e) => updatePermission(index(), 'action', e.currentTarget.value)}
-                                                    class="w-full sm:flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-base-content"
-                                                >
-                                                    <For each={ACTIONS}>
-                                                        {(action) => <option value={action}>{action}</option>}
-                                                    </For>
-                                                </select>
-                                                <span class="hidden sm:inline text-slate-400 text-sm">:</span>
-                                                <select
-                                                    value={perm.resource}
-                                                    onChange={(e) => updatePermission(index(), 'resource', e.currentTarget.value)}
- class="w-full sm:flex-1 rounded-md border bg-surface px-2 py-1.5 text-sm text-base-content"
- >
- <For each={RESOURCES}>
- {(resource) => <option value={resource}>{resource}</option>}
- </For>
- </select>
- <button
- type="button"
- onClick={() => removePermission(index())}
- disabled={formPermissions().length <= 1}
- class="self-end sm:self-auto p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30"
- >
- <Trash2 class="w-4 h-4" />
- </button>
- </div>
- )}
- </For>
- </div>
- </div>
- </div>
-
- <div class="grid grid-cols-1 sm:flex sm:items-center sm:justify-end gap-3 px-4 sm:px-6 py-4 border-t border-border">
- <button
- type="button"
- onClick={() => setShowModal(false)}
- class="w-full sm:w-auto rounded-md px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover"
- >
- Cancel
- </button>
- <button
- type="button"
- onClick={handleSave}
- disabled={saving() || !formName().trim()}
- class="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
- >
- {saving() ?'Saving...' : editingRole() ? 'Update Role' : 'Create Role'}
-                            </button>
-                        </div>
+                  ),
+                },
+                {
+                  key: 'actions',
+                  label: 'Actions',
+                  align: 'right',
+                  render: (role) => (
+                    <div class="inline-flex items-center gap-1">
+                      <Show when={!role.isBuiltIn}>
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(role)}
+                          class="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-surface-hover dark:hover:text-blue-300"
+                          title="Edit role"
+                        >
+                          <Pencil class="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(role)}
+                          class="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
+                          title="Delete role"
+                        >
+                          <Trash2 class="w-4 h-4" />
+                        </button>
+                      </Show>
+                      <Show when={role.isBuiltIn}>
+                        <span class="text-xs text-slate-400 italic">Read-only</span>
+                      </Show>
                     </div>
+                  ),
+                },
+              ]}
+              keyExtractor={(role) => role.id}
+              emptyState="No roles available."
+              desktopMinWidth="620px"
+              class="border-x-0 sm:border-x"
+            />
+          </div>
+        </Show>
+      </SettingsPanel>
+
+      {/* Role Modal */}
+      <Show when={showModal()}>
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
+          <div class="w-full max-w-2xl bg-surface rounded-md shadow-sm border border-border mx-4 max-h-[92vh] overflow-hidden">
+            <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
+              <h3 class="text-lg font-semibold text-base-content">
+                {editingRole() ? 'Edit Role' : 'New Role'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                class="p-1.5 rounded-md text-slate-500 hover:text-base-content hover:bg-surface-hover"
+              >
+                <X class="w-5 h-5" />
+              </button>
+            </div>
+
+            <div class="px-4 sm:px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="space-y-1">
+                  <label class="block text-sm font-medium text-base-content">Role ID</label>
+                  <input
+                    type="text"
+                    value={formId()}
+                    onInput={(e) => setFormId(e.currentTarget.value)}
+                    placeholder="e.g., custom-auditor"
+                    disabled={!!editingRole()}
+                    class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900 disabled:opacity-50"
+                  />
                 </div>
-            </Show>
+                <div class="space-y-1">
+                  <label class="block text-sm font-medium text-base-content">Role Name</label>
+                  <input
+                    type="text"
+                    value={formName()}
+                    onInput={(e) => setFormName(e.currentTarget.value)}
+                    placeholder="e.g., Custom Auditor"
+                    class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900"
+                  />
+                </div>
+              </div>
+              <div class="space-y-1">
+                <label class="block text-sm font-medium text-base-content">Description</label>
+                <input
+                  type="text"
+                  value={formDescription()}
+                  onInput={(e) => setFormDescription(e.currentTarget.value)}
+                  placeholder="Brief description of this role's purpose"
+                  class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900"
+                />
+              </div>
+
+              <div class="space-y-3 pt-2">
+                <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <label class="block text-sm font-medium text-base-content">Permissions</label>
+                  <button
+                    type="button"
+                    onClick={addPermission}
+                    class="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-300 flex items-center gap-1"
+                  >
+                    <Plus class="w-3 h-3" /> Add Permission
+                  </button>
+                </div>
+
+                <div class="space-y-2">
+                  <For each={formPermissions()}>
+                    {(perm, index) => (
+                      <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                        <select
+                          value={perm.action}
+                          onChange={(e) =>
+                            updatePermission(index(), 'action', e.currentTarget.value)
+                          }
+                          class="w-full sm:flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-base-content"
+                        >
+                          <For each={ACTIONS}>
+                            {(action) => <option value={action}>{action}</option>}
+                          </For>
+                        </select>
+                        <span class="hidden sm:inline text-slate-400 text-sm">:</span>
+                        <select
+                          value={perm.resource}
+                          onChange={(e) =>
+                            updatePermission(index(), 'resource', e.currentTarget.value)
+                          }
+                          class="w-full sm:flex-1 rounded-md border bg-surface px-2 py-1.5 text-sm text-base-content"
+                        >
+                          <For each={RESOURCES}>
+                            {(resource) => <option value={resource}>{resource}</option>}
+                          </For>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => removePermission(index())}
+                          disabled={formPermissions().length <= 1}
+                          class="self-end sm:self-auto p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30"
+                        >
+                          <Trash2 class="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:flex sm:items-center sm:justify-end gap-3 px-4 sm:px-6 py-4 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                class="w-full sm:w-auto rounded-md px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving() || !formName().trim()}
+                class="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {saving() ? 'Saving...' : editingRole() ? 'Update Role' : 'Create Role'}
+              </button>
+            </div>
+          </div>
         </div>
-    );
+      </Show>
+    </div>
+  );
 };
 
 export default RolesPanel;

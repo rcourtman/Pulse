@@ -1,224 +1,230 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
-    initKioskMode,
-    isKioskMode,
-    setKioskMode,
-    subscribeToKioskMode,
-    getPulseBaseUrl,
-    getPulseHostname,
-    isPulseHttps,
-    getPulseWebSocketUrl,
-    getKioskModePreference
+  initKioskMode,
+  isKioskMode,
+  setKioskMode,
+  subscribeToKioskMode,
+  getPulseBaseUrl,
+  getPulseHostname,
+  isPulseHttps,
+  getPulseWebSocketUrl,
+  getKioskModePreference,
 } from '../url';
 
 describe('url utils', () => {
-    const originalLocation = window.location;
-    const originalSessionStorage = window.sessionStorage;
+  const originalLocation = window.location;
+  const originalSessionStorage = window.sessionStorage;
 
-    beforeEach(() => {
-        // Reset window.location
-        delete (window as any).location;
-        window.location = {
-            ...originalLocation,
-            origin: 'http://localhost:3000',
-            protocol: 'http:',
-            hostname: 'localhost',
-            port: '3000',
-            search: '',
-            host: 'localhost:3000'
-        } as any;
+  beforeEach(() => {
+    // Reset window.location
+    delete (window as any).location;
+    window.location = {
+      ...originalLocation,
+      origin: 'http://localhost:3000',
+      protocol: 'http:',
+      hostname: 'localhost',
+      port: '3000',
+      search: '',
+      host: 'localhost:3000',
+    } as any;
 
-        // Reset sessionStorage mock
-        const storage: Record<string, string> = {};
-        (window as any).sessionStorage = {
-            getItem: vi.fn((key: string) => storage[key] || null),
-            setItem: vi.fn((key: string, value: string) => { storage[key] = value; }),
-            removeItem: vi.fn((key: string) => { delete storage[key]; }),
-            clear: vi.fn(() => { for (const key in storage) delete storage[key]; }),
-        } as any;
+    // Reset sessionStorage mock
+    const storage: Record<string, string> = {};
+    (window as any).sessionStorage = {
+      getItem: vi.fn((key: string) => storage[key] || null),
+      setItem: vi.fn((key: string, value: string) => {
+        storage[key] = value;
+      }),
+      removeItem: vi.fn((key: string) => {
+        delete storage[key];
+      }),
+      clear: vi.fn(() => {
+        for (const key in storage) delete storage[key];
+      }),
+    } as any;
+  });
+
+  afterEach(() => {
+    (window as any).location = originalLocation;
+    (window as any).sessionStorage = originalSessionStorage;
+    vi.restoreAllMocks();
+  });
+
+  describe('kiosk mode', () => {
+    it('initKioskMode sets kiosk mode from URL param 1', () => {
+      window.location.search = '?kiosk=1';
+      initKioskMode();
+      expect(window.sessionStorage.setItem).toHaveBeenCalledWith('pulse_kiosk_mode', 'true');
     });
 
-    afterEach(() => {
-        (window as any).location = originalLocation;
-        (window as any).sessionStorage = originalSessionStorage;
-        vi.restoreAllMocks();
+    it('initKioskMode sets kiosk mode from URL param true', () => {
+      window.location.search = '?kiosk=true';
+      initKioskMode();
+      expect(window.sessionStorage.setItem).toHaveBeenCalledWith('pulse_kiosk_mode', 'true');
     });
 
-    describe('kiosk mode', () => {
-        it('initKioskMode sets kiosk mode from URL param 1', () => {
-            window.location.search = '?kiosk=1';
-            initKioskMode();
-            expect(window.sessionStorage.setItem).toHaveBeenCalledWith('pulse_kiosk_mode', 'true');
-        });
-
-        it('initKioskMode sets kiosk mode from URL param true', () => {
-            window.location.search = '?kiosk=true';
-            initKioskMode();
-            expect(window.sessionStorage.setItem).toHaveBeenCalledWith('pulse_kiosk_mode', 'true');
-        });
-
-        it('initKioskMode removes kiosk mode from URL param 0', () => {
-            window.location.search = '?kiosk=0';
-            initKioskMode();
-            expect(window.sessionStorage.removeItem).toHaveBeenCalledWith('pulse_kiosk_mode');
-        });
-
-        it('isKioskMode returns true if stored in session', () => {
-            vi.mocked(window.sessionStorage.getItem).mockReturnValue('true');
-            expect(isKioskMode()).toBe(true);
-        });
-
-        it('isKioskMode returns true if present in URL', () => {
-            vi.mocked(window.sessionStorage.getItem).mockReturnValue(null);
-            window.location.search = '?kiosk=1';
-            expect(isKioskMode()).toBe(true);
-        });
-
-        it('setKioskMode updates storage and notifies listeners', () => {
-            const listener = vi.fn();
-            const unsubscribe = subscribeToKioskMode(listener);
-
-            setKioskMode(true);
-            expect(window.sessionStorage.setItem).toHaveBeenCalledWith('pulse_kiosk_mode', 'true');
-            expect(listener).toHaveBeenCalledWith(true);
-
-            setKioskMode(false);
-            expect(window.sessionStorage.setItem).toHaveBeenCalledWith('pulse_kiosk_mode', 'false');
-            expect(listener).toHaveBeenCalledWith(false);
-
-            unsubscribe();
-        });
+    it('initKioskMode removes kiosk mode from URL param 0', () => {
+      window.location.search = '?kiosk=0';
+      initKioskMode();
+      expect(window.sessionStorage.removeItem).toHaveBeenCalledWith('pulse_kiosk_mode');
     });
 
-    describe('Pulse URLs', () => {
-        it('getPulseBaseUrl returns window.location.origin', () => {
-            expect(getPulseBaseUrl()).toBe('http://localhost:3000');
-        });
-
-        it('getPulseHostname returns hostname', () => {
-            expect(getPulseHostname()).toBe('localhost');
-        });
-
-        it('isPulseHttps returns true for https', () => {
-            (window.location as any).protocol = 'https:';
-            Object.defineProperty(window.location, 'origin', {
-                value: 'https://localhost:3000',
-                writable: true,
-                configurable: true
-            });
-            expect(isPulseHttps()).toBe(true);
-        });
-
-        it('getPulseWebSocketUrl returns correct ws URL', () => {
-            const wsUrl = getPulseWebSocketUrl('/ws');
-            expect(wsUrl).toContain('ws://localhost:3000/ws');
-        });
-
-        it('getPulseWebSocketUrl appends auth token if present', () => {
-            vi.mocked(window.sessionStorage.getItem).mockImplementation((key) => {
-                if (key === 'pulse_auth') return JSON.stringify({ type: 'token', value: 'secret' });
-                return null;
-            });
-            const wsUrl = getPulseWebSocketUrl('/ws');
-            expect(wsUrl).toContain('token=secret');
-        });
-
-        it('getPulseWebSocketUrl appends token to existing query string safely', () => {
-            vi.mocked(window.sessionStorage.getItem).mockImplementation((key) => {
-                if (key === 'pulse_auth') return JSON.stringify({ type: 'token', value: 'secret' });
-                return null;
-            });
-            const wsUrl = getPulseWebSocketUrl('/ws?stream=1');
-            expect(wsUrl).toContain('stream=1&token=secret');
-        });
-
-        it('getPulseWebSocketUrl ignores malformed auth token values', () => {
-            vi.mocked(window.sessionStorage.getItem).mockImplementation((key) => {
-                if (key === 'pulse_auth') return JSON.stringify({ type: 'token', value: 'bad\nsecret' });
-                return null;
-            });
-            const wsUrl = getPulseWebSocketUrl('/ws');
-            expect(wsUrl).not.toContain('token=');
-        });
-
-        it('getPulseWebSocketUrl ignores tokens over 256 chars', () => {
-            vi.mocked(window.sessionStorage.getItem).mockImplementation((key) => {
-                if (key === 'pulse_auth') return JSON.stringify({ type: 'token', value: 'a'.repeat(300) });
-                return null;
-            });
-            const wsUrl = getPulseWebSocketUrl('/ws');
-            expect(wsUrl).not.toContain('token=');
-        });
-
-        it('getPulseWebSocketUrl ignores non-token auth', () => {
-            vi.mocked(window.sessionStorage.getItem).mockImplementation((key) => {
-                if (key === 'pulse_auth') return JSON.stringify({ type: 'session', value: 'secret' });
-                return null;
-            });
-            const wsUrl = getPulseWebSocketUrl('/ws');
-            expect(wsUrl).not.toContain('token=');
-        });
-
-        it('getPulseWebSocketUrl defaults to /ws', () => {
-            const wsUrl = getPulseWebSocketUrl();
-            expect(wsUrl).toContain('/ws');
-        });
-
-        it('getPulseWebSocketUrl handles path without leading slash', () => {
-            const wsUrl = getPulseWebSocketUrl('stream');
-            expect(wsUrl).toContain('/stream');
-        });
-
-        it('getPulseWebSocketUrl uses wss for https', () => {
-            (window.location as any).protocol = 'https:';
-            Object.defineProperty(window.location, 'origin', {
-                value: 'https://localhost:3000',
-                writable: true,
-                configurable: true
-            });
-            const wsUrl = getPulseWebSocketUrl('/ws');
-            expect(wsUrl).toContain('wss://');
-        });
+    it('isKioskMode returns true if stored in session', () => {
+      vi.mocked(window.sessionStorage.getItem).mockReturnValue('true');
+      expect(isKioskMode()).toBe(true);
     });
 
-    describe('getKioskModePreference', () => {
-        it('returns true when kiosk is enabled in storage', () => {
-            vi.mocked(window.sessionStorage.getItem).mockReturnValue('true');
-            expect(getKioskModePreference()).toBe(true);
-        });
-
-        it('returns false when kiosk is explicitly disabled in storage', () => {
-            vi.mocked(window.sessionStorage.getItem).mockReturnValue('false');
-            expect(getKioskModePreference()).toBe(false);
-        });
-
-        it('returns null when kiosk preference is not set', () => {
-            vi.mocked(window.sessionStorage.getItem).mockReturnValue(null);
-            expect(getKioskModePreference()).toBe(null);
-        });
+    it('isKioskMode returns true if present in URL', () => {
+      vi.mocked(window.sessionStorage.getItem).mockReturnValue(null);
+      window.location.search = '?kiosk=1';
+      expect(isKioskMode()).toBe(true);
     });
 
-    describe('kiosk mode edge cases', () => {
-        it('isKioskMode returns false when stored is explicitly false', () => {
-            vi.mocked(window.sessionStorage.getItem).mockReturnValue('false');
-            expect(isKioskMode()).toBe(false);
-        });
+    it('setKioskMode updates storage and notifies listeners', () => {
+      const listener = vi.fn();
+      const unsubscribe = subscribeToKioskMode(listener);
 
-        it('isKioskMode returns false when kiosk param is false', () => {
-            vi.mocked(window.sessionStorage.getItem).mockReturnValue(null);
-            window.location.search = '?kiosk=false';
-            expect(isKioskMode()).toBe(false);
-        });
+      setKioskMode(true);
+      expect(window.sessionStorage.setItem).toHaveBeenCalledWith('pulse_kiosk_mode', 'true');
+      expect(listener).toHaveBeenCalledWith(true);
 
-        it('subscribeToKioskMode notifies existing listeners on mode change', () => {
-            const listener1 = vi.fn();
-            const listener2 = vi.fn();
-            subscribeToKioskMode(listener1);
-            subscribeToKioskMode(listener2);
+      setKioskMode(false);
+      expect(window.sessionStorage.setItem).toHaveBeenCalledWith('pulse_kiosk_mode', 'false');
+      expect(listener).toHaveBeenCalledWith(false);
 
-            setKioskMode(true);
-            expect(listener1).toHaveBeenCalledWith(true);
-            expect(listener2).toHaveBeenCalledWith(true);
-        });
+      unsubscribe();
     });
+  });
+
+  describe('Pulse URLs', () => {
+    it('getPulseBaseUrl returns window.location.origin', () => {
+      expect(getPulseBaseUrl()).toBe('http://localhost:3000');
+    });
+
+    it('getPulseHostname returns hostname', () => {
+      expect(getPulseHostname()).toBe('localhost');
+    });
+
+    it('isPulseHttps returns true for https', () => {
+      (window.location as any).protocol = 'https:';
+      Object.defineProperty(window.location, 'origin', {
+        value: 'https://localhost:3000',
+        writable: true,
+        configurable: true,
+      });
+      expect(isPulseHttps()).toBe(true);
+    });
+
+    it('getPulseWebSocketUrl returns correct ws URL', () => {
+      const wsUrl = getPulseWebSocketUrl('/ws');
+      expect(wsUrl).toContain('ws://localhost:3000/ws');
+    });
+
+    it('getPulseWebSocketUrl appends auth token if present', () => {
+      vi.mocked(window.sessionStorage.getItem).mockImplementation((key) => {
+        if (key === 'pulse_auth') return JSON.stringify({ type: 'token', value: 'secret' });
+        return null;
+      });
+      const wsUrl = getPulseWebSocketUrl('/ws');
+      expect(wsUrl).toContain('token=secret');
+    });
+
+    it('getPulseWebSocketUrl appends token to existing query string safely', () => {
+      vi.mocked(window.sessionStorage.getItem).mockImplementation((key) => {
+        if (key === 'pulse_auth') return JSON.stringify({ type: 'token', value: 'secret' });
+        return null;
+      });
+      const wsUrl = getPulseWebSocketUrl('/ws?stream=1');
+      expect(wsUrl).toContain('stream=1&token=secret');
+    });
+
+    it('getPulseWebSocketUrl ignores malformed auth token values', () => {
+      vi.mocked(window.sessionStorage.getItem).mockImplementation((key) => {
+        if (key === 'pulse_auth') return JSON.stringify({ type: 'token', value: 'bad\nsecret' });
+        return null;
+      });
+      const wsUrl = getPulseWebSocketUrl('/ws');
+      expect(wsUrl).not.toContain('token=');
+    });
+
+    it('getPulseWebSocketUrl ignores tokens over 256 chars', () => {
+      vi.mocked(window.sessionStorage.getItem).mockImplementation((key) => {
+        if (key === 'pulse_auth') return JSON.stringify({ type: 'token', value: 'a'.repeat(300) });
+        return null;
+      });
+      const wsUrl = getPulseWebSocketUrl('/ws');
+      expect(wsUrl).not.toContain('token=');
+    });
+
+    it('getPulseWebSocketUrl ignores non-token auth', () => {
+      vi.mocked(window.sessionStorage.getItem).mockImplementation((key) => {
+        if (key === 'pulse_auth') return JSON.stringify({ type: 'session', value: 'secret' });
+        return null;
+      });
+      const wsUrl = getPulseWebSocketUrl('/ws');
+      expect(wsUrl).not.toContain('token=');
+    });
+
+    it('getPulseWebSocketUrl defaults to /ws', () => {
+      const wsUrl = getPulseWebSocketUrl();
+      expect(wsUrl).toContain('/ws');
+    });
+
+    it('getPulseWebSocketUrl handles path without leading slash', () => {
+      const wsUrl = getPulseWebSocketUrl('stream');
+      expect(wsUrl).toContain('/stream');
+    });
+
+    it('getPulseWebSocketUrl uses wss for https', () => {
+      (window.location as any).protocol = 'https:';
+      Object.defineProperty(window.location, 'origin', {
+        value: 'https://localhost:3000',
+        writable: true,
+        configurable: true,
+      });
+      const wsUrl = getPulseWebSocketUrl('/ws');
+      expect(wsUrl).toContain('wss://');
+    });
+  });
+
+  describe('getKioskModePreference', () => {
+    it('returns true when kiosk is enabled in storage', () => {
+      vi.mocked(window.sessionStorage.getItem).mockReturnValue('true');
+      expect(getKioskModePreference()).toBe(true);
+    });
+
+    it('returns false when kiosk is explicitly disabled in storage', () => {
+      vi.mocked(window.sessionStorage.getItem).mockReturnValue('false');
+      expect(getKioskModePreference()).toBe(false);
+    });
+
+    it('returns null when kiosk preference is not set', () => {
+      vi.mocked(window.sessionStorage.getItem).mockReturnValue(null);
+      expect(getKioskModePreference()).toBe(null);
+    });
+  });
+
+  describe('kiosk mode edge cases', () => {
+    it('isKioskMode returns false when stored is explicitly false', () => {
+      vi.mocked(window.sessionStorage.getItem).mockReturnValue('false');
+      expect(isKioskMode()).toBe(false);
+    });
+
+    it('isKioskMode returns false when kiosk param is false', () => {
+      vi.mocked(window.sessionStorage.getItem).mockReturnValue(null);
+      window.location.search = '?kiosk=false';
+      expect(isKioskMode()).toBe(false);
+    });
+
+    it('subscribeToKioskMode notifies existing listeners on mode change', () => {
+      const listener1 = vi.fn();
+      const listener2 = vi.fn();
+      subscribeToKioskMode(listener1);
+      subscribeToKioskMode(listener2);
+
+      setKioskMode(true);
+      expect(listener1).toHaveBeenCalledWith(true);
+      expect(listener2).toHaveBeenCalledWith(true);
+    });
+  });
 });

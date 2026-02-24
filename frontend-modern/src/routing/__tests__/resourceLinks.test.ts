@@ -23,7 +23,9 @@ describe('resource link routing contract', () => {
       host: 'worker-1',
       resource: 'cluster-a:worker-1:101',
     });
-    expect(href).toBe('/workloads?type=k8s&context=cluster-a&host=worker-1&resource=cluster-a%3Aworker-1%3A101');
+    expect(href).toBe(
+      '/workloads?type=k8s&context=cluster-a&host=worker-1&resource=cluster-a%3Aworker-1%3A101',
+    );
 
     const parsed = parseWorkloadsLinkSearch(href.slice('/workloads'.length));
     expect(parsed).toEqual({
@@ -83,7 +85,9 @@ describe('resource link routing contract', () => {
       sort: 'usage',
       order: 'desc',
     });
-    expect(href).toBe('/storage?tab=disks&group=storage&source=pbs&status=available&node=cluster-main-pve1&q=local-lvm&resource=storage-1&sort=usage&order=desc');
+    expect(href).toBe(
+      '/storage?tab=disks&group=storage&source=pbs&status=available&node=cluster-main-pve1&q=local-lvm&resource=storage-1&sort=usage&order=desc',
+    );
 
     const parsed = parseStorageLinkSearch(href.slice('/storage'.length));
     expect(parsed).toEqual({
@@ -169,5 +173,4 @@ describe('resource link routing contract', () => {
 
     expect(PMG_THRESHOLDS_PATH).toBe('/alerts/thresholds/mail-gateway');
   });
-
 });

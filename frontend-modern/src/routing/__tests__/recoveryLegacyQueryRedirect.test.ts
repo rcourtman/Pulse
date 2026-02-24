@@ -37,7 +37,9 @@ describe('recovery legacy query redirect', () => {
   });
 
   it('returns null when no legacy params are present', () => {
-    expect(getRecoveryLegacyQueryRedirectTarget('?view=events&mode=remote&scope=workload&q=vm-101')).toBeNull();
+    expect(
+      getRecoveryLegacyQueryRedirectTarget('?view=events&mode=remote&scope=workload&q=vm-101'),
+    ).toBeNull();
     expect(getRecoveryLegacyQueryRedirectTarget('')).toBeNull();
   });
 });

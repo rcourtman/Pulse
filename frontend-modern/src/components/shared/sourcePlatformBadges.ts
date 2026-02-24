@@ -108,7 +108,9 @@ const normalizeKey = (value: string | null | undefined): KnownSourcePlatform | n
   return null;
 };
 
-export const getSourcePlatformBadge = (value: string | null | undefined): SourcePlatformBadge | null => {
+export const getSourcePlatformBadge = (
+  value: string | null | undefined,
+): SourcePlatformBadge | null => {
   const normalized = normalizeKey(value);
   if (!normalized) {
     const label = titleize((value || '').toString());

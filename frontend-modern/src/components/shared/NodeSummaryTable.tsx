@@ -8,7 +8,14 @@ import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
 import { getCpuTemperature, formatTemperature } from '@/utils/temperature';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { buildMetricKey } from '@/utils/metricsKeys';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/shared/Table';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getNodeStatusIndicator, getPBSStatusIndicator } from '@/utils/status';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
@@ -19,7 +26,55 @@ import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 
 // Lazy load NodeDrawer to avoid circular dependencies and reduce bundle size
-const NodeDrawer = lazy(() => import('./NodeDrawer').then(m => ({ default: m.NodeDrawer })));
+const NodeDrawer = lazy(() => import('./NodeDrawer').then((m) => ({ default: m.NodeDrawer })));
+
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
+
+const asTrimmedString = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const getHostCandidateIds = (host: Host): string[] => {
+  const hostRecord = host as unknown as Record<string, unknown>;
+  const discoveryTarget = asRecord(hostRecord.discoveryTarget);
+  const platformData = asRecord(hostRecord.platformData);
+  const platformAgent = asRecord(platformData?.agent);
+
+  const candidates = [
+    asTrimmedString(host.id),
+    asTrimmedString(discoveryTarget?.resourceId),
+    asTrimmedString(discoveryTarget?.hostId),
+    asTrimmedString(platformAgent?.agentId),
+    asTrimmedString(platformData?.agentId),
+  ].filter((value): value is string => Boolean(value));
+
+  return Array.from(new Set(candidates));
+};
+
+const getHostLinkedNodeId = (host: Host): string | undefined => {
+  const hostRecord = host as unknown as Record<string, unknown>;
+  const platformData = asRecord(hostRecord.platformData);
+  const platformAgent = asRecord(platformData?.agent);
+
+  return (
+    asTrimmedString(host.linkedNodeId) ||
+    asTrimmedString(platformData?.linkedNodeId) ||
+    asTrimmedString(platformAgent?.linkedNodeId)
+  );
+};
+
+const getHostNameCandidates = (host: Host): string[] => {
+  const hostRecord = host as unknown as Record<string, unknown>;
+  const platformData = asRecord(hostRecord.platformData);
+  const platformAgent = asRecord(platformData?.agent);
+  const names = [asTrimmedString(host.hostname), asTrimmedString(platformAgent?.hostname)].filter(
+    (value): value is string => Boolean(value),
+  );
+  return Array.from(new Set(names));
+};
 
 interface NodeSummaryTableProps {
   nodes: Node[];
@@ -47,7 +102,10 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
   const isTemperatureMonitoringEnabled = (node: Node): boolean => {
     const globalEnabled = props.globalTemperatureMonitoringEnabled ?? true;
-    if (node.temperatureMonitoringEnabled !== undefined && node.temperatureMonitoringEnabled !== null) {
+    if (
+      node.temperatureMonitoringEnabled !== undefined &&
+      node.temperatureMonitoringEnabled !== null
+    ) {
       return node.temperatureMonitoringEnabled;
     }
     return globalEnabled;
@@ -78,7 +136,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
   const toggleNodeExpand = (nodeId: string, e: MouseEvent) => {
     e.stopPropagation();
-    setExpandedNodeId(prev => prev === nodeId ? null : nodeId);
+    setExpandedNodeId((prev) => (prev === nodeId ? null : nodeId));
   };
 
   const hasAnyTemperatureData = createMemo(() => {
@@ -93,12 +151,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   const totalColumnCount = createMemo(() => {
     let count = 6; // Base: Name, Uptime, CPU, Memory, Disk, Link
     if (hasAnyTemperatureData()) count += 1;
-    if (props.currentTab === 'dashboard') count += 2; // VMs, CTs
-    else if (props.currentTab === 'storage') count += 2; // Storage, Disks
+    if (props.currentTab === 'dashboard')
+      count += 2; // VMs, CTs
+    else if (props.currentTab === 'storage')
+      count += 2; // Storage, Disks
     else if (props.currentTab === 'recovery') count += 1; // Recovery
     return count;
   });
-
 
   const getCpuTemperatureValue = (item: TableItem) => {
     if (!isPVE(item)) return null;
@@ -227,13 +286,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   const getSortValue = (item: TableItem, key: SortKey): number | string | null => {
     switch (key) {
       case 'name':
-        return isPVE(item)
-          ? getNodeDisplayName(item)
-          : item.name;
+        return isPVE(item) ? getNodeDisplayName(item) : item.name;
       case 'uptime':
-        return isPVE(item)
-          ? item.uptime ?? 0
-          : item.uptime ?? 0;
+        return isPVE(item) ? (item.uptime ?? 0) : (item.uptime ?? 0);
       case 'cpu':
         return getCpuPercent(item);
       case 'memory':
@@ -262,21 +317,21 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     const bOnline = isItemOnline(b);
     if (aOnline !== bOnline) return aOnline ? -1 : 1;
 
-    const aName = aIsPVE
-      ? getNodeDisplayName(a)
-      : a.name;
-    const bName = bIsPVE
-      ? getNodeDisplayName(b)
-      : b.name;
+    const aName = aIsPVE ? getNodeDisplayName(a) : a.name;
+    const bName = bIsPVE ? getNodeDisplayName(b) : b.name;
 
     return aName.localeCompare(bName);
   };
 
   const compareValues = (valueA: number | string | null, valueB: number | string | null) => {
     const aEmpty =
-      valueA === null || valueA === undefined || (typeof valueA === 'number' && Number.isNaN(valueA));
+      valueA === null ||
+      valueA === undefined ||
+      (typeof valueA === 'number' && Number.isNaN(valueA));
     const bEmpty =
-      valueB === null || valueB === undefined || (typeof valueB === 'number' && Number.isNaN(valueB));
+      valueB === null ||
+      valueB === undefined ||
+      (typeof valueB === 'number' && Number.isNaN(valueB));
 
     if (aEmpty && bEmpty) return 0;
     if (aEmpty) return 1;
@@ -325,66 +380,122 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     return sortDirection() === 'asc' ? '▲' : '▼';
   };
 
-  const thClassBase = "px-1.5 sm:px-2 py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-surface-hover whitespace-nowrap";
+  const thClassBase =
+    'px-1.5 sm:px-2 py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-surface-hover whitespace-nowrap';
   const thClass = `${thClassBase} text-center`;
 
   // Cell class constants for consistency
-  const tdClass = "px-2 py-1 align-middle";
-  const metricColumnStyle = { "min-width": "140px", "max-width": "180px" } as const;
+  const tdClass = 'px-2 py-1 align-middle';
+  const metricColumnStyle = { 'min-width': '140px', 'max-width': '180px' } as const;
 
   return (
     <Card padding="none" tone="card" class="mb-4 overflow-hidden">
-      <Table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": "800px" }}>
+      <Table
+        class="w-full border-collapse whitespace-nowrap"
+        style={{ 'table-layout': 'fixed', 'min-width': '800px' }}
+      >
         <TableHeader>
           <TableRow class="bg-surface-alt text-muted border-b border-border">
+            <TableHead class={`${thClassBase} text-left pl-3`} onClick={() => handleSort('name')}>
+              {props.currentTab === 'recovery' ? 'Node / PBS' : 'Node'}{' '}
+              {renderSortIndicator('name')}
+            </TableHead>
 
             <TableHead
-              class={`${thClassBase} text-left pl-3`}
-              onClick={() => handleSort('name')}
+              class={thClass}
+              style={{ width: '80px', 'min-width': '80px', 'max-width': '80px' }}
+              onClick={() => handleSort('uptime')}
             >
-              {props.currentTab === 'recovery' ? 'Node / PBS' : 'Node'} {renderSortIndicator('name')}
-            </TableHead>
-
-            <TableHead class={thClass} style={{ width: '80px', "min-width": '80px', "max-width": '80px' }} onClick={() => handleSort('uptime')}>
               Uptime {renderSortIndicator('uptime')}
             </TableHead>
-            <TableHead class={thClass} style={isMobile() ? { "min-width": "80px" } : { "min-width": "140px", "max-width": "180px" }} onClick={() => handleSort('cpu')}>
+            <TableHead
+              class={thClass}
+              style={
+                isMobile()
+                  ? { 'min-width': '80px' }
+                  : { 'min-width': '140px', 'max-width': '180px' }
+              }
+              onClick={() => handleSort('cpu')}
+            >
               CPU {renderSortIndicator('cpu')}
             </TableHead>
-            <TableHead class={thClass} style={isMobile() ? { "min-width": "80px" } : { "min-width": "140px", "max-width": "180px" }} onClick={() => handleSort('memory')}>
+            <TableHead
+              class={thClass}
+              style={
+                isMobile()
+                  ? { 'min-width': '80px' }
+                  : { 'min-width': '140px', 'max-width': '180px' }
+              }
+              onClick={() => handleSort('memory')}
+            >
               Memory {renderSortIndicator('memory')}
             </TableHead>
-            <TableHead class={thClass} style={isMobile() ? { "min-width": "80px" } : { "min-width": "140px", "max-width": "180px" }} onClick={() => handleSort('disk')}>
+            <TableHead
+              class={thClass}
+              style={
+                isMobile()
+                  ? { 'min-width': '80px' }
+                  : { 'min-width': '140px', 'max-width': '180px' }
+              }
+              onClick={() => handleSort('disk')}
+            >
               Disk {renderSortIndicator('disk')}
             </TableHead>
             <Show when={hasAnyTemperatureData()}>
-              <TableHead class={thClass} style={{ width: '60px', "min-width": '60px', "max-width": '60px' }} onClick={() => handleSort('temperature')}>
+              <TableHead
+                class={thClass}
+                style={{ width: '60px', 'min-width': '60px', 'max-width': '60px' }}
+                onClick={() => handleSort('temperature')}
+              >
                 Temp {renderSortIndicator('temperature')}
               </TableHead>
             </Show>
             <Show when={props.currentTab === 'dashboard'}>
-              <TableHead class={thClass} style={{ width: '50px', "min-width": '50px', "max-width": '50px' }} onClick={() => handleSort('vmCount')}>
+              <TableHead
+                class={thClass}
+                style={{ width: '50px', 'min-width': '50px', 'max-width': '50px' }}
+                onClick={() => handleSort('vmCount')}
+              >
                 VMs {renderSortIndicator('vmCount')}
               </TableHead>
-              <TableHead class={thClass} style={{ width: '50px', "min-width": '50px', "max-width": '50px' }} onClick={() => handleSort('containerCount')}>
+              <TableHead
+                class={thClass}
+                style={{ width: '50px', 'min-width': '50px', 'max-width': '50px' }}
+                onClick={() => handleSort('containerCount')}
+              >
                 CTs {renderSortIndicator('containerCount')}
               </TableHead>
             </Show>
             <Show when={props.currentTab === 'storage'}>
-              <TableHead class={thClass} style={{ width: '70px', "min-width": '70px', "max-width": '70px' }} onClick={() => handleSort('storageCount')}>
+              <TableHead
+                class={thClass}
+                style={{ width: '70px', 'min-width': '70px', 'max-width': '70px' }}
+                onClick={() => handleSort('storageCount')}
+              >
                 Storage {renderSortIndicator('storageCount')}
               </TableHead>
-              <TableHead class={thClass} style={{ width: '60px', "min-width": '60px', "max-width": '60px' }} onClick={() => handleSort('diskCount')}>
+              <TableHead
+                class={thClass}
+                style={{ width: '60px', 'min-width': '60px', 'max-width': '60px' }}
+                onClick={() => handleSort('diskCount')}
+              >
                 Disks {renderSortIndicator('diskCount')}
               </TableHead>
             </Show>
             <Show when={props.currentTab === 'recovery'}>
-              <TableHead class={thClass} style={{ width: '70px', "min-width": '70px', "max-width": '70px' }} onClick={() => handleSort('backupCount')}>
+              <TableHead
+                class={thClass}
+                style={{ width: '70px', 'min-width': '70px', 'max-width': '70px' }}
+                onClick={() => handleSort('backupCount')}
+              >
                 Recovery {renderSortIndicator('backupCount')}
               </TableHead>
             </Show>
             {/* Link icon column moved to end */}
-            <TableHead class={thClass} style={{ width: '28px', "min-width": '28px', "max-width": '28px' }}>
+            <TableHead
+              class={thClass}
+              style={{ width: '28px', 'min-width': '28px', 'max-width': '28px' }}
+            >
               {/* Link icon column */}
             </TableHead>
           </TableRow>
@@ -399,14 +510,20 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
               const online = isItemOnline(item);
               const statusIndicator = createMemo(() =>
-                isPVEItem ? getNodeStatusIndicator(node as Node) : getPBSStatusIndicator(pbs as PBSInstance),
+                isPVEItem
+                  ? getNodeStatusIndicator(node as Node)
+                  : getPBSStatusIndicator(pbs as PBSInstance),
               );
               const cpuPercentValue = getCpuPercent(item);
               const memoryPercentValue = getMemoryPercent(item);
               const diskPercentValue = getDiskPercent(item);
               const diskSublabel = getDiskSublabel(item);
               const cpuTemperatureValue = getCpuTemperatureValue(item);
-              const uptimeValue = isPVEItem ? node?.uptime ?? 0 : isPBSItem ? pbs?.uptime ?? 0 : 0;
+              const uptimeValue = isPVEItem
+                ? (node?.uptime ?? 0)
+                : isPBSItem
+                  ? (pbs?.uptime ?? 0)
+                  : 0;
               const displayName = () => {
                 if (isPVEItem) return getNodeDisplayName(node as Node);
                 return (pbs as PBSInstance).name;
@@ -421,14 +538,26 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 if (!isPVEItem || !node) return undefined;
                 const hosts = props.hosts ?? [];
 
-                if (node.linkedHostAgentId) {
-                  const byId = hosts.find((host) => host.id === node.linkedHostAgentId);
+                const linkedHostAgentId = node.linkedHostAgentId;
+                if (linkedHostAgentId) {
+                  const byId = hosts.find((host) =>
+                    getHostCandidateIds(host).includes(linkedHostAgentId),
+                  );
                   if (byId) return byId;
                 }
 
-                return hosts.find(
-                  (host) => host.linkedNodeId === node.id || host.hostname === node.name,
-                );
+                const nodeName = (node.name || '').trim();
+                return hosts.find((host) => {
+                  const linkedNodeId = getHostLinkedNodeId(host);
+                  if (linkedNodeId === node.id) {
+                    return true;
+                  }
+
+                  if (!nodeName) {
+                    return false;
+                  }
+                  return getHostNameCandidates(host).includes(nodeName);
+                });
               };
               const metricsKey = buildMetricKey('node', resourceId);
               const alertStyles = createMemo(() =>
@@ -460,16 +589,18 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
               });
 
               const rowClass = createMemo(() => {
-                const baseHover = 'cursor-pointer transition-all duration-200 relative hover:shadow-sm group';
+                const baseHover =
+                  'cursor-pointer transition-all duration-200 relative hover:shadow-sm group';
 
                 if (isSelected()) {
                   return `cursor-pointer transition-all duration-200 relative hover:shadow-sm z-10 group bg-blue-50 dark:bg-blue-900`;
                 }
 
                 if (showAlertHighlight()) {
-                  const alertBg = alertStyles().severity === 'critical'
-                    ? 'bg-red-50 dark:bg-red-950'
-                    : 'bg-yellow-50 dark:bg-yellow-950';
+                  const alertBg =
+                    alertStyles().severity === 'critical'
+                      ? 'bg-red-50 dark:bg-red-950'
+                      : 'bg-yellow-50 dark:bg-yellow-950';
                   return `cursor-pointer transition-all duration-200 relative hover:shadow-sm group ${alertBg}`;
                 }
 
@@ -494,52 +625,65 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     onClick={() => props.onNodeClick(nodeId, isPVEItem ? 'pve' : 'pbs')}
                   >
                     {/* Name */}
-                    <TableCell class={`pr-2 py-1 align-middle overflow-hidden ${showAlertHighlight() ? 'pl-4' : 'pl-3'}`}>
+                    <TableCell
+                      class={`pr-2 py-1 align-middle overflow-hidden ${showAlertHighlight() ? 'pl-4' : 'pl-3'}`}
+                    >
                       <div class="flex items-center gap-1.5 min-w-0">
                         <Show when={isPVEItem}>
                           <div
                             class={`cursor-pointer transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}
- onClick={(e) => toggleNodeExpand(nodeId, e)}
- >
- <svg class="w-3.5 h-3.5 hover:text-base-content" fill="none" viewBox="0 0 24 24" stroke="currentColor">
- <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
- </svg>
- </div>
- </Show>
- <StatusDot
- variant={statusIndicator().variant}
- title={statusIndicator().label}
- ariaLabel={statusIndicator().label}
- size="xs"
- />
- <span
- class="font-medium text-[11px] text-base-content whitespace-nowrap select-text"
- title={displayName()}
- >
- {displayName()}
- </span>
- <Show when={showActualName()}>
- <span class="text-[9px] text-muted whitespace-nowrap">
- ({(node as Node).name})
- </span>
- </Show>
- <div class="hidden xl:flex items-center gap-1.5 ml-1 flex-shrink min-w-0 overflow-hidden">
- <Show when={isPVEItem}>
- <span class="text-[9px] px-1 py-0 rounded font-medium bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400">
- PVE
- </span>
- </Show>
- <Show when={isPVEItem && node!.pveVersion}>
- <span class="text-[9px] text-muted whitespace-nowrap">
- v{node!.pveVersion.split('/')[1] || node!.pveVersion}
+                            onClick={(e) => toggleNodeExpand(nodeId, e)}
+                          >
+                            <svg
+                              class="w-3.5 h-3.5 hover:text-base-content"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M9 5l7 7-7 7"
+                              />
+                            </svg>
+                          </div>
+                        </Show>
+                        <StatusDot
+                          variant={statusIndicator().variant}
+                          title={statusIndicator().label}
+                          ariaLabel={statusIndicator().label}
+                          size="xs"
+                        />
+                        <span
+                          class="font-medium text-[11px] text-base-content whitespace-nowrap select-text"
+                          title={displayName()}
+                        >
+                          {displayName()}
+                        </span>
+                        <Show when={showActualName()}>
+                          <span class="text-[9px] text-muted whitespace-nowrap">
+                            ({(node as Node).name})
+                          </span>
+                        </Show>
+                        <div class="hidden xl:flex items-center gap-1.5 ml-1 flex-shrink min-w-0 overflow-hidden">
+                          <Show when={isPVEItem}>
+                            <span class="text-[9px] px-1 py-0 rounded font-medium bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400">
+                              PVE
+                            </span>
+                          </Show>
+                          <Show when={isPVEItem && node!.pveVersion}>
+                            <span class="text-[9px] text-muted whitespace-nowrap">
+                              v{node!.pveVersion.split('/')[1] || node!.pveVersion}
                             </span>
                           </Show>
                           <Show when={isPVEItem && node!.isClusterMember !== undefined}>
                             <span
-                              class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${node!.isClusterMember
- ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-400'
- : 'bg-surface-alt text-muted'
- }`}
+                              class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${
+                                node!.isClusterMember
+                                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-400'
+                                  : 'bg-surface-alt text-muted'
+                              }`}
                             >
                               {node!.isClusterMember ? node!.clusterName : 'Standalone'}
                             </span>
@@ -552,12 +696,20 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                               +Agent
                             </span>
                           </Show>
-                          <Show when={isPVEItem && online && node!.pendingUpdates !== undefined && node!.pendingUpdates > 0}>
+                          <Show
+                            when={
+                              isPVEItem &&
+                              online &&
+                              node!.pendingUpdates !== undefined &&
+                              node!.pendingUpdates > 0
+                            }
+                          >
                             <span
-                              class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${(node!.pendingUpdates ?? 0) >= 10
- ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400'
- : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400'
- }`}
+                              class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${
+                                (node!.pendingUpdates ?? 0) >= 10
+                                  ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400'
+                                  : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400'
+                              }`}
                               title={`${node!.pendingUpdates} pending apt update${node!.pendingUpdates !== 1 ? 's' : ''}`}
                             >
                               {node!.pendingUpdates} updates
@@ -577,16 +729,15 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                       </div>
                     </TableCell>
 
-
-
                     {/* Uptime */}
                     <TableCell class={tdClass}>
                       <div class="flex justify-center">
                         <span
-                          class={`text-xs whitespace-nowrap ${isPVEItem && (node?.uptime ?? 0) < 3600
- ? 'text-orange-500'
- : 'text-muted'
- }`}
+                          class={`text-xs whitespace-nowrap ${
+                            isPVEItem && (node?.uptime ?? 0) < 3600
+                              ? 'text-orange-500'
+                              : 'text-muted'
+                          }`}
                         >
                           <Show when={online && uptimeValue} fallback="-">
                             <Show when={isMobile()} fallback={formatUptime(uptimeValue)}>
@@ -598,12 +749,17 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </TableCell>
 
                     {/* CPU */}
-                    <TableCell class={tdClass} style={isMobile() ? { "min-width": "80px" } : metricColumnStyle}>
+                    <TableCell
+                      class={tdClass}
+                      style={isMobile() ? { 'min-width': '80px' } : metricColumnStyle}
+                    >
                       <div class="h-5">
                         <EnhancedCPUBar
                           usage={cpuPercentValue}
                           loadAverage={isPVEItem ? node!.loadAverage?.[0] : undefined}
-                          cores={isMobile() ? undefined : (isPVEItem ? node!.cpuInfo?.cores : undefined)}
+                          cores={
+                            isMobile() ? undefined : isPVEItem ? node!.cpuInfo?.cores : undefined
+                          }
                           model={isPVEItem ? node!.cpuInfo?.model : undefined}
                           resourceId={metricsKey}
                         />
@@ -611,18 +767,28 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </TableCell>
 
                     {/* Memory */}
-                    <TableCell class={tdClass} style={isMobile() ? { "min-width": "80px" } : metricColumnStyle}>
+                    <TableCell
+                      class={tdClass}
+                      style={isMobile() ? { 'min-width': '80px' } : metricColumnStyle}
+                    >
                       <div class="h-5">
-                        <Show when={isPVEItem} fallback={
-                          <ResponsiveMetricCell
-                            value={memoryPercentValue}
-                            type="memory"
-                            resourceId={metricsKey}
-                            sublabel={pbs!.memoryTotal ? `${formatBytes(pbs!.memoryUsed)}/${formatBytes(pbs!.memoryTotal)}` : undefined}
-                            isRunning={online}
-                            showMobile={false}
-                          />
-                        }>
+                        <Show
+                          when={isPVEItem}
+                          fallback={
+                            <ResponsiveMetricCell
+                              value={memoryPercentValue}
+                              type="memory"
+                              resourceId={metricsKey}
+                              sublabel={
+                                pbs!.memoryTotal
+                                  ? `${formatBytes(pbs!.memoryUsed)}/${formatBytes(pbs!.memoryTotal)}`
+                                  : undefined
+                              }
+                              isRunning={online}
+                              showMobile={false}
+                            />
+                          }
+                        >
                           <StackedMemoryBar
                             used={node!.memory?.used || 0}
                             total={node!.memory?.total || 0}
@@ -636,24 +802,30 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </TableCell>
 
                     {/* Disk */}
-                    <TableCell class={tdClass} style={isMobile() ? { "min-width": "80px" } : metricColumnStyle}>
+                    <TableCell
+                      class={tdClass}
+                      style={isMobile() ? { 'min-width': '80px' } : metricColumnStyle}
+                    >
                       <div class="h-5">
-                        <Show when={isPVEItem} fallback={
-                          <ResponsiveMetricCell
-                            value={diskPercentValue}
-                            type="disk"
-                            resourceId={metricsKey}
-                            sublabel={diskSublabel}
-                            isRunning={online}
-                            showMobile={false}
-                          />
-                        }>
+                        <Show
+                          when={isPVEItem}
+                          fallback={
+                            <ResponsiveMetricCell
+                              value={diskPercentValue}
+                              type="disk"
+                              resourceId={metricsKey}
+                              sublabel={diskSublabel}
+                              isRunning={online}
+                              showMobile={false}
+                            />
+                          }
+                        >
                           <StackedDiskBar
                             aggregateDisk={{
                               total: node!.disk?.total || 0,
                               used: node!.disk?.used || 0,
                               free: (node!.disk?.total || 0) - (node!.disk?.used || 0),
-                              usage: node!.disk?.total ? (node!.disk.used / node!.disk.total) : 0
+                              usage: node!.disk?.total ? node!.disk.used / node!.disk.total : 0,
                             }}
                           />
                         </Show>
@@ -669,7 +841,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                               online &&
                               isPVEItem &&
                               cpuTemperatureValue !== null &&
-                              (node!.temperature?.hasCPU ?? node!.temperature?.hasGPU ?? node!.temperature?.available) &&
+                              (node!.temperature?.hasCPU ??
+                                node!.temperature?.hasGPU ??
+                                node!.temperature?.available) &&
                               isTemperatureMonitoringEnabled(node!)
                             }
                             fallback={<span class="text-xs text-muted">-</span>}
@@ -678,7 +852,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                               const value = cpuTemperatureValue as number;
                               const temp = node!.temperature;
                               const cpuMinValue =
-                                typeof temp?.cpuMin === 'number' && temp.cpuMin > 0 ? temp.cpuMin : null;
+                                typeof temp?.cpuMin === 'number' && temp.cpuMin > 0
+                                  ? temp.cpuMin
+                                  : null;
                               const cpuMaxValue =
                                 typeof temp?.cpuMaxRecord === 'number' && temp.cpuMaxRecord > 0
                                   ? temp.cpuMaxRecord
@@ -689,11 +865,19 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                               const hasGPU = gpus.length > 0;
 
                               if (hasMinMax || hasGPU) {
-                                const min = typeof cpuMinValue === 'number' ? Math.round(cpuMinValue) : undefined;
-                                const max = typeof cpuMaxValue === 'number' ? Math.round(cpuMaxValue) : undefined;
+                                const min =
+                                  typeof cpuMinValue === 'number'
+                                    ? Math.round(cpuMinValue)
+                                    : undefined;
+                                const max =
+                                  typeof cpuMaxValue === 'number'
+                                    ? Math.round(cpuMaxValue)
+                                    : undefined;
 
                                 return (
-                                  <div title={`Min: ${min !== undefined ? formatTemperature(min) : '-'}, Max: ${max !== undefined ? formatTemperature(max) : '-'}${hasGPU ? `\nGPU: ${gpus.map(g => formatTemperature(g.edge ?? g.junction ?? g.mem)).join(', ')}` : ''}`}>
+                                  <div
+                                    title={`Min: ${min !== undefined ? formatTemperature(min) : '-'}, Max: ${max !== undefined ? formatTemperature(max) : '-'}${hasGPU ? `\nGPU: ${gpus.map((g) => formatTemperature(g.edge ?? g.junction ?? g.mem)).join(', ')}` : ''}`}
+                                  >
                                     <TemperatureGauge
                                       value={value}
                                       min={min}
@@ -723,14 +907,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                       <TableCell class={tdClass}>
                         <div class="flex justify-center">
                           <span class={online ? 'text-xs text-base-content' : 'text-xs text-muted'}>
-                            {online ? getCountValue(item, 'vmCount') ?? '-' : '-'}
+                            {online ? (getCountValue(item, 'vmCount') ?? '-') : '-'}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell class={tdClass}>
                         <div class="flex justify-center">
                           <span class={online ? 'text-xs text-base-content' : 'text-xs text-muted'}>
-                            {online ? getCountValue(item, 'containerCount') ?? '-' : '-'}
+                            {online ? (getCountValue(item, 'containerCount') ?? '-') : '-'}
                           </span>
                         </div>
                       </TableCell>
@@ -741,14 +925,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                       <TableCell class={tdClass}>
                         <div class="flex justify-center">
                           <span class={online ? 'text-xs text-base-content' : 'text-xs text-muted'}>
-                            {online ? getCountValue(item, 'storageCount') ?? '-' : '-'}
+                            {online ? (getCountValue(item, 'storageCount') ?? '-') : '-'}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell class={tdClass}>
                         <div class="flex justify-center">
                           <span class={online ? 'text-xs text-base-content' : 'text-xs text-muted'}>
-                            {online ? getCountValue(item, 'diskCount') ?? '-' : '-'}
+                            {online ? (getCountValue(item, 'diskCount') ?? '-') : '-'}
                           </span>
                         </div>
                       </TableCell>
@@ -759,7 +943,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                       <TableCell class={tdClass}>
                         <div class="flex justify-center">
                           <span class={online ? 'text-xs text-base-content' : 'text-xs text-muted'}>
-                            {online ? getCountValue(item, 'backupCount') ?? '-' : '-'}
+                            {online ? (getCountValue(item, 'backupCount') ?? '-') : '-'}
                           </span>
                         </div>
                       </TableCell>
@@ -767,11 +951,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
                     {/* Link Column (Moved to end) */}
                     <TableCell class="px-0 py-1 align-middle text-center">
-                      <Show when={
-                        isPVEItem
-                          ? (node!.guestURL || node!.host)
-                          : (pbs!.guestURL || pbs!.host)
-                      }>
+                      <Show
+                        when={isPVEItem ? node!.guestURL || node!.host : pbs!.guestURL || pbs!.host}
+                      >
                         <a
                           href={
                             isPVEItem
@@ -784,8 +966,18 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                           class="inline-flex justify-center items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
                           title={`Open ${displayName()} web interface`}
                         >
-                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          <svg
+                            class="w-3.5 h-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                            />
                           </svg>
                         </a>
                       </Show>
@@ -793,8 +985,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                   </TableRow>
                   <Show when={isExpanded() && isPVEItem}>
                     <TableRow>
-                      <TableCell colspan={totalColumnCount()} class="bg-surface-alt px-4 py-4 border-b border-border-subtle shadow-inner">
-                        <Suspense fallback={<div class="flex justify-center p-4">Loading stats...</div>}>
+                      <TableCell
+                        colspan={totalColumnCount()}
+                        class="bg-surface-alt px-4 py-4 border-b border-border-subtle shadow-inner"
+                      >
+                        <Suspense
+                          fallback={<div class="flex justify-center p-4">Loading stats...</div>}
+                        >
                           <NodeDrawer node={node!} host={linkedHostForDrawer()} />
                         </Suspense>
                       </TableCell>

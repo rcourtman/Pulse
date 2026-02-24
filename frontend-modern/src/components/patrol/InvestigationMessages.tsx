@@ -27,7 +27,7 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
       } catch {
         return [];
       }
-    }
+    },
   );
 
   return (
@@ -51,13 +51,15 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
 
               return (
                 <div class={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div class={`max-w-[85%] rounded-md px-3 py-2 ${
-                    msg.role === 'user'
-                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100'
-                      : msg.role === 'system'
-                      ? 'bg-surface-alt text-muted text-xs'
-                      : 'bg-surface text-base-content'
-                  }`}>
+                  <div
+                    class={`max-w-[85%] rounded-md px-3 py-2 ${
+                      msg.role === 'user'
+                        ? 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100'
+                        : msg.role === 'system'
+                          ? 'bg-surface-alt text-muted text-xs'
+                          : 'bg-surface text-base-content'
+                    }`}
+                  >
                     {/* Reasoning content (extended thinking) */}
                     <Show when={msg.reasoning_content}>
                       <details class="mb-1">
@@ -81,7 +83,9 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                         <For each={msg.tool_calls}>
                           {(tc) => (
                             <div class="text-xs rounded border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900 px-2 py-1">
-                              <span class="font-semibold text-indigo-700 dark:text-indigo-300">{tc.name}</span>
+                              <span class="font-semibold text-indigo-700 dark:text-indigo-300">
+                                {tc.name}
+                              </span>
                               <Show when={tc.input && Object.keys(tc.input).length > 0}>
                                 <pre class="mt-1 text-[10px] text-muted overflow-x-auto max-h-24 overflow-y-auto">
                                   {JSON.stringify(tc.input, null, 2)}
@@ -95,16 +99,20 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
 
                     {/* Tool result (tool output returned to assistant) */}
                     <Show when={msg.tool_result}>
-                      <div class={`text-xs rounded border px-2 py-1 ${
-                        msg.tool_result!.is_error
-                          ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900'
-                          : 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900'
-                      }`}>
-                        <span class={`font-semibold text-[10px] ${
+                      <div
+                        class={`text-xs rounded border px-2 py-1 ${
                           msg.tool_result!.is_error
-                            ? 'text-red-700 dark:text-red-300'
-                            : 'text-green-700 dark:text-green-300'
-                        }`}>
+                            ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900'
+                            : 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900'
+                        }`}
+                      >
+                        <span
+                          class={`font-semibold text-[10px] ${
+                            msg.tool_result!.is_error
+                              ? 'text-red-700 dark:text-red-300'
+                              : 'text-green-700 dark:text-green-300'
+                          }`}
+                        >
                           {msg.tool_result!.is_error ? 'Error' : 'Result'}
                         </span>
                         <pre class="mt-1 text-[10px] text-muted overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap break-words">
@@ -113,9 +121,7 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                       </div>
                     </Show>
 
-                    <div class="text-[10px] text-muted mt-1">
-                      {formatTimestamp(msg.timestamp)}
-                    </div>
+                    <div class="text-[10px] text-muted mt-1">{formatTimestamp(msg.timestamp)}</div>
                   </div>
                 </div>
               );

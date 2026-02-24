@@ -116,9 +116,9 @@ const getSortValue = (resource: Resource, key: string): number | string | null =
     case 'disk':
       return resource.disk ? getDiskPercent(resource) : null;
     case 'network':
-      return resource.network ? (resource.network.rxBytes + resource.network.txBytes) : null;
+      return resource.network ? resource.network.rxBytes + resource.network.txBytes : null;
     case 'diskio':
-      return resource.diskIO ? (resource.diskIO.readRate + resource.diskIO.writeRate) : null;
+      return resource.diskIO ? resource.diskIO.readRate + resource.diskIO.writeRate : null;
     case 'source':
       return `${resource.platformType ?? ''}-${resource.sourceType ?? ''}`;
     case 'temp':
@@ -136,8 +136,10 @@ const defaultComparison = (a: Resource, b: Resource) => {
 };
 
 const compareValues = (valueA: number | string | null, valueB: number | string | null) => {
-  const aEmpty = valueA === null || valueA === undefined || (typeof valueA === 'number' && Number.isNaN(valueA));
-  const bEmpty = valueB === null || valueB === undefined || (typeof valueB === 'number' && Number.isNaN(valueB));
+  const aEmpty =
+    valueA === null || valueA === undefined || (typeof valueA === 'number' && Number.isNaN(valueA));
+  const bEmpty =
+    valueB === null || valueB === undefined || (typeof valueB === 'number' && Number.isNaN(valueB));
 
   if (aEmpty && bEmpty) return 0;
   if (aEmpty) return 1;
@@ -205,7 +207,9 @@ export const collectAvailableStatuses = (resources: Resource[]): Set<string> => 
   return set;
 };
 
-export const buildStatusOptions = (statuses: Set<string>): Array<{ key: string; label: string }> => {
+export const buildStatusOptions = (
+  statuses: Set<string>,
+): Array<{ key: string; label: string }> => {
   const items = Array.from(statuses);
   items.sort((a, b) => {
     const indexA = statusOrder.indexOf(a);
@@ -302,7 +306,10 @@ export const groupResources = (
     }
   }
 
-  const entries = Array.from(groups.entries()).map(([cluster, resources]) => ({ cluster, resources }));
+  const entries = Array.from(groups.entries()).map(([cluster, resources]) => ({
+    cluster,
+    resources,
+  }));
   entries.sort((a, b) => {
     if (!a.cluster && b.cluster) return 1;
     if (a.cluster && !b.cluster) return -1;
@@ -359,8 +366,10 @@ export const getOutlierEmphasis = (value: number, stats: IODistributionStats): O
     return { fontWeight: 'normal', color: 'text-muted', showOutlierHint: false };
   }
 
-  if (value >= stats.p99) return { fontWeight: '600', color: 'text-base-content', showOutlierHint: true };
-  if (value >= stats.p97) return { fontWeight: '500', color: 'text-base-content', showOutlierHint: true };
+  if (value >= stats.p99)
+    return { fontWeight: '600', color: 'text-base-content', showOutlierHint: true };
+  if (value >= stats.p97)
+    return { fontWeight: '500', color: 'text-base-content', showOutlierHint: true };
   if (value > 0) return { fontWeight: 'normal', color: 'text-muted', showOutlierHint: false };
   return { fontWeight: 'normal', color: 'text-muted', showOutlierHint: false };
 };

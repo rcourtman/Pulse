@@ -30,7 +30,7 @@ const advanceAndFlush = async (ms: number) => {
   await flushAsync();
 };
 
-const deferred = <T,>() => {
+const deferred = <T>() => {
   let resolve!: (value: T | PromiseLike<T>) => void;
   let reject!: (reason?: unknown) => void;
   const promise = new Promise<T>((res, rej) => {
@@ -70,10 +70,8 @@ describe('useWorkloads', () => {
       getOrgID: () => 'default',
     }));
 
-    ({
-      useWorkloads,
-      __resetWorkloadsCacheForTests: resetWorkloadsCacheForTests,
-    } = await import('@/hooks/useWorkloads'));
+    ({ useWorkloads, __resetWorkloadsCacheForTests: resetWorkloadsCacheForTests } =
+      await import('@/hooks/useWorkloads'));
     ({ eventBus } = await import('@/stores/events'));
 
     resetWorkloadsCacheForTests();

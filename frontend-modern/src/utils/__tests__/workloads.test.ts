@@ -122,12 +122,26 @@ describe('getCanonicalWorkloadId', () => {
   });
 
   it('returns id for docker (no instance/node/vmid)', () => {
-    const guest = { id: 'docker-123', type: 'docker', workloadType: 'docker' as const, instance: '', node: '', vmid: 0 };
+    const guest = {
+      id: 'docker-123',
+      type: 'docker',
+      workloadType: 'docker' as const,
+      instance: '',
+      node: '',
+      vmid: 0,
+    };
     expect(getCanonicalWorkloadId(guest)).toBe('docker-123');
   });
 
   it('returns id for k8s (no instance/node/vmid)', () => {
-    const guest = { id: 'pod-456', type: 'pod', workloadType: 'k8s' as const, instance: '', node: '', vmid: 0 };
+    const guest = {
+      id: 'pod-456',
+      type: 'pod',
+      workloadType: 'k8s' as const,
+      instance: '',
+      node: '',
+      vmid: 0,
+    };
     expect(getCanonicalWorkloadId(guest)).toBe('pod-456');
   });
 

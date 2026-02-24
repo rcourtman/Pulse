@@ -142,12 +142,10 @@ describe('infrastructureSelectors', () => {
     });
 
     it('applies combined filters and requires all terms to match', () => {
-      const result = filterResources(
-        resources,
-        new Set(['kubernetes']),
-        new Set(['degraded']),
-        ['gamma', 'db'],
-      );
+      const result = filterResources(resources, new Set(['kubernetes']), new Set(['degraded']), [
+        'gamma',
+        'db',
+      ]);
       expect(result.map((resource) => resource.id)).toEqual(['resource-3']);
     });
   });
@@ -174,7 +172,11 @@ describe('infrastructureSelectors', () => {
         makeResource(3, { status: 'online', displayName: 'Alpha' }),
       ];
       const sorted = sortResources(resources, 'default', 'asc');
-      expect(sorted.map((resource) => resource.id)).toEqual(['resource-3', 'resource-2', 'resource-1']);
+      expect(sorted.map((resource) => resource.id)).toEqual([
+        'resource-3',
+        'resource-2',
+        'resource-1',
+      ]);
     });
 
     it('sorts by name in ascending order', () => {
@@ -184,7 +186,11 @@ describe('infrastructureSelectors', () => {
         makeResource(3, { displayName: 'Bravo' }),
       ];
       const sorted = sortResources(resources, 'name', 'asc');
-      expect(sorted.map((resource) => resource.id)).toEqual(['resource-2', 'resource-3', 'resource-1']);
+      expect(sorted.map((resource) => resource.id)).toEqual([
+        'resource-2',
+        'resource-3',
+        'resource-1',
+      ]);
     });
 
     it('sorts cpu with direction toggle and keeps default tie-breaker', () => {
@@ -195,10 +201,18 @@ describe('infrastructureSelectors', () => {
       ];
 
       const asc = sortResources(resources, 'cpu', 'asc');
-      expect(asc.map((resource) => resource.id)).toEqual(['resource-3', 'resource-2', 'resource-1']);
+      expect(asc.map((resource) => resource.id)).toEqual([
+        'resource-3',
+        'resource-2',
+        'resource-1',
+      ]);
 
       const desc = sortResources(resources, 'cpu', 'desc');
-      expect(desc.map((resource) => resource.id)).toEqual(['resource-2', 'resource-1', 'resource-3']);
+      expect(desc.map((resource) => resource.id)).toEqual([
+        'resource-2',
+        'resource-1',
+        'resource-3',
+      ]);
     });
   });
 
@@ -228,10 +242,19 @@ describe('infrastructureSelectors', () => {
   describe('computeIOScale', () => {
     it('computes expected stats for network and disk io', () => {
       const resources = [
-        makeResource(1, { network: { rxBytes: 1, txBytes: 1 }, diskIO: { readRate: 1, writeRate: 1 } }),
-        makeResource(2, { network: { rxBytes: 3, txBytes: 1 }, diskIO: { readRate: 2, writeRate: 2 } }),
+        makeResource(1, {
+          network: { rxBytes: 1, txBytes: 1 },
+          diskIO: { readRate: 1, writeRate: 1 },
+        }),
+        makeResource(2, {
+          network: { rxBytes: 3, txBytes: 1 },
+          diskIO: { readRate: 2, writeRate: 2 },
+        }),
         makeResource(3, {}),
-        makeResource(4, { network: { rxBytes: 10, txBytes: 0 }, diskIO: { readRate: 8, writeRate: 0 } }),
+        makeResource(4, {
+          network: { rxBytes: 10, txBytes: 0 },
+          diskIO: { readRate: 8, writeRate: 0 },
+        }),
       ];
 
       expect(computeIOScale(resources)).toEqual({

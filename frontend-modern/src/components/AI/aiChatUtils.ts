@@ -18,14 +18,26 @@ export function getProviderFromModelId(modelId: string): string {
   if (colonIndex > 0) {
     return modelId.substring(0, colonIndex);
   }
-  if (/^(openai|anthropic|google|deepseek|meta-llama|mistralai|x-ai|xai|cohere|qwen)\//.test(modelId)) {
+  if (
+    /^(openai|anthropic|google|deepseek|meta-llama|mistralai|x-ai|xai|cohere|qwen)\//.test(modelId)
+  ) {
     return 'openrouter';
   }
   // Default detection for models without prefix
-  if (modelId.includes('claude') || modelId.includes('opus') || modelId.includes('sonnet') || modelId.includes('haiku')) {
+  if (
+    modelId.includes('claude') ||
+    modelId.includes('opus') ||
+    modelId.includes('sonnet') ||
+    modelId.includes('haiku')
+  ) {
     return 'anthropic';
   }
-  if (modelId.includes('gpt') || modelId.includes('o1') || modelId.includes('o3') || modelId.includes('o4')) {
+  if (
+    modelId.includes('gpt') ||
+    modelId.includes('o1') ||
+    modelId.includes('o3') ||
+    modelId.includes('o4')
+  ) {
     return 'openai';
   }
   if (modelId.includes('deepseek')) {
@@ -95,9 +107,37 @@ export const renderMarkdown = (content: unknown): string => {
     // Sanitize to prevent XSS from malicious LLM output or injected content
     return DOMPurify.sanitize(rawHtml, {
       // Allow common formatting tags but block scripts, iframes, etc.
-      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'b', 'i', 'u', 'code', 'pre', 'blockquote',
-        'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'hr', 'table',
-        'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
+      ALLOWED_TAGS: [
+        'p',
+        'br',
+        'strong',
+        'em',
+        'b',
+        'i',
+        'u',
+        'code',
+        'pre',
+        'blockquote',
+        'ul',
+        'ol',
+        'li',
+        'h1',
+        'h2',
+        'h3',
+        'h4',
+        'h5',
+        'h6',
+        'a',
+        'hr',
+        'table',
+        'thead',
+        'tbody',
+        'tr',
+        'th',
+        'td',
+        'span',
+        'div',
+      ],
       ALLOWED_ATTR: ['href', 'target', 'rel', 'class'],
       // Force all links to open in new tab and prevent opener attacks
       ADD_ATTR: ['target', 'rel'],
@@ -105,7 +145,13 @@ export const renderMarkdown = (content: unknown): string => {
   } catch {
     // If parsing fails, escape HTML entities as fallback
     return normalized.replace(/[&<>"']/g, (char) => {
-      const entities: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+      const entities: Record<string, string> = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      };
       return entities[char];
     });
   }
@@ -120,21 +166,15 @@ export const sanitizeThinking = (content: string): string => {
   // don't partially sanitize the error and prevent the higher-level pattern from matching.
   let sanitized = content.replace(
     /failed to send command: write tcp [\d.:->\s]+/g,
-    'failed to send command: connection error'
+    'failed to send command: connection error',
   );
 
   sanitized = sanitized.replace(
     /write tcp [\d.:]+->[\d.:]+: i\/o timeout/g,
-    'connection timed out'
+    'connection timed out',
   );
-  sanitized = sanitized.replace(
-    /read tcp [\d.:]+: i\/o timeout/g,
-    'connection timed out'
-  );
-  sanitized = sanitized.replace(
-    /dial tcp [\d.:]+: connection refused/g,
-    'connection refused'
-  );
+  sanitized = sanitized.replace(/read tcp [\d.:]+: i\/o timeout/g, 'connection timed out');
+  sanitized = sanitized.replace(/dial tcp [\d.:]+: connection refused/g, 'connection refused');
   return sanitized;
 };
 

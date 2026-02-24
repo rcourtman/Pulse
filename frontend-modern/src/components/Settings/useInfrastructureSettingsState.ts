@@ -182,9 +182,16 @@ export function useInfrastructureSettingsState({
         const stateNode = matchStateNode(node, nodeResources);
 
         const tempValue = stateNode?.temperature;
-        const temperature: Temperature | undefined = typeof tempValue === 'number' && tempValue > 0
-          ? { cpuPackage: tempValue, cpuMax: tempValue, available: true, hasCPU: true, lastUpdate: new Date(stateNode!.lastSeen).toISOString() }
-          : node.temperature;
+        const temperature: Temperature | undefined =
+          typeof tempValue === 'number' && tempValue > 0
+            ? {
+                cpuPackage: tempValue,
+                cpuMax: tempValue,
+                available: true,
+                hasCPU: true,
+                lastUpdate: new Date(stateNode!.lastSeen).toISOString(),
+              }
+            : node.temperature;
         return {
           ...node,
           hasPassword: node.hasPassword ?? !!node.password,
@@ -570,12 +577,12 @@ export function useInfrastructureSettingsState({
     } catch (error) {
       logger.error('Failed to update node temperature monitoring setting', error);
       notificationStore.error(
-        error instanceof Error
-          ? error.message
-          : 'Failed to update temperature monitoring setting',
+        error instanceof Error ? error.message : 'Failed to update temperature monitoring setting',
       );
       setNodes(
-        nodes().map((n) => (n.id === nodeId ? { ...n, temperatureMonitoringEnabled: previous } : n)),
+        nodes().map((n) =>
+          n.id === nodeId ? { ...n, temperatureMonitoringEnabled: previous } : n,
+        ),
       );
       if (editingNode()?.id === nodeId) {
         setEditingNode({ ...editingNode()!, temperatureMonitoringEnabled: previous });
@@ -703,7 +710,9 @@ export function useInfrastructureSettingsState({
       if (result.status === 'success') {
         if (result.warnings && Array.isArray(result.warnings) && result.warnings.length > 0) {
           const warningMessage =
-            result.message + '\n\nWarnings:\n' + result.warnings.map((w: string) => '• ' + w).join('\n');
+            result.message +
+            '\n\nWarnings:\n' +
+            result.warnings.map((w: string) => '• ' + w).join('\n');
           notificationStore.warning(warningMessage);
         } else {
           notificationStore.success(result.message || 'Connection successful');
@@ -722,7 +731,9 @@ export function useInfrastructureSettingsState({
       const result = await NodesAPI.refreshClusterNodes(nodeId);
       if (result.status === 'success') {
         if (result.nodesAdded && result.nodesAdded > 0) {
-          notificationStore.success(`Found ${result.nodesAdded} new node(s) in cluster "${result.clusterName}"`);
+          notificationStore.success(
+            `Found ${result.nodesAdded} new node(s) in cluster "${result.clusterName}"`,
+          );
         } else {
           notificationStore.success(
             `Cluster "${result.clusterName}" membership verified (${result.newNodeCount} nodes)`,
@@ -909,7 +920,13 @@ export function useInfrastructureSettingsState({
             const stateNode = matchStateNode(node, nodeResources);
             const tempValue = stateNode?.temperature;
             if (typeof tempValue === 'number' && tempValue > 0) {
-              const temp: Temperature = { cpuPackage: tempValue, cpuMax: tempValue, available: true, hasCPU: true, lastUpdate: new Date(stateNode!.lastSeen).toISOString() };
+              const temp: Temperature = {
+                cpuPackage: tempValue,
+                cpuMax: tempValue,
+                available: true,
+                hasCPU: true,
+                lastUpdate: new Date(stateNode!.lastSeen).toISOString(),
+              };
               return { ...node, temperature: temp };
             }
             return node;

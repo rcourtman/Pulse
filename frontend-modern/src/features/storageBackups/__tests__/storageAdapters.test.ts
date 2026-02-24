@@ -169,7 +169,9 @@ describe('storageAdapters', () => {
     expect(records[0].health).toBe('healthy');
     expect(records[0].capacity.usedBytes).toBe(400);
     expect(records[0].details?.shared).toBe(false);
-    expect(records[0].capabilities.filter((capability) => capability === 'compression')).toHaveLength(1);
+    expect(
+      records[0].capabilities.filter((capability) => capability === 'compression'),
+    ).toHaveLength(1);
   });
 
   it('keeps records separate when canonical identities differ', () => {
@@ -199,7 +201,9 @@ describe('storageAdapters', () => {
     const records = buildStorageRecords({ state: baseState(), resources });
 
     expect(records).toHaveLength(2);
-    expect(new Set(records.map((record) => record.name))).toEqual(new Set(['local-zfs', 'local-zfs-2']));
+    expect(new Set(records.map((record) => record.name))).toEqual(
+      new Set(['local-zfs', 'local-zfs-2']),
+    );
   });
 
   it('maps a TrueNAS pool to StorageRecord with zfs metadata and healthy health', () => {

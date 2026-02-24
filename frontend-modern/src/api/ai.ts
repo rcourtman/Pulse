@@ -9,10 +9,7 @@ import type {
   AIStreamEvent,
   AICostSummary,
 } from '@/types/ai';
-import type {
-  AnomaliesResponse,
-  LearningStatusResponse,
-} from '@/types/aiIntelligence';
+import type { AnomaliesResponse, LearningStatusResponse } from '@/types/aiIntelligence';
 
 export class AIAPI {
   private static baseUrl = '/api';
@@ -41,21 +38,31 @@ export class AIAPI {
   }
 
   // Test a specific provider connection
-  static async testProvider(provider: string): Promise<{ success: boolean; message: string; provider: string }> {
+  static async testProvider(
+    provider: string,
+  ): Promise<{ success: boolean; message: string; provider: string }> {
     return apiFetchJSON(`${this.baseUrl}/ai/test/${this.encodeSegment(provider)}`, {
       method: 'POST',
     }) as Promise<{ success: boolean; message: string; provider: string }>;
   }
 
   // Get available models from the AI provider
-  static async getModels(): Promise<{ models: { id: string; name: string; description?: string; notable?: boolean }[]; error?: string }> {
-    return apiFetchJSON(`${this.baseUrl}/ai/models`) as Promise<{ models: { id: string; name: string; description?: string; notable?: boolean }[]; error?: string }>;
+  static async getModels(): Promise<{
+    models: { id: string; name: string; description?: string; notable?: boolean }[];
+    error?: string;
+  }> {
+    return apiFetchJSON(`${this.baseUrl}/ai/models`) as Promise<{
+      models: { id: string; name: string; description?: string; notable?: boolean }[];
+      error?: string;
+    }>;
   }
 
   // Get AI cost/usage summary
   static async getCostSummary(days = 30): Promise<AICostSummary> {
     const search = new URLSearchParams({ days: String(days) });
-    return apiFetchJSON(`${this.baseUrl}/ai/cost/summary?${search.toString()}`) as Promise<AICostSummary>;
+    return apiFetchJSON(
+      `${this.baseUrl}/ai/cost/summary?${search.toString()}`,
+    ) as Promise<AICostSummary>;
   }
 
   // Reset AI usage history (admin-only)
@@ -89,20 +96,26 @@ export class AIAPI {
     if (options?.source) params.set('source', options.source);
     if (options?.includeResolved) params.set('include_resolved', '1');
     const query = params.toString();
-    return apiFetchJSON(`${this.baseUrl}/ai/unified/findings${query ? `?${query}` : ''}`) as Promise<UnifiedFindingsResponse>;
+    return apiFetchJSON(
+      `${this.baseUrl}/ai/unified/findings${query ? `?${query}` : ''}`,
+    ) as Promise<UnifiedFindingsResponse>;
   }
 
   // Get current anomalies (real-time baseline deviation detection)
   // Returns metrics that are currently deviating significantly from learned baselines
   static async getAnomalies(resourceId?: string): Promise<AnomaliesResponse> {
     const params = resourceId ? `?resource_id=${encodeURIComponent(resourceId)}` : '';
-    return apiFetchJSON(`${this.baseUrl}/ai/intelligence/anomalies${params}`) as Promise<AnomaliesResponse>;
+    return apiFetchJSON(
+      `${this.baseUrl}/ai/intelligence/anomalies${params}`,
+    ) as Promise<AnomaliesResponse>;
   }
 
   // Get learning/baseline status (FREE - no license required)
   // Shows how many resources have been baselined and the overall learning state
   static async getLearningStatus(): Promise<LearningStatusResponse> {
-    return apiFetchJSON(`${this.baseUrl}/ai/intelligence/learning`) as Promise<LearningStatusResponse>;
+    return apiFetchJSON(
+      `${this.baseUrl}/ai/intelligence/learning`,
+    ) as Promise<LearningStatusResponse>;
   }
 
   // Analyze a Kubernetes cluster with AI
@@ -139,7 +152,6 @@ export class AIAPI {
     }) as Promise<{ output: string; success: boolean; error?: string }>;
   }
 
-
   // Investigate an alert with AI (one-click investigation)
   static async investigateAlert(
     request: {
@@ -157,7 +169,7 @@ export class AIAPI {
       vmid?: number;
     },
     onEvent: (event: AIStreamEvent) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<void> {
     logger.debug('[AI] Starting alert investigation', request);
 
@@ -172,7 +184,9 @@ export class AIAPI {
     });
 
     if (!response.ok) {
-      throw new Error(await readAPIErrorMessage(response, `Request failed with status ${response.status}`));
+      throw new Error(
+        await readAPIErrorMessage(response, `Request failed with status ${response.status}`),
+      );
     }
 
     const reader = response.body?.getReader();
@@ -202,7 +216,7 @@ export class AIAPI {
     };
 
     try {
-      for (; ;) {
+      for (;;) {
         if (Date.now() - lastEventTime > STREAM_TIMEOUT_MS) {
           logger.warn('[AI] Alert investigation stream timeout');
           break;
@@ -249,7 +263,10 @@ export class AIAPI {
 
   // Remediation plans
   static async getRemediationPlans(): Promise<RemediationPlansResponse> {
-    const data = await apiFetchJSON(`${this.baseUrl}/ai/remediation/plans`) as { plans?: RemediationPlan[]; executions?: unknown[] };
+    const data = (await apiFetchJSON(`${this.baseUrl}/ai/remediation/plans`)) as {
+      plans?: RemediationPlan[];
+      executions?: unknown[];
+    };
     if (Array.isArray(data?.plans)) {
       return { plans: data.plans };
     }
@@ -261,10 +278,14 @@ export class AIAPI {
 
   static async getRemediationPlan(planId: string): Promise<RemediationPlan> {
     const search = new URLSearchParams({ plan_id: planId });
-    return apiFetchJSON(`${this.baseUrl}/ai/remediation/plan?${search.toString()}`) as Promise<RemediationPlan>;
+    return apiFetchJSON(
+      `${this.baseUrl}/ai/remediation/plan?${search.toString()}`,
+    ) as Promise<RemediationPlan>;
   }
 
-  static async approveRemediationPlan(planId: string): Promise<{ success: boolean; execution?: { id: string } }> {
+  static async approveRemediationPlan(
+    planId: string,
+  ): Promise<{ success: boolean; execution?: { id: string } }> {
     return apiFetchJSON(`${this.baseUrl}/ai/remediation/approve`, {
       method: 'POST',
       body: JSON.stringify({ plan_id: planId }),
@@ -296,7 +317,9 @@ export class AIAPI {
 
   // Get pending approval requests (investigation fixes waiting for user approval)
   static async getPendingApprovals(): Promise<ApprovalRequest[]> {
-    const response = await apiFetchJSON(`${this.baseUrl}/ai/approvals`) as { approvals: ApprovalRequest[] };
+    const response = (await apiFetchJSON(`${this.baseUrl}/ai/approvals`)) as {
+      approvals: ApprovalRequest[];
+    };
     return response.approvals || [];
   }
 
@@ -318,14 +341,18 @@ export class AIAPI {
   // Get investigation details for a finding (includes proposed fix)
   static async getInvestigation(findingId: string): Promise<InvestigationSession | null> {
     try {
-      return await apiFetchJSON(`${this.baseUrl}/ai/findings/${this.encodeSegment(findingId)}/investigation`) as InvestigationSession;
+      return (await apiFetchJSON(
+        `${this.baseUrl}/ai/findings/${this.encodeSegment(findingId)}/investigation`,
+      )) as InvestigationSession;
     } catch {
       return null;
     }
   }
 
   // Re-create an approval for an investigation fix (when original approval expired)
-  static async reapproveInvestigationFix(findingId: string): Promise<{ approval_id: string; message: string }> {
+  static async reapproveInvestigationFix(
+    findingId: string,
+  ): Promise<{ approval_id: string; message: string }> {
     return apiFetchJSON(`${this.baseUrl}/ai/findings/${this.encodeSegment(findingId)}/reapprove`, {
       method: 'POST',
     }) as Promise<{ approval_id: string; message: string }>;
@@ -475,7 +502,7 @@ export type RiskLevel = 'low' | 'medium' | 'high';
 export interface ApprovalRequest {
   id: string;
   executionId?: string;
-  toolId: string;  // "investigation_fix" for patrol findings
+  toolId: string; // "investigation_fix" for patrol findings
   command: string;
   targetType: string;
   targetId: string;
@@ -505,7 +532,12 @@ export interface ApprovalExecutionResult {
 // Investigation Session Types
 // ============================================
 
-export type InvestigationStatus = 'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
+export type InvestigationStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'needs_attention';
 export type InvestigationOutcome =
   | 'resolved'
   | 'fix_queued'

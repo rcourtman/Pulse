@@ -2,7 +2,13 @@ import { Show, For, createMemo, createSignal, onMount, onCleanup } from 'solid-j
 import { useTooltip } from '@/hooks/useTooltip';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import type { Disk } from '@/types/api';
-import { formatBytes, formatPercent, estimateTextWidth, formatAnomalyRatio, ANOMALY_SEVERITY_CLASS } from '@/utils/format';
+import {
+  formatBytes,
+  formatPercent,
+  estimateTextWidth,
+  formatAnomalyRatio,
+  ANOMALY_SEVERITY_CLASS,
+} from '@/utils/format';
 import { getMetricColorRgba } from '@/utils/metricThresholds';
 import type { AnomalyReport } from '@/types/aiIntelligence';
 
@@ -17,18 +23,15 @@ interface StackedDiskBarProps {
   anomaly?: AnomalyReport | null;
 }
 
-
 // Color palette for disk segments - distinct colors for visual differentiation
 const SEGMENT_COLORS = [
-  'rgba(34, 197, 94, 0.6)',   // green
-  'rgba(59, 130, 246, 0.6)',  // blue
-  'rgba(168, 85, 247, 0.6)',  // purple
-  'rgba(249, 115, 22, 0.6)',  // orange
-  'rgba(236, 72, 153, 0.6)',  // pink
-  'rgba(20, 184, 166, 0.6)',  // teal
+  'rgba(34, 197, 94, 0.6)', // green
+  'rgba(59, 130, 246, 0.6)', // blue
+  'rgba(168, 85, 247, 0.6)', // purple
+  'rgba(249, 115, 22, 0.6)', // orange
+  'rgba(236, 72, 153, 0.6)', // pink
+  'rgba(20, 184, 166, 0.6)', // teal
 ];
-
-
 
 export function StackedDiskBar(props: StackedDiskBarProps) {
   const tip = useTooltip();
@@ -59,7 +62,9 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
 
   const aggregateMode = createMemo(() => props.mode === 'aggregate');
   const miniMode = createMemo(() => props.mode === 'mini');
-  const useStackedSegments = createMemo(() => hasMultipleDisks() && !aggregateMode() && !miniMode());
+  const useStackedSegments = createMemo(
+    () => hasMultipleDisks() && !aggregateMode() && !miniMode(),
+  );
 
   // Calculate total capacity across all disks
   const totalCapacity = createMemo(() => {
@@ -95,9 +100,12 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
       const usedPercent = (disk.used / total) * 100;
       const diskPercent = disk.total > 0 ? (disk.used / disk.total) * 100 : 0;
       // Use warning/critical colors for high usage, otherwise use the color palette
-      const color = diskPercent >= 90 ? getMetricColorRgba(90, 'disk') :
-        diskPercent >= 80 ? getMetricColorRgba(80, 'disk') :
-          SEGMENT_COLORS[idx % SEGMENT_COLORS.length];
+      const color =
+        diskPercent >= 90
+          ? getMetricColorRgba(90, 'disk')
+          : diskPercent >= 80
+            ? getMetricColorRgba(80, 'disk')
+            : SEGMENT_COLORS[idx % SEGMENT_COLORS.length];
       return {
         disk,
         widthPercent: Math.min(usedPercent, 100),
@@ -187,13 +195,15 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
     // Fallback for aggregate disk
     if (props.aggregateDisk && props.aggregateDisk.total > 0) {
       const percent = (props.aggregateDisk.used / props.aggregateDisk.total) * 100;
-      return [{
-        label: 'Total',
-        used: formatBytes(props.aggregateDisk.used),
-        total: formatBytes(props.aggregateDisk.total),
-        percent: formatPercent(percent),
-        color: getMetricColorRgba(percent, 'disk'),
-      }];
+      return [
+        {
+          label: 'Total',
+          used: formatBytes(props.aggregateDisk.used),
+          total: formatBytes(props.aggregateDisk.total),
+          percent: formatPercent(percent),
+          color: getMetricColorRgba(percent, 'disk'),
+        },
+      ];
     }
     return [];
   });
@@ -253,7 +263,10 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                       style={{
                         width: `${segment.widthPercent}%`,
                         'background-color': segment.color,
-                        'border-right': idx() < segments().length - 1 ? '1px solid rgba(255,255,255,0.3)' : 'none',
+                        'border-right':
+                          idx() < segments().length - 1
+                            ? '1px solid rgba(255,255,255,0.3)'
+                            : 'none',
                       }}
                     />
                   )}
@@ -268,31 +281,25 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                 style={{
                   width: `${barPercent()}%`,
                   'background-color': barColor(),
- }}
- />
- </Show>
+                }}
+              />
+            </Show>
 
- {/* Label overlay */}
- <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none min-w-0 overflow-hidden">
- <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
- <span>{displayLabel()}</span>
- <Show when={showMaxLabel()}>
- <span
- class="text-[8px] font-normal text-muted"
- title={maxLabelFull()}
- >
- {' '}{maxLabelShort()}
+            {/* Label overlay */}
+            <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none min-w-0 overflow-hidden">
+              <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
+                <span>{displayLabel()}</span>
+                <Show when={showMaxLabel()}>
+                  <span class="text-[8px] font-normal text-muted" title={maxLabelFull()}>
+                    {' '}
+                    {maxLabelShort()}
                   </span>
                 </Show>
                 <Show when={showSublabel()}>
-                  <span class="metric-sublabel font-normal text-muted">
-                    {' '}({displaySublabel()})
-                  </span>
+                  <span class="metric-sublabel font-normal text-muted"> ({displaySublabel()})</span>
                 </Show>
                 <Show when={useStackedSegments()}>
-                  <span class="text-[8px] font-normal text-muted">
-                    {' '}[{props.disks?.length}]
-                  </span>
+                  <span class="text-[8px] font-normal text-muted"> [{props.disks?.length}]</span>
                 </Show>
                 {/* Anomaly indicator */}
                 <Show when={props.anomaly && anomalyRatio()}>
@@ -338,19 +345,23 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
       </Show>
 
       {/* Tooltip for disk breakdown */}
-      <TooltipPortal when={tip.show() && tooltipContent().length > 0} x={tip.pos().x} y={tip.pos().y}>
+      <TooltipPortal
+        when={tip.show() && tooltipContent().length > 0}
+        x={tip.pos().x}
+        y={tip.pos().y}
+      >
         <div class="min-w-[140px]">
           <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
             {hasMultipleDisks() ? 'Disk Breakdown' : 'Disk Usage'}
           </div>
           <For each={tooltipContent()}>
             {(item, idx) => (
-              <div class="flex flex-col gap-1 py-0.5" classList={{ 'border-t border-border': idx() > 0 }}>
+              <div
+                class="flex flex-col gap-1 py-0.5"
+                classList={{ 'border-t border-border': idx() > 0 }}
+              >
                 <div class="flex justify-between gap-3">
-                  <span
-                    class="truncate max-w-[100px]"
-                    style={{ color: item.color }}
-                  >
+                  <span class="truncate max-w-[100px]" style={{ color: item.color }}>
                     {item.label}
                   </span>
                   <span class="whitespace-nowrap text-slate-300">

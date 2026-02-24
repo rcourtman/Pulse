@@ -96,6 +96,43 @@ func TestResourceRegistry_ListByType_Empty(t *testing.T) {
 	}
 }
 
+func TestResourceRegistry_IngestRecords_UnknownSource(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 2, 20, 12, 0, 0, 0, time.UTC)
+
+	customSource := DataSource("xcp")
+	rr.IngestRecords(customSource, []IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: Resource{
+				Type:     ResourceTypeHost,
+				Name:     "xcp-host-1",
+				Status:   StatusOnline,
+				LastSeen: now,
+			},
+			Identity: ResourceIdentity{Hostnames: []string{"xcp-host-1"}},
+		},
+	})
+
+	hosts := rr.ListByType(ResourceTypeHost)
+	if len(hosts) != 1 {
+		t.Fatalf("expected 1 host for custom source, got %d", len(hosts))
+	}
+	if hosts[0].Name != "xcp-host-1" {
+		t.Fatalf("expected host name xcp-host-1, got %q", hosts[0].Name)
+	}
+	targets := rr.SourceTargets(hosts[0].ID)
+	if len(targets) != 1 {
+		t.Fatalf("expected 1 source target, got %d", len(targets))
+	}
+	if targets[0].Source != customSource {
+		t.Fatalf("expected custom source %q, got %q", customSource, targets[0].Source)
+	}
+	if targets[0].SourceID != "host-1" {
+		t.Fatalf("expected source ID host-1, got %q", targets[0].SourceID)
+	}
+}
+
 func TestResourceRegistry_BuildChildCounts_ReparentClearsOldParentCount(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 2, 12, 1, 0, 0, 0, time.UTC)

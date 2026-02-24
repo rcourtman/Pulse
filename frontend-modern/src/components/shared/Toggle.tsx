@@ -76,8 +76,9 @@ export function TogglePrimitive(props: BaseToggleProps): JSX.Element {
   return (
     <button
       type="button"
-      class={`relative inline-flex ${config.track} shrink-0 items-center rounded-full p-0.5 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] focus:outline-none focus:ring-0 ${isDisabled() ? disabledClass : props.checked ? checkedClass : uncheckedClass
-        } ${props.class ?? ''}`.trim()}
+      class={`relative inline-flex ${config.track} shrink-0 items-center rounded-full p-0.5 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] focus:outline-none focus:ring-0 ${
+        isDisabled() ? disabledClass : props.checked ? checkedClass : uncheckedClass
+      } ${props.class ?? ''}`.trim()}
       onClick={handleClick}
       disabled={props.disabled}
       title={props.title}
@@ -85,9 +86,9 @@ export function TogglePrimitive(props: BaseToggleProps): JSX.Element {
       aria-label={props.ariaLabel}
     >
       <span
-        class={`inline-block ${config.knob} rounded-full transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${knobBase} ${props.checked ? config.translateOn : 'translate-x-0'
-          } ${isDisabled() ? 'opacity-60' : ''
-          }`}
+        class={`inline-block ${config.knob} rounded-full transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${knobBase} ${
+          props.checked ? config.translateOn : 'translate-x-0'
+        } ${isDisabled() ? 'opacity-60' : ''}`}
       />
     </button>
   );
@@ -109,9 +110,7 @@ export function Toggle(props: LabeledToggleProps) {
       {(props.label || props.description) && (
         <span class="flex flex-col text-sm text-base-content">
           {props.label}
-          {props.description && (
-            <span class="text-xs text-muted">{props.description}</span>
-          )}
+          {props.description && <span class="text-xs text-muted">{props.description}</span>}
         </span>
       )}
     </div>

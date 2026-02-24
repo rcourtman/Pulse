@@ -56,7 +56,10 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
 }));
 
 vi.mock('@/components/Infrastructure/UnifiedResourceTable', () => ({
-  UnifiedResourceTable: (props: { resources: Resource[]; onExpandedResourceChange?: (id: string | null) => void }) => (
+  UnifiedResourceTable: (props: {
+    resources: Resource[];
+    onExpandedResourceChange?: (id: string | null) => void;
+  }) => (
     <div data-testid="infra-table">
       {props.resources.map((resource) => resource.name).join(',')}
       <button type="button" onClick={() => props.onExpandedResourceChange?.('pmg-main')}>
@@ -78,7 +81,11 @@ vi.mock('@/components/Infrastructure/InfrastructureSummary', () => ({
 describe('Infrastructure PBS/PMG integration', () => {
   beforeEach(() => {
     // Ensure the desktop filter controls are rendered (some suites resize the viewport).
-    Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 1024 });
+    Object.defineProperty(window, 'innerWidth', {
+      writable: true,
+      configurable: true,
+      value: 1024,
+    });
     window.dispatchEvent(new Event('resize'));
 
     mockLocationSearch = '';

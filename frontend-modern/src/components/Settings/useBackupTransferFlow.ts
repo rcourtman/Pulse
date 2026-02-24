@@ -77,9 +77,7 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
 
     try {
       // Get CSRF token from cookie
-      const csrfCookie = document.cookie
-        .split('; ')
-        .find((row) => row.startsWith('pulse_csrf='));
+      const csrfCookie = document.cookie.split('; ').find((row) => row.startsWith('pulse_csrf='));
       const csrfToken = csrfCookie
         ? decodeURIComponent(csrfCookie.split('=').slice(1).join('='))
         : undefined;

@@ -24,7 +24,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     'class',
     'tone',
     'padding',
-    'noPadding'
+    'noPadding',
   ]);
 
   return (
@@ -39,9 +39,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div class="flex min-w-0 items-center gap-3 flex-1">
             <Show when={local.icon}>
-              <div class="text-base-content dark:text-slate-100">
-                {local.icon}
-              </div>
+              <div class="text-base-content dark:text-slate-100">{local.icon}</div>
             </Show>
             <SectionHeader
               title={local.title}
@@ -55,7 +53,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
           </Show>
         </div>
       </div>
-      <div class={`${local.noPadding ? '' : 'p-4 sm:p-6'} ${local.bodyClass ?? (local.noPadding ? '' : 'space-y-6')}`}>
+      <div
+        class={`${local.noPadding ? '' : 'p-4 sm:p-6'} ${local.bodyClass ?? (local.noPadding ? '' : 'space-y-6')}`}
+      >
         {local.children}
       </div>
     </Card>

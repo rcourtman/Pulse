@@ -1,7 +1,15 @@
 import { Accessor, createEffect, untrack } from 'solid-js';
 import { STORAGE_QUERY_PARAMS, parseStorageLinkSearch } from '@/routing/resourceLinks';
 
-type StorageManagedQueryKey = 'tab' | 'group' | 'source' | 'status' | 'node' | 'query' | 'sort' | 'order';
+type StorageManagedQueryKey =
+  | 'tab'
+  | 'group'
+  | 'source'
+  | 'status'
+  | 'node'
+  | 'query'
+  | 'sort'
+  | 'order';
 
 type StoragePathOptions = Partial<Record<StorageManagedQueryKey, string | null>>;
 

@@ -66,9 +66,12 @@ export const Toast: Component<ToastProps> = (props) => {
   };
 
   const iconColors = {
-    success: 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900 border border-green-200 dark:border-green-800',
-    error: 'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900 border border-red-200 dark:border-red-800',
-    warning: 'text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900 border border-amber-200 dark:border-amber-800',
+    success:
+      'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900 border border-green-200 dark:border-green-800',
+    error:
+      'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900 border border-red-200 dark:border-red-800',
+    warning:
+      'text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900 border border-amber-200 dark:border-amber-800',
     info: 'text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900 border border-blue-200 dark:border-blue-800',
   };
 
@@ -106,8 +109,9 @@ export const Toast: Component<ToastProps> = (props) => {
 
   return (
     <div
-      class={`transform transition-all duration-500 ease-out ${show() ? 'translate-x-0 opacity-100 scale-100' : 'translate-x-full opacity-0 scale-95'
-        } animate-slide-in-card`}
+      class={`transform transition-all duration-500 ease-out ${
+        show() ? 'translate-x-0 opacity-100 scale-100' : 'translate-x-full opacity-0 scale-95'
+      } animate-slide-in-card`}
     >
       <div
         class={`
@@ -118,13 +122,15 @@ export const Toast: Component<ToastProps> = (props) => {
           min-w-[300px] max-w-[400px] sm:min-w-[320px] sm:max-w-[500px]
         `}
       >
-        <div class={`flex-shrink-0 flex items-center justify-center p-1.5 sm:p-2 rounded-md ${iconColors[props.toast.type]}`}>{icons[props.toast.type]}</div>
+        <div
+          class={`flex-shrink-0 flex items-center justify-center p-1.5 sm:p-2 rounded-md ${iconColors[props.toast.type]}`}
+        >
+          {icons[props.toast.type]}
+        </div>
         <div class="flex-1">
           <h3 class="text-sm font-medium text-base-content">{props.toast.title}</h3>
           <Show when={props.toast.message}>
-            <p class="mt-1 text-xs text-base-content opacity-90">
-              {props.toast.message}
-            </p>
+            <p class="mt-1 text-xs text-base-content opacity-90">{props.toast.message}</p>
           </Show>
         </div>
         <button
@@ -163,7 +169,10 @@ export const ToastContainer: Component = () => {
 
   // Expose global toast function
   window.showToast = (type: ToastType, title: string, message?: string, duration?: number) => {
-    const id = (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString());
+    const id =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : Date.now().toString();
     setToasts((prev) => [...prev, { id, type, title, message, duration }]);
     return id;
   };

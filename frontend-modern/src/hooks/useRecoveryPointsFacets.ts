@@ -45,7 +45,8 @@ const normalizeQuery = (query: RecoveryFacetsQuery | undefined): RecoveryFacetsQ
   };
 };
 
-const serializeQuery = (query: RecoveryFacetsQuery | undefined): string => JSON.stringify(normalizeQuery(query));
+const serializeQuery = (query: RecoveryFacetsQuery | undefined): string =>
+  JSON.stringify(normalizeQuery(query));
 
 const parseSerializedQuery = (value: string | null): RecoveryFacetsQuery | undefined => {
   if (value == null) return undefined;
@@ -80,7 +81,9 @@ const buildURL = (query: RecoveryFacetsQuery | undefined): string => {
   return `${RECOVERY_FACETS_URL}?${params.toString()}`;
 };
 
-async function fetchFacets(query: RecoveryFacetsQuery | undefined): Promise<RecoveryPointsFacetsResponse> {
+async function fetchFacets(
+  query: RecoveryFacetsQuery | undefined,
+): Promise<RecoveryPointsFacetsResponse> {
   const url = buildURL(query);
   return apiFetchJSON<RecoveryPointsFacetsResponse>(url);
 }

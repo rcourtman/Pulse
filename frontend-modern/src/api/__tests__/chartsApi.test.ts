@@ -28,7 +28,9 @@ describe('ChartsAPI', () => {
 
     await ChartsAPI.getCharts('24h', controller.signal);
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/charts?range=24h', { signal: controller.signal });
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/charts?range=24h', {
+      signal: controller.signal,
+    });
   });
 
   it('adds node query for host-scoped workloads summary', async () => {

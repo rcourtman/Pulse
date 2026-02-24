@@ -120,16 +120,23 @@ export const SecurityWarning: Component = () => {
   return (
     <Portal>
       <div
-        class={`fixed top-0 left-0 right-0 z-50 border-b shadow-sm ${status()!.publicAccess && !status()!.hasAuthentication
-          ? 'bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800'
-          : 'bg-yellow-50 dark:bg-yellow-900 border-yellow-200 dark:border-yellow-800'
-          }`}
+        class={`fixed top-0 left-0 right-0 z-50 border-b shadow-sm ${
+          status()!.publicAccess && !status()!.hasAuthentication
+            ? 'bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800'
+            : 'bg-yellow-50 dark:bg-yellow-900 border-yellow-200 dark:border-yellow-800'
+        }`}
       >
         <div class="max-w-7xl mx-auto px-4 py-3">
           <div class="flex items-start justify-between">
             <div class="flex items-start space-x-3">
-              <span class={`text-2xl ${getScoreIcon(status()!.score, status()!.maxScore) === 'shield' ? 'text-green-600' : getScoreIcon(status()!.score, status()!.maxScore) === 'warning' ? 'text-yellow-600' : 'text-red-600'}`}>
-                {getScoreIcon(status()!.score, status()!.maxScore) === 'shield' ? '✓' : getScoreIcon(status()!.score, status()!.maxScore) === 'warning' ? '!' : '!!'}
+              <span
+                class={`text-2xl ${getScoreIcon(status()!.score, status()!.maxScore) === 'shield' ? 'text-green-600' : getScoreIcon(status()!.score, status()!.maxScore) === 'warning' ? 'text-yellow-600' : 'text-red-600'}`}
+              >
+                {getScoreIcon(status()!.score, status()!.maxScore) === 'shield'
+                  ? '✓'
+                  : getScoreIcon(status()!.score, status()!.maxScore) === 'warning'
+                    ? '!'
+                    : '!!'}
               </span>
               <div>
                 <div class="flex items-center gap-3">
@@ -158,8 +165,8 @@ export const SecurityWarning: Component = () => {
                 <p class="text-sm text-base-content mt-1">
                   {status()!.publicAccess ? (
                     <span class="font-semibold text-red-700 dark:text-red-300">
-                      WARNING: PUBLIC NETWORK ACCESS DETECTED - Your Proxmox credentials are exposed to
-                      the internet!
+                      WARNING: PUBLIC NETWORK ACCESS DETECTED - Your Proxmox credentials are exposed
+                      to the internet!
                     </span>
                   ) : (
                     'Your Pulse instance is accessible without authentication. Proxmox credentials could be exposed.'

@@ -38,7 +38,10 @@ export const getAlertStyles = (
   let hasNonPoweredOffAlert = false;
 
   unacknowledgedAlerts.forEach((alert) => {
-    if (alert.level === 'critical' || (alert.level === 'warning' && highestSeverity !== 'critical')) {
+    if (
+      alert.level === 'critical' ||
+      (alert.level === 'warning' && highestSeverity !== 'critical')
+    ) {
       highestSeverity = alert.level;
     }
 
@@ -105,4 +108,3 @@ export const getAlertStyles = (
     hasAcknowledgedOnlyAlert: !hasUnacknowledgedAlert && acknowledgedCount > 0,
   };
 };
-

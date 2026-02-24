@@ -33,7 +33,8 @@ const normalizeQuery = (query: RecoveryRollupsQuery | undefined): RecoveryRollup
   };
 };
 
-const serializeQuery = (query: RecoveryRollupsQuery | undefined): string => JSON.stringify(normalizeQuery(query));
+const serializeQuery = (query: RecoveryRollupsQuery | undefined): string =>
+  JSON.stringify(normalizeQuery(query));
 
 const parseSerializedQuery = (value: string | null): RecoveryRollupsQuery | undefined => {
   if (value == null) return undefined;
@@ -61,7 +62,9 @@ const buildURL = (page: number, limit: number, query: RecoveryRollupsQuery | und
   return `${RECOVERY_ROLLUPS_URL}?${params.toString()}`;
 };
 
-async function fetchRecoveryRollups(query: RecoveryRollupsQuery | undefined): Promise<ProtectionRollup[]> {
+async function fetchRecoveryRollups(
+  query: RecoveryRollupsQuery | undefined,
+): Promise<ProtectionRollup[]> {
   const rollups: ProtectionRollup[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page += 1) {

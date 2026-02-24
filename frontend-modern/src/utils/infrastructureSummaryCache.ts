@@ -1,4 +1,10 @@
-import { ChartsAPI, type ChartData, type ChartsResponse, type InfrastructureChartsResponse, type TimeRange } from '@/api/charts';
+import {
+  ChartsAPI,
+  type ChartData,
+  type ChartsResponse,
+  type InfrastructureChartsResponse,
+  type TimeRange,
+} from '@/api/charts';
 import { getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
 
@@ -12,7 +18,8 @@ const DEFAULT_ORG_SCOPE = 'default';
 const INFRA_SUMMARY_PERF_LOG_PREFIX = '[InfraSummaryPerf]';
 
 // Opt-in perf logging to keep default test/dev output clean.
-const infraSummaryPerfEnabled = import.meta.env.DEV && import.meta.env.VITE_INFRA_SUMMARY_PERF === '1';
+const infraSummaryPerfEnabled =
+  import.meta.env.DEV && import.meta.env.VITE_INFRA_SUMMARY_PERF === '1';
 
 function infraSummaryPerfNow(): number {
   if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
@@ -33,11 +40,11 @@ function infraSummaryPerfLog(message: string, data?: Record<string, unknown>): v
 function countChartMapPoints(map: Map<string, ChartData>): number {
   let total = 0;
   for (const data of map.values()) {
-    total += (data.cpu?.length ?? 0);
-    total += (data.memory?.length ?? 0);
-    total += (data.disk?.length ?? 0);
-    total += (data.netin?.length ?? 0);
-    total += (data.netout?.length ?? 0);
+    total += data.cpu?.length ?? 0;
+    total += data.memory?.length ?? 0;
+    total += data.disk?.length ?? 0;
+    total += data.netin?.length ?? 0;
+    total += data.netout?.length ?? 0;
   }
   return total;
 }
@@ -63,7 +70,6 @@ function mergeChartData(existing: ChartData | undefined, incoming: ChartData): C
     netout: pickRicherSeries(incoming.netout, existing.netout),
   };
 }
-
 
 type CachedChartData = Pick<ChartData, 'cpu' | 'memory' | 'disk' | 'netin' | 'netout'>;
 
@@ -133,7 +139,9 @@ function trimPoints<T>(points: T[], max: number): T[] {
   return result.length > max ? result.slice(result.length - max) : result;
 }
 
-export function extractInfrastructureSummaryChartMap(response: ChartsResponse): Map<string, ChartData> {
+export function extractInfrastructureSummaryChartMap(
+  response: ChartsResponse,
+): Map<string, ChartData> {
   const map = new Map<string, ChartData>();
 
   if (response.nodeData) {
@@ -235,9 +243,7 @@ export function readInfrastructureSummaryCache(
     }
 
     const chartEntries =
-      parsed.charts && typeof parsed.charts === 'object'
-        ? Object.entries(parsed.charts)
-        : [];
+      parsed.charts && typeof parsed.charts === 'object' ? Object.entries(parsed.charts) : [];
     const map = new Map<string, ChartData>(
       chartEntries.map(([key, value]) => [
         key,
@@ -255,7 +261,8 @@ export function readInfrastructureSummaryCache(
       map,
       cachedAt: parsed.cachedAt,
       oldestDataTimestamp:
-        typeof parsed.oldestDataTimestamp === 'number' && Number.isFinite(parsed.oldestDataTimestamp)
+        typeof parsed.oldestDataTimestamp === 'number' &&
+        Number.isFinite(parsed.oldestDataTimestamp)
           ? parsed.oldestDataTimestamp
           : null,
     };
@@ -300,7 +307,8 @@ export function fetchInfrastructureSummaryAndCache(
     .then((response) => {
       const map = extractInfrastructureSummaryChartMapFromInfrastructureResponse(response);
       const oldestDataTimestamp =
-        typeof response.stats?.oldestDataTimestamp === 'number' && Number.isFinite(response.stats.oldestDataTimestamp)
+        typeof response.stats?.oldestDataTimestamp === 'number' &&
+        Number.isFinite(response.stats.oldestDataTimestamp)
           ? response.stats.oldestDataTimestamp
           : null;
       persistInfrastructureSummaryCache(range, map, oldestDataTimestamp, orgScope);
@@ -359,7 +367,9 @@ const unsubscribeOrgSwitchCacheInvalidation = eventBus.on('org_switched', () => 
       }
     }
     keysToRemove.forEach((key) => window.localStorage.removeItem(key));
-  } catch { /* ignore storage errors */ }
+  } catch {
+    /* ignore storage errors */
+  }
 });
 
 if (import.meta.hot) {

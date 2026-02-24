@@ -15,9 +15,14 @@ const parseTimestamp = (value: string | null | undefined): number | null => {
   return parsed;
 };
 
-const normalizeOutcome = (value: string | null | undefined): 'success' | 'warning' | 'failed' | 'running' | 'unknown' => {
-  const v = String(value || '').trim().toLowerCase();
-  if (v === 'success' || v === 'warning' || v === 'failed' || v === 'running' || v === 'unknown') return v;
+const normalizeOutcome = (
+  value: string | null | undefined,
+): 'success' | 'warning' | 'failed' | 'running' | 'unknown' => {
+  const v = String(value || '')
+    .trim()
+    .toLowerCase();
+  if (v === 'success' || v === 'warning' || v === 'failed' || v === 'running' || v === 'unknown')
+    return v;
   return 'unknown';
 };
 
@@ -31,7 +36,9 @@ export function useDashboardRecovery() {
       return { totalProtected: 0, byOutcome: {}, latestEventTimestamp: null, hasData: false };
     }
 
-    const byOutcome: Partial<Record<'success' | 'warning' | 'failed' | 'running' | 'unknown', number>> = {};
+    const byOutcome: Partial<
+      Record<'success' | 'warning' | 'failed' | 'running' | 'unknown', number>
+    > = {};
     let latestTimestamp: number | null = null;
 
     for (const rollup of data) {

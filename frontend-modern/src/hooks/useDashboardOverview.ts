@@ -85,7 +85,8 @@ function buildTopInfrastructureMetrics(
 ): Array<{ id: string; name: string; percent: number }> {
   const rows = resources
     .map((resource) => {
-      const percent = metric === 'cpu' ? getMetricPercent(resource.cpu) : getMetricPercent(resource.memory);
+      const percent =
+        metric === 'cpu' ? getMetricPercent(resource.cpu) : getMetricPercent(resource.memory);
       if (percent === null) return null;
 
       return {

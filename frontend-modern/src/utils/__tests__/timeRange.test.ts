@@ -19,4 +19,3 @@ describe('timeRangeToMs', () => {
     expect(timeRangeToMs(range)).toBe(expectedMs);
   });
 });
-

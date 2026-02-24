@@ -25,7 +25,7 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
   const [tick, setTick] = createSignal(Date.now());
 
   const pending = createMemo(() =>
-    aiIntelligenceStore.pendingApprovals.filter((a: ApprovalRequest) => a.status === 'pending')
+    aiIntelligenceStore.pendingApprovals.filter((a: ApprovalRequest) => a.status === 'pending'),
   );
 
   // Only tick when there are pending approvals to avoid unnecessary work
@@ -50,9 +50,12 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
 
   const riskBadgeColor = (level: string) => {
     switch (level) {
-      case 'high': return 'bg-red-200 text-red-800 dark:bg-red-900 dark:text-red-300';
-      case 'medium': return 'bg-amber-200 text-amber-800 dark:bg-amber-900 dark:text-amber-300';
-      default: return 'bg-green-200 text-green-800 dark:bg-green-900 dark:text-green-300';
+      case 'high':
+        return 'bg-red-200 text-red-800 dark:bg-red-900 dark:text-red-300';
+      case 'medium':
+        return 'bg-amber-200 text-amber-800 dark:bg-amber-900 dark:text-amber-300';
+      default:
+        return 'bg-green-200 text-green-800 dark:bg-green-900 dark:text-green-300';
     }
   };
 
@@ -105,14 +108,19 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
                   <span class="text-sm font-medium text-amber-900 dark:text-amber-100">
                     Fix awaiting approval
                   </span>
-                  <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${riskBadgeColor(firstApproval()!.riskLevel)}`}>
+                  <span
+                    class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${riskBadgeColor(firstApproval()!.riskLevel)}`}
+                  >
                     {firstApproval()!.riskLevel} risk
                   </span>
                   <span class="text-xs text-amber-700 dark:text-amber-300">
                     expires {timeRemaining(firstApproval()!.expiresAt)}
                   </span>
                 </div>
-                <p class="text-xs text-amber-700 dark:text-amber-300 mt-0.5 max-w-xl truncate" title={firstApproval()!.context}>
+                <p
+                  class="text-xs text-amber-700 dark:text-amber-300 mt-0.5 max-w-xl truncate"
+                  title={firstApproval()!.context}
+                >
                   {firstApproval()!.context}
                 </p>
               </Show>

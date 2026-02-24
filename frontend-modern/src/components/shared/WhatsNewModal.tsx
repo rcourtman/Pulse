@@ -102,12 +102,18 @@ export function WhatsNewModal() {
                 Anonymous telemetry
               </div>
               <p class="mt-1.5 text-xs text-sky-900 dark:text-sky-200">
-                Pulse now sends a lightweight anonymous ping once a day — just a random install ID, version, platform, resource counts, and feature flags. No hostnames, credentials, IP addresses, or personal information is ever sent.
+                Pulse now sends a lightweight anonymous ping once a day — just a random install ID,
+                version, platform, resource counts, and feature flags. No hostnames, credentials, IP
+                addresses, or personal information is ever sent.
               </p>
               <p class="mt-1.5 text-xs text-sky-900 dark:text-sky-200">
-                This helps the developer understand how Pulse is used and prioritise what to build next. You can disable it any time in{' '}
+                This helps the developer understand how Pulse is used and prioritise what to build
+                next. You can disable it any time in{' '}
                 <span class="font-medium">Settings &rarr; System &rarr; General</span> or by setting{' '}
-                <code class="rounded bg-sky-100 px-1 py-0.5 text-[10px] font-mono dark:bg-sky-800">PULSE_TELEMETRY=false</code>.{' '}
+                <code class="rounded bg-sky-100 px-1 py-0.5 text-[10px] font-mono dark:bg-sky-800">
+                  PULSE_TELEMETRY=false
+                </code>
+                .{' '}
                 <a
                   href="https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md"
                   target="_blank"

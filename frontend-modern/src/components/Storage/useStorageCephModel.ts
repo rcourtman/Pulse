@@ -1,16 +1,10 @@
 import { Accessor, createMemo } from 'solid-js';
-import {
-  isCephType,
-} from '@/features/storageBackups/storageDomain';
+import { isCephType } from '@/features/storageBackups/storageDomain';
 import type { StorageRecord } from '@/features/storageBackups/models';
 import type { CephCluster } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { formatBytes, formatPercent } from '@/utils/format';
-import {
-  getRecordNodeLabel,
-  getRecordType,
-  getRecordUsagePercent,
-} from './useStorageModel';
+import { getRecordNodeLabel, getRecordType, getRecordUsagePercent } from './useStorageModel';
 
 type UseStorageCephModelOptions = {
   records: Accessor<StorageRecord[]>;

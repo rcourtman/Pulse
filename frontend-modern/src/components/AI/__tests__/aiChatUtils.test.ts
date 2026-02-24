@@ -37,7 +37,12 @@ describe('aiChatUtils', () => {
       ];
 
       const grouped = utils.groupModelsByProvider(models);
-      expect(Array.from(grouped.keys()).sort()).toEqual(['anthropic', 'deepseek', 'ollama', 'openai']);
+      expect(Array.from(grouped.keys()).sort()).toEqual([
+        'anthropic',
+        'deepseek',
+        'ollama',
+        'openai',
+      ]);
       expect(grouped.get('openai')?.map((m) => m.id)).toEqual(['openai:gpt-4o']);
       expect(grouped.get('anthropic')?.map((m) => m.id)).toEqual(['claude-3-5-sonnet']);
     });
@@ -67,20 +72,18 @@ describe('aiChatUtils', () => {
       expect(utils.getGuestName(undefined)).toBeUndefined();
       expect(utils.getGuestName({})).toBeUndefined();
       expect(utils.getGuestName({ name: 'vm-101' })).toBe('vm-101');
-      expect(utils.getGuestName({ guestName: 'container-202', name: 'ignored' })).toBe('container-202');
+      expect(utils.getGuestName({ guestName: 'container-202', name: 'ignored' })).toBe(
+        'container-202',
+      );
     });
   });
 
   describe('renderMarkdown', () => {
     it('sanitizes HTML and forces safe link attributes', () => {
       const output = utils.renderMarkdown(
-        [
-          'Hello',
-          '',
-          '[link](https://example.com)',
-          '',
-          '<script>alert("xss")</script>',
-        ].join('\n')
+        ['Hello', '', '[link](https://example.com)', '', '<script>alert("xss")</script>'].join(
+          '\n',
+        ),
       );
 
       expect(output).toContain('Hello');

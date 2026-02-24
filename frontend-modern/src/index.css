@@ -38,7 +38,6 @@
   animation: slide-in-card 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-
 /* Custom styles */
 @layer base {
   :root {
@@ -84,7 +83,7 @@
 
   /* Form elements: inherit surface background so they don't show white in dark mode */
   select,
-  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
   textarea {
     background-color: var(--color-bg-surface);
     color: var(--color-text-base);
@@ -131,7 +130,6 @@
       padding: 0.5rem;
     }
   }
-
 
   /* Upward box-shadow shield for sticky chart panels.
      Fills the transparent space-y-3 margin above the element so
@@ -297,7 +295,6 @@ body,
 }
 
 @keyframes pulse-ring {
-
   0%,
   100% {
     opacity: 0.92;
@@ -383,7 +380,6 @@ body,
 }
 
 @keyframes pulse-slow {
-
   0%,
   100% {
     opacity: 0.25;

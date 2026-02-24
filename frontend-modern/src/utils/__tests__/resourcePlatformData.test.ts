@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
-import { getProxmoxData, getAgentData, getLinkedAgentId, type ProxmoxPlatformData, type AgentPlatformData } from '../resourcePlatformData';
+import {
+  getProxmoxData,
+  getAgentData,
+  getLinkedAgentId,
+  type ProxmoxPlatformData,
+  type AgentPlatformData,
+} from '../resourcePlatformData';
 
 const createMockResource = (overrides: Partial<Resource> = {}): Resource => ({
   id: 'test-1',

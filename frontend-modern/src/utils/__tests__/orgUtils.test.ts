@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  normalizeRole,
-  canManageOrg,
-  roleBadgeClass,
-  formatOrgDate,
-} from '@/utils/orgUtils';
+import { normalizeRole, canManageOrg, roleBadgeClass, formatOrgDate } from '@/utils/orgUtils';
 import type { Organization } from '@/api/orgs';
 
 describe('normalizeRole', () => {

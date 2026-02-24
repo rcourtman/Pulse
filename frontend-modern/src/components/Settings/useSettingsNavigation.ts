@@ -29,7 +29,9 @@ interface UseSettingsNavigationParams {
 }
 
 export function useSettingsNavigation({ navigate, location }: UseSettingsNavigationParams) {
-  const [currentTab, setCurrentTab] = createSignal<SettingsTab>(deriveTabFromPath(location.pathname));
+  const [currentTab, setCurrentTab] = createSignal<SettingsTab>(
+    deriveTabFromPath(location.pathname),
+  );
   const activeTab = () => currentTab();
 
   const [selectedAgent, setSelectedAgent] = createSignal<AgentKey>('pve');

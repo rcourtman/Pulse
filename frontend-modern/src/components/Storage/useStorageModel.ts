@@ -72,7 +72,8 @@ export const getRecordNodeHints = (record: StorageRecord): string[] => {
 export const getRecordType = (record: StorageRecord): string =>
   getRecordStringDetail(record, 'type') || record.category || 'other';
 
-export const getRecordContent = (record: StorageRecord): string => getRecordStringDetail(record, 'content');
+export const getRecordContent = (record: StorageRecord): string =>
+  getRecordStringDetail(record, 'content');
 
 export const getRecordStatus = (record: StorageRecord): string => {
   const status = getRecordStringDetail(record, 'status');
@@ -96,7 +97,10 @@ export const getRecordNodeLabel = (record: StorageRecord): string => {
 };
 
 export const getRecordUsagePercent = (record: StorageRecord): number => {
-  if (typeof record.capacity.usagePercent === 'number' && Number.isFinite(record.capacity.usagePercent)) {
+  if (
+    typeof record.capacity.usagePercent === 'number' &&
+    Number.isFinite(record.capacity.usagePercent)
+  ) {
     return record.capacity.usagePercent;
   }
   const total = record.capacity.totalBytes || 0;
@@ -137,7 +141,10 @@ const computeGroupStats = (items: StorageRecord[]): StorageGroupStats => {
     {
       total: 0,
       used: 0,
-      byHealth: { healthy: 0, warning: 0, critical: 0, offline: 0, unknown: 0 } as Record<NormalizedHealth, number>,
+      byHealth: { healthy: 0, warning: 0, critical: 0, offline: 0, unknown: 0 } as Record<
+        NormalizedHealth,
+        number
+      >,
     },
   );
   return {
@@ -160,21 +167,28 @@ export const useStorageModel = (options: UseStorageModelOptions) => {
     const nodeName = node.label.toLowerCase().trim();
     const nodeInstance = (node.instance || '').toLowerCase().trim();
     const hints = getRecordNodeHints(record);
-    return hints.some((hint) => hint.includes(nodeName) || (nodeInstance && hint.includes(nodeInstance)));
+    return hints.some(
+      (hint) => hint.includes(nodeName) || (nodeInstance && hint.includes(nodeInstance)),
+    );
   };
 
   const sourceOptions = createMemo(() => {
-    const values = Array.from(new Set(options.records().map((record) => record.source.platform))).sort((a, b) =>
-      sourceLabel(a).localeCompare(sourceLabel(b)),
-    );
+    const values = Array.from(
+      new Set(options.records().map((record) => record.source.platform)),
+    ).sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b)));
     return ['all', ...values];
   });
 
   const filteredRecords = createMemo(() => {
     const query = options.search().trim().toLowerCase();
-    return options.records()
-      .filter((record) => (options.sourceFilter() === 'all' ? true : record.source.platform === options.sourceFilter()))
-      .filter((record) => (options.healthFilter() === 'all' ? true : record.health === options.healthFilter()))
+    return options
+      .records()
+      .filter((record) =>
+        options.sourceFilter() === 'all' ? true : record.source.platform === options.sourceFilter(),
+      )
+      .filter((record) =>
+        options.healthFilter() === 'all' ? true : record.health === options.healthFilter(),
+      )
       .filter((record) => matchesSelectedNode(record))
       .filter((record) => {
         if (!query) return true;

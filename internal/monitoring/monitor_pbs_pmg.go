@@ -148,7 +148,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		pbsInst.Version = version.Version
 		pbsInst.ConnectionHealth = "healthy"
 		m.resetAuthFailures(instanceName, "pbs")
-		m.state.SetConnectionHealth("pbs-"+instanceName, true)
+		m.setProviderConnectionHealth(InstanceTypePBS, instanceName, true)
 
 		if debugEnabled {
 			log.Debug().
@@ -171,7 +171,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			pbsInst.Version = "connected"
 			pbsInst.ConnectionHealth = "healthy"
 			m.resetAuthFailures(instanceName, "pbs")
-			m.state.SetConnectionHealth("pbs-"+instanceName, true)
+			m.setProviderConnectionHealth(InstanceTypePBS, instanceName, true)
 
 			log.Info().
 				Str("instance", instanceName).
@@ -181,7 +181,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			pbsInst.ConnectionHealth = "error"
 			monErr := errors.WrapConnectionError("get_pbs_version", instanceName, versionErr)
 			log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to connect to PBS")
-			m.state.SetConnectionHealth("pbs-"+instanceName, false)
+			m.setProviderConnectionHealth(InstanceTypePBS, instanceName, false)
 
 			if errors.IsAuthError(versionErr) || errors.IsAuthError(datastoreErr) {
 				m.recordAuthFailure(instanceName, "pbs")
@@ -520,7 +520,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		monErr := errors.WrapConnectionError("pmg_get_version", instanceName, err)
 		pollErr = monErr
 		log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to connect to PMG instance")
-		m.state.SetConnectionHealth("pmg-"+instanceName, false)
+		m.setProviderConnectionHealth(InstanceTypePMG, instanceName, false)
 		m.state.UpdatePMGInstance(pmgInst)
 
 		// Check PMG offline status against alert thresholds
@@ -539,7 +539,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	if version != nil {
 		pmgInst.Version = strings.TrimSpace(version.Version)
 	}
-	m.state.SetConnectionHealth("pmg-"+instanceName, true)
+	m.setProviderConnectionHealth(InstanceTypePMG, instanceName, true)
 	m.resetAuthFailures(instanceName, "pmg")
 
 	cluster, err := client.GetClusterStatus(ctx, true)

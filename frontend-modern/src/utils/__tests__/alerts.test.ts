@@ -20,17 +20,20 @@ describe('getAlertStyles', () => {
   });
 
   const createActiveAlerts = (...alerts: Alert[]): Record<string, Alert> => {
-    return alerts.reduce((acc, alert) => {
-      acc[alert.id] = alert;
-      return acc;
-    }, {} as Record<string, Alert>);
+    return alerts.reduce(
+      (acc, alert) => {
+        acc[alert.id] = alert;
+        return acc;
+      },
+      {} as Record<string, Alert>,
+    );
   };
 
   describe('when alerts are disabled', () => {
     it('returns no alert styles when alertsEnabled is false', () => {
       const alerts = createActiveAlerts(createAlert({ level: 'critical' }));
       const result = getAlertStyles('resource-1', alerts, false);
-      
+
       expect(result.hasAlert).toBe(false);
       expect(result.alertCount).toBe(0);
       expect(result.severity).toBeNull();
@@ -40,7 +43,7 @@ describe('getAlertStyles', () => {
     it('returns alert styles when alertsEnabled is undefined (defaults to enabled)', () => {
       const alerts = createActiveAlerts(createAlert({ level: 'critical' }));
       const result = getAlertStyles('resource-1', alerts, undefined);
-      
+
       expect(result.hasAlert).toBe(true);
     });
   });
@@ -49,7 +52,7 @@ describe('getAlertStyles', () => {
     it('returns critical styles for critical alert', () => {
       const alerts = createActiveAlerts(createAlert({ level: 'critical' }));
       const result = getAlertStyles('resource-1', alerts, true);
-      
+
       expect(result.hasAlert).toBe(true);
       expect(result.alertCount).toBe(1);
       expect(result.severity).toBe('critical');
@@ -64,7 +67,7 @@ describe('getAlertStyles', () => {
         createAlert({ id: 'alert-2', level: 'warning' }),
       );
       const result = getAlertStyles('resource-1', alerts, true);
-      
+
       expect(result.severity).toBe('critical');
     });
   });
@@ -73,7 +76,7 @@ describe('getAlertStyles', () => {
     it('returns warning styles for warning alert', () => {
       const alerts = createActiveAlerts(createAlert({ level: 'warning' }));
       const result = getAlertStyles('resource-1', alerts, true);
-      
+
       expect(result.hasAlert).toBe(true);
       expect(result.severity).toBe('warning');
       expect(result.rowClass).toContain('bg-yellow-50');
@@ -90,7 +93,7 @@ describe('getAlertStyles', () => {
         createAlert({ id: 'alert-3', level: 'critical' }),
       );
       const result = getAlertStyles('resource-1', alerts, true);
-      
+
       expect(result.alertCount).toBe(3);
     });
 
@@ -101,7 +104,7 @@ describe('getAlertStyles', () => {
         createAlert({ id: 'alert-3', acknowledged: false }),
       );
       const result = getAlertStyles('resource-1', alerts, true);
-      
+
       expect(result.unacknowledgedCount).toBe(2);
       expect(result.acknowledgedCount).toBe(1);
       expect(result.hasUnacknowledgedAlert).toBe(true);
@@ -113,7 +116,7 @@ describe('getAlertStyles', () => {
         createAlert({ id: 'alert-2', acknowledged: true }),
       );
       const result = getAlertStyles('resource-1', alerts, true);
-      
+
       expect(result.hasAcknowledgedOnlyAlert).toBe(true);
       expect(result.hasUnacknowledgedAlert).toBe(false);
     });
@@ -121,21 +124,17 @@ describe('getAlertStyles', () => {
 
   describe('powered-off alerts', () => {
     it('detects powered-off alert type', () => {
-      const alerts = createActiveAlerts(
-        createAlert({ id: 'alert-1', type: 'powered-off' }),
-      );
+      const alerts = createActiveAlerts(createAlert({ id: 'alert-1', type: 'powered-off' }));
       const result = getAlertStyles('resource-1', alerts, true);
-      
+
       expect(result.hasPoweredOffAlert).toBe(true);
       expect(result.hasNonPoweredOffAlert).toBe(false);
     });
 
     it('detects non-powered-off alert type', () => {
-      const alerts = createActiveAlerts(
-        createAlert({ id: 'alert-1', type: 'high-cpu' }),
-      );
+      const alerts = createActiveAlerts(createAlert({ id: 'alert-1', type: 'high-cpu' }));
       const result = getAlertStyles('resource-1', alerts, true);
-      
+
       expect(result.hasPoweredOffAlert).toBe(false);
       expect(result.hasNonPoweredOffAlert).toBe(true);
     });
@@ -146,7 +145,7 @@ describe('getAlertStyles', () => {
         createAlert({ id: 'alert-2', type: 'high-cpu' }),
       );
       const result = getAlertStyles('resource-1', alerts, true);
-      
+
       expect(result.hasPoweredOffAlert).toBe(true);
       expect(result.hasNonPoweredOffAlert).toBe(true);
     });
@@ -159,17 +158,15 @@ describe('getAlertStyles', () => {
         createAlert({ id: 'alert-2', resourceId: 'resource-2', level: 'critical' }),
       );
       const result = getAlertStyles('resource-1', alerts, true);
-      
+
       expect(result.alertCount).toBe(1);
       expect(result.severity).toBe('critical');
     });
 
     it('returns empty styles when no alerts for resource', () => {
-      const alerts = createActiveAlerts(
-        createAlert({ id: 'alert-1', resourceId: 'resource-2' }),
-      );
+      const alerts = createActiveAlerts(createAlert({ id: 'alert-1', resourceId: 'resource-2' }));
       const result = getAlertStyles('resource-1', alerts, true);
-      
+
       expect(result.hasAlert).toBe(false);
       expect(result.alertCount).toBe(0);
       expect(result.severity).toBeNull();
@@ -181,7 +178,7 @@ describe('getAlertStyles', () => {
     it('returns empty styles for empty alerts object', () => {
       const alerts = createActiveAlerts();
       const result = getAlertStyles('resource-1', alerts, true);
-      
+
       expect(result.hasAlert).toBe(false);
       expect(result.alertCount).toBe(0);
       expect(result.severity).toBeNull();

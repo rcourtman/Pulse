@@ -19,7 +19,9 @@ describe('AgentProfilesAPI', () => {
 
   describe('listProfiles', () => {
     it('fetches all profiles', async () => {
-      const mockProfiles: AgentProfile[] = [{ id: 'p1', name: 'Profile 1', config: {}, created_at: '', updated_at: '' }];
+      const mockProfiles: AgentProfile[] = [
+        { id: 'p1', name: 'Profile 1', config: {}, created_at: '', updated_at: '' },
+      ];
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockProfiles);
 
       const result = await AgentProfilesAPI.listProfiles();
@@ -47,7 +49,13 @@ describe('AgentProfilesAPI', () => {
 
   describe('getProfile', () => {
     it('fetches a single profile', async () => {
-      const mockProfile: AgentProfile = { id: 'p1', name: 'Profile 1', config: {}, created_at: '', updated_at: '' };
+      const mockProfile: AgentProfile = {
+        id: 'p1',
+        name: 'Profile 1',
+        config: {},
+        created_at: '',
+        updated_at: '',
+      };
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockProfile);
 
       const result = await AgentProfilesAPI.getProfile('p1');
@@ -67,14 +75,17 @@ describe('AgentProfilesAPI', () => {
 
   describe('createProfile', () => {
     it('creates a new profile', async () => {
-      const mockResponse = { ok: true, json: () => Promise.resolve({ id: 'p1' }) } as unknown as Response;
+      const mockResponse = {
+        ok: true,
+        json: () => Promise.resolve({ id: 'p1' }),
+      } as unknown as Response;
       vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
 
       await AgentProfilesAPI.createProfile('New Profile', { key: 'value' }, 'Description');
 
       expect(apiFetch).toHaveBeenCalledWith(
         '/api/admin/profiles/',
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
     });
 
@@ -96,14 +107,16 @@ describe('AgentProfilesAPI', () => {
 
       expect(apiFetch).toHaveBeenCalledWith(
         '/api/admin/profiles/p1',
-        expect.objectContaining({ method: 'DELETE' })
+        expect.objectContaining({ method: 'DELETE' }),
       );
     });
   });
 
   describe('listAssignments', () => {
     it('fetches all assignments', async () => {
-      const mockAssignments: AgentProfileAssignment[] = [{ agent_id: 'a1', profile_id: 'p1', updated_at: '' }];
+      const mockAssignments: AgentProfileAssignment[] = [
+        { agent_id: 'a1', profile_id: 'p1', updated_at: '' },
+      ];
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockAssignments);
 
       const result = await AgentProfilesAPI.listAssignments();
@@ -130,7 +143,7 @@ describe('AgentProfilesAPI', () => {
 
       expect(apiFetch).toHaveBeenCalledWith(
         '/api/admin/profiles/assignments',
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
     });
   });
@@ -144,21 +157,25 @@ describe('AgentProfilesAPI', () => {
 
       expect(apiFetch).toHaveBeenCalledWith(
         '/api/admin/profiles/assignments/agent-1',
-        expect.objectContaining({ method: 'DELETE' })
+        expect.objectContaining({ method: 'DELETE' }),
       );
     });
   });
 
   describe('suggestProfile', () => {
     it('gets AI suggestion', async () => {
-      const mockResponse = { ok: true, json: () => Promise.resolve({ name: 'Suggested', description: '', config: {}, rationale: [] }) } as unknown as Response;
+      const mockResponse = {
+        ok: true,
+        json: () =>
+          Promise.resolve({ name: 'Suggested', description: '', config: {}, rationale: [] }),
+      } as unknown as Response;
       vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
 
       await AgentProfilesAPI.suggestProfile({ prompt: 'Create a profile' });
 
       expect(apiFetch).toHaveBeenCalledWith(
         '/api/admin/profiles/suggestions',
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
     });
 
@@ -166,24 +183,30 @@ describe('AgentProfilesAPI', () => {
       const mockResponse = { ok: false, status: 503 } as unknown as Response;
       vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
 
-      await expect(AgentProfilesAPI.suggestProfile({ prompt: 'test' })).rejects.toThrow('Pulse Assistant service is not available');
+      await expect(AgentProfilesAPI.suggestProfile({ prompt: 'test' })).rejects.toThrow(
+        'Pulse Assistant service is not available',
+      );
     });
   });
 
   describe('getConfigSchema', () => {
     it('fetches and transforms schema', async () => {
-      const mockSchema = [{ Key: 'cpu_limit', Type: 'number', Description: 'CPU limit', Default: 4, Required: true }];
+      const mockSchema = [
+        { Key: 'cpu_limit', Type: 'number', Description: 'CPU limit', Default: 4, Required: true },
+      ];
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockSchema);
 
       const result = await AgentProfilesAPI.getConfigSchema();
 
-      expect(result).toEqual([{
-        key: 'cpu_limit',
-        type: 'number',
-        description: 'CPU limit',
-        defaultValue: 4,
-        required: true,
-      }]);
+      expect(result).toEqual([
+        {
+          key: 'cpu_limit',
+          type: 'number',
+          description: 'CPU limit',
+          defaultValue: 4,
+          required: true,
+        },
+      ]);
     });
   });
 

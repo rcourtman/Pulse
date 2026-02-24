@@ -22,12 +22,19 @@ func (s resourceStateProvider) GetState() models.StateSnapshot {
 }
 
 type mockSupplementalRecordsProvider struct {
-	records []unified.IngestRecord
+	records      []unified.IngestRecord
+	ownedSources []unified.DataSource
 }
 
 func (m mockSupplementalRecordsProvider) GetCurrentRecords() []unified.IngestRecord {
 	out := make([]unified.IngestRecord, len(m.records))
 	copy(out, m.records)
+	return out
+}
+
+func (m mockSupplementalRecordsProvider) SnapshotOwnedSources() []unified.DataSource {
+	out := make([]unified.DataSource, len(m.ownedSources))
+	copy(out, m.ownedSources)
 	return out
 }
 
@@ -1084,6 +1091,63 @@ func TestResourceListIncludesTrueNASFromSupplementalProvider(t *testing.T) {
 	}
 }
 
+func TestResourceListSupplementalOwnerSuppressesSnapshotSource(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		LastUpdate: now,
+		Hosts: []models.Host{
+			{
+				ID:       "host-snapshot-1",
+				Hostname: "snapshot-host",
+				Status:   "online",
+				LastSeen: now,
+			},
+		},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
+	h.SetSupplementalRecordsProvider(unified.SourceAgent, mockSupplementalRecordsProvider{
+		ownedSources: []unified.DataSource{unified.SourceAgent},
+		records: []unified.IngestRecord{
+			{
+				SourceID: "host-provider-1",
+				Resource: unified.Resource{
+					Type:      unified.ResourceTypeHost,
+					Name:      "provider-host",
+					Status:    unified.StatusOnline,
+					LastSeen:  now,
+					UpdatedAt: now,
+				},
+				Identity: unified.ResourceIdentity{
+					MachineID: "provider-machine",
+					Hostnames: []string{"provider-host"},
+				},
+			},
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?source=agent", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 provider-owned resource, got %d", len(resp.Data))
+	}
+	if resp.Data[0].Name != "provider-host" {
+		t.Fatalf("resource name = %q, want provider-host", resp.Data[0].Name)
+	}
+}
+
 func TestResourceListWithoutSupplementalProvider(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{
@@ -1132,5 +1196,15 @@ func TestResourceListWithoutSupplementalProvider(t *testing.T) {
 	}
 	if len(agentResp.Data) != 1 {
 		t.Fatalf("expected 1 agent resource, got %d", len(agentResp.Data))
+	}
+}
+
+func TestSupplementalSnapshotOwnedSources_TrueNASProviders(t *testing.T) {
+	sources := supplementalSnapshotOwnedSources(map[unified.DataSource]SupplementalRecordsProvider{
+		unified.SourceTrueNAS: trueNASRecordsAdapter{},
+	}, "default")
+
+	if len(sources) != 1 || sources[0] != unified.SourceTrueNAS {
+		t.Fatalf("expected owned sources [%q], got %#v", unified.SourceTrueNAS, sources)
 	}
 }

@@ -12,8 +12,6 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 
-
-
 const INCIDENT_EVENT_TYPES = [
   'alert_fired',
   'alert_acknowledged',
@@ -68,7 +66,7 @@ function IncidentEventFilters(props: {
           return (
             <button
               onClick={() => toggleFilter(type)}
-              class={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${ selected() ? 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-800' : ' text-muted border-border hover:bg-surface-alt' } border`}
+              class={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${selected() ? 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-800' : ' text-muted border-border hover:bg-surface-alt'} border`}
             >
               {INCIDENT_EVENT_LABELS[type]}
             </button>
@@ -97,7 +95,9 @@ export function OverviewTab(props: {
   const pendingProcessingResetTimeouts = new Set<number>();
   // Loading states for buttons
   const [processingAlerts, setProcessingAlerts] = createSignal<Set<string>>(new Set());
-  const [incidentTimelines, setIncidentTimelines] = createSignal<Record<string, Incident | null>>({});
+  const [incidentTimelines, setIncidentTimelines] = createSignal<Record<string, Incident | null>>(
+    {},
+  );
   const [incidentLoading, setIncidentLoading] = createSignal<Record<string, boolean>>({});
   const [expandedIncidents, setExpandedIncidents] = createSignal<Set<string>>(new Set());
   const [incidentNoteDrafts, setIncidentNoteDrafts] = createSignal<Record<string, string>>({});
@@ -187,7 +187,6 @@ export function OverviewTab(props: {
     };
   });
 
-
   const filteredAlerts = createMemo(() => {
     const alerts = Object.values(props.activeAlerts);
     // Sort: unacknowledged first, then by start time (newest first)
@@ -254,11 +253,12 @@ export function OverviewTab(props: {
     <div class="space-y-4 sm:space-y-6">
       {/* Stats Cards - only show cards not duplicated in sub-tabs */}
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
-
         <Card padding="sm" class="sm:p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-[10px] sm:text-sm text-muted uppercase tracking-wider sm:normal-case">Acknowledged</p>
+              <p class="text-[10px] sm:text-sm text-muted uppercase tracking-wider sm:normal-case">
+                Acknowledged
+              </p>
               <p class="text-lg sm:text-2xl font-semibold text-yellow-600 dark:text-yellow-400">
                 {alertStats().acknowledged}
               </p>
@@ -283,7 +283,9 @@ export function OverviewTab(props: {
         <Card padding="sm" class="sm:p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-[10px] sm:text-sm text-muted uppercase tracking-wider sm:normal-case">Last 24 Hours</p>
+              <p class="text-[10px] sm:text-sm text-muted uppercase tracking-wider sm:normal-case">
+                Last 24 Hours
+              </p>
               <p class="text-lg sm:text-2xl font-semibold text-base-content">
                 {alertStats().total24h}
               </p>
@@ -308,7 +310,9 @@ export function OverviewTab(props: {
         <Card padding="sm" class="sm:p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-[10px] sm:text-sm text-muted uppercase tracking-wider sm:normal-case">Guest Overrides</p>
+              <p class="text-[10px] sm:text-sm text-muted uppercase tracking-wider sm:normal-case">
+                Guest Overrides
+              </p>
               <p class="text-lg sm:text-2xl font-semibold text-blue-600 dark:text-blue-400">
                 {alertStats().overrides}
               </p>
@@ -339,9 +343,26 @@ export function OverviewTab(props: {
           fallback={
             <div class="text-center py-8 text-muted">
               <div class="flex justify-center mb-3">
-                <svg class="w-12 h-12 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />
+                <svg
+                  class="w-12 h-12 text-green-500 dark:text-green-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    fill="none"
+                  />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 12l2 2 4-4"
+                  />
                 </svg>
               </div>
               <p class="text-sm">No active alerts</p>
@@ -372,7 +393,9 @@ export function OverviewTab(props: {
                     }
                     setBulkAckProcessing(true);
                     try {
-                      const result = await AlertsAPI.bulkAcknowledge(pending.map((alert) => alert.id));
+                      const result = await AlertsAPI.bulkAcknowledge(
+                        pending.map((alert) => alert.id),
+                      );
                       const successes = result.results.filter((r) => r.success);
                       const failures = result.results.filter((r) => !r.success);
 
@@ -419,24 +442,27 @@ export function OverviewTab(props: {
               {(alert) => (
                 <div
                   id={`alert-${alert.id}`}
-                  class={`border rounded-md p-3 sm:p-4 transition-all ${processingAlerts().has(alert.id) ? 'opacity-50' : ''
- } ${alert.acknowledged
- ? 'opacity-60 border-border bg-surface-alt'
- : alert.level === 'critical'
- ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900'
- : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900'
- }`}
+                  class={`border rounded-md p-3 sm:p-4 transition-all ${
+                    processingAlerts().has(alert.id) ? 'opacity-50' : ''
+                  } ${
+                    alert.acknowledged
+                      ? 'opacity-60 border-border bg-surface-alt'
+                      : alert.level === 'critical'
+                        ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900'
+                        : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900'
+                  }`}
                 >
                   <div class="flex flex-col sm:flex-row sm:items-start">
                     <div class="flex items-start flex-1">
                       {/* Status icon */}
                       <div
-                        class={`mr-3 mt-0.5 transition-all ${alert.acknowledged
- ? 'text-green-600 dark:text-green-400'
- : alert.level === 'critical'
- ? 'text-red-600 dark:text-red-400'
- : 'text-yellow-600 dark:text-yellow-400'
- }`}
+                        class={`mr-3 mt-0.5 transition-all ${
+                          alert.acknowledged
+                            ? 'text-green-600 dark:text-green-400'
+                            : alert.level === 'critical'
+                              ? 'text-red-600 dark:text-red-400'
+                              : 'text-yellow-600 dark:text-yellow-400'
+                        }`}
                       >
                         {alert.acknowledged ? (
                           // Checkmark for acknowledged
@@ -473,16 +499,15 @@ export function OverviewTab(props: {
                       <div class="flex-1 min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
                           <span
-                            class={`text-sm font-medium truncate ${alert.level === 'critical'
- ? 'text-red-700 dark:text-red-400'
- : 'text-yellow-700 dark:text-yellow-400'
- }`}
+                            class={`text-sm font-medium truncate ${
+                              alert.level === 'critical'
+                                ? 'text-red-700 dark:text-red-400'
+                                : 'text-yellow-700 dark:text-yellow-400'
+                            }`}
                           >
                             {alert.resourceName}
                           </span>
-                          <span class="text-xs text-muted">
-                            ({alert.type})
-                          </span>
+                          <span class="text-xs text-muted">({alert.type})</span>
                           <Show when={alert.node}>
                             <span class="text-xs text-muted">
                               on {alert.nodeDisplayName || alert.node}
@@ -494,9 +519,7 @@ export function OverviewTab(props: {
                             </span>
                           </Show>
                         </div>
-                        <p class="text-sm text-base-content mt-1 break-words">
-                          {alert.message}
-                        </p>
+                        <p class="text-sm text-base-content mt-1 break-words">{alert.message}</p>
                         <p class="text-xs text-muted mt-1">
                           Started: {new Date(alert.startTime).toLocaleString()}
                         </p>
@@ -504,10 +527,11 @@ export function OverviewTab(props: {
                     </div>
                     <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start justify-end">
                       <button
-                        class={`px-3 py-1.5 text-xs font-medium border rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed ${alert.acknowledged
- ? ' text-base-content border-border hover:bg-surface-hover'
- : ' text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900'
- }`}
+                        class={`px-3 py-1.5 text-xs font-medium border rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                          alert.acknowledged
+                            ? ' text-base-content border-border hover:bg-surface-hover'
+                            : ' text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900'
+                        }`}
                         disabled={processingAlerts().has(alert.id)}
                         onClick={async (e) => {
                           e.preventDefault();
@@ -606,15 +630,23 @@ export function OverviewTab(props: {
                                   </span>
                                 </Show>
                                 <Show when={timeline().openedAt}>
-                                  <span>opened {new Date(timeline().openedAt).toLocaleString()}</span>
+                                  <span>
+                                    opened {new Date(timeline().openedAt).toLocaleString()}
+                                  </span>
                                 </Show>
                                 <Show when={timeline().closedAt}>
-                                  <span>closed {new Date(timeline().closedAt as string).toLocaleString()}</span>
+                                  <span>
+                                    closed{' '}
+                                    {new Date(timeline().closedAt as string).toLocaleString()}
+                                  </span>
                                 </Show>
                               </div>
                               {(() => {
                                 const events = timeline().events || [];
-                                const filteredEvents = filterIncidentEvents(events, incidentEventFilters());
+                                const filteredEvents = filterIncidentEvents(
+                                  events,
+                                  incidentEventFilters(),
+                                );
                                 return (
                                   <>
                                     <Show when={events.length > 0}>
@@ -632,21 +664,42 @@ export function OverviewTab(props: {
                                                 <span class="font-medium text-base-content">
                                                   {event.summary}
                                                 </span>
-                                                <span>{new Date(event.timestamp).toLocaleString()}</span>
+                                                <span>
+                                                  {new Date(event.timestamp).toLocaleString()}
+                                                </span>
                                               </div>
-                                              <Show when={event.details && (event.details as { note?: string }).note}>
+                                              <Show
+                                                when={
+                                                  event.details &&
+                                                  (event.details as { note?: string }).note
+                                                }
+                                              >
                                                 <p class="text-xs text-base-content mt-1">
                                                   {(event.details as { note?: string }).note}
                                                 </p>
                                               </Show>
-                                              <Show when={event.details && (event.details as { command?: string }).command}>
+                                              <Show
+                                                when={
+                                                  event.details &&
+                                                  (event.details as { command?: string }).command
+                                                }
+                                              >
                                                 <p class="text-xs text-base-content mt-1 font-mono">
                                                   {(event.details as { command?: string }).command}
                                                 </p>
                                               </Show>
-                                              <Show when={event.details && (event.details as { output_excerpt?: string }).output_excerpt}>
+                                              <Show
+                                                when={
+                                                  event.details &&
+                                                  (event.details as { output_excerpt?: string })
+                                                    .output_excerpt
+                                                }
+                                              >
                                                 <p class="text-xs text-muted mt-1">
-                                                  {(event.details as { output_excerpt?: string }).output_excerpt}
+                                                  {
+                                                    (event.details as { output_excerpt?: string })
+                                                      .output_excerpt
+                                                  }
                                                 </p>
                                               </Show>
                                             </div>
@@ -673,13 +726,19 @@ export function OverviewTab(props: {
                                   value={incidentNoteDrafts()[alert.id] || ''}
                                   onInput={(e) => {
                                     const value = e.currentTarget.value;
-                                    setIncidentNoteDrafts((prev) => ({ ...prev, [alert.id]: value }));
+                                    setIncidentNoteDrafts((prev) => ({
+                                      ...prev,
+                                      [alert.id]: value,
+                                    }));
                                   }}
                                 />
                                 <div class="flex justify-end">
                                   <button
                                     class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
-                                    disabled={incidentNoteSaving().has(alert.id) || !(incidentNoteDrafts()[alert.id] || '').trim()}
+                                    disabled={
+                                      incidentNoteSaving().has(alert.id) ||
+                                      !(incidentNoteDrafts()[alert.id] || '').trim()
+                                    }
                                     onClick={() => {
                                       void saveIncidentNote(alert.id, alert.startTime);
                                     }}

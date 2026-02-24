@@ -82,9 +82,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
           <div class="text-sm text-blue-800 dark:text-blue-200">
             <p class="font-medium mb-1">Configuration Priority</p>
             <ul class="space-y-1">
-              <li>
-                • Some env vars override settings (API_TOKENS, legacy API_TOKEN, PORTS, AUTH)
-              </li>
+              <li>• Some env vars override settings (API_TOKENS, legacy API_TOKEN, PORTS, AUTH)</li>
               <li>• Changes made here are saved to system.json immediately</li>
               <li>• Settings persist unless overridden by env vars</li>
             </ul>
@@ -143,16 +141,15 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
           <Show when={props.discoveryEnabled()}>
             <div class="space-y-4 rounded-md border border-border bg-surface p-3">
               <fieldset class="space-y-2">
-                <legend class="text-xs font-medium text-base-content">
-                  Scan scope
-                </legend>
+                <legend class="text-xs font-medium text-base-content">Scan scope</legend>
                 <div class="space-y-2">
                   {/* Auto mode */}
                   <label
-                    class={`flex items-start gap-3 rounded-md border p-2 transition-colors ${props.discoveryMode() === 'auto'
- ? 'border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900'
- : 'border-transparent hover:border-border'
- }`}
+                    class={`flex items-start gap-3 rounded-md border p-2 transition-colors ${
+                      props.discoveryMode() === 'auto'
+                        ? 'border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900'
+                        : 'border-transparent hover:border-border'
+                    }`}
                   >
                     <input
                       type="radio"
@@ -170,23 +167,22 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                       class="mt-1 h-5 w-5 sm:h-4 sm:w-4 border-slate-300 text-blue-600 focus:ring-blue-500"
                     />
                     <div class="space-y-1">
-                      <p class="text-sm font-medium text-base-content">
-                        Auto (slower, full scan)
-                      </p>
+                      <p class="text-sm font-medium text-base-content">Auto (slower, full scan)</p>
                       <p class="text-xs text-muted">
-                        Scans all network interfaces on this host, including container bridges, local
-                        subnets, and gateways. On large or shared networks, consider using a custom
-                        subnet instead.
+                        Scans all network interfaces on this host, including container bridges,
+                        local subnets, and gateways. On large or shared networks, consider using a
+                        custom subnet instead.
                       </p>
                     </div>
                   </label>
 
                   {/* Custom mode */}
                   <label
-                    class={`flex items-start gap-3 rounded-md border p-2 transition-colors ${props.discoveryMode() === 'custom'
- ? 'border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900'
- : 'border-transparent hover:border-border'
- }`}
+                    class={`flex items-start gap-3 rounded-md border p-2 transition-colors ${
+                      props.discoveryMode() === 'custom'
+                        ? 'border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900'
+                        : 'border-transparent hover:border-border'
+                    }`}
                   >
                     <input
                       type="radio"
@@ -204,9 +200,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                       class="mt-1 h-5 w-5 sm:h-4 sm:w-4 border-slate-300 text-blue-600 focus:ring-blue-500"
                     />
                     <div class="space-y-1">
-                      <p class="text-sm font-medium text-base-content">
-                        Custom subnet (faster)
-                      </p>
+                      <p class="text-sm font-medium text-base-content">Custom subnet (faster)</p>
                       <p class="text-xs text-muted">
                         Limit discovery to one or more CIDR ranges to finish faster on large
                         networks.
@@ -228,7 +222,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                           return (
                             <button
                               type="button"
-                              class={`rounded border px-2.5 py-1 text-[0.7rem] transition-colors ${isActive ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500' : 'border-border text-base-content hover:border-blue-400 hover:bg-blue-50 dark:hover:border-blue-500 dark:hover:bg-blue-900' }`}
+                              class={`rounded border px-2.5 py-1 text-[0.7rem] transition-colors ${isActive ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500' : 'border-border text-base-content hover:border-blue-400 hover:bg-blue-50 dark:hover:border-blue-500 dark:hover:bg-blue-900'}`}
                               onClick={async () => {
                                 if (props.envOverrides().discoverySubnet) {
                                   return;
@@ -244,13 +238,13 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                                   props.setDiscoverySubnetDraft('');
                                   props.setLastCustomSubnet('');
                                   props.setDiscoverySubnetError(
-                                    'Enter at least one subnet in CIDR format (e.g., 192.168.1.0/24)'
+                                    'Enter at least one subnet in CIDR format (e.g., 192.168.1.0/24)',
                                   );
                                   return;
                                 }
 
                                 const updatedValue = props.normalizeSubnetList(
-                                  selections.join(', ')
+                                  selections.join(', '),
                                 );
                                 props.setDiscoveryMode('custom');
                                 props.setDiscoverySubnetDraft(updatedValue);
@@ -261,59 +255,57 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                               disabled={props.envOverrides().discoverySubnet}
                               classList={{
                                 'cursor-not-allowed opacity-60':
- props.envOverrides().discoverySubnet,
- }}
- >
- {preset}
- </button>
- );
- }}
- </For>
- </div>
- </Show>
- </div>
- </fieldset>
+                                  props.envOverrides().discoverySubnet,
+                              }}
+                            >
+                              {preset}
+                            </button>
+                          );
+                        }}
+                      </For>
+                    </div>
+                  </Show>
+                </div>
+              </fieldset>
 
- {/* Subnet Input */}
- <div class="space-y-2">
- <div class="flex items-center justify-between gap-2">
- <label
- for="discoverySubnetInput"
- class="text-xs font-medium text-base-content"
- >
- Discovery subnet
- </label>
- <span
- class="text-slate-400 hover:text-muted"
- title="Use CIDR notation (comma-separated for multiple), e.g. 192.168.1.0/24, 10.0.0.0/24. Smaller ranges keep scans quick."
- >
- <svg
- class="h-5 w-5 sm:h-4 sm:w-4"
- viewBox="0 0 24 24"
- fill="none"
- stroke="currentColor"
- stroke-width="2"
- >
- <circle cx="12" cy="12" r="10"></circle>
- <path d="M12 16v-4"></path>
- <path d="M12 8h.01"></path>
- </svg>
- </span>
- </div>
- <input
- id="discoverySubnetInput"
- ref={props.discoverySubnetInputRef}
- type="text"
- value={props.discoverySubnetDraft()}
- placeholder={
- props.discoveryMode() ==='auto'
+              {/* Subnet Input */}
+              <div class="space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                  <label for="discoverySubnetInput" class="text-xs font-medium text-base-content">
+                    Discovery subnet
+                  </label>
+                  <span
+                    class="text-slate-400 hover:text-muted"
+                    title="Use CIDR notation (comma-separated for multiple), e.g. 192.168.1.0/24, 10.0.0.0/24. Smaller ranges keep scans quick."
+                  >
+                    <svg
+                      class="h-5 w-5 sm:h-4 sm:w-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M12 16v-4"></path>
+                      <path d="M12 8h.01"></path>
+                    </svg>
+                  </span>
+                </div>
+                <input
+                  id="discoverySubnetInput"
+                  ref={props.discoverySubnetInputRef}
+                  type="text"
+                  value={props.discoverySubnetDraft()}
+                  placeholder={
+                    props.discoveryMode() === 'auto'
                       ? 'auto (scan every network phase)'
                       : '192.168.1.0/24, 10.0.0.0/24'
                   }
-                  class={`w-full min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${props.envOverrides().discoverySubnet
- ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900 dark:text-amber-200 cursor-not-allowed opacity-60'
- : 'border-border bg-surface'
- }`}
+                  class={`w-full min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    props.envOverrides().discoverySubnet
+                      ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900 dark:text-amber-200 cursor-not-allowed opacity-60'
+                      : 'border-border bg-surface'
+                  }`}
                   disabled={props.envOverrides().discoverySubnet}
                   onInput={(e) => {
                     if (props.envOverrides().discoverySubnet) {
@@ -332,7 +324,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                     }
                     if (!props.isValidCIDR(trimmed)) {
                       props.setDiscoverySubnetError(
-                        'Use CIDR format such as 192.168.1.0/24 (comma-separated for multiple)'
+                        'Use CIDR format such as 192.168.1.0/24 (comma-separated for multiple)',
                       );
                     } else {
                       props.setDiscoverySubnetError(undefined);
@@ -350,13 +342,13 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                     const trimmed = rawValue.trim();
                     if (!trimmed) {
                       props.setDiscoverySubnetError(
-                        'Enter at least one subnet in CIDR format (e.g., 192.168.1.0/24)'
+                        'Enter at least one subnet in CIDR format (e.g., 192.168.1.0/24)',
                       );
                       return;
                     }
                     if (!props.isValidCIDR(trimmed)) {
                       props.setDiscoverySubnetError(
-                        'Use CIDR format such as 192.168.1.0/24 (comma-separated for multiple)'
+                        'Use CIDR format such as 192.168.1.0/24 (comma-separated for multiple)',
                       );
                       return;
                     }
@@ -392,7 +384,9 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
           </Show>
 
           {/* Env override warning */}
-          <Show when={props.envOverrides().discoveryEnabled || props.envOverrides().discoverySubnet}>
+          <Show
+            when={props.envOverrides().discoveryEnabled || props.envOverrides().discoverySubnet}
+          >
             <div class="rounded-md border border-amber-200 bg-amber-100 p-3 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
               Discovery settings are locked by environment variables. Update the service
               configuration and restart Pulse to change them here.
@@ -421,7 +415,8 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
               Dashboard URL for Notifications
             </label>
             <p class="text-xs text-muted">
-              The URL included in email alerts to link back to Pulse. Required for Docker deployments with custom ports.
+              The URL included in email alerts to link back to Pulse. Required for Docker
+              deployments with custom ports.
             </p>
             <div class="relative">
               <input
@@ -435,10 +430,11 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                 }}
                 disabled={props.envOverrides().publicURL}
                 placeholder="http://192.168.1.100:8080"
-                class={`w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md ${props.envOverrides().publicURL
- ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900 cursor-not-allowed opacity-75'
- : 'border-border bg-surface'
- }`}
+                class={`w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md ${
+                  props.envOverrides().publicURL
+                    ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900 cursor-not-allowed opacity-75'
+                    : 'border-border bg-surface'
+                }`}
               />
               {props.envOverrides().publicURL && (
                 <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
@@ -460,8 +456,8 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
               )}
             </div>
             <p class="text-xs text-muted mt-1">
-              Example: If you access Pulse at <code>http://myserver:8080</code>, enter that URL here.
-              Leave empty to auto-detect (may not work correctly with Docker port mappings).
+              Example: If you access Pulse at <code>http://myserver:8080</code>, enter that URL
+              here. Leave empty to auto-detect (may not work correctly with Docker port mappings).
             </p>
           </div>
         </section>
@@ -483,9 +479,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
             Network Settings
           </h4>
           <div class="space-y-2">
-            <label class="text-sm font-medium text-base-content">
-              CORS Allowed Origins
-            </label>
+            <label class="text-sm font-medium text-base-content">CORS Allowed Origins</label>
             <p class="text-xs text-muted">
               For reverse proxy setups (* = allow all, empty = same-origin only)
             </p>
@@ -501,10 +495,11 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                 }}
                 disabled={props.envOverrides().allowedOrigins}
                 placeholder="* or https://example.com"
-                class={`w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md ${props.envOverrides().allowedOrigins
- ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900 cursor-not-allowed opacity-75'
- : 'border-border bg-surface'
- }`}
+                class={`w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md ${
+                  props.envOverrides().allowedOrigins
+                    ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900 cursor-not-allowed opacity-75'
+                    : 'border-border bg-surface'
+                }`}
               />
               {props.envOverrides().allowedOrigins && (
                 <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
@@ -617,9 +612,9 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                 Allowed Private IP Ranges for Webhooks
               </label>
               <p class="text-xs text-muted mb-2">
-                By default, webhooks to private IP addresses are blocked for security. Enter
-                trusted CIDR ranges to allow webhooks to internal services (leave empty to block
-                all private IPs).
+                By default, webhooks to private IP addresses are blocked for security. Enter trusted
+                CIDR ranges to allow webhooks to internal services (leave empty to block all private
+                IPs).
               </p>
               <input
                 type="text"

@@ -101,6 +101,7 @@ import {
 } from './routing/resourceLinks';
 import { buildStorageRecoveryTabSpecs } from './routing/platformTabs';
 import { isMultiTenantEnabled, isPro, licenseLoaded, loadLicenseStatus } from '@/stores/license';
+import { IS_V6_PUBLIC_RELEASE } from '@/config/publicRelease';
 
 import { showToast } from '@/utils/toast';
 import {
@@ -1176,8 +1177,14 @@ function App() {
   return (
     <Router root={RootLayout}>
       <Route path="/pricing" component={PricingPage} />
-      <Route path="/cloud" component={() => <Navigate href="/cloud/signup" />} />
-      <Route path="/cloud/signup" component={HostedSignupPage} />
+      <Route
+        path="/cloud"
+        component={() => <Navigate href={IS_V6_PUBLIC_RELEASE ? '/cloud/signup' : '/pricing'} />}
+      />
+      <Route
+        path="/cloud/signup"
+        component={IS_V6_PUBLIC_RELEASE ? HostedSignupPage : () => <Navigate href="/pricing" />}
+      />
       <Route path="/dashboard" component={DashboardPage} />
       <Route path="/" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
       <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsView} />

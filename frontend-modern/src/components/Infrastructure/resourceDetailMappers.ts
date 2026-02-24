@@ -1,4 +1,12 @@
-import type { Disk, Host, HostNetworkInterface, HostRAIDArray, HostSensorSummary, Memory, Node } from '@/types/api';
+import type {
+  Disk,
+  Host,
+  HostNetworkInterface,
+  HostRAIDArray,
+  HostSensorSummary,
+  Memory,
+  Node,
+} from '@/types/api';
 import type { Resource, ResourceMetric } from '@/types/resource';
 import { formatTemperature } from '@/utils/temperature';
 import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
@@ -6,6 +14,7 @@ import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
 export type ProxmoxPlatformData = {
   nodeName?: string;
   clusterName?: string;
+  vmid?: number;
   pveVersion?: string;
   kernelVersion?: string;
   uptime?: number;
@@ -83,8 +92,12 @@ export type KubernetesMetricCapabilities = {
 
 export type KubernetesPlatformData = {
   clusterId?: string;
+  agentId?: string;
   clusterName?: string;
   context?: string;
+  namespace?: string;
+  podName?: string;
+  podUid?: string;
   metricCapabilities?: KubernetesMetricCapabilities;
 };
 
@@ -119,6 +132,7 @@ export type DockerHostCommand = {
 
 export type DockerPlatformData = {
   hostSourceId?: string;
+  containerId?: string;
   hostname?: string;
   runtime?: string;
   runtimeVersion?: string;
@@ -155,6 +169,11 @@ export type DiscoveryConfig = {
 };
 
 export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null => {
+  const asString = (value: unknown): string | undefined =>
+    typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+  const asNumber = (value: unknown): number | undefined =>
+    typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
   const explicitDiscoveryTarget = resource.discoveryTarget;
   if (
     explicitDiscoveryTarget &&
@@ -203,18 +222,62 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
   }
 
   const platformData = resource.platformData as PlatformData | undefined;
-  const hostLookupId =
-    platformData?.agent?.agentId ||
+  const dockerPlatformData = platformData?.docker as DockerPlatformData | undefined;
+  const kubernetesPlatformData = platformData?.kubernetes;
+  const proxmoxVmid =
+    asNumber(resource.proxmox?.vmid) ??
+    asNumber(platformData?.proxmox?.vmid) ??
+    asNumber((platformData as { vmid?: unknown } | undefined)?.vmid);
+  const vmidResourceId =
+    proxmoxVmid !== undefined && proxmoxVmid > 0 ? String(proxmoxVmid) : undefined;
+  const proxmoxNodeName =
+    asString(resource.proxmox?.nodeName) ||
     platformData?.proxmox?.nodeName ||
+    asString((platformData as { nodeName?: unknown } | undefined)?.nodeName);
+  const kubernetesHostId =
+    asString(resource.kubernetes?.agentId) ||
+    asString(kubernetesPlatformData?.agentId) ||
+    asString(resource.kubernetes?.clusterId) ||
+    asString(kubernetesPlatformData?.clusterId) ||
+    asString(resource.clusterId) ||
+    asString(resource.kubernetes?.context) ||
+    asString(kubernetesPlatformData?.context) ||
+    asString(resource.kubernetes?.clusterName) ||
+    asString(kubernetesPlatformData?.clusterName);
+  const kubernetesResourceId =
+    asString(resource.kubernetes?.podUid) ||
+    asString(kubernetesPlatformData?.podUid) ||
+    (() => {
+      const namespace =
+        asString(resource.kubernetes?.namespace) || asString(kubernetesPlatformData?.namespace);
+      const podName =
+        asString(resource.kubernetes?.podName) ||
+        asString(kubernetesPlatformData?.podName) ||
+        asString(resource.name);
+      return namespace && podName ? `${namespace}/${podName}` : undefined;
+    })();
+  const hostLookupId =
+    asString(dockerPlatformData?.hostSourceId) ||
+    asString(resource.agent?.agentId) ||
+    asString(platformData?.agent?.agentId) ||
+    proxmoxNodeName ||
     platformData?.agent?.hostname ||
-    ((platformData?.docker as { hostname?: string } | undefined)?.hostname) ||
+    asString(dockerPlatformData?.hostname) ||
     resource.identity?.hostname ||
     resource.name ||
     resource.platformId ||
     resource.id;
   const hostLikeId = hostLookupId;
-  const workloadHostId = resource.platformId || resource.parentId || resource.id;
-  const hostname = resource.identity?.hostname || resource.displayName || resource.name || resource.id;
+  const workloadHostId =
+    proxmoxNodeName ||
+    asString(dockerPlatformData?.hostSourceId) ||
+    kubernetesHostId ||
+    asString(resource.parentName) ||
+    resource.parentId ||
+    resource.platformId ||
+    resource.id;
+  const hostname =
+    resource.identity?.hostname || resource.displayName || resource.name || resource.id;
 
   switch (resource.type) {
     case 'host':
@@ -238,7 +301,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
       return {
         resourceType: 'vm',
         hostId: workloadHostId,
-        resourceId: resource.id,
+        resourceId: vmidResourceId || resource.id,
         hostname,
         metadataKind: 'guest',
         metadataId: resource.id,
@@ -249,7 +312,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
       return {
         resourceType: 'lxc',
         hostId: workloadHostId,
-        resourceId: resource.id,
+        resourceId: vmidResourceId || resource.id,
         hostname,
         metadataKind: 'guest',
         metadataId: resource.id,
@@ -259,7 +322,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
       return {
         resourceType: 'docker',
         hostId: workloadHostId,
-        resourceId: resource.id,
+        resourceId: asString(dockerPlatformData?.containerId) || resource.id,
         hostname,
         metadataKind: 'guest',
         metadataId: resource.id,
@@ -271,7 +334,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
       return {
         resourceType: 'k8s',
         hostId: workloadHostId,
-        resourceId: resource.id,
+        resourceId: kubernetesResourceId || resource.id,
         hostname,
         metadataKind: 'guest',
         metadataId: resource.id,
@@ -282,13 +345,11 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
   }
 };
 
-
-
 export const buildMemory = (metric?: ResourceMetric, fallback?: Partial<Memory>): Memory => {
   const total = metric?.total ?? fallback?.total ?? 0;
   const used = metric?.used ?? fallback?.used ?? 0;
   const free = metric?.free ?? fallback?.free ?? Math.max(total - used, 0);
-  const usage = total > 0 ? used / total : fallback?.usage ?? 0;
+  const usage = total > 0 ? used / total : (fallback?.usage ?? 0);
   return {
     total,
     used,
@@ -301,7 +362,7 @@ export const buildDisk = (metric?: ResourceMetric, fallback?: Partial<Disk>): Di
   const total = metric?.total ?? fallback?.total ?? 0;
   const used = metric?.used ?? fallback?.used ?? 0;
   const free = metric?.free ?? fallback?.free ?? Math.max(total - used, 0);
-  const usage = total > 0 ? used / total : fallback?.usage ?? 0;
+  const usage = total > 0 ? used / total : (fallback?.usage ?? 0);
   return {
     total,
     used,
@@ -339,7 +400,9 @@ export const toNodeFromProxmox = (resource: Resource): Node | null => {
 
   const memory = buildMemory(resource.memory);
   const disk = buildDisk(resource.disk);
-  const lastSeen = Number.isFinite(resource.lastSeen) ? new Date(resource.lastSeen).toISOString() : new Date().toISOString();
+  const lastSeen = Number.isFinite(resource.lastSeen)
+    ? new Date(resource.lastSeen).toISOString()
+    : new Date().toISOString();
 
   return {
     id: resource.id,
@@ -367,14 +430,21 @@ export const toNodeFromProxmox = (resource: Resource): Node | null => {
   } as Node;
 };
 
-export const toHostFromAgent = (resource: Resource, explicitAgent?: AgentPlatformData): Host | null => {
+export const toHostFromAgent = (
+  resource: Resource,
+  explicitAgent?: AgentPlatformData,
+): Host | null => {
   const platformData = resource.platformData as PlatformData | undefined;
   const agent = explicitAgent ?? platformData?.agent;
   if (!agent) return null;
 
   const proxmoxCores = platformData?.proxmox?.cpuInfo?.cores;
-  const cpuCount = [agent.cpuCount, (agent as { cpuCores?: number }).cpuCores, (agent as { cores?: number }).cores, proxmoxCores]
-    .find((value) => typeof value === 'number' && value > 0);
+  const cpuCount = [
+    agent.cpuCount,
+    (agent as { cpuCores?: number }).cpuCores,
+    (agent as { cores?: number }).cores,
+    proxmoxCores,
+  ].find((value) => typeof value === 'number' && value > 0);
 
   const hostname = agent.hostname ?? resource.platformId ?? resource.name ?? resource.id;
 

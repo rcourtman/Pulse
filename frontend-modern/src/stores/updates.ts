@@ -24,7 +24,16 @@ const isFiniteNumber = (value: unknown): value is number =>
 const normalizeUpdateInfo = (value: unknown): UpdateInfo | undefined => {
   if (!isRecord(value)) return undefined;
 
-  const { available, currentVersion, latestVersion, releaseNotes, releaseDate, downloadUrl, isPrerelease, warning } = value;
+  const {
+    available,
+    currentVersion,
+    latestVersion,
+    releaseNotes,
+    releaseDate,
+    downloadUrl,
+    isPrerelease,
+    warning,
+  } = value;
 
   if (
     typeof available !== 'boolean' ||
@@ -116,7 +125,11 @@ const isTransientUpdateCheckError = (error: unknown): boolean => {
     return false;
   }
 
-  if (message.includes('failed to fetch') || message.includes('networkerror') || message.includes('timeout')) {
+  if (
+    message.includes('failed to fetch') ||
+    message.includes('networkerror') ||
+    message.includes('timeout')
+  ) {
     return true;
   }
 
@@ -160,7 +173,9 @@ const checkForUpdates = async (force = false): Promise<void> => {
     if (state.updateInfo) {
       // First check if version matches (in case user updated)
       try {
-        const currentVersion = await withTransientRetry('version check', () => UpdatesAPI.getVersion());
+        const currentVersion = await withTransientRetry('version check', () =>
+          UpdatesAPI.getVersion(),
+        );
         if (state.updateInfo.currentVersion !== currentVersion.version) {
           // Version changed, invalidate cache and check again
           state.updateInfo = undefined;
@@ -327,10 +342,6 @@ declare global {
 
 const pulseHostname = getPulseHostname();
 
-if (
-  import.meta.env.DEV ||
-  pulseHostname === 'localhost' ||
-  pulseHostname.startsWith('192.168')
-) {
+if (import.meta.env.DEV || pulseHostname === 'localhost' || pulseHostname.startsWith('192.168')) {
   window.updateStore = updateStore;
 }

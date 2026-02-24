@@ -62,7 +62,9 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
         throw new Error(text || 'Failed to change password');
       }
 
-      notificationStore.success('Password changed successfully. Please log in with your new password.');
+      notificationStore.success(
+        'Password changed successfully. Please log in with your new password.',
+      );
 
       // Clear form
       setCurrentPassword('');

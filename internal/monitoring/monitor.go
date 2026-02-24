@@ -111,6 +111,18 @@ type ResourceStoreInterface interface {
 	PopulateFromSnapshot(snapshot models.StateSnapshot)
 }
 
+// SupplementalRecordStore is an optional extension for resource stores that can
+// ingest source-native unified records in addition to legacy snapshots.
+type SupplementalRecordStore interface {
+	PopulateSupplementalRecords(source unifiedresources.DataSource, records []unifiedresources.IngestRecord)
+}
+
+// MonitorSupplementalRecordsProvider emits source-native records outside the
+// poll-provider scheduling path (for example, dedicated background pollers).
+type MonitorSupplementalRecordsProvider interface {
+	SupplementalRecords(m *Monitor, orgID string) []unifiedresources.IngestRecord
+}
+
 func getNodeDisplayName(instance *config.PVEInstance, nodeName string) string {
 	baseName := strings.TrimSpace(nodeName)
 	if baseName == "" {
@@ -177,9 +189,15 @@ func (m *Monitor) totalClientCount() int {
 	if m == nil {
 		return 0
 	}
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return len(m.pveClients) + len(m.pbsClients) + len(m.pmgClients)
+
+	total := 0
+	for _, provider := range m.pollProviderSnapshotWithBuiltins() {
+		if provider == nil {
+			continue
+		}
+		total += len(provider.ListInstances(m))
+	}
+	return total
 }
 
 func (m *Monitor) getPVEClient(name string) (PVEClientInterface, bool) {
@@ -559,6 +577,11 @@ func (r *realExecutor) Execute(ctx context.Context, task PollTask) {
 		return
 	}
 
+	if task.Run != nil {
+		task.Run(ctx)
+		return
+	}
+
 	switch strings.ToLower(task.InstanceType) {
 	case "pve":
 		if task.PVEClient == nil {
@@ -669,6 +692,7 @@ type Monitor struct {
 	pveClients                 map[string]PVEClientInterface
 	pbsClients                 map[string]*pbs.Client
 	pmgClients                 map[string]*pmg.Client
+	pollProviders              map[InstanceType]PollProvider
 	pollMetrics                *PollMetrics
 	scheduler                  *AdaptiveScheduler
 	stalenessTracker           *StalenessTracker
@@ -749,7 +773,8 @@ type Monitor struct {
 	nodeLastOnline           map[string]time.Time           // Track last time each node was seen online (for grace period)
 	nodePendingUpdatesCache  map[string]pendingUpdatesCache // Cache pending updates per node (checked every 30 min)
 	resourceStore            ResourceStoreInterface         // Optional unified resource store for polling optimization
-	recoveryManager          *recoverymanager.Manager       // Optional recovery store manager for backup rollups
+	supplementalProviders    map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider
+	recoveryManager          *recoverymanager.Manager // Optional recovery store manager for backup rollups
 	mockMetricsCancel        context.CancelFunc
 	mockMetricsWg            sync.WaitGroup
 	dockerChecker            DockerChecker // Optional Docker checker for LXC containers
@@ -986,6 +1011,10 @@ func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface
 
 // RemoveDockerHost removes a docker host from the shared state and clears related alerts.
 func (m *Monitor) GetConnectionStatuses() map[string]bool {
+	if m == nil {
+		return map[string]bool{}
+	}
+
 	if mock.IsMockEnabled() {
 		statuses := make(map[string]bool)
 		state := mock.GetMockState()
@@ -1003,6 +1032,13 @@ func (m *Monitor) GetConnectionStatuses() map[string]bool {
 				statuses[pbsInst.Host] = strings.ToLower(pbsInst.Status) != "offline"
 			}
 		}
+		for _, pmgInst := range state.PMGInstances {
+			key := "pmg-" + pmgInst.Name
+			statuses[key] = strings.ToLower(pmgInst.Status) != "offline"
+			if pmgInst.Host != "" {
+				statuses[pmgInst.Host] = strings.ToLower(pmgInst.Status) != "offline"
+			}
+		}
 
 		for _, dockerHost := range state.DockerHosts {
 			key := dockerConnectionPrefix + dockerHost.ID
@@ -1011,45 +1047,15 @@ func (m *Monitor) GetConnectionStatuses() map[string]bool {
 		return statuses
 	}
 
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
 	statuses := make(map[string]bool)
-
-	// Check all configured PVE nodes (not just ones with clients)
-	for _, pve := range m.config.PVEInstances {
-		key := "pve-" + pve.Name
-		// Check if we have a client for this node
-		if client, exists := m.pveClients[pve.Name]; exists && client != nil {
-			// We have a client, check actual connection health from state
-			if m.state != nil && m.state.ConnectionHealth != nil {
-				statuses[key] = m.state.ConnectionHealth[pve.Name]
-			} else {
-				statuses[key] = true // Assume connected if we have a client
+	for _, provider := range m.pollProviderSnapshotWithBuiltins() {
+		for key, connected := range m.providerConnectionStatuses(provider) {
+			if strings.TrimSpace(key) == "" {
+				continue
 			}
-		} else {
-			// No client means disconnected
-			statuses[key] = false
+			statuses[key] = connected
 		}
 	}
-
-	// Check all configured PBS nodes (not just ones with clients)
-	for _, pbs := range m.config.PBSInstances {
-		key := "pbs-" + pbs.Name
-		// Check if we have a client for this node
-		if client, exists := m.pbsClients[pbs.Name]; exists && client != nil {
-			// We have a client, check actual connection health from state
-			if m.state != nil && m.state.ConnectionHealth != nil {
-				statuses[key] = m.state.ConnectionHealth["pbs-"+pbs.Name]
-			} else {
-				statuses[key] = true // Assume connected if we have a client
-			}
-		} else {
-			// No client means disconnected
-			statuses[key] = false
-		}
-	}
-
 	return statuses
 }
 
@@ -1208,6 +1214,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		pveClients:                 make(map[string]PVEClientInterface),
 		pbsClients:                 make(map[string]*pbs.Client),
 		pmgClients:                 make(map[string]*pmg.Client),
+		pollProviders:              make(map[InstanceType]PollProvider),
 		pollMetrics:                getPollMetrics(),
 		scheduler:                  scheduler,
 		stalenessTracker:           stalenessTracker,
@@ -1270,6 +1277,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		dlqInsightMap:              make(map[string]*dlqInsight),
 		nodeLastOnline:             make(map[string]time.Time),
 		nodePendingUpdatesCache:    make(map[string]pendingUpdatesCache),
+		supplementalProviders:      make(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider),
 	}
 
 	m.breakerBaseRetry = 5 * time.Second
@@ -1283,6 +1291,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 	}
 
 	m.executor = newRealExecutor(m)
+	m.registerBuiltInPollProviders()
 	m.buildInstanceInfoCache(cfg)
 
 	// Initialize state with config values
@@ -1378,78 +1387,8 @@ func (m *Monitor) SetExecutor(exec PollExecutor) {
 }
 
 func (m *Monitor) buildInstanceInfoCache(cfg *config.Config) {
-	if m == nil || cfg == nil {
-		return
-	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if m.instanceInfoCache == nil {
-		m.instanceInfoCache = make(map[string]*instanceInfo)
-	}
-
-	add := func(instType InstanceType, name string, displayName string, connection string, metadata map[string]string) {
-		key := schedulerKey(instType, name)
-		m.instanceInfoCache[key] = &instanceInfo{
-			Key:         key,
-			Type:        instType,
-			DisplayName: displayName,
-			Connection:  connection,
-			Metadata:    metadata,
-		}
-	}
-
-	// PVE instances
-	for _, inst := range cfg.PVEInstances {
-		name := strings.TrimSpace(inst.Name)
-		if name == "" {
-			name = strings.TrimSpace(inst.Host)
-		}
-		if name == "" {
-			name = "pve-instance"
-		}
-		display := name
-		if display == "" {
-			display = strings.TrimSpace(inst.Host)
-		}
-		connection := strings.TrimSpace(inst.Host)
-		add(InstanceTypePVE, name, display, connection, nil)
-	}
-
-	// PBS instances
-	for _, inst := range cfg.PBSInstances {
-		name := strings.TrimSpace(inst.Name)
-		if name == "" {
-			name = strings.TrimSpace(inst.Host)
-		}
-		if name == "" {
-			name = "pbs-instance"
-		}
-		display := name
-		if display == "" {
-			display = strings.TrimSpace(inst.Host)
-		}
-		connection := strings.TrimSpace(inst.Host)
-		add(InstanceTypePBS, name, display, connection, nil)
-	}
-
-	// PMG instances
-	for _, inst := range cfg.PMGInstances {
-		name := strings.TrimSpace(inst.Name)
-		if name == "" {
-			name = strings.TrimSpace(inst.Host)
-		}
-		if name == "" {
-			name = "pmg-instance"
-		}
-		display := name
-		if display == "" {
-			display = strings.TrimSpace(inst.Host)
-		}
-		connection := strings.TrimSpace(inst.Host)
-		add(InstanceTypePMG, name, display, connection, nil)
-	}
+	_ = cfg
+	m.refreshInstanceInfoCacheFromProviders()
 }
 
 func (m *Monitor) getExecutor() PollExecutor {
@@ -1490,6 +1429,12 @@ func (m *Monitor) effectivePVEPollingInterval() time.Duration {
 }
 
 func (m *Monitor) baseIntervalForInstanceType(instanceType InstanceType) time.Duration {
+	if provider := m.getPollProvider(instanceType); provider != nil {
+		if interval := provider.BaseInterval(m); interval > 0 {
+			return interval
+		}
+	}
+
 	if m == nil || m.config == nil {
 		return DefaultSchedulerConfig().BaseInterval
 	}
@@ -1872,38 +1817,8 @@ func (m *Monitor) executeScheduledTask(ctx context.Context, task ScheduledTask) 
 		return
 	}
 
-	pollTask := PollTask{
-		InstanceName: task.InstanceName,
-		InstanceType: string(task.InstanceType),
-	}
-
-	switch task.InstanceType {
-	case InstanceTypePVE:
-		client, ok := m.getPVEClient(task.InstanceName)
-		if !ok || client == nil {
-			log.Warn().Str("instance", task.InstanceName).Msg("PVE client missing for scheduled task")
-			return
-		}
-		pollTask.PVEClient = client
-	case InstanceTypePBS:
-		client, ok := m.getPBSClient(task.InstanceName)
-		if !ok || client == nil {
-			log.Warn().Str("instance", task.InstanceName).Msg("PBS client missing for scheduled task")
-			return
-		}
-		pollTask.PBSClient = client
-	case InstanceTypePMG:
-		client, ok := m.getPMGClient(task.InstanceName)
-		if !ok || client == nil {
-			log.Warn().Str("instance", task.InstanceName).Msg("PMG client missing for scheduled task")
-			return
-		}
-		pollTask.PMGClient = client
-	default:
-		log.Debug().
-			Str("instance", task.InstanceName).
-			Str("type", string(task.InstanceType)).
-			Msg("Skipping unsupported task type")
+	pollTask, ok := m.buildPollTask(task)
+	if !ok {
 		return
 	}
 
@@ -1924,6 +1839,35 @@ func (m *Monitor) executeScheduledTask(ctx context.Context, task ScheduledTask) 
 			Dur("timeout", timeout).
 			Msg("Polling task timed out; rescheduling with fresh worker")
 	}
+}
+
+func (m *Monitor) buildPollTask(task ScheduledTask) (PollTask, bool) {
+	provider := m.getPollProvider(task.InstanceType)
+	if provider == nil {
+		log.Debug().
+			Str("instance", task.InstanceName).
+			Str("type", string(task.InstanceType)).
+			Msg("Skipping unsupported task type")
+		return PollTask{}, false
+	}
+
+	pollTask, err := provider.BuildPollTask(m, task.InstanceName)
+	if err != nil {
+		log.Warn().
+			Str("instance", task.InstanceName).
+			Str("type", string(task.InstanceType)).
+			Err(err).
+			Msg("Skipping scheduled task")
+		return PollTask{}, false
+	}
+
+	if strings.TrimSpace(pollTask.InstanceName) == "" {
+		pollTask.InstanceName = task.InstanceName
+	}
+	if strings.TrimSpace(pollTask.InstanceType) == "" {
+		pollTask.InstanceType = string(task.InstanceType)
+	}
+	return pollTask, true
 }
 
 func (m *Monitor) rescheduleTask(task ScheduledTask) {
@@ -2238,6 +2182,8 @@ func (m *Monitor) SchedulerHealth() SchedulerHealthResponse {
 		UpdatedAt: time.Now(),
 		Enabled:   m.config != nil && m.config.AdaptivePollingEnabled,
 	}
+
+	m.refreshInstanceInfoCacheFromProviders()
 
 	// Queue snapshot
 	if m.taskQueue != nil {
@@ -2744,6 +2690,30 @@ func (m *Monitor) SetResourceStore(store ResourceStoreInterface) {
 	log.Info().Msg("resource store set for polling optimization")
 }
 
+// SetSupplementalRecordsProvider configures source-native resource providers
+// that ingest alongside the legacy state snapshot path.
+func (m *Monitor) SetSupplementalRecordsProvider(source unifiedresources.DataSource, provider MonitorSupplementalRecordsProvider) {
+	if m == nil {
+		return
+	}
+
+	normalized := unifiedresources.DataSource(strings.ToLower(strings.TrimSpace(string(source))))
+	if normalized == "" {
+		return
+	}
+
+	m.mu.Lock()
+	if m.supplementalProviders == nil {
+		m.supplementalProviders = make(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider)
+	}
+	if provider == nil {
+		delete(m.supplementalProviders, normalized)
+	} else {
+		m.supplementalProviders[normalized] = provider
+	}
+	m.mu.Unlock()
+}
+
 // SetRecoveryManager wires the recovery store manager for best-effort ingestion of
 // recovery points derived from polled backup/snapshot data.
 func (m *Monitor) SetRecoveryManager(manager *recoverymanager.Manager) {
@@ -2775,6 +2745,23 @@ func (m *Monitor) GetMetricsStore() *metrics.Store {
 // This is used by the AI context builder to compute trends and predictions
 func (m *Monitor) GetMetricsHistory() *MetricsHistory {
 	return m.metricsHistory
+}
+
+// GetUnifiedResources returns the current unified resource view for this monitor.
+// Returns nil when no resource store is configured.
+func (m *Monitor) GetUnifiedResources() []unifiedresources.Resource {
+	if m == nil {
+		return nil
+	}
+
+	m.mu.RLock()
+	store := m.resourceStore
+	m.mu.RUnlock()
+	if store == nil {
+		return nil
+	}
+
+	return store.GetAll()
 }
 
 // shouldSkipNodeMetrics returns true if we should skip detailed metric polling
@@ -2818,7 +2805,37 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 		Int("dockerHosts", len(state.DockerHosts)).
 		Msg("[Resources] Populating resource store from state snapshot")
 
-	store.PopulateFromSnapshot(state)
+	snapshotForStore := state
+	ownedSources := m.providerOwnedSnapshotSources()
+	if len(ownedSources) > 0 {
+		snapshotForStore = unifiedresources.SnapshotWithoutSources(state, ownedSources)
+		sourceNames := make([]string, 0, len(ownedSources))
+		for _, source := range ownedSources {
+			sourceNames = append(sourceNames, string(source))
+		}
+		log.Debug().
+			Strs("sources", sourceNames).
+			Msg("[Resources] Suppressing legacy snapshot slices for provider-owned sources")
+	}
+
+	store.PopulateFromSnapshot(snapshotForStore)
+
+	supplementalStore, ok := store.(SupplementalRecordStore)
+	if !ok {
+		return
+	}
+
+	recordsBySource := m.collectSupplementalRecordsBySource()
+	for source, records := range recordsBySource {
+		if len(records) == 0 {
+			continue
+		}
+		supplementalStore.PopulateSupplementalRecords(source, records)
+		log.Debug().
+			Str("source", string(source)).
+			Int("records", len(records)).
+			Msg("[Resources] Ingested supplemental records")
+	}
 }
 
 // getResourcesForBroadcast retrieves all resources from the store and converts them to frontend format.
@@ -3004,7 +3021,15 @@ func monitorPlatformType(resource unifiedresources.Resource, resourceType string
 		if monitorHasSource(resource.Sources, unifiedresources.SourceAgent) {
 			return "host-agent"
 		}
-		return "proxmox-pve"
+		if monitorHasSource(resource.Sources, unifiedresources.SourceProxmox) {
+			return "proxmox-pve"
+		}
+		for _, source := range resource.Sources {
+			if candidate := strings.TrimSpace(string(source)); candidate != "" {
+				return candidate
+			}
+		}
+		return "unknown"
 	}
 }
 

@@ -32,15 +32,16 @@ export function StatusDot(props: StatusDotProps): JSX.Element {
   const size = () => props.size ?? 'sm';
   const ariaHidden = () => props.ariaHidden ?? !props.ariaLabel;
 
-  const className = () => [
-    'inline-block rounded-full flex-shrink-0',
-    SIZE_CLASSES[size()],
-    VARIANT_CLASSES[variant()],
-    props.pulse ? 'animate-pulse' : '',
-    props.class ?? '',
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const className = () =>
+    [
+      'inline-block rounded-full flex-shrink-0',
+      SIZE_CLASSES[size()],
+      VARIANT_CLASSES[variant()],
+      props.pulse ? 'animate-pulse' : '',
+      props.class ?? '',
+    ]
+      .filter(Boolean)
+      .join(' ');
 
   return (
     <span

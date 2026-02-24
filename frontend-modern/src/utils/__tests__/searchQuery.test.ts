@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  parseFilter,
-  parseFilterStack,
-  evaluateFilterStack,
-} from '@/utils/searchQuery';
+import { parseFilter, parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
 import type { VM } from '@/types/api';
 
 describe('parseFilter', () => {

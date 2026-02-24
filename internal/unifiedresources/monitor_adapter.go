@@ -97,6 +97,15 @@ func (a *MonitorAdapter) PopulateFromSnapshot(snapshot models.StateSnapshot) {
 	a.mu.Unlock()
 }
 
+// PopulateSupplementalRecords ingests source-native records emitted outside the
+// legacy state snapshot pipeline.
+func (a *MonitorAdapter) PopulateSupplementalRecords(source DataSource, records []IngestRecord) {
+	if a.registry == nil || len(records) == 0 || strings.TrimSpace(string(source)) == "" {
+		return
+	}
+	a.registry.IngestRecords(source, records)
+}
+
 func monitorSourceType(sources []DataSource) string {
 	if len(sources) > 1 {
 		return "hybrid"

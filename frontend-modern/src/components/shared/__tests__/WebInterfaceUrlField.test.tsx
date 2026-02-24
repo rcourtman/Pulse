@@ -25,7 +25,9 @@ describe('WebInterfaceUrlField', () => {
   });
 
   it('renders URL controls for a metadata target', async () => {
-    render(() => <WebInterfaceUrlField metadataKind="host" metadataId="host-1" targetLabel="host" />);
+    render(() => (
+      <WebInterfaceUrlField metadataKind="host" metadataId="host-1" targetLabel="host" />
+    ));
 
     expect(await screen.findByText('Web Interface URL')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
@@ -33,7 +35,12 @@ describe('WebInterfaceUrlField', () => {
 
   it('saves a host URL through metadata API', async () => {
     render(() => (
-      <WebInterfaceUrlField metadataKind="host" metadataId="host-1" targetLabel="host" customUrl="" />
+      <WebInterfaceUrlField
+        metadataKind="host"
+        metadataId="host-1"
+        targetLabel="host"
+        customUrl=""
+      />
     ));
 
     const input = await screen.findByPlaceholderText('https://192.168.1.100:8080');

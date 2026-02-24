@@ -39,7 +39,7 @@ export const celsiusToFahrenheit = (celsius: number): number => {
  */
 export const formatTemperature = (
   celsius: number | null | undefined,
-  options: { showUnit?: boolean; decimals?: number } = {}
+  options: { showUnit?: boolean; decimals?: number } = {},
 ): string => {
   const { showUnit = true, decimals = 0 } = options;
 

@@ -17,7 +17,9 @@ vi.mock('@/api/charts', async () => {
 });
 
 vi.mock('@/components/shared/InteractiveSparkline', () => ({
-  InteractiveSparkline: (props: { series?: Array<{ id?: string; name?: string; data?: Array<unknown> }> }) => {
+  InteractiveSparkline: (props: {
+    series?: Array<{ id?: string; name?: string; data?: Array<unknown> }>;
+  }) => {
     const series = props.series ?? [];
     const maxPoints = series.reduce((max, current) => Math.max(max, current.data?.length ?? 0), 0);
     return (
@@ -33,7 +35,9 @@ vi.mock('@/components/shared/InteractiveSparkline', () => ({
 }));
 
 vi.mock('@/components/shared/DensityMap', () => ({
-  DensityMap: (props: { series?: Array<{ id?: string; name?: string; data?: Array<unknown> }> }) => {
+  DensityMap: (props: {
+    series?: Array<{ id?: string; name?: string; data?: Array<unknown> }>;
+  }) => {
     const series = props.series ?? [];
     const maxPoints = series.reduce((max, current) => Math.max(max, current.data?.length ?? 0), 0);
     return (
@@ -54,9 +58,7 @@ const twoPointSeries = [
   { timestamp: now, value: 18 },
 ];
 
-const makeChartsResponse = (
-  ids: string[],
-): WorkloadChartsResponse => ({
+const makeChartsResponse = (ids: string[]): WorkloadChartsResponse => ({
   data: Object.fromEntries(
     ids.map((id) => [
       id,
@@ -120,7 +122,7 @@ describe('WorkloadsSummary performance behavior', () => {
     };
     localStorage.setItem(makeCacheKey('1h', ''), JSON.stringify(cachePayload));
 
-    mockGetWorkloadCharts.mockImplementationOnce(() => new Promise(() => { }));
+    mockGetWorkloadCharts.mockImplementationOnce(() => new Promise(() => {}));
 
     render(() => (
       <WorkloadsSummary

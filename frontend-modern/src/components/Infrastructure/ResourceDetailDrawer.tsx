@@ -6,7 +6,12 @@ import { formatUptime, formatRelativeTime, formatAbsoluteTime } from '@/utils/fo
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TagBadges } from '@/components/Dashboard/TagBadges';
 import { getHostStatusIndicator } from '@/utils/status';
-import { getPlatformBadge, getSourceBadge, getTypeBadge, getUnifiedSourceBadges } from './resourceBadges';
+import {
+  getPlatformBadge,
+  getSourceBadge,
+  getTypeBadge,
+  getUnifiedSourceBadges,
+} from './resourceBadges';
 import { buildWorkloadsHref } from './workloadsLink';
 import { buildServiceDetailLinks } from './serviceDetailLinks';
 import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
@@ -45,18 +50,27 @@ import {
   healthToneClass,
   formatInteger,
   ALIAS_COLLAPSE_THRESHOLD,
-  formatSourceType
+  formatSourceType,
 } from './resourceDetailMappers';
 
 const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
-  type DrawerTab = 'overview' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'discovery' | 'debug';
+  type DrawerTab =
+    | 'overview'
+    | 'mail'
+    | 'namespaces'
+    | 'deployments'
+    | 'swarm'
+    | 'discovery'
+    | 'debug';
   const [activeTab, setActiveTab] = createSignal<DrawerTab>('overview');
   const [debugEnabled] = createLocalStorageBooleanSignal(STORAGE_KEYS.DEBUG_MODE, false);
   const [copied, setCopied] = createSignal(false);
   const [showReportModal, setShowReportModal] = createSignal(false);
 
   const displayName = createMemo(() => getDisplayName(props.resource));
-  const statusIndicator = createMemo(() => getHostStatusIndicator({ status: props.resource.status }));
+  const statusIndicator = createMemo(() =>
+    getHostStatusIndicator({ status: props.resource.status }),
+  );
   const lastSeen = createMemo(() => formatRelativeTime(props.resource.lastSeen));
   const lastSeenAbsolute = createMemo(() => formatAbsoluteTime(props.resource.lastSeen));
 
@@ -69,16 +83,22 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   });
   const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
   const platformData = createMemo(() => props.resource.platformData as PlatformData | undefined);
-  const agentMeta = createMemo(() => props.resource.agent ?? (platformData()?.agent as AgentPlatformData | undefined));
+  const agentMeta = createMemo(
+    () => props.resource.agent ?? (platformData()?.agent as AgentPlatformData | undefined),
+  );
   const kubernetesMeta = createMemo(
-    () => props.resource.kubernetes ?? (platformData()?.kubernetes as KubernetesPlatformData | undefined),
+    () =>
+      props.resource.kubernetes ??
+      (platformData()?.kubernetes as KubernetesPlatformData | undefined),
   );
   const kubernetesCapabilityBadges = createMemo(() => {
     const capabilities = kubernetesMeta()?.metricCapabilities;
     if (!capabilities) return [];
 
-    const supportedBadge = 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-400';
-    const unsupportedBadge = 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-muted';
+    const supportedBadge =
+      'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-400';
+    const unsupportedBadge =
+      'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-muted';
     const badges: { label: string; classes: string; title: string }[] = [];
 
     if (capabilities.nodeCpuMemory) {
@@ -92,7 +112,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       badges.push({
         label: 'Node Telemetry (Agent)',
         classes: supportedBadge,
-        title: 'Linked Pulse host agent provides node uptime, temperature, disk, network, and disk I/O.',
+        title:
+          'Linked Pulse host agent provides node uptime, temperature, disk, network, and disk I/O.',
       });
     }
     if (capabilities.podCpuMemory) {
@@ -120,7 +141,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       badges.push({
         label: 'Pod Disk I/O Unsupported',
         classes: unsupportedBadge,
-        title: 'Pod disk read/write throughput is not collected by the Kubernetes integration path today.',
+        title:
+          'Pod disk read/write throughput is not collected by the Kubernetes integration path today.',
       });
     }
 
@@ -132,7 +154,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const temperatureRows = createMemo(() => buildTemperatureRows(agentHost()?.sensors));
 
   const dockerHostData = createMemo(() => platformData()?.docker as DockerPlatformData | undefined);
-  const dockerHostSourceId = createMemo(() => (dockerHostData()?.hostSourceId || '').trim() || null);
+  const dockerHostSourceId = createMemo(
+    () => (dockerHostData()?.hostSourceId || '').trim() || null,
+  );
   const dockerUpdatesAvailable = createMemo(() => dockerHostData()?.updatesAvailableCount ?? 0);
   const dockerContainerCount = createMemo(() => dockerHostData()?.containerCount ?? 0);
   const dockerUpdatesCheckedRelative = createMemo(() => {
@@ -341,14 +365,19 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     }
     return rows;
   });
-  const identityCardHasRichData = createMemo(() =>
-    primaryIdentityRows().length > 0 ||
-    (props.resource.identity?.ips?.length || 0) > 0 ||
-    (props.resource.tags?.length || 0) > 0 ||
-    identityAliasValues().length > 0,
+  const identityCardHasRichData = createMemo(
+    () =>
+      primaryIdentityRows().length > 0 ||
+      (props.resource.identity?.ips?.length || 0) > 0 ||
+      (props.resource.tags?.length || 0) > 0 ||
+      identityAliasValues().length > 0,
   );
-  const aliasPreviewValues = createMemo(() => identityAliasValues().slice(0, ALIAS_COLLAPSE_THRESHOLD));
-  const hasAliasOverflow = createMemo(() => identityAliasValues().length > ALIAS_COLLAPSE_THRESHOLD);
+  const aliasPreviewValues = createMemo(() =>
+    identityAliasValues().slice(0, ALIAS_COLLAPSE_THRESHOLD),
+  );
+  const hasAliasOverflow = createMemo(
+    () => identityAliasValues().length > ALIAS_COLLAPSE_THRESHOLD,
+  );
   const hasMergedSources = createMemo(() => mergedSources().length > 1);
   const discoveryConfig = createMemo(() => toDiscoveryConfig(props.resource));
   const workloadsHref = createMemo(() => buildWorkloadsHref(props.resource));
@@ -423,8 +452,12 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     const base = [
       { id: 'overview' as DrawerTab, label: 'Overview' },
       ...(props.resource.type === 'pmg' ? [{ id: 'mail' as DrawerTab, label: 'Mail' }] : []),
-      ...(props.resource.type === 'k8s-cluster' ? [{ id: 'namespaces' as DrawerTab, label: 'Namespaces' }] : []),
-      ...(props.resource.type === 'k8s-cluster' ? [{ id: 'deployments' as DrawerTab, label: 'Deployments' }] : []),
+      ...(props.resource.type === 'k8s-cluster'
+        ? [{ id: 'namespaces' as DrawerTab, label: 'Namespaces' }]
+        : []),
+      ...(props.resource.type === 'k8s-cluster'
+        ? [{ id: 'deployments' as DrawerTab, label: 'Deployments' }]
+        : []),
       ...(props.resource.type === 'docker-host' && dockerSwarmClusterKey()
         ? [{ id: 'swarm' as DrawerTab, label: 'Swarm' }]
         : []),
@@ -465,119 +498,123 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         document.body.appendChild(textarea);
         textarea.select();
         document.execCommand('copy');
- document.body.removeChild(textarea);
- }
- setCopied(true);
- setTimeout(() => setCopied(false), 2000);
- } catch {
- setCopied(false);
- }
- };
+        document.body.removeChild(textarea);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
 
- return (
- <div class="space-y-3">
- <div class="flex items-start justify-between gap-4">
- <div class="space-y-1 min-w-0">
- <div class="flex items-center gap-2">
- <StatusDot
- variant={statusIndicator().variant}
- title={statusIndicator().label}
- ariaLabel={statusIndicator().label}
- size="sm"
- />
- <div class="text-sm font-semibold text-base-content truncate" title={displayName()}>
- {displayName()}
- </div>
- </div>
- <div class="text-[11px] text-muted truncate" title={props.resource.id}>
- {props.resource.id}
- </div>
- <div class="flex flex-wrap gap-1.5">
- <Show when={typeBadge()}>
- {(badge) => (
- <span class={badge().classes} title={badge().title}>
- {badge().label}
- </span>
- )}
- </Show>
- <Show
- when={hasUnifiedSources()}
- fallback={
- <>
- <Show when={platformBadge()}>
- {(badge) => (
- <span class={badge().classes} title={badge().title}>
- {badge().label}
- </span>
- )}
- </Show>
- <Show when={sourceBadge()}>
- {(badge) => (
- <span class={badge().classes} title={badge().title}>
- {badge().label}
- </span>
- )}
- </Show>
- </>
- }
- >
- <For each={unifiedSourceBadges()}>
- {(badge) => (
- <span class={badge.classes} title={badge.title}>
- {badge.label}
- </span>
- )}
- </For>
- </Show>
- <For each={kubernetesCapabilityBadges()}>
- {(badge) => (
- <span class={badge.classes} title={badge.title}>
- {badge.label}
- </span>
- )}
- </For>
- </div>
- </div>
+  return (
+    <div class="space-y-3">
+      <div class="flex items-start justify-between gap-4">
+        <div class="space-y-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <StatusDot
+              variant={statusIndicator().variant}
+              title={statusIndicator().label}
+              ariaLabel={statusIndicator().label}
+              size="sm"
+            />
+            <div class="text-sm font-semibold text-base-content truncate" title={displayName()}>
+              {displayName()}
+            </div>
+          </div>
+          <div class="text-[11px] text-muted truncate" title={props.resource.id}>
+            {props.resource.id}
+          </div>
+          <div class="flex flex-wrap gap-1.5">
+            <Show when={typeBadge()}>
+              {(badge) => (
+                <span class={badge().classes} title={badge().title}>
+                  {badge().label}
+                </span>
+              )}
+            </Show>
+            <Show
+              when={hasUnifiedSources()}
+              fallback={
+                <>
+                  <Show when={platformBadge()}>
+                    {(badge) => (
+                      <span class={badge().classes} title={badge().title}>
+                        {badge().label}
+                      </span>
+                    )}
+                  </Show>
+                  <Show when={sourceBadge()}>
+                    {(badge) => (
+                      <span class={badge().classes} title={badge().title}>
+                        {badge().label}
+                      </span>
+                    )}
+                  </Show>
+                </>
+              }
+            >
+              <For each={unifiedSourceBadges()}>
+                {(badge) => (
+                  <span class={badge.classes} title={badge.title}>
+                    {badge.label}
+                  </span>
+                )}
+              </For>
+            </Show>
+            <For each={kubernetesCapabilityBadges()}>
+              {(badge) => (
+                <span class={badge.classes} title={badge.title}>
+                  {badge.label}
+                </span>
+              )}
+            </For>
+          </div>
+        </div>
 
- <Show when={props.onClose}>
- <button
- type="button"
- onClick={() => props.onClose?.()}
- class="rounded-md p-1 hover:bg-surface-hover hover:text-base-content"
- aria-label="Close"
- >
- <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
- <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
- </svg>
- </button>
- </Show>
- </div>
+        <Show when={props.onClose}>
+          <button
+            type="button"
+            onClick={() => props.onClose?.()}
+            class="rounded-md p-1 hover:bg-surface-hover hover:text-base-content"
+            aria-label="Close"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </Show>
+      </div>
 
- <Show when={relatedLinks().length > 0}>
- <div class="flex items-center justify-end gap-2">
- <For each={relatedLinks()}>
- {(link) => (
- <a
- href={link.href}
- aria-label={link.ariaLabel}
- class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
- >
- {link.label}
- </a>
- )}
- </For>
- </div>
- </Show>
+      <Show when={relatedLinks().length > 0}>
+        <div class="flex items-center justify-end gap-2">
+          <For each={relatedLinks()}>
+            {(link) => (
+              <a
+                href={link.href}
+                aria-label={link.ariaLabel}
+                class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
+              >
+                {link.label}
+              </a>
+            )}
+          </For>
+        </div>
+      </Show>
 
- <div class="flex items-center gap-6 border-b border-border px-1 mb-1">
- <For each={tabs()}>
- {(tab) => (
- <button
- onClick={() => setActiveTab(tab.id)}
- class={`pb-2 text-sm font-medium transition-colors relative ${activeTab() === tab.id
- ?'text-blue-600 dark:text-blue-400'
- : ' hover:text-muted'
- }`}
+      <div class="flex items-center gap-6 border-b border-border px-1 mb-1">
+        <For each={tabs()}>
+          {(tab) => (
+            <button
+              onClick={() => setActiveTab(tab.id)}
+              class={`pb-2 text-sm font-medium transition-colors relative ${
+                activeTab() === tab.id ? 'text-blue-600 dark:text-blue-400' : ' hover:text-muted'
+              }`}
             >
               {tab.label}
               <Show when={activeTab() === tab.id}>
@@ -589,7 +626,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       </div>
 
       {/* Overview Tab */}
-      <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
+      <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
         <Show when={proxmoxNode() || agentHost()}>
           <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
             <Show when={proxmoxNode()}>
@@ -618,145 +655,169 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
         <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3 mt-3">
           <div class="rounded border border-border bg-surface p-3">
-            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Runtime</div>
+            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+              Runtime
+            </div>
             <div class="space-y-1.5 text-[11px]">
               <div class="flex items-center justify-between gap-2">
                 <span class="text-muted">State</span>
-                <span class="font-medium text-base-content capitalize">{props.resource.status || 'unknown'}</span>
+                <span class="font-medium text-base-content capitalize">
+                  {props.resource.status || 'unknown'}
+                </span>
               </div>
               <Show when={props.resource.uptime}>
                 <div class="flex items-center justify-between gap-2">
                   <span class="text-muted">Uptime</span>
-                  <span class="font-medium text-base-content">{formatUptime(props.resource.uptime ?? 0)}</span>
+                  <span class="font-medium text-base-content">
+                    {formatUptime(props.resource.uptime ?? 0)}
+                  </span>
                 </div>
               </Show>
               <Show when={props.resource.lastSeen}>
                 <div class="flex items-center justify-between gap-2">
                   <span class="text-muted">Last Seen</span>
-                  <span
-                    class="font-medium text-base-content"
-                    title={lastSeenAbsolute()}
-                  >
+                  <span class="font-medium text-base-content" title={lastSeenAbsolute()}>
                     {lastSeen() || '—'}
- </span>
- </div>
- </Show>
- <Show when={sourceSummary()}>
- <div class="flex items-center justify-between gap-2">
- <span class="text-muted">Sources</span>
- <span class={`font-medium ${sourceSummary()!.className}`} title={sourceSummary()!.title}>
- {sourceSummary()!.label}
- </span>
- </div>
- </Show>
- <div class="flex items-center justify-between gap-2">
- <span class="text-muted">Mode</span>
- <span class="font-medium text-base-content">{formatSourceType(props.resource.sourceType)}</span>
- </div>
- <Show when={(props.resource.alerts?.length || 0) > 0}>
- <div class="flex items-center justify-between gap-2">
- <span class="text-muted">Alerts</span>
- <span class="font-medium text-amber-600 dark:text-amber-400">
- {formatInteger(props.resource.alerts?.length)}
- </span>
- </div>
- </Show>
- <Show when={props.resource.platformId}>
- <div class="flex items-center justify-between gap-2">
- <span class="text-muted">Platform ID</span>
- <span class="font-medium text-base-content truncate" title={props.resource.platformId}>
- {props.resource.platformId}
- </span>
- </div>
- </Show>
- </div>
- </div>
+                  </span>
+                </div>
+              </Show>
+              <Show when={sourceSummary()}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-muted">Sources</span>
+                  <span
+                    class={`font-medium ${sourceSummary()!.className}`}
+                    title={sourceSummary()!.title}
+                  >
+                    {sourceSummary()!.label}
+                  </span>
+                </div>
+              </Show>
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-muted">Mode</span>
+                <span class="font-medium text-base-content">
+                  {formatSourceType(props.resource.sourceType)}
+                </span>
+              </div>
+              <Show when={(props.resource.alerts?.length || 0) > 0}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-muted">Alerts</span>
+                  <span class="font-medium text-amber-600 dark:text-amber-400">
+                    {formatInteger(props.resource.alerts?.length)}
+                  </span>
+                </div>
+              </Show>
+              <Show when={props.resource.platformId}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-muted">Platform ID</span>
+                  <span
+                    class="font-medium text-base-content truncate"
+                    title={props.resource.platformId}
+                  >
+                    {props.resource.platformId}
+                  </span>
+                </div>
+              </Show>
+            </div>
+          </div>
 
- <div class="rounded border border-border bg-surface p-3">
- <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Identity</div>
- <div class="space-y-1.5 text-[11px]">
- <For each={primaryIdentityRows()}>
- {(row) => (
- <div class="flex items-center justify-between gap-2">
- <span class="text-muted">{row.label}</span>
- <span class="font-medium text-base-content truncate" title={row.value}>
- {row.value}
- </span>
- </div>
- )}
- </For>
- <Show when={props.resource.identity?.ips && props.resource.identity.ips.length > 0}>
- <div class="flex flex-col gap-1">
- <span class="text-muted">IP Addresses</span>
- <div class="flex flex-wrap gap-1">
- <For each={props.resource.identity?.ips ?? []}>
- {(ip) => (
- <span
- class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200"
- title={ip}
- >
- {ip}
- </span>
- )}
- </For>
- </div>
- </div>
- </Show>
- <Show when={props.resource.tags && props.resource.tags.length > 0}>
- <div class="flex items-center justify-between gap-2">
- <span class="text-muted">Tags</span>
- <TagBadges tags={props.resource.tags} maxVisible={6} />
- </div>
- </Show>
- <Show when={identityAliasValues().length > 0}>
- <Show
- when={hasAliasOverflow()}
- fallback={
- <div class="flex flex-col gap-1">
- <span class="text-muted">Aliases</span>
- <div class="flex flex-wrap gap-1">
- <For each={aliasPreviewValues()}>
- {(value) => (
- <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]" title={value}>
- {value}
- </span>
- )}
- </For>
- </div>
- </div>
- }
- >
- <details class="rounded border border-border bg-surface px-2 py-1.5">
- <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
- <span>Aliases</span>
- <span class="text-muted">{identityAliasValues().length}</span>
- </summary>
- <div class="mt-2 flex flex-wrap gap-1 border-t border-border pt-2">
- <For each={identityAliasValues()}>
- {(value) => (
- <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]" title={value}>
- {value}
- </span>
- )}
- </For>
- </div>
- </details>
- </Show>
- </Show>
- <Show when={!identityCardHasRichData()}>
- <div class="rounded border border-dashed bg-surface-hover px-2 py-1.5 text-[10px] ">
- No enriched identity metadata yet.
- </div>
- </Show>
- </div>
- </div>
+          <div class="rounded border border-border bg-surface p-3">
+            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+              Identity
+            </div>
+            <div class="space-y-1.5 text-[11px]">
+              <For each={primaryIdentityRows()}>
+                {(row) => (
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted">{row.label}</span>
+                    <span class="font-medium text-base-content truncate" title={row.value}>
+                      {row.value}
+                    </span>
+                  </div>
+                )}
+              </For>
+              <Show when={props.resource.identity?.ips && props.resource.identity.ips.length > 0}>
+                <div class="flex flex-col gap-1">
+                  <span class="text-muted">IP Addresses</span>
+                  <div class="flex flex-wrap gap-1">
+                    <For each={props.resource.identity?.ips ?? []}>
+                      {(ip) => (
+                        <span
+                          class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+                          title={ip}
+                        >
+                          {ip}
+                        </span>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
+              <Show when={props.resource.tags && props.resource.tags.length > 0}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-muted">Tags</span>
+                  <TagBadges tags={props.resource.tags} maxVisible={6} />
+                </div>
+              </Show>
+              <Show when={identityAliasValues().length > 0}>
+                <Show
+                  when={hasAliasOverflow()}
+                  fallback={
+                    <div class="flex flex-col gap-1">
+                      <span class="text-muted">Aliases</span>
+                      <div class="flex flex-wrap gap-1">
+                        <For each={aliasPreviewValues()}>
+                          {(value) => (
+                            <span
+                              class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
+                              title={value}
+                            >
+                              {value}
+                            </span>
+                          )}
+                        </For>
+                      </div>
+                    </div>
+                  }
+                >
+                  <details class="rounded border border-border bg-surface px-2 py-1.5">
+                    <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
+                      <span>Aliases</span>
+                      <span class="text-muted">{identityAliasValues().length}</span>
+                    </summary>
+                    <div class="mt-2 flex flex-wrap gap-1 border-t border-border pt-2">
+                      <For each={identityAliasValues()}>
+                        {(value) => (
+                          <span
+                            class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
+                            title={value}
+                          >
+                            {value}
+                          </span>
+                        )}
+                      </For>
+                    </div>
+                  </details>
+                </Show>
+              </Show>
+              <Show when={!identityCardHasRichData()}>
+                <div class="rounded border border-dashed bg-surface-hover px-2 py-1.5 text-[10px] ">
+                  No enriched identity metadata yet.
+                </div>
+              </Show>
+            </div>
+          </div>
 
- <Show when={props.resource.type ==='docker-host'}>
+          <Show when={props.resource.type === 'docker-host'}>
             <div class="rounded border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-sky-900">
               <div class="mb-2 flex items-center justify-between gap-2">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300">Container Updates</div>
+                <div class="text-[11px] font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300">
+                  Container Updates
+                </div>
                 <Show when={dockerHostData()?.runtime}>
-                  <span class="max-w-[55%] truncate text-[10px] text-sky-700 dark:text-sky-300" title={dockerHostData()?.runtime}>
+                  <span
+                    class="max-w-[55%] truncate text-[10px] text-sky-700 dark:text-sky-300"
+                    title={dockerHostData()?.runtime}
+                  >
                     {dockerHostData()?.runtime}
                   </span>
                 </Show>
@@ -765,18 +826,24 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               <div class="space-y-1.5 text-[11px]">
                 <div class="flex items-center justify-between gap-2">
                   <span class="text-muted">Containers</span>
-                  <span class="font-medium text-base-content">{formatInteger(dockerContainerCount())}</span>
+                  <span class="font-medium text-base-content">
+                    {formatInteger(dockerContainerCount())}
+                  </span>
                 </div>
                 <div class="flex items-center justify-between gap-2">
                   <span class="text-muted">Updates Available</span>
-                  <span class={`font-medium ${dockerUpdatesAvailable() > 0 ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'}`}>
+                  <span
+                    class={`font-medium ${dockerUpdatesAvailable() > 0 ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'}`}
+                  >
                     {formatInteger(dockerUpdatesAvailable())}
                   </span>
                 </div>
                 <Show when={dockerUpdatesCheckedRelative()}>
                   <div class="flex items-center justify-between gap-2">
                     <span class="text-muted">Last Check</span>
-                    <span class="font-medium text-base-content">{dockerUpdatesCheckedRelative()}</span>
+                    <span class="font-medium text-base-content">
+                      {dockerUpdatesCheckedRelative()}
+                    </span>
                   </div>
                 </Show>
 
@@ -790,45 +857,50 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     </div>
                     <div class="mt-1 flex items-center justify-between gap-2">
                       <span class="text-muted">Status</span>
-                      <span class={`font-medium ${dockerHostCommandActive() ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'}`}>
+                      <span
+                        class={`font-medium ${dockerHostCommandActive() ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'}`}
+                      >
                         {(dockerHostCommand()?.status || 'unknown').replace(/_/g, ' ')}
- </span>
- </div>
- <Show when={dockerHostCommand()?.message}>
- <div class="mt-1 text-muted truncate" title={dockerHostCommand()?.message}>
- {dockerHostCommand()?.message}
- </div>
- </Show>
- <Show when={dockerHostCommand()?.failureReason}>
- <div class="mt-1 text-red-700 dark:text-red-300 truncate" title={dockerHostCommand()?.failureReason}>
- {dockerHostCommand()?.failureReason}
- </div>
- </Show>
- </div>
- </Show>
+                      </span>
+                    </div>
+                    <Show when={dockerHostCommand()?.message}>
+                      <div class="mt-1 text-muted truncate" title={dockerHostCommand()?.message}>
+                        {dockerHostCommand()?.message}
+                      </div>
+                    </Show>
+                    <Show when={dockerHostCommand()?.failureReason}>
+                      <div
+                        class="mt-1 text-red-700 dark:text-red-300 truncate"
+                        title={dockerHostCommand()?.failureReason}
+                      >
+                        {dockerHostCommand()?.failureReason}
+                      </div>
+                    </Show>
+                  </div>
+                </Show>
 
- <Show when={dockerActionError()}>
- <div class="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900 dark:text-red-200">
- {dockerActionError()}
- </div>
- </Show>
- <Show when={dockerActionNote()}>
- <div class="rounded border border-sky-200 bg-surface px-2 py-1.5 text-[10px] text-base-content dark:border-sky-700">
- {dockerActionNote()}
- </div>
- </Show>
+                <Show when={dockerActionError()}>
+                  <div class="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900 dark:text-red-200">
+                    {dockerActionError()}
+                  </div>
+                </Show>
+                <Show when={dockerActionNote()}>
+                  <div class="rounded border border-sky-200 bg-surface px-2 py-1.5 text-[10px] text-base-content dark:border-sky-700">
+                    {dockerActionNote()}
+                  </div>
+                </Show>
 
- <div class="flex flex-wrap items-center gap-2 pt-1">
- <button
- type="button"
- disabled={
- dockerActionBusy() ||
- dockerUpdateActionsLoading() ||
- dockerHostCommandActive() ||
- dockerHostSourceId() === null
- }
- onClick={async () => {
- setDockerActionError('');
+                <div class="flex flex-wrap items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={
+                      dockerActionBusy() ||
+                      dockerUpdateActionsLoading() ||
+                      dockerHostCommandActive() ||
+                      dockerHostSourceId() === null
+                    }
+                    onClick={async () => {
+                      setDockerActionError('');
                       setDockerActionNote('');
                       setConfirmUpdateAll(false);
                       const hostId = dockerHostSourceId();
@@ -836,9 +908,13 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                       try {
                         setDockerActionBusy(true);
                         await MonitoringAPI.checkDockerUpdates(hostId);
-                        setDockerActionNote('Update check queued. Results will refresh on the next agent report.');
+                        setDockerActionNote(
+                          'Update check queued. Results will refresh on the next agent report.',
+                        );
                       } catch (err) {
-                        setDockerActionError((err as Error)?.message || 'Failed to queue update check');
+                        setDockerActionError(
+                          (err as Error)?.message || 'Failed to queue update check',
+                        );
                       } finally {
                         setDockerActionBusy(false);
                       }
@@ -867,25 +943,37 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
                       if (!confirmUpdateAll()) {
                         setConfirmUpdateAll(true);
-                        setDockerActionNote(`Click again to confirm updating ${dockerUpdatesAvailable()} container(s).`);
+                        setDockerActionNote(
+                          `Click again to confirm updating ${dockerUpdatesAvailable()} container(s).`,
+                        );
                         return;
                       }
 
                       try {
                         setDockerActionBusy(true);
                         await MonitoringAPI.updateAllDockerContainers(hostId);
-                        setDockerActionNote('Batch update queued. Progress will appear as the agent reports back.');
+                        setDockerActionNote(
+                          'Batch update queued. Progress will appear as the agent reports back.',
+                        );
                       } catch (err) {
-                        setDockerActionError((err as Error)?.message || 'Failed to queue batch update');
+                        setDockerActionError(
+                          (err as Error)?.message || 'Failed to queue batch update',
+                        );
                       } finally {
                         setDockerActionBusy(false);
                         setConfirmUpdateAll(false);
                       }
                     }}
                     class="rounded-md border border-sky-200 bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-sky-700 disabled:opacity-60 disabled:hover:bg-sky-600 dark:border-sky-700 dark:bg-sky-600 dark:hover:bg-sky-500 dark:disabled:hover:bg-sky-600"
-                    title={dockerUpdateActionsDisabled() ? 'Docker updates are disabled by server configuration.' : undefined}
+                    title={
+                      dockerUpdateActionsDisabled()
+                        ? 'Docker updates are disabled by server configuration.'
+                        : undefined
+                    }
                   >
-                    {confirmUpdateAll() ? 'Confirm Update All' : `Update All${dockerUpdatesAvailable() > 0 ? ` (${dockerUpdatesAvailable()})` : ''}`}
+                    {confirmUpdateAll()
+                      ? 'Confirm Update All'
+                      : `Update All${dockerUpdatesAvailable() > 0 ? ` (${dockerUpdatesAvailable()})` : ''}`}
                   </button>
                 </div>
               </div>
@@ -896,9 +984,14 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             {(pbs) => (
               <div class="rounded border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-700 dark:bg-indigo-900">
                 <div class="mb-2 flex items-center justify-between gap-2">
-                  <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700 dark:text-indigo-300">PBS Service</div>
+                  <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+                    PBS Service
+                  </div>
                   <Show when={pbs().hostname}>
-                    <span class="max-w-[55%] truncate text-[10px] text-indigo-700 dark:text-indigo-300" title={pbs().hostname}>
+                    <span
+                      class="max-w-[55%] truncate text-[10px] text-indigo-700 dark:text-indigo-300"
+                      title={pbs().hostname}
+                    >
                       {pbs().hostname}
                     </span>
                   </Show>
@@ -927,11 +1020,15 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   <div class="grid grid-cols-2 gap-2 pt-1">
                     <div class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
                       <div class="text-[10px] text-muted">Datastores</div>
-                      <div class="text-sm font-semibold text-base-content">{formatInteger(pbs().datastoreCount)}</div>
+                      <div class="text-sm font-semibold text-base-content">
+                        {formatInteger(pbs().datastoreCount)}
+                      </div>
                     </div>
                     <div class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
                       <div class="text-[10px] text-muted">Total Jobs</div>
-                      <div class="text-sm font-semibold text-base-content">{formatInteger(pbsJobTotal())}</div>
+                      <div class="text-sm font-semibold text-base-content">
+                        {formatInteger(pbsJobTotal())}
+                      </div>
                     </div>
                   </div>
                   <details class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
@@ -944,7 +1041,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         {(entry) => (
                           <span class="text-muted">
                             {entry.label}:{' '}
-                            <span class="font-medium text-base-content">{formatInteger(entry.value)}</span>
+                            <span class="font-medium text-base-content">
+                              {formatInteger(entry.value)}
+                            </span>
                           </span>
                         )}
                       </For>
@@ -959,9 +1058,14 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             {(pmg) => (
               <div class="rounded border border-rose-200 bg-rose-50 p-3 dark:border-rose-700 dark:bg-rose-900">
                 <div class="mb-2 flex items-center justify-between gap-2">
-                  <div class="text-[11px] font-medium uppercase tracking-wide text-rose-700 dark:text-rose-300">Mail Gateway</div>
+                  <div class="text-[11px] font-medium uppercase tracking-wide text-rose-700 dark:text-rose-300">
+                    Mail Gateway
+                  </div>
                   <Show when={pmg().hostname}>
-                    <span class="max-w-[55%] truncate text-[10px] text-rose-700 dark:text-rose-300" title={pmg().hostname}>
+                    <span
+                      class="max-w-[55%] truncate text-[10px] text-rose-700 dark:text-rose-300"
+                      title={pmg().hostname}
+                    >
                       {pmg().hostname}
                     </span>
                   </Show>
@@ -990,17 +1094,23 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   <div class="grid grid-cols-3 gap-2 pt-1">
                     <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
                       <div class="text-[10px] text-muted">Nodes</div>
-                      <div class="text-sm font-semibold text-base-content">{formatInteger(pmg().nodeCount)}</div>
+                      <div class="text-sm font-semibold text-base-content">
+                        {formatInteger(pmg().nodeCount)}
+                      </div>
                     </div>
                     <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
                       <div class="text-[10px] text-muted">Queue Total</div>
-                      <div class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}>
+                      <div
+                        class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
+                      >
                         {formatInteger(pmg().queueTotal)}
                       </div>
                     </div>
                     <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
                       <div class="text-[10px] text-muted">Backlog</div>
-                      <div class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}>
+                      <div
+                        class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
+                      >
                         {formatInteger(pmgQueueBacklog())}
                       </div>
                     </div>
@@ -1015,7 +1125,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         {(entry) => (
                           <span class="text-muted">
                             {entry.label}:{' '}
-                            <span class={`font-medium ${entry.warn ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}>
+                            <span
+                              class={`font-medium ${entry.warn ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
+                            >
                               {formatInteger(entry.value)}
                             </span>
                           </span>
@@ -1033,7 +1145,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         {(entry) => (
                           <span class="text-muted">
                             {entry.label}:{' '}
-                            <span class="font-medium text-base-content">{formatInteger(entry.value)}</span>
+                            <span class="font-medium text-base-content">
+                              {formatInteger(entry.value)}
+                            </span>
                           </span>
                         )}
                       </For>
@@ -1065,37 +1179,40 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       </div>
 
       {/* Discovery Tab */}
-      <div class={activeTab() === 'discovery' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
- <Show
- when={discoveryConfig()}
- fallback={
- <div class="rounded border border-dashed border-border bg-surface-hover p-4 text-sm">
- Discovery is not available for this resource type yet.
- </div>
- }
- >
- {(config) => (
- <Suspense
- fallback={
- <div class="flex items-center justify-center py-8">
- <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
- <span class="ml-2 text-sm text-muted">Loading discovery...</span>
- </div>
- }
- >
- <DiscoveryTab
- resourceType={config().resourceType}
- hostId={config().hostId}
- resourceId={config().resourceId}
- hostname={config().hostname}
- />
- </Suspense>
- )}
- </Show>
- </div>
+      <div
+        class={activeTab() === 'discovery' ? '' : 'hidden'}
+        style={{ 'overflow-anchor': 'none' }}
+      >
+        <Show
+          when={discoveryConfig()}
+          fallback={
+            <div class="rounded border border-dashed border-border bg-surface-hover p-4 text-sm">
+              Discovery is not available for this resource type yet.
+            </div>
+          }
+        >
+          {(config) => (
+            <Suspense
+              fallback={
+                <div class="flex items-center justify-center py-8">
+                  <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+                  <span class="ml-2 text-sm text-muted">Loading discovery...</span>
+                </div>
+              }
+            >
+              <DiscoveryTab
+                resourceType={config().resourceType}
+                hostId={config().hostId}
+                resourceId={config().resourceId}
+                hostname={config().hostname}
+              />
+            </Suspense>
+          )}
+        </Show>
+      </div>
 
- {/* PMG Mail Tab */}
- <div class={activeTab() ==='mail' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
+      {/* PMG Mail Tab */}
+      <div class={activeTab() === 'mail' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
         {/* Mount on-demand to avoid background fetching when the tab isn't open. */}
         <Show when={activeTab() === 'mail'}>
           <Show
@@ -1115,7 +1232,10 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       </div>
 
       {/* Kubernetes Namespaces Tab */}
-      <div class={activeTab() === 'namespaces' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
+      <div
+        class={activeTab() === 'namespaces' ? '' : 'hidden'}
+        style={{ 'overflow-anchor': 'none' }}
+      >
         {/* Mount on-demand to avoid background fetching when the tab isn't open. */}
         <Show when={activeTab() === 'namespaces'}>
           <Show
@@ -1138,7 +1258,10 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       </div>
 
       {/* Kubernetes Deployments Tab */}
-      <div class={activeTab() === 'deployments' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
+      <div
+        class={activeTab() === 'deployments' ? '' : 'hidden'}
+        style={{ 'overflow-anchor': 'none' }}
+      >
         {/* Mount on-demand to avoid background fetching when the tab isn't open. */}
         <Show when={activeTab() === 'deployments'}>
           <Show
@@ -1158,7 +1281,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       </div>
 
       {/* Docker Swarm Tab */}
-      <div class={activeTab() === 'swarm' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
+      <div class={activeTab() === 'swarm' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
         {/* Mount on-demand to avoid background fetching when the tab isn't open. */}
         <Show when={activeTab() === 'swarm'}>
           <Show
@@ -1176,30 +1299,34 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
       {/* Debug Tab */}
       <Show when={debugEnabled()}>
-        <div class={activeTab() === 'debug' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
- <div class="flex items-center justify-between gap-3">
- <div class="text-xs text-muted">
- Debug mode is enabled via localStorage (<code>pulse_debug_mode</code>).
- </div>
- <button
- type="button"
- onClick={handleCopyJson}
- class="rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
- >
- {copied() ?'Copied' : 'Copy JSON'}
+        <div class={activeTab() === 'debug' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
+          <div class="flex items-center justify-between gap-3">
+            <div class="text-xs text-muted">
+              Debug mode is enabled via localStorage (<code>pulse_debug_mode</code>).
+            </div>
+            <button
+              type="button"
+              onClick={handleCopyJson}
+              class="rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
+            >
+              {copied() ? 'Copied' : 'Copy JSON'}
             </button>
           </div>
 
           <div class="mt-3 space-y-4">
             <div>
-              <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Unified Resource</div>
+              <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+                Unified Resource
+              </div>
               <pre class="max-h-[280px] overflow-auto rounded-md bg-base p-3 text-[11px] text-base-content">
                 {JSON.stringify(props.resource, null, 2)}
               </pre>
             </div>
 
             <div>
-              <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Identity Matching</div>
+              <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+                Identity Matching
+              </div>
               <pre class="max-h-[220px] overflow-auto rounded-md bg-base p-3 text-[11px] text-base-content">
                 {JSON.stringify(
                   {
@@ -1213,7 +1340,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             </div>
 
             <div>
-              <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Sources</div>
+              <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+                Sources
+              </div>
               <div class="space-y-2">
                 <For each={sourceSections()}>
                   {(section) => {
@@ -1268,7 +1397,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     </div>
   );
 };
-
 
 export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props) => {
   return <DrawerContent resource={props.resource} onClose={props.onClose} />;

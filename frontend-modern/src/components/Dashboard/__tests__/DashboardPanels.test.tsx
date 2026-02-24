@@ -104,7 +104,9 @@ describe('Dashboard panels data contract', () => {
       'infra-4',
       'infra-5',
     ]);
-    expect(overview.infrastructure.topCPU.map((entry) => entry.percent)).toEqual([95, 92, 84, 78, 65]);
+    expect(overview.infrastructure.topCPU.map((entry) => entry.percent)).toEqual([
+      95, 92, 84, 78, 65,
+    ]);
 
     expect(overview.workloads.total).toBe(4);
     expect(overview.workloads.running).toBe(2);

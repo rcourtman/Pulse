@@ -1,4 +1,3 @@
-
 import { createMemo } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import type { Resource } from '@/types/resource';
@@ -26,9 +25,8 @@ export function useThresholdsData(
   searchTerm: () => string,
   pd: (r: Resource) => Record<string, unknown> | undefined,
   buildNodeHeaderMeta: (node: Resource) => { headerMeta: GroupHeaderMeta; keys: Set<string> },
-  getFriendlyNodeName: (value: string, clusterName?: string) => string
+  getFriendlyNodeName: (value: string, clusterName?: string) => string,
 ) {
-
   // Passed-in blocks:
   const nodesWithOverrides = createMemo<TableResource[]>((prev = []) => {
     // If we're currently editing, return the previous value to avoid re-renders
@@ -50,14 +48,17 @@ export function useThresholdsData(
       const hasCustomThresholds =
         (override as Override | undefined)?.thresholds &&
         Object.keys((override as Override).thresholds).some((key: string) => {
-          const k = key as keyof Override["thresholds"];
+          const k = key as keyof Override['thresholds'];
           return (
             (override as Override).thresholds[k] !== undefined &&
             (override as Override).thresholds[k] !== (props.nodeDefaults as any)[k]
           );
         });
 
-      const note = typeof (override as Override | undefined)?.note === 'string' ? (override as Override).note : undefined;
+      const note =
+        typeof (override as Override | undefined)?.note === 'string'
+          ? (override as Override).note
+          : undefined;
       const hasNote = Boolean(note && note.trim().length > 0);
 
       const originalDisplayName = node.displayName?.trim() || node.name;
@@ -72,7 +73,9 @@ export function useThresholdsData(
         (typeof data?.host === 'string' ? (data.host as string).trim() : '') || rawName;
       let normalizedHost: string;
       if (guestUrlValue && guestUrlValue !== '') {
-        normalizedHost = guestUrlValue.startsWith('http') ? guestUrlValue : `https://${guestUrlValue}`;
+        normalizedHost = guestUrlValue.startsWith('http')
+          ? guestUrlValue
+          : `https://${guestUrlValue}`;
       } else {
         normalizedHost =
           hostValue.startsWith('http://') || hostValue.startsWith('https://')
@@ -93,7 +96,10 @@ export function useThresholdsData(
         cpu: (node.cpu?.current ?? 0) / 100,
         memory: node.memory?.current,
         hasOverride:
-          hasCustomThresholds || hasNote || Boolean((override as Override | undefined)?.disableConnectivity) || false,
+          hasCustomThresholds ||
+          hasNote ||
+          Boolean((override as Override | undefined)?.disableConnectivity) ||
+          false,
         disabled: false,
         disableConnectivity: (override as Override | undefined)?.disableConnectivity || false,
         thresholds: (override as Override | undefined)?.thresholds || {},
@@ -111,7 +117,6 @@ export function useThresholdsData(
     return nodes;
   }, []);
 
-
   const hostAgentsWithOverrides = createMemo<TableResource[]>((prev = []) => {
     if (editingId()) {
       return prev;
@@ -126,14 +131,15 @@ export function useThresholdsData(
       const hasCustomThresholds =
         (override as Override | undefined)?.thresholds &&
         Object.keys((override as Override).thresholds).some((key: string) => {
-          const k = key as keyof Override["thresholds"];
+          const k = key as keyof Override['thresholds'];
           return (
             (override as Override).thresholds[k] !== undefined &&
             (override as Override).thresholds[k] !== (props.hostDefaults as any)[k]
           );
         });
 
-      const displayName = host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
+      const displayName =
+        host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
       const status = host.status;
 
       seen.add(host.id);
@@ -160,7 +166,10 @@ export function useThresholdsData(
     });
 
     (props.overrides() ?? [])
-      .filter((override) => (override as Override).type === 'hostAgent' && !seen.has((override as Override).id))
+      .filter(
+        (override) =>
+          (override as Override).type === 'hostAgent' && !seen.has((override as Override).id),
+      )
       .forEach((override) => {
         const name = (override as Override).name?.trim() || (override as Override).id;
         hosts.push({
@@ -188,13 +197,15 @@ export function useThresholdsData(
     return hosts;
   }, []);
 
-
   // Helper function to create host disk resource ID (matches backend sanitizeHostComponent)
   const hostDiskResourceID = (hostId: string, mountpoint: string, device?: string): string => {
     // Use mountpoint if available, otherwise device
     let label = (mountpoint?.trim() || device?.trim() || 'disk').toLowerCase();
     // Replicate backend sanitizeHostComponent: keep a-z 0-9, replace everything else with '-', collapse consecutive hyphens
-    label = label.replace(/[^a-z0-9]/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '');
+    label = label
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-{2,}/g, '-')
+      .replace(/^-|-$/g, '');
     if (!label) label = 'unknown';
     return `host:${hostId}/disk:${label}`;
   };
@@ -215,14 +226,13 @@ export function useThresholdsData(
       const hostDisplayName =
         host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
 
-      const disksForHost =
-        (pd(host)?.disks ?? []) as Array<{
-          mountpoint?: string;
-          device?: string;
-          used?: number;
-          total?: number;
-          type?: string;
-        }>;
+      const disksForHost = (pd(host)?.disks ?? []) as Array<{
+        mountpoint?: string;
+        device?: string;
+        used?: number;
+        total?: number;
+        type?: string;
+      }>;
 
       disksForHost.forEach((disk) => {
         const diskLabel = disk.mountpoint?.trim() || disk.device?.trim() || 'disk';
@@ -257,7 +267,10 @@ export function useThresholdsData(
 
     // Include any hostDisk overrides for disks that are no longer present
     (props.overrides() ?? [])
-      .filter((override) => (override as Override).type === 'hostDisk' && !seen.has((override as Override).id))
+      .filter(
+        (override) =>
+          (override as Override).type === 'hostDisk' && !seen.has((override as Override).id),
+      )
       .forEach((override) => {
         const name = (override as Override).name || (override as Override).id;
         disks.push({
@@ -318,7 +331,8 @@ export function useThresholdsData(
     const seen = new Set<string>();
 
     const hosts: TableResource[] = (props.dockerHosts ?? []).map((host) => {
-      const originalName = host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
+      const originalName =
+        host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
       const friendlyName = getFriendlyNodeName(originalName);
       const override = overridesMap.get(host.id);
       const disableConnectivity = (override as Override | undefined)?.disableConnectivity || false;
@@ -346,7 +360,10 @@ export function useThresholdsData(
 
     // Include any overrides referencing Docker hosts that are no longer reporting
     (props.overrides() ?? [])
-      .filter((override) => (override as Override).type === 'dockerHost' && !seen.has((override as Override).id))
+      .filter(
+        (override) =>
+          (override as Override).type === 'dockerHost' && !seen.has((override as Override).id),
+      )
       .forEach((override) => {
         const originalName = (override as Override).name || (override as Override).id;
         const friendlyName = getFriendlyNodeName(originalName);
@@ -373,7 +390,6 @@ export function useThresholdsData(
     }
     return hosts;
   }, []);
-
 
   const dockerContainersByHostId = createMemo(() => {
     const map = new Map<string, Resource[]>();
@@ -413,7 +429,9 @@ export function useThresholdsData(
       const containers = dockerContainersByHostId().get(host.id) ?? [];
 
       containers.forEach((container) => {
-        const shortId = container.id.includes('/') ? (container.id.split('/').pop() ?? container.id) : container.id;
+        const shortId = container.id.includes('/')
+          ? (container.id.split('/').pop() ?? container.id)
+          : container.id;
         const resourceId = `docker:${host.id}/${shortId}`;
         const override = overridesMap.get(resourceId);
         const overrideSeverity = (override as Override | undefined)?.poweredOffSeverity;
@@ -422,7 +440,7 @@ export function useThresholdsData(
         const hasCustomThresholds =
           (override as Override | undefined)?.thresholds &&
           Object.keys((override as Override).thresholds).some((key: string) => {
-            const k = key as keyof Override["thresholds"];
+            const k = key as keyof Override['thresholds'];
             return (
               (override as Override).thresholds[k] !== undefined &&
               (override as Override).thresholds[k] !== defaults?.[k as keyof typeof defaults]
@@ -482,9 +500,15 @@ export function useThresholdsData(
 
     // Include overrides for Docker containers that aren't currently reporting
     (props.overrides() ?? [])
-      .filter((override) => (override as Override).type === 'dockerContainer' && !seen.has((override as Override).id))
+      .filter(
+        (override) =>
+          (override as Override).type === 'dockerContainer' && !seen.has((override as Override).id),
+      )
       .forEach((override) => {
-        const fallbackName = (override as Override).name || (override as Override).id.split('/').pop() || (override as Override).id;
+        const fallbackName =
+          (override as Override).name ||
+          (override as Override).id.split('/').pop() ||
+          (override as Override).id;
         const group = 'Unassigned Containers';
         if (!groups[group]) {
           groups[group] = [];
@@ -522,11 +546,9 @@ export function useThresholdsData(
     return filteredGroups;
   }, {});
 
-
   const dockerContainersFlat = createMemo<TableResource[]>(() =>
     Object.values(dockerContainersGroupedByHost() ?? {}).flat(),
   );
-
 
   const totalDockerContainers = createMemo(() =>
     (props.dockerHosts ?? []).reduce(
@@ -535,11 +557,11 @@ export function useThresholdsData(
     ),
   );
 
-
   const dockerHostGroupMeta = createMemo<Record<string, GroupHeaderMeta>>(() => {
     const meta: Record<string, GroupHeaderMeta> = {};
     (props.dockerHosts ?? []).forEach((host) => {
-      const originalName = host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
+      const originalName =
+        host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
       const friendlyName = getFriendlyNodeName(originalName);
       const headerMeta: GroupHeaderMeta = {
         displayName: friendlyName,
@@ -563,7 +585,6 @@ export function useThresholdsData(
     return meta;
   });
 
-
   const snapshotFactoryConfig = () =>
     props.snapshotFactoryDefaults ?? {
       enabled: false,
@@ -572,7 +593,6 @@ export function useThresholdsData(
       warningSizeGiB: DEFAULT_SNAPSHOT_WARNING_SIZE,
       criticalSizeGiB: DEFAULT_SNAPSHOT_CRITICAL_SIZE,
     };
-
 
   const sanitizeSnapshotConfig = (config: SnapshotAlertConfig): SnapshotAlertConfig => {
     let warning = Math.max(0, Math.round(config.warningDays ?? 0));
@@ -613,7 +633,6 @@ export function useThresholdsData(
     };
   };
 
-
   const backupFactoryConfig = () =>
     props.backupFactoryDefaults ?? {
       enabled: false,
@@ -625,7 +644,6 @@ export function useThresholdsData(
       ignoreVMIDs: [],
     };
 
-
   const sanitizeBackupConfig = (config: BackupAlertConfig): BackupAlertConfig => {
     let warning = Math.max(0, Math.round(config.warningDays ?? 0));
     let critical = Math.max(0, Math.round(config.criticalDays ?? 0));
@@ -634,9 +652,7 @@ export function useThresholdsData(
     const alertOrphaned = config.alertOrphaned ?? true;
     const ignoreVMIDs = Array.from(
       new Set(
-        (config.ignoreVMIDs ?? [])
-          .map((value) => value.trim())
-          .filter((value) => value.length > 0),
+        (config.ignoreVMIDs ?? []).map((value) => value.trim()).filter((value) => value.length > 0),
       ),
     );
 
@@ -663,7 +679,6 @@ export function useThresholdsData(
     };
   };
 
-
   const snapshotDefaultsRecord = createMemo(() => {
     const current = props.snapshotDefaults();
     return {
@@ -673,7 +688,6 @@ export function useThresholdsData(
       'critical size (gib)': current.criticalSizeGiB ?? 0,
     };
   });
-
 
   const snapshotFactoryDefaultsRecord = createMemo(() => {
     const factory = snapshotFactoryConfig();
@@ -685,7 +699,6 @@ export function useThresholdsData(
     };
   });
 
-
   const backupDefaultsRecord = createMemo(() => {
     const current = props.backupDefaults();
     return {
@@ -695,7 +708,6 @@ export function useThresholdsData(
       'critical days': current.criticalDays ?? 0,
     };
   });
-
 
   const backupFactoryDefaultsRecord = createMemo(() => {
     const factory = backupFactoryConfig();
@@ -707,23 +719,21 @@ export function useThresholdsData(
     };
   });
 
-
   const snapshotOverridesCount = createMemo(() => {
     const current = props.snapshotDefaults();
     const factory = snapshotFactoryConfig();
     const differs =
       current.enabled !== factory.enabled ||
       (current.warningDays ?? DEFAULT_SNAPSHOT_WARNING) !==
-      (factory.warningDays ?? DEFAULT_SNAPSHOT_WARNING) ||
+        (factory.warningDays ?? DEFAULT_SNAPSHOT_WARNING) ||
       (current.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL) !==
-      (factory.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL) ||
+        (factory.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL) ||
       (current.warningSizeGiB ?? DEFAULT_SNAPSHOT_WARNING_SIZE) !==
-      (factory.warningSizeGiB ?? DEFAULT_SNAPSHOT_WARNING_SIZE) ||
+        (factory.warningSizeGiB ?? DEFAULT_SNAPSHOT_WARNING_SIZE) ||
       (current.criticalSizeGiB ?? DEFAULT_SNAPSHOT_CRITICAL_SIZE) !==
-      (factory.criticalSizeGiB ?? DEFAULT_SNAPSHOT_CRITICAL_SIZE);
+        (factory.criticalSizeGiB ?? DEFAULT_SNAPSHOT_CRITICAL_SIZE);
     return differs ? 1 : 0;
   });
-
 
   const backupOverridesCount = createMemo(() => {
     const backupCurrent = props.backupDefaults();
@@ -735,19 +745,18 @@ export function useThresholdsData(
       currentIgnore.some((value, index) => value !== factoryIgnore[index]);
     return backupCurrent.enabled !== backupFactory.enabled ||
       (backupCurrent.warningDays ?? DEFAULT_BACKUP_WARNING) !==
-      (backupFactory.warningDays ?? DEFAULT_BACKUP_WARNING) ||
+        (backupFactory.warningDays ?? DEFAULT_BACKUP_WARNING) ||
       (backupCurrent.criticalDays ?? DEFAULT_BACKUP_CRITICAL) !==
-      (backupFactory.criticalDays ?? DEFAULT_BACKUP_CRITICAL) ||
+        (backupFactory.criticalDays ?? DEFAULT_BACKUP_CRITICAL) ||
       (backupCurrent.freshHours ?? DEFAULT_BACKUP_FRESH_HOURS) !==
-      (backupFactory.freshHours ?? DEFAULT_BACKUP_FRESH_HOURS) ||
+        (backupFactory.freshHours ?? DEFAULT_BACKUP_FRESH_HOURS) ||
       (backupCurrent.staleHours ?? DEFAULT_BACKUP_STALE_HOURS) !==
-      (backupFactory.staleHours ?? DEFAULT_BACKUP_STALE_HOURS) ||
+        (backupFactory.staleHours ?? DEFAULT_BACKUP_STALE_HOURS) ||
       (backupCurrent.alertOrphaned ?? true) !== (backupFactory.alertOrphaned ?? true) ||
       ignoreDiff
       ? 1
       : 0;
   });
-
 
   // Process guests with their overrides and group by node
   const guestsGroupedByNode = createMemo<Record<string, TableResource[]>>((prev = {}) => {
@@ -760,7 +769,9 @@ export function useThresholdsData(
     const overridesMap = new Map((props.overrides() ?? []).map((o: Override) => [o.id, o]));
 
     const guests = (props.allGuests() ?? []).map((guest) => {
-      const gpd = guest.platformData ? (unwrap(guest.platformData) as Record<string, unknown>) : undefined;
+      const gpd = guest.platformData
+        ? (unwrap(guest.platformData) as Record<string, unknown>)
+        : undefined;
       const vmid = (gpd?.vmid as number | undefined) ?? undefined;
       const node = (gpd?.node as string | undefined) ?? '';
       const instance = (gpd?.instance as string | undefined) ?? guest.platformId ?? '';
@@ -772,7 +783,7 @@ export function useThresholdsData(
       const hasCustomThresholds =
         (override as Override | undefined)?.thresholds &&
         Object.keys((override as Override).thresholds).some((key: string) => {
-          const k = key as keyof Override["thresholds"];
+          const k = key as keyof Override['thresholds'];
           return (
             (override as Override).thresholds[k] !== undefined &&
             (override as Override).thresholds[k] !== (props.guestDefaults as any)[k]
@@ -809,11 +820,11 @@ export function useThresholdsData(
 
     const filteredGuests = search
       ? guests.filter(
-        (g) =>
-          g.name.toLowerCase().includes(search) ||
-          g.vmid?.toString().includes(search) ||
-          g.node?.toLowerCase().includes(search),
-      )
+          (g) =>
+            g.name.toLowerCase().includes(search) ||
+            g.vmid?.toString().includes(search) ||
+            g.node?.toLowerCase().includes(search),
+        )
       : guests;
 
     // Group by instance (not node - node is just the hostname which may be duplicated)
@@ -838,11 +849,9 @@ export function useThresholdsData(
     return grouped;
   }, {});
 
-
   const guestsFlat = createMemo<TableResource[]>(() =>
     Object.values(guestsGroupedByNode() ?? {}).flat(),
   );
-
 
   const guestGroupHeaderMeta = createMemo<Record<string, GroupHeaderMeta>>(() => {
     const meta: Record<string, GroupHeaderMeta> = {};
@@ -879,11 +888,12 @@ export function useThresholdsData(
       const hasCustomThresholds =
         (override as Override | undefined)?.thresholds &&
         Object.keys((override as Override).thresholds).some((key: string) => {
-          const k = key as keyof Override["thresholds"];
+          const k = key as keyof Override['thresholds'];
           // PBS uses pbsDefaults for CPU/Memory (not nodeDefaults)
           return (
             (override as Override).thresholds[k] !== undefined &&
-            (override as Override).thresholds[k] !== (props.pbsDefaults?.[k as keyof typeof props.pbsDefaults] ?? (k === 'cpu' ? 80 : 85))
+            (override as Override).thresholds[k] !==
+              (props.pbsDefaults?.[k as keyof typeof props.pbsDefaults] ?? (k === 'cpu' ? 80 : 85))
           );
         });
 
@@ -921,17 +931,15 @@ export function useThresholdsData(
     return pbsServers;
   }, []);
 
-
   const pmgGlobalDefaults = createMemo<Record<string, number>>(() => {
     const defaults = props.pmgThresholds();
     const record: Record<string, number> = {};
-    PMG_THRESHOLD_COLUMNS.forEach(({ key, normalized }: { key: any, normalized: any }) => {
+    PMG_THRESHOLD_COLUMNS.forEach(({ key, normalized }: { key: any; normalized: any }) => {
       const value = defaults[key as keyof PMGThresholdDefaults];
       record[normalized] = typeof value === 'number' && Number.isFinite(value) ? value : 0;
     });
     return record;
   });
-
 
   const pmgServersWithOverrides = createMemo<TableResource[]>((prev = []) => {
     // If we're currently editing, return the previous value to avoid re-renders
@@ -952,7 +960,10 @@ export function useThresholdsData(
       const override = overridesMap.get(pmgId);
 
       const thresholdOverrides: Record<string, number> = {};
-      const overrideThresholds = ((override as Override | undefined)?.thresholds ?? {}) as Record<string, unknown>;
+      const overrideThresholds = ((override as Override | undefined)?.thresholds ?? {}) as Record<
+        string,
+        unknown
+      >;
       Object.entries(overrideThresholds).forEach(([rawKey, rawValue]) => {
         if (typeof rawValue !== 'number' || Number.isNaN(rawValue)) return;
         const normalizedKey =
@@ -1037,7 +1048,8 @@ export function useThresholdsData(
         (override as Override).thresholds.usage !== props.storageDefault();
 
       // A storage device has an override if it has custom thresholds OR is disabled
-      const hasOverride = hasCustomThresholds || (override as Override | undefined)?.disabled || false;
+      const hasOverride =
+        hasCustomThresholds || (override as Override | undefined)?.disabled || false;
 
       return {
         id: storage.id,
@@ -1062,7 +1074,6 @@ export function useThresholdsData(
     return storageDevices;
   }, []);
 
-
   const storageGroupedByNode = createMemo<Record<string, TableResource[]>>(() => {
     const grouped: Record<string, TableResource[]> = {};
     storageWithOverrides().forEach((storage) => {
@@ -1079,7 +1090,6 @@ export function useThresholdsData(
 
     return grouped;
   });
-
 
   return {
     nodesWithOverrides,

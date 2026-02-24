@@ -53,7 +53,14 @@ export interface ExploreStatus {
 }
 
 // Unified event for chronological display
-export type StreamEventType = 'thinking' | 'explore_status' | 'tool' | 'content' | 'pending_tool' | 'approval' | 'question';
+export type StreamEventType =
+  | 'thinking'
+  | 'explore_status'
+  | 'tool'
+  | 'content'
+  | 'pending_tool'
+  | 'approval'
+  | 'question';
 
 export interface StreamDisplayEvent {
   type: StreamEventType;

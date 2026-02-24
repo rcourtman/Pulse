@@ -259,10 +259,22 @@ func TestMonitorLegacyAndMetricHelpers(t *testing.T) {
 				want:         "host-agent",
 			},
 			{
-				name:         "fallback proxmox",
+				name:         "fallback proxmox source",
+				resourceType: "custom",
+				resource:     unifiedresources.Resource{Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox}},
+				want:         "proxmox-pve",
+			},
+			{
+				name:         "fallback custom source",
+				resourceType: "custom",
+				resource:     unifiedresources.Resource{Sources: []unifiedresources.DataSource{"xcp"}},
+				want:         "xcp",
+			},
+			{
+				name:         "fallback unknown",
 				resourceType: "custom",
 				resource:     unifiedresources.Resource{},
-				want:         "proxmox-pve",
+				want:         "unknown",
 			},
 		}
 

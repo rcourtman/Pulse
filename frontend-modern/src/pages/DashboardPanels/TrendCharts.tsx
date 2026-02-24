@@ -1,6 +1,9 @@
 import { For, createMemo } from 'solid-js';
 import { Card } from '@/components/shared/Card';
-import { InteractiveSparkline, type InteractiveSparklineSeries } from '@/components/shared/InteractiveSparkline';
+import {
+  InteractiveSparkline,
+  type InteractiveSparklineSeries,
+} from '@/components/shared/InteractiveSparkline';
 import {
   SUMMARY_TIME_RANGES,
   SUMMARY_TIME_RANGE_LABEL,
@@ -97,7 +100,11 @@ export function TrendCharts(props: TrendChartsProps) {
                   : 'px-2 py-0.5 rounded border border-border text-base-content text-[11px] font-medium hover:bg-surface-hover transition-colors';
 
               return (
-                <button type="button" class={className()} onClick={() => props.setTrendRange(range)}>
+                <button
+                  type="button"
+                  class={className()}
+                  onClick={() => props.setTrendRange(range)}
+                >
                   {SUMMARY_TIME_RANGE_LABEL[range]}
                 </button>
               );

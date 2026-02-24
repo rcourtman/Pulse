@@ -184,12 +184,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
     ];
     mockLocationSearch = '?type=k8s';
     const { getByText, getByTestId } = render(() => (
-      <Dashboard
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
-      />
+      <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
     ));
 
     await waitFor(() => {
@@ -231,12 +226,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
     mockLocationSearch = '?type=k8s&resource=legacy:pve1:101';
 
     const { getByText } = render(() => (
-      <Dashboard
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
-      />
+      <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
     ));
 
     await waitFor(() => {
@@ -276,12 +266,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
     ];
 
     const { getByText, queryByText } = render(() => (
-      <Dashboard
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
-      />
+      <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
     ));
 
     await waitFor(() => {
@@ -324,12 +309,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
     mockLocationSearch = '?type=k8s&migrated=1&from=kubernetes';
 
     const { getByText, getByRole, queryByText } = render(() => (
-      <Dashboard
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
-      />
+      <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
     ));
 
     await waitFor(() => {
@@ -405,12 +385,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
     ];
 
     const { getByText, queryByText } = render(() => (
-      <Dashboard
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
-      />
+      <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
     ));
 
     await waitFor(() => {
@@ -490,12 +465,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
     ];
 
     const { getByText, queryByText } = render(() => (
-      <Dashboard
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
-      />
+      <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
     ));
 
     await waitFor(() => {
@@ -559,12 +529,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
     ];
 
     const { getByText, queryByText } = render(() => (
-      <Dashboard
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
-      />
+      <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
     ));
 
     await waitFor(() => {
@@ -656,12 +621,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
     ];
 
     const { queryByText, getByTestId } = render(() => (
-      <Dashboard
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
-      />
+      <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
     ));
 
     await waitFor(() => {
@@ -733,12 +693,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
     ];
 
     const { getByText, getAllByText } = render(() => (
-      <Dashboard
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
-      />
+      <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
     ));
 
     await waitFor(() => {
@@ -755,14 +710,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
     mockLocationSearch = '?type=all';
     mockWorkloads = [];
 
-    render(() => (
-      <Dashboard
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
-      />
-    ));
+    render(() => <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />);
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalled();
@@ -778,14 +726,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
     mockLocationSearch = '?type=all&migrated=1&from=kubernetes';
     mockWorkloads = [];
 
-    render(() => (
-      <Dashboard
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
-      />
-    ));
+    render(() => <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />);
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalled();

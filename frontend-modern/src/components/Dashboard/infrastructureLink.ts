@@ -25,7 +25,13 @@ export const buildInfrastructureHrefForWorkload = (guest: WorkloadGuest): string
   }
 
   if (type === 'k8s') {
-    const query = firstNonEmpty([guest.contextLabel, guest.instance, guest.namespace, guest.node, guest.name]);
+    const query = firstNonEmpty([
+      guest.contextLabel,
+      guest.instance,
+      guest.namespace,
+      guest.node,
+      guest.name,
+    ]);
     return buildInfrastructurePath({ source: 'kubernetes', query });
   }
 

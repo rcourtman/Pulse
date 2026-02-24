@@ -23,4 +23,3 @@ export function areSearchParamsEquivalent(a: URLSearchParams, b: URLSearchParams
   }
   return true;
 }
-

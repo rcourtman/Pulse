@@ -108,7 +108,8 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (canonicalPath.includes('/settings/system-pro')) return 'system-pro';
   if (canonicalPath.includes('/settings/organization/access')) return 'organization-access';
   if (canonicalPath.includes('/settings/organization/sharing')) return 'organization-sharing';
-  if (canonicalPath.includes('/settings/organization/billing-admin')) return 'organization-billing-admin';
+  if (canonicalPath.includes('/settings/organization/billing-admin'))
+    return 'organization-billing-admin';
   if (canonicalPath.includes('/settings/billing')) return 'organization-billing';
   if (canonicalPath.includes('/settings/plan')) return 'organization-billing';
   if (canonicalPath.includes('/settings/organization/billing')) return 'organization-billing';

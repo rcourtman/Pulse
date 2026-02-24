@@ -84,10 +84,13 @@ export const OrgsAPI = {
     }),
 
   removeMember: (id: string, userId: string) =>
-    apiFetchJSON<void>(`/api/orgs/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`, {
-      method: 'DELETE',
-      skipOrgContext: true,
-    }),
+    apiFetchJSON<void>(
+      `/api/orgs/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`,
+      {
+        method: 'DELETE',
+        skipOrgContext: true,
+      },
+    ),
 
   listShares: (id: string) =>
     apiFetchJSON<OrganizationShare[]>(`/api/orgs/${encodeURIComponent(id)}/shares`, {
@@ -95,9 +98,12 @@ export const OrgsAPI = {
     }),
 
   listIncomingShares: (id: string) =>
-    apiFetchJSON<IncomingOrganizationShare[]>(`/api/orgs/${encodeURIComponent(id)}/shares/incoming`, {
-      skipOrgContext: true,
-    }),
+    apiFetchJSON<IncomingOrganizationShare[]>(
+      `/api/orgs/${encodeURIComponent(id)}/shares/incoming`,
+      {
+        skipOrgContext: true,
+      },
+    ),
 
   createShare: (
     id: string,
@@ -116,8 +122,11 @@ export const OrgsAPI = {
     }),
 
   deleteShare: (id: string, shareId: string) =>
-    apiFetchJSON<void>(`/api/orgs/${encodeURIComponent(id)}/shares/${encodeURIComponent(shareId)}`, {
-      method: 'DELETE',
-      skipOrgContext: true,
-    }),
+    apiFetchJSON<void>(
+      `/api/orgs/${encodeURIComponent(id)}/shares/${encodeURIComponent(shareId)}`,
+      {
+        method: 'DELETE',
+        skipOrgContext: true,
+      },
+    ),
 };

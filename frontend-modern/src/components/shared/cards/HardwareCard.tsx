@@ -2,20 +2,23 @@ import { Component } from 'solid-js';
 import { Host, Node } from '@/types/api';
 import { formatBytes } from '@/utils/format';
 
-type HardwareCardProps =
-  | { variant: 'node'; node: Node }
-  | { variant: 'host'; host: Host };
+type HardwareCardProps = { variant: 'node'; node: Node } | { variant: 'host'; host: Host };
 
 export const HardwareCard: Component<HardwareCardProps> = (props) => {
   if (props.variant === 'node') {
     const node = props.node;
     return (
       <div class="rounded border border-border bg-surface p-3 shadow-sm">
-        <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Hardware</div>
+        <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+          Hardware
+        </div>
         <div class="space-y-1.5 text-[11px]">
           <div class="flex items-center justify-between">
             <span class="text-muted">CPU Model</span>
-            <div class="font-medium text-base-content text-right truncate max-w-[150px]" title={node.cpuInfo?.model || 'Unknown'}>
+            <div
+              class="font-medium text-base-content text-right truncate max-w-[150px]"
+              title={node.cpuInfo?.model || 'Unknown'}
+            >
               {node.cpuInfo?.model || 'Unknown'}
             </div>
           </div>
@@ -37,7 +40,9 @@ export const HardwareCard: Component<HardwareCardProps> = (props) => {
   const host = props.host;
   return (
     <div class="rounded border border-border bg-surface p-3 shadow-sm">
-      <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Hardware</div>
+      <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+        Hardware
+      </div>
       <div class="space-y-1.5 text-[11px]">
         <div class="flex items-center justify-between">
           <span class="text-muted">CPU</span>
@@ -45,9 +50,7 @@ export const HardwareCard: Component<HardwareCardProps> = (props) => {
         </div>
         <div class="flex items-center justify-between">
           <span class="text-muted">Memory</span>
-          <span class="font-medium text-base-content">
-            {formatBytes(host.memory?.total || 0)}
-          </span>
+          <span class="font-medium text-base-content">{formatBytes(host.memory?.total || 0)}</span>
         </div>
         <div class="flex items-center justify-between">
           <span class="text-muted">Agent</span>

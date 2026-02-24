@@ -68,7 +68,9 @@ describe('API URL encoding', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/updates/check?channel=stable%26next');
 
     await UpdatesAPI.getUpdatePlan('v1.2.3&x=1', 'beta/dev');
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/updates/plan?version=v1.2.3%26x%3D1&channel=beta%2Fdev');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith(
+      '/api/updates/plan?version=v1.2.3%26x%3D1&channel=beta%2Fdev',
+    );
   });
 
   it('encodes AI chat session, approval, and question ids', async () => {

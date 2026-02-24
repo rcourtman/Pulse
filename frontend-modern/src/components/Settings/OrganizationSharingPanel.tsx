@@ -1,4 +1,13 @@
-import { Component, For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import {
+  Component,
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import {
   OrgsAPI,
@@ -74,7 +83,9 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
   const targetOrgOptions = createMemo(() =>
     orgs()
       .filter((candidate) => candidate.id !== activeOrgId())
-      .sort((left, right) => (left.displayName || left.id).localeCompare(right.displayName || right.id)),
+      .sort((left, right) =>
+        (left.displayName || left.id).localeCompare(right.displayName || right.id),
+      ),
   );
   const unifiedResourceOptions = createMemo<ResourceOption[]>(() => {
     return resources()
@@ -142,9 +153,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
       await loadShares(orgId);
 
       const firstTarget =
-        targetOrgId().trim() ||
-        allOrgs.find((candidate) => candidate.id !== orgId)?.id ||
-        '';
+        targetOrgId().trim() || allOrgs.find((candidate) => candidate.id !== orgId)?.id || '';
       setTargetOrgId(firstTarget);
       setTargetOrgError(firstTarget === '' ? 'Target organization is required' : '');
     } catch (error) {
@@ -197,7 +206,9 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
     setSelectedQuickPick('');
     setResourceType(value);
     const normalized = value.trim().toLowerCase();
-    setResourceTypeError(normalized === '' || isValidResourceType(normalized) ? '' : INVALID_RESOURCE_TYPE_ERROR);
+    setResourceTypeError(
+      normalized === '' || isValidResourceType(normalized) ? '' : INVALID_RESOURCE_TYPE_ERROR,
+    );
   };
 
   const updateResourceId = (value: string) => {
@@ -295,7 +306,10 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
   });
 
   return (
-    <Show when={isMultiTenantEnabled()} fallback={<div class="p-4 text-sm text-slate-500">This feature is not available.</div>}>
+    <Show
+      when={isMultiTenantEnabled()}
+      fallback={<div class="p-4 text-sm text-slate-500">This feature is not available.</div>}
+    >
       <div class="space-y-6">
         <SettingsPanel
           title="Organization Sharing"
@@ -390,65 +404,69 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                       <select
                         value={targetOrgId()}
                         onChange={(event) => updateTargetOrg(event.currentTarget.value)}
-                        class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${targetOrgError() ? 'border-red-400 dark:border-red-500' : 'border-border' }`}
+                        class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${targetOrgError() ? 'border-red-400 dark:border-red-500' : 'border-border'}`}
                       >
                         <option value="">Select organization</option>
                         <For each={targetOrgOptions()}>
-                          {(target) => <option value={target.id}>{target.displayName || target.id}</option>}
+                          {(target) => (
+                            <option value={target.id}>{target.displayName || target.id}</option>
+                          )}
                         </For>
                       </select>
                       <Show when={targetOrgError() !== ''}>
- <p class="text-xs text-red-600 dark:text-red-400">{targetOrgError()}</p>
- </Show>
- </label>
+                        <p class="text-xs text-red-600 dark:text-red-400">{targetOrgError()}</p>
+                      </Show>
+                    </label>
 
- <label class="space-y-1">
- <span class="text-xs font-medium uppercase tracking-wide text-muted">
- Access Role
- </span>
- <select
- value={accessRole()}
- onChange={(event) => setAccessRole(event.currentTarget.value as ShareAccessRole)}
- class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
- >
- <For each={accessRoleOptions}>
- {(option) => <option value={option.value}>{option.label}</option>}
- </For>
- </select>
- </label>
- </div>
+                    <label class="space-y-1">
+                      <span class="text-xs font-medium uppercase tracking-wide text-muted">
+                        Access Role
+                      </span>
+                      <select
+                        value={accessRole()}
+                        onChange={(event) =>
+                          setAccessRole(event.currentTarget.value as ShareAccessRole)
+                        }
+                        class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <For each={accessRoleOptions}>
+                          {(option) => <option value={option.value}>{option.label}</option>}
+                        </For>
+                      </select>
+                    </label>
+                  </div>
 
- <Show when={unifiedResourceOptions().length > 0}>
- <div class="rounded-md border border-blue-200 bg-blue-50 p-3 space-y-2 dark:border-blue-900 dark:bg-blue-900">
- <label class="space-y-1 block">
- <span class="text-xs font-medium uppercase tracking-wide text-blue-700 dark:text-blue-300">
- Quick Pick Resource
- </span>
- <select
- value={selectedQuickPick()}
- onChange={(event) => applyResourceQuickPick(event.currentTarget.value)}
- class="w-full rounded-md border border-blue-300 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-700"
- >
- <option value="">Select resource</option>
- <For each={unifiedResourceOptions()}>
- {(resource) => (
- <option value={`${resource.type}::${resource.id}`}>
- {resource.name} ({resource.type})
- </option>
- )}
- </For>
- </select>
- </label>
- <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
- <p class="text-xs text-blue-700 dark:text-blue-300">
- Choose a discovered resource, or switch to manual entry.
- </p>
- <button
- type="button"
- onClick={toggleManualEntry}
- class="text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
- >
- {manualEntryExpanded() ?'Hide manual entry' : 'Enter manually'}
+                  <Show when={unifiedResourceOptions().length > 0}>
+                    <div class="rounded-md border border-blue-200 bg-blue-50 p-3 space-y-2 dark:border-blue-900 dark:bg-blue-900">
+                      <label class="space-y-1 block">
+                        <span class="text-xs font-medium uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                          Quick Pick Resource
+                        </span>
+                        <select
+                          value={selectedQuickPick()}
+                          onChange={(event) => applyResourceQuickPick(event.currentTarget.value)}
+                          class="w-full rounded-md border border-blue-300 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-700"
+                        >
+                          <option value="">Select resource</option>
+                          <For each={unifiedResourceOptions()}>
+                            {(resource) => (
+                              <option value={`${resource.type}::${resource.id}`}>
+                                {resource.name} ({resource.type})
+                              </option>
+                            )}
+                          </For>
+                        </select>
+                      </label>
+                      <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p class="text-xs text-blue-700 dark:text-blue-300">
+                          Choose a discovered resource, or switch to manual entry.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={toggleManualEntry}
+                          class="text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+                        >
+                          {manualEntryExpanded() ? 'Hide manual entry' : 'Enter manually'}
                         </button>
                       </div>
                     </div>
@@ -472,52 +490,54 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                           value={resourceType()}
                           onInput={(event) => updateResourceType(event.currentTarget.value)}
                           placeholder={VALID_RESOURCE_TYPES.join(' | ')}
-                          class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${resourceTypeError() ? 'border-red-400 dark:border-red-500' : 'border-border' }`}
+                          class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${resourceTypeError() ? 'border-red-400 dark:border-red-500' : 'border-border'}`}
                         />
                         <Show when={resourceTypeError() !== ''}>
- <p class="text-xs text-red-600 dark:text-red-400">{resourceTypeError()}</p>
- </Show>
- </label>
+                          <p class="text-xs text-red-600 dark:text-red-400">
+                            {resourceTypeError()}
+                          </p>
+                        </Show>
+                      </label>
 
- <label class="space-y-1">
- <span class="text-xs font-medium uppercase tracking-wide text-muted">
- Resource ID
- </span>
- <input
- type="text"
- value={resourceId()}
- onInput={(event) => updateResourceId(event.currentTarget.value)}
- placeholder="resource identifier"
- class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${resourceIdError() ?'border-red-400 dark:border-red-500' : 'border-border' }`}
+                      <label class="space-y-1">
+                        <span class="text-xs font-medium uppercase tracking-wide text-muted">
+                          Resource ID
+                        </span>
+                        <input
+                          type="text"
+                          value={resourceId()}
+                          onInput={(event) => updateResourceId(event.currentTarget.value)}
+                          placeholder="resource identifier"
+                          class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${resourceIdError() ? 'border-red-400 dark:border-red-500' : 'border-border'}`}
                         />
                         <Show when={resourceIdError() !== ''}>
- <p class="text-xs text-red-600 dark:text-red-400">{resourceIdError()}</p>
- </Show>
- </label>
+                          <p class="text-xs text-red-600 dark:text-red-400">{resourceIdError()}</p>
+                        </Show>
+                      </label>
 
- <label class="space-y-1">
- <span class="text-xs font-medium uppercase tracking-wide text-muted">
- Resource Name
- </span>
- <input
- type="text"
- value={resourceName()}
- onInput={(event) => updateResourceName(event.currentTarget.value)}
- placeholder="optional display name"
- class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
- />
- </label>
- </div>
- </Show>
+                      <label class="space-y-1">
+                        <span class="text-xs font-medium uppercase tracking-wide text-muted">
+                          Resource Name
+                        </span>
+                        <input
+                          type="text"
+                          value={resourceName()}
+                          onInput={(event) => updateResourceName(event.currentTarget.value)}
+                          placeholder="optional display name"
+                          class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </label>
+                    </div>
+                  </Show>
 
- <div class="flex justify-end">
- <button
- type="button"
- onClick={createShare}
- disabled={!canCreateShare()}
- class="inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
- >
- {saving() ?'Saving...' : 'Create Share'}
+                  <div class="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={createShare}
+                      disabled={!canCreateShare()}
+                      class="inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {saving() ? 'Saving...' : 'Create Share'}
                     </button>
                   </div>
                 </div>
@@ -543,17 +563,23 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                       label: 'Resource',
                       render: (share) => (
                         <div class="flex flex-col">
-                          <span class="text-base-content">{share.resourceName || share.resourceId}</span>
+                          <span class="text-base-content">
+                            {share.resourceName || share.resourceId}
+                          </span>
                           <span class="text-xs text-muted">
                             {share.resourceType}:{share.resourceId}
                           </span>
                         </div>
-                      )
+                      ),
                     },
                     {
                       key: 'targetOrgId',
                       label: 'Target Org',
-                      render: (share) => <span class="text-base-content">{orgNameById().get(share.targetOrgId) || share.targetOrgId}</span>
+                      render: (share) => (
+                        <span class="text-base-content">
+                          {orgNameById().get(share.targetOrgId) || share.targetOrgId}
+                        </span>
+                      ),
                     },
                     {
                       key: 'accessRole',
@@ -561,16 +587,20 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                       render: (share) => {
                         const role = normalizeShareRole(share.accessRole);
                         return (
-                          <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}>
+                          <span
+                            class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}
+                          >
                             {role}
                           </span>
                         );
-                      }
+                      },
                     },
                     {
                       key: 'createdAt',
                       label: 'Created',
-                      render: (share) => <span class="text-muted">{formatOrgDate(share.createdAt)}</span>
+                      render: (share) => (
+                        <span class="text-muted">{formatOrgDate(share.createdAt)}</span>
+                      ),
                     },
                     {
                       key: 'actions',
@@ -590,8 +620,8 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                             Remove
                           </button>
                         </Show>
-                      )
-                    }
+                      ),
+                    },
                   ]}
                   keyExtractor={(share) => share.id}
                   emptyState="No outgoing shares configured."
@@ -610,19 +640,25 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                     {
                       key: 'sourceOrg',
                       label: 'Source Org',
-                      render: (share) => <span class="text-base-content">{share.sourceOrgName || share.sourceOrgId}</span>
+                      render: (share) => (
+                        <span class="text-base-content">
+                          {share.sourceOrgName || share.sourceOrgId}
+                        </span>
+                      ),
                     },
                     {
                       key: 'resource',
                       label: 'Resource',
                       render: (share) => (
                         <div class="flex flex-col">
-                          <span class="text-base-content">{share.resourceName || share.resourceId}</span>
+                          <span class="text-base-content">
+                            {share.resourceName || share.resourceId}
+                          </span>
                           <span class="text-xs text-muted">
                             {share.resourceType}:{share.resourceId}
                           </span>
                         </div>
-                      )
+                      ),
                     },
                     {
                       key: 'accessRole',
@@ -630,17 +666,21 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                       render: (share) => {
                         const role = normalizeShareRole(share.accessRole);
                         return (
-                          <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}>
+                          <span
+                            class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}
+                          >
                             {role}
                           </span>
                         );
-                      }
+                      },
                     },
                     {
                       key: 'createdAt',
                       label: 'Shared',
-                      render: (share) => <span class="text-muted">{formatOrgDate(share.createdAt)}</span>
-                    }
+                      render: (share) => (
+                        <span class="text-muted">{formatOrgDate(share.createdAt)}</span>
+                      ),
+                    },
                   ]}
                   keyExtractor={(share) => share.id}
                   emptyState="No incoming shares from other organizations."

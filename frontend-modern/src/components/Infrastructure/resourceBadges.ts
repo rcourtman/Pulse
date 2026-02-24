@@ -7,9 +7,17 @@ export interface ResourceBadge {
   title?: string;
 }
 
-const baseBadge = 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap';
+const baseBadge =
+  'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap';
 
-export type UnifiedSource = 'proxmox' | 'agent' | 'docker' | 'pbs' | 'pmg' | 'kubernetes' | 'truenas';
+export type UnifiedSource =
+  | 'proxmox'
+  | 'agent'
+  | 'docker'
+  | 'pbs'
+  | 'pmg'
+  | 'kubernetes'
+  | 'truenas';
 
 const sourceLabels: Record<SourceType, string> = {
   agent: 'Agent',
@@ -111,10 +119,7 @@ export function getContainerRuntimeBadge(
   if (!raw) return null;
 
   const normalized = raw.toLowerCase();
-  const label =
-    normalized === 'podman' ? 'Podman' :
-    normalized === 'docker' ? 'Docker' :
-    raw;
+  const label = normalized === 'podman' ? 'Podman' : normalized === 'docker' ? 'Docker' : raw;
 
   const classes =
     normalized === 'podman'

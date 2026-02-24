@@ -75,7 +75,9 @@ describe.skip('Settings architecture guardrails', () => {
     expect(source).toContain('lazy(');
 
     const staticImports = Array.from(
-      source.matchAll(/^import\s+(?!type\b)(?!{[^}]*}\s+from\s+'solid-js').*from\s+'\.\/\w+Panel'/gm),
+      source.matchAll(
+        /^import\s+(?!type\b)(?!{[^}]*}\s+from\s+'solid-js').*from\s+'\.\/\w+Panel'/gm,
+      ),
     );
     expect(staticImports.length).toBe(0);
   });

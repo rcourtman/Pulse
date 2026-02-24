@@ -69,7 +69,9 @@ export async function startProTrial(): Promise<StartProTrialResult> {
 
     if (res.status === 409 && payload?.code === 'trial_signup_required') {
       const actionUrl =
-        payload.details?.action_url || getFirstUpgradeActionUrl() || getUpgradeActionUrlOrFallback('relay');
+        payload.details?.action_url ||
+        getFirstUpgradeActionUrl() ||
+        getUpgradeActionUrlOrFallback('relay');
       return { outcome: 'redirect', actionUrl };
     }
 

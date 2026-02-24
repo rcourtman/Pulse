@@ -7,7 +7,11 @@ interface ChatMessagesProps {
   messages: ChatMessage[];
   onApprove: (messageId: string, approval: PendingApproval) => void;
   onSkip: (messageId: string, toolId: string) => void;
-  onAnswerQuestion: (messageId: string, question: PendingQuestion, answers: Array<{ id: string; value: string }>) => void;
+  onAnswerQuestion: (
+    messageId: string,
+    question: PendingQuestion,
+    answers: Array<{ id: string; value: string }>,
+  ) => void;
   onSkipQuestion: (messageId: string, questionId: string) => void;
   // Dashboard props
   recentSessions?: ChatSession[];
@@ -39,10 +43,12 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
     if (msgs.length === 0) return 0;
     const lastMsg = msgs[msgs.length - 1];
     // Combine multiple signals to ensure we detect all content updates
-    return msgs.length +
+    return (
+      msgs.length +
       (lastMsg.content?.length || 0) +
       (lastMsg.isStreaming ? 1000000 : 0) +
-      (lastMsg.streamEvents?.length || 0);
+      (lastMsg.streamEvents?.length || 0)
+    );
   });
 
   // Auto-scroll to bottom on new messages or streaming content
@@ -65,10 +71,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
   });
 
   return (
-    <div
-      ref={containerRef}
-      class="flex-1 overflow-y-auto px-4 py-3 bg-surface"
-    >
+    <div ref={containerRef} class="flex-1 overflow-y-auto px-4 py-3 bg-surface">
       {/* Empty state */}
       <Show when={props.messages.length === 0 && props.emptyState}>
         <div class="flex flex-col items-center justify-center min-h-full text-center py-8">
@@ -89,18 +92,12 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
             </svg>
           </div>
 
-          <h3 class="text-base font-semibold text-base-content mb-6">
-            {props.emptyState!.title}
-          </h3>
+          <h3 class="text-base font-semibold text-base-content mb-6">{props.emptyState!.title}</h3>
           <Show when={props.emptyState!.subtitle}>
-            <p class="text-sm text-muted max-w-xs mb-6">
-              {props.emptyState!.subtitle}
-            </p>
+            <p class="text-sm text-muted max-w-xs mb-6">{props.emptyState!.subtitle}</p>
           </Show>
 
           <div class="w-full max-w-xs space-y-6">
-
-
             {/* Suggestions */}
             <Show when={props.emptyState!.suggestions && props.emptyState!.suggestions!.length > 0}>
               <div class="space-y-2">
@@ -132,7 +129,9 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
             message={message}
             onApprove={(approval) => props.onApprove(message.id, approval)}
             onSkip={(toolId) => props.onSkip(message.id, toolId)}
-            onAnswerQuestion={(question, answers) => props.onAnswerQuestion(message.id, question, answers)}
+            onAnswerQuestion={(question, answers) =>
+              props.onAnswerQuestion(message.id, question, answers)
+            }
             onSkipQuestion={(questionId) => props.onSkipQuestion(message.id, questionId)}
           />
         )}

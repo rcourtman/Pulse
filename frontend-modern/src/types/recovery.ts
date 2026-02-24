@@ -1,7 +1,13 @@
 export type RecoveryProvider = string;
 export type RecoveryKind = 'snapshot' | 'backup' | 'other' | (string & {});
 export type RecoveryMode = 'snapshot' | 'local' | 'remote' | (string & {});
-export type RecoveryOutcome = 'success' | 'warning' | 'failed' | 'running' | 'unknown' | (string & {});
+export type RecoveryOutcome =
+  | 'success'
+  | 'warning'
+  | 'failed'
+  | 'running'
+  | 'unknown'
+  | (string & {});
 
 export interface RecoveryExternalRef {
   type: string;

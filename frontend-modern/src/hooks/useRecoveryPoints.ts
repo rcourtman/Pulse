@@ -35,8 +35,12 @@ export type RecoveryPointsQuery = {
 const normalizeQuery = (query: RecoveryPointsQuery | undefined): RecoveryPointsQuery => {
   const q = query || {};
   const norm = (value: string | null | undefined) => (value || '').trim();
-  const page = typeof q.page === 'number' && Number.isFinite(q.page) ? Math.max(1, Math.floor(q.page)) : 1;
-  const limit = typeof q.limit === 'number' && Number.isFinite(q.limit) ? Math.max(1, Math.floor(q.limit)) : DEFAULT_LIMIT;
+  const page =
+    typeof q.page === 'number' && Number.isFinite(q.page) ? Math.max(1, Math.floor(q.page)) : 1;
+  const limit =
+    typeof q.limit === 'number' && Number.isFinite(q.limit)
+      ? Math.max(1, Math.floor(q.limit))
+      : DEFAULT_LIMIT;
 
   return {
     page,
@@ -61,7 +65,8 @@ const normalizeQuery = (query: RecoveryPointsQuery | undefined): RecoveryPointsQ
   };
 };
 
-const serializeQuery = (query: RecoveryPointsQuery | undefined): string => JSON.stringify(normalizeQuery(query));
+const serializeQuery = (query: RecoveryPointsQuery | undefined): string =>
+  JSON.stringify(normalizeQuery(query));
 
 const parseSerializedQuery = (value: string | null): RecoveryPointsQuery | undefined => {
   if (value == null) return undefined;
@@ -100,7 +105,9 @@ const buildURL = (query: RecoveryPointsQuery | undefined): string => {
   return `${RECOVERY_POINTS_URL}?${params.toString()}`;
 };
 
-async function fetchRecoveryPointsResponse(query: RecoveryPointsQuery | undefined): Promise<RecoveryPointsResponse> {
+async function fetchRecoveryPointsResponse(
+  query: RecoveryPointsQuery | undefined,
+): Promise<RecoveryPointsResponse> {
   const url = buildURL(query);
   return apiFetchJSON<RecoveryPointsResponse>(url);
 }
@@ -117,7 +124,9 @@ export function useRecoveryPoints(query?: Accessor<RecoveryPointsQuery | null | 
   );
 
   const points = createMemo<RecoveryPoint[]>(() => response()?.data || []);
-  const meta = createMemo(() => response()?.meta || { page: 1, limit: DEFAULT_LIMIT, total: 0, totalPages: 1 });
+  const meta = createMemo(
+    () => response()?.meta || { page: 1, limit: DEFAULT_LIMIT, total: 0, totalPages: 1 },
+  );
 
   const interval = setInterval(() => void refetch(), REFRESH_MS);
   onCleanup(() => clearInterval(interval));

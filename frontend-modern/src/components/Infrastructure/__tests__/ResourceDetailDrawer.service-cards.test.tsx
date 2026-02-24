@@ -56,7 +56,9 @@ describe('ResourceDetailDrawer service cards', () => {
       },
     });
 
-    const { getByText, getAllByText, getByRole } = render(() => <ResourceDetailDrawer resource={resource} />);
+    const { getByText, getAllByText, getByRole } = render(() => (
+      <ResourceDetailDrawer resource={resource} />
+    ));
 
     expect(getByText('PBS Service')).toBeInTheDocument();
     expect(getAllByText('pbs-main.local').length).toBeGreaterThan(0);
@@ -93,7 +95,9 @@ describe('ResourceDetailDrawer service cards', () => {
       },
     });
 
-    const { getByText, getAllByText, getByRole } = render(() => <ResourceDetailDrawer resource={resource} />);
+    const { getByText, getAllByText, getByRole } = render(() => (
+      <ResourceDetailDrawer resource={resource} />
+    ));
 
     expect(getByText('Mail Gateway')).toBeInTheDocument();
     expect(getAllByText('pmg-main.local').length).toBeGreaterThan(0);

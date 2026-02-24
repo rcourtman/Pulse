@@ -10,7 +10,9 @@ export const NetworkInterfacesCard: Component<NetworkInterfacesCardProps> = (pro
 
   return (
     <div class="rounded border border-border bg-surface p-3 shadow-sm">
-      <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Network</div>
+      <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+        Network
+      </div>
       <div class="max-h-[140px] overflow-y-auto custom-scrollbar space-y-2">
         <For each={props.interfaces}>
           {(iface) => (
@@ -18,14 +20,22 @@ export const NetworkInterfacesCard: Component<NetworkInterfacesCardProps> = (pro
               <div class="flex items-center gap-2 text-[11px] font-medium text-base-content min-w-0">
                 <span class="truncate min-w-0">{iface.name}</span>
                 <Show when={iface.mac}>
-                  <span class="text-[9px] text-muted font-normal truncate shrink-0 max-w-[100px]" title={iface.mac}>{iface.mac}</span>
+                  <span
+                    class="text-[9px] text-muted font-normal truncate shrink-0 max-w-[100px]"
+                    title={iface.mac}
+                  >
+                    {iface.mac}
+                  </span>
                 </Show>
               </div>
               <Show when={iface.addresses && iface.addresses.length > 0}>
                 <div class="flex flex-wrap gap-1 mt-1">
                   <For each={iface.addresses}>
                     {(ip) => (
-                      <span class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200 max-w-full truncate" title={ip}>
+                      <span
+                        class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200 max-w-full truncate"
+                        title={ip}
+                      >
                         {ip}
                       </span>
                     )}

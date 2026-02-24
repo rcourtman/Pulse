@@ -27,4 +27,3 @@ export function timeRangeToMs(range: TimeRange): number {
       return 60 * 60_000;
   }
 }
-

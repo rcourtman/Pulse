@@ -6,7 +6,7 @@ import {
   MAX_ALERTS_MAX,
   MAX_ALERTS_DEFAULT,
   COOLDOWN_DEFAULT_MINUTES,
-  GROUPING_WINDOW_DEFAULT_MINUTES
+  GROUPING_WINDOW_DEFAULT_MINUTES,
 } from './types';
 import { unwrap } from 'solid-js/store';
 import type {
@@ -15,7 +15,7 @@ import type {
   GroupingConfig,
   UIAppriseConfig,
   UIEmailConfig,
-  EscalationConfig
+  EscalationConfig,
 } from './types';
 
 export const clampMaxAlertsPerHour = (value?: number): number => {
@@ -191,9 +191,7 @@ export const getTriggerValue = (
   return 0; // Default fallback
 };
 
-export const extractTriggerValues = (
-  thresholds: RawOverrideConfig,
-): Record<string, number> => {
+export const extractTriggerValues = (thresholds: RawOverrideConfig): Record<string, number> => {
   const result: Record<string, number> = {};
   Object.entries(thresholds).forEach(([key, value]) => {
     // Skip non-threshold fields

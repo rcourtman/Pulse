@@ -14,7 +14,6 @@ export function DiskList(props: DiskListProps) {
     return (disk.used / disk.total) * 100;
   };
 
-
   const getDiskStatusTooltip = () => {
     const reason = props.diskStatusReason;
 

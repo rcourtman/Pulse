@@ -220,12 +220,14 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
           aria-label="Clear search"
           title="Clear search"
         >
-          <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M6 18L18 6M6 6l12 12"
-            />
+          <svg
+            class="h-3 w-3"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="3"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </Show>
@@ -237,9 +239,10 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
               ref={(el) => (historyToggleRef = el)}
               type="button"
               class={`flex h-7 w-7 items-center justify-center rounded-md transition-colors
- ${isHistoryOpen()
- ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400'
- : 'text-muted hover:bg-surface-hover hover:text-base-content'
+ ${
+   isHistoryOpen()
+     ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400'
+     : 'text-muted hover:bg-surface-hover hover:text-base-content'
  }`}
               onClick={() =>
                 setIsHistoryOpen((prev) => {
@@ -253,13 +256,15 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
               onMouseDown={markSuppressCommit}
               aria-haspopup="listbox"
               aria-expanded={isHistoryOpen()}
-              title={
-                searchHistory().length > 0
-                  ? 'Show recent searches'
-                  : 'No recent searches yet'
-              }
+              title={searchHistory().length > 0 ? 'Show recent searches' : 'No recent searches yet'}
             >
-              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <svg
+                class="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
               <span class="sr-only">Show search history</span>
@@ -318,7 +323,12 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
                       onClick={() => deleteHistoryEntry(entry)}
                       onMouseDown={markSuppressCommit}
                     >
-                      <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg
+                        class="h-3.5 w-3.5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
                         <path
                           stroke-linecap="round"
                           stroke-linejoin="round"

@@ -1,5 +1,15 @@
 import { useLocation, useNavigate } from '@solidjs/router';
-import { Component, For, Index, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import {
+  Component,
+  For,
+  Index,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import { useWebSocket } from '@/App';
 import { useResources } from '@/hooks/useResources';
 import { Card } from '@/components/shared/Card';
@@ -9,16 +19,10 @@ import { EnhancedStorageBar } from '@/components/Storage/EnhancedStorageBar';
 import { StorageHero } from '@/components/Storage/StorageHero';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { buildStorageRecords } from '@/features/storageBackups/storageAdapters';
-import {
-  getCephHealthLabel,
-  getCephHealthStyles,
-} from '@/features/storageBackups/storageDomain';
+import { getCephHealthLabel, getCephHealthStyles } from '@/features/storageBackups/storageDomain';
 import type { NormalizedHealth, StorageRecord } from '@/features/storageBackups/models';
 import { useStorageRecoveryResources } from '@/hooks/useUnifiedResources';
-import {
-  buildStoragePath,
-  parseStorageLinkSearch,
-} from '@/routing/resourceLinks';
+import { buildStoragePath, parseStorageLinkSearch } from '@/routing/resourceLinks';
 import { formatBytes, formatPercent } from '@/utils/format';
 import { segmentedButtonClass } from '@/utils/segmentedButton';
 import { getProxmoxData } from '@/utils/resourcePlatformData';
@@ -27,7 +31,11 @@ import { useStorageRouteState } from './useStorageRouteState';
 import { isCephRecord, useStorageCephModel } from './useStorageCephModel';
 import { useStorageAlertState } from './useStorageAlertState';
 import { useStorageHeroTrend } from './useStorageHeroTrend';
-import { StorageFilter, type StorageGroupByFilter, type StorageStatusFilter } from './StorageFilter';
+import {
+  StorageFilter,
+  type StorageGroupByFilter,
+  type StorageStatusFilter,
+} from './StorageFilter';
 import { StorageGroupRow } from './StorageGroupRow';
 import { StoragePoolRow } from './StoragePoolRow';
 import {
@@ -49,7 +57,8 @@ const STORAGE_SORT_OPTIONS: Array<{ value: StorageSortKey; label: string }> = [
 const normalizeHealthFilter = (value: string): 'all' | NormalizedHealth => {
   const normalized = (value || '').trim().toLowerCase();
   if (!normalized || normalized === 'all') return 'all';
-  if (normalized === 'available' || normalized === 'online' || normalized === 'healthy') return 'healthy';
+  if (normalized === 'available' || normalized === 'online' || normalized === 'healthy')
+    return 'healthy';
   if (normalized === 'degraded' || normalized === 'warning') return 'warning';
   if (normalized === 'critical') return 'critical';
   if (normalized === 'offline') return 'offline';
@@ -87,7 +96,8 @@ const isRecordCeph = (record: StorageRecord): boolean => {
 const Storage: Component = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { state, activeAlerts, connected, initialDataReceived, reconnecting, reconnect } = useWebSocket();
+  const { state, activeAlerts, connected, initialDataReceived, reconnecting, reconnect } =
+    useWebSocket();
   const { byType } = useResources();
 
   const [kioskMode, setKioskMode] = createSignal(isKioskMode());
@@ -161,17 +171,19 @@ const Storage: Component = () => {
     return map;
   });
 
-  const { sourceOptions, selectedNode, filteredRecords, groupedRecords, summary } = useStorageModel({
-    records,
-    search,
-    sourceFilter,
-    healthFilter,
-    selectedNodeId,
-    nodeOptions,
-    sortKey,
-    sortDirection,
-    groupBy,
-  });
+  const { sourceOptions, selectedNode, filteredRecords, groupedRecords, summary } = useStorageModel(
+    {
+      records,
+      search,
+      sourceFilter,
+      healthFilter,
+      selectedNodeId,
+      nodeOptions,
+      sortKey,
+      sortDirection,
+      groupBy,
+    },
+  );
 
   // Default all groups to expanded on first load; new groups auto-expand
   createEffect(() => {
@@ -182,7 +194,10 @@ const Storage: Component = () => {
       const next = new Set(prev);
       let changed = false;
       for (const key of allKeys) {
-        if (!next.has(key)) { next.add(key); changed = true; }
+        if (!next.has(key)) {
+          next.add(key);
+          changed = true;
+        }
       }
       return changed ? next : prev;
     });
@@ -264,7 +279,9 @@ const Storage: Component = () => {
       !connected() &&
       !initialDataReceived(),
   );
-  const isDisconnectedAfterLoad = createMemo(() => !connected() && initialDataReceived() && !reconnecting());
+  const isDisconnectedAfterLoad = createMemo(
+    () => !connected() && initialDataReceived() && !reconnecting(),
+  );
   const isLoadingPools = createMemo(
     () => storageBackupsResources.loading() && view() === 'pools' && filteredRecords().length === 0,
   );
@@ -415,8 +432,8 @@ const Storage: Component = () => {
                     </div>
                     <span
                       class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${getCephHealthStyles(
- cluster.health,
- )}`}
+                        cluster.health,
+                      )}`}
                     >
                       {getCephHealthLabel(cluster.health)}
                     </span>
@@ -440,7 +457,7 @@ const Storage: Component = () => {
           search={search}
           setSearch={setSearch}
           groupBy={view() === 'pools' ? storageFilterGroupBy : undefined}
-          setGroupBy={view() === 'pools' ? ((value) => setGroupBy(value)) : undefined}
+          setGroupBy={view() === 'pools' ? (value) => setGroupBy(value) : undefined}
           sortKey={sortKey}
           setSortKey={(value) => setSortKey(normalizeSortKey(value))}
           sortDirection={sortDirection}
@@ -454,7 +471,11 @@ const Storage: Component = () => {
           sourceOptions={sourceFilterOptions()}
           leadingFilters={
             <>
-              <div class="inline-flex rounded-md bg-surface-hover p-0.5" role="group" aria-label="View">
+              <div
+                class="inline-flex rounded-md bg-surface-hover p-0.5"
+                role="group"
+                aria-label="View"
+              >
                 <button
                   type="button"
                   onClick={() => setView('pools')}
@@ -468,77 +489,81 @@ const Storage: Component = () => {
                   onClick={() => setView('disks')}
                   aria-pressed={view() === 'disks'}
                   class={segmentedButtonClass(view() === 'disks')}
- >
- Physical Disks
- </button>
- </div>
- <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
- <select
- value={selectedNodeId()}
- onChange={(event) => setSelectedNodeId(event.currentTarget.value)}
- class="px-2 py-1 text-xs border border-border rounded-md bg-surface text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
- aria-label="Node"
- >
- <option value="all">All Nodes</option>
- <For each={nodeOptions()}>{(node) => <option value={node.id}>{node.label}</option>}</For>
- </select>
- <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
- </>
- }
- />
- </Show>
+                >
+                  Physical Disks
+                </button>
+              </div>
+              <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
+              <select
+                value={selectedNodeId()}
+                onChange={(event) => setSelectedNodeId(event.currentTarget.value)}
+                class="px-2 py-1 text-xs border border-border rounded-md bg-surface text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                aria-label="Node"
+              >
+                <option value="all">All Nodes</option>
+                <For each={nodeOptions()}>
+                  {(node) => <option value={node.id}>{node.label}</option>}
+                </For>
+              </select>
+              <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
+            </>
+          }
+        />
+      </Show>
 
- <Show when={reconnecting()}>
- <Card padding="sm" tone="warning">
- <div class="flex items-center justify-between gap-3">
- <span class="text-xs text-amber-800 dark:text-amber-200">Reconnecting to backend data stream…</span>
- <button
- type="button"
- onClick={() => reconnect()}
- class="rounded border border-amber-300 bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200 dark:hover:bg-amber-900"
- >
- Retry now
- </button>
- </div>
- </Card>
- </Show>
+      <Show when={reconnecting()}>
+        <Card padding="sm" tone="warning">
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-xs text-amber-800 dark:text-amber-200">
+              Reconnecting to backend data stream…
+            </span>
+            <button
+              type="button"
+              onClick={() => reconnect()}
+              class="rounded border border-amber-300 bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200 dark:hover:bg-amber-900"
+            >
+              Retry now
+            </button>
+          </div>
+        </Card>
+      </Show>
 
- <Show when={hasFetchError()}>
- <Card padding="sm" tone="warning">
- <div class="text-xs text-amber-800 dark:text-amber-200">
- Unable to refresh storage resources. Showing latest available data.
- </div>
- </Card>
- </Show>
+      <Show when={hasFetchError()}>
+        <Card padding="sm" tone="warning">
+          <div class="text-xs text-amber-800 dark:text-amber-200">
+            Unable to refresh storage resources. Showing latest available data.
+          </div>
+        </Card>
+      </Show>
 
- <Show when={isDisconnectedAfterLoad()}>
- <Card padding="sm" tone="warning">
- <div class="flex items-center justify-between gap-3">
- <span class="text-xs text-amber-800 dark:text-amber-200">
- Storage data stream disconnected. Data may be stale.
- </span>
- <button
- type="button"
- onClick={() => reconnect()}
- class="rounded border border-amber-300 bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200 dark:hover:bg-amber-900"
- >
- Reconnect
- </button>
- </div>
- </Card>
- </Show>
+      <Show when={isDisconnectedAfterLoad()}>
+        <Card padding="sm" tone="warning">
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-xs text-amber-800 dark:text-amber-200">
+              Storage data stream disconnected. Data may be stale.
+            </span>
+            <button
+              type="button"
+              onClick={() => reconnect()}
+              class="rounded border border-amber-300 bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200 dark:hover:bg-amber-900"
+            >
+              Reconnect
+            </button>
+          </div>
+        </Card>
+      </Show>
 
- <Show when={isWaitingForData()}>
- <Card padding="sm" tone="warning">
- <div class="text-xs text-amber-800 dark:text-amber-200">
- Waiting for storage data from connected platforms.
- </div>
- </Card>
- </Show>
+      <Show when={isWaitingForData()}>
+        <Card padding="sm" tone="warning">
+          <div class="text-xs text-amber-800 dark:text-amber-200">
+            Waiting for storage data from connected platforms.
+          </div>
+        </Card>
+      </Show>
 
- <Card padding="none" class="overflow-hidden">
- <div class="border-b px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 ">
- {view() ==='pools' ? 'Storage Pools' : 'Physical Disks'}
+      <Card padding="none" class="overflow-hidden">
+        <div class="border-b px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 ">
+          {view() === 'pools' ? 'Storage Pools' : 'Physical Disks'}
         </div>
         <Show when={view() === 'disks'}>
           <div class="p-2">
@@ -566,14 +591,26 @@ const Storage: Component = () => {
                   <Table class="w-full text-xs">
                     <TableHeader>
                       <TableRow class="bg-surface-alt text-muted border-b border-border">
-                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Name</TableHead>
+                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+                          Name
+                        </TableHead>
                         <Show when={groupBy() !== 'node'}>
-                          <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Node</TableHead>
+                          <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+                            Node
+                          </TableHead>
                         </Show>
-                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden md:table-cell">Type</TableHead>
-                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider md:min-w-[180px]">Capacity</TableHead>
-                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[120px] hidden md:table-cell">Trend</TableHead>
-                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Health</TableHead>
+                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden md:table-cell">
+                          Type
+                        </TableHead>
+                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider md:min-w-[180px]">
+                          Capacity
+                        </TableHead>
+                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[120px] hidden md:table-cell">
+                          Trend
+                        </TableHead>
+                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+                          Health
+                        </TableHead>
                         <TableHead class="px-1.5 sm:px-2 py-0.5 w-10" />
                       </TableRow>
                     </TableHeader>
@@ -581,8 +618,8 @@ const Storage: Component = () => {
                       {/* Outer <For> uses string keys — strings compare by value so DOM is stable across data updates */}
                       <For each={groupedRecords().map((g) => g.key)}>
                         {(groupKey) => {
-                          const group = createMemo(() =>
-                            groupedRecords().find((g) => g.key === groupKey)!,
+                          const group = createMemo(
+                            () => groupedRecords().find((g) => g.key === groupKey)!,
                           );
                           const groupItems = createMemo(() => group().items);
                           return (
@@ -598,8 +635,12 @@ const Storage: Component = () => {
                                 <Index each={groupItems()}>
                                   {(record) => {
                                     const isExpanded = () => expandedPoolId() === record().id;
-                                    const alertState = createMemo(() => getRecordAlertState(record().id));
-                                    const nodeLabel = createMemo(() => getRecordNodeLabel(record()).trim().toLowerCase());
+                                    const alertState = createMemo(() =>
+                                      getRecordAlertState(record().id),
+                                    );
+                                    const nodeLabel = createMemo(() =>
+                                      getRecordNodeLabel(record()).trim().toLowerCase(),
+                                    );
                                     const parentNodeOnline = createMemo(() => {
                                       const label = nodeLabel();
                                       if (!label) return true;
@@ -607,12 +648,15 @@ const Storage: Component = () => {
                                       return nodeStatus === undefined ? true : nodeStatus;
                                     });
                                     const showAlertHighlight = createMemo(
-                                      () => alertState().hasUnacknowledgedAlert && parentNodeOnline(),
+                                      () =>
+                                        alertState().hasUnacknowledgedAlert && parentNodeOnline(),
                                     );
                                     const hasAcknowledgedOnlyAlert = createMemo(
-                                      () => alertState().hasAcknowledgedOnlyAlert && parentNodeOnline(),
+                                      () =>
+                                        alertState().hasAcknowledgedOnlyAlert && parentNodeOnline(),
                                     );
-                                    const isResourceHighlighted = () => highlightedRecordId() === record().id;
+                                    const isResourceHighlighted = () =>
+                                      highlightedRecordId() === record().id;
                                     const rowClass = createMemo(() => {
                                       const classes = [
                                         'transition-all duration-200',
@@ -626,7 +670,9 @@ const Storage: Component = () => {
                                             : 'bg-yellow-50 dark:bg-yellow-950',
                                         );
                                       } else if (isResourceHighlighted()) {
-                                        classes.push('bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300 dark:ring-blue-600');
+                                        classes.push(
+                                          'bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300 dark:ring-blue-600',
+                                        );
                                       } else if (hasAcknowledgedOnlyAlert()) {
                                         classes.push('bg-surface-alt');
                                       }
@@ -641,8 +687,11 @@ const Storage: Component = () => {
                                     const rowStyle = createMemo(() => {
                                       if (showAlertHighlight()) {
                                         return {
-                                          'box-shadow': `inset 4px 0 0 0 ${alertState().severity === 'critical' ? '#ef4444' : '#eab308'
-                                            }`,
+                                          'box-shadow': `inset 4px 0 0 0 ${
+                                            alertState().severity === 'critical'
+                                              ? '#ef4444'
+                                              : '#eab308'
+                                          }`,
                                         };
                                       }
                                       if (hasAcknowledgedOnlyAlert()) {
@@ -675,7 +724,9 @@ const Storage: Component = () => {
                                               ? 'acknowledged'
                                               : 'none',
                                           'data-alert-severity': alertState().severity || 'none',
-                                          'data-resource-highlighted': isResourceHighlighted() ? 'true' : 'false',
+                                          'data-resource-highlighted': isResourceHighlighted()
+                                            ? 'true'
+                                            : 'false',
                                         }}
                                       />
                                     );

@@ -29,7 +29,9 @@ const normalizeQuery = (query: RecoverySeriesQuery | undefined): RecoverySeriesQ
   const q = query || {};
   const norm = (value: string | null | undefined) => (value || '').trim();
   const tzOffsetMinutes =
-    typeof q.tzOffsetMinutes === 'number' && Number.isFinite(q.tzOffsetMinutes) ? Math.trunc(q.tzOffsetMinutes) : 0;
+    typeof q.tzOffsetMinutes === 'number' && Number.isFinite(q.tzOffsetMinutes)
+      ? Math.trunc(q.tzOffsetMinutes)
+      : 0;
   return {
     rollupId: norm(q.rollupId) || null,
     provider: norm(q.provider) || null,
@@ -51,7 +53,8 @@ const normalizeQuery = (query: RecoverySeriesQuery | undefined): RecoverySeriesQ
   };
 };
 
-const serializeQuery = (query: RecoverySeriesQuery | undefined): string => JSON.stringify(normalizeQuery(query));
+const serializeQuery = (query: RecoverySeriesQuery | undefined): string =>
+  JSON.stringify(normalizeQuery(query));
 
 const parseSerializedQuery = (value: string | null): RecoverySeriesQuery | undefined => {
   if (value == null) return undefined;
@@ -88,7 +91,9 @@ const buildURL = (query: RecoverySeriesQuery | undefined): string => {
   return `${RECOVERY_SERIES_URL}?${params.toString()}`;
 };
 
-async function fetchSeries(query: RecoverySeriesQuery | undefined): Promise<RecoveryPointsSeriesResponse> {
+async function fetchSeries(
+  query: RecoverySeriesQuery | undefined,
+): Promise<RecoveryPointsSeriesResponse> {
   const url = buildURL(query);
   return apiFetchJSON<RecoveryPointsSeriesResponse>(url);
 }

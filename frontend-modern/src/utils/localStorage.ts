@@ -43,8 +43,7 @@ function createLocalStorageSignal<T>(
   // Keep multiple instances in sync (and reflect updates performed elsewhere in the same tab).
   if (typeof window !== 'undefined') {
     const applyRaw = (raw: string | null) => {
-      const next =
-        raw !== null ? (parse ? parse(raw) : (raw as unknown as T)) : defaultValue;
+      const next = raw !== null ? (parse ? parse(raw) : (raw as unknown as T)) : defaultValue;
       if (Object.is(next, value())) return;
       setValue(() => next);
     };

@@ -81,15 +81,16 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
   // Calculate security score
   const securityScore = createMemo(() => {
     const list = items();
-    const criticalItems = list.filter(i => i.critical);
-    const enabledCritical = criticalItems.filter(i => i.enabled).length;
-    const allItems = list.filter(i => i.enabled).length;
+    const criticalItems = list.filter((i) => i.critical);
+    const enabledCritical = criticalItems.filter((i) => i.enabled).length;
+    const allItems = list.filter((i) => i.enabled).length;
 
     // Weight critical items more heavily
     const criticalWeight = 0.7;
     const optionalWeight = 0.3;
 
-    const criticalScore = criticalItems.length > 0 ? (enabledCritical / criticalItems.length) * criticalWeight : 0;
+    const criticalScore =
+      criticalItems.length > 0 ? (enabledCritical / criticalItems.length) * criticalWeight : 0;
     const optionalScore = list.length > 0 ? (allItems / list.length) * optionalWeight : 0;
 
     return Math.round((criticalScore + optionalScore) * 100);
@@ -145,11 +146,7 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
   };
 
   return (
-    <Card
-      padding="none"
-      class="overflow-hidden border border-border"
-      border={false}
-    >
+    <Card padding="none" class="overflow-hidden border border-border" border={false}>
       {/* Header with Security Score */}
       <div class={`px-6 py-5 ${scoreTone().headerBg} ${scoreTone().headerBorder}`}>
         <div class="flex items-center justify-between">
@@ -171,7 +168,9 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
           </div>
           <div class="text-right">
             <div class={`text-3xl font-semibold ${scoreTone().score}`}>{securityScore()}%</div>
-            <div class={`mt-1 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${scoreTone().badge}`}>
+            <div
+              class={`mt-1 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${scoreTone().badge}`}
+            >
               {scoreLabel()}
             </div>
           </div>
@@ -183,26 +182,30 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
         <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <For each={items()}>
             {(item) => (
-              <div class={`rounded-md border p-4 transition-all ${item.enabled
- ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950'
- : item.critical
- ? 'border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950'
- : 'border-border bg-surface-alt'
- }`}>
+              <div
+                class={`rounded-md border p-4 transition-all ${
+                  item.enabled
+                    ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950'
+                    : item.critical
+                      ? 'border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950'
+                      : 'border-border bg-surface-alt'
+                }`}
+              >
                 <div class="flex items-center justify-between mb-2">
-                  <span class="text-sm font-semibold text-base-content">
-                    {item.label}
-                  </span>
-                  <Show when={item.enabled} fallback={
-                    <XCircle class={`w-5 h-5 ${item.critical ? 'text-rose-500 dark:text-rose-400' : 'text-muted'}`} />
-                  }>
+                  <span class="text-sm font-semibold text-base-content">{item.label}</span>
+                  <Show
+                    when={item.enabled}
+                    fallback={
+                      <XCircle
+                        class={`w-5 h-5 ${item.critical ? 'text-rose-500 dark:text-rose-400' : 'text-muted'}`}
+                      />
+                    }
+                  >
                     <CheckCircle class="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
                   </Show>
                 </div>
                 <div class="flex items-center justify-between">
-                  <p class="text-xs text-muted">
-                    {item.description}
-                  </p>
+                  <p class="text-xs text-muted">{item.description}</p>
                   <Show when={item.critical && !item.enabled}>
                     <span class="text-[10px] font-medium text-rose-600 dark:text-rose-400 uppercase">
                       Critical

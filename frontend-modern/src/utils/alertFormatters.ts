@@ -21,18 +21,18 @@ const THROUGHPUT_METRIC_TYPES = new Set(['diskRead', 'diskWrite', 'networkIn', '
  * @returns The unit suffix to append to values (e.g., '%', '°C', '°F', ' MB/s')
  */
 export function getAlertUnit(metricType?: string): string {
-    if (!metricType) return '%';
-    const typeLower = metricType.toLowerCase();
+  if (!metricType) return '%';
+  const typeLower = metricType.toLowerCase();
 
-    if (TEMPERATURE_METRIC_TYPES.has(typeLower)) {
-        return getTemperatureSymbol();
-    }
+  if (TEMPERATURE_METRIC_TYPES.has(typeLower)) {
+    return getTemperatureSymbol();
+  }
 
-    if (THROUGHPUT_METRIC_TYPES.has(typeLower)) {
-        return ' MB/s';
-    }
+  if (THROUGHPUT_METRIC_TYPES.has(typeLower)) {
+    return ' MB/s';
+  }
 
-    return '%';
+  return '%';
 }
 
 /**
@@ -43,14 +43,14 @@ export function getAlertUnit(metricType?: string): string {
  * @returns Formatted string with appropriate unit (e.g., '82.5%', '74.0°C')
  */
 export function formatAlertValue(
-    value: number | undefined,
-    metricType?: string,
-    decimals = 1
+  value: number | undefined,
+  metricType?: string,
+  decimals = 1,
 ): string {
-    if (value === undefined || !Number.isFinite(value)) {
-        return 'N/A';
-    }
-    return `${value.toFixed(decimals)}${getAlertUnit(metricType)}`;
+  if (value === undefined || !Number.isFinite(value)) {
+    return 'N/A';
+  }
+  return `${value.toFixed(decimals)}${getAlertUnit(metricType)}`;
 }
 
 /**
@@ -60,16 +60,12 @@ export function formatAlertValue(
  * @param metricType The alert's metric type (e.g., 'cpu', 'memory', 'temperature')
  * @returns Formatted threshold string
  */
-export function formatAlertThreshold(
-    value: number | undefined,
-    metricType?: string
-): string {
-    if (value === undefined || Number.isNaN(value)) {
-        return 'Not configured';
-    }
-    if (value <= 0) {
-        return 'Disabled';
-    }
-    return `${value}${getAlertUnit(metricType)}`;
+export function formatAlertThreshold(value: number | undefined, metricType?: string): string {
+  if (value === undefined || Number.isNaN(value)) {
+    return 'Not configured';
+  }
+  if (value <= 0) {
+    return 'Disabled';
+  }
+  return `${value}${getAlertUnit(metricType)}`;
 }
-

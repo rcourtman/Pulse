@@ -28,6 +28,8 @@ describe('legacyRedirects contract', () => {
     const servicesTarget = buildLegacyRedirectTarget(services.destination, services.source);
 
     expect(k8sTarget).toBe(`${buildWorkloadsPath({ type: 'k8s' })}&migrated=1&from=kubernetes`);
-    expect(servicesTarget).toBe(`${buildInfrastructurePath({ source: 'pmg' })}&migrated=1&from=services`);
+    expect(servicesTarget).toBe(
+      `${buildInfrastructurePath({ source: 'pmg' })}&migrated=1&from=services`,
+    );
   });
 });

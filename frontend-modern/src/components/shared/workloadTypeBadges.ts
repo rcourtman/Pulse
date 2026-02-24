@@ -69,7 +69,11 @@ const normalizeKey = (value: string | null | undefined): WorkloadTypeBadgeKey | 
   if (!normalized) return null;
   if (normalized === 'qemu' || normalized === 'vm') return 'vm';
   if (normalized === 'lxc' || normalized === 'ct' || normalized === 'container') return 'container';
-  if (normalized === 'docker' || normalized === 'docker-container' || normalized === 'docker_container') {
+  if (
+    normalized === 'docker' ||
+    normalized === 'docker-container' ||
+    normalized === 'docker_container'
+  ) {
     return 'docker';
   }
   if (normalized === 'k8s' || normalized === 'kubernetes') return 'k8s';
@@ -84,7 +88,8 @@ export const getWorkloadTypeBadge = (
   overrides?: Partial<Pick<WorkloadTypeBadge, 'label' | 'title'>>,
 ): WorkloadTypeBadge => {
   const normalized = normalizeKey(rawType);
-  const fallbackLabel = overrides?.label || toTitleCase((rawType || '').toString()) || DEFAULT_BADGE.label;
+  const fallbackLabel =
+    overrides?.label || toTitleCase((rawType || '').toString()) || DEFAULT_BADGE.label;
 
   if (!normalized) {
     return {

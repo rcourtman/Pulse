@@ -82,7 +82,6 @@ export type AIChatStreamEvent =
   | { type: 'tool_start'; data: ToolStartData }
   | { type: 'tool_end'; data: ToolEndData }
   | { type: 'approval_needed'; data: ApprovalNeededData }
-  | { type: 'question'; data: (QuestionData & { session_id?: string }) }
+  | { type: 'question'; data: QuestionData & { session_id?: string } }
   | { type: 'done'; data?: DoneData }
-  | { type: 'error'; data: ErrorData }
-;
+  | { type: 'error'; data: ErrorData };

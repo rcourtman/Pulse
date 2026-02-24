@@ -20,8 +20,16 @@ const outcomeBadgeClass = (outcome: ProtectionOutcome): string => {
       return `${base} bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300`;
     case 'failed':
       return `${base} bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300`;
-    case 'running': return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300`; default: return `${base} bg-surface-alt text-muted`; }
-}; export function RecoveryStatusPanel(props: RecoveryStatusPanelProps) { const latestAgeMs = createMemo(() => { const ts = props.recovery.latestEventTimestamp; if (typeof ts !=='number' || !Number.isFinite(ts)) return null;
+    case 'running':
+      return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300`;
+    default:
+      return `${base} bg-surface-alt text-muted`;
+  }
+};
+export function RecoveryStatusPanel(props: RecoveryStatusPanelProps) {
+  const latestAgeMs = createMemo(() => {
+    const ts = props.recovery.latestEventTimestamp;
+    if (typeof ts !== 'number' || !Number.isFinite(ts)) return null;
     return Date.now() - ts;
   });
 
@@ -46,19 +54,29 @@ const outcomeBadgeClass = (outcome: ProtectionOutcome): string => {
         <div class="space-y-1.5">
           <div class="flex items-baseline justify-between gap-4">
             <p class="text-xs text-muted">
-              <span class="font-mono font-semibold text-base text-base-content">{props.recovery.totalProtected}</span> total
+              <span class="font-mono font-semibold text-base text-base-content">
+                {props.recovery.totalProtected}
+              </span>{' '}
+              total
             </p>
             <p class="text-xs text-muted">
-              Last: <span class="font-mono font-medium text-base-content">{formatRelativeTime(props.recovery.latestEventTimestamp ?? undefined, { compact: true }) || '—'}</span>
+              Last:{' '}
+              <span class="font-mono font-medium text-base-content">
+                {formatRelativeTime(props.recovery.latestEventTimestamp ?? undefined, {
+                  compact: true,
+                }) || '—'}
+              </span>
             </p>
           </div>
 
           <Show when={isStale()}>
-            <p class="text-sm font-medium text-amber-700 dark:text-amber-300">Last recovery point over 24 hours ago</p>
+            <p class="text-sm font-medium text-amber-700 dark:text-amber-300">
+              Last recovery point over 24 hours ago
+            </p>
           </Show>
 
           <div class="flex flex-wrap gap-2">
-              <For each={OUTCOMES}>
+            <For each={OUTCOMES}>
               {(outcome) => {
                 const count = () => props.recovery.byOutcome[outcome] ?? 0;
                 return (

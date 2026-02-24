@@ -38,14 +38,20 @@ describe('canvasRenderQueue', () => {
     const callbacks = new Map<number, FrameRequestCallback>();
     let nextId = 1;
 
-    vi.stubGlobal('requestAnimationFrame', vi.fn((cb: FrameRequestCallback) => {
-      const id = nextId++;
-      callbacks.set(id, cb);
-      return id;
-    }));
-    vi.stubGlobal('cancelAnimationFrame', vi.fn((id: number) => {
-      callbacks.delete(id);
-    }));
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((cb: FrameRequestCallback) => {
+        const id = nextId++;
+        callbacks.set(id, cb);
+        return id;
+      }),
+    );
+    vi.stubGlobal(
+      'cancelAnimationFrame',
+      vi.fn((id: number) => {
+        callbacks.delete(id);
+      }),
+    );
 
     const { scheduleSparkline } = await import('@/utils/canvasRenderQueue');
 

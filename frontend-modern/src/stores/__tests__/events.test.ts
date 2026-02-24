@@ -10,37 +10,37 @@ describe('eventBus', () => {
     it('calls handler when event is emitted', () => {
       const handler = vi.fn();
       eventBus.on('refresh_nodes', handler);
-      
+
       eventBus.emit('refresh_nodes');
-      
+
       expect(handler).toHaveBeenCalledTimes(1);
     });
 
     it('passes data to handler when event is emitted with data', () => {
       const handler = vi.fn();
       eventBus.on('theme_changed', handler);
-      
+
       eventBus.emit('theme_changed', 'dark');
-      
+
       expect(handler).toHaveBeenCalledWith('dark');
     });
 
     it('calls handler with undefined when no data provided', () => {
       const handler = vi.fn();
       eventBus.on('refresh_nodes', handler);
-      
+
       eventBus.emit('refresh_nodes');
-      
+
       expect(handler).toHaveBeenCalledWith(undefined);
     });
 
     it('returns unsubscribe function', () => {
       const handler = vi.fn();
       const unsubscribe = eventBus.on('refresh_nodes', handler);
-      
+
       unsubscribe();
       eventBus.emit('refresh_nodes');
-      
+
       expect(handler).not.toHaveBeenCalled();
     });
 
@@ -48,9 +48,9 @@ describe('eventBus', () => {
       const handler = vi.fn();
       eventBus.on('refresh_nodes', handler);
       eventBus.off('refresh_nodes', handler);
-      
+
       eventBus.emit('refresh_nodes');
-      
+
       expect(handler).not.toHaveBeenCalled();
     });
 
@@ -59,9 +59,9 @@ describe('eventBus', () => {
       const handler2 = vi.fn();
       eventBus.on('refresh_nodes', handler1);
       eventBus.on('refresh_nodes', handler2);
-      
+
       eventBus.emit('refresh_nodes');
-      
+
       expect(handler1).toHaveBeenCalledTimes(1);
       expect(handler2).toHaveBeenCalledTimes(1);
     });
@@ -71,9 +71,9 @@ describe('eventBus', () => {
       const handler2 = vi.fn();
       eventBus.on('theme_changed', handler1);
       eventBus.on('refresh_nodes', handler2);
-      
+
       eventBus.emit('refresh_nodes');
-      
+
       expect(handler1).not.toHaveBeenCalled();
       expect(handler2).toHaveBeenCalledTimes(1);
     });
@@ -83,7 +83,7 @@ describe('eventBus', () => {
     it('emits node_auto_registered with correct data', () => {
       const handler = vi.fn();
       eventBus.on('node_auto_registered', handler);
-      
+
       const data = {
         type: 'qemu',
         host: '192.168.1.1',
@@ -91,9 +91,9 @@ describe('eventBus', () => {
         tokenId: 'token-123',
         hasToken: true,
       };
-      
+
       eventBus.emit('node_auto_registered', data);
-      
+
       expect(handler).toHaveBeenCalledWith(data);
     });
   });
@@ -102,16 +102,14 @@ describe('eventBus', () => {
     it('emits discovery_updated with server list', () => {
       const handler = vi.fn();
       eventBus.on('discovery_updated', handler);
-      
+
       const data = {
         scanning: false,
-        servers: [
-          { ip: '192.168.1.1', port: 8006, type: 'qemu', version: '8.0' },
-        ],
+        servers: [{ ip: '192.168.1.1', port: 8006, type: 'qemu', version: '8.0' }],
       };
-      
+
       eventBus.emit('discovery_updated', data);
-      
+
       expect(handler).toHaveBeenCalledWith(data);
     });
   });
@@ -120,9 +118,9 @@ describe('eventBus', () => {
     it('emits org_switched with org ID', () => {
       const handler = vi.fn();
       eventBus.on('org_switched', handler);
-      
+
       eventBus.emit('org_switched', 'org-123');
-      
+
       expect(handler).toHaveBeenCalledWith('org-123');
     });
   });
@@ -131,9 +129,9 @@ describe('eventBus', () => {
     it('emits websocket_reconnected', () => {
       const handler = vi.fn();
       eventBus.on('websocket_reconnected', handler);
-      
+
       eventBus.emit('websocket_reconnected');
-      
+
       expect(handler).toHaveBeenCalledWith(undefined);
     });
   });

@@ -28,8 +28,9 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
         <div class="flex items-center gap-3">
           {/* Expand chevron */}
           <svg
-            class={`w-3.5 h-3.5 text-muted transition-transform duration-150 flex-shrink-0 ${props.expanded ? 'rotate-90' : ''
-              }`}
+            class={`w-3.5 h-3.5 text-muted transition-transform duration-150 flex-shrink-0 ${
+              props.expanded ? 'rotate-90' : ''
+            }`}
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -75,13 +76,17 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
             <Show when={props.group.stats.byHealth.warning > 0}>
               <span class="flex items-center gap-0.5">
                 <span class={`w-2 h-2 rounded-full ${HEALTH_DOT.warning}`} />
-                <span class="text-[10px] text-yellow-600 dark:text-yellow-400">{props.group.stats.byHealth.warning}</span>
+                <span class="text-[10px] text-yellow-600 dark:text-yellow-400">
+                  {props.group.stats.byHealth.warning}
+                </span>
               </span>
             </Show>
             <Show when={props.group.stats.byHealth.critical > 0}>
               <span class="flex items-center gap-0.5">
                 <span class={`w-2 h-2 rounded-full ${HEALTH_DOT.critical}`} />
-                <span class="text-[10px] text-red-600 dark:text-red-400">{props.group.stats.byHealth.critical}</span>
+                <span class="text-[10px] text-red-600 dark:text-red-400">
+                  {props.group.stats.byHealth.critical}
+                </span>
               </span>
             </Show>
             <Show when={props.group.stats.byHealth.offline > 0}>

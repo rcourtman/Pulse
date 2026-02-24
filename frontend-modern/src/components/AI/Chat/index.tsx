@@ -1,4 +1,13 @@
-import { Component, Show, createSignal, onMount, onCleanup, For, createMemo, createEffect } from 'solid-js';
+import {
+  Component,
+  Show,
+  createSignal,
+  onMount,
+  onCleanup,
+  For,
+  createMemo,
+  createEffect,
+} from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession } from '@/api/aiChat';
@@ -23,7 +32,7 @@ interface AIChatProps {
 
 /**
  * AIChat - Main chat panel component.
- * 
+ *
  * Provides a terminal-like chat experience with clear status indicators,
  * session management, and streaming response display.
  */
@@ -40,7 +49,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [modelsError, setModelsError] = createSignal('');
   const [defaultModel, setDefaultModel] = createSignal('');
   const [chatOverrideModel, setChatOverrideModel] = createSignal('');
-  const [controlLevel, setControlLevel] = createSignal<'read_only' | 'controlled' | 'autonomous'>('read_only');
+  const [controlLevel, setControlLevel] = createSignal<'read_only' | 'controlled' | 'autonomous'>(
+    'read_only',
+  );
   const [showControlMenu, setShowControlMenu] = createSignal(false);
   const [controlSaving, setControlSaving] = createSignal(false);
   const [discoveryEnabled, setDiscoveryEnabled] = createSignal<boolean | null>(null); // null = loading
@@ -61,7 +72,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
     try {
       const raw = localStorage.getItem(MODEL_SESSION_STORAGE_KEY);
       const parsed = raw ? JSON.parse(raw) : {};
-      const selections = typeof parsed === 'object' && parsed ? parsed as Record<string, string> : {};
+      const selections =
+        typeof parsed === 'object' && parsed ? (parsed as Record<string, string>) : {};
       const legacy = localStorage.getItem(MODEL_LEGACY_STORAGE_KEY);
       if (legacy && !selections[DEFAULT_SESSION_KEY]) {
         selections[DEFAULT_SESSION_KEY] = legacy;
@@ -85,7 +97,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
   };
 
   const initialModelSelections = loadModelSelections();
-  const [modelSelections, setModelSelections] = createSignal<Record<string, string>>(initialModelSelections);
+  const [modelSelections, setModelSelections] =
+    createSignal<Record<string, string>>(initialModelSelections);
 
   const getStoredModel = (sessionId: string) => {
     const key = sessionId || DEFAULT_SESSION_KEY;
@@ -109,19 +122,18 @@ export const AIChat: Component<AIChatProps> = (props) => {
   // Chat hook
   const chat = useChat({ model: initialModelSelections[DEFAULT_SESSION_KEY] || '' });
 
-
   const defaultModelLabel = createMemo(() => {
     const fallback = defaultModel().trim();
     if (!fallback) return '';
     const match = models().find((model) => model.id === fallback);
-    return match ? (match.name || match.id.split(':').pop() || match.id) : fallback;
+    return match ? match.name || match.id.split(':').pop() || match.id : fallback;
   });
 
   const chatOverrideLabel = createMemo(() => {
     const override = chatOverrideModel().trim();
     if (!override) return '';
     const match = models().find((model) => model.id === override);
-    return match ? (match.name || match.id.split(':').pop() || match.id) : override;
+    return match ? match.name || match.id.split(':').pop() || match.id : override;
   });
 
   const normalizeControlLevel = (value?: string): 'read_only' | 'controlled' | 'autonomous' => {
@@ -193,7 +205,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const settings = await AIAPI.getSettings();
       const chatOverride = (settings.chat_model || '').trim();
       const fallback = chatOverride || (settings.model || '').trim();
-      const resolvedControl = normalizeControlLevel(settings.control_level || (settings.autonomous_mode ? 'autonomous' : undefined));
+      const resolvedControl = normalizeControlLevel(
+        settings.control_level || (settings.autonomous_mode ? 'autonomous' : undefined),
+      );
       setDefaultModel(fallback);
       setChatOverrideModel(chatOverride);
       setControlLevel(resolvedControl);
@@ -380,10 +394,46 @@ export const AIChat: Component<AIChatProps> = (props) => {
   // Build resources for @ mention autocomplete from unified selectors
   createEffect(() => {
     const readPlatformData = (resource: Resource): Record<string, unknown> | undefined => {
-      return resource.platformData ? (unwrap(resource.platformData) as Record<string, unknown>) : undefined;
+      return resource.platformData
+        ? (unwrap(resource.platformData) as Record<string, unknown>)
+        : undefined;
+    };
+    const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+      value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
+    const asString = (value: unknown): string | undefined =>
+      typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+    const getHostActionId = (resource: Resource): string => {
+      const platformData = readPlatformData(resource);
+      const platformAgent = asRecord(platformData?.agent);
+      return (
+        (resource.discoveryTarget?.resourceType === 'host'
+          ? resource.discoveryTarget.resourceId
+          : undefined) ||
+        resource.discoveryTarget?.hostId ||
+        asString(resource.agent?.agentId) ||
+        asString(platformAgent?.agentId) ||
+        asString(platformData?.agentId) ||
+        resource.id
+      );
+    };
+    const getDockerActionId = (resource: Resource): string => {
+      const platformData = readPlatformData(resource);
+      const platformDocker = asRecord(platformData?.docker);
+      return (
+        (resource.discoveryTarget?.resourceType === 'docker'
+          ? resource.discoveryTarget.resourceId
+          : undefined) ||
+        asString(platformDocker?.hostSourceId) ||
+        asString(platformData?.hostSourceId) ||
+        resource.discoveryTarget?.hostId ||
+        resource.id
+      );
     };
 
-    const parseLegacyVmid = (resource: Resource, platformData: Record<string, unknown> | undefined): number => {
+    const parseLegacyVmid = (
+      resource: Resource,
+      platformData: Record<string, unknown> | undefined,
+    ): number => {
       const vmidRaw = platformData?.vmid;
       if (typeof vmidRaw === 'number' && Number.isFinite(vmidRaw)) return vmidRaw;
       if (typeof vmidRaw === 'string') {
@@ -446,11 +496,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
 
     for (const host of dockerHosts) {
+      const dockerActionId = getDockerActionId(host);
       const displayName = host.displayName || host.identity?.hostname || host.name || host.id;
       const hostnameOrId = host.identity?.hostname || host.name || host.id;
-      const hostStatus = host.status === 'online' || host.status === 'running' ? 'online' : (host.status || 'online');
+      const hostStatus =
+        host.status === 'online' || host.status === 'running' ? 'online' : host.status || 'online';
       resources.push({
-        id: `host:${host.id}`,
+        id: `host:${dockerActionId}`,
         name: displayName,
         type: 'host',
         status: hostStatus,
@@ -459,10 +511,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
       // Add Docker containers
       for (const container of dockerContainersByHostId.get(host.id) || []) {
         const originalContainerId = container.id.includes('/')
-          ? (container.id.split('/').pop() || container.id)
+          ? container.id.split('/').pop() || container.id
           : container.id;
         resources.push({
-          id: `docker:${host.id}:${originalContainerId}`,
+          id: `docker:${dockerActionId}:${originalContainerId}`,
           name: container.name,
           type: 'docker',
           status: container.status === 'running' ? 'running' : 'exited',
@@ -483,10 +535,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     // Add standalone host agents
     for (const host of hosts) {
+      const hostActionId = getHostActionId(host);
       const name = host.displayName || host.identity?.hostname || host.name;
-      const hostStatus = host.status === 'online' || host.status === 'running' ? 'online' : host.status;
+      const hostStatus =
+        host.status === 'online' || host.status === 'running' ? 'online' : host.status;
       resources.push({
-        id: `host:${host.id}`,
+        id: `host:${hostActionId}`,
         name,
         type: 'host',
         status: hostStatus,
@@ -505,12 +559,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
     // Pass findingId from context on the first message, clear after success
     const ctx = aiChatStore.context;
     const findingId = ctx.findingId;
-    chat.sendMessage(prompt, mentions.length > 0 ? mentions : undefined, findingId)
-      .then((ok) => {
-        if (ok && findingId) {
-          aiChatStore.clearFindingId?.();
-        }
-      });
+    chat.sendMessage(prompt, mentions.length > 0 ? mentions : undefined, findingId).then((ok) => {
+      if (ok && findingId) {
+        aiChatStore.clearFindingId?.();
+      }
+    });
     setInput('');
     setAccumulatedMentions([]);
     setMentionActive(false);
@@ -560,9 +613,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setMentionActive(false);
 
     // Accumulate the structured mention data so we can send it with the prompt
-    setAccumulatedMentions(prev => {
+    setAccumulatedMentions((prev) => {
       // Deduplicate by id
-      if (prev.some(m => m.id === resource.id)) return prev;
+      if (prev.some((m) => m.id === resource.id)) return prev;
       return [...prev, resource];
     });
 
@@ -610,7 +663,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (!confirm('Delete this conversation?')) return;
     try {
       await AIChatAPI.deleteSession(sessionId);
-      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
       updateStoredModel(sessionId, '');
       if (chat.sessionId() === sessionId) {
         chat.clearMessages();
@@ -650,7 +703,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
       // 2. Re-execute the tool with the approval_id
       // 3. Send a tool_end event with the result
       // 4. Continue the conversation automatically
-
     } catch (error) {
       logger.error('[AIChat] Approval failed:', error);
       notificationStore.error('Failed to approve command');
@@ -680,7 +732,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
   };
 
   // Question handlers
-  const handleAnswerQuestion = async (messageId: string, question: PendingQuestion, answers: Array<{ id: string; value: string }>) => {
+  const handleAnswerQuestion = async (
+    messageId: string,
+    question: PendingQuestion,
+    answers: Array<{ id: string; value: string }>,
+  ) => {
     await chat.answerQuestion(messageId, question.questionId, answers);
   };
 
@@ -689,11 +745,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
     chat.updateQuestion(messageId, questionId, { removed: true });
   };
 
-
   return (
     <div
-      class={`relative flex-shrink-0 h-full bg-surface border-l border-border flex flex-col transition-all duration-300 ${isOpen() ? 'w-full sm:w-[480px] overflow-visible' : 'w-0 border-l-0 overflow-hidden'
- }`}
+      class={`relative flex-shrink-0 h-full bg-surface border-l border-border flex flex-col transition-all duration-300 ${
+        isOpen() ? 'w-full sm:w-[480px] overflow-visible' : 'w-0 border-l-0 overflow-hidden'
+      }`}
     >
       <Show when={isOpen()}>
         {/* Floating Close Handle (Desktop only) */}
@@ -702,7 +758,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
           class="hidden sm:flex absolute left-0 top-1/2 -translate-x-full -translate-y-1/2 items-center justify-center w-8 py-3 rounded-l-xl bg-surface text-blue-600 dark:text-blue-400 shadow-sm border border-r-0 border-border hover:bg-surface-hover transition-colors z-50 cursor-pointer"
           title="Collapse Pulse Assistant"
         >
-          <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+          <svg
+            class="h-5 w-5 flex-shrink-0"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            stroke-width="1.5"
+          >
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -714,15 +776,23 @@ export const AIChat: Component<AIChatProps> = (props) => {
         <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-border bg-surface-alt">
           <div class="flex items-center gap-3">
             <div class="p-2 border border-border bg-surface rounded-md shadow-sm">
-              <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+              <svg
+                class="w-5 h-5 text-slate-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.5"
+                  d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"
+                />
               </svg>
             </div>
             <div>
               <h2 class="text-sm font-semibold text-base-content">Pulse Assistant</h2>
-              <p class="text-[11px] text-muted">
-                Infrastructure intelligence
-              </p>
+              <p class="text-[11px] text-muted">Infrastructure intelligence</p>
             </div>
           </div>
 
@@ -734,7 +804,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
               title="New chat"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 4v16m8-8H4"
+                />
               </svg>
               <span class="font-medium">New</span>
             </button>
@@ -760,10 +835,17 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 title="Control mode"
                 disabled={controlSaving()}
               >
-                <span class={`h-1.5 w-1.5 rounded-full ${controlLevel() === 'autonomous' ? 'bg-red-500' : controlLevel() === 'controlled' ? 'bg-amber-500' : 'bg-slate-400'}`} />
+                <span
+                  class={`h-1.5 w-1.5 rounded-full ${controlLevel() === 'autonomous' ? 'bg-red-500' : controlLevel() === 'controlled' ? 'bg-amber-500' : 'bg-slate-400'}`}
+                />
                 <span>{controlLabel()}</span>
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M19 9l-7 7-7-7"
+                  />
                 </svg>
               </button>
 
@@ -789,107 +871,136 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   <button
                     class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'autonomous' ? 'bg-red-50 dark:bg-red-900' : ''}`}
                     onClick={() => updateControlLevel('autonomous')}
- >
- <div class="font-medium text-base-content">Autonomous</div>
- <div class="text-[11px] text-muted">Executes without approval (Pro)</div>
- </button>
- </div>
- </Show>
- </div>
+                  >
+                    <div class="font-medium text-base-content">Autonomous</div>
+                    <div class="text-[11px] text-muted">Executes without approval (Pro)</div>
+                  </button>
+                </div>
+              </Show>
+            </div>
 
- {/* Session picker */}
- <div class="relative" data-dropdown>
- <button
- ref={sessionButtonRef}
- onClick={() => {
- const next = !showSessions();
- if (next && sessionButtonRef) {
- const rect = sessionButtonRef.getBoundingClientRect();
- setSessionDropdownPosition({
- top: rect.bottom + 4,
- right: window.innerWidth - rect.right,
- });
- }
- setShowSessions(next);
- }}
- class="p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors"
- title="Chat sessions"
- >
- <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
- <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
- </svg>
- </button>
+            {/* Session picker */}
+            <div class="relative" data-dropdown>
+              <button
+                ref={sessionButtonRef}
+                onClick={() => {
+                  const next = !showSessions();
+                  if (next && sessionButtonRef) {
+                    const rect = sessionButtonRef.getBoundingClientRect();
+                    setSessionDropdownPosition({
+                      top: rect.bottom + 4,
+                      right: window.innerWidth - rect.right,
+                    });
+                  }
+                  setShowSessions(next);
+                }}
+                class="p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors"
+                title="Chat sessions"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                  />
+                </svg>
+              </button>
 
- <Show when={showSessions()}>
- <div
- class="fixed w-72 max-h-96 bg-surface rounded-md shadow-sm border border-border z-[9999] overflow-hidden"
- style={{ top: `${sessionDropdownPosition().top}px`, right: `${sessionDropdownPosition().right}px` }}
- >
- <button
- onClick={handleNewConversation}
- class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 border-b border-border"
- >
- <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
- <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
- </svg>
- <span class="font-medium">New conversation</span>
- </button>
+              <Show when={showSessions()}>
+                <div
+                  class="fixed w-72 max-h-96 bg-surface rounded-md shadow-sm border border-border z-[9999] overflow-hidden"
+                  style={{
+                    top: `${sessionDropdownPosition().top}px`,
+                    right: `${sessionDropdownPosition().right}px`,
+                  }}
+                >
+                  <button
+                    onClick={handleNewConversation}
+                    class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 border-b border-border"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M12 4v16m8-8H4"
+                      />
+                    </svg>
+                    <span class="font-medium">New conversation</span>
+                  </button>
 
- <div class="max-h-64 overflow-y-auto">
- <Show when={sessions().length > 0} fallback={
- <div class="px-3 py-6 text-center text-xs text-muted">
- No previous conversations
- </div>
- }>
- <For each={sessions()}>
- {(session) => (
- <div
- class={`group relative px-3 py-2.5 flex items-start gap-2 hover:bg-surface-hover cursor-pointer ${chat.sessionId() === session.id ?'bg-blue-50 dark:bg-blue-900' : ''}`}
+                  <div class="max-h-64 overflow-y-auto">
+                    <Show
+                      when={sessions().length > 0}
+                      fallback={
+                        <div class="px-3 py-6 text-center text-xs text-muted">
+                          No previous conversations
+                        </div>
+                      }
+                    >
+                      <For each={sessions()}>
+                        {(session) => (
+                          <div
+                            class={`group relative px-3 py-2.5 flex items-start gap-2 hover:bg-surface-hover cursor-pointer ${chat.sessionId() === session.id ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
                             onClick={() => handleLoadSession(session.id)}
                           >
                             <div class="flex-1 min-w-0">
                               <div class="text-sm font-medium truncate text-base-content">
                                 {session.title || 'Untitled'}
- </div>
- <div class="text-xs text-muted">
- {session.message_count} messages
- </div>
- </div>
- <button
- type="button"
- class="flex-shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900 hover:text-red-500 transition-opacity"
- onClick={(e) => handleDeleteSession(session.id, e)}
- >
- <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
- <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
- </svg>
- </button>
- </div>
- )}
- </For>
- </Show>
- </div>
- </div>
- </Show>
- </div>
+                              </div>
+                              <div class="text-xs text-muted">{session.message_count} messages</div>
+                            </div>
+                            <button
+                              type="button"
+                              class="flex-shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900 hover:text-red-500 transition-opacity"
+                              onClick={(e) => handleDeleteSession(session.id, e)}
+                            >
+                              <svg
+                                class="w-3.5 h-3.5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  stroke-width="2"
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                        )}
+                      </For>
+                    </Show>
+                  </div>
+                </div>
+              </Show>
+            </div>
 
- {/* Close button (Always visible as fallback) */}
- <button
- onClick={(e) => {
- e.stopPropagation();
- props.onClose();
- }}
- class="p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors"
- title="Close panel"
- >
- <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
- <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
- </svg>
- </button>
- </div>
- </div>
+            {/* Close button (Always visible as fallback) */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onClose();
+              }}
+              class="p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors"
+              title="Close panel"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
 
- <Show when={controlLevel() ==='autonomous' && !autonomousBannerDismissed()}>
+        <Show when={controlLevel() === 'autonomous' && !autonomousBannerDismissed()}>
           <div class="px-4 py-2 border-b border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 flex items-center justify-between gap-3 text-[11px] text-red-700 dark:text-red-200">
             <div class="flex items-center gap-2">
               <span class="inline-flex h-2 w-2 rounded-full bg-red-500" />
@@ -909,7 +1020,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 title="Dismiss"
               >
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
@@ -920,12 +1036,22 @@ export const AIChat: Component<AIChatProps> = (props) => {
         <Show when={discoveryEnabled() === false && !discoveryHintDismissed()}>
           <div class="px-4 py-2 border-b border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900 flex items-center justify-between gap-3 text-[11px] text-cyan-700 dark:text-cyan-200">
             <div class="flex items-center gap-2">
-              <svg class="w-4 h-4 text-cyan-500 dark:text-cyan-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg
+                class="w-4 h-4 text-cyan-500 dark:text-cyan-400 flex-shrink-0"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
               <span>
-                <span class="font-medium">Discovery is off.</span>
-                {' '}Enable it in Settings for more accurate answers about your infrastructure.
+                <span class="font-medium">Discovery is off.</span> Enable it in Settings for more
+                accurate answers about your infrastructure.
               </span>
             </div>
             <button
@@ -934,7 +1060,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
               title="Dismiss"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>
@@ -948,20 +1079,22 @@ export const AIChat: Component<AIChatProps> = (props) => {
           onAnswerQuestion={handleAnswerQuestion}
           onSkipQuestion={handleSkipQuestion}
           recentSessions={sessions()
-            .filter(s => s.id !== chat.sessionId() && s.message_count > 0)
+            .filter((s) => s.id !== chat.sessionId() && s.message_count > 0)
             .slice(0, 3)}
           onLoadSession={handleLoadSession}
           emptyState={{
             title: 'Pulse Assistant ready',
-            suggestions: isCluster() ? [
-              'Analyze overall cluster health',
-              'Check node load balancing',
-              'Find and fix failed services',
-            ] : [
-              'Analyze system health',
-              'Check storage usage',
-              'Scan for security vulnerabilities',
-            ],
+            suggestions: isCluster()
+              ? [
+                  'Analyze overall cluster health',
+                  'Check node load balancing',
+                  'Find and fix failed services',
+                ]
+              : [
+                  'Analyze system health',
+                  'Check storage usage',
+                  'Scan for security vulnerabilities',
+                ],
             onSuggestionClick: (s) => setInput(s),
           }}
         />
@@ -972,43 +1105,91 @@ export const AIChat: Component<AIChatProps> = (props) => {
             {/* Status icon based on type */}
             <Show when={currentStatus()?.type === 'thinking'}>
               <div class="flex items-center justify-center w-4 h-4">
-                <svg class="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                <svg
+                  class="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 animate-pulse"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                  />
                 </svg>
               </div>
             </Show>
             <Show when={currentStatus()?.type === 'tool'}>
               <div class="flex items-center justify-center w-4 h-4">
-                <svg class="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                <svg
+                  class="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="3"
+                  />
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
                 </svg>
               </div>
             </Show>
             <Show when={currentStatus()?.type === 'generating'}>
               <div class="flex items-center justify-center w-4 h-4">
-                <svg class="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                <svg
+                  class="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                  />
                 </svg>
               </div>
             </Show>
 
-            <span class="text-muted font-medium">
-              {currentStatus()?.text}
-            </span>
+            <span class="text-muted font-medium">{currentStatus()?.text}</span>
 
             {/* Subtle animated dots */}
             <div class="flex gap-0.5 ml-1">
-              <span class="w-1 h-1 rounded-full bg-slate-400 animate-bounce" style="animation-delay: 0ms; animation-duration: 1s" />
-              <span class="w-1 h-1 rounded-full bg-slate-400 animate-bounce" style="animation-delay: 150ms; animation-duration: 1s" />
-              <span class="w-1 h-1 rounded-full bg-slate-400 animate-bounce" style="animation-delay: 300ms; animation-duration: 1s" />
+              <span
+                class="w-1 h-1 rounded-full bg-slate-400 animate-bounce"
+                style="animation-delay: 0ms; animation-duration: 1s"
+              />
+              <span
+                class="w-1 h-1 rounded-full bg-slate-400 animate-bounce"
+                style="animation-delay: 150ms; animation-duration: 1s"
+              />
+              <span
+                class="w-1 h-1 rounded-full bg-slate-400 animate-bounce"
+                style="animation-delay: 300ms; animation-duration: 1s"
+              />
             </div>
           </div>
         </Show>
 
         {/* Input */}
         <div class="border-t border-border p-4 bg-surface">
-          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="flex gap-2 relative">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSubmit();
+            }}
+            class="flex gap-2 relative"
+          >
             <div class="flex-1 relative">
               <textarea
                 ref={textareaRef}
@@ -1053,16 +1234,26 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   title="Send"
                 >
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                    />
                   </svg>
                 </button>
               </Show>
             </div>
           </form>
           <div class="flex items-center justify-center gap-3 mt-2 text-[10px] text-muted">
-            <span><kbd class="font-sans px-1 rounded bg-surface-alt border border-border">Enter</kbd> to send</span>
+            <span>
+              <kbd class="font-sans px-1 rounded bg-surface-alt border border-border">Enter</kbd> to
+              send
+            </span>
             <span class="text-muted">&middot;</span>
-            <span><span class="font-semibold text-muted">@</span> to mention resources</span>
+            <span>
+              <span class="font-semibold text-muted">@</span> to mention resources
+            </span>
           </div>
         </div>
       </Show>

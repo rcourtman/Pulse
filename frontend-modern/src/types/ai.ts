@@ -107,7 +107,6 @@ export interface AISettingsUpdateRequest {
   discovery_interval_hours?: number;
 }
 
-
 export interface AITestResult {
   success: boolean;
   message: string;
@@ -164,9 +163,9 @@ export interface AIExecuteRequest {
 
 // Tool execution info
 export interface AIToolExecution {
-  name: string;      // "run_command", "read_file"
-  input: string;     // The command or file path
-  output: string;    // Result of execution
+  name: string; // "run_command", "read_file"
+  input: string; // The command or file path
+  output: string; // Result of execution
   success: boolean;
 }
 
@@ -180,7 +179,16 @@ export interface AIExecuteResponse {
 }
 
 // Streaming event types
-export type AIStreamEventType = 'tool_start' | 'tool_end' | 'content' | 'thinking' | 'done' | 'error' | 'complete' | 'approval_needed' | 'processing';
+export type AIStreamEventType =
+  | 'tool_start'
+  | 'tool_end'
+  | 'content'
+  | 'thinking'
+  | 'done'
+  | 'error'
+  | 'complete'
+  | 'approval_needed'
+  | 'processing';
 
 export interface AIStreamToolStartData {
   name: string;
@@ -202,10 +210,14 @@ export interface AIStreamApprovalNeededData {
   target_host?: string; // Explicit host to route the command to
 }
 
-
 export interface AIStreamEvent {
   type: AIStreamEventType;
-  data?: string | AIStreamToolStartData | AIStreamToolEndData | AIStreamCompleteData | AIStreamApprovalNeededData;
+  data?:
+    | string
+    | AIStreamToolStartData
+    | AIStreamToolEndData
+    | AIStreamCompleteData
+    | AIStreamApprovalNeededData;
 }
 
 export interface AIStreamCompleteData {

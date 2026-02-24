@@ -202,6 +202,7 @@ export interface Resource {
 
   // Hierarchy
   parentId?: string; // Parent resource (e.g., VM -> Node)
+  parentName?: string; // Parent display identifier when available
   clusterId?: string; // Cluster membership
 
   // Universal Metrics

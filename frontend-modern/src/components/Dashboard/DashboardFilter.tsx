@@ -114,9 +114,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                     class="min-w-[8rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <For each={hostFilter().options}>
-                      {(option) => (
-                        <option value={option.value}>{option.label}</option>
-                      )}
+                      {(option) => <option value={option.value}>{option.label}</option>}
                     </For>
                   </select>
                 </div>
@@ -139,9 +137,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                     class="min-w-[8rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <For each={namespaceFilter().options}>
-                      {(option) => (
-                        <option value={option.value}>{option.label}</option>
-                      )}
+                      {(option) => <option value={option.value}>{option.label}</option>}
                     </For>
                   </select>
                 </div>
@@ -164,9 +160,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                     class="min-w-[7rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <For each={runtimeFilter().options}>
-                      {(option) => (
-                        <option value={option.value}>{option.label}</option>
-                      )}
+                      {(option) => <option value={option.value}>{option.label}</option>}
                     </For>
                   </select>
                 </div>
@@ -183,7 +177,11 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               <select
                 id="dashboard-type-filter"
                 value={props.viewMode()}
-                onChange={(event) => props.setViewMode(event.currentTarget.value as 'all' | 'vm' | 'lxc' | 'docker' | 'k8s')}
+                onChange={(event) =>
+                  props.setViewMode(
+                    event.currentTarget.value as 'all' | 'vm' | 'lxc' | 'docker' | 'k8s',
+                  )
+                }
                 class="min-w-[7rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">All</option>
@@ -204,7 +202,11 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               <select
                 id="dashboard-status-filter"
                 value={props.statusMode()}
-                onChange={(event) => props.setStatusMode(event.currentTarget.value as 'all' | 'running' | 'degraded' | 'stopped')}
+                onChange={(event) =>
+                  props.setStatusMode(
+                    event.currentTarget.value as 'all' | 'running' | 'degraded' | 'stopped',
+                  )
+                }
                 class="min-w-[8rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">All</option>
@@ -221,7 +223,13 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                 class={segmentedButtonClass(props.groupingMode() === 'grouped')}
                 title="Group by node"
               >
-                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg
+                  class="w-3 h-3"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
                   <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z" />
                 </svg>
                 Grouped
@@ -232,7 +240,13 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                 class={segmentedButtonClass(props.groupingMode() === 'flat')}
                 title="Flat list view"
               >
-                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg
+                  class="w-3 h-3"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
                   <line x1="8" y1="6" x2="21" y2="6" />
                   <line x1="8" y1="12" x2="21" y2="12" />
                   <line x1="8" y1="18" x2="21" y2="18" />
@@ -252,7 +266,13 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                   class={segmentedButtonClass(!props.chartsCollapsed?.())}
                   title={props.chartsCollapsed?.() ? 'Show charts' : 'Hide charts'}
                 >
-                  <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <svg
+                    class="w-3 h-3"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
                     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                   </svg>
                   Charts
@@ -269,14 +289,16 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               />
             </Show>
 
-            <Show when={
-              props.search().trim() !== '' ||
-              props.viewMode() !== 'all' ||
-              props.statusMode() !== 'all' ||
-              props.groupingMode() !== 'grouped' ||
-              (props.hostFilter ? props.hostFilter.value !== '' : false) ||
-              (props.namespaceFilter ? props.namespaceFilter.value !== '' : false)
-            }>
+            <Show
+              when={
+                props.search().trim() !== '' ||
+                props.viewMode() !== 'all' ||
+                props.statusMode() !== 'all' ||
+                props.groupingMode() !== 'grouped' ||
+                (props.hostFilter ? props.hostFilter.value !== '' : false) ||
+                (props.namespaceFilter ? props.namespaceFilter.value !== '' : false)
+              }
+            >
               <button
                 onClick={() => {
                   props.setSearch('');

@@ -217,6 +217,42 @@ func TestMonitorAdapterPopulateFromSnapshot(t *testing.T) {
 	}
 }
 
+func TestMonitorAdapterPopulateSupplementalRecords(t *testing.T) {
+	now := time.Date(2026, 2, 21, 10, 0, 0, 0, time.UTC)
+	adapter := NewMonitorAdapter(NewRegistry(nil))
+
+	customSource := DataSource("xcp")
+	adapter.PopulateSupplementalRecords(customSource, []IngestRecord{
+		{
+			SourceID: "xcp-host-1",
+			Resource: Resource{
+				Type:     ResourceTypeHost,
+				Name:     "xcp-host-1",
+				Status:   StatusOnline,
+				LastSeen: now,
+			},
+			Identity: ResourceIdentity{Hostnames: []string{"xcp-host-1"}},
+		},
+	})
+
+	resources := adapter.GetAll()
+	if len(resources) != 1 {
+		t.Fatalf("expected 1 resource after supplemental ingest, got %d", len(resources))
+	}
+	if resources[0].Name != "xcp-host-1" {
+		t.Fatalf("expected resource name xcp-host-1, got %q", resources[0].Name)
+	}
+	if len(resources[0].Sources) != 1 || resources[0].Sources[0] != customSource {
+		t.Fatalf("expected source %q, got %#v", customSource, resources[0].Sources)
+	}
+
+	// Nil/empty inputs should be ignored safely.
+	adapter.PopulateSupplementalRecords("", []IngestRecord{{SourceID: "ignored"}})
+	adapter.PopulateSupplementalRecords(customSource, nil)
+	nilRegistryAdapter := &MonitorAdapter{}
+	nilRegistryAdapter.PopulateSupplementalRecords(customSource, []IngestRecord{{SourceID: "ignored"}})
+}
+
 func TestUnifiedAIAdapterClassificationAndStats(t *testing.T) {
 	registry := testRegistry(
 		Resource{ID: "host-1", Type: ResourceTypeHost, Status: StatusOnline, Sources: []DataSource{SourceAgent}},

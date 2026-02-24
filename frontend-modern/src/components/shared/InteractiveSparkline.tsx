@@ -58,7 +58,10 @@ const formatRelativeOffset = (offsetMs: number): string => {
   return `-${Math.max(1, Math.round(offsetMs / minuteMs))}m`;
 };
 
-const findNearestMetricPoint = (points: MetricPoint[], targetTimestamp: number): { point: MetricPoint, index: number } | null => {
+const findNearestMetricPoint = (
+  points: MetricPoint[],
+  targetTimestamp: number,
+): { point: MetricPoint; index: number } | null => {
   if (points.length === 0) return null;
 
   let low = 0;
@@ -74,7 +77,10 @@ const findNearestMetricPoint = (points: MetricPoint[], targetTimestamp: number):
 
   const candidate = points[low];
   const previous = low > 0 ? points[low - 1] : candidate;
-  if (Math.abs(previous.timestamp - targetTimestamp) <= Math.abs(candidate.timestamp - targetTimestamp)) {
+  if (
+    Math.abs(previous.timestamp - targetTimestamp) <=
+    Math.abs(candidate.timestamp - targetTimestamp)
+  ) {
     return { point: previous, index: low > 0 ? low - 1 : low };
   }
   return { point: candidate, index: low };
@@ -153,10 +159,7 @@ interface HoverSeriesValue {
   seriesIndex: number;
 }
 
-const selectTopValuesByValue = (
-  values: HoverSeriesValue[],
-  limit: number,
-): HoverSeriesValue[] => {
+const selectTopValuesByValue = (values: HoverSeriesValue[], limit: number): HoverSeriesValue[] => {
   if (limit <= 0 || values.length === 0) return [];
   if (values.length <= limit) {
     return [...values].sort((a, b) => b.value - a.value);
@@ -199,7 +202,8 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
     const totalPoints = props.series.reduce((sum, series) => sum + series.data.length, 0);
     return props.series.length >= canvasSeriesThreshold || totalPoints >= canvasPointThreshold;
   });
-  const formatValue = (value: number) => props.formatValue ? props.formatValue(value) : `${value.toFixed(1)}%`;
+  const formatValue = (value: number) =>
+    props.formatValue ? props.formatValue(value) : `${value.toFixed(1)}%`;
 
   const [hoveredState, setHoveredState] = createSignal<{
     x: number;
@@ -224,8 +228,8 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
     const bridgeLeadingGap = props.bridgeLeadingGap === true;
     const validSeries = props.series
       .map((series) => {
-        const inWindow = series.data.filter((point) =>
-          point.timestamp >= windowStart && point.timestamp <= windowEnd
+        const inWindow = series.data.filter(
+          (point) => point.timestamp >= windowStart && point.timestamp <= windowEnd,
         );
         // Need at least 2 real points to render a meaningful line.
         // Single-point series create tiny artifacts at the chart edge.
@@ -233,9 +237,10 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
         const renderable = ensureRenderablePoints(inWindow, windowStart);
         if (renderable.length === 0) return null;
         // Downsample to target resolution — LTTB preserves visual shape (peaks, valleys, trends).
-        const drawData = renderable.length > targetPoints * 1.5
-          ? downsampleLTTB(renderable, targetPoints)
-          : renderable;
+        const drawData =
+          renderable.length > targetPoints * 1.5
+            ? downsampleLTTB(renderable, targetPoints)
+            : renderable;
         const segments = splitPointsOnGaps(
           drawData,
           inferGapThresholdMs(drawData, rangeMs),
@@ -249,15 +254,19 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
           segments,
         };
       })
-      .filter((series): series is {
-        id?: string;
-        data: MetricPoint[];
-        color: string;
-        name?: string;
-        hoverData: MetricPoint[];
-        drawData: MetricPoint[];
-        segments: MetricPoint[][];
-      } => series !== null);
+      .filter(
+        (
+          series,
+        ): series is {
+          id?: string;
+          data: MetricPoint[];
+          color: string;
+          name?: string;
+          hoverData: MetricPoint[];
+          drawData: MetricPoint[];
+          segments: MetricPoint[][];
+        } => series !== null,
+      );
 
     if (validSeries.length === 0) {
       return {
@@ -301,26 +310,27 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
     const paths = shouldUseCanvas()
       ? []
       : (() => {
-        return validSeries.flatMap((series, index) => {
-          return series.segments.map((segment) => {
-            const coords = segment.map((point) => {
-              const x = clamp(((point.timestamp - windowStart) / rangeMs) * vbW, 0, vbW);
-              const normalized = yMode() === 'auto'
-                ? Math.max(0, point.value) / scaleMax
-                : Math.min(Math.max(point.value, 0), 100) / 100;
-              const y = vbH - normalized * vbH;
-              return { x, y };
+          return validSeries.flatMap((series, index) => {
+            return series.segments.map((segment) => {
+              const coords = segment.map((point) => {
+                const x = clamp(((point.timestamp - windowStart) / rangeMs) * vbW, 0, vbW);
+                const normalized =
+                  yMode() === 'auto'
+                    ? Math.max(0, point.value) / scaleMax
+                    : Math.min(Math.max(point.value, 0), 100) / 100;
+                const y = vbH - normalized * vbH;
+                return { x, y };
+              });
+              const pathStrings = coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`);
+              const path = `M${pathStrings.join('L')}`;
+              let areaPath = '';
+              if (validSeries.length === 1 && coords.length > 1) {
+                areaPath = `${path} L${coords[coords.length - 1].x.toFixed(1)},${vbH} L${coords[0].x.toFixed(1)},${vbH} Z`;
+              }
+              return { path, areaPath, color: series.color, seriesIndex: index };
             });
-            const pathStrings = coords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`);
-            const path = `M${pathStrings.join('L')}`;
-            let areaPath = '';
-            if (validSeries.length === 1 && coords.length > 1) {
-              areaPath = `${path} L${coords[coords.length - 1].x.toFixed(1)},${vbH} L${coords[0].x.toFixed(1)},${vbH} Z`;
-            }
-            return { path, areaPath, color: series.color, seriesIndex: index };
           });
-        });
-      })();
+        })();
 
     return {
       validSeries,
@@ -396,13 +406,11 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
     const effectiveSeriesIndex =
       lockedIndex !== null
         ? lockedIndex
-        : (
-          shouldTrackNearest &&
+        : shouldTrackNearest &&
             nearestSeriesIndex !== null &&
             nearestDistance <= nearLineThresholdChartUnits
-            ? nearestSeriesIndex
-            : null
-        );
+          ? nearestSeriesIndex
+          : null;
     const focusedTooltip = effectiveSeriesIndex !== null;
 
     let groupedValues = values;
@@ -429,13 +437,12 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
       }
     }
 
-    const tooltipValues: HoverSeriesValue[] = focusedTooltip && effectiveSeriesIndex !== null
-      ? values.filter((value) => value.seriesIndex === effectiveSeriesIndex)
-      : (
-        props.sortTooltipByValue
+    const tooltipValues: HoverSeriesValue[] =
+      focusedTooltip && effectiveSeriesIndex !== null
+        ? values.filter((value) => value.seriesIndex === effectiveSeriesIndex)
+        : props.sortTooltipByValue
           ? selectTopValuesByValue(groupedValues, maxRows())
-          : groupedValues.slice(0, maxRows())
-      );
+          : groupedValues.slice(0, maxRows());
     if (tooltipValues.length === 0) {
       setHoveredState(null);
       return;
@@ -447,7 +454,10 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
     if (typeof window !== 'undefined') {
       const activeTooltipWidth = focusedTooltip ? 150 : tooltipEstimatedWidth;
       const minTooltipX = tooltipPadding + activeTooltipWidth / 2;
-      const maxTooltipX = Math.max(minTooltipX, window.innerWidth - tooltipPadding - activeTooltipWidth / 2);
+      const maxTooltipX = Math.max(
+        minTooltipX,
+        window.innerWidth - tooltipPadding - activeTooltipWidth / 2,
+      );
       tooltipX = clamp(tooltipX, minTooltipX, maxTooltipX);
 
       const shownRows = tooltipValues.length;
@@ -464,8 +474,7 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
       totalValues,
       minY,
       nearestSeriesIndex,
-      highlightedSeriesIndex:
-        shouldTrackNearest && focusedTooltip ? effectiveSeriesIndex : null,
+      highlightedSeriesIndex: shouldTrackNearest && focusedTooltip ? effectiveSeriesIndex : null,
       focusedTooltip,
       values: tooltipValues.map((value) => ({
         name: value.name,
@@ -585,7 +594,11 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
       return locked;
     }
     const hovered = hoveredState();
-    if (props.highlightNearestSeriesOnHover && hovered?.highlightedSeriesIndex !== null && hovered) {
+    if (
+      props.highlightNearestSeriesOnHover &&
+      hovered?.highlightedSeriesIndex !== null &&
+      hovered
+    ) {
       return hovered.highlightedSeriesIndex;
     }
     return externallyHighlightedSeriesIndex();
@@ -604,7 +617,8 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
 
     setupCanvasDPR(canvasRef, ctx, width, height);
 
-    const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+    const isDark =
+      typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
     const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(17, 24, 39, 0.06)';
     const gridColorStrong = isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(17, 24, 39, 0.10)';
     const hoverLineColor = isDark ? 'rgba(255, 255, 255, 0.45)' : 'rgba(17, 24, 39, 0.45)';
@@ -643,7 +657,18 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
     for (let seriesIndex = 0; seriesIndex < computed.validSeries.length; seriesIndex++) {
       const series = computed.validSeries[seriesIndex];
       const isLg = props.size === 'lg';
-      const lineWidth = active === null ? (isLg ? 2 : 1.5) : active === seriesIndex ? (isLg ? 3.5 : 2.8) : (isLg ? 1 : 0.9);
+      const lineWidth =
+        active === null
+          ? isLg
+            ? 2
+            : 1.5
+          : active === seriesIndex
+            ? isLg
+              ? 3.5
+              : 2.8
+            : isLg
+              ? 1
+              : 0.9;
       const opacity = active === null ? 0.75 : active === seriesIndex ? 1 : 0.1;
 
       ctx.save();
@@ -660,15 +685,27 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
           ctx.beginPath();
           for (let i = 0; i < segment.length; i++) {
             const point = segment[i];
-            const x = clamp(((point.timestamp - computed.windowStart) / computed.rangeMs) * width, 0, width);
+            const x = clamp(
+              ((point.timestamp - computed.windowStart) / computed.rangeMs) * width,
+              0,
+              width,
+            );
             const y = valueToY(point.value);
             if (i === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
           }
           const lastPoint = segment[segment.length - 1];
           const firstPoint = segment[0];
-          const lastX = clamp(((lastPoint.timestamp - computed.windowStart) / computed.rangeMs) * width, 0, width);
-          const firstX = clamp(((firstPoint.timestamp - computed.windowStart) / computed.rangeMs) * width, 0, width);
+          const lastX = clamp(
+            ((lastPoint.timestamp - computed.windowStart) / computed.rangeMs) * width,
+            0,
+            width,
+          );
+          const firstX = clamp(
+            ((firstPoint.timestamp - computed.windowStart) / computed.rangeMs) * width,
+            0,
+            width,
+          );
 
           ctx.lineTo(lastX, height);
           ctx.lineTo(firstX, height);
@@ -691,7 +728,11 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
         ctx.beginPath();
         for (let i = 0; i < segment.length; i++) {
           const point = segment[i];
-          const x = clamp(((point.timestamp - computed.windowStart) / computed.rangeMs) * width, 0, width);
+          const x = clamp(
+            ((point.timestamp - computed.windowStart) / computed.rangeMs) * width,
+            0,
+            width,
+          );
           const y = valueToY(point.value);
           if (i === 0) {
             ctx.moveTo(x, y);
@@ -711,7 +752,12 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
       ctx.lineWidth = 1;
       ctx.setLineDash([3, 3]);
       const x = (hover.x / vbW) * width;
-      const grad = ctx.createLinearGradient(0, Math.max(0, hover.minY - 4), 0, Math.max(0, hover.minY - 4) + 20);
+      const grad = ctx.createLinearGradient(
+        0,
+        Math.max(0, hover.minY - 4),
+        0,
+        Math.max(0, hover.minY - 4) + 20,
+      );
       grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
       grad.addColorStop(1, hoverLineColor);
       ctx.strokeStyle = hoverLineColor; // Fallback to basic hover line if complex gradient logic adds noise
@@ -815,8 +861,16 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
                 <Show when={chartData().validSeries.length === 1}>
                   <defs>
                     <linearGradient id="single-series-area" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stop-color={chartData().validSeries[0].color} stop-opacity="0.25" />
-                      <stop offset="100%" stop-color={chartData().validSeries[0].color} stop-opacity="0" />
+                      <stop
+                        offset="0%"
+                        stop-color={chartData().validSeries[0].color}
+                        stop-opacity="0.25"
+                      />
+                      <stop
+                        offset="100%"
+                        stop-color={chartData().validSeries[0].color}
+                        stop-opacity="0"
+                      />
                     </linearGradient>
                   </defs>
                 </Show>
@@ -868,11 +922,7 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
                   {(pathData) => (
                     <g>
                       <Show when={pathData.areaPath}>
-                        <path
-                          d={pathData.areaPath}
-                          fill="url(#single-series-area)"
-                          stroke="none"
-                        />
+                        <path d={pathData.areaPath} fill="url(#single-series-area)" stroke="none" />
                       </Show>
                       <path
                         d={pathData.path}
@@ -916,10 +966,7 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
           </Show>
         </div>
       </div>
-      <div
-        class="relative pointer-events-none ml-7 mr-3"
-        style={{ height: `${xAxisBandPx}px` }}
-      >
+      <div class="relative pointer-events-none ml-7 mr-3" style={{ height: `${xAxisBandPx}px` }}>
         <For each={xAxisTicks()}>
           {(tick) => (
             <span
@@ -957,28 +1004,36 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
               <div class="font-medium text-center mb-1">{formatHoverTime(hover().timestamp)}</div>
               <For each={hover().values}>
                 {(entry) => (
-                  <div class={`flex items-center gap-1.5 leading-tight ${props.highlightNearestSeriesOnHover &&
-                    hover().focusedTooltip &&
-                    hover().highlightedSeriesIndex !== null
-                    ? hover().highlightedSeriesIndex === entry.seriesIndex
-                      ? 'rounded px-1'
-                      : 'opacity-40'
-                    : ''
+                  <div
+                    class={`flex items-center gap-1.5 leading-tight ${
+                      props.highlightNearestSeriesOnHover &&
+                      hover().focusedTooltip &&
+                      hover().highlightedSeriesIndex !== null
+                        ? hover().highlightedSeriesIndex === entry.seriesIndex
+                          ? 'rounded px-1'
+                          : 'opacity-40'
+                        : ''
                     }`}
-                    style={props.highlightNearestSeriesOnHover &&
+                    style={
+                      props.highlightNearestSeriesOnHover &&
                       hover().focusedTooltip &&
                       hover().highlightedSeriesIndex === entry.seriesIndex
-                      ? { 'background-color': 'rgba(255,255,255,0.1)' }
-                      : {}}
+                        ? { 'background-color': 'rgba(255,255,255,0.1)' }
+                        : {}
+                    }
                   >
                     <span class="w-1.5 h-1.5 rounded-full" style={{ background: entry.color }} />
                     <span style={{ color: 'rgb(203, 213, 225)' }}>{entry.name}</span>
-                    <span class="ml-auto font-medium" style={{ color: 'rgb(248, 250, 252)' }}>{formatValue(entry.value)}</span>
+                    <span class="ml-auto font-medium" style={{ color: 'rgb(248, 250, 252)' }}>
+                      {formatValue(entry.value)}
+                    </span>
                   </div>
                 )}
               </For>
               <Show when={hover().totalValues > hover().values.length}>
-                <div class="text-[10px] mt-0.5" style={{ color: 'rgb(148, 163, 184)' }}>+{hover().totalValues - hover().values.length} more series</div>
+                <div class="text-[10px] mt-0.5" style={{ color: 'rgb(148, 163, 184)' }}>
+                  +{hover().totalValues - hover().values.length} more series
+                </div>
               </Show>
             </div>
           )}

@@ -70,7 +70,7 @@ describe('HostMetadataAPI', () => {
         expect.objectContaining({
           method: 'PUT',
           body: JSON.stringify({ description: 'Updated description', tags: ['updated'] }),
-        })
+        }),
       );
       expect(result).toEqual(updatedMetadata);
     });
@@ -84,7 +84,7 @@ describe('HostMetadataAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/hosts/metadata/host-1',
-        expect.objectContaining({ method: 'DELETE' })
+        expect.objectContaining({ method: 'DELETE' }),
       );
     });
   });

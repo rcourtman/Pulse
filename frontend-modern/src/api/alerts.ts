@@ -34,7 +34,9 @@ export class AlertsAPI {
     if (startedAt) {
       query.set('started_at', startedAt);
     }
-    return apiFetchJSON(`${this.baseUrl}/incidents?${query.toString()}`) as Promise<Incident | null>;
+    return apiFetchJSON(
+      `${this.baseUrl}/incidents?${query.toString()}`,
+    ) as Promise<Incident | null>;
   }
 
   static async getIncidentsForResource(resourceId: string, limit?: number): Promise<Incident[]> {
@@ -109,5 +111,4 @@ export class AlertsAPI {
       body: JSON.stringify({ alertIds, user }),
     });
   }
-
 }

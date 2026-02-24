@@ -8,7 +8,12 @@ import type { Resource } from '@/types/resource';
 import type { RawOverrideConfig, BackupAlertConfig, SnapshotAlertConfig } from '@/types/alerts';
 import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI, Webhook } from '@/api/notifications';
-import { hasFeature, licenseLoaded, licenseLoading as entitlementsLoading, loadLicenseStatus } from '@/stores/license';
+import {
+  hasFeature,
+  licenseLoaded,
+  licenseLoading as entitlementsLoading,
+  loadLicenseStatus,
+} from '@/stores/license';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { logger } from '@/utils/logger';
 import { Card } from '@/components/shared/Card';
@@ -30,8 +35,21 @@ import { InvestigateAlertButton } from '@/components/Alerts/InvestigateAlertButt
 import type { PMGThresholdDefaults } from '@/types/alerts';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
-import { formField, formControl, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
+import {
+  formField,
+  formControl,
+  formHelpText,
+  labelClass,
+  controlClass,
+} from '@/components/shared/Form';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/shared/Table';
 import { useWebSocket } from '@/App';
 import { useResources } from '@/hooks/useResources';
 import { aiChatStore } from '@/stores/aiChat';
@@ -47,13 +65,11 @@ import Gauge from 'lucide-solid/icons/gauge';
 import Send from 'lucide-solid/icons/send';
 import { OverviewTab } from '@/features/alerts/OverviewTab';
 import {
-
   pathForTab,
   tabFromPath,
   type AlertTab,
   type DestinationsRef,
   type Override,
-
   type UIEmailConfig,
   type UIAppriseConfig,
   type QuietHoursConfig,
@@ -67,7 +83,7 @@ import {
   GROUPING_WINDOW_DEFAULT_SECONDS,
   INCIDENT_EVENT_LABELS,
   fallbackCooldownMinutes,
-  clampCooldownMinutes
+  clampCooldownMinutes,
 } from '@/features/alerts/types';
 import {
   clampMaxAlertsPerHour,
@@ -88,7 +104,7 @@ import {
   unifiedTypeToAlertDisplayType,
   platformData,
   guessNumericId,
-  DEFAULT_DELAY_SECONDS
+  DEFAULT_DELAY_SECONDS,
 } from '@/features/alerts/helpers';
 
 export function Alerts() {
@@ -109,7 +125,9 @@ export function Alerts() {
     try {
       const success = await alertsActivation.activate();
       if (success) {
-        notificationStore.success('Alerts activated! You\'ll now receive alerts when issues are detected.');
+        notificationStore.success(
+          "Alerts activated! You'll now receive alerts when issues are detected.",
+        );
         try {
           await alertsActivation.refreshActiveAlerts();
         } catch (error) {
@@ -131,7 +149,9 @@ export function Alerts() {
     try {
       const success = await alertsActivation.deactivate();
       if (success) {
-        notificationStore.success('Alerts deactivated. Nothing will be sent until you activate them again.');
+        notificationStore.success(
+          'Alerts deactivated. Nothing will be sent until you activate them again.',
+        );
         try {
           await alertsActivation.refreshActiveAlerts();
         } catch (error) {
@@ -167,7 +187,8 @@ export function Alerts() {
     const expectedPath = pathForTab(tab);
 
     // Allow sub-paths for thresholds tab (e.g., /alerts/thresholds/proxmox)
-    const isThresholdsSubPath = tab === 'thresholds' && currentPath.startsWith('/alerts/thresholds/');
+    const isThresholdsSubPath =
+      tab === 'thresholds' && currentPath.startsWith('/alerts/thresholds/');
 
     if (currentPath !== expectedPath && !isThresholdsSubPath) {
       navigate(expectedPath, { replace: true });
@@ -203,7 +224,8 @@ export function Alerts() {
   const hasAIAlertsFeature = createMemo(() => !licenseLoaded() || hasFeature('ai_alerts'));
 
   createEffect((wasPaywallVisible) => {
-    const isPaywallVisible = licenseLoaded() && aiChatStore.enabled === true && !hasFeature('ai_alerts');
+    const isPaywallVisible =
+      licenseLoaded() && aiChatStore.enabled === true && !hasFeature('ai_alerts');
     if (isPaywallVisible && !wasPaywallVisible) {
       trackPaywallViewed('ai_alerts', 'alerts_page');
     }
@@ -286,8 +308,9 @@ export function Alerts() {
   const [scheduleEscalation, setScheduleEscalation] =
     createSignal<EscalationConfig>(createDefaultEscalation());
 
-  const [notifyOnResolve, setNotifyOnResolve] =
-    createSignal<boolean>(createDefaultResolveNotifications());
+  const [notifyOnResolve, setNotifyOnResolve] = createSignal<boolean>(
+    createDefaultResolveNotifications(),
+  );
 
   // Set up destinationsRef.emailConfig function immediately
   destinationsRef.emailConfig = () => {
@@ -322,6 +345,54 @@ export function Alerts() {
     } as AppriseConfig;
   };
 
+  const pd = platformData;
+  const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+    value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
+  const asString = (value: unknown): string | undefined =>
+    typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+  const uniqueIds = (...values: unknown[]): string[] => {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    values.forEach((value) => {
+      const normalized = asString(value);
+      if (!normalized || seen.has(normalized)) return;
+      seen.add(normalized);
+      ids.push(normalized);
+    });
+    return ids;
+  };
+  const hostOverrideIdCandidates = (resource: Resource): string[] => {
+    const data = pd(resource);
+    const agent = asRecord(data?.agent);
+    return uniqueIds(
+      resource.discoveryTarget?.resourceType === 'host'
+        ? resource.discoveryTarget.resourceId
+        : undefined,
+      resource.discoveryTarget?.hostId,
+      resource.agent?.agentId,
+      agent?.agentId,
+      data?.agentId,
+      resource.id,
+    );
+  };
+  const dockerHostOverrideIdCandidates = (resource: Resource): string[] => {
+    const data = pd(resource);
+    const docker = asRecord(data?.docker);
+    return uniqueIds(
+      resource.discoveryTarget?.resourceType === 'docker'
+        ? resource.discoveryTarget.resourceId
+        : undefined,
+      docker?.hostSourceId,
+      data?.hostSourceId,
+      resource.discoveryTarget?.hostId,
+      resource.id,
+    );
+  };
+  const dockerContainerOverrideIdCandidates = (host: Resource, shortId: string): string[] =>
+    uniqueIds(
+      ...dockerHostOverrideIdCandidates(host).map((hostId) => `docker:${hostId}/${shortId}`),
+    );
+
   // Process raw overrides config when state changes
   createEffect(() => {
     // Skip this effect if there are unsaved changes to prevent losing focus
@@ -330,23 +401,24 @@ export function Alerts() {
     }
 
     const rawConfig = rawOverridesConfig();
-    if (
-      Object.keys(rawConfig).length > 0 &&
-      byType('node').length > 0
-    ) {
+    if (Object.keys(rawConfig).length > 0 && byType('node').length > 0) {
       const nodeResources = byType('node');
       const vmResources = byType('vm');
       const containerResources = [...byType('container'), ...byType('oci-container')];
-      const storageResources = allResources().filter((r) => r.type === 'storage' || r.type === 'datastore');
+      const storageResources = allResources().filter(
+        (r) => r.type === 'storage' || r.type === 'datastore',
+      );
       const hostResources = byType('host');
       const dockerHostResources = byType('docker-host');
 
       // Convert overrides object to array format
       const overridesList: Override[] = [];
 
-      const pd = platformData;
       const dockerHostMap = new Map<string, Resource>();
-      const dockerContainerMap = new Map<string, { host: Resource; container: Resource; containerShortId: string }>();
+      const dockerContainerMap = new Map<
+        string,
+        { host: Resource; container: Resource; containerShortId: string }
+      >();
       const hostAgentMap = new Map<string, Resource>();
 
       const storageCoords = (r: Resource): { node: string; instance: string } => {
@@ -354,8 +426,7 @@ export function Alerts() {
         if (r.type === 'datastore') {
           const instance =
             (data?.pbsInstanceId as string | undefined) || r.parentId || r.platformId || 'pbs';
-          const node =
-            (data?.pbsInstanceName as string | undefined) || instance;
+          const node = (data?.pbsInstanceName as string | undefined) || instance;
           return { node, instance };
         }
         return {
@@ -365,16 +436,23 @@ export function Alerts() {
       };
 
       dockerHostResources.forEach((host) => {
-        dockerHostMap.set(host.id, host);
+        dockerHostOverrideIdCandidates(host).forEach((id) => {
+          dockerHostMap.set(id, host);
+        });
         const containers = children(host.id).filter((r) => r.type === 'docker-container');
         containers.forEach((container) => {
-          const shortId = container.id.includes('/') ? container.id.split('/').pop()! : container.id;
-          const resourceId = `docker:${host.id}/${shortId}`;
-          dockerContainerMap.set(resourceId, { host, container, containerShortId: shortId });
+          const shortId = container.id.includes('/')
+            ? container.id.split('/').pop()!
+            : container.id;
+          dockerContainerOverrideIdCandidates(host, shortId).forEach((resourceId) => {
+            dockerContainerMap.set(resourceId, { host, container, containerShortId: shortId });
+          });
         });
       });
       hostResources.forEach((host) => {
-        hostAgentMap.set(host.id, host);
+        hostOverrideIdCandidates(host).forEach((id) => {
+          hostAgentMap.set(id, host);
+        });
       });
 
       Object.entries(rawConfig).forEach(([key, thresholds]) => {
@@ -447,7 +525,7 @@ export function Alerts() {
           }
 
           overridesList.push({
-            id: hostId || key,
+            id: key,
             name: hostId || key,
             type: 'dockerHost',
             resourceType: 'Container Host',
@@ -480,16 +558,20 @@ export function Alerts() {
         const hostAgent = hostAgentMap.get(key);
         if (hostAgent) {
           const displayName =
-            hostAgent.displayName?.trim() || hostAgent.identity?.hostname || hostAgent.name || hostAgent.id;
+            hostAgent.displayName?.trim() ||
+            hostAgent.identity?.hostname ||
+            hostAgent.name ||
+            hostAgent.id;
           const data = pd(hostAgent);
 
           overridesList.push({
-            id: hostAgent.id,
+            id: key,
             name: displayName,
             type: 'hostAgent',
             resourceType: 'Host Agent',
             node: hostAgent.identity?.hostname ?? hostAgent.name,
-            instance: (data?.platform as string | undefined) || (data?.osName as string | undefined) || '',
+            instance:
+              (data?.platform as string | undefined) || (data?.osName as string | undefined) || '',
             disabled: thresholds.disabled || false,
             disableConnectivity: thresholds.disableConnectivity || false,
             thresholds: extractTriggerValues(thresholds),
@@ -551,7 +633,7 @@ export function Alerts() {
                   resourceType: guest.type === 'vm' ? 'VM' : 'CT',
                   vmid: (data?.vmid as number | undefined) ?? guessNumericId(guest.id),
                   node: (data?.node as string | undefined) ?? '',
-                  instance: ((data?.instance as string | undefined) ?? guest.platformId),
+                  instance: (data?.instance as string | undefined) ?? guest.platformId,
                   disabled: thresholds.disabled || false,
                   disableConnectivity: thresholds.disableConnectivity || false,
                   poweredOffSeverity:
@@ -577,26 +659,25 @@ export function Alerts() {
         overridesList.some((newOverride) => {
           const existing = currentOverrides.find((o) => o.id === newOverride.id);
           if (!existing) return true;
-          // Check both thresholds and disableConnectivity for nodes/PBS
           const thresholdsChanged =
             JSON.stringify(newOverride.thresholds) !== JSON.stringify(existing.thresholds);
           const connectivityChanged =
-            (newOverride.type === 'node' ||
-              newOverride.type === 'pbs' ||
-              newOverride.type === 'dockerContainer') &&
-            newOverride.disableConnectivity !== existing.disableConnectivity;
-          const disabledChanged =
-            (newOverride.type === 'guest' || newOverride.type === 'storage' || newOverride.type === 'hostDisk') &&
-            newOverride.disabled !== existing.disabled;
+            Boolean(newOverride.disableConnectivity) !== Boolean(existing.disableConnectivity);
+          const disabledChanged = Boolean(newOverride.disabled) !== Boolean(existing.disabled);
           const severityChanged =
-            (newOverride.type === 'guest' || newOverride.type === 'dockerContainer') &&
-            (newOverride.poweredOffSeverity ?? null) !==
-            (existing.poweredOffSeverity ?? null);
+            (newOverride.poweredOffSeverity ?? null) !== (existing.poweredOffSeverity ?? null);
+          const backupChanged =
+            JSON.stringify(newOverride.backup ?? null) !== JSON.stringify(existing.backup ?? null);
+          const snapshotChanged =
+            JSON.stringify(newOverride.snapshot ?? null) !==
+            JSON.stringify(existing.snapshot ?? null);
           return (
             thresholdsChanged ||
             connectivityChanged ||
             disabledChanged ||
-            severityChanged
+            severityChanged ||
+            backupChanged ||
+            snapshotChanged
           );
         });
 
@@ -759,7 +840,10 @@ export function Alerts() {
           host: config.timeThresholds.host ?? DEFAULT_DELAY_SECONDS,
         });
       } else {
-        const fallback = config.timeThreshold && config.timeThreshold > 0 ? config.timeThreshold : DEFAULT_DELAY_SECONDS;
+        const fallback =
+          config.timeThreshold && config.timeThreshold > 0
+            ? config.timeThreshold
+            : DEFAULT_DELAY_SECONDS;
         setTimeThresholds({
           guest: fallback,
           node: fallback,
@@ -778,7 +862,8 @@ export function Alerts() {
       if (config.backupDefaults) {
         const enabled = Boolean(config.backupDefaults.enabled);
         const rawWarning = config.backupDefaults.warningDays ?? FACTORY_BACKUP_DEFAULTS.warningDays;
-        const rawCritical = config.backupDefaults.criticalDays ?? FACTORY_BACKUP_DEFAULTS.criticalDays;
+        const rawCritical =
+          config.backupDefaults.criticalDays ?? FACTORY_BACKUP_DEFAULTS.criticalDays;
         const safeCritical = Math.max(0, rawCritical);
         const normalizedWarning = Math.max(0, rawWarning);
         const warningDays =
@@ -786,7 +871,8 @@ export function Alerts() {
         const criticalDays = Math.max(safeCritical, warningDays);
         const freshHours = config.backupDefaults.freshHours ?? FACTORY_BACKUP_DEFAULTS.freshHours;
         const staleHours = config.backupDefaults.staleHours ?? FACTORY_BACKUP_DEFAULTS.staleHours;
-        const alertOrphaned = config.backupDefaults.alertOrphaned ?? FACTORY_BACKUP_DEFAULTS.alertOrphaned ?? true;
+        const alertOrphaned =
+          config.backupDefaults.alertOrphaned ?? FACTORY_BACKUP_DEFAULTS.alertOrphaned ?? true;
         const ignoreVMIDs = Array.from(
           new Set(
             (config.backupDefaults.ignoreVMIDs ?? FACTORY_BACKUP_DEFAULTS.ignoreVMIDs ?? [])
@@ -879,7 +965,12 @@ export function Alerts() {
       for (const [key, value] of Object.entries(rawOverrides)) {
         const diskMatch = key.match(/^(host:.+\/disk:)(.+)$/);
         if (diskMatch) {
-          const normalized = diskMatch[2].toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '') || 'unknown';
+          const normalized =
+            diskMatch[2]
+              .toLowerCase()
+              .replace(/[^a-z0-9]/g, '-')
+              .replace(/-{2,}/g, '-')
+              .replace(/^-|-$/g, '') || 'unknown';
           cleanedOverrides[diskMatch[1] + normalized] = value;
         } else {
           cleanedOverrides[key] = value;
@@ -947,10 +1038,8 @@ export function Alerts() {
                 ? Boolean(groupingConfig.enabled)
                 : normalizedGroupingWindowSeconds > 0,
             window: groupingWindowMinutes,
-            byNode:
-              groupingConfig?.byNode !== undefined ? groupingConfig.byNode : true,
-            byGuest:
-              groupingConfig?.byGuest !== undefined ? groupingConfig.byGuest : false,
+            byNode: groupingConfig?.byNode !== undefined ? groupingConfig.byNode : true,
+            byGuest: groupingConfig?.byGuest !== undefined ? groupingConfig.byGuest : false,
           });
         }
 
@@ -1135,21 +1224,31 @@ export function Alerts() {
   };
 
   // Threshold states - using trigger values for display
-  const [guestDefaults, setGuestDefaults] = createSignal<Record<string, number | undefined>>({ ...FACTORY_GUEST_DEFAULTS });
+  const [guestDefaults, setGuestDefaults] = createSignal<Record<string, number | undefined>>({
+    ...FACTORY_GUEST_DEFAULTS,
+  });
   const [guestDisableConnectivity, setGuestDisableConnectivity] = createSignal(false);
-  const [guestPoweredOffSeverity, setGuestPoweredOffSeverity] = createSignal<'warning' | 'critical'>('warning');
+  const [guestPoweredOffSeverity, setGuestPoweredOffSeverity] = createSignal<
+    'warning' | 'critical'
+  >('warning');
 
-  const [nodeDefaults, setNodeDefaults] = createSignal<Record<string, number | undefined>>({ ...FACTORY_NODE_DEFAULTS });
-  const [pbsDefaults, setPBSDefaults] = createSignal<Record<string, number | undefined>>({ ...FACTORY_PBS_DEFAULTS });
-  const [hostDefaults, setHostDefaults] = createSignal<Record<string, number | undefined>>({ ...FACTORY_HOST_DEFAULTS });
+  const [nodeDefaults, setNodeDefaults] = createSignal<Record<string, number | undefined>>({
+    ...FACTORY_NODE_DEFAULTS,
+  });
+  const [pbsDefaults, setPBSDefaults] = createSignal<Record<string, number | undefined>>({
+    ...FACTORY_PBS_DEFAULTS,
+  });
+  const [hostDefaults, setHostDefaults] = createSignal<Record<string, number | undefined>>({
+    ...FACTORY_HOST_DEFAULTS,
+  });
 
   const [dockerDefaults, setDockerDefaults] = createSignal({ ...FACTORY_DOCKER_DEFAULTS });
   const [dockerDisableConnectivity, setDockerDisableConnectivity] = createSignal(
     FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY,
   );
-  const [dockerPoweredOffSeverity, setDockerPoweredOffSeverity] = createSignal<'warning' | 'critical'>(
-    FACTORY_DOCKER_STATE_SEVERITY,
-  );
+  const [dockerPoweredOffSeverity, setDockerPoweredOffSeverity] = createSignal<
+    'warning' | 'critical'
+  >(FACTORY_DOCKER_STATE_SEVERITY);
   const [dockerIgnoredPrefixes, setDockerIgnoredPrefixes] = createSignal<string[]>([]);
   const [ignoredGuestPrefixes, setIgnoredGuestPrefixes] = createSignal<string[]>([]);
   const [guestTagWhitelist, setGuestTagWhitelist] = createSignal<string[]>([]);
@@ -1212,8 +1311,9 @@ export function Alerts() {
     pbs: DEFAULT_DELAY_SECONDS,
     host: DEFAULT_DELAY_SECONDS,
   });
-  const [metricTimeThresholds, setMetricTimeThresholds] =
-    createSignal<Record<string, Record<string, number>>>({});
+  const [metricTimeThresholds, setMetricTimeThresholds] = createSignal<
+    Record<string, Record<string, number>>
+  >({});
   const [snapshotDefaults, setSnapshotDefaults] = createSignal<SnapshotAlertConfig>({
     ...FACTORY_SNAPSHOT_DEFAULTS,
   });
@@ -1261,24 +1361,32 @@ export function Alerts() {
     label: string;
     items: { id: AlertTab; label: string; icon: JSX.Element }[];
   }[] = [
-      {
-        id: 'status',
-        label: 'Status',
-        items: [
-          { id: 'overview', label: 'Overview', icon: <LayoutDashboard class="w-4 h-4" strokeWidth={2} /> },
-          { id: 'history', label: 'History', icon: <History class="w-4 h-4" strokeWidth={2} /> },
-        ],
-      },
-      {
-        id: 'configuration',
-        label: 'Configuration',
-        items: [
-          { id: 'thresholds', label: 'Thresholds', icon: <Gauge class="w-4 h-4" strokeWidth={2} /> },
-          { id: 'destinations', label: 'Notifications', icon: <Send class="w-4 h-4" strokeWidth={2} /> },
-          { id: 'schedule', label: 'Schedule', icon: <Calendar class="w-4 h-4" strokeWidth={2} /> },
-        ],
-      },
-    ];
+    {
+      id: 'status',
+      label: 'Status',
+      items: [
+        {
+          id: 'overview',
+          label: 'Overview',
+          icon: <LayoutDashboard class="w-4 h-4" strokeWidth={2} />,
+        },
+        { id: 'history', label: 'History', icon: <History class="w-4 h-4" strokeWidth={2} /> },
+      ],
+    },
+    {
+      id: 'configuration',
+      label: 'Configuration',
+      items: [
+        { id: 'thresholds', label: 'Thresholds', icon: <Gauge class="w-4 h-4" strokeWidth={2} /> },
+        {
+          id: 'destinations',
+          label: 'Notifications',
+          icon: <Send class="w-4 h-4" strokeWidth={2} />,
+        },
+        { id: 'schedule', label: 'Schedule', icon: <Calendar class="w-4 h-4" strokeWidth={2} /> },
+      ],
+    },
+  ];
 
   const flatTabs = tabGroups.flatMap((group) => group.items);
   // Sidebar always starts expanded for discoverability (consistent with Settings)
@@ -1298,8 +1406,9 @@ export function Alerts() {
           <Show when={activeTab() === 'overview'}>
             <div class="flex items-center gap-3">
               <span
-                class={`text-sm font-medium ${isAlertsActive() ? 'text-green-600 dark:text-green-400' : 'text-muted'
-                  }`}
+                class={`text-sm font-medium ${
+                  isAlertsActive() ? 'text-green-600 dark:text-green-400' : 'text-muted'
+                }`}
               >
                 {isAlertsActive() ? 'Alerts enabled' : 'Alerts disabled'}
               </span>
@@ -1319,12 +1428,14 @@ export function Alerts() {
                   }}
                 />
                 <div
-                  class={`relative w-11 h-6 rounded-full transition ${isAlertsActive() ? 'bg-blue-600' : 'bg-surface-hover'
-                    } ${alertsActivation.isLoading() || isSwitchingActivation() ? 'opacity-50' : ''}`}
+                  class={`relative w-11 h-6 rounded-full transition ${
+                    isAlertsActive() ? 'bg-blue-600' : 'bg-surface-hover'
+                  } ${alertsActivation.isLoading() || isSwitchingActivation() ? 'opacity-50' : ''}`}
                 >
                   <span
-                    class={`absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white transition-all shadow ${isAlertsActive() ? 'translate-x-5' : 'translate-x-0'
-                      }`}
+                    class={`absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white transition-all shadow ${
+                      isAlertsActive() ? 'translate-x-5' : 'translate-x-0'
+                    }`}
                   />
                 </div>
               </label>
@@ -1372,7 +1483,10 @@ export function Alerts() {
 
                     const snapshotConfig = snapshotDefaults();
                     const normalizedSnapshotWarning = Math.max(0, snapshotConfig.warningDays ?? 0);
-                    const normalizedSnapshotCritical = Math.max(0, snapshotConfig.criticalDays ?? 0);
+                    const normalizedSnapshotCritical = Math.max(
+                      0,
+                      snapshotConfig.criticalDays ?? 0,
+                    );
                     const finalSnapshotCritical =
                       normalizedSnapshotCritical > 0
                         ? Math.max(normalizedSnapshotCritical, normalizedSnapshotWarning)
@@ -1389,7 +1503,8 @@ export function Alerts() {
                     const dockerDefaultsValue = dockerDefaults();
                     if (
                       dockerDefaultsValue.serviceCriticalGapPercent > 0 &&
-                      dockerDefaultsValue.serviceWarnGapPercent > dockerDefaultsValue.serviceCriticalGapPercent
+                      dockerDefaultsValue.serviceWarnGapPercent >
+                        dockerDefaultsValue.serviceCriticalGapPercent
                     ) {
                       notificationStore.error(
                         'Swarm service critical gap must be greater than or equal to the warning gap when enabled.',
@@ -1400,7 +1515,9 @@ export function Alerts() {
                     const normalizedCooldownMinutes = scheduleCooldown().enabled
                       ? clampCooldownMinutes(scheduleCooldown().minutes)
                       : 0;
-                    const normalizedMaxAlertsHour = clampMaxAlertsPerHour(scheduleCooldown().maxAlerts);
+                    const normalizedMaxAlertsHour = clampMaxAlertsPerHour(
+                      scheduleCooldown().maxAlerts,
+                    );
                     const groupingState = scheduleGrouping();
                     const groupingWindowSeconds =
                       groupingState.enabled && groupingState.window >= 0
@@ -1559,14 +1676,16 @@ export function Alerts() {
 
                     if (destinationsRef.appriseConfig) {
                       const appriseData = destinationsRef.appriseConfig();
-                      const updatedApprise = await NotificationsAPI.updateAppriseConfig(appriseData);
+                      const updatedApprise =
+                        await NotificationsAPI.updateAppriseConfig(appriseData);
                       setAppriseConfig({
                         enabled: updatedApprise.enabled ?? false,
                         mode: updatedApprise.mode === 'http' ? 'http' : 'cli',
                         targetsText: formatAppriseTargets(updatedApprise.targets),
                         cliPath: updatedApprise.cliPath || 'apprise',
                         timeoutSeconds:
-                          typeof updatedApprise.timeoutSeconds === 'number' && updatedApprise.timeoutSeconds > 0
+                          typeof updatedApprise.timeoutSeconds === 'number' &&
+                          updatedApprise.timeoutSeconds > 0
                             ? updatedApprise.timeoutSeconds
                             : 15,
                         serverUrl: updatedApprise.serverUrl || '',
@@ -1581,7 +1700,9 @@ export function Alerts() {
                     notificationStore.success('Configuration saved successfully!');
                   } catch (err) {
                     logger.error('Failed to save configuration:', err);
-                    notificationStore.error(err instanceof Error ? err.message : 'Failed to save configuration');
+                    notificationStore.error(
+                      err instanceof Error ? err.message : 'Failed to save configuration',
+                    );
                   }
                 }}
               >
@@ -1670,12 +1791,13 @@ export function Alerts() {
                               aria-current={activeTab() === item.id ? 'page' : undefined}
                               aria-disabled={areAlertsDisabled()}
                               disabled={areAlertsDisabled()}
-                              class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${areAlertsDisabled()
-                                ? 'cursor-not-allowed text-muted bg-surface-alt'
-                                : activeTab() === item.id
-                                  ? 'bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-200'
-                                  : 'hover:bg-surface-hover hover:text-base-content'
-                                }`}
+                              class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${
+                                areAlertsDisabled()
+                                  ? 'cursor-not-allowed text-muted bg-surface-alt'
+                                  : activeTab() === item.id
+                                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-200'
+                                    : 'hover:bg-surface-hover hover:text-base-content'
+                              }`}
                               onClick={() => handleTabChange(item.id)}
                               title={sidebarCollapsed() ? item.label : undefined}
                             >
@@ -1708,12 +1830,13 @@ export function Alerts() {
                           type="button"
                           aria-disabled={areAlertsDisabled()}
                           disabled={areAlertsDisabled()}
-                          class={`flex-1 min-w-0 px-2 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-medium rounded-md transition-all ${areAlertsDisabled()
-                            ? 'cursor-not-allowed text-muted bg-surface-alt'
-                            : activeTab() === tab.id
-                              ? 'bg-surface text-base-content shadow-sm'
-                              : 'text-muted hover:text-base-content'
-                            }`}
+                          class={`flex-1 min-w-0 px-2 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-medium rounded-md transition-all ${
+                            areAlertsDisabled()
+                              ? 'cursor-not-allowed text-muted bg-surface-alt'
+                              : activeTab() === tab.id
+                                ? 'bg-surface text-base-content shadow-sm'
+                                : 'text-muted hover:text-base-content'
+                          }`}
                           onClick={() => handleTabChange(tab.id)}
                         >
                           <span class="w-full text-center truncate block">{tab.label}</span>
@@ -1752,7 +1875,9 @@ export function Alerts() {
                   state={state}
                   nodes={byType('node')}
                   hosts={byType('host')}
-                  storage={allResources().filter((r) => r.type === 'storage' || r.type === 'datastore')}
+                  storage={allResources().filter(
+                    (r) => r.type === 'storage' || r.type === 'datastore',
+                  )}
                   dockerHosts={byType('docker-host')}
                   allResources={allResources()}
                   guestDefaults={guestDefaults}
@@ -1929,9 +2054,7 @@ interface ThresholdsTabProps {
   rawOverridesConfig: () => Record<string, RawOverrideConfig>;
   pmgThresholds: () => PMGThresholdDefaults;
   setPMGThresholds: (
-    value:
-      | PMGThresholdDefaults
-      | ((prev: PMGThresholdDefaults) => PMGThresholdDefaults),
+    value: PMGThresholdDefaults | ((prev: PMGThresholdDefaults) => PMGThresholdDefaults),
   ) => void;
   setGuestDefaults: (
     value:
@@ -1960,37 +2083,37 @@ interface ThresholdsTabProps {
   setDockerDefaults: (
     value:
       | {
-        cpu: number;
-        memory: number;
-        disk: number;
-        restartCount: number;
-        restartWindow: number;
-        memoryWarnPct: number;
-        memoryCriticalPct: number;
-        serviceWarnGapPercent: number;
-        serviceCriticalGapPercent: number;
-      }
+          cpu: number;
+          memory: number;
+          disk: number;
+          restartCount: number;
+          restartWindow: number;
+          memoryWarnPct: number;
+          memoryCriticalPct: number;
+          serviceWarnGapPercent: number;
+          serviceCriticalGapPercent: number;
+        }
       | ((prev: {
-        cpu: number;
-        memory: number;
-        disk: number;
-        restartCount: number;
-        restartWindow: number;
-        memoryWarnPct: number;
-        memoryCriticalPct: number;
-        serviceWarnGapPercent: number;
-        serviceCriticalGapPercent: number;
-      }) => {
-        cpu: number;
-        memory: number;
-        disk: number;
-        restartCount: number;
-        restartWindow: number;
-        memoryWarnPct: number;
-        memoryCriticalPct: number;
-        serviceWarnGapPercent: number;
-        serviceCriticalGapPercent: number;
-      }),
+          cpu: number;
+          memory: number;
+          disk: number;
+          restartCount: number;
+          restartWindow: number;
+          memoryWarnPct: number;
+          memoryCriticalPct: number;
+          serviceWarnGapPercent: number;
+          serviceCriticalGapPercent: number;
+        }) => {
+          cpu: number;
+          memory: number;
+          disk: number;
+          restartCount: number;
+          restartWindow: number;
+          memoryWarnPct: number;
+          memoryCriticalPct: number;
+          serviceWarnGapPercent: number;
+          serviceCriticalGapPercent: number;
+        }),
   ) => void;
   setDockerDisableConnectivity: (value: boolean) => void;
   setDockerPoweredOffSeverity: (value: 'warning' | 'critical') => void;
@@ -2006,17 +2129,13 @@ interface ThresholdsTabProps {
   ) => void;
   snapshotDefaults: () => SnapshotAlertConfig;
   setSnapshotDefaults: (
-    value:
-      | SnapshotAlertConfig
-      | ((prev: SnapshotAlertConfig) => SnapshotAlertConfig),
+    value: SnapshotAlertConfig | ((prev: SnapshotAlertConfig) => SnapshotAlertConfig),
   ) => void;
   snapshotFactoryDefaults: SnapshotAlertConfig;
   resetSnapshotDefaults: () => void;
   backupDefaults: () => BackupAlertConfig;
   setBackupDefaults: (
-    value:
-      | BackupAlertConfig
-      | ((prev: BackupAlertConfig) => BackupAlertConfig),
+    value: BackupAlertConfig | ((prev: BackupAlertConfig) => BackupAlertConfig),
   ) => void;
   backupFactoryDefaults: BackupAlertConfig;
   resetBackupDefaults: () => void;
@@ -2245,7 +2364,9 @@ function DestinationsTab(props: DestinationsTabProps) {
       notificationStore.success('Test email sent successfully! Check your inbox.');
     } catch (err) {
       logger.error('Failed to send test email:', err);
-      notificationStore.error('Failed to send test email: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      notificationStore.error(
+        'Failed to send test email: ' + (err instanceof Error ? err.message : 'Unknown error'),
+      );
     } finally {
       setTestingEmail(false);
     }
@@ -2277,7 +2398,7 @@ function DestinationsTab(props: DestinationsTabProps) {
       logger.error('Failed to send test Apprise notification:', err);
       notificationStore.error(
         'Failed to send test Apprise notification: ' +
-        (err instanceof Error ? err.message : 'Unknown error'),
+          (err instanceof Error ? err.message : 'Unknown error'),
       );
     } finally {
       setTestingApprise(false);
@@ -2390,7 +2511,9 @@ function DestinationsTab(props: DestinationsTabProps) {
           </div>
 
           <div class={formField}>
-            <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Delivery targets</label>
+            <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+              Delivery targets
+            </label>
             <textarea
               rows={4}
               class={`${formControl} font-mono min-h-[120px]`}
@@ -2439,10 +2562,14 @@ mailto://alerts@example.com`}
                     props.setHasUnsavedChanges(true);
                   }}
                 />
-                <p class={formHelpText}>Point to an Apprise API endpoint such as https://host:8000.</p>
+                <p class={formHelpText}>
+                  Point to an Apprise API endpoint such as https://host:8000.
+                </p>
               </div>
               <div class={formField}>
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Config key (optional)</label>
+                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                  Config key (optional)
+                </label>
                 <input
                   type="text"
                   value={appriseState().configKey}
@@ -2467,10 +2594,14 @@ mailto://alerts@example.com`}
                     props.setHasUnsavedChanges(true);
                   }}
                 />
-                <p class={formHelpText}>Included with each request when your Apprise API requires authentication.</p>
+                <p class={formHelpText}>
+                  Included with each request when your Apprise API requires authentication.
+                </p>
               </div>
               <div class={formField}>
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>API key header</label>
+                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                  API key header
+                </label>
                 <input
                   type="text"
                   value={appriseState().apiKeyHeader}
@@ -2484,7 +2615,9 @@ mailto://alerts@example.com`}
                 <p class={formHelpText}>Defaults to X-API-KEY for Apprise API deployments.</p>
               </div>
               <div class={`${formField} sm:col-span-2`}>
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>TLS verification</label>
+                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                  TLS verification
+                </label>
                 <label class="inline-flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -2497,13 +2630,17 @@ mailto://alerts@example.com`}
                   />
                   <span class="text-sm text-muted">Allow self-signed certificates</span>
                 </label>
-                <p class={formHelpText}>Enable only when the Apprise API uses a self-signed certificate.</p>
+                <p class={formHelpText}>
+                  Enable only when the Apprise API uses a self-signed certificate.
+                </p>
               </div>
             </div>
           </Show>
 
           <div class={formField}>
-            <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Timeout (seconds)</label>
+            <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+              Timeout (seconds)
+            </label>
             <input
               type="number"
               min="5"
@@ -2526,9 +2663,7 @@ mailto://alerts@example.com`}
         title="Webhooks"
         description="Push alerts to chat apps or automation systems."
         action={
-          <span class="text-xs text-muted whitespace-nowrap">
-            {webhooks().length} configured
-          </span>
+          <span class="text-xs text-muted whitespace-nowrap">{webhooks().length} configured</span>
         }
         class="min-w-0"
         bodyClass="space-y-4"
@@ -2552,7 +2687,9 @@ mailto://alerts@example.com`}
               notificationStore.success('Webhook updated successfully');
             } catch (err) {
               logger.error('Failed to update webhook:', err);
-              notificationStore.error(err instanceof Error ? err.message : 'Failed to update webhook');
+              notificationStore.error(
+                err instanceof Error ? err.message : 'Failed to update webhook',
+              );
             }
           }}
           onDelete={async (id) => {
@@ -2562,7 +2699,9 @@ mailto://alerts@example.com`}
               notificationStore.success('Webhook deleted successfully');
             } catch (err) {
               logger.error('Failed to delete webhook:', err);
-              notificationStore.error(err instanceof Error ? err.message : 'Failed to delete webhook');
+              notificationStore.error(
+                err instanceof Error ? err.message : 'Failed to delete webhook',
+              );
             }
           }}
           onTest={testWebhook}
@@ -2696,22 +2835,22 @@ function ScheduleTab(props: ScheduleTabProps) {
     label: string;
     description: string;
   }> = [
-      {
-        key: 'performance',
-        label: 'Performance alerts',
-        description: 'CPU, memory, disk, and network thresholds stay quiet.',
-      },
-      {
-        key: 'storage',
-        label: 'Storage alerts',
-        description: 'Silence storage usage, disk health, and ZFS events.',
-      },
-      {
-        key: 'offline',
-        label: 'Offline & power state',
-        description: 'Skip connectivity and powered-off alerts during backups.',
-      },
-    ];
+    {
+      key: 'performance',
+      label: 'Performance alerts',
+      description: 'CPU, memory, disk, and network thresholds stay quiet.',
+    },
+    {
+      key: 'storage',
+      label: 'Storage alerts',
+      description: 'Silence storage usage, disk health, and ZFS events.',
+    },
+    {
+      key: 'offline',
+      label: 'Offline & power state',
+      description: 'Skip connectivity and powered-off alerts during backups.',
+    },
+  ];
 
   const days = [
     { id: 'monday', label: 'M', fullLabel: 'Monday' },
@@ -2727,12 +2866,8 @@ function ScheduleTab(props: ScheduleTabProps) {
     <div class="space-y-6">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 class="text-base font-semibold text-base-content">
-            Alert scheduling
-          </h3>
-          <p class="mt-1 text-sm text-muted">
-            Configure when and how alerts are delivered
-          </p>
+          <h3 class="text-base font-semibold text-base-content">Alert scheduling</h3>
+          <p class="mt-1 text-sm text-muted">Configure when and how alerts are delivered</p>
         </div>
         <button
           type="button"
@@ -2889,10 +3024,11 @@ function ScheduleTab(props: ScheduleTabProps) {
                   <For each={quietHourSuppressOptions}>
                     {(option) => (
                       <label
-                        class={`flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2 transition-colors ${quietHours().suppress[option.key]
-                          ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-500'
-                          : 'border-border hover:bg-surface-hover'
-                          }`}
+                        class={`flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2 transition-colors ${
+                          quietHours().suppress[option.key]
+                            ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-500'
+                            : 'border-border hover:bg-surface-hover'
+                        }`}
                       >
                         <input
                           type="checkbox"
@@ -2910,10 +3046,11 @@ function ScheduleTab(props: ScheduleTabProps) {
                           class="sr-only"
                         />
                         <div
-                          class={`mt-1 flex h-4 w-4 items-center justify-center rounded border-2 ${quietHours().suppress[option.key]
-                            ? 'border-blue-500 bg-blue-500'
-                            : 'border-border'
-                            }`}
+                          class={`mt-1 flex h-4 w-4 items-center justify-center rounded border-2 ${
+                            quietHours().suppress[option.key]
+                              ? 'border-blue-500 bg-blue-500'
+                              : 'border-border'
+                          }`}
                         >
                           <Show when={quietHours().suppress[option.key]}>
                             <svg
@@ -2923,17 +3060,17 @@ function ScheduleTab(props: ScheduleTabProps) {
                               stroke="currentColor"
                               stroke-width="3"
                             >
-                              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="M5 13l4 4L19 7"
+                              />
                             </svg>
                           </Show>
                         </div>
                         <div>
-                          <p class="text-sm font-medium text-base-content">
-                            {option.label}
-                          </p>
-                          <p class="text-xs text-muted">
-                            {option.description}
-                          </p>
+                          <p class="text-sm font-medium text-base-content">{option.label}</p>
+                          <p class="text-xs text-muted">{option.description}</p>
                         </div>
                       </label>
                     )}
@@ -3092,10 +3229,11 @@ function ScheduleTab(props: ScheduleTabProps) {
                 </span>
                 <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <label
-                    class={`relative flex items-center gap-2 rounded-md border-2 p-3 transition-all ${grouping().byNode
-                      ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900'
-                      : 'border-border hover:bg-surface-hover'
-                      }`}
+                    class={`relative flex items-center gap-2 rounded-md border-2 p-3 transition-all ${
+                      grouping().byNode
+                        ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900'
+                        : 'border-border hover:bg-surface-hover'
+                    }`}
                   >
                     <input
                       type="checkbox"
@@ -3107,10 +3245,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                       class="sr-only"
                     />
                     <div
-                      class={`flex h-4 w-4 items-center justify-center rounded border-2 ${grouping().byNode
-                        ? 'border-blue-500 bg-blue-500'
-                        : 'border-border'
-                        }`}
+                      class={`flex h-4 w-4 items-center justify-center rounded border-2 ${
+                        grouping().byNode ? 'border-blue-500 bg-blue-500' : 'border-border'
+                      }`}
                     >
                       <Show when={grouping().byNode}>
                         <svg
@@ -3124,16 +3261,15 @@ function ScheduleTab(props: ScheduleTabProps) {
                         </svg>
                       </Show>
                     </div>
-                    <span class="text-sm font-medium text-base-content">
-                      By Node
-                    </span>
+                    <span class="text-sm font-medium text-base-content">By Node</span>
                   </label>
 
                   <label
-                    class={`relative flex items-center gap-2 rounded-md border-2 p-3 transition-all ${grouping().byGuest
-                      ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900'
-                      : 'border-border hover:bg-surface-hover'
-                      }`}
+                    class={`relative flex items-center gap-2 rounded-md border-2 p-3 transition-all ${
+                      grouping().byGuest
+                        ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900'
+                        : 'border-border hover:bg-surface-hover'
+                    }`}
                   >
                     <input
                       type="checkbox"
@@ -3145,10 +3281,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                       class="sr-only"
                     />
                     <div
-                      class={`flex h-4 w-4 items-center justify-center rounded border-2 ${grouping().byGuest
-                        ? 'border-blue-500 bg-blue-500'
-                        : 'border-border'
-                        }`}
+                      class={`flex h-4 w-4 items-center justify-center rounded border-2 ${
+                        grouping().byGuest ? 'border-blue-500 bg-blue-500' : 'border-border'
+                      }`}
                     >
                       <Show when={grouping().byGuest}>
                         <svg
@@ -3162,9 +3297,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                         </svg>
                       </Show>
                     </div>
-                    <span class="text-sm font-medium text-base-content">
-                      By Guest
-                    </span>
+                    <span class="text-sm font-medium text-base-content">By Guest</span>
                   </label>
                 </div>
               </div>
@@ -3227,9 +3360,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   <div class="flex items-center gap-3 rounded-md border border-border bg-surface-hover p-3">
                     <div class="flex flex-1 flex-col gap-3 sm:grid sm:grid-cols-2 sm:items-center sm:gap-2">
                       <div class="flex items-center gap-2">
-                        <span class="text-xs font-medium text-muted">
-                          After
-                        </span>
+                        <span class="text-xs font-medium text-muted">After</span>
                         <input
                           type="number"
                           min="5"
@@ -3250,9 +3381,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                         <span class="text-xs text-muted">min</span>
                       </div>
                       <div class="flex items-center gap-2">
-                        <span class="text-xs font-medium text-muted">
-                          Notify
-                        </span>
+                        <span class="text-xs font-medium text-muted">Notify</span>
                         <select
                           value={level.notify}
                           onChange={(e) => {
@@ -3275,7 +3404,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                     <button
                       type="button"
                       onClick={() => {
-                        const newLevels = escalation().levels.filter((_: EscalationLevel, i: number) => i !== index());
+                        const newLevels = escalation().levels.filter(
+                          (_: EscalationLevel, i: number) => i !== index(),
+                        );
                         setEscalation({ ...escalation(), levels: newLevels });
                         props.setHasUnsavedChanges(true);
                       }}
@@ -3437,10 +3568,11 @@ export function IncidentEventFilters(props: {
           return (
             <button
               type="button"
-              class={`px-2 py-0.5 rounded border text-[10px] ${selected()
-                ? 'border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300'
-                : 'border-border text-slate-500'
-                }`}
+              class={`px-2 py-0.5 rounded border text-[10px] ${
+                selected()
+                  ? 'border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300'
+                  : 'border-border text-slate-500'
+              }`}
               onClick={() => toggleFilter(type)}
             >
               {INCIDENT_EVENT_LABELS[type]}
@@ -3466,7 +3598,8 @@ function HistoryTab(props: {
     'alertHistoryTimeFilter',
     '7d',
     {
-      deserialize: (raw) => (raw === '24h' || raw === '7d' || raw === '30d' || raw === 'all' ? raw : '7d'),
+      deserialize: (raw) =>
+        raw === '24h' || raw === '7d' || raw === '30d' || raw === 'all' ? raw : '7d',
     },
   );
   const [severityFilter, setSeverityFilter] = usePersistentSignal<'all' | 'warning' | 'critical'>(
@@ -3480,17 +3613,26 @@ function HistoryTab(props: {
   const [alertHistory, setAlertHistory] = createSignal<Alert[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [selectedBarIndex, setSelectedBarIndex] = createSignal<number | null>(null);
-  const [resourceIncidentPanel, setResourceIncidentPanel] = createSignal<{ resourceId: string; resourceName: string } | null>(null);
+  const [resourceIncidentPanel, setResourceIncidentPanel] = createSignal<{
+    resourceId: string;
+    resourceName: string;
+  } | null>(null);
   const [resourceIncidents, setResourceIncidents] = createSignal<Record<string, Incident[]>>({});
-  const [resourceIncidentLoading, setResourceIncidentLoading] = createSignal<Record<string, boolean>>({});
-  const [expandedResourceIncidentIds, setExpandedResourceIncidentIds] = createSignal<Set<string>>(new Set());
+  const [resourceIncidentLoading, setResourceIncidentLoading] = createSignal<
+    Record<string, boolean>
+  >({});
+  const [expandedResourceIncidentIds, setExpandedResourceIncidentIds] = createSignal<Set<string>>(
+    new Set(),
+  );
   const [historyIncidentEventFilters, setHistoryIncidentEventFilters] = createSignal<Set<string>>(
     new Set(INCIDENT_EVENT_TYPES),
   );
   const [resourceIncidentEventFilters, setResourceIncidentEventFilters] = createSignal<Set<string>>(
     new Set(INCIDENT_EVENT_TYPES),
   );
-  const [incidentTimelines, setIncidentTimelines] = createSignal<Record<string, Incident | null>>({});
+  const [incidentTimelines, setIncidentTimelines] = createSignal<Record<string, Incident | null>>(
+    {},
+  );
   const [incidentLoading, setIncidentLoading] = createSignal<Record<string, boolean>>({});
   const [expandedIncidents, setExpandedIncidents] = createSignal<Set<string>>(new Set());
   const [incidentNoteDrafts, setIncidentNoteDrafts] = createSignal<Record<string, string>>({});
@@ -3761,9 +3903,7 @@ function HistoryTab(props: {
   ) => {
     // 1. Canonical path: metadata.resourceType (set by checkMetric on the backend)
     const metadataType =
-      typeof metadata?.resourceType === 'string'
-        ? (metadata.resourceType as string)
-        : undefined;
+      typeof metadata?.resourceType === 'string' ? (metadata.resourceType as string) : undefined;
     if (metadataType && metadataType.trim().length > 0) {
       return metadataType;
     }
@@ -3778,9 +3918,7 @@ function HistoryTab(props: {
 
     // 3. Unified resource lookup by name (for old historical alerts without resourceId)
     const resources = props.allResources();
-    const byName = resources.find(
-      (r) => r.name === resourceName || r.displayName === resourceName,
-    );
+    const byName = resources.find((r) => r.name === resourceName || r.displayName === resourceName);
     if (byName) {
       return unifiedTypeToAlertDisplayType(byName.type);
     }
@@ -3890,7 +4028,10 @@ function HistoryTab(props: {
         const description = item.description?.toLowerCase() ?? '';
         const nodeName = item.node?.toLowerCase() ?? '';
         return (
-          name.includes(term) || title.includes(term) || description.includes(term) || nodeName.includes(term)
+          name.includes(term) ||
+          title.includes(term) ||
+          description.includes(term) ||
+          nodeName.includes(term)
         );
       });
     }
@@ -4004,11 +4145,7 @@ function HistoryTab(props: {
 
     alertData().forEach((alert) => {
       const alertDate = new Date(alert.startTime);
-      const dateOnly = new Date(
-        alertDate.getFullYear(),
-        alertDate.getMonth(),
-        alertDate.getDate(),
-      );
+      const dateOnly = new Date(alertDate.getFullYear(), alertDate.getMonth(), alertDate.getDate());
       const dateKey = dateOnly.getTime();
 
       if (!groups.has(dateKey)) {
@@ -4068,8 +4205,7 @@ function HistoryTab(props: {
         }, now);
         const rawRangeHours = Math.max(1, Math.ceil((now - earliest) / msPerHour));
         const rawBucketSize = Math.max(1, Math.ceil(rawRangeHours / maxBuckets));
-        bucketSizeHours =
-          niceBucketSizes.find((size) => size >= rawBucketSize) ?? rawBucketSize;
+        bucketSizeHours = niceBucketSizes.find((size) => size >= rawBucketSize) ?? rawBucketSize;
         computedRangeHours = Math.max(rawRangeHours, bucketSizeHours);
         const bucketsNeeded = Math.min(
           Math.max(1, Math.ceil(computedRangeHours / bucketSizeHours)),
@@ -4249,18 +4385,12 @@ function HistoryTab(props: {
     const end = start + totalDurationMs;
 
     const desiredTicks = Math.min(5, trends.bucketTimes.length + 1);
-    const step = Math.max(
-      1,
-      Math.round(trends.bucketTimes.length / Math.max(1, desiredTicks - 1)),
-    );
+    const step = Math.max(1, Math.round(trends.bucketTimes.length / Math.max(1, desiredTicks - 1)));
     const ticks: Array<{ position: number; label: string }> = [];
 
     for (let index = 0; index < trends.bucketTimes.length; index += step) {
       const ts = trends.bucketTimes[index];
-      const position = Math.min(
-        1,
-        Math.max(0, (ts - start) / (totalDurationMs || 1)),
-      );
+      const position = Math.min(1, Math.max(0, (ts - start) / (totalDurationMs || 1)));
       ticks.push({
         position,
         label: formatAxisTickLabel(ts, bucketHours, totalHours),
@@ -4319,11 +4449,7 @@ function HistoryTab(props: {
         <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
           <SectionHeader
             title="Alert frequency"
-            description={
-              <span class="text-xs text-muted">
-                {alertData().length} alerts
-              </span>
-            }
+            description={<span class="text-xs text-muted">{alertData().length} alerts</span>}
             size="sm"
             class="flex-1"
           />
@@ -4340,8 +4466,7 @@ function HistoryTab(props: {
             </Show>
             <div class="flex flex-col items-start gap-1 text-xs text-muted sm:items-end">
               <div>
-                <span class="font-medium text-muted">Bar size:</span>{' '}
-                {bucketDurationLabel()}
+                <span class="font-medium text-muted">Bar size:</span> {bucketDurationLabel()}
               </div>
               <Show when={rangeSummary()}>
                 {(summary) => (
@@ -4393,8 +4518,7 @@ function HistoryTab(props: {
                 {trends.buckets.map((val, i) => {
                   const scaledHeight =
                     val > 0 ? Math.min(100, Math.max(20, Math.log(val + 1) * 20)) : 0;
-                  const pixelHeight =
-                    val > 0 ? Math.max(8, (scaledHeight / 100) * 40) : 0; // 40px is roughly the inner height
+                  const pixelHeight = val > 0 ? Math.max(8, (scaledHeight / 100) * 40) : 0; // 40px is roughly the inner height
                   const isSelected = selectedBarIndex() === i;
                   const bucketStart = trends.bucketTimes[i];
                   const bucketEnd = bucketStart + trends.bucketSize * MS_PER_HOUR;
@@ -4405,7 +4529,11 @@ function HistoryTab(props: {
                       : `${trends.bucketSize} hour${trends.bucketSize === 1 ? '' : 's'}`;
                   const countLabel =
                     val === 0 ? 'No alerts' : `${val} alert${val === 1 ? '' : 's'}`;
-                  const tooltipContent = [countLabel, `${bucketDurationText} period`, bucketRangeLabel].join('\n');
+                  const tooltipContent = [
+                    countLabel,
+                    `${bucketDurationText} period`,
+                    bucketRangeLabel,
+                  ].join('\n');
                   return (
                     <div
                       class="flex-1 relative flex items-end cursor-pointer"
@@ -4512,11 +4640,18 @@ function HistoryTab(props: {
           <Show when={!isMobile() || filtersOpen()}>
             <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
               <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                <label for="alert-time-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Period</label>
+                <label
+                  for="alert-time-filter"
+                  class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
+                >
+                  Period
+                </label>
                 <select
                   id="alert-time-filter"
                   value={timeFilter()}
-                  onChange={(e) => setTimeFilter(e.currentTarget.value as '24h' | '7d' | '30d' | 'all')}
+                  onChange={(e) =>
+                    setTimeFilter(e.currentTarget.value as '24h' | '7d' | '30d' | 'all')
+                  }
                   class="rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="24h">Last 24h</option>
@@ -4526,11 +4661,18 @@ function HistoryTab(props: {
                 </select>
               </div>
               <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                <label for="alert-severity-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Severity</label>
+                <label
+                  for="alert-severity-filter"
+                  class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
+                >
+                  Severity
+                </label>
                 <select
                   id="alert-severity-filter"
                   value={severityFilter()}
-                  onChange={(e) => setSeverityFilter(e.currentTarget.value as 'warning' | 'critical' | 'all')}
+                  onChange={(e) =>
+                    setSeverityFilter(e.currentTarget.value as 'warning' | 'critical' | 'all')
+                  }
                   class="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="all">All</option>
@@ -4556,7 +4698,10 @@ function HistoryTab(props: {
                   <p class="text-xs text-muted">
                     {selection().resourceName}
                     <Show when={incidents().length > 0}>
-                      <span> · {incidents().length} incident{incidents().length === 1 ? '' : 's'}</span>
+                      <span>
+                        {' '}
+                        · {incidents().length} incident{incidents().length === 1 ? '' : 's'}
+                      </span>
                     </Show>
                   </p>
                 </div>
@@ -4619,11 +4764,18 @@ function HistoryTab(props: {
                             : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300';
                         const isExpanded = expandedResourceIncidentIds().has(incident.id);
                         const events = incident.events || [];
-                        const filteredEvents = filterIncidentEvents(events, resourceIncidentEventFilters());
+                        const filteredEvents = filterIncidentEvents(
+                          events,
+                          resourceIncidentEventFilters(),
+                        );
                         const recentEvents =
-                          filteredEvents.length > 6 ? filteredEvents.slice(filteredEvents.length - 6) : filteredEvents;
+                          filteredEvents.length > 6
+                            ? filteredEvents.slice(filteredEvents.length - 6)
+                            : filteredEvents;
                         const lastEvent =
-                          filteredEvents.length > 0 ? filteredEvents[filteredEvents.length - 1] : undefined;
+                          filteredEvents.length > 0
+                            ? filteredEvents[filteredEvents.length - 1]
+                            : undefined;
                         const filteredLabel =
                           filteredEvents.length !== events.length
                             ? `${filteredEvents.length}/${events.length}`
@@ -4634,17 +4786,21 @@ function HistoryTab(props: {
                               <span class="font-medium text-base-content">
                                 {incident.alertType}
                               </span>
-                              <span class={`px-2 py-0.5 rounded ${levelClasses}`}>{incident.level}</span>
-                              <span class={`px-2 py-0.5 rounded ${statusClasses}`}>{statusLabel}</span>
+                              <span class={`px-2 py-0.5 rounded ${levelClasses}`}>
+                                {incident.level}
+                              </span>
+                              <span class={`px-2 py-0.5 rounded ${statusClasses}`}>
+                                {statusLabel}
+                              </span>
                               <span>opened {new Date(incident.openedAt).toLocaleString()}</span>
                               <Show when={incident.closedAt}>
-                                <span>closed {new Date(incident.closedAt as string).toLocaleString()}</span>
+                                <span>
+                                  closed {new Date(incident.closedAt as string).toLocaleString()}
+                                </span>
                               </Show>
                             </div>
                             <Show when={incident.message}>
-                              <p class="mt-1 text-xs text-muted">
-                                {incident.message}
-                              </p>
+                              <p class="mt-1 text-xs text-muted">{incident.message}</p>
                             </Show>
                             <Show when={incident.acknowledged && incident.ackUser}>
                               <p class="mt-1 text-xs text-muted">
@@ -4689,19 +4845,38 @@ function HistoryTab(props: {
                                           </span>
                                           <span>{new Date(event.timestamp).toLocaleString()}</span>
                                         </div>
-                                        <Show when={event.details && (event.details as { note?: string }).note}>
+                                        <Show
+                                          when={
+                                            event.details &&
+                                            (event.details as { note?: string }).note
+                                          }
+                                        >
                                           <p class="text-xs text-base-content mt-1">
                                             {(event.details as { note?: string }).note}
                                           </p>
                                         </Show>
-                                        <Show when={event.details && (event.details as { command?: string }).command}>
+                                        <Show
+                                          when={
+                                            event.details &&
+                                            (event.details as { command?: string }).command
+                                          }
+                                        >
                                           <p class="text-xs text-base-content mt-1 font-mono">
                                             {(event.details as { command?: string }).command}
                                           </p>
                                         </Show>
-                                        <Show when={event.details && (event.details as { output_excerpt?: string }).output_excerpt}>
+                                        <Show
+                                          when={
+                                            event.details &&
+                                            (event.details as { output_excerpt?: string })
+                                              .output_excerpt
+                                          }
+                                        >
                                           <p class="text-xs text-muted mt-1">
-                                            {(event.details as { output_excerpt?: string }).output_excerpt}
+                                            {
+                                              (event.details as { output_excerpt?: string })
+                                                .output_excerpt
+                                            }
                                           </p>
                                         </Show>
                                       </div>
@@ -4794,12 +4969,25 @@ function HistoryTab(props: {
                                 </span>
                                 <span class="text-[10px] font-medium text-muted">
                                   {(() => {
-                                    const alertCount = group.alerts.filter(a => a.source === 'alert').length;
-                                    const aiCount = group.alerts.filter(a => a.source === 'ai').length;
+                                    const alertCount = group.alerts.filter(
+                                      (a) => a.source === 'alert',
+                                    ).length;
+                                    const aiCount = group.alerts.filter(
+                                      (a) => a.source === 'ai',
+                                    ).length;
                                     const parts = [];
-                                    if (alertCount > 0) parts.push(`${alertCount} alert${alertCount === 1 ? '' : 's'}`);
-                                    if (aiCount > 0) parts.push(`${aiCount} patrol insight${aiCount === 1 ? '' : 's'}`);
-                                    return parts.join(', ') || `${group.alerts.length} item${group.alerts.length === 1 ? '' : 's'}`;
+                                    if (alertCount > 0)
+                                      parts.push(
+                                        `${alertCount} alert${alertCount === 1 ? '' : 's'}`,
+                                      );
+                                    if (aiCount > 0)
+                                      parts.push(
+                                        `${aiCount} patrol insight${aiCount === 1 ? '' : 's'}`,
+                                      );
+                                    return (
+                                      parts.join(', ') ||
+                                      `${group.alerts.length} item${group.alerts.length === 1 ? '' : 's'}`
+                                    );
                                   })()}
                                 </span>
                               </div>
@@ -4813,8 +5001,9 @@ function HistoryTab(props: {
                               return (
                                 <>
                                   <TableRow
-                                    class={`border-b border-border hover:bg-surface-hover ${alert.status === 'active' ? 'bg-red-50 dark:bg-red-900' : ''
-                                      }`}
+                                    class={`border-b border-border hover:bg-surface-hover ${
+                                      alert.status === 'active' ? 'bg-red-50 dark:bg-red-900' : ''
+                                    }`}
                                   >
                                     {/* Timestamp */}
                                     <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-muted font-mono whitespace-nowrap">
@@ -4827,10 +5016,11 @@ function HistoryTab(props: {
                                     {/* Source */}
                                     <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
                                       <span
-                                        class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${alert.source === 'ai'
-                                          ? 'bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300'
-                                          : 'bg-sky-100 dark:bg-sky-900 text-sky-700 dark:text-sky-300'
-                                          }`}
+                                        class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                                          alert.source === 'ai'
+                                            ? 'bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300'
+                                            : 'bg-sky-100 dark:bg-sky-900 text-sky-700 dark:text-sky-300'
+                                        }`}
                                       >
                                         {alert.source === 'ai' ? 'Patrol' : 'Alert'}
                                       </span>
@@ -4844,16 +5034,17 @@ function HistoryTab(props: {
                                     {/* Type */}
                                     <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2">
                                       <span
-                                        class={`text-xs px-1 py-0.5 rounded ${alert.resourceType === 'VM'
-                                          ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-                                          : alert.resourceType === 'CT'
-                                            ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
-                                            : alert.resourceType === 'Node'
-                                              ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-                                              : alert.resourceType === 'Storage'
-                                                ? 'bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300'
-                                                : 'bg-surface-hover text-base-content'
-                                          }`}
+                                        class={`text-xs px-1 py-0.5 rounded ${
+                                          alert.resourceType === 'VM'
+                                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                                            : alert.resourceType === 'CT'
+                                              ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
+                                              : alert.resourceType === 'Node'
+                                                ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                                                : alert.resourceType === 'Storage'
+                                                  ? 'bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300'
+                                                  : 'bg-surface-hover text-base-content'
+                                        }`}
                                       >
                                         {alert.type}
                                       </span>
@@ -4862,10 +5053,11 @@ function HistoryTab(props: {
                                     {/* Severity */}
                                     <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
                                       <span
-                                        class={`text-xs px-2 py-0.5 rounded font-medium ${alert.level === 'critical'
-                                          ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
-                                          : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
-                                          }`}
+                                        class={`text-xs px-2 py-0.5 rounded font-medium ${
+                                          alert.level === 'critical'
+                                            ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
+                                            : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
+                                        }`}
                                       >
                                         {alert.level}
                                       </span>
@@ -4887,12 +5079,13 @@ function HistoryTab(props: {
                                     {/* Status */}
                                     <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
                                       <span
-                                        class={`text-xs px-2 py-0.5 rounded ${alert.status === 'active'
-                                          ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 font-medium'
-                                          : alert.status === 'acknowledged'
-                                            ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
-                                            : 'bg-surface-hover text-base-content'
-                                          }`}
+                                        class={`text-xs px-2 py-0.5 rounded ${
+                                          alert.status === 'active'
+                                            ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 font-medium'
+                                            : alert.status === 'acknowledged'
+                                              ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
+                                              : 'bg-surface-hover text-base-content'
+                                        }`}
                                       >
                                         {alert.status}
                                       </span>
@@ -4911,7 +5104,11 @@ function HistoryTab(props: {
                                             type="button"
                                             class="px-2 py-1 text-[10px] border rounded-md border-border text-muted hover:bg-surface-hover"
                                             onClick={() => {
-                                              void toggleIncidentTimeline(rowKey, alert.id, alert.startTime);
+                                              void toggleIncidentTimeline(
+                                                rowKey,
+                                                alert.id,
+                                                alert.startTime,
+                                              );
                                             }}
                                           >
                                             {expandedIncidents().has(rowKey) ? 'Hide' : 'Timeline'}
@@ -4923,13 +5120,22 @@ function HistoryTab(props: {
                                             class="px-2 py-1 text-[10px] border rounded-md border-border text-muted hover:bg-surface-hover"
                                             title="View incidents for this resource"
                                             onClick={() => {
-                                              void openResourceIncidentPanel(alert.resourceId as string, alert.resourceName);
+                                              void openResourceIncidentPanel(
+                                                alert.resourceId as string,
+                                                alert.resourceName,
+                                              );
                                             }}
                                           >
                                             Resource
                                           </button>
                                         </Show>
-                                        <Show when={alert.source === 'alert' && (alert.status === 'active' || alert.status === 'acknowledged')}>
+                                        <Show
+                                          when={
+                                            alert.source === 'alert' &&
+                                            (alert.status === 'active' ||
+                                              alert.status === 'acknowledged')
+                                          }
+                                        >
                                           <InvestigateAlertButton
                                             alert={{
                                               id: alert.id,
@@ -4949,13 +5155,19 @@ function HistoryTab(props: {
                                             }}
                                             variant="icon"
                                             size="sm"
-                                            licenseLocked={!props.hasAIAlertsFeature() && !props.licenseLoading()}
+                                            licenseLocked={
+                                              !props.hasAIAlertsFeature() && !props.licenseLoading()
+                                            }
                                           />
                                         </Show>
                                       </div>
                                     </TableCell>
                                   </TableRow>
-                                  <Show when={alert.source === 'alert' && expandedIncidents().has(rowKey)}>
+                                  <Show
+                                    when={
+                                      alert.source === 'alert' && expandedIncidents().has(rowKey)
+                                    }
+                                  >
                                     <TableRow class="bg-surface-alt border-b border-border">
                                       <TableCell colspan={11} class="p-3">
                                         <Show when={incidentLoading()[rowKey]}>
@@ -4966,7 +5178,9 @@ function HistoryTab(props: {
                                             {(timeline) => (
                                               <div class="space-y-3">
                                                 <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
-                                                  <span class="font-medium text-base-content">Incident</span>
+                                                  <span class="font-medium text-base-content">
+                                                    Incident
+                                                  </span>
                                                   <span>{timeline().status}</span>
                                                   <Show when={timeline().acknowledged}>
                                                     <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
@@ -4974,21 +5188,36 @@ function HistoryTab(props: {
                                                     </span>
                                                   </Show>
                                                   <Show when={timeline().openedAt}>
-                                                    <span>opened {new Date(timeline().openedAt).toLocaleString()}</span>
+                                                    <span>
+                                                      opened{' '}
+                                                      {new Date(
+                                                        timeline().openedAt,
+                                                      ).toLocaleString()}
+                                                    </span>
                                                   </Show>
                                                   <Show when={timeline().closedAt}>
-                                                    <span>closed {new Date(timeline().closedAt as string).toLocaleString()}</span>
+                                                    <span>
+                                                      closed{' '}
+                                                      {new Date(
+                                                        timeline().closedAt as string,
+                                                      ).toLocaleString()}
+                                                    </span>
                                                   </Show>
                                                 </div>
                                                 {(() => {
                                                   const events = timeline().events || [];
-                                                  const filteredEvents = filterIncidentEvents(events, historyIncidentEventFilters());
+                                                  const filteredEvents = filterIncidentEvents(
+                                                    events,
+                                                    historyIncidentEventFilters(),
+                                                  );
                                                   return (
                                                     <>
                                                       <Show when={events.length > 0}>
                                                         <IncidentEventFilters
                                                           filters={historyIncidentEventFilters}
-                                                          setFilters={setHistoryIncidentEventFilters}
+                                                          setFilters={
+                                                            setHistoryIncidentEventFilters
+                                                          }
                                                         />
                                                       </Show>
                                                       <Show when={filteredEvents.length > 0}>
@@ -5000,21 +5229,70 @@ function HistoryTab(props: {
                                                                   <span class="font-medium text-base-content">
                                                                     {event.summary}
                                                                   </span>
-                                                                  <span>{new Date(event.timestamp).toLocaleString()}</span>
+                                                                  <span>
+                                                                    {new Date(
+                                                                      event.timestamp,
+                                                                    ).toLocaleString()}
+                                                                  </span>
                                                                 </div>
-                                                                <Show when={event.details && (event.details as { note?: string }).note}>
+                                                                <Show
+                                                                  when={
+                                                                    event.details &&
+                                                                    (
+                                                                      event.details as {
+                                                                        note?: string;
+                                                                      }
+                                                                    ).note
+                                                                  }
+                                                                >
                                                                   <p class="text-xs text-base-content mt-1">
-                                                                    {(event.details as { note?: string }).note}
+                                                                    {
+                                                                      (
+                                                                        event.details as {
+                                                                          note?: string;
+                                                                        }
+                                                                      ).note
+                                                                    }
                                                                   </p>
                                                                 </Show>
-                                                                <Show when={event.details && (event.details as { command?: string }).command}>
+                                                                <Show
+                                                                  when={
+                                                                    event.details &&
+                                                                    (
+                                                                      event.details as {
+                                                                        command?: string;
+                                                                      }
+                                                                    ).command
+                                                                  }
+                                                                >
                                                                   <p class="text-xs text-base-content mt-1 font-mono">
-                                                                    {(event.details as { command?: string }).command}
+                                                                    {
+                                                                      (
+                                                                        event.details as {
+                                                                          command?: string;
+                                                                        }
+                                                                      ).command
+                                                                    }
                                                                   </p>
                                                                 </Show>
-                                                                <Show when={event.details && (event.details as { output_excerpt?: string }).output_excerpt}>
+                                                                <Show
+                                                                  when={
+                                                                    event.details &&
+                                                                    (
+                                                                      event.details as {
+                                                                        output_excerpt?: string;
+                                                                      }
+                                                                    ).output_excerpt
+                                                                  }
+                                                                >
                                                                   <p class="text-xs text-muted mt-1">
-                                                                    {(event.details as { output_excerpt?: string }).output_excerpt}
+                                                                    {
+                                                                      (
+                                                                        event.details as {
+                                                                          output_excerpt?: string;
+                                                                        }
+                                                                      ).output_excerpt
+                                                                    }
                                                                   </p>
                                                                 </Show>
                                                               </div>
@@ -5022,13 +5300,21 @@ function HistoryTab(props: {
                                                           </For>
                                                         </div>
                                                       </Show>
-                                                      <Show when={events.length > 0 && filteredEvents.length === 0}>
+                                                      <Show
+                                                        when={
+                                                          events.length > 0 &&
+                                                          filteredEvents.length === 0
+                                                        }
+                                                      >
                                                         <p class="text-xs text-muted">
-                                                          No timeline events match the selected filters.
+                                                          No timeline events match the selected
+                                                          filters.
                                                         </p>
                                                       </Show>
                                                       <Show when={events.length === 0}>
-                                                        <p class="text-xs text-muted">No timeline events yet.</p>
+                                                        <p class="text-xs text-muted">
+                                                          No timeline events yet.
+                                                        </p>
                                                       </Show>
                                                     </>
                                                   );
@@ -5041,18 +5327,30 @@ function HistoryTab(props: {
                                                     value={incidentNoteDrafts()[rowKey] || ''}
                                                     onInput={(e) => {
                                                       const value = e.currentTarget.value;
-                                                      setIncidentNoteDrafts((prev) => ({ ...prev, [rowKey]: value }));
+                                                      setIncidentNoteDrafts((prev) => ({
+                                                        ...prev,
+                                                        [rowKey]: value,
+                                                      }));
                                                     }}
                                                   />
                                                   <div class="flex justify-end">
                                                     <button
                                                       class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
-                                                      disabled={incidentNoteSaving().has(rowKey) || !(incidentNoteDrafts()[rowKey] || '').trim()}
+                                                      disabled={
+                                                        incidentNoteSaving().has(rowKey) ||
+                                                        !(incidentNoteDrafts()[rowKey] || '').trim()
+                                                      }
                                                       onClick={() => {
-                                                        void saveIncidentNote(rowKey, alert.id, alert.startTime);
+                                                        void saveIncidentNote(
+                                                          rowKey,
+                                                          alert.id,
+                                                          alert.startTime,
+                                                        );
                                                       }}
                                                     >
-                                                      {incidentNoteSaving().has(rowKey) ? 'Saving...' : 'Save Note'}
+                                                      {incidentNoteSaving().has(rowKey)
+                                                        ? 'Saving...'
+                                                        : 'Save Note'}
                                                     </button>
                                                   </div>
                                                 </div>
@@ -5060,7 +5358,9 @@ function HistoryTab(props: {
                                             )}
                                           </Show>
                                           <Show when={!incidentTimelines()[rowKey]}>
-                                            <p class="text-xs text-muted">No incident timeline available.</p>
+                                            <p class="text-xs text-muted">
+                                              No incident timeline available.
+                                            </p>
                                           </Show>
                                         </Show>
                                       </TableCell>
@@ -5091,9 +5391,7 @@ function HistoryTab(props: {
           <div class="bg-surface-alt rounded-md p-4">
             <div class="flex items-start justify-between">
               <div>
-                <h4 class="text-sm font-medium text-base-content mb-1">
-                  Administrative Actions
-                </h4>
+                <h4 class="text-sm font-medium text-base-content mb-1">Administrative Actions</h4>
                 <p class="text-xs text-muted">
                   Permanently clear all alert history. Use with caution - this action cannot be
                   undone.

@@ -28,17 +28,33 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
 
   // Find the pending approval for this finding from the store
   const pendingApproval = createMemo(() => {
-    return aiIntelligenceStore.pendingApprovals.find(
-      (a: ApprovalRequest) => a.toolId === 'investigation_fix' && a.targetId === props.findingId && a.status === 'pending'
-    ) ?? null;
+    return (
+      aiIntelligenceStore.pendingApprovals.find(
+        (a: ApprovalRequest) =>
+          a.toolId === 'investigation_fix' &&
+          a.targetId === props.findingId &&
+          a.status === 'pending',
+      ) ?? null
+    );
   });
 
   const canAutoFix = createMemo(() => hasFeature('ai_autofix'));
 
-  const handleFixWithAssistant = (approval: ApprovalRequest | null, fix: { description?: string; commands?: string[]; target_host?: string; risk_level?: string; rationale?: string } | null, e: Event) => {
+  const handleFixWithAssistant = (
+    approval: ApprovalRequest | null,
+    fix: {
+      description?: string;
+      commands?: string[];
+      target_host?: string;
+      risk_level?: string;
+      rationale?: string;
+    } | null,
+    e: Event,
+  ) => {
     e.stopPropagation();
     const desc = approval?.context || fix?.description || 'No description available';
-    const command = approval?.command || (fix?.commands && fix.commands.length > 0 ? fix.commands[0] : undefined);
+    const command =
+      approval?.command || (fix?.commands && fix.commands.length > 0 ? fix.commands[0] : undefined);
     const targetHost = approval?.targetName || fix?.target_host;
     const riskLevel = approval?.riskLevel || fix?.risk_level || 'unknown';
     const rationale = fix?.rationale;
@@ -58,7 +74,14 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   };
 
   // Load investigation details when outcome indicates a fix was proposed/executed
-  const fixRelatedOutcomes = new Set(['fix_queued', 'fix_executed', 'fix_failed', 'fix_verified', 'fix_verification_failed', 'fix_verification_unknown']);
+  const fixRelatedOutcomes = new Set([
+    'fix_queued',
+    'fix_executed',
+    'fix_failed',
+    'fix_verified',
+    'fix_verification_failed',
+    'fix_verification_unknown',
+  ]);
   const [investigation] = createResource(
     () => ({ findingId: props.findingId, outcome: props.investigationOutcome }),
     async ({ findingId, outcome }) => {
@@ -70,41 +93,50 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
       } catch {
         return null;
       }
-    }
+    },
   );
 
   // Determine state
-  const isExpired = createMemo(() =>
-    !pendingApproval() &&
-    props.investigationOutcome === 'fix_queued' &&
-    investigation()?.proposed_fix
+  const isExpired = createMemo(
+    () =>
+      !pendingApproval() &&
+      props.investigationOutcome === 'fix_queued' &&
+      investigation()?.proposed_fix,
   );
 
-  const isVerificationUnknown = createMemo(() =>
-    props.investigationOutcome === 'fix_verification_unknown'
+  const isVerificationUnknown = createMemo(
+    () => props.investigationOutcome === 'fix_verification_unknown',
   );
 
-  const isExecuted = createMemo(() =>
-    props.investigationOutcome === 'fix_executed' ||
-    props.investigationOutcome === 'fix_verified' ||
-    props.investigationOutcome === 'fix_verification_unknown' ||
-    executionResult()?.success
+  const isExecuted = createMemo(
+    () =>
+      props.investigationOutcome === 'fix_executed' ||
+      props.investigationOutcome === 'fix_verified' ||
+      props.investigationOutcome === 'fix_verification_unknown' ||
+      executionResult()?.success,
   );
 
-  const isFailed = createMemo(() =>
-    props.investigationOutcome === 'fix_failed' || props.investigationOutcome === 'fix_verification_failed' || (executionResult() && !executionResult()!.success)
+  const isFailed = createMemo(
+    () =>
+      props.investigationOutcome === 'fix_failed' ||
+      props.investigationOutcome === 'fix_verification_failed' ||
+      (executionResult() && !executionResult()!.success),
   );
 
   // Show section only when there's something to display
-  const shouldShow = createMemo(() =>
-    pendingApproval() || isExpired() || isExecuted() || isFailed() || executionResult()
+  const shouldShow = createMemo(
+    () => pendingApproval() || isExpired() || isExecuted() || isFailed() || executionResult(),
   );
 
   const riskBadgeColor = (level?: string) => {
     switch (level) {
-      case 'high': case 'critical': return 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300';
-      case 'medium': return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300';
-      default: return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
+      case 'high':
+      case 'critical':
+        return 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300';
+      case 'medium':
+        return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300';
+      default:
+        return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
     }
   };
 
@@ -176,11 +208,23 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
             return (
               <>
                 <div class="flex items-center gap-2 mb-2">
-                  <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  <svg
+                    class="w-4 h-4 text-green-600 dark:text-green-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M13 10V3L4 14h7v7l9-11h-7z"
+                    />
                   </svg>
                   <span class="text-sm font-medium text-base-content">Fix Available</span>
-                  <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${riskBadgeColor(approval.riskLevel)}`}>
+                  <span
+                    class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${riskBadgeColor(approval.riskLevel)}`}
+                  >
                     {approval.riskLevel} risk
                   </span>
                 </div>
@@ -202,8 +246,18 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                         <span class="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       </Show>
                       <Show when={actionLoading() !== approval.id}>
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        <svg
+                          class="w-3.5 h-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M5 13l4 4L19 7"
+                          />
                         </svg>
                       </Show>
                       Approve & Execute
@@ -223,8 +277,18 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                       onClick={(e) => handleFixWithAssistant(approval, null, e)}
                       class="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
                     >
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      <svg
+                        class="w-3.5 h-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                        />
                       </svg>
                       Fix with Assistant
                     </button>
@@ -242,11 +306,23 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
             return (
               <>
                 <div class="flex items-center gap-2 mb-2">
-                  <svg class="w-4 h-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  <svg
+                    class="w-4 h-4 text-amber-600 dark:text-amber-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
                   </svg>
                   <span class="text-sm font-medium text-base-content">Fix Pending Approval</span>
-                  <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${riskBadgeColor(fix.risk_level)}`}>
+                  <span
+                    class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${riskBadgeColor(fix.risk_level)}`}
+                  >
                     {fix.risk_level || 'unknown'} risk
                   </span>
                   <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
@@ -276,8 +352,18 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                         <span class="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       </Show>
                       <Show when={actionLoading() !== 'reapprove'}>
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        <svg
+                          class="w-3.5 h-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M5 13l4 4L19 7"
+                          />
                         </svg>
                       </Show>
                       Re-approve & Execute
@@ -289,8 +375,18 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                       onClick={(e) => handleFixWithAssistant(null, fix, e)}
                       class="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
                     >
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      <svg
+                        class="w-3.5 h-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                        />
                       </svg>
                       Fix with Assistant
                     </button>
@@ -308,9 +404,16 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
 
         {/* Executed (from backend state, no local result) */}
         <Show when={isExecuted() && !executionResult()}>
-          <div class={`flex items-center gap-2 ${isVerificationUnknown() ? 'text-amber-700 dark:text-amber-300' : 'text-green-600 dark:text-green-400'}`}>
+          <div
+            class={`flex items-center gap-2 ${isVerificationUnknown() ? 'text-amber-700 dark:text-amber-300' : 'text-green-600 dark:text-green-400'}`}
+          >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
             </svg>
             <span class="text-sm font-medium">
               {props.investigationOutcome === 'fix_verified'
@@ -344,9 +447,18 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
         <Show when={isFailed() && !executionResult()}>
           <div class="flex items-center gap-2 text-red-600 dark:text-red-400">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
             </svg>
-            <span class="text-sm font-medium">{props.investigationOutcome === 'fix_verification_failed' ? 'Fix executed but issue persists' : 'Fix execution failed'}</span>
+            <span class="text-sm font-medium">
+              {props.investigationOutcome === 'fix_verification_failed'
+                ? 'Fix executed but issue persists'
+                : 'Fix execution failed'}
+            </span>
           </div>
           <Show when={investigation()?.proposed_fix}>
             {(fix) => (

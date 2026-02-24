@@ -5,7 +5,7 @@ import {
   pathForTab,
   tabFromPath,
   clampCooldownMinutes,
-  fallbackCooldownMinutes
+  fallbackCooldownMinutes,
 } from '@/features/alerts/types';
 import {
   clampMaxAlertsPerHour,

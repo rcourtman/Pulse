@@ -17,4 +17,6 @@ export type WorkloadGuest = (VM | Container) & {
   updateStatus?: DockerContainerUpdateStatus;
   // Docker host ID — needed for update button (= resource.docker.hostSourceId)
   dockerHostId?: string;
+  // Kubernetes agent ID (when available) — preferred for actionable operations.
+  kubernetesAgentId?: string;
 };

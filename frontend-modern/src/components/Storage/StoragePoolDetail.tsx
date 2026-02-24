@@ -30,8 +30,10 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
   const usagePercent = createMemo(() => getRecordUsagePercent(props.record));
   const totalBytes = createMemo(() => props.record.capacity.totalBytes || 0);
   const usedBytes = createMemo(() => props.record.capacity.usedBytes || 0);
-  const freeBytes = createMemo(() =>
-    props.record.capacity.freeBytes ?? (totalBytes() > 0 ? Math.max(totalBytes() - usedBytes(), 0) : 0),
+  const freeBytes = createMemo(
+    () =>
+      props.record.capacity.freeBytes ??
+      (totalBytes() > 0 ? Math.max(totalBytes() - usedBytes(), 0) : 0),
   );
 
   // Match physical disks to ZFS pool devices
@@ -39,30 +41,34 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
     const pool = zfsPool();
     if (!pool || !pool.devices?.length) return [];
     return props.physicalDisks.filter((disk) => {
-      const pd = (disk.platformData as Record<string, unknown>)?.physicalDisk as Record<string, unknown> | undefined;
+      const pd = (disk.platformData as Record<string, unknown>)?.physicalDisk as
+        | Record<string, unknown>
+        | undefined;
       const devPath = (pd?.devPath as string) || '';
- return pool.devices.some((d) => devPath.endsWith(d.name));
- });
- });
+      return pool.devices.some((d) => devPath.endsWith(d.name));
+    });
+  });
 
- // Build resource ID for history chart
- const chartResourceId = createMemo(() => {
- return props.record.refs?.resourceId || props.record.id;
- });
+  // Build resource ID for history chart
+  const chartResourceId = createMemo(() => {
+    return props.record.refs?.resourceId || props.record.id;
+  });
 
- return (
- <tr class="border-t border-border">
- <td colSpan={99} class="bg-surface-alt px-4 py-4">
- <div class="grid gap-4 md:grid-cols-2">
- {/* Left: Capacity trend chart */}
- <div class="rounded-md border p-3 shadow-sm">
- <div class="flex items-center justify-between mb-2">
- <h4 class="text-xs font-semibold text-base-content">Capacity Trend</h4>
- <select
- value={chartRange()}
- onChange={(e) => setChartRange(e.currentTarget.value as HistoryTimeRange)}
- class="text-[11px] font-medium pl-2 pr-5 py-0.5 rounded border border-border bg-surface text-base-content cursor-pointer appearance-none"
- style={{'background-image': "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
+  return (
+    <tr class="border-t border-border">
+      <td colSpan={99} class="bg-surface-alt px-4 py-4">
+        <div class="grid gap-4 md:grid-cols-2">
+          {/* Left: Capacity trend chart */}
+          <div class="rounded-md border p-3 shadow-sm">
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-xs font-semibold text-base-content">Capacity Trend</h4>
+              <select
+                value={chartRange()}
+                onChange={(e) => setChartRange(e.currentTarget.value as HistoryTimeRange)}
+                class="text-[11px] font-medium pl-2 pr-5 py-0.5 rounded border border-border bg-surface text-base-content cursor-pointer appearance-none"
+                style={{
+                  'background-image':
+                    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
                   'background-repeat': 'no-repeat',
                   'background-position': 'right 4px center',
                 }}
@@ -99,10 +105,22 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                   <ConfigRow label="Content" value={content()} />
                 </Show>
                 <ConfigRow label="Status" value={status()} />
-                <ConfigRow label="Shared" value={shared() === null ? '-' : shared() ? 'Yes' : 'No'} />
-                <ConfigRow label="Used" value={totalBytes() > 0 ? formatBytes(usedBytes()) : 'n/a'} />
-                <ConfigRow label="Free" value={totalBytes() > 0 ? formatBytes(freeBytes()) : 'n/a'} />
-                <ConfigRow label="Total" value={totalBytes() > 0 ? formatBytes(totalBytes()) : 'n/a'} />
+                <ConfigRow
+                  label="Shared"
+                  value={shared() === null ? '-' : shared() ? 'Yes' : 'No'}
+                />
+                <ConfigRow
+                  label="Used"
+                  value={totalBytes() > 0 ? formatBytes(usedBytes()) : 'n/a'}
+                />
+                <ConfigRow
+                  label="Free"
+                  value={totalBytes() > 0 ? formatBytes(freeBytes()) : 'n/a'}
+                />
+                <ConfigRow
+                  label="Total"
+                  value={totalBytes() > 0 ? formatBytes(totalBytes()) : 'n/a'}
+                />
                 <ConfigRow label="Usage" value={formatPercent(usagePercent())} />
               </div>
             </div>
@@ -116,12 +134,21 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                   <Show when={zfsPool()!.scan && zfsPool()!.scan !== 'none'}>
                     <div class="col-span-2">
                       <span class="text-muted">Scan: </span>
-                      <span class="text-yellow-600 dark:text-yellow-400 italic">{zfsPool()!.scan}</span>
+                      <span class="text-yellow-600 dark:text-yellow-400 italic">
+                        {zfsPool()!.scan}
+                      </span>
                     </div>
                   </Show>
-                  <Show when={zfsPool()!.readErrors > 0 || zfsPool()!.writeErrors > 0 || zfsPool()!.checksumErrors > 0}>
+                  <Show
+                    when={
+                      zfsPool()!.readErrors > 0 ||
+                      zfsPool()!.writeErrors > 0 ||
+                      zfsPool()!.checksumErrors > 0
+                    }
+                  >
                     <div class="col-span-2 text-red-600 dark:text-red-400 font-medium">
-                      Errors: R:{zfsPool()!.readErrors} W:{zfsPool()!.writeErrors} C:{zfsPool()!.checksumErrors}
+                      Errors: R:{zfsPool()!.readErrors} W:{zfsPool()!.writeErrors} C:
+                      {zfsPool()!.checksumErrors}
                     </div>
                   </Show>
                 </div>
@@ -137,26 +164,43 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                 <div class="space-y-1">
                   <For each={poolDisks()}>
                     {(disk) => {
-                      const pd = () => (disk.platformData as Record<string, unknown>)?.physicalDisk as Record<string, unknown> | undefined;
+                      const pd = () =>
+                        (disk.platformData as Record<string, unknown>)?.physicalDisk as
+                          | Record<string, unknown>
+                          | undefined;
                       const temp = () => (pd()?.temperature as number) ?? 0;
-                      const health = () => (pd()?.smart as Record<string, unknown>)?.reallocatedSectors as number | undefined;
+                      const health = () =>
+                        (pd()?.smart as Record<string, unknown>)?.reallocatedSectors as
+                          | number
+                          | undefined;
                       return (
                         <div class="flex items-center gap-2 text-[11px] py-0.5">
-                          <span class="font-mono text-muted w-16 truncate" title={pd()?.devPath as string}>
-                            {pd()?.devPath as string || disk.name}
+                          <span
+                            class="font-mono text-muted w-16 truncate"
+                            title={pd()?.devPath as string}
+                          >
+                            {(pd()?.devPath as string) || disk.name}
                           </span>
-                          <span class={`w-2 h-2 rounded-full flex-shrink-0 ${
- health() != null && (health() as number) > 0
- ? 'bg-yellow-500'
- : 'bg-green-500'
- }`} />
+                          <span
+                            class={`w-2 h-2 rounded-full flex-shrink-0 ${
+                              health() != null && (health() as number) > 0
+                                ? 'bg-yellow-500'
+                                : 'bg-green-500'
+                            }`}
+                          />
                           <span class="text-base-content truncate flex-1">
-                            {pd()?.model as string || 'Unknown'}
+                            {(pd()?.model as string) || 'Unknown'}
                           </span>
                           <Show when={temp() > 0}>
-                            <span class={`font-medium ${
- temp() > 60 ? 'text-red-500' : temp() > 50 ? 'text-yellow-500' : 'text-muted'
- }`}>
+                            <span
+                              class={`font-medium ${
+                                temp() > 60
+                                  ? 'text-red-500'
+                                  : temp() > 50
+                                    ? 'text-yellow-500'
+                                    : 'text-muted'
+                              }`}
+                            >
                               {temp()}°C
                             </span>
                           </Show>

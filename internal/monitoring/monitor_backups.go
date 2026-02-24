@@ -886,29 +886,34 @@ func (m *Monitor) collectSnapshotSizes(ctx context.Context, instanceName string,
 }
 
 func (m *Monitor) recordAuthFailure(instanceName string, nodeType string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	nodeID := instanceName
 	if nodeType != "" {
 		nodeID = nodeType + "-" + instanceName
 	}
 
-	// Increment failure count
+	m.mu.Lock()
 	m.authFailures[nodeID]++
+	failures := m.authFailures[nodeID]
 	m.lastAuthAttempt[nodeID] = time.Now()
+	m.mu.Unlock()
 
 	log.Warn().
 		Str("node", nodeID).
-		Int("failures", m.authFailures[nodeID]).
+		Int("failures", failures).
 		Msg("Authentication failure recorded")
 
-	// If we've exceeded the threshold, remove the node
 	const maxAuthFailures = 5
-	if m.authFailures[nodeID] >= maxAuthFailures {
+	if failures >= maxAuthFailures {
+		// Clear tracking first, then perform removal outside the monitor lock.
+		// Removal updates state/health and may need to acquire monitor locks internally.
+		m.mu.Lock()
+		delete(m.authFailures, nodeID)
+		delete(m.lastAuthAttempt, nodeID)
+		m.mu.Unlock()
+
 		log.Error().
 			Str("node", nodeID).
-			Int("failures", m.authFailures[nodeID]).
+			Int("failures", failures).
 			Msg("Maximum authentication failures reached, removing node from state")
 
 		// Remove from state based on type
@@ -919,10 +924,6 @@ func (m *Monitor) recordAuthFailure(instanceName string, nodeType string) {
 		} else if nodeType == "pmg" {
 			m.removeFailedPMGInstance(instanceName)
 		}
-
-		// Reset the counter since we've removed the node
-		delete(m.authFailures, nodeID)
-		delete(m.lastAuthAttempt, nodeID)
 	}
 }
 
@@ -951,12 +952,16 @@ func (m *Monitor) resetAuthFailures(instanceName string, nodeType string) {
 func (m *Monitor) removeFailedPVENode(instanceName string) {
 	// Get instance config to get host URL
 	var hostURL string
-	for _, cfg := range m.config.PVEInstances {
-		if cfg.Name == instanceName {
-			hostURL = cfg.Host
-			break
+	m.mu.RLock()
+	if m.config != nil {
+		for _, cfg := range m.config.PVEInstances {
+			if cfg.Name == instanceName {
+				hostURL = cfg.Host
+				break
+			}
 		}
 	}
+	m.mu.RUnlock()
 
 	// Create a failed node entry to show in UI with error status
 	failedNode := models.Node{
@@ -988,7 +993,7 @@ func (m *Monitor) removeFailedPVENode(instanceName string) {
 	m.state.UpdateGuestSnapshotsForInstance(instanceName, []models.GuestSnapshot{})
 
 	// Set connection health to false
-	m.state.SetConnectionHealth(instanceName, false)
+	m.setProviderConnectionHealth(InstanceTypePVE, instanceName, false)
 }
 
 // removeFailedPBSNode removes a PBS node and all its resources from state
@@ -1007,7 +1012,7 @@ func (m *Monitor) removeFailedPBSNode(instanceName string) {
 	m.state.UpdatePBSBackups(instanceName, []models.PBSBackup{})
 
 	// Set connection health to false
-	m.state.SetConnectionHealth("pbs-"+instanceName, false)
+	m.setProviderConnectionHealth(InstanceTypePBS, instanceName, false)
 }
 
 // removeFailedPMGInstance removes PMG data from state when authentication fails repeatedly
@@ -1022,7 +1027,7 @@ func (m *Monitor) removeFailedPMGInstance(instanceName string) {
 
 	m.state.UpdatePMGInstances(updated)
 	m.state.UpdatePMGBackups(instanceName, nil)
-	m.state.SetConnectionHealth("pmg-"+instanceName, false)
+	m.setProviderConnectionHealth(InstanceTypePMG, instanceName, false)
 }
 
 // pbsBackupCacheTTL controls how long cached PBS backup snapshots are reused

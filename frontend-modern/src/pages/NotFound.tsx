@@ -4,7 +4,11 @@ import { useLocation, useNavigate } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { DASHBOARD_PATH, buildRecoveryPath, buildInfrastructurePath } from '@/routing/resourceLinks';
+import {
+  DASHBOARD_PATH,
+  buildRecoveryPath,
+  buildInfrastructurePath,
+} from '@/routing/resourceLinks';
 
 const NotFound: Component = () => {
   const location = useLocation();
@@ -21,10 +25,7 @@ const NotFound: Component = () => {
 
   return (
     <div class="space-y-4">
-      <PageHeader
-        title="Page Not Found"
-        description="The route you requested does not exist."
-      />
+      <PageHeader title="Page Not Found" description="The route you requested does not exist." />
       <Card padding="md">
         <EmptyState
           title="Page not found"

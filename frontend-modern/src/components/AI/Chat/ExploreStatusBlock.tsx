@@ -39,7 +39,9 @@ export const ExploreStatusBlock: Component<ExploreStatusBlockProps> = (props) =>
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
       <span class="font-semibold tracking-wide uppercase">{phaseLabel(props.status.phase)}</span>
       {props.status.model && <span class="font-mono opacity-80">{props.status.model}</span>}
-      {props.status.outcome && <span class="font-mono opacity-75">outcome={props.status.outcome}</span>}
+      {props.status.outcome && (
+        <span class="font-mono opacity-75">outcome={props.status.outcome}</span>
+      )}
     </div>
     <p class="mt-1 leading-relaxed">{props.status.message}</p>
   </div>

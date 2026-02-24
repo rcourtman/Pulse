@@ -76,9 +76,7 @@ export const CollapsibleSearchInput: Component<CollapsibleSearchInputProps> = (p
   const rootClass = () => {
     const baseClass = props.class ?? '';
     if (!props.fullWidthWhenExpanded) return baseClass;
-    const layoutClass = showExpanded()
-      ? 'order-last basis-full w-full'
-      : 'shrink-0 md:ml-auto';
+    const layoutClass = showExpanded() ? 'order-last basis-full w-full' : 'shrink-0 md:ml-auto';
     return `${baseClass} ${layoutClass}`.trim();
   };
 

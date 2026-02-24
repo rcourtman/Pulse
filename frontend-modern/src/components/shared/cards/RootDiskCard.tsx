@@ -15,13 +15,15 @@ export const RootDiskCard: Component<RootDiskCardProps> = (props) => {
     return {
       percent: total > 0 ? (used / total) * 100 : 0,
       used: used,
-      total: total
+      total: total,
     };
   };
 
   return (
     <div class="rounded border border-border bg-surface p-3 shadow-sm">
-      <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">Root Disk</div>
+      <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+        Root Disk
+      </div>
       <div class="mb-3">
         <div class="flex justify-between text-[10px] mb-1">
           <span class="text-muted">Usage</span>
@@ -34,7 +36,7 @@ export const RootDiskCard: Component<RootDiskCardProps> = (props) => {
             total: diskStats().total,
             used: diskStats().used,
             free: diskStats().total - diskStats().used,
-            usage: diskStats().percent / 100
+            usage: diskStats().percent / 100,
           }}
         />
       </div>

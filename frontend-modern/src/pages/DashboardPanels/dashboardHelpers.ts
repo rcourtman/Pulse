@@ -1,7 +1,8 @@
 export type StatusTone = 'online' | 'offline' | 'warning' | 'critical' | 'unknown';
 
 export function statusBadgeClass(tone: StatusTone): string {
-  const base = 'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium';
+  const base =
+    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium';
   switch (tone) {
     case 'online':
       return `${base} border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900 dark:text-emerald-300`;
@@ -9,9 +10,18 @@ export function statusBadgeClass(tone: StatusTone): string {
       return `${base} border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300`;
     case 'critical':
       return `${base} border-red-200 bg-red-100 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300`;
-    case 'offline': return `${base} border-border bg-surface-alt text-base-content`; default: return `${base} border-border bg-surface-alt text-muted`; }
-} export function formatPercent(value: number): string { return `${Math.round(value)}%`;
-} export function formatDelta(delta: number | null): string | null { if (delta === null) return null; const sign = delta >= 0 ?'+' : '';
+    case 'offline':
+      return `${base} border-border bg-surface-alt text-base-content`;
+    default:
+      return `${base} border-border bg-surface-alt text-muted`;
+  }
+}
+export function formatPercent(value: number): string {
+  return `${Math.round(value)}%`;
+}
+export function formatDelta(delta: number | null): string | null {
+  if (delta === null) return null;
+  const sign = delta >= 0 ? '+' : '';
   return `${sign}${delta.toFixed(1)}%`;
 }
 
@@ -54,4 +64,3 @@ export function priorityBadgeClass(priority: ActionPriority): string {
       return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
   }
 }
-

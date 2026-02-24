@@ -74,7 +74,11 @@ describe('InteractiveSparkline hover behavior', () => {
     });
 
     const { container } = render(() => (
-      <InteractiveSparkline timeRange="1h" series={[1, 2, 3, 4, 5, 6, 7, 8].map((i) => makeSeries(i, i * 10))} maxTooltipRows={6} />
+      <InteractiveSparkline
+        timeRange="1h"
+        series={[1, 2, 3, 4, 5, 6, 7, 8].map((i) => makeSeries(i, i * 10))}
+        maxTooltipRows={6}
+      />
     ));
 
     const svg = container.querySelector('svg');
@@ -253,7 +257,7 @@ describe('InteractiveSparkline hover behavior', () => {
     const now = Date.now();
 
     const data = Array.from({ length: 30 }, (_, index) => ({
-      timestamp: now - (60 - index*2) * 60_000,
+      timestamp: now - (60 - index * 2) * 60_000,
       value: 50 + (index % 5),
     }));
 

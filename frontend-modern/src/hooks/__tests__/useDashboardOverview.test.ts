@@ -79,12 +79,54 @@ describe('computeDashboardOverview', () => {
 
   it('handles infrastructure-only resources and returns top CPU/memory lists', () => {
     const resources: Resource[] = [
-      createResource({ id: 'infra-1', type: 'host', displayName: 'Host 1', status: 'online', cpu: { current: 10 }, memory: { current: 40 } }),
-      createResource({ id: 'infra-2', type: 'node', displayName: 'Node 2', status: 'online', cpu: { current: 90 }, memory: { current: 70 } }),
-      createResource({ id: 'infra-3', type: 'k8s-node', displayName: 'K8S 3', status: 'degraded', cpu: { current: 50 }, memory: { current: 60 } }),
-      createResource({ id: 'infra-4', type: 'docker-host', displayName: 'Docker 4', status: 'offline', cpu: { current: 30 }, memory: { current: 10 } }),
-      createResource({ id: 'infra-5', type: 'truenas', displayName: 'NAS 5', status: 'online', cpu: { current: 70 }, memory: { current: 50 } }),
-      createResource({ id: 'infra-6', type: 'k8s-cluster', displayName: 'Cluster 6', status: 'online', cpu: { current: 20 }, memory: { current: 80 } }),
+      createResource({
+        id: 'infra-1',
+        type: 'host',
+        displayName: 'Host 1',
+        status: 'online',
+        cpu: { current: 10 },
+        memory: { current: 40 },
+      }),
+      createResource({
+        id: 'infra-2',
+        type: 'node',
+        displayName: 'Node 2',
+        status: 'online',
+        cpu: { current: 90 },
+        memory: { current: 70 },
+      }),
+      createResource({
+        id: 'infra-3',
+        type: 'k8s-node',
+        displayName: 'K8S 3',
+        status: 'degraded',
+        cpu: { current: 50 },
+        memory: { current: 60 },
+      }),
+      createResource({
+        id: 'infra-4',
+        type: 'docker-host',
+        displayName: 'Docker 4',
+        status: 'offline',
+        cpu: { current: 30 },
+        memory: { current: 10 },
+      }),
+      createResource({
+        id: 'infra-5',
+        type: 'truenas',
+        displayName: 'NAS 5',
+        status: 'online',
+        cpu: { current: 70 },
+        memory: { current: 50 },
+      }),
+      createResource({
+        id: 'infra-6',
+        type: 'k8s-cluster',
+        displayName: 'Cluster 6',
+        status: 'online',
+        cpu: { current: 20 },
+        memory: { current: 80 },
+      }),
     ];
 
     const overview = computeDashboardOverview(resources, []);

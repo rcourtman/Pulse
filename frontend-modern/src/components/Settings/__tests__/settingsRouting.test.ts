@@ -38,8 +38,8 @@ const canonicalTabPaths = {
 
 const hasFeatures =
   (features: string[]) =>
-    (feature: string): boolean =>
-      features.includes(feature);
+  (feature: string): boolean =>
+    features.includes(feature);
 
 describe('settingsRouting', () => {
   it('uses Unified Agents as the default /settings landing tab', () => {

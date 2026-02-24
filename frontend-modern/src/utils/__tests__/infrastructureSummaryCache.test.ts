@@ -234,7 +234,9 @@ describe('infrastructureSummaryCache persistence', () => {
     expect(series?.netin?.length).toBeLessThanOrEqual(360);
     expect(series?.netout?.length).toBeLessThanOrEqual(360);
     const cachedCpu = series?.cpu ?? [];
-    expect(cachedCpu[cachedCpu.length - 1]?.timestamp).toBe(sourceSeries[sourceSeries.length - 1]?.timestamp);
+    expect(cachedCpu[cachedCpu.length - 1]?.timestamp).toBe(
+      sourceSeries[sourceSeries.length - 1]?.timestamp,
+    );
   });
 
   it('drops oversized cache payloads to keep storage bounded', () => {
@@ -296,8 +298,12 @@ describe('infrastructureSummaryCache persistence', () => {
     expect(readInfrastructureSummaryCache('1h')?.map.get('node-b')).toBeDefined();
     expect(readInfrastructureSummaryCache('1h')?.map.get('node-a')).toBeUndefined();
 
-    expect(readInfrastructureSummaryCache('1h', undefined, 'org-a')?.map.get('node-a')).toBeDefined();
-    expect(readInfrastructureSummaryCache('1h', undefined, 'org-a')?.map.get('node-b')).toBeUndefined();
+    expect(
+      readInfrastructureSummaryCache('1h', undefined, 'org-a')?.map.get('node-a'),
+    ).toBeDefined();
+    expect(
+      readInfrastructureSummaryCache('1h', undefined, 'org-a')?.map.get('node-b'),
+    ).toBeUndefined();
     expect(localStorage.getItem(cacheKeyForRange('1h', 'org-a'))).not.toBeNull();
     expect(localStorage.getItem(cacheKeyForRange('1h', 'org-b'))).not.toBeNull();
   });

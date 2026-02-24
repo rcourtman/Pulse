@@ -45,7 +45,10 @@ describe('MonitoringAPI', () => {
   describe('exportDiagnostics', () => {
     it('exports diagnostics as blob', async () => {
       const mockBlob = new Blob(['diagnostics data']);
-      const mockResponse = { ok: true, blob: () => Promise.resolve(mockBlob) } as unknown as Response;
+      const mockResponse = {
+        ok: true,
+        blob: () => Promise.resolve(mockBlob),
+      } as unknown as Response;
       vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
 
       const result = await MonitoringAPI.exportDiagnostics();
@@ -63,7 +66,7 @@ describe('MonitoringAPI', () => {
 
       expect(apiFetch).toHaveBeenCalledWith(
         '/api/agents/docker/hosts/host-1',
-        expect.objectContaining({ method: 'DELETE' })
+        expect.objectContaining({ method: 'DELETE' }),
       );
     });
 
@@ -74,7 +77,7 @@ describe('MonitoringAPI', () => {
 
       expect(apiFetch).toHaveBeenCalledWith(
         '/api/agents/docker/hosts/host-1?hide=true',
-        expect.objectContaining({ method: 'DELETE' })
+        expect.objectContaining({ method: 'DELETE' }),
       );
     });
 
@@ -85,7 +88,7 @@ describe('MonitoringAPI', () => {
 
       expect(apiFetch).toHaveBeenCalledWith(
         '/api/agents/docker/hosts/host-1?force=true',
-        expect.objectContaining({ method: 'DELETE' })
+        expect.objectContaining({ method: 'DELETE' }),
       );
     });
 
@@ -106,7 +109,7 @@ describe('MonitoringAPI', () => {
 
       expect(apiFetch).toHaveBeenCalledWith(
         '/api/agents/docker/hosts/host-1/unhide',
-        expect.objectContaining({ method: 'PUT' })
+        expect.objectContaining({ method: 'PUT' }),
       );
     });
   });
@@ -119,7 +122,7 @@ describe('MonitoringAPI', () => {
 
       expect(apiFetch).toHaveBeenCalledWith(
         '/api/agents/docker/hosts/host-1/pending-uninstall',
-        expect.objectContaining({ method: 'PUT' })
+        expect.objectContaining({ method: 'PUT' }),
       );
     });
   });
@@ -135,7 +138,7 @@ describe('MonitoringAPI', () => {
         expect.objectContaining({
           method: 'PUT',
           body: JSON.stringify({ displayName: 'New Name' }),
-        })
+        }),
       );
     });
   });
@@ -148,7 +151,7 @@ describe('MonitoringAPI', () => {
 
       expect(apiFetch).toHaveBeenCalledWith(
         '/api/agents/kubernetes/clusters/cluster-1',
-        expect.objectContaining({ method: 'DELETE' })
+        expect.objectContaining({ method: 'DELETE' }),
       );
     });
   });
@@ -161,7 +164,7 @@ describe('MonitoringAPI', () => {
 
       expect(apiFetch).toHaveBeenCalledWith(
         '/api/agents/kubernetes/clusters/cluster-1/unhide',
-        expect.objectContaining({ method: 'PUT' })
+        expect.objectContaining({ method: 'PUT' }),
       );
     });
   });

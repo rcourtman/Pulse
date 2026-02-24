@@ -20,9 +20,7 @@ const asNumberOrNull = (value: unknown): number | null => {
 
 const dedupe = <T>(values: T[]): T[] => Array.from(new Set(values));
 const normalizeIdentityPart = (value: string | undefined | null): string =>
-  (value || '')
-    .trim()
-    .toLowerCase();
+  (value || '').trim().toLowerCase();
 
 type ResourceStorageMeta = {
   type?: string;
@@ -39,7 +37,9 @@ type ResourceWithStorageMeta = Resource & {
 
 const canonicalStorageIdentityKey = (record: StorageRecord): string => {
   const platform = normalizeIdentityPart(String(record.source.platform || 'generic'));
-  const location = normalizeIdentityPart(record.location?.label) || normalizeIdentityPart(record.refs?.platformEntityId);
+  const location =
+    normalizeIdentityPart(record.location?.label) ||
+    normalizeIdentityPart(record.refs?.platformEntityId);
   const name = normalizeIdentityPart(record.name) || normalizeIdentityPart(record.id);
   const category = normalizeIdentityPart(record.category || 'other');
 
@@ -49,7 +49,8 @@ const canonicalStorageIdentityKey = (record: StorageRecord): string => {
 const resolvePlatformFamily = (platform: StorageBackupPlatform): PlatformFamily => {
   const value = String(platform).toLowerCase();
   if (value.includes('kubernetes') || value.includes('docker')) return 'container';
-  if (value.includes('cloud') || value === 'aws' || value === 'azure' || value === 'gcp') return 'cloud';
+  if (value.includes('cloud') || value === 'aws' || value === 'azure' || value === 'gcp')
+    return 'cloud';
   if (value.includes('proxmox') || value.includes('vmware') || value.includes('hyperv')) {
     return 'virtualization';
   }
@@ -105,7 +106,12 @@ const normalizeHealthValue = (value: string | undefined): NormalizedHealth | und
     return 'healthy';
   }
 
-  if (normalized === 'warning' || normalized === 'warn' || normalized === 'degraded' || normalized === 'health_warn') {
+  if (
+    normalized === 'warning' ||
+    normalized === 'warn' ||
+    normalized === 'degraded' ||
+    normalized === 'health_warn'
+  ) {
     return 'warning';
   }
 
@@ -121,7 +127,12 @@ const normalizeHealthValue = (value: string | undefined): NormalizedHealth | und
     return 'critical';
   }
 
-  if (normalized === 'offline' || normalized === 'stopped' || normalized === 'down' || normalized === 'unavailable') {
+  if (
+    normalized === 'offline' ||
+    normalized === 'stopped' ||
+    normalized === 'down' ||
+    normalized === 'unavailable'
+  ) {
     return 'offline';
   }
 
@@ -141,11 +152,19 @@ const normalizeHealthValue = (value: string | undefined): NormalizedHealth | und
     return 'warning';
   }
 
-  if (normalized.includes('offline') || normalized.includes('stopped') || normalized.includes('down')) {
+  if (
+    normalized.includes('offline') ||
+    normalized.includes('stopped') ||
+    normalized.includes('down')
+  ) {
     return 'offline';
   }
 
-  if (normalized.includes('healthy') || normalized.includes('online') || normalized.includes('available')) {
+  if (
+    normalized.includes('healthy') ||
+    normalized.includes('online') ||
+    normalized.includes('available')
+  ) {
     return 'healthy';
   }
 
@@ -153,14 +172,22 @@ const normalizeHealthValue = (value: string | undefined): NormalizedHealth | und
   return undefined;
 };
 
-const normalizeResourceHealth = (status: string | undefined, tags: string[] | undefined): NormalizedHealth =>
+const normalizeResourceHealth = (
+  status: string | undefined,
+  tags: string[] | undefined,
+): NormalizedHealth =>
   normalizeHealthValue(extractHealthTag(tags)) || normalizeHealthValue(status) || 'unknown';
 
 const categoryFromStorageType = (type: string | undefined): StorageCategory => {
   const value = (type || '').toLowerCase();
   if (!value) return 'other';
   if (value.includes('pbs')) return 'backup-repository';
-  if (value.includes('zfs') || value.includes('lvm') || value.includes('ceph') || value.includes('pool')) {
+  if (
+    value.includes('zfs') ||
+    value.includes('lvm') ||
+    value.includes('ceph') ||
+    value.includes('pool')
+  ) {
     return 'pool';
   }
   if (value.includes('dataset')) return 'dataset';
@@ -173,7 +200,9 @@ const normalizeStorageMeta = (value: unknown): ResourceStorageMeta | null => {
   if (!value || typeof value !== 'object') return null;
   const candidate = value as Record<string, unknown>;
   const contentTypes = Array.isArray(candidate.contentTypes)
-    ? candidate.contentTypes.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    ? candidate.contentTypes.filter(
+        (item): item is string => typeof item === 'string' && item.trim().length > 0,
+      )
     : undefined;
 
   return {
@@ -232,7 +261,10 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
   const resourceType = (resource.type || '').toLowerCase();
   const platform = (resource.platformType || 'generic') as StorageBackupPlatform;
   const isDatastore = resourceType === 'datastore';
-  const storageType = storageMeta?.type || (platformData.type as string | undefined) || (isDatastore ? 'pbs' : resourceType);
+  const storageType =
+    storageMeta?.type ||
+    (platformData.type as string | undefined) ||
+    (isDatastore ? 'pbs' : resourceType);
   const content = resolveStorageContent(storageMeta, platformData, isDatastore ? 'backup' : '');
   const shared =
     typeof storageMeta?.shared === 'boolean'
@@ -241,8 +273,14 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
         ? platformData.shared
         : undefined;
   const locationLabel = isDatastore
-    ? ((platformData.pbsInstanceName as string | undefined) || resource.parentId || resource.platformId || 'Unknown')
-    : ((platformData.node as string | undefined) || resource.parentId || resource.platformId || 'Unknown');
+    ? (platformData.pbsInstanceName as string | undefined) ||
+      resource.parentId ||
+      resource.platformId ||
+      'Unknown'
+    : (platformData.node as string | undefined) ||
+      resource.parentId ||
+      resource.platformId ||
+      'Unknown';
   const usagePercent = asNumberOrNull(resource.disk?.current);
   const totalBytes = asNumberOrNull(resource.disk?.total);
   const usedBytes = asNumberOrNull(resource.disk?.used);
@@ -298,9 +336,7 @@ const resourceStorageAdapter: StorageAdapter = {
       .map((resource) => mapResourceStorageRecord(resource, 'resource-storage')),
 };
 
-export const DEFAULT_STORAGE_ADAPTERS: StorageAdapter[] = [
-  resourceStorageAdapter,
-];
+export const DEFAULT_STORAGE_ADAPTERS: StorageAdapter[] = [resourceStorageAdapter];
 
 const mergeStorageRecords = (current: StorageRecord, incoming: StorageRecord): StorageRecord => {
   const currentRank = STORAGE_DATA_ORIGIN_PRECEDENCE[current.source.origin];

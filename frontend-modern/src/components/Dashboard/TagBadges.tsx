@@ -13,7 +13,7 @@ interface TagBadgesProps {
 
 export const TagBadges: Component<TagBadgesProps> = (props) => {
   // maxVisible: 0 means show all, undefined defaults to 3
-  const maxVisible = () => props.maxVisible === 0 ? Infinity : (props.maxVisible ?? 3);
+  const maxVisible = () => (props.maxVisible === 0 ? Infinity : (props.maxVisible ?? 3));
   const darkModeSignal = useDarkMode();
   const isDark = () => props.isDarkMode ?? darkModeSignal();
 
@@ -60,9 +60,7 @@ export const TagBadges: Component<TagBadgesProps> = (props) => {
   return (
     <Show when={props.tags && props.tags.length > 0}>
       <div class="inline-flex items-center gap-1 ml-2">
-        <For each={visibleTags()}>
-          {(tag) => <TagDot tag={tag} />}
-        </For>
+        <For each={visibleTags()}>{(tag) => <TagDot tag={tag} />}</For>
 
         {/* Show the final dot if only one hidden tag remains */}
         <Show when={hiddenTags().length === 1}>

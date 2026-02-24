@@ -73,7 +73,7 @@ const loadMessagesFromStorage = (): Message[] => {
     // Revive Date objects
     return parsed.map((m: any) => ({
       ...m,
-      timestamp: new Date(m.timestamp)
+      timestamp: new Date(m.timestamp),
     }));
   } catch (e) {
     logger.error('Failed to load chat history:', e);
@@ -185,7 +185,7 @@ export const aiChatStore = {
 
   // Check if a specific item is in context
   hasContextItem(id: string) {
-    return contextItems().some(item => item.id === id);
+    return contextItems().some((item) => item.id === id);
   },
 
   // Set AI enabled state (called from settings check)
@@ -198,7 +198,7 @@ export const aiChatStore = {
 
   // Notify that AI settings have changed (call after saving settings)
   notifySettingsChanged() {
-    setSettingsVersion(v => v + 1);
+    setSettingsVersion((v) => v + 1);
   },
 
   // Set messages (for persistence from AIChat component)
@@ -331,15 +331,11 @@ export const aiChatStore = {
 
   // Add an item to the context (accumulative)
   addContextItem(type: string, id: string, name: string, data: Record<string, unknown>) {
-    setContextItems(prev => {
+    setContextItems((prev) => {
       // Don't add duplicates
-      if (prev.some(item => item.id === id)) {
+      if (prev.some((item) => item.id === id)) {
         // Update existing item with new data
-        return prev.map(item =>
-          item.id === id
-            ? { ...item, data, addedAt: new Date() }
-            : item
-        );
+        return prev.map((item) => (item.id === id ? { ...item, data, addedAt: new Date() } : item));
       }
       return [...prev, { id, type, name, data, addedAt: new Date() }];
     });
@@ -353,11 +349,11 @@ export const aiChatStore = {
 
   // Remove an item from context
   removeContextItem(id: string) {
-    setContextItems(prev => prev.filter(item => item.id !== id));
+    setContextItems((prev) => prev.filter((item) => item.id !== id));
     // Update legacy context if we removed the current one
     const current = aiChatContext();
     if (current.targetId === id) {
-      const remaining = contextItems().filter(item => item.id !== id);
+      const remaining = contextItems().filter((item) => item.id !== id);
       if (remaining.length > 0) {
         const last = remaining[remaining.length - 1];
         setAIChatContext({
@@ -384,12 +380,15 @@ export const aiChatStore = {
 
   // Convenience method to set context for a specific target (host, VM, container, etc.)
   // This replaces any existing context with the new target
-  setTargetContext(targetType: string, targetId: string, additionalContext?: Record<string, unknown>) {
+  setTargetContext(
+    targetType: string,
+    targetId: string,
+    additionalContext?: Record<string, unknown>,
+  ) {
     // Clear existing context first since context UI is removed
     setContextItems([]);
-    const name = (additionalContext?.guestName as string) ||
-      (additionalContext?.name as string) ||
-      targetId;
+    const name =
+      (additionalContext?.guestName as string) || (additionalContext?.name as string) || targetId;
     this.addContextItem(targetType, targetId, name, additionalContext || {});
   },
 
@@ -397,9 +396,8 @@ export const aiChatStore = {
   openForTarget(targetType: string, targetId: string, additionalContext?: Record<string, unknown>) {
     // Clear existing context first since context UI is removed
     setContextItems([]);
-    const name = (additionalContext?.guestName as string) ||
-      (additionalContext?.name as string) ||
-      targetId;
+    const name =
+      (additionalContext?.guestName as string) || (additionalContext?.name as string) || targetId;
     this.addContextItem(targetType, targetId, name, additionalContext || {});
     setIsAIChatOpen(true);
   },
@@ -415,7 +413,7 @@ export const aiChatStore = {
 
   // Clear the initialPrompt so it doesn't re-fire on subsequent opens
   clearInitialPrompt() {
-    setAIChatContext(prev => {
+    setAIChatContext((prev) => {
       if (!prev.initialPrompt) return prev;
       const { initialPrompt: _, ...rest } = prev;
       return rest;
@@ -424,7 +422,7 @@ export const aiChatStore = {
 
   // Clear the findingId after first message is sent
   clearFindingId() {
-    setAIChatContext(prev => {
+    setAIChatContext((prev) => {
       if (!prev.findingId) return prev;
       const { findingId: _, ...rest } = prev;
       return rest;
@@ -466,7 +464,9 @@ eventBus.on('org_switched', () => {
   setCurrentSessionId(newId);
   try {
     localStorage.setItem(SESSION_ID_KEY, newId);
-  } catch { /* ignore storage errors */ }
+  } catch {
+    /* ignore storage errors */
+  }
 
   // Clear context
   setContextItems([]);

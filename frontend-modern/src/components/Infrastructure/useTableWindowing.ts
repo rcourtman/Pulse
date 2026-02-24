@@ -43,9 +43,7 @@ export const useTableWindowing = (options: UseTableWindowingOptions): UseTableWi
     return enabled && total > 0;
   });
 
-  const maxStart = createMemo(() =>
-    Math.max(0, options.totalCount() - normalizedWindowSize()),
-  );
+  const maxStart = createMemo(() => Math.max(0, options.totalCount() - normalizedWindowSize()));
 
   const startIndex = createMemo(() => {
     if (!isWindowed()) return 0;
@@ -76,7 +74,10 @@ export const useTableWindowing = (options: UseTableWindowingOptions): UseTableWi
     const safeRowHeight = rowHeight > 0 ? rowHeight : 40;
     const safeContainerHeight = containerHeight > 0 ? containerHeight : safeRowHeight;
     const rowsInView = Math.max(1, Math.ceil(safeContainerHeight / safeRowHeight));
-    const overscan = Math.min(DEFAULT_OVERSCAN_ROWS, Math.max(0, normalizedWindowSize() - rowsInView));
+    const overscan = Math.min(
+      DEFAULT_OVERSCAN_ROWS,
+      Math.max(0, normalizedWindowSize() - rowsInView),
+    );
     const firstVisibleRow = Math.floor(Math.max(0, scrollTop) / safeRowHeight);
     setClampedStart(firstVisibleRow - overscan);
   };

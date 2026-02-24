@@ -63,17 +63,22 @@ function buildRedirect(search: string): RedirectResult {
   const rawView = normalize(incomingParams.get('view')).toLowerCase();
   const view = normalizeLegacyView(rawView);
 
-  const mode = normalize(incomingParams.get('mode')) || normalize(incomingParams.get(LEGACY_QUERY_KEYS.backupType));
+  const mode =
+    normalize(incomingParams.get('mode')) ||
+    normalize(incomingParams.get(LEGACY_QUERY_KEYS.backupType));
   const scope =
     normalize(incomingParams.get('scope')) ||
-    (normalize(incomingParams.get(LEGACY_QUERY_KEYS.group)).toLowerCase() === 'guest' ? 'workload' : '');
+    (normalize(incomingParams.get(LEGACY_QUERY_KEYS.group)).toLowerCase() === 'guest'
+      ? 'workload'
+      : '');
 
   const rawProviderParam = normalize(incomingParams.get('provider'));
   const normalizedProviderParam = normalizeProvider(rawProviderParam);
   const legacySourceParam = normalize(incomingParams.get(LEGACY_QUERY_KEYS.provider));
   const provider = normalizeProvider(rawProviderParam || legacySourceParam);
 
-  const query = normalize(incomingParams.get('q')) || normalize(incomingParams.get(LEGACY_QUERY_KEYS.query));
+  const query =
+    normalize(incomingParams.get('q')) || normalize(incomingParams.get(LEGACY_QUERY_KEYS.query));
 
   let status = normalize(incomingParams.get('status')).toLowerCase();
   let verification = normalize(incomingParams.get('verification')).toLowerCase();

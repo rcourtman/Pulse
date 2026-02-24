@@ -1,6 +1,6 @@
 /**
  * System Settings Store
- * 
+ *
  * Provides reactive access to server-wide system settings.
  * Used to control features like Docker update buttons based on server configuration.
  */
@@ -27,17 +27,17 @@ const [systemSettingsLoaded, setSystemSettingsLoaded] = createSignal(false);
  * Call this after you've already fetched system settings (e.g., for theme loading).
  */
 export function updateSystemSettingsFromResponse(settings: SystemConfig): void {
-    setDisableDockerUpdateActions(settings.disableDockerUpdateActions ?? false);
-    setDisableLegacyRouteRedirects(settings.disableLegacyRouteRedirects ?? false);
-    setReduceProUpsellNoise(settings.reduceProUpsellNoise ?? false);
-    setDisableLocalUpgradeMetrics(settings.disableLocalUpgradeMetrics ?? false);
-    setSystemSettingsLoaded(true);
-    logger.debug('System settings updated from response', {
-        disableDockerUpdateActions: settings.disableDockerUpdateActions,
-        disableLegacyRouteRedirects: settings.disableLegacyRouteRedirects,
-        reduceProUpsellNoise: settings.reduceProUpsellNoise,
-        disableLocalUpgradeMetrics: settings.disableLocalUpgradeMetrics,
-    });
+  setDisableDockerUpdateActions(settings.disableDockerUpdateActions ?? false);
+  setDisableLegacyRouteRedirects(settings.disableLegacyRouteRedirects ?? false);
+  setReduceProUpsellNoise(settings.reduceProUpsellNoise ?? false);
+  setDisableLocalUpgradeMetrics(settings.disableLocalUpgradeMetrics ?? false);
+  setSystemSettingsLoaded(true);
+  logger.debug('System settings updated from response', {
+    disableDockerUpdateActions: settings.disableDockerUpdateActions,
+    disableLegacyRouteRedirects: settings.disableLegacyRouteRedirects,
+    reduceProUpsellNoise: settings.reduceProUpsellNoise,
+    disableLocalUpgradeMetrics: settings.disableLocalUpgradeMetrics,
+  });
 }
 
 /**
@@ -46,18 +46,18 @@ export function updateSystemSettingsFromResponse(settings: SystemConfig): void {
  * Prefer `updateSystemSettingsFromResponse` when you already have the settings.
  */
 export async function loadSystemSettings(): Promise<void> {
-    try {
-        const settings = await SettingsAPI.getSystemSettings();
-        updateSystemSettingsFromResponse(settings);
-    } catch (err) {
-        logger.warn('Failed to load system settings, using defaults', err);
-        // Use safe defaults
-        setDisableDockerUpdateActions(false);
-        setDisableLegacyRouteRedirects(false);
-        setReduceProUpsellNoise(false);
-        setDisableLocalUpgradeMetrics(false);
-        setSystemSettingsLoaded(true);
-    }
+  try {
+    const settings = await SettingsAPI.getSystemSettings();
+    updateSystemSettingsFromResponse(settings);
+  } catch (err) {
+    logger.warn('Failed to load system settings, using defaults', err);
+    // Use safe defaults
+    setDisableDockerUpdateActions(false);
+    setDisableLegacyRouteRedirects(false);
+    setReduceProUpsellNoise(false);
+    setDisableLocalUpgradeMetrics(false);
+    setSystemSettingsLoaded(true);
+  }
 }
 
 /**
@@ -65,29 +65,29 @@ export async function loadSystemSettings(): Promise<void> {
  * Returns true if the server has configured to hide update buttons.
  */
 export function shouldHideDockerUpdateActions(): boolean {
-    return disableDockerUpdateActions();
+  return disableDockerUpdateActions();
 }
 
 /**
  * Check if legacy frontend route redirects should be disabled globally.
  */
 export function shouldDisableLegacyRouteRedirects(): boolean {
-    return disableLegacyRouteRedirects();
+  return disableLegacyRouteRedirects();
 }
 
 export function shouldReduceProUpsellNoise(): boolean {
-    return reduceProUpsellNoise();
+  return reduceProUpsellNoise();
 }
 
 export function shouldDisableLocalUpgradeMetrics(): boolean {
-    return disableLocalUpgradeMetrics();
+  return disableLocalUpgradeMetrics();
 }
 
 /**
  * Check if system settings have been loaded from the server.
  */
 export function areSystemSettingsLoaded(): boolean {
-    return systemSettingsLoaded();
+  return systemSettingsLoaded();
 }
 
 /**
@@ -95,29 +95,29 @@ export function areSystemSettingsLoaded(): boolean {
  * Call this when settings fail to load but the app should continue working.
  */
 export function markSystemSettingsLoadedWithDefaults(): void {
-    setDisableDockerUpdateActions(false);
-    setDisableLegacyRouteRedirects(false);
-    setReduceProUpsellNoise(false);
-    setDisableLocalUpgradeMetrics(false);
-    setSystemSettingsLoaded(true);
-    logger.debug('System settings marked as loaded with defaults');
+  setDisableDockerUpdateActions(false);
+  setDisableLegacyRouteRedirects(false);
+  setReduceProUpsellNoise(false);
+  setDisableLocalUpgradeMetrics(false);
+  setSystemSettingsLoaded(true);
+  logger.debug('System settings marked as loaded with defaults');
 }
 
 /**
  * Update the local state when settings change (e.g., from Settings page).
  */
 export function updateDockerUpdateActionsSetting(disabled: boolean): void {
-    setDisableDockerUpdateActions(disabled);
+  setDisableDockerUpdateActions(disabled);
 }
 
 export function updateLegacyRouteRedirectsSetting(disabled: boolean): void {
-    setDisableLegacyRouteRedirects(disabled);
+  setDisableLegacyRouteRedirects(disabled);
 }
 
 export function updateReduceProUpsellNoiseSetting(enabled: boolean): void {
-    setReduceProUpsellNoise(enabled);
+  setReduceProUpsellNoise(enabled);
 }
 
 export function updateDisableLocalUpgradeMetricsSetting(disabled: boolean): void {
-    setDisableLocalUpgradeMetrics(disabled);
+  setDisableLocalUpgradeMetrics(disabled);
 }
