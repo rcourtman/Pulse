@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { ensureAuthenticated, getMockMode, setMockMode } from './helpers';
+import { ensureAuthenticated, getMockMode, setMockMode, waitForPulseReady } from './helpers';
 
 const truthy = (value: string | undefined) => {
   if (!value) return false;
@@ -20,6 +20,35 @@ const median = (values: number[]): number => {
     return Math.round((sorted[mid - 1] + sorted[mid]) / 2);
   }
   return sorted[mid];
+};
+
+const isTransientBackendError = (error: unknown): boolean => {
+  const message = String(error);
+  return (
+    message.includes('ERR_CONNECTION_REFUSED') ||
+    message.includes('ECONNREFUSED') ||
+    message.includes('socket hang up') ||
+    message.includes('ETIMEDOUT')
+  );
+};
+
+const gotoWithBackendRetry = async (page: Page, url: string, attempts = 3): Promise<void> => {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      await waitForPulseReady(page, 30_000);
+      await page.goto(url);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (!isTransientBackendError(error) || attempt === attempts) {
+        throw error;
+      }
+      console.warn(`[perf] transient backend outage during ${url}, retrying (${attempt}/${attempts})`);
+      await page.waitForTimeout(1_000);
+    }
+  }
+  throw lastError ?? new Error(`Failed to navigate to ${url}`);
 };
 
 const waitForInfrastructureReady = async (page: Page) => {
@@ -79,7 +108,7 @@ test.describe.serial('Navigation performance budgets', () => {
 
     try {
       // Warm both routes first so budgets represent interactive tab switching.
-      await page.goto('/infrastructure');
+      await gotoWithBackendRetry(page, '/infrastructure');
       await waitForInfrastructureReady(page);
       await measureTabTransition(page, 'Workloads', waitForWorkloadsReady);
       await measureTabTransition(page, 'Infrastructure', waitForInfrastructureReady);
@@ -110,7 +139,11 @@ test.describe.serial('Navigation performance budgets', () => {
       expect(workloadsToInfraMedianMs).toBeLessThanOrEqual(workloadsToInfraBudgetMs);
     } finally {
       if (initialMockMode && !initialMockMode.enabled) {
-        await setMockMode(page, false);
+        try {
+          await setMockMode(page, false);
+        } catch (error) {
+          console.warn(`[perf] unable to restore mock mode, continuing: ${String(error)}`);
+        }
       }
     }
   });
