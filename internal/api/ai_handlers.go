@@ -358,25 +358,35 @@ func (h *AISettingsHandler) RemoveTenantService(orgID string) {
 // getConfig returns the config for the current context
 func (h *AISettingsHandler) getConfig(ctx context.Context) *config.Config {
 	_, mtMonitor, legacyConfig, _, _, _ := h.stateRefs()
-	orgID := GetOrgID(ctx)
+	orgID := strings.TrimSpace(GetOrgID(ctx))
+	if orgID == "" || orgID == "default" {
+		return legacyConfig
+	}
 	if mtMonitor != nil {
 		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
 			return m.GetConfig()
 		}
+		// Security: never fall back to default config for non-default orgs.
+		return nil
 	}
-	return legacyConfig
+	return nil
 }
 
 // GetPersistence returns the persistence for the current context
 func (h *AISettingsHandler) getPersistence(ctx context.Context) *config.ConfigPersistence {
 	mtPersistence, _, _, legacyPersistence, _, _ := h.stateRefs()
-	orgID := GetOrgID(ctx)
+	orgID := strings.TrimSpace(GetOrgID(ctx))
+	if orgID == "" || orgID == "default" {
+		return legacyPersistence
+	}
 	if mtPersistence != nil {
-		if p, err := mtPersistence.GetPersistence(orgID); err == nil {
+		if p, err := mtPersistence.GetPersistence(orgID); err == nil && p != nil {
 			return p
 		}
+		// Security: never fall back to default persistence for non-default orgs.
+		return nil
 	}
-	return legacyPersistence
+	return nil
 }
 
 // SetMultiTenantPersistence updates the persistence manager
