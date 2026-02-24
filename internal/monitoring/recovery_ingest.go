@@ -118,7 +118,7 @@ func buildProxmoxGuestInfoIndex(snapshot models.StateSnapshot) map[string]proxmo
 		}
 		out[key] = proxmoxmapper.GuestInfo{
 			SourceID:     sourceID,
-			ResourceType: unifiedresources.ResourceTypeLXC,
+			ResourceType: unifiedresources.ResourceTypeSystemContainer,
 			Name:         strings.TrimSpace(ct.Name),
 		}
 	}

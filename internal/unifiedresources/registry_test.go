@@ -47,7 +47,7 @@ func TestResourceRegistry_ListByType(t *testing.T) {
 		{
 			SourceID: "ct-200",
 			Resource: Resource{
-				Type:     ResourceTypeLXC,
+				Type:     ResourceTypeSystemContainer,
 				Name:     "ct-200",
 				Status:   StatusOnline,
 				LastSeen: now,

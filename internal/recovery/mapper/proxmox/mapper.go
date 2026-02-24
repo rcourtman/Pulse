@@ -44,7 +44,7 @@ func proxmoxSubjectRef(resourceType unifiedresources.ResourceType, info GuestInf
 	refType := "proxmox-guest"
 	if resourceType == unifiedresources.ResourceTypeVM {
 		refType = "proxmox-vm"
-	} else if resourceType == unifiedresources.ResourceTypeLXC {
+	} else if resourceType == unifiedresources.ResourceTypeSystemContainer {
 		refType = "proxmox-lxc"
 	}
 	return &recovery.ExternalRef{
@@ -80,7 +80,7 @@ func resourceTypeFromGuestType(guestType string) unifiedresources.ResourceType {
 	case "qemu", "vm":
 		return unifiedresources.ResourceTypeVM
 	case "lxc", "ct":
-		return unifiedresources.ResourceTypeLXC
+		return unifiedresources.ResourceTypeSystemContainer
 	default:
 		return ""
 	}

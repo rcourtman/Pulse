@@ -96,7 +96,7 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 	ct := unifiedresources.Resource{
 		ID:       "ct-200",
 		Name:     "db-ct",
-		Type:     unifiedresources.ResourceTypeLXC,
+		Type:     unifiedresources.ResourceTypeSystemContainer,
 		ParentID: &nodeWithAgentID,
 		Status:   unifiedresources.StatusOffline,
 		Proxmox: &unifiedresources.ProxmoxData{
@@ -106,7 +106,7 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 	dockerContainer := unifiedresources.Resource{
 		ID:       "dock-300",
 		Name:     "redis",
-		Type:     unifiedresources.ResourceTypeContainer,
+		Type:     unifiedresources.ResourceTypeAppContainer,
 		ParentID: &dockerHostID,
 		Status:   unifiedresources.StatusOnline,
 		Metrics: &unifiedresources.ResourceMetrics{
@@ -116,7 +116,7 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 	dockerStopped := unifiedresources.Resource{
 		ID:       "dock-301",
 		Name:     "cache",
-		Type:     unifiedresources.ResourceTypeContainer,
+		Type:     unifiedresources.ResourceTypeAppContainer,
 		ParentID: &dockerHostID,
 		Status:   unifiedresources.StatusOffline,
 	}
@@ -133,7 +133,7 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 	orphan := unifiedresources.Resource{
 		ID:     "orphan-1",
 		Name:   "orphan",
-		Type:   unifiedresources.ResourceTypeLXC,
+		Type:   unifiedresources.ResourceTypeSystemContainer,
 		Status: unifiedresources.StatusOnline,
 		Identity: unifiedresources.ResourceIdentity{
 			IPAddresses: []string{"172.16.0.5"},
@@ -147,10 +147,10 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 	stats := unifiedresources.ResourceStats{
 		Total: len(all),
 		ByType: map[unifiedresources.ResourceType]int{
-			unifiedresources.ResourceTypeHost:      5,
-			unifiedresources.ResourceTypeVM:        2,
-			unifiedresources.ResourceTypeLXC:       2,
-			unifiedresources.ResourceTypeContainer: 2,
+			unifiedresources.ResourceTypeHost:            5,
+			unifiedresources.ResourceTypeVM:              2,
+			unifiedresources.ResourceTypeSystemContainer: 2,
+			unifiedresources.ResourceTypeAppContainer:    2,
 		},
 		ByStatus: map[unifiedresources.ResourceStatus]int{
 			unifiedresources.StatusOnline:  7,
@@ -470,7 +470,7 @@ func TestResourceContextUnifiedProvider_ResourceCounts(t *testing.T) {
 		{
 			SourceID: "ct-1",
 			Resource: unifiedresources.Resource{
-				Type:     unifiedresources.ResourceTypeLXC,
+				Type:     unifiedresources.ResourceTypeSystemContainer,
 				Name:     "ct-1",
 				Status:   unifiedresources.StatusOnline,
 				LastSeen: now,
@@ -512,7 +512,7 @@ func TestResourceContextUnifiedProvider_InfrastructureWorkloadSplit(t *testing.T
 		{
 			SourceID: "ct-1",
 			Resource: unifiedresources.Resource{
-				Type:     unifiedresources.ResourceTypeLXC,
+				Type:     unifiedresources.ResourceTypeSystemContainer,
 				Name:     "ct-1",
 				Status:   unifiedresources.StatusOnline,
 				LastSeen: now,
@@ -564,7 +564,7 @@ func TestResourceContextUnifiedProvider_TopCPU(t *testing.T) {
 		{
 			SourceID: "ct-mid",
 			Resource: unifiedresources.Resource{
-				Type:     unifiedresources.ResourceTypeContainer,
+				Type:     unifiedresources.ResourceTypeAppContainer,
 				Name:     "ct-mid",
 				Status:   unifiedresources.StatusOnline,
 				LastSeen: now,
@@ -579,7 +579,7 @@ func TestResourceContextUnifiedProvider_TopCPU(t *testing.T) {
 	top := unified.GetTopByCPU(2, []unifiedresources.ResourceType{
 		unifiedresources.ResourceTypeHost,
 		unifiedresources.ResourceTypeVM,
-		unifiedresources.ResourceTypeContainer,
+		unifiedresources.ResourceTypeAppContainer,
 	})
 	if len(top) != 2 {
 		t.Fatalf("GetTopByCPU() len = %d, want 2", len(top))
@@ -606,7 +606,7 @@ func TestResourceContextUnifiedProvider_FindContainerHost(t *testing.T) {
 			SourceID:       "container-1",
 			ParentSourceID: "docker-host-1",
 			Resource: unifiedresources.Resource{
-				Type:     unifiedresources.ResourceTypeContainer,
+				Type:     unifiedresources.ResourceTypeAppContainer,
 				Name:     "web",
 				Status:   unifiedresources.StatusOnline,
 				LastSeen: now,

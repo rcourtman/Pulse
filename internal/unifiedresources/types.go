@@ -81,12 +81,6 @@ const (
 	ResourceTypePhysicalDisk    ResourceType = "physical_disk"
 )
 
-// Backward-compatible aliases — use the new names in new code.
-const (
-	ResourceTypeLXC       = ResourceTypeSystemContainer
-	ResourceTypeContainer = ResourceTypeAppContainer
-)
-
 // ResourceStatus represents the high-level status of a resource.
 type ResourceStatus string
 

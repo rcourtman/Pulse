@@ -208,7 +208,7 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 
 	r := &Resource{
 		ID:       "ct-1",
-		Type:     ResourceTypeLXC,
+		Type:     ResourceTypeSystemContainer,
 		Name:     "db-ct",
 		Status:   StatusWarning,
 		LastSeen: now,
@@ -288,7 +288,7 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 	})
 
 	t.Run("NilProxmoxAndMetricsAreSafe", func(t *testing.T) {
-		r := testResource(ResourceTypeLXC)
+		r := testResource(ResourceTypeSystemContainer)
 		r.Proxmox = nil
 		r.Metrics = nil
 		r.Tags = nil
@@ -795,7 +795,7 @@ func TestView_WorkloadView(t *testing.T) {
 	t.Run("ContainerWorkload", func(t *testing.T) {
 		r := &Resource{
 			ID:       "ct-w",
-			Type:     ResourceTypeLXC,
+			Type:     ResourceTypeSystemContainer,
 			Name:     "ct-name",
 			Status:   StatusWarning,
 			LastSeen: now,
@@ -807,7 +807,7 @@ func TestView_WorkloadView(t *testing.T) {
 		if v.IsVM() || !v.IsContainer() {
 			t.Fatalf("expected IsVM=false and IsContainer=true, got vm=%v ct=%v", v.IsVM(), v.IsContainer())
 		}
-		if v.Type() != ResourceTypeLXC || v.VMID() != 200 {
+		if v.Type() != ResourceTypeSystemContainer || v.VMID() != 200 {
 			t.Fatalf("expected type/vmid to match")
 		}
 	})
@@ -971,7 +971,7 @@ func TestView_RegistryCachedAccessors(t *testing.T) {
 		t.Fatalf("expected containers sorted by name, got %q then %q", cts[0].Name(), cts[1].Name())
 	}
 	for _, v := range cts {
-		if v == nil || v.r == nil || v.r.Type != ResourceTypeLXC {
+		if v == nil || v.r == nil || v.r.Type != ResourceTypeSystemContainer {
 			t.Fatalf("expected ContainerView to wrap an lxc resource, got %+v", v)
 		}
 	}
@@ -1064,7 +1064,7 @@ func TestView_RegistryCachedAccessors(t *testing.T) {
 		if w == nil || w.r == nil {
 			t.Fatalf("expected workload view to be non-nil")
 		}
-		if w.r.Type != ResourceTypeVM && w.r.Type != ResourceTypeLXC {
+		if w.r.Type != ResourceTypeVM && w.r.Type != ResourceTypeSystemContainer {
 			t.Fatalf("expected workload type vm or lxc, got %q", w.r.Type)
 		}
 	}

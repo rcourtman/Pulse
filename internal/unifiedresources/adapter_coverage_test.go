@@ -259,8 +259,8 @@ func TestUnifiedAIAdapterClassificationAndStats(t *testing.T) {
 		Resource{ID: "cluster-1", Type: ResourceTypeK8sCluster, Status: StatusOnline, Sources: []DataSource{SourceK8s}},
 		Resource{ID: "node-1", Type: ResourceTypeK8sNode, Status: StatusWarning, Sources: []DataSource{SourceK8s}},
 		Resource{ID: "vm-1", Type: ResourceTypeVM, Status: StatusOnline, Sources: []DataSource{SourceProxmox}},
-		Resource{ID: "lxc-1", Type: ResourceTypeLXC, Status: StatusOnline, Sources: []DataSource{SourceProxmox}},
-		Resource{ID: "ct-1", Type: ResourceTypeContainer, Status: StatusOnline, Sources: []DataSource{SourceDocker}},
+		Resource{ID: "lxc-1", Type: ResourceTypeSystemContainer, Status: StatusOnline, Sources: []DataSource{SourceProxmox}},
+		Resource{ID: "ct-1", Type: ResourceTypeAppContainer, Status: StatusOnline, Sources: []DataSource{SourceDocker}},
 		Resource{ID: "pod-1", Type: ResourceTypePod, Status: StatusOffline, Sources: []DataSource{SourceK8s}},
 		Resource{ID: "dep-1", Type: ResourceTypeK8sDeployment, Status: StatusOnline, Sources: []DataSource{SourceK8s}},
 		Resource{ID: "storage-1", Type: ResourceTypeStorage, Status: StatusOnline, Sources: []DataSource{SourceProxmox}},
@@ -275,7 +275,7 @@ func TestUnifiedAIAdapterClassificationAndStats(t *testing.T) {
 	if len(workloads) != 5 {
 		t.Fatalf("expected 5 workload resources, got %d", len(workloads))
 	}
-	containers := adapter.GetByType(ResourceTypeContainer)
+	containers := adapter.GetByType(ResourceTypeAppContainer)
 	if len(containers) != 1 || containers[0].ID != "ct-1" {
 		t.Fatalf("expected container lookup to return ct-1, got %#v", containers)
 	}
@@ -381,9 +381,9 @@ func TestUnifiedAIAdapterGetTopByMetric(t *testing.T) {
 func TestUnifiedAIAdapterGetRelated(t *testing.T) {
 	registry := testRegistry(
 		Resource{ID: "parent", Type: ResourceTypeHost, Name: "parent-host"},
-		Resource{ID: "child", Type: ResourceTypeContainer, Name: "child", ParentID: strPointer("parent")},
+		Resource{ID: "child", Type: ResourceTypeAppContainer, Name: "child", ParentID: strPointer("parent")},
 		Resource{ID: "sibling", Type: ResourceTypeVM, Name: "sibling", ParentID: strPointer("parent")},
-		Resource{ID: "grandchild", Type: ResourceTypeLXC, Name: "grandchild", ParentID: strPointer("child")},
+		Resource{ID: "grandchild", Type: ResourceTypeSystemContainer, Name: "grandchild", ParentID: strPointer("child")},
 		Resource{ID: "other", Type: ResourceTypeStorage, Name: "other"},
 	)
 	adapter := NewUnifiedAIAdapter(registry)
@@ -426,7 +426,7 @@ func TestUnifiedAIAdapterFindContainerHost(t *testing.T) {
 		},
 		Resource{
 			ID:       "ctr-a",
-			Type:     ResourceTypeContainer,
+			Type:     ResourceTypeAppContainer,
 			Name:     "web-app",
 			ParentID: strPointer("host-a"),
 			Docker:   &DockerData{ContainerID: "abc123"},
@@ -450,7 +450,7 @@ func TestUnifiedAIAdapterFindContainerHost(t *testing.T) {
 		},
 		Resource{
 			ID:       "lxc-c",
-			Type:     ResourceTypeLXC,
+			Type:     ResourceTypeSystemContainer,
 			Name:     "cache-lxc",
 			ParentID: strPointer("host-c"),
 		},
@@ -460,13 +460,13 @@ func TestUnifiedAIAdapterFindContainerHost(t *testing.T) {
 		},
 		Resource{
 			ID:       "ctr-d",
-			Type:     ResourceTypeContainer,
+			Type:     ResourceTypeAppContainer,
 			Name:     "orphan-ish",
 			ParentID: strPointer("host-d"),
 		},
 		Resource{
 			ID:       "ctr-missing",
-			Type:     ResourceTypeContainer,
+			Type:     ResourceTypeAppContainer,
 			Name:     "missing-parent",
 			ParentID: strPointer("missing-parent-id"),
 		},

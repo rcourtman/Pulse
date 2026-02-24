@@ -1271,7 +1271,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		}
 		candidates[key] = append(candidates[key], proxmoxrecoverymapper.GuestCandidate{
 			SourceID:     sourceID,
-			ResourceType: unifiedresources.ResourceTypeLXC,
+			ResourceType: unifiedresources.ResourceTypeSystemContainer,
 			DisplayName:  strings.TrimSpace(ct.Name),
 			InstanceName: strings.TrimSpace(ct.Instance),
 			NodeName:     strings.TrimSpace(ct.Node),

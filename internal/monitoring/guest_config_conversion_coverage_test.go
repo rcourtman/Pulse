@@ -190,8 +190,8 @@ func TestMonitorLegacyAndMetricHelpers(t *testing.T) {
 			want     string
 		}{
 			{name: "vm", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeVM}, want: "vm"},
-			{name: "lxc", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeLXC}, want: "container"},
-			{name: "docker container", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeContainer}, want: "docker-container"},
+			{name: "lxc", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeSystemContainer}, want: "container"},
+			{name: "docker container", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeAppContainer}, want: "docker-container"},
 			{name: "k8s cluster", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeK8sCluster}, want: "k8s-cluster"},
 			{name: "k8s node", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeK8sNode}, want: "k8s-node"},
 			{name: "pod", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypePod}, want: "pod"},
