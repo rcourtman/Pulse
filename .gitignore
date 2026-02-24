@@ -161,6 +161,8 @@ mock.env.backup
 .claudecode-settings.json
 .claudecode-hooks/
 .validation_marker
+.session_dirty_*
+.session_validated_*
 
 # Sensitive files - DO NOT COMMIT
 secrets.env
