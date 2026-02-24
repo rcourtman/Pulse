@@ -715,28 +715,41 @@ func RequirePermission(cfg *config.Config, authorizer auth.Authorizer, action, r
 			return
 		}
 
-		// Check if using proxy auth and if so, verify admin status
+		// Check if using proxy auth and if so, verify admin status.
+		// When a real RBAC authorizer is active (non-DefaultAuthorizer), non-admin
+		// proxy users are allowed through to the RBAC check below, which may grant
+		// access based on their role assignments. Without RBAC, non-admin proxy
+		// users are hard-rejected since there's no other authorization mechanism.
 		if cfg.ProxyAuthSecret != "" {
 			if valid, username, isAdmin := CheckProxyAuth(cfg, r); valid {
 				if !isAdmin {
-					// User is authenticated but not an admin
-					log.Warn().
-						Str("ip", r.RemoteAddr).
-						Str("path", r.URL.Path).
+					// Check if a real RBAC authorizer is active
+					_, isDefaultAuth := authorizer.(*internalauth.DefaultAuthorizer)
+					if isDefaultAuth {
+						// No RBAC: non-admin proxy users are rejected
+						log.Warn().
+							Str("ip", r.RemoteAddr).
+							Str("path", r.URL.Path).
+							Str("action", action).
+							Str("resource", resource).
+							Str("username", username).
+							Msg("Non-admin proxy user attempted to access permissioned endpoint (no RBAC active)")
+
+						if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
+							w.Header().Set("Content-Type", "application/json")
+							w.WriteHeader(http.StatusForbidden)
+							w.Write([]byte(`{"error":"Admin privileges required"}`))
+						} else {
+							http.Error(w, "Admin privileges required", http.StatusForbidden)
+						}
+						return
+					}
+					// RBAC active: defer to authorizer check below
+					log.Debug().
+						Str("username", username).
 						Str("action", action).
 						Str("resource", resource).
-						Str("username", username).
-						Msg("Non-admin user attempted to access permissioned endpoint")
-
-					// Return forbidden error
-					if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
-						w.Header().Set("Content-Type", "application/json")
-						w.WriteHeader(http.StatusForbidden)
-						w.Write([]byte(`{"error":"Admin privileges required"}`))
-					} else {
-						http.Error(w, "Admin privileges required", http.StatusForbidden)
-					}
-					return
+						Msg("Non-admin proxy user deferred to RBAC authorizer")
 				}
 			}
 		}

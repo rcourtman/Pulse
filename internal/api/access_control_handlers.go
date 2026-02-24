@@ -227,6 +227,16 @@ func (h *RBACHandlers) HandleUserRoleActions(w http.ResponseWriter, r *http.Requ
 
 	switch r.Method {
 	case http.MethodPut, http.MethodPost:
+		// Self-escalation prevention: users cannot modify their own role assignments.
+		// This prevents privilege escalation and ensures audit trail integrity.
+		// Only blocks writes — reads (GET) on own roles/permissions are allowed.
+		callerUser := auth.GetUser(r.Context())
+		if callerUser != "" && strings.EqualFold(callerUser, username) {
+			LogAuditEventForTenant(GetOrgID(r.Context()), "user_roles_self_modify_denied", callerUser, GetClientIP(r), r.URL.Path, false, "Attempted to modify own role assignments")
+			writeErrorResponse(w, http.StatusForbidden, "self_modification_denied", "Cannot modify your own role assignments", nil)
+			return
+		}
+
 		// Limit request body size
 		r.Body = http.MaxBytesReader(w, r.Body, 64*1024) // 64KB max
 
