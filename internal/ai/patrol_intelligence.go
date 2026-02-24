@@ -128,12 +128,12 @@ func (p *PatrolService) gatherGuestIntelligence(ctx context.Context, state model
 
 		// Look up discovery
 		vmidStr := strconv.Itoa(ct.VMID)
-		if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeLXC, ct.Node, vmidStr}]; ok {
+		if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeSystemContainer, ct.Node, vmidStr}]; ok {
 			gi.ServiceName = d.ServiceName
 			gi.ServiceType = d.ServiceType
 		}
 		if gi.ServiceName == "" && ct.Instance != "" && ct.Instance != ct.Node {
-			if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeLXC, ct.Instance, vmidStr}]; ok {
+			if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeSystemContainer, ct.Instance, vmidStr}]; ok {
 				gi.ServiceName = d.ServiceName
 				gi.ServiceType = d.ServiceType
 			}

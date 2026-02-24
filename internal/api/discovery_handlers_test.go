@@ -388,7 +388,7 @@ func TestHandleListByType(t *testing.T) {
 	h, _, store := setupDiscoveryHandlers(t)
 
 	d1 := &servicediscovery.ResourceDiscovery{ID: "vm:1", ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "1", HostID: "h"}
-	d2 := &servicediscovery.ResourceDiscovery{ID: "lxc:2", ResourceType: servicediscovery.ResourceTypeLXC, ResourceID: "2", HostID: "h"}
+	d2 := &servicediscovery.ResourceDiscovery{ID: "lxc:2", ResourceType: servicediscovery.ResourceTypeSystemContainer, ResourceID: "2", HostID: "h"}
 	require.NoError(t, store.Save(d1))
 	require.NoError(t, store.Save(d2))
 

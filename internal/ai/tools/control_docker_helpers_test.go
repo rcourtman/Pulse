@@ -14,7 +14,7 @@ func TestResolveDockerContainer(t *testing.T) {
 		exec := NewPulseToolExecutor(ExecutorConfig{})
 		_, _, err := exec.resolveDockerContainer("web", "")
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "state provider not available")
+		assert.Contains(t, err.Error(), "read state not available")
 	})
 
 	t.Run("HostMatch", func(t *testing.T) {

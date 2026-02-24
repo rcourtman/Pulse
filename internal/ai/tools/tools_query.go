@@ -1839,7 +1839,7 @@ func (r *RoutingValidationResult) IsBlocked() bool {
 // they probably intend to target that child, not the parent host.
 func (e *PulseToolExecutor) validateRoutingContext(targetHost string) RoutingValidationResult {
 	// Skip if no state provider or resolved context
-	if e.stateProvider == nil || e.resolvedContext == nil {
+	if !e.hasReadState() || e.resolvedContext == nil {
 		return RoutingValidationResult{}
 	}
 
@@ -1934,13 +1934,13 @@ func (e *PulseToolExecutor) findRecentlyReferencedChildrenOnNode(nodeName string
 		}
 		// Check if this LXC is in the resolved context AND was recently accessed
 		if res, found := e.resolvedContext.GetResolvedResourceByAlias(ct.Name()); found {
-			if res.GetKind() == "lxc" {
+			if res.GetKind() == "system-container" {
 				resourceID := res.GetResourceID()
 				if e.resolvedContext.WasRecentlyAccessed(resourceID, RecentAccessWindow) {
 					children = append(children, recentChildInfo{
 						Name:       ct.Name(),
 						ResourceID: resourceID,
-						Kind:       "lxc",
+						Kind:       "system-container",
 					})
 				}
 			}
@@ -3024,13 +3024,9 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 		return NewErrorResult(fmt.Errorf("resource_id is required")), nil
 	}
 
-	if e.stateProvider == nil {
-		return NewTextResult("State information not available."), nil
-	}
-
 	rs, err := e.readStateForControl()
 	if err != nil {
-		return NewErrorResult(err), nil
+		return NewTextResult("State information not available."), nil
 	}
 
 	switch resourceType {
@@ -3118,7 +3114,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 
 				// Register in resolved context WITH explicit access (single-resource get operation)
 				e.registerResolvedResourceWithExplicitAccess(ResourceRegistration{
-					Kind:          "lxc",
+					Kind:          "system-container",
 					ProviderUID:   fmt.Sprintf("%d", ct.VMID()), // VMID is the stable provider ID
 					Name:          ct.Name(),
 					Aliases:       []string{ct.Name(), fmt.Sprintf("%d", ct.VMID()), ct.ID()},
@@ -3126,7 +3122,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 					HostName:      ct.Node(),
 					VMID:          ct.VMID(),
 					Node:          ct.Node(),
-					LocationChain: []string{"node:" + ct.Node(), "lxc:" + ct.Name()},
+					LocationChain: []string{"node:" + ct.Node(), "system-container:" + ct.Name()},
 					Executors: []ExecutorRegistration{{
 						ExecutorID: ct.Node(),
 						Adapter:    "pct",
@@ -3304,9 +3300,6 @@ func (e *PulseToolExecutor) executeGetGuestConfig(_ context.Context, args map[st
 	if resourceID == "" {
 		return NewErrorResult(fmt.Errorf("resource_id is required")), nil
 	}
-	if e.stateProvider == nil {
-		return NewTextResult("State information not available."), nil
-	}
 	if e.guestConfigProvider == nil {
 		return NewTextResult("Guest configuration not available."), nil
 	}
@@ -3321,7 +3314,7 @@ func (e *PulseToolExecutor) executeGetGuestConfig(_ context.Context, args map[st
 	var err error
 	rs, err := e.readStateForControl()
 	if err != nil {
-		return NewErrorResult(err), nil
+		return NewTextResult("State information not available."), nil
 	}
 	guestType, vmID, name, node, instance, err = resolveGuestFromReadState(rs, resourceType, resourceID)
 	if err != nil {
@@ -3526,7 +3519,7 @@ func parseOnbootValue(value interface{}) *bool {
 }
 
 func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
+	if !e.hasReadState() {
 		return NewTextResult("State provider not available."), nil
 	}
 
@@ -3713,7 +3706,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 			}
 			// Build searchable candidates: name, ID, VMID, type-prefixed VMID, IPs, tags
 			vmidStr := fmt.Sprintf("%d", ct.VMID())
-			candidates := []string{ct.Name(), ct.ID(), vmidStr, "lxc" + vmidStr, "ct" + vmidStr}
+			candidates := []string{ct.Name(), ct.ID(), vmidStr, "lxc" + vmidStr, "ct" + vmidStr, "system-container" + vmidStr}
 			candidates = append(candidates, ct.IPAddresses()...)
 			candidates = append(candidates, ct.Tags()...)
 
@@ -3875,7 +3868,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 			}
 		case "system-container", "container":
 			reg = ResourceRegistration{
-				Kind:          "lxc",
+				Kind:          "system-container",
 				ProviderUID:   fmt.Sprintf("%d", match.VMID),
 				Name:          match.Name,
 				Aliases:       []string{match.Name, fmt.Sprintf("%d", match.VMID), match.ID},
@@ -3883,7 +3876,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 				HostName:      match.Node,
 				VMID:          match.VMID,
 				Node:          match.Node,
-				LocationChain: []string{"node:" + match.Node, "lxc:" + match.Name},
+				LocationChain: []string{"node:" + match.Node, "system-container:" + match.Name},
 				Executors: []ExecutorRegistration{{
 					ExecutorID: match.Node,
 					Adapter:    "pct",
@@ -3934,13 +3927,13 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 }
 
 func (e *PulseToolExecutor) executeGetConnectionHealth(_ context.Context, _ map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
+	if e.connectionHealth == nil {
 		return NewTextResult("State provider not available."), nil
 	}
 
-	state := e.stateProvider.GetState()
+	health := e.connectionHealth.GetConnectionHealth()
 
-	if len(state.ConnectionHealth) == 0 {
+	if len(health) == 0 {
 		return NewTextResult("No connection health data available."), nil
 	}
 
@@ -3948,7 +3941,7 @@ func (e *PulseToolExecutor) executeGetConnectionHealth(_ context.Context, _ map[
 	connected := 0
 	disconnected := 0
 
-	for instanceID, isConnected := range state.ConnectionHealth {
+	for instanceID, isConnected := range health {
 		connections = append(connections, ConnectionStatus{
 			InstanceID: instanceID,
 			Connected:  isConnected,

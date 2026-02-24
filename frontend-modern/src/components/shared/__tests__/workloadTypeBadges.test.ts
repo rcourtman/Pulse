@@ -21,21 +21,21 @@ describe('workloadTypeBadges', () => {
       });
     });
 
-    describe('LXC types', () => {
-      it('returns LXC badge for lxc', () => {
+    describe('System container types', () => {
+      it('returns Container badge for lxc', () => {
         const result = getWorkloadTypeBadge('lxc');
-        expect(result.label).toBe('LXC');
-        expect(result.title).toBe('LXC Container');
+        expect(result.label).toBe('Container');
+        expect(result.title).toBe('System Container');
       });
 
-      it('returns LXC badge for ct', () => {
+      it('returns Container badge for ct', () => {
         const result = getWorkloadTypeBadge('ct');
-        expect(result.label).toBe('LXC');
+        expect(result.label).toBe('Container');
       });
 
-      it('returns LXC badge for container', () => {
+      it('returns Container badge for container', () => {
         const result = getWorkloadTypeBadge('container');
-        expect(result.label).toBe('LXC');
+        expect(result.label).toBe('Container');
       });
     });
 

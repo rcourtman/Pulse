@@ -12,13 +12,13 @@ import (
 type ResourceType string
 
 const (
-	ResourceTypeVM        ResourceType = "vm"
-	ResourceTypeLXC       ResourceType = "lxc"
-	ResourceTypeDocker    ResourceType = "docker"
-	ResourceTypeK8s       ResourceType = "k8s"
-	ResourceTypeHost      ResourceType = "host"
-	ResourceTypeDockerVM  ResourceType = "docker_vm"  // Docker on a VM
-	ResourceTypeDockerLXC ResourceType = "docker_lxc" // Docker in an LXC
+	ResourceTypeVM                    ResourceType = "vm"
+	ResourceTypeSystemContainer       ResourceType = "system-container"
+	ResourceTypeDocker                ResourceType = "docker"
+	ResourceTypeK8s                   ResourceType = "k8s"
+	ResourceTypeHost                  ResourceType = "host"
+	ResourceTypeDockerVM              ResourceType = "docker_vm"               // Docker on a VM
+	ResourceTypeDockerSystemContainer ResourceType = "docker_system-container" // Docker in a system container
 )
 
 // FactCategory categorizes discovery facts.
@@ -55,8 +55,8 @@ const (
 // ResourceDiscovery is the main data model for discovered resource information.
 type ResourceDiscovery struct {
 	// Identity
-	ID           string       `json:"id"`            // Unique ID: "lxc:minipc:101"
-	ResourceType ResourceType `json:"resource_type"` // vm, lxc, docker, k8s, host
+	ID           string       `json:"id"`            // Unique ID: "system-container:minipc:101"
+	ResourceType ResourceType `json:"resource_type"` // vm, system-container, docker, k8s, host
 	ResourceID   string       `json:"resource_id"`   // 101, container-name, etc.
 	HostID       string       `json:"host_id"`       // Proxmox node name or host agent ID
 	Hostname     string       `json:"hostname"`      // Human-readable host name

@@ -723,7 +723,7 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
     'netIo',
     'link',
   ]),
-  lxc: new Set([
+  'system-container': new Set([
     'name',
     'vmid',
     'cpu',
@@ -844,13 +844,13 @@ export function GuestRow(props: GuestRowProps) {
   const clusterName = createMemo(() => props.guest.clusterName?.trim() ?? '');
   const isPveWorkload = createMemo(() => {
     const t = workloadType();
-    return t === 'vm' || t === 'lxc';
+    return t === 'vm' || t === 'system-container';
   });
 
   // Merged identifier for the "all" view — shows the most relevant ID per type
   const infoValue = createMemo(() => {
     const type = workloadType();
-    if (type === 'vm' || type === 'lxc') return displayId();
+    if (type === 'vm' || type === 'system-container') return displayId();
     if (type === 'docker') return dockerImage() ? getShortImageName(dockerImage()) : '';
     if (type === 'k8s') return namespace();
     return '';
@@ -862,11 +862,11 @@ export function GuestRow(props: GuestRowProps) {
   });
   const supportsBackup = createMemo(() => {
     const type = workloadType();
-    return type === 'vm' || type === 'lxc';
+    return type === 'vm' || type === 'system-container';
   });
 
   const isOCIContainer = createMemo(() => {
-    if (workloadType() !== 'lxc') return false;
+    if (workloadType() !== 'system-container') return false;
     const container = props.guest as Container;
     return props.guest.type === 'oci' || container.isOci === true;
   });

@@ -184,8 +184,9 @@ func TestBackupAndDiskAdapters(t *testing.T) {
 		Backups: models.Backups{PVE: models.PVEBackups{
 			BackupTasks: []models.BackupTask{{ID: "task1"}},
 		}},
-		PBSInstances: []models.PBSInstance{{ID: "pbs1"}},
-		Hosts:        []models.Host{{ID: "h1"}},
+		PBSInstances:    []models.PBSInstance{{ID: "pbs1"}},
+		ReplicationJobs: []models.ReplicationJob{{ID: "rep1"}},
+		Hosts:           []models.Host{{ID: "h1"}},
 	}
 	if NewBackupMCPAdapter(nil) != nil {
 		t.Fatal("expected nil backup adapter for nil state")
@@ -204,6 +205,22 @@ func TestBackupAndDiskAdapters(t *testing.T) {
 	diskAdapter := NewDiskHealthMCPAdapter(fakeStateGetter{state: state})
 	if len(diskAdapter.GetHosts()) != 1 {
 		t.Fatal("expected hosts")
+	}
+
+	if NewReplicationMCPAdapter(nil) != nil {
+		t.Fatal("expected nil replication adapter for nil state")
+	}
+	replicationAdapter := NewReplicationMCPAdapter(fakeStateGetter{state: state})
+	if len(replicationAdapter.GetReplicationJobs()) != 1 {
+		t.Fatal("expected replication jobs")
+	}
+
+	if NewConnectionHealthMCPAdapter(nil) != nil {
+		t.Fatal("expected nil connection health adapter for nil state")
+	}
+	connectionHealthAdapter := NewConnectionHealthMCPAdapter(fakeStateGetter{state: state})
+	if len(connectionHealthAdapter.GetConnectionHealth()) != 0 {
+		t.Fatal("expected empty connection health map")
 	}
 }
 

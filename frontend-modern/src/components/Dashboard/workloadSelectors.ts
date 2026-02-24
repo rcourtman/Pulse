@@ -278,7 +278,7 @@ export const createWorkloadSortComparator = (
 
 export const getWorkloadGroupKey = (guest: WorkloadGuest): string => {
   const type = resolveWorkloadType(guest);
-  if (type === 'vm' || type === 'lxc') {
+  if (type === 'vm' || type === 'system-container') {
     return `${guest.instance}-${guest.node}`;
   }
   const context = guest.contextLabel || guest.node || guest.instance || guest.namespace || guest.id;
@@ -327,7 +327,7 @@ export const computeWorkloadStats = (guests: WorkloadGuest[]): WorkloadStats => 
   }).length;
   const stopped = guests.length - running - degraded;
   const vms = guests.filter((g) => resolveWorkloadType(g) === 'vm').length;
-  const containers = guests.filter((g) => resolveWorkloadType(g) === 'lxc').length;
+  const containers = guests.filter((g) => resolveWorkloadType(g) === 'system-container').length;
   const docker = guests.filter((g) => resolveWorkloadType(g) === 'docker').length;
   const k8s = guests.filter((g) => resolveWorkloadType(g) === 'k8s').length;
 

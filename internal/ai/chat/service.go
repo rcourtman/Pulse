@@ -413,7 +413,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 				switch mention.ResourceType {
 				case "system-container", "lxc":
 					if mention.HostID != "" {
-						resourceID = "lxc:" + mention.HostID + ":" + mention.ResourceID
+						resourceID = "system-container:" + mention.HostID + ":" + mention.ResourceID
 					}
 				case "vm":
 					if mention.HostID != "" {

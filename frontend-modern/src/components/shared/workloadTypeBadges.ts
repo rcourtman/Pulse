@@ -26,14 +26,9 @@ const BADGE_MAP: Record<WorkloadTypeBadgeKey, WorkloadTypeBadge> = {
     title: 'System Container',
     className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
   },
-  lxc: {
-    label: 'LXC',
-    title: 'LXC Container',
-    className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-  },
   container: {
-    label: 'LXC',
-    title: 'LXC Container',
+    label: 'CT',
+    title: 'System Container',
     className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
   },
   'app-container': {

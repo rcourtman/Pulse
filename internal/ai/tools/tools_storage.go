@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	proxmoxrecoverymapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -537,9 +538,13 @@ func (e *PulseToolExecutor) executeGetCephStatus(_ context.Context, args map[str
 func (e *PulseToolExecutor) executeGetReplication(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	vmFilter, _ := args["vm_id"].(string)
 
-	state := e.stateProvider.GetState()
+	if e.replicationProvider == nil {
+		return NewTextResult("No replication jobs found. Replication may not be configured."), nil
+	}
 
-	if len(state.ReplicationJobs) == 0 {
+	jobs := e.replicationProvider.GetReplicationJobs()
+
+	if len(jobs) == 0 {
 		return NewTextResult("No replication jobs found. Replication may not be configured."), nil
 	}
 
@@ -560,7 +565,7 @@ func (e *PulseToolExecutor) executeGetReplication(_ context.Context, args map[st
 
 	var results []ReplicationSummary
 
-	for _, job := range state.ReplicationJobs {
+	for _, job := range jobs {
 		if vmFilter != "" && fmt.Sprintf("%d", job.GuestID) != vmFilter {
 			continue
 		}
@@ -611,8 +616,24 @@ func containsAny(s string, substrs ...string) bool {
 	return false
 }
 
+func (e *PulseToolExecutor) legacyPVESnapshotPoints() ([]recovery.RecoveryPoint, int) {
+	if e.backupProvider != nil {
+		backups := e.backupProvider.GetBackups()
+		return proxmoxrecoverymapper.FromPVEGuestSnapshots(backups.PVE.GuestSnapshots, nil), len(backups.PVE.GuestSnapshots)
+	}
+	return nil, 0
+}
+
+func (e *PulseToolExecutor) legacyPVEBackupTaskPoints() ([]recovery.RecoveryPoint, int) {
+	if e.backupProvider != nil {
+		backups := e.backupProvider.GetBackups()
+		return proxmoxrecoverymapper.FromPVEBackupTasks(backups.PVE.BackupTasks, nil), len(backups.PVE.BackupTasks)
+	}
+	return nil, 0
+}
+
 func (e *PulseToolExecutor) executeListSnapshots(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil && e.recoveryPointsProvider == nil {
+	if e.backupProvider == nil && e.recoveryPointsProvider == nil {
 		return NewTextResult("State provider not available."), nil
 	}
 
@@ -783,15 +804,25 @@ func (e *PulseToolExecutor) executeListSnapshots(ctx context.Context, args map[s
 			}
 		}
 	} else {
-		// Legacy fallback: read from state snapshot guest snapshots.
-		state := e.stateProvider.GetState()
+		// Legacy fallback: normalize snapshot data into recovery points so
+		// both paths share the same extraction behavior.
+		points, total := e.legacyPVESnapshotPoints()
+		totalCount = total
+
 		matchedIndex := 0
-		for _, snap := range state.PVEBackups.GuestSnapshots {
-			// Apply filters
-			if guestIDFilter != "" && fmt.Sprintf("%d", snap.VMID) != guestIDFilter {
+		for _, p := range points {
+			if !strings.HasPrefix(strings.TrimSpace(p.ID), "pve-snapshot:") {
 				continue
 			}
-			if instanceFilter != "" && snap.Instance != instanceFilter {
+
+			vmid := getDetailInt(p, "vmid")
+			instance := getDetailString(p, "instance")
+
+			// Apply filters
+			if guestIDFilter != "" && strconv.Itoa(vmid) != guestIDFilter {
+				continue
+			}
+			if instanceFilter != "" && instance != instanceFilter {
 				continue
 			}
 
@@ -807,22 +838,38 @@ func (e *PulseToolExecutor) executeListSnapshots(ctx context.Context, args map[s
 				continue
 			}
 
+			node := getDetailString(p, "node")
+			guestType := getDetailString(p, "type")
+			snapshotName := getDetailString(p, "snapshotName")
+			description := getDetailString(p, "description")
+
+			var ts time.Time
+			if p.CompletedAt != nil {
+				ts = p.CompletedAt.UTC()
+			} else if p.StartedAt != nil {
+				ts = p.StartedAt.UTC()
+			}
+
+			size := int64(0)
+			if p.SizeBytes != nil {
+				size = *p.SizeBytes
+			}
+
 			snapshots = append(snapshots, SnapshotSummary{
-				ID:           snap.ID,
-				VMID:         snap.VMID,
-				VMName:       vmNames[snap.VMID],
-				Type:         snap.Type,
-				Node:         snap.Node,
-				Instance:     snap.Instance,
-				SnapshotName: snap.Name,
-				Description:  snap.Description,
-				Time:         snap.Time,
-				VMState:      snap.VMState,
-				SizeBytes:    snap.SizeBytes,
+				ID:           trimPrefix(p.ID),
+				VMID:         vmid,
+				VMName:       vmNames[vmid],
+				Type:         guestType,
+				Node:         node,
+				Instance:     instance,
+				SnapshotName: snapshotName,
+				Description:  description,
+				Time:         ts,
+				VMState:      getDetailBool(p, "vmState"),
+				SizeBytes:    size,
 			})
 			matchedIndex++
 		}
-		totalCount = len(state.PVEBackups.GuestSnapshots)
 	}
 
 	if snapshots == nil {
@@ -952,7 +999,7 @@ func (e *PulseToolExecutor) executeListPBSJobs(_ context.Context, args map[strin
 }
 
 func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil && e.recoveryPointsProvider == nil {
+	if e.backupProvider == nil && e.recoveryPointsProvider == nil {
 		return NewTextResult("State provider not available."), nil
 	}
 
@@ -1104,17 +1151,31 @@ func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map
 			}
 		}
 	} else {
-		// Legacy fallback: read from state snapshot backup tasks.
-		state := e.stateProvider.GetState()
-		for _, task := range state.PVEBackups.BackupTasks {
+		// Legacy fallback: normalize backup-task data into recovery points so
+		// both paths share the same extraction behavior.
+		points, total := e.legacyPVEBackupTaskPoints()
+		totalCount = total
+
+		for _, p := range points {
+			if !strings.HasPrefix(strings.TrimSpace(p.ID), "pve-task:") {
+				continue
+			}
+
+			instance := getDetailString(p, "instance")
+			node := getDetailString(p, "node")
+			vmid := getDetailInt(p, "vmid")
+			status := getDetailString(p, "status")
+			taskType := getDetailString(p, "type")
+			errText := getDetailString(p, "error")
+
 			// Apply filters
-			if instanceFilter != "" && task.Instance != instanceFilter {
+			if instanceFilter != "" && instance != instanceFilter {
 				continue
 			}
-			if guestIDFilter != "" && fmt.Sprintf("%d", task.VMID) != guestIDFilter {
+			if guestIDFilter != "" && strconv.Itoa(vmid) != guestIDFilter {
 				continue
 			}
-			if statusFilter != "" && !strings.EqualFold(task.Status, statusFilter) {
+			if statusFilter != "" && !strings.EqualFold(status, statusFilter) {
 				continue
 			}
 
@@ -1124,21 +1185,34 @@ func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map
 				continue
 			}
 
+			started := time.Time{}
+			if p.StartedAt != nil {
+				started = p.StartedAt.UTC()
+			}
+			ended := time.Time{}
+			if p.CompletedAt != nil {
+				ended = p.CompletedAt.UTC()
+			}
+
+			size := int64(0)
+			if p.SizeBytes != nil {
+				size = *p.SizeBytes
+			}
+
 			tasks = append(tasks, BackupTaskDetail{
-				ID:        task.ID,
-				VMID:      task.VMID,
-				VMName:    vmNames[task.VMID],
-				Node:      task.Node,
-				Instance:  task.Instance,
-				Type:      task.Type,
-				Status:    task.Status,
-				StartTime: task.StartTime,
-				EndTime:   task.EndTime,
-				SizeBytes: task.Size,
-				Error:     task.Error,
+				ID:        trimPrefix(p.ID),
+				VMID:      vmid,
+				VMName:    vmNames[vmid],
+				Node:      node,
+				Instance:  instance,
+				Type:      taskType,
+				Status:    status,
+				StartTime: started,
+				EndTime:   ended,
+				SizeBytes: size,
+				Error:     errText,
 			})
 		}
-		totalCount = len(state.PVEBackups.BackupTasks)
 	}
 
 	if tasks == nil {

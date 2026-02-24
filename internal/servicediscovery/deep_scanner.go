@@ -365,7 +365,7 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 // since Docker isn't a recognized TargetType in the agent.
 func (s *DeepScanner) buildCommand(resourceType ResourceType, resourceID string, cmd string) string {
 	switch resourceType {
-	case ResourceTypeLXC:
+	case ResourceTypeSystemContainer:
 		// Agent wraps with pct exec based on TargetType="container"
 		return cmd
 	case ResourceTypeVM:
@@ -377,8 +377,8 @@ func (s *DeepScanner) buildCommand(resourceType ResourceType, resourceID string,
 	case ResourceTypeHost:
 		// Commands run directly on host
 		return cmd
-	case ResourceTypeDockerLXC:
-		// Docker inside LXC - agent wraps with pct exec, we just add docker exec
+	case ResourceTypeDockerSystemContainer:
+		// Docker inside system container - agent wraps with pct exec, we just add docker exec
 		// resourceID format: "vmid:container_name"
 		parts := splitResourceID(resourceID)
 		if len(parts) >= 2 {
@@ -400,14 +400,14 @@ func (s *DeepScanner) buildCommand(resourceType ResourceType, resourceID string,
 // getTargetType returns the target type for the agent execution payload.
 func (s *DeepScanner) getTargetType(resourceType ResourceType) string {
 	switch resourceType {
-	case ResourceTypeLXC:
+	case ResourceTypeSystemContainer:
 		return "container"
 	case ResourceTypeVM:
 		return "vm"
 	case ResourceTypeDocker:
 		return "host" // Docker commands run on host via docker exec
-	case ResourceTypeDockerLXC:
-		return "container" // Docker inside LXC: agent wraps with pct exec
+	case ResourceTypeDockerSystemContainer:
+		return "container" // Docker inside system container: agent wraps with pct exec
 	case ResourceTypeDockerVM:
 		return "vm" // Docker inside VM: agent wraps with qm guest exec
 	case ResourceTypeHost:
@@ -421,7 +421,7 @@ func (s *DeepScanner) getTargetType(resourceType ResourceType) string {
 // For nested Docker (docker_lxc/docker_vm), this extracts just the vmid.
 func (s *DeepScanner) getTargetID(resourceType ResourceType, resourceID string) string {
 	switch resourceType {
-	case ResourceTypeDockerLXC, ResourceTypeDockerVM:
+	case ResourceTypeDockerSystemContainer, ResourceTypeDockerVM:
 		// resourceID format: "vmid:container_name" - extract just vmid
 		parts := splitResourceID(resourceID)
 		if len(parts) >= 1 {
@@ -526,10 +526,10 @@ func (s *DeepScanner) ScanDocker(ctx context.Context, hostID, hostname, containe
 	return s.Scan(ctx, req)
 }
 
-// ScanLXC runs discovery on an LXC container.
-func (s *DeepScanner) ScanLXC(ctx context.Context, hostID, hostname, vmid string) (*ScanResult, error) {
+// ScanSystemContainer runs discovery on a system container (LXC).
+func (s *DeepScanner) ScanSystemContainer(ctx context.Context, hostID, hostname, vmid string) (*ScanResult, error) {
 	req := DiscoveryRequest{
-		ResourceType: ResourceTypeLXC,
+		ResourceType: ResourceTypeSystemContainer,
 		ResourceID:   vmid,
 		HostID:       hostID,
 		Hostname:     hostname,

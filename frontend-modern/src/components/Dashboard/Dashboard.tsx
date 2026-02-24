@@ -571,10 +571,17 @@ export function Dashboard(props: DashboardProps) {
 
   // Initialize from localStorage with proper type checking
   const [viewMode, setViewMode] = usePersistentSignal<ViewMode>('dashboardViewMode', 'all', {
-    deserialize: (raw) =>
-      raw === 'all' || raw === 'vm' || raw === 'lxc' || raw === 'docker' || raw === 'k8s'
-        ? raw
-        : 'all',
+    deserialize: (raw) => {
+      // Normalize legacy 'lxc' from old localStorage
+      if (raw === 'lxc') return 'system-container' as ViewMode;
+      return raw === 'all' ||
+        raw === 'vm' ||
+        raw === 'system-container' ||
+        raw === 'docker' ||
+        raw === 'k8s'
+        ? (raw as ViewMode)
+        : 'all';
+    },
   });
 
   const [containerRuntime, setContainerRuntime] = usePersistentSignal<string>(
@@ -628,7 +635,7 @@ export function Dashboard(props: DashboardProps) {
     const normalized = value.trim().toLowerCase();
     if (normalized === 'all') return 'all';
     if (normalized === 'vm' || normalized === 'qemu') return 'vm';
-    if (normalized === 'lxc' || normalized === 'system-container') return 'lxc';
+    if (normalized === 'lxc' || normalized === 'system-container') return 'system-container';
     if (
       normalized === 'docker' ||
       normalized === 'app-container' ||
@@ -1193,7 +1200,7 @@ export function Dashboard(props: DashboardProps) {
     if (prefix === 'docker') return { type: 'Containers', name: context };
     if (prefix === 'k8s') return { type: 'K8s', name: context };
     if (prefix === 'vm') return { type: 'VM', name: context };
-    if (prefix === 'lxc') return { type: 'LXC', name: context };
+    if (prefix === 'lxc' || prefix === 'system-container') return { type: 'CT', name: context };
     // For PVE workload groups (instance-node key), show node name + cluster badge
     const first = guests[0];
     if (first) {

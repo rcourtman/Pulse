@@ -138,6 +138,16 @@ type BackupProvider interface {
 	GetPBSInstances() []models.PBSInstance
 }
 
+// ReplicationProvider provides replication job information.
+type ReplicationProvider interface {
+	GetReplicationJobs() []models.ReplicationJob
+}
+
+// ConnectionHealthProvider provides instance connection health information.
+type ConnectionHealthProvider interface {
+	GetConnectionHealth() map[string]bool
+}
+
 // GuestConfigProvider provides guest configuration data (VM/system container).
 type GuestConfigProvider interface {
 	GetGuestConfig(guestType, instance, node string, vmID int) (map[string]interface{}, error)
@@ -189,7 +199,7 @@ type ResolvedResourceInfo interface {
 // This structured approach replaces the long parameter list for clarity.
 type ResourceRegistration struct {
 	// Identity
-	Kind        string   // Technology/transport kind: "node", "vm", "lxc", "docker_container", etc. (drives routing)
+	Kind        string   // Technology/transport kind: "node", "vm", "system-container", "docker_container", etc. (drives routing)
 	ProviderUID string   // Stable provider ID (container ID, VMID, pod UID)
 	Name        string   // Primary display name
 	Aliases     []string // Additional names that resolve to this resource
@@ -336,6 +346,8 @@ type ExecutorConfig struct {
 
 	// Optional providers - infrastructure
 	BackupProvider         BackupProvider
+	ReplicationProvider    ReplicationProvider
+	ConnectionHealth       ConnectionHealthProvider
 	RecoveryPointsProvider RecoveryPointsProvider
 
 	GuestConfigProvider GuestConfigProvider
@@ -383,7 +395,9 @@ type PulseToolExecutor struct {
 	findingsProvider FindingsProvider
 
 	// Infrastructure context providers
-	backupProvider BackupProvider
+	backupProvider      BackupProvider
+	replicationProvider ReplicationProvider
+	connectionHealth    ConnectionHealthProvider
 	// Paged recovery points access for snapshot/backup tools.
 	recoveryPointsProvider RecoveryPointsProvider
 
@@ -449,7 +463,7 @@ type TelemetryCallback interface {
 	// RecordRoutingMismatchBlock records when routing validation blocks an operation
 	// that targeted a parent host when a child resource was recently referenced.
 	// targetKind: "node" (the kind being targeted)
-	// childKind: "lxc", "vm", "docker_container" (the kind of the more specific resource)
+	// childKind: "system-container", "vm", "docker_container" (the kind of the more specific resource)
 	RecordRoutingMismatchBlock(tool, targetKind, childKind string)
 }
 
@@ -465,6 +479,8 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		alertProvider:          cfg.AlertProvider,
 		findingsProvider:       cfg.FindingsProvider,
 		backupProvider:         cfg.BackupProvider,
+		replicationProvider:    cfg.ReplicationProvider,
+		connectionHealth:       cfg.ConnectionHealth,
 		recoveryPointsProvider: cfg.RecoveryPointsProvider,
 
 		guestConfigProvider:      cfg.GuestConfigProvider,
@@ -486,6 +502,16 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		registry:                 NewToolRegistry(),
 	}
 
+	if e.backupProvider == nil && e.stateProvider != nil {
+		e.backupProvider = NewBackupMCPAdapter(e.stateProvider)
+	}
+	if e.replicationProvider == nil && e.stateProvider != nil {
+		e.replicationProvider = NewReplicationMCPAdapter(e.stateProvider)
+	}
+	if e.connectionHealth == nil && e.stateProvider != nil {
+		e.connectionHealth = NewConnectionHealthMCPAdapter(e.stateProvider)
+	}
+
 	// Register all tools
 	e.registerTools()
 
@@ -501,7 +527,22 @@ func normalizeExecutorOrgID(orgID string) string {
 }
 
 func (e *PulseToolExecutor) getReadState() unifiedresources.ReadState {
-	return e.readState
+	if e.readState != nil {
+		return e.readState
+	}
+	if e.stateProvider == nil {
+		return nil
+	}
+
+	// Compatibility bridge for legacy-only wiring: derive a typed ReadState view
+	// from the latest snapshot so tool handlers can stay platform-agnostic.
+	rr := unifiedresources.NewRegistry(nil)
+	rr.IngestSnapshot(e.stateProvider.GetState())
+	return rr
+}
+
+func (e *PulseToolExecutor) hasReadState() bool {
+	return e.readState != nil || e.stateProvider != nil
 }
 
 // SetContext sets the current execution context
@@ -679,21 +720,21 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	switch name {
 	// Check tool availability based on primary requirements
 	case "pulse_query":
-		return e.stateProvider != nil
+		return e.hasReadState()
 	case "pulse_metrics":
-		return e.stateProvider != nil || e.metricsHistory != nil || e.baselineProvider != nil || e.patternProvider != nil
+		return e.hasReadState() || e.metricsHistory != nil || e.baselineProvider != nil || e.patternProvider != nil
 	case "pulse_storage":
-		return e.stateProvider != nil || e.unifiedResourceProvider != nil || e.backupProvider != nil || e.diskHealthProvider != nil
+		return e.hasReadState() || e.unifiedResourceProvider != nil || e.backupProvider != nil || e.diskHealthProvider != nil
 	case "pulse_docker":
-		return e.stateProvider != nil || e.updatesProvider != nil
+		return e.hasReadState() || e.updatesProvider != nil
 	case "pulse_kubernetes":
-		return e.stateProvider != nil
+		return e.hasReadState()
 	case "pulse_alerts":
-		return e.alertProvider != nil || e.findingsProvider != nil || e.findingsManager != nil || e.stateProvider != nil
+		return e.alertProvider != nil || e.findingsProvider != nil || e.findingsManager != nil || e.hasReadState()
 	case "pulse_read":
 		return e.agentServer != nil
 	case "pulse_control":
-		return e.agentServer != nil && e.stateProvider != nil
+		return e.agentServer != nil && e.hasReadState()
 	case "pulse_file_edit":
 		return e.agentServer != nil
 	case "pulse_discovery":
@@ -706,7 +747,7 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 		// Always available when registered; handler checks patrolFindingCreator at runtime
 		return e.GetPatrolFindingCreator() != nil
 	default:
-		return e.stateProvider != nil
+		return e.hasReadState()
 	}
 }
 

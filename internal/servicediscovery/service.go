@@ -765,8 +765,8 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 		}
 	}
 
-	// Process LXC containers
-	lxcNew, lxcChanged := s.processFingerprint(ctx, GenerateLXCFingerprint, "lxc", "lxc:", state.Containers)
+	// Process system containers (LXC)
+	lxcNew, lxcChanged := s.processFingerprint(ctx, GenerateLXCFingerprint, "system-container", "system-container:", state.Containers)
 	newCount += lxcNew
 	changedCount += lxcChanged
 
@@ -970,9 +970,9 @@ func (s *Service) cleanupOrphanedData(state StateSnapshot) {
 		}
 	}
 
-	// LXC containers
-	for _, lxc := range state.Containers {
-		fpKey := "lxc:" + lxc.Node + ":" + strconv.Itoa(lxc.VMID)
+	// System containers
+	for _, ct := range state.Containers {
+		fpKey := "system-container:" + ct.Node + ":" + strconv.Itoa(ct.VMID)
 		currentIDs[fpKey] = true
 	}
 
@@ -1683,7 +1683,7 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 	metadata := make(map[string]any)
 
 	switch req.ResourceType {
-	case ResourceTypeLXC:
+	case ResourceTypeSystemContainer:
 		for _, c := range state.Containers {
 			if fmt.Sprintf("%d", c.VMID) == req.ResourceID && c.Node == req.HostID {
 				metadata["name"] = c.Name
@@ -1740,7 +1740,7 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 }
 
 // getResourceExternalIP retrieves the external IP address for a resource from the state.
-// For LXC/VM, this is the first IP from the Proxmox guest agent.
+// For system containers/VMs, this is the first IP from the Proxmox guest agent.
 // For Docker containers, this is the Docker host's IP/hostname.
 func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 	if s.stateProvider == nil {
@@ -1750,7 +1750,7 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 	state := s.stateProvider.GetState()
 
 	switch req.ResourceType {
-	case ResourceTypeLXC:
+	case ResourceTypeSystemContainer:
 		for _, c := range state.Containers {
 			if fmt.Sprintf("%d", c.VMID) == req.ResourceID && c.Node == req.HostID {
 				if len(c.IPAddresses) > 0 {
@@ -1776,8 +1776,8 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 				return host.Hostname
 			}
 		}
-	case ResourceTypeDockerVM, ResourceTypeDockerLXC:
-		// For Docker containers inside VMs/LXCs, find the VM/LXC's IP
+	case ResourceTypeDockerVM, ResourceTypeDockerSystemContainer:
+		// For Docker containers inside VMs/system containers, find the parent's IP
 		// The hostID contains the parent resource info
 		for _, vm := range state.VMs {
 			if fmt.Sprintf("%d", vm.VMID) == req.HostID || vm.Name == req.HostID {
@@ -2505,7 +2505,7 @@ func (s *Service) upgradeCLIAccessIfNeeded(d *ResourceDiscovery) {
 // lookupHostnameFromState finds the hostname/name for a resource from state
 func (s *Service) lookupHostnameFromState(resourceType ResourceType, hostID, resourceID string, state StateSnapshot) string {
 	switch resourceType {
-	case ResourceTypeLXC:
+	case ResourceTypeSystemContainer:
 		for _, c := range state.Containers {
 			if fmt.Sprintf("%d", c.VMID) == resourceID && c.Node == hostID {
 				return c.Name

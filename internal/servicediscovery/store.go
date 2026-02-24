@@ -95,6 +95,49 @@ func cloneContainerFingerprint(src *ContainerFingerprint) *ContainerFingerprint 
 	return &cloned
 }
 
+// NormalizeResourceType maps legacy resource type strings to their current values.
+func NormalizeResourceType(rt ResourceType) ResourceType {
+	switch rt {
+	case "lxc":
+		return ResourceTypeSystemContainer
+	case "docker_lxc":
+		return ResourceTypeDockerSystemContainer
+	default:
+		return rt
+	}
+}
+
+// normalizeResourceID replaces legacy type prefixes in resource IDs.
+func normalizeResourceID(id string) string {
+	if strings.HasPrefix(id, "lxc:") {
+		return string(ResourceTypeSystemContainer) + id[3:]
+	}
+	if strings.HasPrefix(id, "docker_lxc:") {
+		return string(ResourceTypeDockerSystemContainer) + id[10:]
+	}
+	return id
+}
+
+// normalizeDiscovery normalizes legacy type strings in a loaded discovery.
+func normalizeDiscovery(d *ResourceDiscovery) {
+	if d == nil {
+		return
+	}
+	d.ResourceType = NormalizeResourceType(d.ResourceType)
+	d.ID = normalizeResourceID(d.ID)
+}
+
+// toLegacyID converts a normalized resource ID back to its legacy form for file lookup.
+func toLegacyID(id string) string {
+	if strings.HasPrefix(id, "system-container:") {
+		return "lxc" + id[len("system-container"):]
+	}
+	if strings.HasPrefix(id, "docker_system-container:") {
+		return "docker_lxc" + id[len("docker_system-container"):]
+	}
+	return id
+}
+
 // For testing - allows injecting a mock crypto manager
 var newCryptoManagerAt = crypto.NewCryptoManagerAt
 
@@ -275,9 +318,24 @@ func (s *Store) Get(id string) (*ResourceDiscovery, error) {
 	data, err := readRegularFileWithLimit(filePath, maxDiscoveryFileReadBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil // Not found is not an error
+			// Try legacy filename for migrated IDs (e.g., "lxc_node1_101.enc" for "system-container:node1:101")
+			legacyID := toLegacyID(id)
+			if legacyID != id {
+				legacyPath := s.getFilePath(legacyID)
+				data, err = readRegularFileWithLimit(legacyPath, maxDiscoveryFileReadBytes)
+				if err != nil {
+					if os.IsNotExist(err) {
+						return nil, nil
+					}
+					return nil, fmt.Errorf("failed to read discovery file: %w", err)
+				}
+				// Fall through to decrypt/unmarshal below
+			} else {
+				return nil, nil // Not found is not an error
+			}
+		} else {
+			return nil, fmt.Errorf("failed to read discovery file: %w", err)
 		}
-		return nil, fmt.Errorf("failed to read discovery file: %w", err)
 	}
 
 	// Decrypt if crypto is available
@@ -293,6 +351,9 @@ func (s *Store) Get(id string) (*ResourceDiscovery, error) {
 	if err := json.Unmarshal(data, &discovery); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal discovery: %w", err)
 	}
+
+	// Normalize legacy type strings loaded from disk
+	normalizeDiscovery(&discovery)
 
 	// Update cache
 	s.cache[id] = cloneResourceDiscovery(&discovery)
@@ -373,10 +434,29 @@ func (s *Store) List() ([]*ResourceDiscovery, error) {
 			continue
 		}
 
+		// Normalize legacy type strings loaded from disk
+		normalizeDiscovery(&discovery)
+
 		discoveries = append(discoveries, &discovery)
 	}
 
-	return discoveries, nil
+	// Deduplicate by normalized ID — both legacy and new-format files may
+	// exist during lazy migration, producing duplicate entries after normalization.
+	seen := make(map[string]int, len(discoveries))
+	deduped := make([]*ResourceDiscovery, 0, len(discoveries))
+	for _, d := range discoveries {
+		if idx, exists := seen[d.ID]; exists {
+			// Keep the more recently updated entry
+			if d.UpdatedAt.After(deduped[idx].UpdatedAt) {
+				deduped[idx] = d
+			}
+		} else {
+			seen[d.ID] = len(deduped)
+			deduped = append(deduped, d)
+		}
+	}
+
+	return deduped, nil
 }
 
 // ListByType returns discoveries for a specific resource type.
@@ -682,7 +762,7 @@ func (s *Store) GetFingerprintCount() int {
 }
 
 // CleanupOrphanedFingerprints removes fingerprints for resources that no longer exist.
-// Pass in a set of current resource IDs (e.g., "docker:host1:nginx", "lxc:node1:101").
+// Pass in a set of current resource IDs (e.g., "docker:host1:nginx", "system-container:node1:101").
 // Returns the number of fingerprints removed.
 func (s *Store) CleanupOrphanedFingerprints(currentResourceIDs map[string]bool) int {
 	s.fingerprintMu.Lock()
@@ -690,7 +770,8 @@ func (s *Store) CleanupOrphanedFingerprints(currentResourceIDs map[string]bool) 
 
 	removed := 0
 	for fpID := range s.fingerprints {
-		if !currentResourceIDs[fpID] {
+		normalizedFpID := normalizeResourceID(fpID)
+		if !currentResourceIDs[fpID] && !currentResourceIDs[normalizedFpID] {
 			// Remove from memory
 			delete(s.fingerprints, fpID)
 
@@ -734,7 +815,9 @@ func (s *Store) CleanupOrphanedDiscoveries(currentResourceIDs map[string]bool) i
 			continue
 		}
 
-		if !currentResourceIDs[resourceID] {
+		// Normalize the stored ID before checking membership (handles legacy "lxc:..." IDs)
+		normalizedID := normalizeResourceID(resourceID)
+		if !currentResourceIDs[resourceID] && !currentResourceIDs[normalizedID] {
 			filePath := filepath.Join(s.dataDir, entry.Name())
 			if err := os.Remove(filePath); err != nil {
 				log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to remove orphaned discovery file")

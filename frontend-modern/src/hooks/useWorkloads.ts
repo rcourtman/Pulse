@@ -9,7 +9,8 @@ import {
 import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
 import { normalizeDiskArray } from '@/utils/format';
-import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
+import { resolveWorkloadTypeFromString } from '@/utils/workloads';
+import type { WorkloadGuest } from '@/types/workloads';
 
 const WORKLOADS_URL = '/api/resources?type=vm,system-container,app-container,pod';
 const WORKLOADS_PAGE_LIMIT = 200;
@@ -228,27 +229,7 @@ const normalizeWorkloadStatus = (status?: string | null): string => {
   return normalized;
 };
 
-const resolveWorkloadType = (value?: string | null): WorkloadType | null => {
-  const normalized = (value || '').trim().toLowerCase();
-  if (normalized === 'vm' || normalized === 'qemu') return 'vm';
-  if (
-    normalized === 'lxc' ||
-    normalized === 'system-container' ||
-    normalized === 'system_container'
-  )
-    return 'lxc';
-  if (
-    normalized === 'container' ||
-    normalized === 'docker-container' ||
-    normalized === 'docker_container' ||
-    normalized === 'app-container' ||
-    normalized === 'app_container'
-  ) {
-    return 'docker';
-  }
-  if (normalized === 'pod' || normalized === 'k8s' || normalized === 'kubernetes') return 'k8s';
-  return null;
-};
+const resolveWorkloadType = resolveWorkloadTypeFromString;
 
 const resolvePlatformType = (sources?: string[]): string | undefined => {
   const set = new Set((sources || []).map((source) => source.toLowerCase()));
@@ -331,7 +312,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
         : 0;
   const rawDisplayId = resource.id;
   const displayId =
-    workloadType === 'vm' || workloadType === 'lxc'
+    workloadType === 'vm' || workloadType === 'system-container'
       ? vmid > 0
         ? String(vmid)
         : undefined
@@ -347,7 +328,12 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
   // match what the backend charts API returns. Without this, sparklines
   // show no data because the hashed unified ID doesn't match any backend keys.
   const guestId = (() => {
-    if ((workloadType === 'vm' || workloadType === 'lxc') && instance && node && vmid > 0) {
+    if (
+      (workloadType === 'vm' || workloadType === 'system-container') &&
+      instance &&
+      node &&
+      vmid > 0
+    ) {
       return `${instance}:${node}:${vmid}`;
     }
     if (workloadType === 'docker') {
@@ -373,7 +359,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     type:
       workloadType === 'vm'
         ? 'vm'
-        : workloadType === 'lxc'
+        : workloadType === 'system-container'
           ? 'lxc'
           : workloadType === 'k8s'
             ? 'k8s'
@@ -429,7 +415,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
           : undefined,
     namespace: workloadType === 'k8s' ? resource.kubernetes?.namespace : undefined,
     contextLabel:
-      workloadType === 'vm' || workloadType === 'lxc'
+      workloadType === 'vm' || workloadType === 'system-container'
         ? node
           ? (() => {
               const cluster = resource.proxmox?.clusterName || resource.identity?.clusterName || '';

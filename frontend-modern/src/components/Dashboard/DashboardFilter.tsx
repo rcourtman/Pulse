@@ -12,8 +12,8 @@ interface DashboardFilterProps {
   search: () => string;
   setSearch: (value: string) => void;
   isSearchLocked: () => boolean;
-  viewMode: () => 'all' | 'vm' | 'lxc' | 'docker' | 'k8s';
-  setViewMode: (value: 'all' | 'vm' | 'lxc' | 'docker' | 'k8s') => void;
+  viewMode: () => 'all' | 'vm' | 'system-container' | 'docker' | 'k8s';
+  setViewMode: (value: 'all' | 'vm' | 'system-container' | 'docker' | 'k8s') => void;
   statusMode: () => 'all' | 'running' | 'degraded' | 'stopped';
   setStatusMode: (value: 'all' | 'running' | 'degraded' | 'stopped') => void;
   groupingMode: () => 'grouped' | 'flat';
@@ -179,14 +179,19 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                 value={props.viewMode()}
                 onChange={(event) =>
                   props.setViewMode(
-                    event.currentTarget.value as 'all' | 'vm' | 'lxc' | 'docker' | 'k8s',
+                    event.currentTarget.value as
+                      | 'all'
+                      | 'vm'
+                      | 'system-container'
+                      | 'docker'
+                      | 'k8s',
                   )
                 }
                 class="min-w-[7rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">All</option>
                 <option value="vm">VMs</option>
-                <option value="lxc">LXCs</option>
+                <option value="system-container">CTs</option>
                 <option value="docker">Containers</option>
                 <option value="k8s">K8s</option>
               </select>

@@ -185,7 +185,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
       switch (explicitDiscoveryTarget.resourceType) {
         case 'host':
         case 'vm':
-        case 'lxc':
+        case 'system-container':
         case 'docker':
         case 'k8s':
           return explicitDiscoveryTarget.resourceType;
@@ -311,7 +311,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     case 'container':
     case 'oci-container':
       return {
-        resourceType: 'lxc',
+        resourceType: 'system-container',
         hostId: workloadHostId,
         resourceId: vmidResourceId || resource.id,
         hostname,

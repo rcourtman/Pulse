@@ -14,7 +14,7 @@ const firstNonEmpty = (values: Array<string | undefined | null>): string | undef
 export const buildInfrastructureHrefForWorkload = (guest: WorkloadGuest): string => {
   const type = resolveWorkloadType(guest);
 
-  if (type === 'vm' || type === 'lxc') {
+  if (type === 'vm' || type === 'system-container') {
     const query = firstNonEmpty([guest.node, guest.instance, guest.name]);
     return buildInfrastructurePath({ source: 'proxmox', query });
   }

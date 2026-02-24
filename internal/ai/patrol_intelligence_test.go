@@ -71,7 +71,7 @@ func TestGatherGuestIntelligence_DiscoveryMatching(t *testing.T) {
 		},
 		{
 			ID:           "lxc:pve1:101",
-			ResourceType: servicediscovery.ResourceTypeLXC,
+			ResourceType: servicediscovery.ResourceTypeSystemContainer,
 			HostID:       "pve1",
 			ResourceID:   "101",
 			ServiceName:  "Nginx",

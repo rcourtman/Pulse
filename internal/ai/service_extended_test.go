@@ -489,7 +489,7 @@ func TestFormatContextKey(t *testing.T) {
 	}{
 		{"guestName", "Guest Name"},
 		{"vmid", "VMID"},
-		{"node", "PVE Node (host)"},
+		{"node", "Host Node"},
 		{"unknown_key", "unknown_key"},
 	}
 

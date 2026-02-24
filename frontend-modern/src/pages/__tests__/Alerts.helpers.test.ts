@@ -275,9 +275,9 @@ describe('unifiedTypeToAlertDisplayType', () => {
     expect(unifiedTypeToAlertDisplayType('vm')).toBe('VM');
   });
 
-  it('maps container and oci-container to CT', () => {
-    expect(unifiedTypeToAlertDisplayType('container')).toBe('CT');
-    expect(unifiedTypeToAlertDisplayType('oci-container')).toBe('CT');
+  it('maps container and oci-container to Container', () => {
+    expect(unifiedTypeToAlertDisplayType('container')).toBe('Container');
+    expect(unifiedTypeToAlertDisplayType('oci-container')).toBe('Container');
   });
 
   it('maps docker-container to Container', () => {
@@ -328,8 +328,8 @@ describe('Unified selector parity', () => {
       ['k8s-node', 'k8s-node'],
       ['truenas', 'truenas'],
       ['vm', 'VM'],
-      ['container', 'CT'],
-      ['oci-container', 'CT'],
+      ['container', 'Container'],
+      ['oci-container', 'Container'],
       ['docker-container', 'Container'],
       ['pod', 'pod'],
       ['jail', 'jail'],
@@ -369,7 +369,7 @@ describe('Unified selector parity', () => {
       id,
       name,
       type: 'guest' as const,
-      resourceType: guestType === 'qemu' ? 'VM' : 'CT',
+      resourceType: guestType === 'qemu' ? 'VM' : 'Container',
       vmid,
       node,
       instance,

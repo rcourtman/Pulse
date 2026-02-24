@@ -1,7 +1,7 @@
 import type { VM, Container, DockerContainerUpdateStatus } from './api';
 
-export type WorkloadType = 'vm' | 'lxc' | 'docker' | 'k8s';
-export type ViewMode = 'all' | 'vm' | 'lxc' | 'docker' | 'k8s';
+export type WorkloadType = 'vm' | 'system-container' | 'docker' | 'k8s';
+export type ViewMode = 'all' | 'vm' | 'system-container' | 'docker' | 'k8s';
 
 export type WorkloadGuest = (VM | Container) & {
   workloadType?: WorkloadType;

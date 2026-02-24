@@ -1059,7 +1059,7 @@ func buildDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
 	case unified.ResourceTypeVM:
 		return proxmoxGuestDiscoveryTarget(resource, "vm")
 	case unified.ResourceTypeSystemContainer:
-		return proxmoxGuestDiscoveryTarget(resource, "lxc")
+		return proxmoxGuestDiscoveryTarget(resource, "system-container")
 	case unified.ResourceTypePBS:
 		return hostDiscoveryTarget(resource)
 	case unified.ResourceTypePMG:

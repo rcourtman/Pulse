@@ -1908,7 +1908,7 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 				}
 				gi := guestIntel[ctv.ID()]
 				guests = append(guests, guestRow{
-					name: ctv.Name(), gType: "CT", node: ctv.Node(), status: string(ctv.Status()),
+					name: ctv.Name(), gType: "Container", node: ctv.Node(), status: string(ctv.Status()),
 					cpu: ctv.CPUPercent(), mem: ctv.MemoryPercent(), disk: ctv.DiskPercent(),
 					lastBackup: ctv.LastBackup(),
 					service:    formatService(gi),
@@ -1935,7 +1935,7 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 				}
 				gi := guestIntel[ct.ID]
 				guests = append(guests, guestRow{
-					name: ct.Name, gType: "CT", node: ct.Node, status: ct.Status,
+					name: ct.Name, gType: "Container", node: ct.Node, status: ct.Status,
 					cpu: ct.CPU * 100, mem: ct.Memory.Usage, disk: ct.Disk.Usage,
 					lastBackup: ct.LastBackup,
 					service:    formatService(gi),
@@ -1996,7 +1996,7 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 				if g.status == "running" && g.reachable == "NO" {
 					svc := g.service
 					if svc == "-" {
-						svc = strings.ToUpper(g.gType) // "VM" or "CT"
+						svc = g.gType // "VM" or "Container"
 					}
 					issues = append(issues, serviceHealthIssue{
 						name:    g.name,

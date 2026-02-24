@@ -110,7 +110,7 @@ vi.mock('../GuestRow', () => {
     VIEW_MODE_COLUMNS: {
       all: new Set(['name', 'status']),
       vm: new Set(['name', 'status']),
-      lxc: new Set(['name', 'status']),
+      'system-container': new Set(['name', 'status']),
       docker: new Set(['name', 'status']),
       k8s: new Set(['name', 'status']),
     },
@@ -153,7 +153,7 @@ const makeGuest = (i: number, overrides?: Record<string, unknown>) => ({
   tags: [],
   lock: '',
   lastSeen: new Date().toISOString(),
-  workloadType: i % 4 === 0 ? 'lxc' : i % 3 === 0 ? 'docker' : 'vm',
+  workloadType: i % 4 === 0 ? 'system-container' : i % 3 === 0 ? 'docker' : 'vm',
   ...overrides,
 });
 
@@ -321,16 +321,16 @@ describe('Dashboard performance contract', () => {
   });
 
   describe('Filter mode contract', () => {
-    it('applies all/vm/lxc/docker type filters deterministically for Profile S', async () => {
+    it('applies all/vm/system-container/docker type filters deterministically for Profile S', async () => {
       const profileGuests = makeGuests(PROFILES.S);
       const expectedByMode = {
         all: PROFILES.S,
         vm: profileGuests.filter((guest) => guest.type === 'vm').length,
-        lxc: profileGuests.filter((guest) => guest.type === 'lxc').length,
+        'system-container': profileGuests.filter((guest) => guest.type === 'lxc').length,
         docker: profileGuests.filter((guest) => guest.type === 'docker').length,
       };
 
-      for (const mode of ['all', 'vm', 'lxc', 'docker'] as const) {
+      for (const mode of ['all', 'vm', 'system-container', 'docker'] as const) {
         mockLocationSearch = `?type=${mode}`;
         mockWorkloads = profileGuests;
 

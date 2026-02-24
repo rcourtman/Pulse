@@ -16,7 +16,7 @@ func (e *PulseToolExecutor) registerReadTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
 			Name:        "pulse_read",
-			Description: `Execute read-only operations on infrastructure (exec, file, find, tail, logs). Rejects write commands. target_host routes to Proxmox host, LXC, or VM by name.`,
+			Description: `Execute read-only operations on infrastructure (exec, file, find, tail, logs). Rejects write commands. target_host routes to host, system container, or VM by name.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -27,7 +27,7 @@ func (e *PulseToolExecutor) registerReadTools() {
 					},
 					"target_host": {
 						Type:        "string",
-						Description: "Hostname to read from (Proxmox host, LXC name, or VM name)",
+						Description: "Hostname to read from (host, system container name, or VM name)",
 					},
 					"command": {
 						Type:        "string",

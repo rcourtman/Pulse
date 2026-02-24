@@ -28,7 +28,7 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
   const infrastructurePath = buildInfrastructurePath();
   const workloadsPath = buildWorkloadsPath();
   const kubernetesWorkloadsPath = buildWorkloadsPath({ type: 'k8s' });
-  const lxcWorkloadsPath = buildWorkloadsPath({ type: 'lxc' });
+  const lxcWorkloadsPath = buildWorkloadsPath({ type: 'system-container' });
   const storagePath = buildStoragePath();
   const recoveryPath = buildRecoveryPath();
   const classicProxmoxPath = buildInfrastructurePath({ source: 'proxmox' });

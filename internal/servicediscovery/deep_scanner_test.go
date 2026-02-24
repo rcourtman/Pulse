@@ -162,7 +162,7 @@ func TestDeepScanner_FindAgentAndTargetType(t *testing.T) {
 		t.Fatalf("expected no agent, got %s", got)
 	}
 
-	if scanner.getTargetType(ResourceTypeLXC) != "container" {
+	if scanner.getTargetType(ResourceTypeSystemContainer) != "container" {
 		t.Fatalf("unexpected target type for lxc")
 	}
 	if scanner.getTargetType(ResourceTypeVM) != "vm" {
@@ -191,11 +191,11 @@ func TestDeepScanner_GetTargetTypeAndID(t *testing.T) {
 		resourceType ResourceType
 		wantType     string
 	}{
-		{ResourceTypeLXC, "container"},
+		{ResourceTypeSystemContainer, "container"},
 		{ResourceTypeVM, "vm"},
 		{ResourceTypeDocker, "host"},
-		{ResourceTypeDockerLXC, "container"}, // Docker inside LXC runs via pct exec
-		{ResourceTypeDockerVM, "vm"},         // Docker inside VM runs via qm guest exec
+		{ResourceTypeDockerSystemContainer, "container"}, // Docker inside LXC runs via pct exec
+		{ResourceTypeDockerVM, "vm"},                     // Docker inside VM runs via qm guest exec
 		{ResourceTypeHost, "host"},
 		{ResourceType("unknown"), "host"},
 	}
@@ -211,11 +211,11 @@ func TestDeepScanner_GetTargetTypeAndID(t *testing.T) {
 		resourceID   string
 		wantID       string
 	}{
-		{ResourceTypeLXC, "101", "101"},
+		{ResourceTypeSystemContainer, "101", "101"},
 		{ResourceTypeVM, "102", "102"},
 		{ResourceTypeDocker, "web", "web"},
-		{ResourceTypeDockerLXC, "201:nginx", "201"},   // Extract vmid for nested docker
-		{ResourceTypeDockerVM, "301:postgres", "301"}, // Extract vmid for nested docker
+		{ResourceTypeDockerSystemContainer, "201:nginx", "201"}, // Extract vmid for nested docker
+		{ResourceTypeDockerVM, "301:postgres", "301"},           // Extract vmid for nested docker
 		{ResourceTypeHost, "myhost", "myhost"},
 	}
 	for _, tt := range idTests {
@@ -229,7 +229,7 @@ func TestDeepScanner_BuildCommandAndProgress(t *testing.T) {
 	scanner := NewDeepScanner(&stubExecutor{})
 
 	// LXC: buildCommand returns raw command, agent handles pct exec wrapping
-	if cmd := scanner.buildCommand(ResourceTypeLXC, "101", "echo hi"); cmd != "echo hi" {
+	if cmd := scanner.buildCommand(ResourceTypeSystemContainer, "101", "echo hi"); cmd != "echo hi" {
 		t.Fatalf("LXC should return raw command (agent wraps), got: %s", cmd)
 	}
 	// VM: buildCommand returns raw command, agent handles qm guest exec wrapping
@@ -247,14 +247,14 @@ func TestDeepScanner_BuildCommandAndProgress(t *testing.T) {
 
 	// DockerLXC: buildCommand adds docker exec, agent adds pct exec
 	// So we should only see docker exec in the command (agent adds pct exec at runtime)
-	dockerLXC := scanner.buildCommand(ResourceTypeDockerLXC, "201:web", "echo hi")
+	dockerLXC := scanner.buildCommand(ResourceTypeDockerSystemContainer, "201:web", "echo hi")
 	if !strings.Contains(dockerLXC, "docker exec") {
 		t.Fatalf("DockerLXC should include docker exec, got: %s", dockerLXC)
 	}
 	if strings.Contains(dockerLXC, "pct exec") {
 		t.Fatalf("DockerLXC should NOT include pct exec (agent adds it), got: %s", dockerLXC)
 	}
-	if cmd := scanner.buildCommand(ResourceTypeDockerLXC, "bad", "echo hi"); cmd != "echo hi" {
+	if cmd := scanner.buildCommand(ResourceTypeDockerSystemContainer, "bad", "echo hi"); cmd != "echo hi" {
 		t.Fatalf("DockerLXC with bad ID should fallback, got: %s", cmd)
 	}
 
@@ -305,8 +305,8 @@ func TestDeepScanner_ScanWrappers(t *testing.T) {
 	if _, err := scanner.ScanDocker(context.Background(), "host1", "host1", "web"); err != nil {
 		t.Fatalf("ScanDocker error: %v", err)
 	}
-	if _, err := scanner.ScanLXC(context.Background(), "host1", "host1", "101"); err != nil {
-		t.Fatalf("ScanLXC error: %v", err)
+	if _, err := scanner.ScanSystemContainer(context.Background(), "host1", "host1", "101"); err != nil {
+		t.Fatalf("ScanSystemContainer error: %v", err)
 	}
 	if _, err := scanner.ScanVM(context.Background(), "host1", "host1", "102"); err != nil {
 		t.Fatalf("ScanVM error: %v", err)

@@ -473,10 +473,11 @@ func discoveryTokens(d *ResourceDiscovery) []string {
 		add("qemu/" + d.ResourceID)
 		add("vm/" + d.ResourceID)
 		add("vm-" + d.ResourceID)
-	case ResourceTypeLXC:
+	case ResourceTypeSystemContainer:
 		add("lxc/" + d.ResourceID)
 		add("ct/" + d.ResourceID)
 		add("ct-" + d.ResourceID)
+		add("system-container/" + d.ResourceID)
 	case ResourceTypeDocker:
 		if d.HostID != "" {
 			add("docker:" + d.HostID)

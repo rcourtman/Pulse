@@ -109,7 +109,7 @@ export interface ResourceIdentity {
 }
 
 export interface ResourceDiscoveryTarget {
-  resourceType: 'host' | 'vm' | 'lxc' | 'docker' | 'k8s' | 'disk' | 'ceph';
+  resourceType: 'host' | 'vm' | 'system-container' | 'docker' | 'k8s' | 'disk' | 'ceph';
   hostId: string;
   resourceId: string;
   hostname?: string;

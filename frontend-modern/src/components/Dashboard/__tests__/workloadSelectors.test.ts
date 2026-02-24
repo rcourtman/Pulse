@@ -332,7 +332,7 @@ describe('workloadSelectors', () => {
       const guests = [
         makeGuest(1, { type: 'vm', workloadType: 'vm', status: 'running' }),
         makeGuest(2, { type: 'vm', workloadType: 'vm', status: 'warning' }),
-        makeGuest(3, { type: 'lxc', workloadType: 'lxc', status: 'offline' }),
+        makeGuest(3, { type: 'lxc', workloadType: 'system-container', status: 'offline' }),
         makeGuest(4, { type: 'docker', workloadType: 'docker', status: 'running' }),
         makeGuest(5, { type: 'k8s', workloadType: 'k8s', status: 'migrating' }),
       ];

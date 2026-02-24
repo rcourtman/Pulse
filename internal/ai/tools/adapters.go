@@ -132,6 +132,50 @@ func (a *BackupMCPAdapter) GetPBSInstances() []models.PBSInstance {
 	return state.PBSInstances
 }
 
+// ReplicationMCPAdapter adapts monitor state to MCP ReplicationProvider.
+type ReplicationMCPAdapter struct {
+	stateGetter StateGetter
+}
+
+// NewReplicationMCPAdapter creates a new adapter for replication data.
+func NewReplicationMCPAdapter(stateGetter StateGetter) *ReplicationMCPAdapter {
+	if stateGetter == nil {
+		return nil
+	}
+	return &ReplicationMCPAdapter{stateGetter: stateGetter}
+}
+
+// GetReplicationJobs implements ReplicationProvider.
+func (a *ReplicationMCPAdapter) GetReplicationJobs() []models.ReplicationJob {
+	if a.stateGetter == nil {
+		return nil
+	}
+	state := a.stateGetter.GetState()
+	return state.ReplicationJobs
+}
+
+// ConnectionHealthMCPAdapter adapts monitor state to MCP ConnectionHealthProvider.
+type ConnectionHealthMCPAdapter struct {
+	stateGetter StateGetter
+}
+
+// NewConnectionHealthMCPAdapter creates a new adapter for connection health data.
+func NewConnectionHealthMCPAdapter(stateGetter StateGetter) *ConnectionHealthMCPAdapter {
+	if stateGetter == nil {
+		return nil
+	}
+	return &ConnectionHealthMCPAdapter{stateGetter: stateGetter}
+}
+
+// GetConnectionHealth implements ConnectionHealthProvider.
+func (a *ConnectionHealthMCPAdapter) GetConnectionHealth() map[string]bool {
+	if a.stateGetter == nil {
+		return nil
+	}
+	state := a.stateGetter.GetState()
+	return state.ConnectionHealth
+}
+
 // RecoveryPointsMCPAdapter provides MCP tools access to persisted recovery points.
 // It is org-scoped to avoid leaking cross-tenant data.
 type RecoveryPointsMCPAdapter struct {

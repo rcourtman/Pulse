@@ -398,7 +398,7 @@ func TestService_getResourceMetadata(t *testing.T) {
 	}
 
 	lxcMeta := service.getResourceMetadata(DiscoveryRequest{
-		ResourceType: ResourceTypeLXC,
+		ResourceType: ResourceTypeSystemContainer,
 		ResourceID:   "201",
 		HostID:       "node2",
 	})

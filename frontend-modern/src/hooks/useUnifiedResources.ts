@@ -486,7 +486,7 @@ const toResource = (v2: APIResource): Resource => {
           resourceType: v2.discoveryTarget.resourceType as
             | 'host'
             | 'vm'
-            | 'lxc'
+            | 'system-container'
             | 'docker'
             | 'k8s'
             | 'disk'

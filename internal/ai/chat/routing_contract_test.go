@@ -22,7 +22,7 @@ import (
 // This is the core contract for Invariant 7: routing validation.
 func TestContract_MentionTriggersRoutingMismatchBlock(t *testing.T) {
 	// Simulate: User message contains "@homepage-docker"
-	// Prefetch resolves it to lxc:delly:141 and marks explicit access
+	// Prefetch resolves it to system-container:delly:141 and marks explicit access
 	// Tool call attempts to write with target_host="delly"
 	// Assert: ROUTING_MISMATCH with target_resource_id suggestion
 
@@ -31,7 +31,7 @@ func TestContract_MentionTriggersRoutingMismatchBlock(t *testing.T) {
 
 	// Step 2: Add the LXC resource to resolved context (simulating discovery)
 	resolvedCtx.AddResolvedResource(tools.ResourceRegistration{
-		Kind:        "lxc",
+		Kind:        "system-container",
 		ProviderUID: "141",
 		Name:        "homepage-docker",
 		HostName:    "delly",
@@ -46,12 +46,12 @@ func TestContract_MentionTriggersRoutingMismatchBlock(t *testing.T) {
 
 	// Step 3: Simulate prefetch marking @mention as explicit access
 	// This is what service.go does when it finds a @mention
-	resourceID := "lxc:delly:141" // kind:host:provider_uid format
+	resourceID := "system-container:delly:141" // kind:host:provider_uid format
 	resolvedCtx.MarkExplicitAccess(resourceID)
 
 	// Verify: Resource is marked as recently accessed
 	if !resolvedCtx.WasRecentlyAccessed(resourceID, tools.RecentAccessWindow) {
-		t.Fatal("Expected lxc:delly:141 to be marked as recently accessed after @mention")
+		t.Fatal("Expected system-container:delly:141 to be marked as recently accessed after @mention")
 	}
 
 	// Step 4: Create tool executor with state showing delly is a Proxmox node
@@ -93,8 +93,8 @@ func TestContract_MentionTriggersRoutingMismatchBlock(t *testing.T) {
 	err := &tools.ErrRoutingMismatch{
 		TargetHost:            "delly",
 		MoreSpecificResources: []string{"homepage-docker"},
-		MoreSpecificIDs:       []string{"lxc:delly:141"},
-		ChildKinds:            []string{"lxc"},
+		MoreSpecificIDs:       []string{"system-container:delly:141"},
+		ChildKinds:            []string{"system-container"},
 		Message:               "You targeted 'delly' but recently referenced 'homepage-docker'. Did you mean to target the LXC?",
 	}
 
@@ -117,8 +117,8 @@ func TestContract_MentionTriggersRoutingMismatchBlock(t *testing.T) {
 	if details["auto_recoverable"] != true {
 		t.Error("Expected auto_recoverable=true in response")
 	}
-	if details["target_resource_id"] != "lxc:delly:141" {
-		t.Errorf("Expected target_resource_id='lxc:delly:141', got %v", details["target_resource_id"])
+	if details["target_resource_id"] != "system-container:delly:141" {
+		t.Errorf("Expected target_resource_id='system-container:delly:141', got %v", details["target_resource_id"])
 	}
 	if details["recovery_hint"] == nil {
 		t.Error("Expected recovery_hint in response")
@@ -145,14 +145,14 @@ func TestContract_HostOpAllowedWhenNoRecentChildAccess(t *testing.T) {
 	// Step 2: Add resources via bulk discovery (no explicit access)
 	// This simulates the model running pulse_query search, which doesn't mark explicit access
 	resolvedCtx.AddResolvedResource(tools.ResourceRegistration{
-		Kind:        "lxc",
+		Kind:        "system-container",
 		ProviderUID: "141",
 		Name:        "homepage-docker",
 		HostName:    "delly",
 		HostUID:     "delly",
 	})
 	resolvedCtx.AddResolvedResource(tools.ResourceRegistration{
-		Kind:        "lxc",
+		Kind:        "system-container",
 		ProviderUID: "142",
 		Name:        "nginx-proxy",
 		HostName:    "delly",
@@ -170,10 +170,10 @@ func TestContract_HostOpAllowedWhenNoRecentChildAccess(t *testing.T) {
 	// and find none, so it would NOT block.
 
 	// Verify the interface contract
-	if resolvedCtx.WasRecentlyAccessed("lxc:delly:141", tools.RecentAccessWindow) {
+	if resolvedCtx.WasRecentlyAccessed("system-container:delly:141", tools.RecentAccessWindow) {
 		t.Error("lxc:141 should NOT be recently accessed after bulk discovery")
 	}
-	if resolvedCtx.WasRecentlyAccessed("lxc:delly:142", tools.RecentAccessWindow) {
+	if resolvedCtx.WasRecentlyAccessed("system-container:delly:142", tools.RecentAccessWindow) {
 		t.Error("lxc:142 should NOT be recently accessed after bulk discovery")
 	}
 
@@ -200,7 +200,7 @@ func TestContract_HostTargetingBlockedEvenWithHostMention(t *testing.T) {
 
 	// Step 2: Add resources
 	resolvedCtx.AddResolvedResource(tools.ResourceRegistration{
-		Kind:        "lxc",
+		Kind:        "system-container",
 		ProviderUID: "141",
 		Name:        "homepage-docker",
 		HostName:    "delly",
@@ -208,15 +208,15 @@ func TestContract_HostTargetingBlockedEvenWithHostMention(t *testing.T) {
 	})
 
 	// Step 3: Mark the child as explicitly accessed (from @mention)
-	resolvedCtx.MarkExplicitAccess("lxc:delly:141")
+	resolvedCtx.MarkExplicitAccess("system-container:delly:141")
 
 	// Note: We don't mark "delly" (the host) because:
 	// a) Hosts aren't resources in the same sense
 	// b) The prefetch logic only marks lxc/vm/docker resources
 
 	// Step 4: Verify the child IS recently accessed
-	if !resolvedCtx.WasRecentlyAccessed("lxc:delly:141", tools.RecentAccessWindow) {
-		t.Fatal("Expected lxc:delly:141 to be recently accessed")
+	if !resolvedCtx.WasRecentlyAccessed("system-container:delly:141", tools.RecentAccessWindow) {
+		t.Fatal("Expected system-container:delly:141 to be recently accessed")
 	}
 
 	// Step 5: This documents the CURRENT POLICY:
@@ -240,10 +240,10 @@ func TestContract_ExplicitAccessExpiry(t *testing.T) {
 	ctx := NewResolvedContextWithConfig("test-session", 1*time.Hour, 1000)
 
 	// Mark resource as explicitly accessed
-	ctx.MarkExplicitAccess("lxc:delly:141")
+	ctx.MarkExplicitAccess("system-container:delly:141")
 
 	// Immediately should be recently accessed
-	if !ctx.WasRecentlyAccessed("lxc:delly:141", 50*time.Millisecond) {
+	if !ctx.WasRecentlyAccessed("system-container:delly:141", 50*time.Millisecond) {
 		t.Error("Expected resource to be recently accessed immediately after marking")
 	}
 
@@ -251,7 +251,7 @@ func TestContract_ExplicitAccessExpiry(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Should no longer be recently accessed
-	if ctx.WasRecentlyAccessed("lxc:delly:141", 50*time.Millisecond) {
+	if ctx.WasRecentlyAccessed("system-container:delly:141", 50*time.Millisecond) {
 		t.Error("Expected resource to NOT be recently accessed after window expires")
 	}
 
@@ -265,8 +265,8 @@ func TestContract_ExplicitAccessCleanup(t *testing.T) {
 	ctx := NewResolvedContextWithConfig("test-session", 1*time.Hour, 1000)
 
 	// Mark several resources as explicitly accessed
-	ctx.MarkExplicitAccess("lxc:delly:141")
-	ctx.MarkExplicitAccess("lxc:delly:142")
+	ctx.MarkExplicitAccess("system-container:delly:141")
+	ctx.MarkExplicitAccess("system-container:delly:142")
 	ctx.MarkExplicitAccess("vm:delly:100")
 
 	// Verify all are tracked
@@ -277,13 +277,13 @@ func TestContract_ExplicitAccessCleanup(t *testing.T) {
 	// Simulate time passing beyond RecentAccessWindow (30s)
 	// We manually set the timestamps to simulate aging
 	oldTime := time.Now().Add(-1 * time.Minute)
-	ctx.explicitlyAccessed["lxc:delly:141"] = oldTime
-	ctx.explicitlyAccessed["lxc:delly:142"] = oldTime
+	ctx.explicitlyAccessed["system-container:delly:141"] = oldTime
+	ctx.explicitlyAccessed["system-container:delly:142"] = oldTime
 	// Leave vm:delly:100 as recent
 
 	// Add a resource to trigger eviction sweep
 	ctx.AddResolvedResource(tools.ResourceRegistration{
-		Kind:        "lxc",
+		Kind:        "system-container",
 		ProviderUID: "999",
 		Name:        "trigger-sweep",
 	})
@@ -295,8 +295,8 @@ func TestContract_ExplicitAccessCleanup(t *testing.T) {
 	if _, exists := ctx.explicitlyAccessed["vm:delly:100"]; !exists {
 		t.Error("Expected vm:delly:100 to survive (recent)")
 	}
-	if _, exists := ctx.explicitlyAccessed["lxc:delly:141"]; exists {
-		t.Error("Expected lxc:delly:141 to be pruned (old)")
+	if _, exists := ctx.explicitlyAccessed["system-container:delly:141"]; exists {
+		t.Error("Expected system-container:delly:141 to be pruned (old)")
 	}
 
 	t.Log("✓ Explicit access entries are cleaned up during eviction sweeps")

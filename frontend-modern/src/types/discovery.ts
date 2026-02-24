@@ -9,7 +9,8 @@ export type ResourceType =
   | 'k8s'
   | 'host'
   | 'docker_vm'
-  | 'docker_lxc';
+  | 'docker_lxc' // legacy alias for docker_system-container
+  | 'docker_system-container';
 
 export type ServiceCategory =
   | 'database'

@@ -641,7 +641,7 @@ func TestStore_GetChangedResources(t *testing.T) {
 	// Save discoveries with matching fingerprint hashes.
 	for _, d := range []*ResourceDiscovery{
 		{ID: "docker:host1:nginx", ResourceType: ResourceTypeDocker, HostID: "host1", ResourceID: "nginx", Fingerprint: "aaa111"},
-		{ID: "lxc:node1:101", ResourceType: ResourceTypeLXC, HostID: "node1", ResourceID: "101", Fingerprint: "bbb222"},
+		{ID: "lxc:node1:101", ResourceType: ResourceTypeSystemContainer, HostID: "node1", ResourceID: "101", Fingerprint: "bbb222"},
 		{ID: "vm:node1:200", ResourceType: ResourceTypeVM, HostID: "node1", ResourceID: "200", Fingerprint: "ccc333"},
 	} {
 		if err := store.Save(d); err != nil {

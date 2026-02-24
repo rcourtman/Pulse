@@ -7,11 +7,11 @@ import (
 
 func TestCommandsAndTemplates(t *testing.T) {
 	resourceTypes := []ResourceType{
-		ResourceTypeLXC,
+		ResourceTypeSystemContainer,
 		ResourceTypeVM,
 		ResourceTypeDocker,
 		ResourceTypeDockerVM,
-		ResourceTypeDockerLXC,
+		ResourceTypeDockerSystemContainer,
 		ResourceTypeK8s,
 		ResourceTypeHost,
 	}
@@ -81,7 +81,7 @@ func TestCommandsAndTemplates(t *testing.T) {
 }
 
 func TestDockerMountsCommandAvoidsExtraTextUtilities(t *testing.T) {
-	lxcCmds := GetCommandsForResource(ResourceTypeLXC)
+	lxcCmds := GetCommandsForResource(ResourceTypeSystemContainer)
 	vmCmds := GetCommandsForResource(ResourceTypeVM)
 
 	findByName := func(cmds []DiscoveryCommand, name string) string {

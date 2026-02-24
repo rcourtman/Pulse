@@ -107,7 +107,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     if (type === 'vm') return 'vm';
     if (type === 'docker') return 'docker';
     if (type === 'k8s') return 'k8s';
-    return 'lxc';
+    return 'system-container';
   };
   const discoveryHostId = () => {
     return getDiscoveryHostIdForWorkload(props.guest);

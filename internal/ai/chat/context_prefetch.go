@@ -545,21 +545,9 @@ func parseStructuredDockerMentionID(mentionID string, state models.StateSnapshot
 	return parts[0], parts[1]
 }
 
-// discoveryResourceType maps semantic resource types to servicediscovery-level types.
-// The servicediscovery package uses provider-level identifiers ("lxc", "vm", "docker").
-func discoveryResourceType(semanticType string) string {
-	switch semanticType {
-	case "system-container":
-		return "lxc"
-	default:
-		return semanticType
-	}
-}
-
 // getOrTriggerDiscovery gets existing discovery or triggers a new one
 func (p *ContextPrefetcher) getOrTriggerDiscovery(ctx context.Context, mention ResourceMention) (*tools.ResourceDiscoveryInfo, error) {
-	// Map semantic type to discovery-level type at the boundary
-	discoveryType := discoveryResourceType(mention.ResourceType)
+	discoveryType := mention.ResourceType
 
 	// First try to get existing discovery
 	discovery, err := p.discoveryProvider.GetDiscoveryByResource(discoveryType, mention.HostID, mention.ResourceID)
@@ -605,8 +593,7 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 	}
 
 	for _, mention := range mentions {
-		// Use discovery-level type for lookup key to match discovery data keyed by provider type
-		key := fmt.Sprintf("%s:%s:%s", discoveryResourceType(mention.ResourceType), mention.HostID, mention.ResourceID)
+		key := fmt.Sprintf("%s:%s:%s", mention.ResourceType, mention.HostID, mention.ResourceID)
 		discovery, hasDiscovery := discoveryMap[key]
 
 		// Docker containers get special treatment - show the full routing chain

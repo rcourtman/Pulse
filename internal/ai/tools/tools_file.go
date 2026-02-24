@@ -618,7 +618,7 @@ func (e *ErrExecutionContextUnavailable) ToToolResponse() ToolResponse {
 // 2. An agent on the node matches "homepage-docker" as a direct hostname
 // 3. Command runs on the node without pct exec → writes to node filesystem
 func (e *PulseToolExecutor) validateWriteExecutionContext(targetHost string, routing CommandRoutingResult) *ErrExecutionContextUnavailable {
-	if e.stateProvider == nil {
+	if !e.hasReadState() {
 		return nil // Can't validate without state
 	}
 

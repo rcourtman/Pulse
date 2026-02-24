@@ -22,19 +22,19 @@ describe('resolveWorkloadType', () => {
     expect(resolveWorkloadType(guest)).toBe('vm');
   });
 
-  it('returns lxc for lxc type', () => {
+  it('returns system-container for lxc type', () => {
     const guest = { type: 'lxc' };
-    expect(resolveWorkloadType(guest)).toBe('lxc');
+    expect(resolveWorkloadType(guest)).toBe('system-container');
   });
 
-  it('returns lxc for oci type', () => {
+  it('returns system-container for oci type', () => {
     const guest = { type: 'oci' };
-    expect(resolveWorkloadType(guest)).toBe('lxc');
+    expect(resolveWorkloadType(guest)).toBe('system-container');
   });
 
-  it('returns lxc for container type', () => {
+  it('returns system-container for container type', () => {
     const guest = { type: 'container' };
-    expect(resolveWorkloadType(guest)).toBe('lxc');
+    expect(resolveWorkloadType(guest)).toBe('system-container');
   });
 
   it('returns docker for docker type', () => {
@@ -67,19 +67,19 @@ describe('resolveWorkloadType', () => {
     expect(resolveWorkloadType(guest)).toBe('k8s');
   });
 
-  it('defaults to lxc for unknown type', () => {
+  it('defaults to system-container for unknown type', () => {
     const guest = { type: 'unknown' };
-    expect(resolveWorkloadType(guest)).toBe('lxc');
+    expect(resolveWorkloadType(guest)).toBe('system-container');
   });
 
-  it('defaults to lxc for empty type', () => {
+  it('defaults to system-container for empty type', () => {
     const guest = { type: '' };
-    expect(resolveWorkloadType(guest)).toBe('lxc');
+    expect(resolveWorkloadType(guest)).toBe('system-container');
   });
 
-  it('defaults to lxc for undefined type', () => {
+  it('defaults to system-container for undefined type', () => {
     const guest = { type: undefined } as unknown as WorkloadGuest;
-    expect(resolveWorkloadType(guest)).toBe('lxc');
+    expect(resolveWorkloadType(guest)).toBe('system-container');
   });
 });
 
@@ -89,8 +89,8 @@ describe('getWorkloadMetricsKind', () => {
     expect(getWorkloadMetricsKind(guest)).toBe('vm');
   });
 
-  it('returns container for lxc workload', () => {
-    const guest = { workloadType: 'lxc' as const, type: 'lxc' };
+  it('returns container for system-container workload', () => {
+    const guest = { workloadType: 'system-container' as const, type: 'lxc' };
     expect(getWorkloadMetricsKind(guest)).toBe('container');
   });
 

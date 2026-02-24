@@ -644,15 +644,7 @@ func (e *PulseToolExecutor) readStateForControl() (unifiedresources.ReadState, e
 	if rs := e.getReadState(); rs != nil {
 		return rs, nil
 	}
-	if e.stateProvider == nil {
-		return nil, fmt.Errorf("read state not available")
-	}
-
-	// Compatibility bridge for tests and any remaining legacy wiring:
-	// build a typed ReadState view from the current StateSnapshot.
-	rr := unifiedresources.NewRegistry(nil)
-	rr.IngestSnapshot(e.stateProvider.GetState())
-	return rr, nil
+	return nil, fmt.Errorf("read state not available")
 }
 
 func (e *PulseToolExecutor) resolveGuest(guestID string) (*GuestInfo, error) {
@@ -696,10 +688,7 @@ func (e *PulseToolExecutor) resolveGuest(guestID string) (*GuestInfo, error) {
 func (e *PulseToolExecutor) resolveDockerContainer(containerName, hostName string) (*models.DockerContainer, *models.DockerHost, error) {
 	rs, err := e.readStateForControl()
 	if err != nil {
-		if e.stateProvider == nil {
-			return nil, nil, fmt.Errorf("state provider not available")
-		}
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("read state not available: %w", err)
 	}
 
 	containersByHost := make(map[string][]*unifiedresources.DockerContainerView)
