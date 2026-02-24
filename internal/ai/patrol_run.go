@@ -472,6 +472,17 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 			findingsSummaryStr = fmt.Sprintf("Analysis incomplete (%d errors)", runStats.errors)
 		}
 	}
+	if runStats.aiAnalysis != nil && runStats.aiAnalysis.StoppedEarly {
+		const partialMsg = "Partial analysis (per-run token budget reached)"
+		if findingsSummaryStr == "All healthy" {
+			findingsSummaryStr = partialMsg
+		} else {
+			findingsSummaryStr = findingsSummaryStr + " • " + partialMsg
+		}
+		if status == "healthy" {
+			status = "issues_found"
+		}
+	}
 
 	// Create run record
 	runRecord := PatrolRunRecord{
@@ -515,6 +526,8 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		runRecord.AIAnalysis = runStats.aiAnalysis.Response
 		runRecord.InputTokens = runStats.aiAnalysis.InputTokens
 		runRecord.OutputTokens = runStats.aiAnalysis.OutputTokens
+		runRecord.AnalysisStopReason = runStats.aiAnalysis.StopReason
+		runRecord.AnalysisStoppedEarly = runStats.aiAnalysis.StoppedEarly
 		toolCalls := runStats.aiAnalysis.ToolCalls
 		if len(toolCalls) > MaxToolCallsPerRun {
 			toolCalls = toolCalls[:MaxToolCallsPerRun]
@@ -779,6 +792,17 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 			findingsSummaryStr = fmt.Sprintf("Analysis incomplete (%d errors)", runStats.errors)
 		}
 	}
+	if runStats.aiAnalysis != nil && runStats.aiAnalysis.StoppedEarly {
+		const partialMsg = "Partial analysis (per-run token budget reached)"
+		if findingsSummaryStr == "All healthy" {
+			findingsSummaryStr = partialMsg
+		} else {
+			findingsSummaryStr = findingsSummaryStr + " • " + partialMsg
+		}
+		if status == "healthy" {
+			status = "issues_found"
+		}
+	}
 
 	runRecord := PatrolRunRecord{
 		ID:                 fmt.Sprintf("%d", start.UnixNano()),
@@ -815,6 +839,8 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		runRecord.AIAnalysis = runStats.aiAnalysis.Response
 		runRecord.InputTokens = runStats.aiAnalysis.InputTokens
 		runRecord.OutputTokens = runStats.aiAnalysis.OutputTokens
+		runRecord.AnalysisStopReason = runStats.aiAnalysis.StopReason
+		runRecord.AnalysisStoppedEarly = runStats.aiAnalysis.StoppedEarly
 		toolCalls := runStats.aiAnalysis.ToolCalls
 		if len(toolCalls) > MaxToolCallsPerRun {
 			toolCalls = toolCalls[:MaxToolCallsPerRun]

@@ -26,6 +26,8 @@ type AIAnalysisResult struct {
 	RejectedFindings int        // Findings rejected by threshold validation
 	InputTokens      int
 	OutputTokens     int
+	StopReason       string
+	StoppedEarly     bool
 	ToolCalls        []ToolCallRecord // Tool invocations during this analysis
 	ReportedIDs      []string         // Finding IDs reported (created/re-reported) this run
 	ResolvedIDs      []string         // Finding IDs explicitly resolved by LLM this run
@@ -38,6 +40,7 @@ const (
 	patrolTurnsPer50Devices = 5
 	patrolQuickMinTurns     = 10
 	patrolQuickMaxTurns     = 30
+	patrolMaxTotalTokens    = 250000
 )
 
 // CleanThinkingTokens removes model-specific thinking markers from AI responses.
@@ -283,11 +286,12 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 	var rawToolOutputs []string
 
 	chatResp, chatErr := cs.ExecutePatrolStream(ctx, PatrolExecuteRequest{
-		Prompt:       seedContext,
-		SystemPrompt: p.getPatrolSystemPrompt(),
-		SessionID:    "patrol-main",
-		UseCase:      "patrol",
-		MaxTurns:     maxTurns,
+		Prompt:         seedContext,
+		SystemPrompt:   p.getPatrolSystemPrompt(),
+		SessionID:      "patrol-main",
+		UseCase:        "patrol",
+		MaxTurns:       maxTurns,
+		MaxTotalTokens: patrolMaxTotalTokens,
 	}, func(event ChatStreamEvent) {
 		switch event.Type {
 		case "content":
@@ -536,6 +540,8 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 		RejectedFindings: rejectedCount,
 		InputTokens:      inputTokens,
 		OutputTokens:     outputTokens,
+		StopReason:       chatResp.StopReason,
+		StoppedEarly:     chatResp.StopReason == "token_limit",
 		ToolCalls:        collectedToolCalls,
 		ReportedIDs:      adapter.getReportedFindingIDs(),
 		ResolvedIDs:      adapter.getResolvedIDs(),
@@ -714,11 +720,12 @@ func (p *PatrolService) runEvaluationPass(ctx context.Context, adapter *patrolFi
 		Msg("AI Patrol: Running evaluation pass for unmatched signals")
 
 	resp, err := cs.ExecutePatrolStream(ctx, PatrolExecuteRequest{
-		Prompt:       userPrompt,
-		SystemPrompt: systemPrompt,
-		SessionID:    "patrol-eval",
-		UseCase:      "patrol",
-		MaxTurns:     5,
+		Prompt:         userPrompt,
+		SystemPrompt:   systemPrompt,
+		SessionID:      "patrol-eval",
+		UseCase:        "patrol",
+		MaxTurns:       5,
+		MaxTotalTokens: patrolMaxTotalTokens,
 	}, func(event ChatStreamEvent) {
 		// Minimal callback — we don't stream eval pass to the frontend
 		// but findings are still created via the adapter

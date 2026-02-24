@@ -31,6 +31,8 @@ type AgenticLoop struct {
 	tools            []providers.Tool
 	baseSystemPrompt string // Base prompt without mode context
 	maxTurns         int
+	maxTotalTokens   int // Optional hard cap for total tokens in one run (0 = disabled)
+	stopReason       string
 
 	// Provider info for telemetry (e.g., "anthropic", "claude-3-sonnet")
 	providerName string
@@ -55,6 +57,11 @@ type AgenticLoop struct {
 	// Budget checker called after each turn to enforce token spending limits
 	budgetChecker func() error
 }
+
+const (
+	stopReasonNone       = ""
+	stopReasonTokenLimit = "token_limit"
+)
 
 // NewAgenticLoop creates a new agentic loop
 func NewAgenticLoop(provider providers.StreamingProvider, executor *tools.PulseToolExecutor, systemPrompt string) *AgenticLoop {
@@ -94,6 +101,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	// before calling ExecuteWithTools, and this avoids races with concurrent sessions.
 	a.mu.Lock()
 	maxTurns := a.maxTurns
+	maxTotalTokens := a.maxTotalTokens
+	a.stopReason = stopReasonNone
 	a.aborted[sessionID] = false
 	a.mu.Unlock()
 	defer func() {
@@ -390,6 +399,18 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			toolCalls = nil
 		}
 
+		// Per-run hard token cap (used by Patrol) — stop before executing further tool calls.
+		tokenLimitReached := maxTotalTokens > 0 && (a.totalInputTokens+a.totalOutputTokens) >= maxTotalTokens
+		if tokenLimitReached && len(toolCalls) > 0 {
+			log.Warn().
+				Int("token_total", a.totalInputTokens+a.totalOutputTokens).
+				Int("token_limit", maxTotalTokens).
+				Int("stripped_tool_calls", len(toolCalls)).
+				Str("session_id", sessionID).
+				Msg("[AgenticLoop] Token cap reached — stripping pending tool calls for graceful stop")
+			toolCalls = nil
+		}
+
 		// Check mid-run budget after each turn completes
 		if a.budgetChecker != nil {
 			if budgetErr := a.budgetChecker(); budgetErr != nil {
@@ -402,6 +423,16 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		// Create assistant message
 		// Clean DeepSeek artifacts from the content before storing
 		cleanedContent := cleanDeepSeekArtifacts(contentBuilder.String())
+		if tokenLimitReached {
+			note := fmt.Sprintf("Analysis stopped early after reaching per-run token budget (%d tokens). Results above may be partial.", maxTotalTokens)
+			if cleanedContent == "" {
+				cleanedContent = note
+			} else {
+				cleanedContent = strings.TrimSpace(cleanedContent + "\n\n" + note)
+			}
+			jsonData, _ := json.Marshal(ContentData{Text: "\n\n" + note})
+			callback(StreamEvent{Type: "content", Data: jsonData})
+		}
 		assistantMsg := Message{
 			ID:               uuid.New().String(),
 			Role:             "assistant",
@@ -439,6 +470,18 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			})
 		}
 		providerMessages = append(providerMessages, providerAssistant)
+
+		if tokenLimitReached {
+			a.mu.Lock()
+			a.stopReason = stopReasonTokenLimit
+			a.mu.Unlock()
+			log.Warn().
+				Int("token_total", a.totalInputTokens+a.totalOutputTokens).
+				Int("token_limit", maxTotalTokens).
+				Str("session_id", sessionID).
+				Msg("[AgenticLoop] Token cap reached — ending run gracefully")
+			return resultMessages, nil
+		}
 
 		// If no tool calls, we're done - but first check FSM and phantom execution
 		if len(toolCalls) == 0 {
@@ -1291,6 +1334,14 @@ func (a *AgenticLoop) SetMaxTurns(n int) {
 	a.mu.Unlock()
 }
 
+// SetMaxTotalTokens sets a hard cap on total tokens for a single execution.
+// When reached, the loop stops gracefully and returns partial analysis.
+func (a *AgenticLoop) SetMaxTotalTokens(n int) {
+	a.mu.Lock()
+	a.maxTotalTokens = n
+	a.mu.Unlock()
+}
+
 // SetProviderInfo sets the provider/model info for telemetry.
 func (a *AgenticLoop) SetProviderInfo(provider, model string) {
 	a.mu.Lock()
@@ -1319,6 +1370,13 @@ func (a *AgenticLoop) GetTotalOutputTokens() int {
 func (a *AgenticLoop) ResetTokenCounts() {
 	a.totalInputTokens = 0
 	a.totalOutputTokens = 0
+}
+
+// GetStopReason returns why the most recent execution stopped, if applicable.
+func (a *AgenticLoop) GetStopReason() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.stopReason
 }
 
 // hasPhantomExecution detects when the model claims to have executed something

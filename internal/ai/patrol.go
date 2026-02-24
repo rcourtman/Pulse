@@ -127,9 +127,11 @@ type PatrolRunRecord struct {
 	ErrorCount       int      `json:"error_count"`
 	Status           string   `json:"status"` // "healthy", "issues_found", "error"
 	// AI Analysis details
-	AIAnalysis   string `json:"ai_analysis,omitempty"`   // The AI's raw response/analysis
-	InputTokens  int    `json:"input_tokens,omitempty"`  // Tokens sent to AI
-	OutputTokens int    `json:"output_tokens,omitempty"` // Tokens received from AI
+	AIAnalysis           string `json:"ai_analysis,omitempty"`            // The AI's raw response/analysis
+	InputTokens          int    `json:"input_tokens,omitempty"`           // Tokens sent to AI
+	OutputTokens         int    `json:"output_tokens,omitempty"`          // Tokens received from AI
+	AnalysisStopReason   string `json:"analysis_stop_reason,omitempty"`   // Why analysis stopped early, if applicable
+	AnalysisStoppedEarly bool   `json:"analysis_stopped_early,omitempty"` // True when patrol hit a hard per-run guardrail
 	// Tool call traces
 	ToolCalls     []ToolCallRecord `json:"tool_calls,omitempty"`
 	ToolCallCount int              `json:"tool_call_count"`

@@ -34,11 +34,12 @@ func (a *chatServiceAdapter) ExecuteStream(ctx context.Context, req ai.ChatExecu
 
 func (a *chatServiceAdapter) ExecutePatrolStream(ctx context.Context, req ai.PatrolExecuteRequest, callback ai.ChatStreamCallback) (*ai.PatrolStreamResponse, error) {
 	resp, err := a.svc.ExecutePatrolStream(ctx, chat.PatrolRequest{
-		Prompt:       req.Prompt,
-		SystemPrompt: req.SystemPrompt,
-		SessionID:    req.SessionID,
-		UseCase:      req.UseCase,
-		MaxTurns:     req.MaxTurns,
+		Prompt:         req.Prompt,
+		SystemPrompt:   req.SystemPrompt,
+		SessionID:      req.SessionID,
+		UseCase:        req.UseCase,
+		MaxTurns:       req.MaxTurns,
+		MaxTotalTokens: req.MaxTotalTokens,
 	}, adaptCallback(callback))
 	if err != nil {
 		return nil, err
@@ -47,6 +48,7 @@ func (a *chatServiceAdapter) ExecutePatrolStream(ctx context.Context, req ai.Pat
 		Content:      resp.Content,
 		InputTokens:  resp.InputTokens,
 		OutputTokens: resp.OutputTokens,
+		StopReason:   resp.StopReason,
 	}, nil
 }
 

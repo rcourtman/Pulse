@@ -20,6 +20,7 @@ func (m mockKnowledgeStore) GetKnowledge(resourceID, category string) []tools.Kn
 type mockStreamingProvider struct {
 	chatStreamFunc func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error
 	lastRequest    providers.ChatRequest
+	requests       []providers.ChatRequest
 }
 
 func (m *mockStreamingProvider) Chat(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
@@ -28,6 +29,7 @@ func (m *mockStreamingProvider) Chat(ctx context.Context, req providers.ChatRequ
 
 func (m *mockStreamingProvider) ChatStream(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
 	m.lastRequest = req
+	m.requests = append(m.requests, req)
 	if m.chatStreamFunc != nil {
 		return m.chatStreamFunc(ctx, req, callback)
 	}
@@ -143,6 +145,94 @@ func TestService_ExecutePatrolStream_Success(t *testing.T) {
 	}
 	if len(msgs) < 2 {
 		t.Fatalf("expected at least 2 messages saved, got %d", len(msgs))
+	}
+}
+
+func TestService_ExecutePatrolStream_ResetsSessionHistoryEachRun(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+
+	service := &Service{
+		started:  true,
+		sessions: store,
+		executor: executor,
+		cfg:      &config.AIConfig{PatrolModel: "mock:model"},
+	}
+
+	mockProvider := &mockStreamingProvider{
+		chatStreamFunc: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "ok"}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1}})
+			return nil
+		},
+	}
+	service.providerFactory = func(modelStr string) (providers.StreamingProvider, error) {
+		return mockProvider, nil
+	}
+
+	for i := 0; i < 2; i++ {
+		if _, err := service.ExecutePatrolStream(context.Background(), PatrolRequest{
+			Prompt:    "check status",
+			MaxTurns:  1,
+			SessionID: "patrol-main",
+		}, func(StreamEvent) {}); err != nil {
+			t.Fatalf("patrol run %d failed: %v", i+1, err)
+		}
+	}
+
+	if len(mockProvider.requests) != 2 {
+		t.Fatalf("expected 2 patrol requests, got %d", len(mockProvider.requests))
+	}
+	if len(mockProvider.requests[0].Messages) != 1 {
+		t.Fatalf("expected first run to include only current prompt message, got %d", len(mockProvider.requests[0].Messages))
+	}
+	if len(mockProvider.requests[1].Messages) != 1 {
+		t.Fatalf("expected second run to reset history and include only current prompt message, got %d", len(mockProvider.requests[1].Messages))
+	}
+}
+
+func TestService_ExecutePatrolStream_TokenCapStopsGracefully(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+
+	service := &Service{
+		started:  true,
+		sessions: store,
+		executor: executor,
+		cfg:      &config.AIConfig{PatrolModel: "mock:model"},
+	}
+
+	mockProvider := &mockStreamingProvider{
+		chatStreamFunc: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "initial analysis"}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{InputTokens: 2, OutputTokens: 1}})
+			return nil
+		},
+	}
+	service.providerFactory = func(modelStr string) (providers.StreamingProvider, error) {
+		return mockProvider, nil
+	}
+
+	resp, err := service.ExecutePatrolStream(context.Background(), PatrolRequest{
+		Prompt:         "check status",
+		MaxTurns:       5,
+		MaxTotalTokens: 1,
+		SessionID:      "patrol-main",
+	}, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatalf("expected response")
+	}
+	if resp.StopReason != "token_limit" {
+		t.Fatalf("expected token_limit stop reason, got %q", resp.StopReason)
 	}
 }
 

@@ -124,11 +124,12 @@ type ChatToolResult struct {
 
 // PatrolExecuteRequest represents a patrol execution request via the chat service
 type PatrolExecuteRequest struct {
-	Prompt       string `json:"prompt"`
-	SystemPrompt string `json:"system_prompt"`
-	SessionID    string `json:"session_id,omitempty"`
-	UseCase      string `json:"use_case"` // "patrol" — for model selection
-	MaxTurns     int    `json:"max_turns,omitempty"`
+	Prompt         string `json:"prompt"`
+	SystemPrompt   string `json:"system_prompt"`
+	SessionID      string `json:"session_id,omitempty"`
+	UseCase        string `json:"use_case"` // "patrol" — for model selection
+	MaxTurns       int    `json:"max_turns,omitempty"`
+	MaxTotalTokens int    `json:"max_total_tokens,omitempty"`
 }
 
 // PatrolStreamResponse contains the results of a patrol execution via the chat service
@@ -136,6 +137,7 @@ type PatrolStreamResponse struct {
 	Content      string `json:"content"`
 	InputTokens  int    `json:"input_tokens"`
 	OutputTokens int    `json:"output_tokens"`
+	StopReason   string `json:"stop_reason,omitempty"`
 }
 
 // Service orchestrates AI interactions

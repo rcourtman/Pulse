@@ -545,11 +545,12 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 
 // PatrolRequest represents a patrol execution request within the chat service
 type PatrolRequest struct {
-	Prompt       string `json:"prompt"`
-	SystemPrompt string `json:"system_prompt"`
-	SessionID    string `json:"session_id,omitempty"`
-	UseCase      string `json:"use_case"`
-	MaxTurns     int    `json:"max_turns,omitempty"`
+	Prompt         string `json:"prompt"`
+	SystemPrompt   string `json:"system_prompt"`
+	SessionID      string `json:"session_id,omitempty"`
+	UseCase        string `json:"use_case"`
+	MaxTurns       int    `json:"max_turns,omitempty"`
+	MaxTotalTokens int    `json:"max_total_tokens,omitempty"`
 }
 
 // PatrolResponse contains the results of a patrol execution
@@ -557,6 +558,7 @@ type PatrolResponse struct {
 	Content      string `json:"content"`
 	InputTokens  int    `json:"input_tokens"`
 	OutputTokens int    `json:"output_tokens"`
+	StopReason   string `json:"stop_reason,omitempty"`
 }
 
 // ExecutePatrolStream creates a temporary agentic loop for patrol execution.
@@ -606,6 +608,9 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 	if req.MaxTurns > 0 {
 		tempLoop.SetMaxTurns(req.MaxTurns)
 	}
+	if req.MaxTotalTokens > 0 {
+		tempLoop.SetMaxTotalTokens(req.MaxTotalTokens)
+	}
 
 	// Set provider info for telemetry
 	parts := strings.SplitN(patrolModel, ":", 2)
@@ -613,10 +618,20 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 		tempLoop.SetProviderInfo(parts[0], parts[1])
 	}
 
-	// Ensure patrol session exists
+	// Reset patrol session history before each run.
+	// Patrol prompts already include full seed context, so reusing prior run
+	// messages only bloats input tokens and can cause severe cost spikes.
 	sessionID := req.SessionID
 	if sessionID == "" {
 		sessionID = "patrol-main"
+	}
+	if _, getErr := sessions.Get(sessionID); getErr == nil {
+		if delErr := sessions.Delete(sessionID); delErr != nil {
+			log.Warn().
+				Err(delErr).
+				Str("session_id", sessionID).
+				Msg("Failed to reset patrol session history; continuing with existing session")
+		}
 	}
 	session, err := sessions.EnsureSession(sessionID)
 	if err != nil {
@@ -707,6 +722,7 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 		Content:      contentBuilder.String(),
 		InputTokens:  tempLoop.GetTotalInputTokens(),
 		OutputTokens: tempLoop.GetTotalOutputTokens(),
+		StopReason:   tempLoop.GetStopReason(),
 	}, nil
 }
 
