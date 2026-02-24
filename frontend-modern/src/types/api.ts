@@ -1092,4 +1092,4 @@ export type WSMessage =
 
 // Utility types
 export type Status = 'running' | 'stopped' | 'paused' | 'unknown';
-export type GuestType = 'qemu' | 'lxc';
+export type GuestType = 'qemu' | 'lxc' | 'vm' | 'system-container';

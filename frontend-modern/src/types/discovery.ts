@@ -1,6 +1,15 @@
 // Discovery types for AI-powered infrastructure discovery
 
-export type ResourceType = 'vm' | 'lxc' | 'docker' | 'k8s' | 'host' | 'docker_vm' | 'docker_lxc';
+export type ResourceType =
+  | 'vm'
+  | 'system-container'
+  | 'app-container'
+  | 'lxc' // legacy alias for system-container
+  | 'docker' // legacy alias for app-container
+  | 'k8s'
+  | 'host'
+  | 'docker_vm'
+  | 'docker_lxc';
 
 export type ServiceCategory =
   | 'database'

@@ -745,6 +745,12 @@ func addResourceIDTokens(tokens map[string]struct{}, resourceID string) {
 	if strings.HasPrefix(lower, "lxc-") {
 		utils.AddToken(tokens, trimmed[4:])
 	}
+	if strings.HasPrefix(lower, "system-container-") {
+		utils.AddToken(tokens, trimmed[17:])
+	}
+	if strings.HasPrefix(lower, "app-container-") {
+		utils.AddToken(tokens, trimmed[14:])
+	}
 
 	if strings.Contains(lower, "qemu/") || strings.Contains(lower, "lxc/") || strings.HasPrefix(lower, "vm-") || strings.HasPrefix(lower, "ct-") {
 		if digits := utils.TrailingDigits(trimmed); digits != "" {
