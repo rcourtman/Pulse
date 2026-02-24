@@ -497,6 +497,75 @@ func TestResourceListFiltersKubernetesNamespace(t *testing.T) {
 	}
 }
 
+func TestBuildDiscoveryTargetKubernetesPrefersAgentID(t *testing.T) {
+	tests := []struct {
+		name           string
+		resource       unified.Resource
+		wantResourceID string
+	}{
+		{
+			name: "pod",
+			resource: unified.Resource{
+				ID:   "resource:pod:1",
+				Type: unified.ResourceTypePod,
+				Name: "api-1",
+				Kubernetes: &unified.K8sData{
+					AgentID:   "agent-k8s-1",
+					ClusterID: "cluster-a",
+					Namespace: "default",
+					PodUID:    "pod-uid-1",
+				},
+			},
+			wantResourceID: "pod-uid-1",
+		},
+		{
+			name: "cluster",
+			resource: unified.Resource{
+				ID:   "resource:k8s-cluster:1",
+				Type: unified.ResourceTypeK8sCluster,
+				Name: "cluster-a",
+				Kubernetes: &unified.K8sData{
+					AgentID:   "agent-k8s-1",
+					ClusterID: "cluster-a",
+				},
+			},
+			wantResourceID: "cluster-a",
+		},
+		{
+			name: "deployment",
+			resource: unified.Resource{
+				ID:   "resource:k8s-deployment:1",
+				Type: unified.ResourceTypeK8sDeployment,
+				Name: "web",
+				Kubernetes: &unified.K8sData{
+					AgentID:   "agent-k8s-1",
+					ClusterID: "cluster-a",
+					Namespace: "default",
+				},
+			},
+			wantResourceID: "default/web",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			target := buildDiscoveryTarget(tt.resource)
+			if target == nil {
+				t.Fatalf("expected discovery target")
+			}
+			if target.ResourceType != "k8s" {
+				t.Fatalf("resource type = %q, want k8s", target.ResourceType)
+			}
+			if target.HostID != "agent-k8s-1" {
+				t.Fatalf("hostID = %q, want agent-k8s-1", target.HostID)
+			}
+			if target.ResourceID != tt.wantResourceID {
+				t.Fatalf("resourceID = %q, want %q", target.ResourceID, tt.wantResourceID)
+			}
+		})
+	}
+}
+
 func TestK8sNamespacesEndpointAggregatesPodsAndDeployments(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{
