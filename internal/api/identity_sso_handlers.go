@@ -687,6 +687,15 @@ func (r *Router) handleTestSSOProvider(w http.ResponseWriter, req *http.Request)
 
 	switch testReq.Type {
 	case "saml":
+		// Defense-in-depth: SAML requires advanced_sso feature
+		if r.licenseHandlers != nil {
+			if svc := r.licenseHandlers.Service(req.Context()); svc != nil {
+				if err := svc.RequireFeature(featureAdvancedSSOKey); err != nil {
+					WriteLicenseRequired(w, featureAdvancedSSOKey, "SAML SSO requires a Pro license. Basic OIDC SSO is available on all tiers.")
+					return
+				}
+			}
+		}
 		response = r.testSAMLConnection(ctx, testReq.SAML)
 	case "oidc":
 		response = r.testOIDCConnection(ctx, testReq.OIDC)
@@ -978,6 +987,16 @@ func (r *Router) handleMetadataPreview(w http.ResponseWriter, req *http.Request)
 	if previewReq.Type != "saml" {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", "Only SAML metadata preview is supported", nil)
 		return
+	}
+
+	// Defense-in-depth: SAML metadata preview requires advanced_sso feature
+	if r.licenseHandlers != nil {
+		if svc := r.licenseHandlers.Service(req.Context()); svc != nil {
+			if err := svc.RequireFeature(featureAdvancedSSOKey); err != nil {
+				WriteLicenseRequired(w, featureAdvancedSSOKey, "SAML SSO requires a Pro license. Basic OIDC SSO is available on all tiers.")
+				return
+			}
+		}
 	}
 
 	if previewReq.MetadataURL == "" && previewReq.MetadataXML == "" {

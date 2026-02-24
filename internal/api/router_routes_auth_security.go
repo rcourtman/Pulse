@@ -19,6 +19,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const featureSSOKey = "sso"
+
 func (r *Router) registerAuthSecurityInstallRoutes() {
 	// API routes
 	r.mux.HandleFunc("/api/health", r.handleHealth)
@@ -60,19 +62,19 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			http.NotFound(w, req)
 		}
 	})
-	r.mux.HandleFunc("/api/security/sso/providers/test", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
+	r.mux.HandleFunc("/api/security/sso/providers/test", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers, featureSSOKey, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureSettingsWriteScope(r.config, w, req) {
 			return
 		}
 		ssoAdminEndpoints.HandleProviderTest(w, req)
-	}))
-	r.mux.HandleFunc("/api/security/sso/providers/metadata/preview", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
+	})))
+	r.mux.HandleFunc("/api/security/sso/providers/metadata/preview", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers, featureSSOKey, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureSettingsReadScope(r.config, w, req) {
 			return
 		}
 		ssoAdminEndpoints.HandleMetadataPreview(w, req)
-	}))
-	r.mux.HandleFunc("/api/security/sso/providers", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
+	})))
+	r.mux.HandleFunc("/api/security/sso/providers", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers, featureSSOKey, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
 			if !ensureSettingsReadScope(r.config, w, req) {
@@ -87,8 +89,8 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			return
 		}
 		ssoAdminEndpoints.HandleProvidersCollection(w, req)
-	}))
-	r.mux.HandleFunc("/api/security/sso/providers/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
+	})))
+	r.mux.HandleFunc("/api/security/sso/providers/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers, featureSSOKey, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
 			if !ensureSettingsReadScope(r.config, w, req) {
@@ -103,7 +105,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			return
 		}
 		ssoAdminEndpoints.HandleProviderItem(w, req)
-	}))
+	})))
 
 	// SAML login flow routes (unauthenticated - these are login/callback endpoints)
 	r.mux.HandleFunc("/api/saml/", func(w http.ResponseWriter, req *http.Request) {
