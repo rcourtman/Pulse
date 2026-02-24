@@ -84,6 +84,98 @@ func (a *MonitorAdapter) GetAll() []Resource {
 	return a.registry.List()
 }
 
+func (a *MonitorAdapter) unifiedAIAdapter() *UnifiedAIAdapter {
+	if a == nil || a.registry == nil {
+		return nil
+	}
+	return &UnifiedAIAdapter{registry: a.registry}
+}
+
+// GetInfrastructure returns infrastructure resources for unified AI context.
+func (a *MonitorAdapter) GetInfrastructure() []Resource {
+	adapter := a.unifiedAIAdapter()
+	if adapter == nil {
+		return nil
+	}
+	return adapter.GetInfrastructure()
+}
+
+// GetWorkloads returns workload resources for unified AI context.
+func (a *MonitorAdapter) GetWorkloads() []Resource {
+	adapter := a.unifiedAIAdapter()
+	if adapter == nil {
+		return nil
+	}
+	return adapter.GetWorkloads()
+}
+
+// GetByType returns resources filtered by type for MCP tools.
+func (a *MonitorAdapter) GetByType(t ResourceType) []Resource {
+	adapter := a.unifiedAIAdapter()
+	if adapter == nil {
+		return nil
+	}
+	return adapter.GetByType(t)
+}
+
+// GetStats returns aggregate stats for unified AI context.
+func (a *MonitorAdapter) GetStats() ResourceStats {
+	adapter := a.unifiedAIAdapter()
+	if adapter == nil {
+		return ResourceStats{
+			ByType:   make(map[ResourceType]int),
+			ByStatus: make(map[ResourceStatus]int),
+			BySource: make(map[DataSource]int),
+		}
+	}
+	return adapter.GetStats()
+}
+
+// GetTopByCPU returns top CPU resources for unified AI context.
+func (a *MonitorAdapter) GetTopByCPU(limit int, types []ResourceType) []Resource {
+	adapter := a.unifiedAIAdapter()
+	if adapter == nil {
+		return nil
+	}
+	return adapter.GetTopByCPU(limit, types)
+}
+
+// GetTopByMemory returns top memory resources for unified AI context.
+func (a *MonitorAdapter) GetTopByMemory(limit int, types []ResourceType) []Resource {
+	adapter := a.unifiedAIAdapter()
+	if adapter == nil {
+		return nil
+	}
+	return adapter.GetTopByMemory(limit, types)
+}
+
+// GetTopByDisk returns top disk resources for unified AI context.
+func (a *MonitorAdapter) GetTopByDisk(limit int, types []ResourceType) []Resource {
+	adapter := a.unifiedAIAdapter()
+	if adapter == nil {
+		return nil
+	}
+	return adapter.GetTopByDisk(limit, types)
+}
+
+// GetRelated returns related resources for unified AI context.
+func (a *MonitorAdapter) GetRelated(resourceID string) map[string][]Resource {
+	adapter := a.unifiedAIAdapter()
+	if adapter == nil {
+		return map[string][]Resource{}
+	}
+	return adapter.GetRelated(resourceID)
+}
+
+// FindContainerHost resolves a container host for unified AI context.
+func (a *MonitorAdapter) FindContainerHost(containerNameOrID string) string {
+	adapter := a.unifiedAIAdapter()
+	if adapter == nil {
+		return ""
+	}
+	return adapter.FindContainerHost(containerNameOrID)
+}
+
 // PopulateFromSnapshot ingests a fresh state snapshot into the registry.
 func (a *MonitorAdapter) PopulateFromSnapshot(snapshot models.StateSnapshot) {
 	if a.registry == nil {
@@ -104,6 +196,126 @@ func (a *MonitorAdapter) PopulateSupplementalRecords(source DataSource, records 
 		return
 	}
 	a.registry.IngestRecords(source, records)
+}
+
+// VMs returns cached VM views for AI/read-state consumers.
+func (a *MonitorAdapter) VMs() []*VMView {
+	if a == nil || a.registry == nil {
+		return nil
+	}
+	return a.registry.VMs()
+}
+
+// Containers returns cached LXC container views for AI/read-state consumers.
+func (a *MonitorAdapter) Containers() []*ContainerView {
+	if a == nil || a.registry == nil {
+		return nil
+	}
+	return a.registry.Containers()
+}
+
+// Nodes returns cached Proxmox node views for AI/read-state consumers.
+func (a *MonitorAdapter) Nodes() []*NodeView {
+	if a == nil || a.registry == nil {
+		return nil
+	}
+	return a.registry.Nodes()
+}
+
+// Hosts returns cached host-agent views for AI/read-state consumers.
+func (a *MonitorAdapter) Hosts() []*HostView {
+	if a == nil || a.registry == nil {
+		return nil
+	}
+	return a.registry.Hosts()
+}
+
+// DockerHosts returns cached Docker host views for AI/read-state consumers.
+func (a *MonitorAdapter) DockerHosts() []*DockerHostView {
+	if a == nil || a.registry == nil {
+		return nil
+	}
+	return a.registry.DockerHosts()
+}
+
+// DockerContainers returns cached Docker container views for AI/read-state consumers.
+func (a *MonitorAdapter) DockerContainers() []*DockerContainerView {
+	if a == nil || a.registry == nil {
+		return nil
+	}
+	return a.registry.DockerContainers()
+}
+
+// StoragePools returns cached storage pool views for AI/read-state consumers.
+func (a *MonitorAdapter) StoragePools() []*StoragePoolView {
+	if a == nil || a.registry == nil {
+		return nil
+	}
+	return a.registry.StoragePools()
+}
+
+// PBSInstances returns cached PBS instance views for AI/read-state consumers.
+func (a *MonitorAdapter) PBSInstances() []*PBSInstanceView {
+	if a == nil || a.registry == nil {
+		return nil
+	}
+	return a.registry.PBSInstances()
+}
+
+// PMGInstances returns cached PMG instance views for AI/read-state consumers.
+func (a *MonitorAdapter) PMGInstances() []*PMGInstanceView {
+	if a == nil || a.registry == nil {
+		return nil
+	}
+	return a.registry.PMGInstances()
+}
+
+// K8sClusters returns cached Kubernetes cluster views for AI/read-state consumers.
+func (a *MonitorAdapter) K8sClusters() []*K8sClusterView {
+	if a == nil || a.registry == nil {
+		return nil
+	}
+	return a.registry.K8sClusters()
+}
+
+// K8sNodes returns cached Kubernetes node views for AI/read-state consumers.
+func (a *MonitorAdapter) K8sNodes() []*K8sNodeView {
+	if a == nil || a.registry == nil {
+		return nil
+	}
+	return a.registry.K8sNodes()
+}
+
+// Pods returns cached pod views for AI/read-state consumers.
+func (a *MonitorAdapter) Pods() []*PodView {
+	if a == nil || a.registry == nil {
+		return nil
+	}
+	return a.registry.Pods()
+}
+
+// K8sDeployments returns cached deployment views for AI/read-state consumers.
+func (a *MonitorAdapter) K8sDeployments() []*K8sDeploymentView {
+	if a == nil || a.registry == nil {
+		return nil
+	}
+	return a.registry.K8sDeployments()
+}
+
+// Workloads returns cached polymorphic workload views for AI/read-state consumers.
+func (a *MonitorAdapter) Workloads() []*WorkloadView {
+	if a == nil || a.registry == nil {
+		return nil
+	}
+	return a.registry.Workloads()
+}
+
+// Infrastructure returns cached polymorphic infrastructure views for AI/read-state consumers.
+func (a *MonitorAdapter) Infrastructure() []*InfrastructureView {
+	if a == nil || a.registry == nil {
+		return nil
+	}
+	return a.registry.Infrastructure()
 }
 
 func monitorSourceType(sources []DataSource) string {

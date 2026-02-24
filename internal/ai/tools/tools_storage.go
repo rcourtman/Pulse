@@ -1462,7 +1462,7 @@ func (e *PulseToolExecutor) executeGetResourceDisks(_ context.Context, args map[
 	}
 
 	// Process containers
-	if typeFilter == "" || strings.EqualFold(typeFilter, "lxc") {
+	if typeFilter == "" || strings.EqualFold(typeFilter, "lxc") || strings.EqualFold(typeFilter, "system-container") {
 		for _, ct := range state.Containers {
 			// Apply filters
 			if resourceFilter != "" && ct.ID != resourceFilter && fmt.Sprintf("%d", ct.VMID) != resourceFilter {
@@ -1508,7 +1508,7 @@ func (e *PulseToolExecutor) executeGetResourceDisks(_ context.Context, args map[
 				ID:       ct.ID,
 				VMID:     ct.VMID,
 				Name:     ct.Name,
-				Type:     "lxc",
+				Type:     "system-container",
 				Node:     ct.Node,
 				Instance: ct.Instance,
 				Disks:    disks,

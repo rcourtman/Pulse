@@ -29,7 +29,7 @@ type PingResult struct {
 // GuestIntelligence enriches a single guest with discovery and reachability data.
 type GuestIntelligence struct {
 	Name        string // Human-readable guest name (e.g. "db-server")
-	GuestType   string // "vm" or "lxc"
+	GuestType   string // "vm" or "system-container"
 	ServiceName string // e.g. "PostgreSQL 15", "Nginx" (from discovery)
 	ServiceType string // e.g. "postgres", "nginx" (from discovery)
 	Reachable   *bool  // nil = not checked (no agent/no IP), true/false = checked
@@ -123,7 +123,7 @@ func (p *PatrolService) gatherGuestIntelligence(ctx context.Context, state model
 		}
 		gi := &GuestIntelligence{
 			Name:      ct.Name,
-			GuestType: "lxc",
+			GuestType: "system-container",
 		}
 
 		// Look up discovery

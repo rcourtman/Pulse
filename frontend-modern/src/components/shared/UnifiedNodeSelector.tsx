@@ -75,7 +75,11 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
   // Compute per-node container counts (LXC + OCI containers)
   const containerCounts = createMemo(() => {
     const counts: Record<string, number> = {};
-    const containers = [...byType('container'), ...byType('oci-container')];
+    const containers = [
+      ...byType('system-container'),
+      ...byType('container'),
+      ...byType('oci-container'),
+    ];
     containers.forEach((r) => {
       if (r.parentId) counts[r.parentId] = (counts[r.parentId] || 0) + 1;
     });

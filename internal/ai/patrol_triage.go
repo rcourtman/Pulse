@@ -17,7 +17,7 @@ import (
 type TriageFlag struct {
 	ResourceID   string  // e.g., "node/pve1", "qemu/100"
 	ResourceName string  // e.g., "pve1", "webserver-01"
-	ResourceType string  // "node", "vm", "container", "storage", "docker_host", "pbs", "pmg"
+	ResourceType string  // "node", "vm", "system-container", "storage", "docker_host", "pbs", "pmg"
 	Category     string  // "performance", "capacity", "backup", "health", "connectivity", "anomaly"
 	Severity     string  // "critical", "warning", "watch"
 	Reason       string  // Human-readable: "Memory at 92% (threshold: 80%)"
@@ -200,7 +200,7 @@ func triageThresholdChecks(state models.StateSnapshot, scopedSet map[string]bool
 			flags = append(flags, TriageFlag{
 				ResourceID:   ct.ID,
 				ResourceName: ct.Name,
-				ResourceType: "container",
+				ResourceType: "system-container",
 				Category:     "performance",
 				Severity:     sev,
 				Reason:       fmt.Sprintf("Memory at %.0f%% (threshold: %.0f%%)", mem, threshold),
@@ -215,7 +215,7 @@ func triageThresholdChecks(state models.StateSnapshot, scopedSet map[string]bool
 			flags = append(flags, TriageFlag{
 				ResourceID:   ct.ID,
 				ResourceName: ct.Name,
-				ResourceType: "container",
+				ResourceType: "system-container",
 				Category:     "capacity",
 				Severity:     sev,
 				Reason:       fmt.Sprintf("Disk at %.0f%% (threshold: %.0f%%)", disk, threshold),
@@ -230,7 +230,7 @@ func triageThresholdChecks(state models.StateSnapshot, scopedSet map[string]bool
 			flags = append(flags, TriageFlag{
 				ResourceID:   ct.ID,
 				ResourceName: ct.Name,
-				ResourceType: "container",
+				ResourceType: "system-container",
 				Category:     "performance",
 				Severity:     "warning",
 				Reason:       fmt.Sprintf("CPU at %.0f%% (threshold: %.0f%%)", cpu, thresholds.NodeCPUWarning),
@@ -336,7 +336,7 @@ func triageBackupChecks(state models.StateSnapshot, scopedSet map[string]bool) [
 		if ct.Template || ct.Status != "running" || !seedIsInScope(scopedSet, ct.ID) {
 			continue
 		}
-		flags = append(flags, triageBackupFlag(ct.ID, ct.Name, "container", ct.LastBackup, now)...)
+		flags = append(flags, triageBackupFlag(ct.ID, ct.Name, "system-container", ct.LastBackup, now)...)
 	}
 
 	return flags
@@ -484,8 +484,8 @@ func triageConnectivityChecks(state models.StateSnapshot, guestIntel map[string]
 		}
 
 		resourceType := "vm"
-		if strings.EqualFold(intel.GuestType, "lxc") || strings.EqualFold(intel.GuestType, "container") {
-			resourceType = "container"
+		if strings.EqualFold(intel.GuestType, "lxc") || strings.EqualFold(intel.GuestType, "container") || strings.EqualFold(intel.GuestType, "system-container") {
+			resourceType = "system-container"
 		}
 
 		flags = append(flags, TriageFlag{
@@ -600,7 +600,7 @@ func FormatTriageBriefing(triage *TriageResult) string {
 		sb.WriteString("\n")
 	}
 
-	healthyGuests := triage.Summary.TotalGuests - triageUniqueFlaggedByTypes(triage.Flags, "vm", "container")
+	healthyGuests := triage.Summary.TotalGuests - triageUniqueFlaggedByTypes(triage.Flags, "vm", "system-container")
 	if healthyGuests < 0 {
 		healthyGuests = 0
 	}
@@ -824,8 +824,8 @@ func triageMetricLabel(metric string) string {
 func triageResourceType(knownType, resourceID string) string {
 	knownType = strings.TrimSpace(strings.ToLower(knownType))
 	if knownType != "" {
-		if knownType == "lxc" {
-			return "container"
+		if knownType == "lxc" || knownType == "container" {
+			return "system-container"
 		}
 		if knownType == "docker" {
 			return "docker_host"
@@ -841,7 +841,7 @@ func triageConnectionResourceType(resourceID string) string {
 	case strings.Contains(id, "qemu/"):
 		return "vm"
 	case strings.Contains(id, "lxc/"):
-		return "container"
+		return "system-container"
 	case strings.HasPrefix(id, "node/"), strings.HasPrefix(id, "pve"), strings.Contains(id, "/node/"):
 		return "node"
 	case strings.HasPrefix(id, "storage/"), strings.Contains(id, "storage"):

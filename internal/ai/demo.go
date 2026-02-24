@@ -82,7 +82,7 @@ func (p *PatrolService) InjectDemoFindings() {
 			Description:  "The postgres container (CT 105) last successful backup was 8 days ago. Your backup schedule targets daily backups.",
 			ResourceID:   "lxc/105",
 			ResourceName: "postgres",
-			ResourceType: "lxc",
+			ResourceType: "system-container",
 			Node:         "pve1",
 			Recommendation: `**Investigate:**
 1. Check PBS backup job status: ` + "`pvesh get /nodes/pve1/tasks --typefilter vzdump`" + `

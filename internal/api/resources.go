@@ -873,10 +873,10 @@ func parseResourceTypes(raw string) map[unified.ResourceType]struct{} {
 			result[unified.ResourceTypeHost] = struct{}{}
 		case "vm", "vms", "qemu":
 			result[unified.ResourceTypeVM] = struct{}{}
-		case "lxc", "lxcs":
-			result[unified.ResourceTypeLXC] = struct{}{}
-		case "container", "containers", "docker_container", "docker-container":
-			result[unified.ResourceTypeContainer] = struct{}{}
+		case "lxc", "lxcs", "system-container", "system_container":
+			result[unified.ResourceTypeSystemContainer] = struct{}{}
+		case "container", "containers", "docker_container", "docker-container", "app-container", "app_container":
+			result[unified.ResourceTypeAppContainer] = struct{}{}
 		case "docker_service", "docker-service", "swarm_service", "swarm-service", "service", "services":
 			result[unified.ResourceTypeDockerService] = struct{}{}
 		case "pod", "pods", "k8s_pod", "k8s-pod", "kubernetes_pod", "kubernetes-pod":
@@ -1012,11 +1012,11 @@ func buildMetricsTarget(resource unified.Resource, registry *unified.ResourceReg
 		if st, ok := bySource[unified.SourceProxmox]; ok {
 			return &unified.MetricsTarget{ResourceType: "guest", ResourceID: st.SourceID}
 		}
-	case unified.ResourceTypeLXC:
+	case unified.ResourceTypeSystemContainer:
 		if st, ok := bySource[unified.SourceProxmox]; ok {
 			return &unified.MetricsTarget{ResourceType: "guest", ResourceID: st.SourceID}
 		}
-	case unified.ResourceTypeContainer:
+	case unified.ResourceTypeAppContainer:
 		if st, ok := bySource[unified.SourceDocker]; ok {
 			return &unified.MetricsTarget{ResourceType: "docker", ResourceID: st.SourceID}
 		}
@@ -1058,7 +1058,7 @@ func buildDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
 		return hostDiscoveryTarget(resource)
 	case unified.ResourceTypeVM:
 		return proxmoxGuestDiscoveryTarget(resource, "vm")
-	case unified.ResourceTypeLXC:
+	case unified.ResourceTypeSystemContainer:
 		return proxmoxGuestDiscoveryTarget(resource, "lxc")
 	case unified.ResourceTypePBS:
 		return hostDiscoveryTarget(resource)

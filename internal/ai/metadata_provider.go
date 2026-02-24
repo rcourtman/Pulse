@@ -66,7 +66,7 @@ func (s *Service) SetResourceURL(resourceType, resourceID, customURL string) err
 
 	// Route to the appropriate metadata store based on resource type
 	switch strings.ToLower(resourceType) {
-	case "guest", "vm", "container", "lxc", "qemu":
+	case "guest", "vm", "system-container", "container", "lxc", "qemu":
 		if err := mp.SetGuestURL(resourceID, customURL); err != nil {
 			return fmt.Errorf("failed to set guest URL: %w", err)
 		}

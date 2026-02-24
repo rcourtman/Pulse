@@ -14,15 +14,15 @@ import (
 // ResourceMention represents a detected resource mention in a user message
 type ResourceMention struct {
 	Name         string
-	ResourceType string // "vm", "lxc", "docker", "host"
+	ResourceType string // "vm", "system-container", "docker", "host", "node"
 	ResourceID   string
 	HostID       string
 	MatchedText  string // The actual text that matched
 	// Docker-specific: bind mounts (source -> destination)
 	BindMounts []MountInfo
 	// Full routing chain (for Docker containers)
-	DockerHostName string // Name of LXC/VM/host running Docker (e.g., "homepage-docker")
-	DockerHostType string // "lxc", "vm", or "host"
+	DockerHostName string // Name of system-container/VM/host running Docker (e.g., "homepage-docker")
+	DockerHostType string // "lxc", "vm", or "host" (technology-level, from state.ResolveResource)
 	DockerHostVMID int    // VMID if DockerHost is an LXC/VM
 	ProxmoxNode    string // Proxmox node name (e.g., "delly")
 	TargetHost     string // The correct target_host to use for commands
@@ -122,7 +122,7 @@ func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, struct
 			var sb strings.Builder
 			sb.WriteString("=== RESOURCE LOOKUP RESULT ===\n")
 			for _, name := range unresolvedMentions {
-				sb.WriteString(fmt.Sprintf("'%s' was NOT found in Pulse monitoring. It is not a tracked VM, LXC, Docker container, or host.\n", name))
+				sb.WriteString(fmt.Sprintf("'%s' was NOT found in Pulse monitoring. It is not a tracked VM, container, Docker container, or host.\n", name))
 			}
 			sb.WriteString("Do NOT use pulse_discovery to search for these resources — they are not in the system.\n")
 			sb.WriteString("Instead: use pulse_control directly if you know the host where the service runs, or ask the user for the location.\n")
@@ -202,7 +202,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 		}
 	}
 
-	// Check LXC containers (via ReadState)
+	// Check system containers (LXC via ReadState)
 	if rs != nil {
 		for _, ct := range rs.Containers() {
 			if ct == nil {
@@ -215,7 +215,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 					seen[nameLower] = true
 					mentions = append(mentions, ResourceMention{
 						Name:         name,
-						ResourceType: "lxc",
+						ResourceType: "system-container",
 						ResourceID:   fmt.Sprintf("%d", ct.VMID()),
 						HostID:       ct.Node(),
 						MatchedText:  name,
@@ -380,10 +380,10 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 		// "host:id", "node:instance:name"
 		parts := strings.Split(sm.ID, ":")
 
-		// Normalize frontend type "container" → "lxc"
+		// Normalize frontend type aliases to canonical types
 		resourceType := sm.Type
-		if resourceType == "container" {
-			resourceType = "lxc"
+		if resourceType == "container" || resourceType == "lxc" {
+			resourceType = "system-container"
 		}
 
 		// Use ResolveResource for full routing info (target_host, Docker chain, etc.)
@@ -406,7 +406,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				TargetHost:   loc.TargetHost,
 			})
 
-		case "lxc":
+		case "system-container":
 			vmID := ""
 			node := sm.Node
 			if len(parts) >= 3 {
@@ -415,7 +415,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 			}
 			mentions = append(mentions, ResourceMention{
 				Name:         sm.Name,
-				ResourceType: "lxc",
+				ResourceType: "system-container",
 				ResourceID:   vmID,
 				HostID:       node,
 				MatchedText:  sm.Name,
@@ -545,10 +545,24 @@ func parseStructuredDockerMentionID(mentionID string, state models.StateSnapshot
 	return parts[0], parts[1]
 }
 
+// discoveryResourceType maps semantic resource types to servicediscovery-level types.
+// The servicediscovery package uses provider-level identifiers ("lxc", "vm", "docker").
+func discoveryResourceType(semanticType string) string {
+	switch semanticType {
+	case "system-container":
+		return "lxc"
+	default:
+		return semanticType
+	}
+}
+
 // getOrTriggerDiscovery gets existing discovery or triggers a new one
 func (p *ContextPrefetcher) getOrTriggerDiscovery(ctx context.Context, mention ResourceMention) (*tools.ResourceDiscoveryInfo, error) {
+	// Map semantic type to discovery-level type at the boundary
+	discoveryType := discoveryResourceType(mention.ResourceType)
+
 	// First try to get existing discovery
-	discovery, err := p.discoveryProvider.GetDiscoveryByResource(mention.ResourceType, mention.HostID, mention.ResourceID)
+	discovery, err := p.discoveryProvider.GetDiscoveryByResource(discoveryType, mention.HostID, mention.ResourceID)
 	if err == nil && discovery != nil {
 		log.Debug().
 			Str("resource", mention.Name).
@@ -556,14 +570,14 @@ func (p *ContextPrefetcher) getOrTriggerDiscovery(ctx context.Context, mention R
 		return discovery, nil
 	}
 
-	// Trigger discovery if not found (for VMs and LXCs)
-	if mention.ResourceType == "vm" || mention.ResourceType == "lxc" || mention.ResourceType == "docker" {
+	// Trigger discovery if not found (for VMs, system containers, and Docker containers)
+	if mention.ResourceType == "vm" || mention.ResourceType == "system-container" || mention.ResourceType == "docker" {
 		log.Debug().
 			Str("resource", mention.Name).
 			Str("type", mention.ResourceType).
 			Msg("[ContextPrefetch] Triggering discovery")
 
-		discovery, err = p.discoveryProvider.TriggerDiscovery(ctx, mention.ResourceType, mention.HostID, mention.ResourceID)
+		discovery, err = p.discoveryProvider.TriggerDiscovery(ctx, discoveryType, mention.HostID, mention.ResourceID)
 		if err != nil {
 			return nil, err
 		}
@@ -591,7 +605,8 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 	}
 
 	for _, mention := range mentions {
-		key := fmt.Sprintf("%s:%s:%s", mention.ResourceType, mention.HostID, mention.ResourceID)
+		// Use discovery-level type for lookup key to match discovery data keyed by provider type
+		key := fmt.Sprintf("%s:%s:%s", discoveryResourceType(mention.ResourceType), mention.HostID, mention.ResourceID)
 		discovery, hasDiscovery := discoveryMap[key]
 
 		// Docker containers get special treatment - show the full routing chain
@@ -648,8 +663,8 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 		sb.WriteString(fmt.Sprintf("## %s\n", mention.Name))
 		sb.WriteString(fmt.Sprintf("Type: %s | Host: %s\n", mention.ResourceType, mention.HostID))
 
-		// Include VMID for VMs and LXCs — the AI needs this for pulse_control guest operations
-		if (mention.ResourceType == "lxc" || mention.ResourceType == "vm") && mention.ResourceID != "" {
+		// Include VMID for VMs and system containers — the AI needs this for pulse_control guest operations
+		if (mention.ResourceType == "system-container" || mention.ResourceType == "vm") && mention.ResourceID != "" {
 			sb.WriteString(fmt.Sprintf("VMID: %s\n", mention.ResourceID))
 			sb.WriteString(fmt.Sprintf("To control this guest, use: pulse_control type=\"guest\", guest_id=\"%s\", action=\"start|stop|shutdown|restart\"\n", mention.ResourceID))
 		}
@@ -728,7 +743,7 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 		} else {
 			// No discovery - provide basic routing without suggesting discovery calls
 			sb.WriteString(fmt.Sprintf("target_host: \"%s\"\n", mention.Name))
-			if mention.ResourceType == "lxc" || mention.ResourceType == "vm" {
+			if mention.ResourceType == "system-container" || mention.ResourceType == "vm" {
 				sb.WriteString("Proceed directly with pulse_control — do NOT call pulse_discovery.\n")
 			} else {
 				sb.WriteString("Proceed directly with pulse_control — do NOT call pulse_discovery.\n")

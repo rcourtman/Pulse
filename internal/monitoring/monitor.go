@@ -2764,6 +2764,27 @@ func (m *Monitor) GetUnifiedResources() []unifiedresources.Resource {
 	return store.GetAll()
 }
 
+// GetUnifiedReadState returns a typed unified read-state provider when the
+// configured resource store supports it.
+func (m *Monitor) GetUnifiedReadState() unifiedresources.ReadState {
+	if m == nil {
+		return nil
+	}
+
+	m.mu.RLock()
+	store := m.resourceStore
+	m.mu.RUnlock()
+	if store == nil {
+		return nil
+	}
+
+	readState, ok := store.(unifiedresources.ReadState)
+	if !ok {
+		return nil
+	}
+	return readState
+}
+
 // shouldSkipNodeMetrics returns true if we should skip detailed metric polling
 // for the given node because a host agent is providing richer data.
 // This helps reduce API load when agents are active.
@@ -2930,9 +2951,9 @@ func monitorLegacyResourceType(resource unifiedresources.Resource) string {
 	switch resource.Type {
 	case unifiedresources.ResourceTypeVM:
 		return "vm"
-	case unifiedresources.ResourceTypeLXC:
+	case unifiedresources.ResourceTypeSystemContainer:
 		return "container"
-	case unifiedresources.ResourceTypeContainer:
+	case unifiedresources.ResourceTypeAppContainer:
 		return "docker-container"
 	case unifiedresources.ResourceTypeK8sCluster:
 		return "k8s-cluster"

@@ -48,7 +48,7 @@ Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,
 					"resource_type": {
 						Type:        "string",
 						Description: "Resource type",
-						Enum:        []string{"node", "vm", "container", "docker_container", "storage", "host", "kubernetes_cluster", "pbs"},
+						Enum:        []string{"node", "vm", "system-container", "container", "docker_container", "storage", "host", "kubernetes_cluster", "pbs"},
 					},
 					"title": {
 						Type:        "string",

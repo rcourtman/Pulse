@@ -409,16 +409,20 @@ const resolveType = (value?: string): ResourceType => {
       return 'truenas';
     case 'vm':
       return 'vm';
+    case 'system-container':
+    case 'system_container':
     case 'lxc':
-      return 'container';
+      return 'system-container';
     case 'oci-container':
       return 'oci-container';
     case 'container':
-      return 'container';
+      return 'system-container';
+    case 'app-container':
+    case 'app_container':
     case 'docker-container':
-      return 'docker-container';
+      return 'app-container';
     case 'docker_container':
-      return 'docker-container';
+      return 'app-container';
     case 'pod':
       return 'pod';
     case 'jail':

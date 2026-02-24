@@ -39,14 +39,15 @@ func resourceFromProxmoxNode(node models.Node) (Resource, ResourceIdentity) {
 	metrics := metricsFromProxmoxNode(node)
 
 	resource := Resource{
-		Type:      ResourceTypeHost,
-		Name:      name,
-		Status:    statusFromString(node.Status),
-		LastSeen:  node.LastSeen,
-		UpdatedAt: time.Now().UTC(),
-		Metrics:   metrics,
-		Proxmox:   proxmox,
-		Tags:      nil,
+		Type:       ResourceTypeHost,
+		Technology: "proxmox",
+		Name:       name,
+		Status:     statusFromString(node.Status),
+		LastSeen:   node.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Metrics:    metrics,
+		Proxmox:    proxmox,
+		Tags:       nil,
 	}
 
 	return resource, identity
@@ -180,14 +181,15 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	metrics := metricsFromHost(host)
 
 	resource := Resource{
-		Type:      ResourceTypeHost,
-		Name:      name,
-		Status:    statusFromString(host.Status),
-		LastSeen:  host.LastSeen,
-		UpdatedAt: time.Now().UTC(),
-		Metrics:   metrics,
-		Agent:     agent,
-		Tags:      host.Tags,
+		Type:       ResourceTypeHost,
+		Technology: strings.TrimSpace(host.Platform),
+		Name:       name,
+		Status:     statusFromString(host.Status),
+		LastSeen:   host.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Metrics:    metrics,
+		Agent:      agent,
+		Tags:       host.Tags,
 	}
 
 	return resource, identity
@@ -268,14 +270,15 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 	metrics := metricsFromDockerHost(host)
 
 	resource := Resource{
-		Type:      ResourceTypeHost,
-		Name:      name,
-		Status:    statusFromString(host.Status),
-		LastSeen:  host.LastSeen,
-		UpdatedAt: time.Now().UTC(),
-		Metrics:   metrics,
-		Docker:    docker,
-		Tags:      nil,
+		Type:       ResourceTypeHost,
+		Technology: strings.TrimSpace(host.Runtime),
+		Name:       name,
+		Status:     statusFromString(host.Status),
+		LastSeen:   host.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Metrics:    metrics,
+		Docker:     docker,
+		Tags:       nil,
 	}
 
 	return resource, identity
@@ -491,14 +494,15 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 		Balloon:    vm.Memory.Balloon,
 	}
 	resource := Resource{
-		Type:      ResourceTypeVM,
-		Name:      vm.Name,
-		Status:    statusFromGuest(vm.Status),
-		LastSeen:  vm.LastSeen,
-		UpdatedAt: time.Now().UTC(),
-		Metrics:   metrics,
-		Proxmox:   proxmox,
-		Tags:      vm.Tags,
+		Type:       ResourceTypeVM,
+		Technology: "qemu",
+		Name:       vm.Name,
+		Status:     statusFromGuest(vm.Status),
+		LastSeen:   vm.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Metrics:    metrics,
+		Proxmox:    proxmox,
+		Tags:       vm.Tags,
 	}
 	identity := ResourceIdentity{
 		Hostnames:   uniqueStrings([]string{vm.Name}),
@@ -523,14 +527,15 @@ func resourceFromContainer(ct models.Container) (Resource, ResourceIdentity) {
 		Balloon:    ct.Memory.Balloon,
 	}
 	resource := Resource{
-		Type:      ResourceTypeLXC,
-		Name:      ct.Name,
-		Status:    statusFromGuest(ct.Status),
-		LastSeen:  ct.LastSeen,
-		UpdatedAt: time.Now().UTC(),
-		Metrics:   metrics,
-		Proxmox:   proxmox,
-		Tags:      ct.Tags,
+		Type:       ResourceTypeSystemContainer,
+		Technology: "lxc",
+		Name:       ct.Name,
+		Status:     statusFromGuest(ct.Status),
+		LastSeen:   ct.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Metrics:    metrics,
+		Proxmox:    proxmox,
+		Tags:       ct.Tags,
 	}
 	identity := ResourceIdentity{
 		Hostnames:   uniqueStrings([]string{ct.Name}),
@@ -882,12 +887,13 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 		}
 	}
 	resource := Resource{
-		Type:      ResourceTypeContainer,
-		Name:      ct.Name,
-		Status:    statusFromDockerState(ct.State),
-		LastSeen:  time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
-		Metrics:   metrics,
+		Type:       ResourceTypeAppContainer,
+		Technology: runtime,
+		Name:       ct.Name,
+		Status:     statusFromDockerState(ct.State),
+		LastSeen:   time.Now().UTC(),
+		UpdatedAt:  time.Now().UTC(),
+		Metrics:    metrics,
 	}
 	resource.Docker = docker
 	identity := ResourceIdentity{
@@ -944,13 +950,14 @@ func resourceFromDockerService(service models.DockerService, host models.DockerH
 	}
 
 	resource := Resource{
-		Type:      ResourceTypeDockerService,
-		Name:      strings.TrimSpace(service.Name),
-		Status:    statusFromDockerService(service),
-		LastSeen:  host.LastSeen,
-		UpdatedAt: now,
-		Docker:    docker,
-		Tags:      labelsToTags(docker.Labels),
+		Type:       ResourceTypeDockerService,
+		Technology: "docker",
+		Name:       strings.TrimSpace(service.Name),
+		Status:     statusFromDockerService(service),
+		LastSeen:   host.LastSeen,
+		UpdatedAt:  now,
+		Docker:     docker,
+		Tags:       labelsToTags(docker.Labels),
 	}
 
 	identity := ResourceIdentity{
@@ -1067,12 +1074,13 @@ func resourceFromKubernetesPod(cluster models.KubernetesCluster, pod models.Kube
 	}
 	metrics := metricsFromKubernetesPod(cluster, pod)
 	resource := Resource{
-		Type:      ResourceTypePod,
-		Name:      pod.Name,
-		Status:    statusFromKubernetesPod(pod),
-		LastSeen:  cluster.LastSeen,
-		UpdatedAt: now,
-		Metrics:   metrics,
+		Type:       ResourceTypePod,
+		Technology: "kubernetes",
+		Name:       pod.Name,
+		Status:     statusFromKubernetesPod(pod),
+		LastSeen:   cluster.LastSeen,
+		UpdatedAt:  now,
+		Metrics:    metrics,
 		Kubernetes: &K8sData{
 			ClusterID:   cluster.ID,
 			ClusterName: clusterName,

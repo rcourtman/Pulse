@@ -174,9 +174,9 @@ func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[stri
 	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
 	resourceID = strings.TrimSpace(resourceID)
 	if resourceType != "" {
-		validTypes := map[string]bool{"vm": true, "container": true, "node": true, "docker": true}
+		validTypes := map[string]bool{"vm": true, "system-container": true, "container": true, "node": true, "docker": true}
 		if !validTypes[resourceType] {
-			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, container, node, or docker", resourceType)), nil
+			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, system-container, node, or docker", resourceType)), nil
 		}
 	}
 
@@ -195,8 +195,8 @@ func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[stri
 		switch normalized {
 		case "docker container", "docker-container", "docker_container":
 			return "docker"
-		case "lxc", "lxc container", "lxc-container", "lxc_container":
-			return "container"
+		case "system-container", "lxc", "lxc container", "lxc-container", "lxc_container", "container":
+			return "system-container"
 		default:
 			return normalized
 		}

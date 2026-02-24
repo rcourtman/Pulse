@@ -76,7 +76,7 @@ type ErrRoutingMismatch struct {
 	TargetHost            string   // The host that was targeted
 	MoreSpecificResources []string // Child resource names that exist on this host
 	MoreSpecificIDs       []string // Canonical resource IDs (kind:host:id) for future ID-based targeting
-	ChildKinds            []string // Resource kinds of children (for telemetry: "lxc", "vm", etc.)
+	ChildKinds            []string // Resource kinds of children (for telemetry/routing: "lxc", "vm", etc.)
 	Message               string   // Human-readable message
 }
 
@@ -2018,8 +2018,8 @@ func (e *PulseToolExecutor) registerQueryTools() {
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "Resource type: 'vm', 'container', 'docker', 'node' (for action: get, config, search)",
-						Enum:        []string{"vm", "container", "docker", "node"},
+						Description: "Resource type: 'vm', 'system-container', 'docker', 'node' (for action: get, config, search)",
+						Enum:        []string{"vm", "system-container", "container", "docker", "node"},
 					},
 					"resource_id": {
 						Type:        "string",
@@ -2607,13 +2607,13 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 			"type":        "vm",
 		}), nil
 
-	case "container":
+	case "system-container", "container":
 		for _, ct := range rs.Containers() {
 			if fmt.Sprintf("%d", ct.VMID()) == resourceID || ct.Name() == resourceID || ct.ID() == resourceID {
 				used := ct.MemoryUsed()
 				total := ct.MemoryTotal()
 				response := ResourceResponse{
-					Type:   "container",
+					Type:   "system-container",
 					ID:     ct.ID(),
 					Name:   ct.Name(),
 					Status: string(ct.Status()),
@@ -2659,7 +2659,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 		return NewJSONResult(map[string]interface{}{
 			"error":       "not_found",
 			"resource_id": resourceID,
-			"type":        "container",
+			"type":        "system-container",
 		}), nil
 
 	case "docker":
@@ -2745,7 +2745,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 		}), nil
 
 	default:
-		return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use 'vm', 'container', or 'docker'", resourceType)), nil
+		return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use 'vm', 'system-container', or 'docker'", resourceType)), nil
 	}
 }
 
@@ -2783,7 +2783,13 @@ func (e *PulseToolExecutor) executeGetGuestConfig(_ context.Context, args map[st
 		return NewErrorResult(err), nil
 	}
 
-	rawConfig, err := e.guestConfigProvider.GetGuestConfig(guestType, instance, node, vmID)
+	// Normalize semantic type to provider-level type for guest config lookup.
+	// GetGuestConfig expects "container"/"lxc" or "vm", not "system-container".
+	configType := guestType
+	if configType == "system-container" {
+		configType = "container"
+	}
+	rawConfig, err := e.guestConfigProvider.GetGuestConfig(configType, instance, node, vmID)
 	if err != nil {
 		return NewErrorResult(err), nil
 	}
@@ -2797,7 +2803,7 @@ func (e *PulseToolExecutor) executeGetGuestConfig(_ context.Context, args map[st
 	}
 
 	switch guestType {
-	case "container", "lxc":
+	case "system-container", "container", "lxc":
 		hostname, osType, onboot, rootfs, mounts := parseContainerConfig(rawConfig)
 		response.Hostname = hostname
 		response.OSType = osType
@@ -2824,10 +2830,10 @@ func resolveGuestFromReadState(rs unifiedresources.ReadState, resourceType, reso
 	}
 
 	switch resourceType {
-	case "container", "lxc":
+	case "system-container", "container", "lxc":
 		for _, ct := range rs.Containers() {
 			if fmt.Sprintf("%d", ct.VMID()) == resourceID || ct.Name() == resourceID || ct.ID() == resourceID {
-				return "container", ct.VMID(), ct.Name(), ct.Node(), ct.Instance(), nil
+				return "system-container", ct.VMID(), ct.Name(), ct.Node(), ct.Instance(), nil
 			}
 		}
 		return "", 0, "", "", "", fmt.Errorf("container not found: %s", resourceID)
@@ -3001,15 +3007,16 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 	}
 
 	allowedTypes := map[string]bool{
-		"":            true,
-		"node":        true,
-		"vm":          true,
-		"container":   true,
-		"docker":      true,
-		"docker_host": true,
+		"":                 true,
+		"node":             true,
+		"vm":               true,
+		"system-container": true,
+		"container":        true,
+		"docker":           true,
+		"docker_host":      true,
 	}
 	if !allowedTypes[typeFilter] {
-		return NewErrorResult(fmt.Errorf("invalid type: %s. Use node, vm, container, docker, or docker_host", typeFilter)), nil
+		return NewErrorResult(fmt.Errorf("invalid type: %s. Use node, vm, system-container, docker, or docker_host", typeFilter)), nil
 	}
 
 	// normalizeForSearch replaces common separators with spaces and splits at
@@ -3160,7 +3167,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 		}
 	}
 
-	if typeFilter == "" || typeFilter == "container" {
+	if typeFilter == "" || typeFilter == "system-container" || typeFilter == "container" {
 		for _, ct := range rs.Containers() {
 			status := string(ct.Status())
 			if !statusMatchesFilter(status, statusFilter) {
@@ -3176,7 +3183,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 				continue
 			}
 			addMatch(ResourceMatch{
-				Type:           "container",
+				Type:           "system-container",
 				ID:             ct.ID(),
 				Name:           ct.Name(),
 				Status:         status,
@@ -3291,7 +3298,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 					Priority:   10,
 				}},
 			}
-		case "container":
+		case "system-container", "container":
 			reg = ResourceRegistration{
 				Kind:          "lxc",
 				ProviderUID:   fmt.Sprintf("%d", match.VMID),

@@ -177,8 +177,8 @@ func TestExecuteSearchResources(t *testing.T) {
 		wantType string
 		wantName string
 	}{
-		{"LXC200", "container", "db-ct"},
-		{"CT200", "container", "db-ct"},
+		{"LXC200", "system-container", "db-ct"},
+		{"CT200", "system-container", "db-ct"},
 		{"VM100", "vm", "web-vm"},
 		{"vm100", "vm", "web-vm"},
 	} {
@@ -413,7 +413,7 @@ func TestExecuteGetResourceErrorsAndContainer(t *testing.T) {
 	if err := json.Unmarshal([]byte(result.Content[0].Text), &res); err != nil {
 		t.Fatalf("decode container response: %v", err)
 	}
-	if res.Type != "container" || res.Name != "ct1" {
+	if res.Type != "system-container" || res.Name != "ct1" {
 		t.Fatalf("unexpected container response: %+v", res)
 	}
 

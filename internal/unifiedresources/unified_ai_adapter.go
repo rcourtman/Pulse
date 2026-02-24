@@ -295,7 +295,7 @@ func isUnifiedInfrastructure(t ResourceType) bool {
 
 func isUnifiedWorkload(t ResourceType) bool {
 	switch t {
-	case ResourceTypeVM, ResourceTypeLXC, ResourceTypeContainer, ResourceTypePod, ResourceTypeK8sDeployment:
+	case ResourceTypeVM, ResourceTypeSystemContainer, ResourceTypeAppContainer, ResourceTypePod, ResourceTypeK8sDeployment:
 		return true
 	default:
 		return false
@@ -304,7 +304,7 @@ func isUnifiedWorkload(t ResourceType) bool {
 
 func isUnifiedHostResolvableWorkload(t ResourceType) bool {
 	switch t {
-	case ResourceTypeContainer, ResourceTypeLXC, ResourceTypeVM:
+	case ResourceTypeAppContainer, ResourceTypeSystemContainer, ResourceTypeVM:
 		return true
 	default:
 		return false

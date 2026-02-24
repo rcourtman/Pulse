@@ -24,9 +24,11 @@ export type ResourceType =
   | 'k8s-node' // Kubernetes node
   | 'truenas' // TrueNAS system
   | 'vm' // Proxmox VM
-  | 'container' // LXC container
+  | 'system-container' // System container (LXC, Incus, BSD jail)
+  | 'app-container' // Application container (Docker, Podman)
+  | 'container' // Legacy alias for system-container
   | 'oci-container' // OCI container (Proxmox VE 9.1+)
-  | 'docker-container' // Docker container
+  | 'docker-container' // Legacy alias for app-container
   | 'pod' // Kubernetes pod
   | 'jail' // BSD jail
   | 'docker-service' // Docker Swarm service
@@ -192,6 +194,7 @@ export interface Resource {
   // Identity
   id: string;
   type: ResourceType;
+  technology?: string; // Implementation detail: "qemu", "lxc", "docker", "podman", etc.
   name: string;
   displayName: string;
 
@@ -252,7 +255,16 @@ export function isInfrastructure(r: Resource): boolean {
 }
 
 export function isWorkload(r: Resource): boolean {
-  return ['vm', 'container', 'oci-container', 'docker-container', 'pod', 'jail'].includes(r.type);
+  return [
+    'vm',
+    'system-container',
+    'app-container',
+    'container',
+    'oci-container',
+    'docker-container',
+    'pod',
+    'jail',
+  ].includes(r.type);
 }
 
 export function isStorage(r: Resource): boolean {

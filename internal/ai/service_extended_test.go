@@ -816,13 +816,13 @@ func TestService_LookupNodeForVMID_Extended(t *testing.T) {
 
 	// 1. Find VM
 	node, name, gType := svc.lookupNodeForVMID(101)
-	if node != "node-1" || name != "vm-101" || gType != "qemu" {
+	if node != "node-1" || name != "vm-101" || gType != "vm" {
 		t.Errorf("VM lookup failed: %s, %s, %s", node, name, gType)
 	}
 
 	// 2. Find Container
 	node, name, gType = svc.lookupNodeForVMID(201)
-	if node != "node-2" || name != "ct-201" || gType != "lxc" {
+	if node != "node-2" || name != "ct-201" || gType != "system-container" {
 		t.Errorf("Container lookup failed: %s, %s, %s", node, name, gType)
 	}
 

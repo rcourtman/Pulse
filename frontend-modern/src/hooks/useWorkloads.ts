@@ -231,11 +231,18 @@ const normalizeWorkloadStatus = (status?: string | null): string => {
 const resolveWorkloadType = (value?: string | null): WorkloadType | null => {
   const normalized = (value || '').trim().toLowerCase();
   if (normalized === 'vm' || normalized === 'qemu') return 'vm';
-  if (normalized === 'lxc') return 'lxc';
+  if (
+    normalized === 'lxc' ||
+    normalized === 'system-container' ||
+    normalized === 'system_container'
+  )
+    return 'lxc';
   if (
     normalized === 'container' ||
     normalized === 'docker-container' ||
-    normalized === 'docker_container'
+    normalized === 'docker_container' ||
+    normalized === 'app-container' ||
+    normalized === 'app_container'
   ) {
     return 'docker';
   }

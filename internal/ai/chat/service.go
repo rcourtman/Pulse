@@ -411,7 +411,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 				// Build canonical resource ID: kind:host:id
 				var resourceID string
 				switch mention.ResourceType {
-				case "lxc":
+				case "system-container", "lxc":
 					if mention.HostID != "" {
 						resourceID = "lxc:" + mention.HostID + ":" + mention.ResourceID
 					}

@@ -7,6 +7,17 @@ import (
 	"strings"
 )
 
+// semanticResourceType normalizes provider-level discovery types back to semantic types for AI responses.
+// Discovery stores "lxc" (provider-level), but the AI layer uses "system-container" (semantic).
+func semanticResourceType(discoveryType string) string {
+	switch discoveryType {
+	case "lxc":
+		return "system-container"
+	default:
+		return discoveryType
+	}
+}
+
 // registerDiscoveryTools registers the pulse_discovery tool
 func (e *PulseToolExecutor) registerDiscoveryTools() {
 	e.registry.Register(RegisteredTool{
@@ -23,8 +34,8 @@ func (e *PulseToolExecutor) registerDiscoveryTools() {
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "For get: resource type (vm, lxc, docker, host)",
-						Enum:        []string{"vm", "lxc", "docker", "host"},
+						Description: "For get: resource type (vm, system-container, docker, host)",
+						Enum:        []string{"vm", "system-container", "lxc", "docker", "host"},
 					},
 					"resource_id": {
 						Type:        "string",
@@ -37,7 +48,7 @@ func (e *PulseToolExecutor) registerDiscoveryTools() {
 					"type": {
 						Type:        "string",
 						Description: "For list: filter by resource type",
-						Enum:        []string{"vm", "lxc", "docker", "host"},
+						Enum:        []string{"vm", "system-container", "lxc", "docker", "host"},
 					},
 					"host": {
 						Type:        "string",
@@ -91,8 +102,8 @@ type CommandContext struct {
 // Does NOT prescribe how to access - the AI should determine that based on available agents.
 func getCLIAccessPattern(resourceType, hostID, resourceID string) string {
 	switch resourceType {
-	case "lxc":
-		return fmt.Sprintf("LXC container on Proxmox node '%s' (VMID %s)", hostID, resourceID)
+	case "system-container", "lxc":
+		return fmt.Sprintf("System container on Proxmox node '%s' (VMID %s)", hostID, resourceID)
 	case "vm":
 		return fmt.Sprintf("VM on Proxmox node '%s' (VMID %s)", hostID, resourceID)
 	case "docker":
@@ -220,6 +231,15 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 	resourceID, _ := args["resource_id"].(string)
 	hostID, _ := args["host_id"].(string)
 
+	// Preserve the caller's semantic type for response fields.
+	responseType := resourceType
+
+	// Normalize semantic types to discovery-level types at the boundary.
+	// The servicediscovery package uses provider-level identifiers ("lxc", "vm", "docker").
+	if resourceType == "system-container" {
+		resourceType = "lxc"
+	}
+
 	if resourceType == "" {
 		return NewErrorResult(fmt.Errorf("resource_type is required")), nil
 	}
@@ -232,14 +252,14 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 
 	// For LXC and VM types, resourceID should be a numeric VMID.
 	// If a name was passed, try to resolve it to a VMID.
-	if (resourceType == "lxc" || resourceType == "vm") && e.stateProvider != nil {
+	if (resourceType == "lxc" || resourceType == "system-container" || resourceType == "vm") && e.stateProvider != nil {
 		if _, err := strconv.Atoi(resourceID); err != nil {
 			// Not a number - try to resolve the name to a VMID
 			resolved := false
 
 			rs, err := e.readStateForControl()
 			if err == nil {
-				if resourceType == "lxc" {
+				if resourceType == "lxc" || resourceType == "system-container" {
 					for _, c := range rs.Containers() {
 						if strings.EqualFold(c.Name(), resourceID) && nodeMatchesHostID(c.Node(), hostID) {
 							resourceID = fmt.Sprintf("%d", c.VMID())
@@ -261,7 +281,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 			// Fallback to legacy StateSnapshot when typed views are unavailable or couldn't resolve.
 			if !resolved {
 				state := e.stateProvider.GetState()
-				if resourceType == "lxc" {
+				if resourceType == "lxc" || resourceType == "system-container" {
 					for _, c := range state.Containers {
 						if strings.EqualFold(c.Name, resourceID) && nodeMatchesHostID(c.Node, hostID) {
 							resourceID = fmt.Sprintf("%d", c.VMID)
@@ -314,7 +334,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 			// Genuine failure (e.g. resource doesn't exist) — keep existing behavior
 			return NewJSONResult(map[string]interface{}{
 				"found":         false,
-				"resource_type": resourceType,
+				"resource_type": responseType,
 				"resource_id":   resourceID,
 				"host_id":       hostID,
 				"cli_access":    cliAccess,
@@ -328,7 +348,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 		// No discovery but provide cli_access for manual investigation
 		return NewJSONResult(map[string]interface{}{
 			"found":         false,
-			"resource_type": resourceType,
+			"resource_type": responseType,
 			"resource_id":   resourceID,
 			"host_id":       hostID,
 			"cli_access":    cliAccess,
@@ -365,7 +385,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 	response := map[string]interface{}{
 		"found":           true,
 		"id":              discovery.ID,
-		"resource_type":   discovery.ResourceType,
+		"resource_type":   semanticResourceType(discovery.ResourceType),
 		"resource_id":     discovery.ResourceID,
 		"host_id":         discovery.HostID,
 		"hostname":        discovery.Hostname,
@@ -491,6 +511,14 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 	filterServiceType, _ := args["service_type"].(string)
 	limit := intArg(args, "limit", 50)
 
+	// Preserve caller's semantic type for the response echo.
+	responseFilterType := filterType
+
+	// Normalize semantic types to discovery-level types at the boundary.
+	if filterType == "system-container" {
+		filterType = "lxc"
+	}
+
 	var discoveries []*ResourceDiscoveryInfo
 	var err error
 
@@ -530,7 +558,7 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 	for _, d := range discoveries {
 		result := map[string]interface{}{
 			"id":              d.ID,
-			"resource_type":   d.ResourceType,
+			"resource_type":   semanticResourceType(d.ResourceType),
 			"resource_id":     d.ResourceID,
 			"host_id":         d.HostID,
 			"hostname":        d.Hostname,
@@ -561,8 +589,8 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 		"total":       len(results),
 	}
 
-	if filterType != "" {
-		response["filter_type"] = filterType
+	if responseFilterType != "" {
+		response["filter_type"] = responseFilterType
 	}
 	if filterHost != "" {
 		response["filter_host"] = filterHost

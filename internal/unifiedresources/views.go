@@ -239,7 +239,7 @@ func (v VMView) IPAddresses() []string {
 	return cloneStringSlice(v.r.Identity.IPAddresses)
 }
 
-// ContainerView wraps an LXC container resource (ResourceTypeLXC).
+// ContainerView wraps a system container resource (ResourceTypeSystemContainer).
 // It shares the same Proxmox payload shape and accessor set as VMView.
 type ContainerView struct{ r *Resource }
 
@@ -1697,7 +1697,9 @@ func (v WorkloadView) LastSeen() time.Time {
 
 func (v WorkloadView) IsVM() bool { return v.r != nil && v.r.Type == ResourceTypeVM }
 
-func (v WorkloadView) IsContainer() bool { return v.r != nil && v.r.Type == ResourceTypeLXC }
+func (v WorkloadView) IsContainer() bool {
+	return v.r != nil && v.r.Type == ResourceTypeSystemContainer
+}
 
 // InfrastructureView is a polymorphic view over host resources.
 type InfrastructureView struct{ r *Resource }
@@ -2192,7 +2194,7 @@ func (v K8sDeploymentView) ParentID() string {
 	return *v.r.ParentID
 }
 
-// DockerContainerView wraps a Docker container resource (ResourceTypeContainer).
+// DockerContainerView wraps a Docker/OCI app container resource (ResourceTypeAppContainer).
 type DockerContainerView struct{ r *Resource }
 
 func NewDockerContainerView(r *Resource) DockerContainerView { return DockerContainerView{r: r} }

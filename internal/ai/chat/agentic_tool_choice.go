@@ -55,7 +55,7 @@ func requiresToolUse(messages []providers.Message) bool {
 
 			// Exception: explicit resource references should trigger tools even in "tell me about" queries.
 			resourceNouns := []string{
-				"container", "vm", "lxc", "node", "pod", "deployment", "service", "host", "cluster",
+				"container", "system-container", "vm", "lxc", "node", "pod", "deployment", "service", "host", "cluster",
 			}
 			hasResourceNoun := false
 			for _, noun := range resourceNouns {

@@ -220,8 +220,8 @@ func TestService_LookupGuestsByVMID(t *testing.T) {
 	if len(guests) != 1 {
 		t.Errorf("Expected 1 guest for VMID 200, got %d", len(guests))
 	}
-	if len(guests) > 0 && guests[0].Type != "lxc" {
-		t.Errorf("Expected type 'lxc', got '%s'", guests[0].Type)
+	if len(guests) > 0 && guests[0].Type != "system-container" {
+		t.Errorf("Expected type 'system-container', got '%s'", guests[0].Type)
 	}
 
 	// Test not found
@@ -260,8 +260,8 @@ func TestService_LookupNodeForVMID(t *testing.T) {
 	if name != "web-server" {
 		t.Errorf("Expected name 'web-server', got '%s'", name)
 	}
-	if guestType != "qemu" {
-		t.Errorf("Expected type 'qemu', got '%s'", guestType)
+	if guestType != "vm" {
+		t.Errorf("Expected type 'vm', got '%s'", guestType)
 	}
 }
 
@@ -661,6 +661,18 @@ func TestService_Reload(t *testing.T) {
 	}
 }
 
+func TestService_Reload_NoPersistence(t *testing.T) {
+	svc := NewService(nil, nil)
+
+	err := svc.Reload()
+	if err == nil {
+		t.Fatal("expected Reload to fail when config persistence is unavailable")
+	}
+	if !strings.Contains(err.Error(), "config persistence unavailable") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestService_ListModels(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "pulse-ai-list-models-test-*")
 	defer os.RemoveAll(tmpDir)
@@ -690,6 +702,36 @@ func TestService_TestConnection(t *testing.T) {
 	err := svc.TestConnection(context.Background())
 	if err == nil {
 		t.Error("Expected error with no config")
+	}
+}
+
+func TestService_TestConnection_NoPersistence(t *testing.T) {
+	svc := NewService(nil, nil)
+
+	err := svc.TestConnection(context.Background())
+	if err == nil {
+		t.Fatal("expected TestConnection to fail when config persistence is unavailable")
+	}
+	if !strings.Contains(err.Error(), "config persistence unavailable") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestService_ListModelsWithCache_NoPersistence(t *testing.T) {
+	svc := NewService(nil, nil)
+
+	models, cached, err := svc.ListModelsWithCache(context.Background())
+	if err == nil {
+		t.Fatal("expected ListModelsWithCache to fail when config persistence is unavailable")
+	}
+	if !strings.Contains(err.Error(), "config persistence unavailable") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if models != nil {
+		t.Fatalf("expected nil models, got %#v", models)
+	}
+	if cached {
+		t.Fatal("expected cached=false on persistence failure")
 	}
 }
 

@@ -128,8 +128,8 @@ func TestGatherGuestIntelligence_DiscoveryMatching(t *testing.T) {
 		if gi.ServiceName != "Nginx" {
 			t.Errorf("lxc/101 ServiceName = %q, want %q", gi.ServiceName, "Nginx")
 		}
-		if gi.GuestType != "lxc" {
-			t.Errorf("lxc/101 GuestType = %q, want %q", gi.GuestType, "lxc")
+		if gi.GuestType != "system-container" {
+			t.Errorf("lxc/101 GuestType = %q, want %q", gi.GuestType, "system-container")
 		}
 	}
 }

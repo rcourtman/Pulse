@@ -6164,9 +6164,9 @@ func CanonicalResourceTypeKeys(resourceType string) []string {
 
 	var keys []string
 	switch typeKey {
-	case "guest", "qemu", "vm", "ct", "container", "lxc":
+	case "guest", "qemu", "vm", "ct", "container", "lxc", "system-container", "system_container":
 		keys = addUnique(keys, "guest")
-	case "docker", "docker container", "dockercontainer":
+	case "docker", "docker container", "dockercontainer", "app-container", "app_container":
 		keys = addUnique(keys, "docker")
 		keys = addUnique(keys, "guest")
 	case "docker host", "dockerhost":

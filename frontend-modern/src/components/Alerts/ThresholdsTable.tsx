@@ -758,7 +758,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const dockerContainersByHostId = createMemo(() => {
     const map = new Map<string, Resource[]>();
     (props.allResources ?? []).forEach((resource) => {
-      if (resource.type !== 'docker-container') return;
+      if (resource.type !== 'app-container' && resource.type !== 'docker-container') return;
       const parentId = resource.parentId;
       if (!parentId) return;
       const existing = map.get(parentId);

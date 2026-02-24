@@ -463,7 +463,7 @@ type CommandRoutingResult struct {
 
 	// Provenance info
 	AgentHostname string // Hostname of the agent
-	ResolvedKind  string // What kind of resource we resolved to: "node", "lxc", "vm", "docker", "host"
+	ResolvedKind  string // Technology/transport kind: "node", "lxc", "vm", "docker", "host" (drives routing decisions)
 	ResolvedNode  string // Proxmox node name (if applicable)
 	Transport     string // How command will be executed: "direct", "pct_exec", "qm_guest_exec"
 }
@@ -665,12 +665,13 @@ func (e *PulseToolExecutor) resolveGuest(guestID string) (*GuestInfo, error) {
 	for _, vm := range rs.VMs() {
 		if (convErr == nil && vm.VMID() == vmID) || vm.Name() == guestID || vm.ID() == guestID {
 			return &GuestInfo{
-				VMID:     vm.VMID(),
-				Name:     vm.Name(),
-				Node:     vm.Node(),
-				Type:     "vm",
-				Status:   string(vm.Status()),
-				Instance: vm.Instance(),
+				VMID:       vm.VMID(),
+				Name:       vm.Name(),
+				Node:       vm.Node(),
+				Type:       "vm",
+				Technology: "qemu",
+				Status:     string(vm.Status()),
+				Instance:   vm.Instance(),
 			}, nil
 		}
 	}
@@ -678,12 +679,13 @@ func (e *PulseToolExecutor) resolveGuest(guestID string) (*GuestInfo, error) {
 	for _, ct := range rs.Containers() {
 		if (convErr == nil && ct.VMID() == vmID) || ct.Name() == guestID || ct.ID() == guestID {
 			return &GuestInfo{
-				VMID:     ct.VMID(),
-				Name:     ct.Name(),
-				Node:     ct.Node(),
-				Type:     "lxc",
-				Status:   string(ct.Status()),
-				Instance: ct.Instance(),
+				VMID:       ct.VMID(),
+				Name:       ct.Name(),
+				Node:       ct.Node(),
+				Type:       "system-container",
+				Technology: "lxc",
+				Status:     string(ct.Status()),
+				Instance:   ct.Instance(),
 			}, nil
 		}
 	}

@@ -447,9 +447,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     const nodes = byType('node');
     const vms = byType('vm');
-    const containers = [...byType('container'), ...byType('oci-container')];
+    const containers = [
+      ...byType('system-container'),
+      ...byType('container'),
+      ...byType('oci-container'),
+    ];
     const dockerHosts = byType('docker-host');
-    const dockerContainers = byType('docker-container');
+    const dockerContainers = [...byType('app-container'), ...byType('docker-container')];
     const hosts = byType('host');
     const resources: MentionResource[] = [];
 

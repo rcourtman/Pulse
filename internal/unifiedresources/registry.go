@@ -1204,12 +1204,12 @@ func (rr *ResourceRegistry) rebuildViews() {
 			rr.cachedVMs = append(rr.cachedVMs, &v)
 			w := NewWorkloadView(viewResource)
 			rr.cachedWorkload = append(rr.cachedWorkload, &w)
-		case ResourceTypeLXC:
+		case ResourceTypeSystemContainer:
 			v := NewContainerView(viewResource)
 			rr.cachedLXC = append(rr.cachedLXC, &v)
 			w := NewWorkloadView(viewResource)
 			rr.cachedWorkload = append(rr.cachedWorkload, &w)
-		case ResourceTypeContainer:
+		case ResourceTypeAppContainer:
 			v := NewDockerContainerView(viewResource)
 			rr.cachedDockerContainers = append(rr.cachedDockerContainers, &v)
 		case ResourceTypeHost:

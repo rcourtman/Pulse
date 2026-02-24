@@ -628,8 +628,13 @@ export function Dashboard(props: DashboardProps) {
     const normalized = value.trim().toLowerCase();
     if (normalized === 'all') return 'all';
     if (normalized === 'vm' || normalized === 'qemu') return 'vm';
-    if (normalized === 'lxc') return 'lxc';
-    if (normalized === 'docker' || normalized === 'container' || normalized === 'containers')
+    if (normalized === 'lxc' || normalized === 'system-container') return 'lxc';
+    if (
+      normalized === 'docker' ||
+      normalized === 'app-container' ||
+      normalized === 'container' ||
+      normalized === 'containers'
+    )
       return 'docker';
     if (normalized === 'k8s' || normalized === 'kubernetes' || normalized === 'pod') return 'k8s';
     return null;

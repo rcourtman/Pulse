@@ -8,12 +8,13 @@ import (
 
 // Resource represents a unified resource aggregated across multiple data sources.
 type Resource struct {
-	ID        string         `json:"id"`
-	Type      ResourceType   `json:"type"`
-	Name      string         `json:"name"`
-	Status    ResourceStatus `json:"status"`
-	LastSeen  time.Time      `json:"lastSeen"`
-	UpdatedAt time.Time      `json:"updatedAt,omitempty"`
+	ID         string         `json:"id"`
+	Type       ResourceType   `json:"type"`
+	Technology string         `json:"technology,omitempty"`
+	Name       string         `json:"name"`
+	Status     ResourceStatus `json:"status"`
+	LastSeen   time.Time      `json:"lastSeen"`
+	UpdatedAt  time.Time      `json:"updatedAt,omitempty"`
 
 	DiscoveryTarget *DiscoveryTarget `json:"discoveryTarget,omitempty"`
 	MetricsTarget   *MetricsTarget   `json:"metricsTarget,omitempty"`
@@ -64,20 +65,26 @@ type MetricsTarget struct {
 type ResourceType string
 
 const (
-	ResourceTypeHost          ResourceType = "host"
-	ResourceTypeVM            ResourceType = "vm"
-	ResourceTypeLXC           ResourceType = "lxc"
-	ResourceTypeContainer     ResourceType = "container"
-	ResourceTypeDockerService ResourceType = "docker-service"
-	ResourceTypeK8sCluster    ResourceType = "k8s-cluster"
-	ResourceTypeK8sNode       ResourceType = "k8s-node"
-	ResourceTypePod           ResourceType = "pod"
-	ResourceTypeK8sDeployment ResourceType = "k8s-deployment"
-	ResourceTypeStorage       ResourceType = "storage"
-	ResourceTypePBS           ResourceType = "pbs"
-	ResourceTypePMG           ResourceType = "pmg"
-	ResourceTypeCeph          ResourceType = "ceph"
-	ResourceTypePhysicalDisk  ResourceType = "physical_disk"
+	ResourceTypeHost            ResourceType = "host"
+	ResourceTypeVM              ResourceType = "vm"
+	ResourceTypeSystemContainer ResourceType = "system-container"
+	ResourceTypeAppContainer    ResourceType = "app-container"
+	ResourceTypeDockerService   ResourceType = "docker-service"
+	ResourceTypeK8sCluster      ResourceType = "k8s-cluster"
+	ResourceTypeK8sNode         ResourceType = "k8s-node"
+	ResourceTypePod             ResourceType = "pod"
+	ResourceTypeK8sDeployment   ResourceType = "k8s-deployment"
+	ResourceTypeStorage         ResourceType = "storage"
+	ResourceTypePBS             ResourceType = "pbs"
+	ResourceTypePMG             ResourceType = "pmg"
+	ResourceTypeCeph            ResourceType = "ceph"
+	ResourceTypePhysicalDisk    ResourceType = "physical_disk"
+)
+
+// Backward-compatible aliases — use the new names in new code.
+const (
+	ResourceTypeLXC       = ResourceTypeSystemContainer
+	ResourceTypeContainer = ResourceTypeAppContainer
 )
 
 // ResourceStatus represents the high-level status of a resource.
@@ -411,7 +418,7 @@ type DockerData struct {
 	UpdatesLastCheckedAt  *time.Time                      `json:"updatesLastCheckedAt,omitempty"`
 	Command               *models.DockerHostCommandStatus `json:"command,omitempty"`
 
-	// Container-specific fields (populated when Resource.Type == ResourceTypeContainer)
+	// Container-specific fields (populated when Resource.Type == ResourceTypeAppContainer)
 	ContainerState string                  `json:"containerState,omitempty"`
 	Health         string                  `json:"health,omitempty"`
 	RestartCount   int                     `json:"restartCount,omitempty"`

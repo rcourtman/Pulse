@@ -220,9 +220,11 @@ export function unifiedTypeToAlertDisplayType(type: ResourceType): string {
   switch (type) {
     case 'vm':
       return 'VM';
+    case 'system-container':
     case 'container':
     case 'oci-container':
       return 'CT';
+    case 'app-container':
     case 'docker-container':
       return 'Container';
     case 'node':

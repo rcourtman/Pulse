@@ -6,13 +6,25 @@ export interface WorkloadTypeBadge {
   className: string;
 }
 
-type WorkloadTypeBadgeKey = WorkloadType | 'container' | 'host' | 'pod' | 'oci';
+type WorkloadTypeBadgeKey =
+  | WorkloadType
+  | 'container'
+  | 'system-container'
+  | 'app-container'
+  | 'host'
+  | 'pod'
+  | 'oci';
 
 const BADGE_MAP: Record<WorkloadTypeBadgeKey, WorkloadTypeBadge> = {
   vm: {
     label: 'VM',
     title: 'Virtual Machine',
     className: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+  },
+  'system-container': {
+    label: 'Container',
+    title: 'System Container',
+    className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
   },
   lxc: {
     label: 'LXC',
@@ -23,6 +35,11 @@ const BADGE_MAP: Record<WorkloadTypeBadgeKey, WorkloadTypeBadge> = {
     label: 'LXC',
     title: 'LXC Container',
     className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+  },
+  'app-container': {
+    label: 'Containers',
+    title: 'Application Container',
+    className: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
   },
   docker: {
     label: 'Containers',
@@ -68,13 +85,22 @@ const normalizeKey = (value: string | null | undefined): WorkloadTypeBadgeKey | 
   const normalized = (value || '').trim().toLowerCase();
   if (!normalized) return null;
   if (normalized === 'qemu' || normalized === 'vm') return 'vm';
-  if (normalized === 'lxc' || normalized === 'ct' || normalized === 'container') return 'container';
+  if (
+    normalized === 'lxc' ||
+    normalized === 'ct' ||
+    normalized === 'container' ||
+    normalized === 'system-container' ||
+    normalized === 'system_container'
+  )
+    return 'system-container';
   if (
     normalized === 'docker' ||
     normalized === 'docker-container' ||
-    normalized === 'docker_container'
+    normalized === 'docker_container' ||
+    normalized === 'app-container' ||
+    normalized === 'app_container'
   ) {
-    return 'docker';
+    return 'app-container';
   }
   if (normalized === 'k8s' || normalized === 'kubernetes') return 'k8s';
   if (normalized === 'pod') return 'pod';

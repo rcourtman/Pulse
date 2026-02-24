@@ -34,10 +34,10 @@ func TestInferFindingResourceType(t *testing.T) {
 			expected:     "docker_container",
 		},
 		{
-			name:         "lxc keyword maps to container",
+			name:         "lxc keyword maps to system-container",
 			resourceID:   "lxc/200",
 			resourceName: "App CT",
-			expected:     "container",
+			expected:     "system-container",
 		},
 		{
 			name:         "vm keyword maps to vm",
@@ -119,8 +119,8 @@ func TestFindingsStoreAdd_InferResourceTypeWhenMissing(t *testing.T) {
 	if inferred == nil {
 		t.Fatalf("expected finding to exist")
 	}
-	if inferred.ResourceType != "container" {
-		t.Fatalf("expected inferred resource type %q, got %q", "container", inferred.ResourceType)
+	if inferred.ResourceType != "system-container" {
+		t.Fatalf("expected inferred resource type %q, got %q", "system-container", inferred.ResourceType)
 	}
 
 	added = store.Add(&Finding{

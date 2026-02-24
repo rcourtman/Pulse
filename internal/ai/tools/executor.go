@@ -189,7 +189,7 @@ type ResolvedResourceInfo interface {
 // This structured approach replaces the long parameter list for clarity.
 type ResourceRegistration struct {
 	// Identity
-	Kind        string   // Resource type: "node", "vm", "lxc", "docker_container", etc.
+	Kind        string   // Technology/transport kind: "node", "vm", "lxc", "docker_container", etc. (drives routing)
 	ProviderUID string   // Stable provider ID (container ID, VMID, pod UID)
 	Name        string   // Primary display name
 	Aliases     []string // Additional names that resolve to this resource

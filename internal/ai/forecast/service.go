@@ -527,7 +527,7 @@ func (s *Service) FormatKeyForecasts() string {
 
 	// Check containers for concerning trends
 	for _, ct := range state.Containers {
-		s.checkResourceForecasts(ct.ID, ct.Name, "container", cfg, provider, &concerns)
+		s.checkResourceForecasts(ct.ID, ct.Name, "system-container", cfg, provider, &concerns)
 	}
 
 	// Check nodes for concerning trends
@@ -748,7 +748,7 @@ func (s *Service) ForecastAll(metric string, horizon time.Duration, threshold fl
 			log.Debug().Str("resource", ct.ID).Str("metric", metric).Err(err).Msg("skipping container forecast")
 			continue
 		}
-		addIfActionable(forecast, "lxc")
+		addIfActionable(forecast, "system-container")
 	}
 
 	// Process Nodes

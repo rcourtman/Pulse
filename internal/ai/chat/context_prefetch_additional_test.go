@@ -199,8 +199,8 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 	if mentions[1].ResourceType != "host" {
 		t.Fatalf("expected host mention, got %q", mentions[1].ResourceType)
 	}
-	if mentions[2].ResourceType != "lxc" {
-		t.Fatalf("expected container type normalized to lxc, got %q", mentions[2].ResourceType)
+	if mentions[2].ResourceType != "system-container" {
+		t.Fatalf("expected container type normalized to system-container, got %q", mentions[2].ResourceType)
 	}
 	if mentions[3].HostID != "resource:docker:abc" {
 		t.Fatalf("expected docker host ID with colons preserved, got %q", mentions[3].HostID)

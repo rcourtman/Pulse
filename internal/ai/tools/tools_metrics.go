@@ -128,9 +128,13 @@ func (e *PulseToolExecutor) executeGetMetrics(_ context.Context, args map[string
 	}
 	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
 	if resourceType != "" {
+		// Normalize semantic type alias to metrics-level type
+		if resourceType == "system-container" {
+			resourceType = "container"
+		}
 		validTypes := map[string]bool{"vm": true, "container": true, "node": true}
 		if !validTypes[resourceType] {
-			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, container, or node", resourceType)), nil
+			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, system-container, or node", resourceType)), nil
 		}
 	}
 
@@ -229,9 +233,13 @@ func (e *PulseToolExecutor) executeGetBaselines(_ context.Context, args map[stri
 	}
 	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
 	if resourceType != "" {
+		// Normalize semantic type alias to metrics-level type
+		if resourceType == "system-container" {
+			resourceType = "container"
+		}
 		validTypes := map[string]bool{"vm": true, "container": true, "node": true}
 		if !validTypes[resourceType] {
-			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, container, or node", resourceType)), nil
+			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, system-container, or node", resourceType)), nil
 		}
 	}
 

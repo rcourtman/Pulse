@@ -34,7 +34,7 @@ type UnifiedResourceMetric struct {
 // This avoids importing unifiedresources (which would cause an import cycle).
 type UnifiedResourceInput struct {
 	ID         string
-	Type       string // lowercase: "vm", "lxc", "container", "host", "pbs", "storage", "pmg"
+	Type       string // lowercase: "vm", "system-container", "app-container", "lxc", "container", "host", "pbs", "storage", "pmg"
 	Name       string
 	Node       string
 	Instance   string
@@ -52,8 +52,10 @@ func unifiedAlertType(typeKey string) string {
 	switch typeKey {
 	case "vm":
 		return "VM"
-	case "lxc", "container":
+	case "system-container", "lxc", "container":
 		return "Container"
+	case "app-container":
+		return "Docker"
 	case "host":
 		return "Host"
 	case "node":
@@ -72,7 +74,7 @@ func unifiedAlertType(typeKey string) string {
 // isUnifiedGuestType returns true for resource types that support I/O metrics.
 func isUnifiedGuestType(typeKey string) bool {
 	switch typeKey {
-	case "vm", "lxc", "container":
+	case "vm", "system-container", "app-container", "lxc", "container":
 		return true
 	default:
 		return false
@@ -82,7 +84,7 @@ func isUnifiedGuestType(typeKey string) bool {
 // unifiedDefaultThresholds returns the default ThresholdConfig for a resource type key.
 func (m *Manager) unifiedDefaultThresholds(typeKey string) ThresholdConfig {
 	switch typeKey {
-	case "vm", "lxc", "container":
+	case "vm", "system-container", "app-container", "lxc", "container":
 		return cloneThresholdConfig(m.config.GuestDefaults)
 	case "host":
 		return cloneThresholdConfig(m.config.HostDefaults)

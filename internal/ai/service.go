@@ -249,6 +249,17 @@ func (s *Service) SetOrgID(orgID string) {
 	s.orgID = normalized
 }
 
+// GetOrgID returns the org scope associated with this service instance.
+func (s *Service) GetOrgID() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	orgID := strings.TrimSpace(s.orgID)
+	if orgID == "" {
+		return "default"
+	}
+	return orgID
+}
+
 func (s *Service) acquireExecutionSlot(ctx context.Context, useCase string) (func(), error) {
 	normalized := strings.TrimSpace(strings.ToLower(useCase))
 	if normalized == "" {
@@ -964,10 +975,11 @@ func (s *Service) enrichRequestFromFinding(req *ExecuteRequest) {
 
 // GuestInfo contains information about a guest (VM or container) found by VMID lookup
 type GuestInfo struct {
-	Node     string
-	Name     string
-	Type     string // "lxc" or "qemu"
-	Instance string // PVE instance ID (for multi-cluster disambiguation)
+	Node       string
+	Name       string
+	Type       string // semantic type: "system-container" or "vm"
+	Technology string // implementation: "lxc", "qemu", etc.
+	Instance   string // PVE instance ID (for multi-cluster disambiguation)
 }
 
 // lookupNodeForVMID looks up which node owns a given VMID using the state provider
@@ -1009,10 +1021,11 @@ func (s *Service) lookupGuestsByVMID(vmID int, targetInstance string) []GuestInf
 		if ct.VMID == vmID {
 			if targetInstance == "" || ct.Instance == targetInstance {
 				results = append(results, GuestInfo{
-					Node:     ct.Node,
-					Name:     ct.Name,
-					Type:     "lxc",
-					Instance: ct.Instance,
+					Node:       ct.Node,
+					Name:       ct.Name,
+					Type:       "system-container",
+					Technology: "lxc",
+					Instance:   ct.Instance,
 				})
 			}
 		}
@@ -1023,10 +1036,11 @@ func (s *Service) lookupGuestsByVMID(vmID int, targetInstance string) []GuestInf
 		if vm.VMID == vmID {
 			if targetInstance == "" || vm.Instance == targetInstance {
 				results = append(results, GuestInfo{
-					Node:     vm.Node,
-					Name:     vm.Name,
-					Type:     "qemu",
-					Instance: vm.Instance,
+					Node:       vm.Node,
+					Name:       vm.Name,
+					Type:       "vm",
+					Technology: "qemu",
+					Instance:   vm.Instance,
 				})
 			}
 		}
@@ -1264,6 +1278,11 @@ func approvalNeededFromToolCall(req ExecuteRequest, tc providers.ToolCall, resul
 func (s *Service) LoadConfig() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if s.persistence == nil {
+		s.provider = nil
+		return fmt.Errorf("Pulse Assistant config persistence unavailable")
+	}
 
 	cfg, err := s.persistence.LoadAIConfig()
 	if err != nil {
@@ -3970,12 +3989,16 @@ func (s *Service) TestConnection(ctx context.Context) error {
 	s.mu.RLock()
 	cfg := s.cfg
 	defaultProvider := s.provider
+	persistence := s.persistence
 	s.mu.RUnlock()
 
 	// Load config if not available
 	if cfg == nil {
+		if persistence == nil {
+			return fmt.Errorf("Pulse Assistant config persistence unavailable")
+		}
 		var err error
-		cfg, err = s.persistence.LoadAIConfig()
+		cfg, err = persistence.LoadAIConfig()
 		if err != nil {
 			return fmt.Errorf("failed to load Pulse Assistant config: %w", err)
 		}
@@ -4011,7 +4034,14 @@ func (s *Service) ListModels(ctx context.Context) ([]providers.ModelInfo, error)
 }
 
 func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInfo, bool, error) {
-	cfg, err := s.persistence.LoadAIConfig()
+	s.mu.RLock()
+	persistence := s.persistence
+	s.mu.RUnlock()
+	if persistence == nil {
+		return nil, false, fmt.Errorf("Pulse Assistant config persistence unavailable")
+	}
+
+	cfg, err := persistence.LoadAIConfig()
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to load Pulse Assistant config: %w", err)
 	}

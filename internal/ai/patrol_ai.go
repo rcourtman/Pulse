@@ -1895,7 +1895,7 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 				}
 				gi := guestIntel[vmv.ID()]
 				guests = append(guests, guestRow{
-					name: vmv.Name(), gType: "vm", node: vmv.Node(), status: string(vmv.Status()),
+					name: vmv.Name(), gType: "VM", node: vmv.Node(), status: string(vmv.Status()),
 					cpu: vmv.CPUPercent(), mem: vmv.MemoryPercent(), disk: vmv.DiskPercent(),
 					lastBackup: vmv.LastBackup(),
 					service:    formatService(gi),
@@ -1908,7 +1908,7 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 				}
 				gi := guestIntel[ctv.ID()]
 				guests = append(guests, guestRow{
-					name: ctv.Name(), gType: "lxc", node: ctv.Node(), status: string(ctv.Status()),
+					name: ctv.Name(), gType: "CT", node: ctv.Node(), status: string(ctv.Status()),
 					cpu: ctv.CPUPercent(), mem: ctv.MemoryPercent(), disk: ctv.DiskPercent(),
 					lastBackup: ctv.LastBackup(),
 					service:    formatService(gi),
@@ -1922,7 +1922,7 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 				}
 				gi := guestIntel[vm.ID]
 				guests = append(guests, guestRow{
-					name: vm.Name, gType: "vm", node: vm.Node, status: vm.Status,
+					name: vm.Name, gType: "VM", node: vm.Node, status: vm.Status,
 					cpu: vm.CPU * 100, mem: vm.Memory.Usage, disk: vm.Disk.Usage,
 					lastBackup: vm.LastBackup,
 					service:    formatService(gi),
@@ -1935,7 +1935,7 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 				}
 				gi := guestIntel[ct.ID]
 				guests = append(guests, guestRow{
-					name: ct.Name, gType: "lxc", node: ct.Node, status: ct.Status,
+					name: ct.Name, gType: "CT", node: ct.Node, status: ct.Status,
 					cpu: ct.CPU * 100, mem: ct.Memory.Usage, disk: ct.Disk.Usage,
 					lastBackup: ct.LastBackup,
 					service:    formatService(gi),
@@ -1996,7 +1996,7 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 				if g.status == "running" && g.reachable == "NO" {
 					svc := g.service
 					if svc == "-" {
-						svc = strings.ToUpper(g.gType) // "VM" or "LXC"
+						svc = strings.ToUpper(g.gType) // "VM" or "CT"
 					}
 					issues = append(issues, serviceHealthIssue{
 						name:    g.name,

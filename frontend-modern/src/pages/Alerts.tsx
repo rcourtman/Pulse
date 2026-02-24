@@ -404,7 +404,11 @@ export function Alerts() {
     if (Object.keys(rawConfig).length > 0 && byType('node').length > 0) {
       const nodeResources = byType('node');
       const vmResources = byType('vm');
-      const containerResources = [...byType('container'), ...byType('oci-container')];
+      const containerResources = [
+        ...byType('system-container'),
+        ...byType('container'),
+        ...byType('oci-container'),
+      ];
       const storageResources = allResources().filter(
         (r) => r.type === 'storage' || r.type === 'datastore',
       );
@@ -439,7 +443,9 @@ export function Alerts() {
         dockerHostOverrideIdCandidates(host).forEach((id) => {
           dockerHostMap.set(id, host);
         });
-        const containers = children(host.id).filter((r) => r.type === 'docker-container');
+        const containers = children(host.id).filter(
+          (r) => r.type === 'app-container' || r.type === 'docker-container',
+        );
         containers.forEach((container) => {
           const shortId = container.id.includes('/')
             ? container.id.split('/').pop()!
@@ -1154,7 +1160,12 @@ export function Alerts() {
 
   // Get all guests from alert resource selectors - memoize to prevent unnecessary updates
   const allGuests = createMemo(
-    () => [...byType('vm'), ...byType('container'), ...byType('oci-container')],
+    () => [
+      ...byType('vm'),
+      ...byType('system-container'),
+      ...byType('container'),
+      ...byType('oci-container'),
+    ],
     [],
     {
       equals: (prev, next) => {

@@ -53,8 +53,8 @@ func (s *Service) buildUnifiedResourceContext() string {
 			stats.ByType[unifiedresources.ResourceTypeK8sCluster] +
 			stats.ByType[unifiedresources.ResourceTypeK8sNode]
 		workloadCount := stats.ByType[unifiedresources.ResourceTypeVM] +
-			stats.ByType[unifiedresources.ResourceTypeLXC] +
-			stats.ByType[unifiedresources.ResourceTypeContainer] +
+			stats.ByType[unifiedresources.ResourceTypeSystemContainer] +
+			stats.ByType[unifiedresources.ResourceTypeAppContainer] +
 			stats.ByType[unifiedresources.ResourceTypePod] +
 			stats.ByType[unifiedresources.ResourceTypeK8sDeployment]
 
@@ -233,7 +233,7 @@ func (s *Service) buildUnifiedResourceContext() string {
 						if workload.ParentID == nil || *workload.ParentID != host.ID {
 							continue
 						}
-						if workload.Type != unifiedresources.ResourceTypeContainer {
+						if workload.Type != unifiedresources.ResourceTypeAppContainer {
 							continue
 						}
 						containerCount++
@@ -334,14 +334,14 @@ func (s *Service) buildUnifiedResourceContext() string {
 					switch workload.Type {
 					case unifiedresources.ResourceTypeVM:
 						typeLabel = "VM"
-					case unifiedresources.ResourceTypeLXC:
-						typeLabel = "LXC"
-					case unifiedresources.ResourceTypeContainer:
+					case unifiedresources.ResourceTypeSystemContainer:
+						typeLabel = "Container"
+					case unifiedresources.ResourceTypeAppContainer:
 						typeLabel = "Docker"
 					}
 
 					vmidInfo := ""
-					if workload.Proxmox != nil && workload.Proxmox.VMID > 0 && workload.Type != unifiedresources.ResourceTypeContainer {
+					if workload.Proxmox != nil && workload.Proxmox.VMID > 0 && workload.Type != unifiedresources.ResourceTypeAppContainer {
 						vmidInfo = fmt.Sprintf(" %d", workload.Proxmox.VMID)
 					}
 

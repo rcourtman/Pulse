@@ -910,9 +910,10 @@ func (p *PatrolService) filterStateByScope(state models.StateSnapshot, scope Pat
 			typeSet["k8s"] = true
 			typeSet["kubernetes"] = true
 			typeSet["kubernetes_cluster"] = true
-		case "lxc", "container":
+		case "lxc", "container", "system-container":
 			typeSet["lxc"] = true
 			typeSet["container"] = true
+			typeSet["system-container"] = true
 		case "vm", "qemu":
 			typeSet["vm"] = true
 			typeSet["qemu"] = true
@@ -983,7 +984,7 @@ func (p *PatrolService) filterStateByScope(state models.StateSnapshot, scope Pat
 		}
 	}
 	for _, c := range state.Containers {
-		if matchesType("container", "lxc") && matchesID(c.ID, c.Name) {
+		if matchesType("container", "lxc", "system-container") && matchesID(c.ID, c.Name) {
 			filtered.Containers = append(filtered.Containers, c)
 		}
 	}
@@ -1582,7 +1583,7 @@ func (p *PatrolService) getCurrentMetricValue(alert AlertInfo, state models.Stat
 				}
 			}
 		}
-	case "container":
+	case "system-container", "container":
 		for _, ct := range state.Containers {
 			if ct.ID == alert.ResourceID || ct.Name == alert.ResourceName {
 				if alert.Type == "cpu" {
@@ -1629,7 +1630,7 @@ func (p *PatrolService) isResourceOnline(alert AlertInfo, state models.StateSnap
 				return true
 			}
 		}
-	case "container":
+	case "system-container", "container":
 		for _, ct := range state.Containers {
 			if (ct.ID == alert.ResourceID || ct.Name == alert.ResourceName) && ct.Status == "running" {
 				return true
@@ -1717,7 +1718,7 @@ func (p *PatrolService) getResourceCurrentState(alert AlertInfo, state models.St
 			}
 		}
 		return "VM not found in current state"
-	case "container":
+	case "system-container", "container":
 		for _, ct := range state.Containers {
 			if ct.ID == alert.ResourceID || ct.Name == alert.ResourceName {
 				return fmt.Sprintf("Container '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",

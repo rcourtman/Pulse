@@ -85,12 +85,13 @@ type Finding struct {
 
 // GuestInfo represents resolved guest information
 type GuestInfo struct {
-	VMID     int
-	Name     string
-	Node     string
-	Type     string // "vm" or "lxc"
-	Status   string
-	Instance string
+	VMID       int
+	Name       string
+	Node       string
+	Type       string // semantic type: "vm" or "system-container"
+	Technology string // implementation: "qemu", "lxc", etc.
+	Status     string
+	Instance   string
 }
 
 // ========== JSON Response Types ==========
