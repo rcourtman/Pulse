@@ -160,6 +160,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 				WriteBytes: d.WriteBytes,
 				ReadOps:    d.ReadOps,
 				WriteOps:   d.WriteOps,
+				IOTimeMs:   d.IOTime,
 			}
 		}
 		agent.DiskIO = diskIO
@@ -246,6 +247,7 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 
 	docker := &DockerData{
 		HostSourceID:          host.ID,
+		AgentID:               host.AgentID,
 		Hostname:              host.Hostname,
 		Temperature:           host.Temperature,
 		Runtime:               host.Runtime,
@@ -1217,6 +1219,8 @@ func convertInterfaces(interfaces []models.HostNetworkInterface) []NetworkInterf
 			Name:      iface.Name,
 			MAC:       iface.MAC,
 			Addresses: iface.Addresses,
+			RXBytes:   iface.RXBytes,
+			TXBytes:   iface.TXBytes,
 			SpeedMbps: iface.SpeedMbps,
 		})
 	}

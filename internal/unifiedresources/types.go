@@ -295,6 +295,7 @@ type HostDiskIOMeta struct {
 	WriteBytes uint64 `json:"writeBytes"`
 	ReadOps    uint64 `json:"readOps"`
 	WriteOps   uint64 `json:"writeOps"`
+	IOTimeMs   uint64 `json:"ioTimeMs,omitempty"`
 }
 
 // HostCephMeta describes host-level Ceph cluster data.
@@ -393,6 +394,7 @@ type DockerServicePortMeta struct {
 // DockerData contains Docker host- and container-specific data.
 type DockerData struct {
 	HostSourceID   string   `json:"hostSourceId,omitempty"` // raw model ID for the docker host
+	AgentID        string   `json:"agentId,omitempty"`
 	ContainerID    string   `json:"containerId,omitempty"`
 	Hostname       string   `json:"hostname,omitempty"`
 	Image          string   `json:"image,omitempty"`
@@ -640,6 +642,8 @@ type NetworkInterface struct {
 	Name      string   `json:"name"`
 	MAC       string   `json:"mac,omitempty"`
 	Addresses []string `json:"addresses,omitempty"`
+	RXBytes   uint64   `json:"rxBytes,omitempty"`
+	TXBytes   uint64   `json:"txBytes,omitempty"`
 	SpeedMbps *int64   `json:"speedMbps,omitempty"`
 	Status    string   `json:"status,omitempty"`
 }

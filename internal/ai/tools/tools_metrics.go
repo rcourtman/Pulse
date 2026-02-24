@@ -357,7 +357,10 @@ func (e *PulseToolExecutor) executeGetPatterns(_ context.Context, _ map[string]i
 func (e *PulseToolExecutor) executeGetTemperatures(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	hostFilter, _ := args["host"].(string)
 
-	state := e.stateProvider.GetState()
+	rs, err := e.readStateForControl()
+	if err != nil {
+		return NewTextResult("State provider not available."), nil
+	}
 
 	type HostTemps struct {
 		Hostname    string             `json:"hostname"`
@@ -371,18 +374,30 @@ func (e *PulseToolExecutor) executeGetTemperatures(_ context.Context, args map[s
 
 	var results []HostTemps
 
-	for _, host := range state.Hosts {
-		if hostFilter != "" && host.Hostname != hostFilter {
+	for _, host := range rs.Hosts() {
+		if host == nil {
 			continue
 		}
 
-		if len(host.Sensors.TemperatureCelsius) == 0 && len(host.Sensors.FanRPM) == 0 {
+		hostname := strings.TrimSpace(host.Hostname())
+		if hostname == "" {
+			hostname = strings.TrimSpace(host.Name())
+		}
+		if hostFilter != "" && hostname != hostFilter {
+			continue
+		}
+
+		sensors := host.Sensors()
+		if sensors == nil {
+			continue
+		}
+		if len(sensors.TemperatureCelsius) == 0 && len(sensors.FanRPM) == 0 {
 			continue
 		}
 
 		temps := HostTemps{
-			Hostname: host.Hostname,
-			Platform: host.Platform,
+			Hostname: hostname,
+			Platform: host.Platform(),
 			CPU:      make(map[string]float64),
 			Disks:    make(map[string]float64),
 			Fans:     make(map[string]float64),
@@ -390,7 +405,7 @@ func (e *PulseToolExecutor) executeGetTemperatures(_ context.Context, args map[s
 		}
 
 		// Categorize temperatures
-		for name, value := range host.Sensors.TemperatureCelsius {
+		for name, value := range sensors.TemperatureCelsius {
 			switch {
 			case containsAny(name, "cpu", "core", "package"):
 				temps.CPU[name] = value
@@ -402,12 +417,12 @@ func (e *PulseToolExecutor) executeGetTemperatures(_ context.Context, args map[s
 		}
 
 		// Add fan data
-		for name, value := range host.Sensors.FanRPM {
+		for name, value := range sensors.FanRPM {
 			temps.Fans[name] = value
 		}
 
 		// Add additional sensors to Other
-		for name, value := range host.Sensors.Additional {
+		for name, value := range sensors.Additional {
 			if _, exists := temps.CPU[name]; !exists {
 				if _, exists := temps.Disks[name]; !exists {
 					temps.Other[name] = value
@@ -430,27 +445,35 @@ func (e *PulseToolExecutor) executeGetTemperatures(_ context.Context, args map[s
 }
 
 func (e *PulseToolExecutor) executeGetNetworkStats(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
+	hostFilter, _ := args["host"].(string)
+
+	rs, err := e.readStateForControl()
+	if err != nil {
 		return NewTextResult("State provider not available."), nil
 	}
 
-	hostFilter, _ := args["host"].(string)
-
-	state := e.stateProvider.GetState()
-
 	var hosts []HostNetworkStatsSummary
+	seenHostnames := map[string]bool{}
 
-	for _, host := range state.Hosts {
-		if hostFilter != "" && host.Hostname != hostFilter {
+	for _, host := range rs.Hosts() {
+		if host == nil {
+			continue
+		}
+		hostname := strings.TrimSpace(host.Hostname())
+		if hostname == "" {
+			hostname = strings.TrimSpace(host.Name())
+		}
+		if hostFilter != "" && hostname != hostFilter {
 			continue
 		}
 
-		if len(host.NetworkInterfaces) == 0 {
+		networkInterfaces := host.NetworkInterfaces()
+		if len(networkInterfaces) == 0 {
 			continue
 		}
 
 		var interfaces []NetworkInterfaceSummary
-		for _, iface := range host.NetworkInterfaces {
+		for _, iface := range networkInterfaces {
 			interfaces = append(interfaces, NetworkInterfaceSummary{
 				Name:      iface.Name,
 				MAC:       iface.MAC,
@@ -462,35 +485,37 @@ func (e *PulseToolExecutor) executeGetNetworkStats(_ context.Context, args map[s
 		}
 
 		hosts = append(hosts, HostNetworkStatsSummary{
-			Hostname:   host.Hostname,
+			Hostname:   hostname,
 			Interfaces: interfaces,
 		})
+		seenHostnames[hostname] = true
 	}
 
 	// Also check Docker hosts for network stats
-	for _, dockerHost := range state.DockerHosts {
-		if hostFilter != "" && dockerHost.Hostname != hostFilter {
+	for _, dockerHost := range rs.DockerHosts() {
+		if dockerHost == nil {
+			continue
+		}
+		hostname := strings.TrimSpace(dockerHost.Hostname())
+		if hostname == "" {
+			hostname = strings.TrimSpace(dockerHost.Name())
+		}
+		if hostFilter != "" && hostname != hostFilter {
 			continue
 		}
 
-		if len(dockerHost.NetworkInterfaces) == 0 {
+		networkInterfaces := dockerHost.NetworkInterfaces()
+		if len(networkInterfaces) == 0 {
 			continue
 		}
 
 		// Check if we already have this host
-		found := false
-		for _, h := range hosts {
-			if h.Hostname == dockerHost.Hostname {
-				found = true
-				break
-			}
-		}
-		if found {
+		if seenHostnames[hostname] {
 			continue
 		}
 
 		var interfaces []NetworkInterfaceSummary
-		for _, iface := range dockerHost.NetworkInterfaces {
+		for _, iface := range networkInterfaces {
 			interfaces = append(interfaces, NetworkInterfaceSummary{
 				Name:      iface.Name,
 				MAC:       iface.MAC,
@@ -502,9 +527,10 @@ func (e *PulseToolExecutor) executeGetNetworkStats(_ context.Context, args map[s
 		}
 
 		hosts = append(hosts, HostNetworkStatsSummary{
-			Hostname:   dockerHost.Hostname,
+			Hostname:   hostname,
 			Interfaces: interfaces,
 		})
+		seenHostnames[hostname] = true
 	}
 
 	if len(hosts) == 0 {
@@ -523,39 +549,46 @@ func (e *PulseToolExecutor) executeGetNetworkStats(_ context.Context, args map[s
 }
 
 func (e *PulseToolExecutor) executeGetDiskIOStats(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
+	hostFilter, _ := args["host"].(string)
+
+	rs, err := e.readStateForControl()
+	if err != nil {
 		return NewTextResult("State provider not available."), nil
 	}
 
-	hostFilter, _ := args["host"].(string)
-
-	state := e.stateProvider.GetState()
-
 	var hosts []HostDiskIOStatsSummary
 
-	for _, host := range state.Hosts {
-		if hostFilter != "" && host.Hostname != hostFilter {
+	for _, host := range rs.Hosts() {
+		if host == nil {
+			continue
+		}
+		hostname := strings.TrimSpace(host.Hostname())
+		if hostname == "" {
+			hostname = strings.TrimSpace(host.Name())
+		}
+		if hostFilter != "" && hostname != hostFilter {
 			continue
 		}
 
-		if len(host.DiskIO) == 0 {
+		diskIO := host.DiskIO()
+		if len(diskIO) == 0 {
 			continue
 		}
 
 		var devices []DiskIODeviceSummary
-		for _, dio := range host.DiskIO {
+		for _, dio := range diskIO {
 			devices = append(devices, DiskIODeviceSummary{
 				Device:     dio.Device,
 				ReadBytes:  dio.ReadBytes,
 				WriteBytes: dio.WriteBytes,
 				ReadOps:    dio.ReadOps,
 				WriteOps:   dio.WriteOps,
-				IOTimeMs:   dio.IOTime,
+				IOTimeMs:   dio.IOTimeMs,
 			})
 		}
 
 		hosts = append(hosts, HostDiskIOStatsSummary{
-			Hostname: host.Hostname,
+			Hostname: hostname,
 			Devices:  devices,
 		})
 	}

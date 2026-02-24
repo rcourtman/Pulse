@@ -101,6 +101,33 @@ func TestResolveDockerContainer(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "abcdef", container.ID)
 	})
+
+	t.Run("PreservesAgentID", func(t *testing.T) {
+		state := models.StateSnapshot{
+			DockerHosts: []models.DockerHost{
+				{
+					ID:       "host1",
+					AgentID:  "agent1",
+					Hostname: "dock1",
+					Containers: []models.DockerContainer{
+						{ID: "abc123", Name: "web"},
+					},
+				},
+			},
+		}
+		agentSrv := &mockAgentServer{agents: []agentexec.ConnectedAgent{
+			{AgentID: "agent1", Hostname: "node1"},
+		}}
+		exec := NewPulseToolExecutor(ExecutorConfig{
+			StateProvider: &mockStateProvider{state: state},
+			AgentServer:   agentSrv,
+		})
+
+		_, host, err := exec.resolveDockerContainer("web", "dock1")
+		require.NoError(t, err)
+		assert.Equal(t, "agent1", host.AgentID)
+		assert.Equal(t, "node1", exec.getAgentHostnameForDockerHost(host))
+	})
 }
 
 func TestGetAgentHostnameForDockerHost(t *testing.T) {

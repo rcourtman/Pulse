@@ -141,6 +141,13 @@ func (v VMView) LastBackup() time.Time {
 	return v.r.Proxmox.LastBackup
 }
 
+func (v VMView) Disks() []DiskInfo {
+	if v.r == nil || v.r.Proxmox == nil {
+		return nil
+	}
+	return cloneDiskInfos(v.r.Proxmox.Disks)
+}
+
 func (v VMView) Tags() []string {
 	if v.r == nil {
 		return nil
@@ -315,6 +322,13 @@ func (v ContainerView) LastBackup() time.Time {
 		return time.Time{}
 	}
 	return v.r.Proxmox.LastBackup
+}
+
+func (v ContainerView) Disks() []DiskInfo {
+	if v.r == nil || v.r.Proxmox == nil {
+		return nil
+	}
+	return cloneDiskInfos(v.r.Proxmox.Disks)
 }
 
 func (v ContainerView) Tags() []string {
@@ -839,6 +853,13 @@ func (v DockerHostView) Hostname() string {
 		return ""
 	}
 	return v.r.Docker.Hostname
+}
+
+func (v DockerHostView) AgentID() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.AgentID
 }
 
 func (v DockerHostView) DockerVersion() string {

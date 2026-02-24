@@ -694,29 +694,47 @@ func (e *PulseToolExecutor) resolveGuest(guestID string) (*GuestInfo, error) {
 }
 
 func (e *PulseToolExecutor) resolveDockerContainer(containerName, hostName string) (*models.DockerContainer, *models.DockerHost, error) {
-	if e.stateProvider == nil {
-		return nil, nil, fmt.Errorf("state provider not available")
+	rs, err := e.readStateForControl()
+	if err != nil {
+		if e.stateProvider == nil {
+			return nil, nil, fmt.Errorf("state provider not available")
+		}
+		return nil, nil, err
 	}
 
-	state := e.stateProvider.GetState()
+	containersByHost := make(map[string][]*unifiedresources.DockerContainerView)
+	for _, container := range rs.DockerContainers() {
+		if container == nil {
+			continue
+		}
+		parentID := strings.TrimSpace(container.ParentID())
+		if parentID == "" {
+			continue
+		}
+		containersByHost[parentID] = append(containersByHost[parentID], container)
+	}
+
 	type dockerMatch struct {
-		host *models.DockerHost
-		idx  int
+		host      models.DockerHost
+		container models.DockerContainer
 	}
 	matches := []dockerMatch{}
 
-	for i := range state.DockerHosts {
-		host := &state.DockerHosts[i]
-		if hostName != "" && host.Hostname != hostName && host.DisplayName != hostName {
+	for _, hostView := range rs.DockerHosts() {
+		if hostView == nil {
+			continue
+		}
+		if hostName != "" && !matchesDockerHostFilter(hostView, hostName) {
 			continue
 		}
 
-		for ci := range host.Containers {
-			container := host.Containers[ci]
+		hostModel := dockerHostModelFromView(hostView)
+		for _, containerView := range containersByHost[hostView.ID()] {
+			container := dockerContainerModelFromView(containerView)
 			if container.Name == containerName ||
 				container.ID == containerName ||
 				strings.HasPrefix(container.ID, containerName) {
-				matches = append(matches, dockerMatch{host: host, idx: ci})
+				matches = append(matches, dockerMatch{host: hostModel, container: container})
 			}
 		}
 	}
@@ -726,7 +744,7 @@ func (e *PulseToolExecutor) resolveDockerContainer(containerName, hostName strin
 			return nil, nil, fmt.Errorf("container '%s' not found on host '%s'", containerName, hostName)
 		}
 		match := matches[0]
-		return &match.host.Containers[match.idx], match.host, nil
+		return &match.container, &match.host, nil
 	}
 
 	if len(matches) == 0 {
@@ -756,7 +774,124 @@ func (e *PulseToolExecutor) resolveDockerContainer(containerName, hostName strin
 	}
 
 	match := matches[0]
-	return &match.host.Containers[match.idx], match.host, nil
+	return &match.container, &match.host, nil
+}
+
+func matchesDockerHostFilter(host *unifiedresources.DockerHostView, filter string) bool {
+	if host == nil {
+		return false
+	}
+	if host.Hostname() == filter || host.Name() == filter {
+		return true
+	}
+	if host.ID() == filter || host.HostSourceID() == filter {
+		return true
+	}
+	return false
+}
+
+func dockerHostModelFromView(host *unifiedresources.DockerHostView) models.DockerHost {
+	if host == nil {
+		return models.DockerHost{}
+	}
+
+	hostID := strings.TrimSpace(host.HostSourceID())
+	if hostID == "" {
+		hostID = strings.TrimSpace(host.ID())
+	}
+
+	displayName := strings.TrimSpace(host.Name())
+	hostname := strings.TrimSpace(host.Hostname())
+	if hostname == "" {
+		hostname = displayName
+	}
+
+	return models.DockerHost{
+		ID:          hostID,
+		AgentID:     strings.TrimSpace(host.AgentID()),
+		Hostname:    hostname,
+		DisplayName: displayName,
+		Status:      string(host.Status()),
+	}
+}
+
+func dockerContainerModelFromView(container *unifiedresources.DockerContainerView) models.DockerContainer {
+	if container == nil {
+		return models.DockerContainer{}
+	}
+
+	containerID := strings.TrimSpace(container.ContainerID())
+	if containerID == "" {
+		containerID = strings.TrimSpace(container.ID())
+	}
+
+	state := strings.TrimSpace(container.ContainerState())
+	if state == "" {
+		state = string(container.Status())
+	}
+
+	ports := container.Ports()
+	portModels := make([]models.DockerContainerPort, 0, len(ports))
+	for _, p := range ports {
+		portModels = append(portModels, models.DockerContainerPort{
+			PrivatePort: p.PrivatePort,
+			PublicPort:  p.PublicPort,
+			Protocol:    p.Protocol,
+			IP:          p.IP,
+		})
+	}
+
+	networks := container.Networks()
+	networkModels := make([]models.DockerContainerNetworkLink, 0, len(networks))
+	for _, n := range networks {
+		networkModels = append(networkModels, models.DockerContainerNetworkLink{
+			Name: n.Name,
+			IPv4: n.IPv4,
+			IPv6: n.IPv6,
+		})
+	}
+
+	mounts := container.Mounts()
+	mountModels := make([]models.DockerContainerMount, 0, len(mounts))
+	for _, m := range mounts {
+		mountModels = append(mountModels, models.DockerContainerMount{
+			Type:        m.Type,
+			Source:      m.Source,
+			Destination: m.Destination,
+			Mode:        m.Mode,
+			RW:          m.RW,
+		})
+	}
+
+	var updateStatus *models.DockerContainerUpdateStatus
+	if status := container.UpdateStatus(); status != nil {
+		updateStatus = &models.DockerContainerUpdateStatus{
+			UpdateAvailable: status.UpdateAvailable,
+			CurrentDigest:   status.CurrentDigest,
+			LatestDigest:    status.LatestDigest,
+			Error:           status.Error,
+		}
+	}
+
+	return models.DockerContainer{
+		ID:            containerID,
+		Name:          container.Name(),
+		Image:         container.Image(),
+		State:         state,
+		Health:        container.Health(),
+		CPUPercent:    container.CPUPercent(),
+		MemoryUsage:   container.MemoryUsed(),
+		MemoryLimit:   container.MemoryTotal(),
+		MemoryPercent: container.MemoryPercent(),
+		UptimeSeconds: container.UptimeSeconds(),
+		RestartCount:  container.RestartCount(),
+		ExitCode:      container.ExitCode(),
+		Ports:         portModels,
+		Labels:        container.Labels(),
+		Networks:      networkModels,
+		Mounts:        mountModels,
+		UpdateStatus:  updateStatus,
+	}
 }
 
 func (e *PulseToolExecutor) findAgentForNode(nodeName string) string {

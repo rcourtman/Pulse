@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -3029,7 +3028,6 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 		return NewTextResult("State information not available."), nil
 	}
 
-	state := e.stateProvider.GetState()
 	rs, err := e.readStateForControl()
 	if err != nil {
 		return NewErrorResult(err), nil
@@ -3147,80 +3145,143 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 		}), nil
 
 	case "docker":
-		for _, host := range state.DockerHosts {
-			for _, c := range host.Containers {
-				if c.ID == resourceID || c.Name == resourceID || strings.HasPrefix(c.ID, resourceID) {
-					response := ResourceResponse{
-						Type:   "docker",
-						ID:     c.ID,
-						Name:   c.Name,
-						Status: c.State,
-						Host:   host.Hostname,
-						Image:  c.Image,
-						Health: c.Health,
-						CPU: ResourceCPU{
-							Percent: c.CPUPercent,
-						},
-						Memory: ResourceMemory{
-							Percent: c.MemoryPercent,
-							UsedGB:  float64(c.MemoryUsage) / (1024 * 1024 * 1024),
-							TotalGB: float64(c.MemoryLimit) / (1024 * 1024 * 1024),
-						},
-						RestartCount: c.RestartCount,
-						Labels:       c.Labels,
-					}
+		dockerHostsByID := make(map[string]*unifiedresources.DockerHostView)
+		for _, host := range rs.DockerHosts() {
+			if host == nil {
+				continue
+			}
+			dockerHostsByID[host.ID()] = host
+		}
 
-					if c.UpdateStatus != nil && c.UpdateStatus.UpdateAvailable {
-						response.UpdateAvailable = true
-					}
+		for _, container := range rs.DockerContainers() {
+			if container == nil {
+				continue
+			}
 
-					for _, p := range c.Ports {
-						response.Ports = append(response.Ports, PortInfo{
-							Private:  p.PrivatePort,
-							Public:   p.PublicPort,
-							Protocol: p.Protocol,
-							IP:       p.IP,
-						})
-					}
+			containerID := strings.TrimSpace(container.ContainerID())
+			if containerID == "" {
+				containerID = strings.TrimSpace(container.ID())
+			}
+			if containerID != resourceID && container.Name() != resourceID && !strings.HasPrefix(containerID, resourceID) {
+				continue
+			}
 
-					for _, n := range c.Networks {
-						response.Networks = append(response.Networks, NetworkInfo{
-							Name:      n.Name,
-							Addresses: []string{n.IPv4},
-						})
-					}
+			state := strings.TrimSpace(container.ContainerState())
+			if state == "" {
+				state = string(container.Status())
+			}
 
-					for _, m := range c.Mounts {
-						response.Mounts = append(response.Mounts, MountInfo{
-							Source:      m.Source,
-							Destination: m.Destination,
-							ReadWrite:   m.RW,
-						})
-					}
-
-					// Register in resolved context WITH explicit access (single-resource get operation)
-					aliases := []string{c.Name, c.ID}
-					if len(c.ID) > 12 {
-						aliases = append(aliases, c.ID[:12]) // Add short ID for longer IDs
-					}
-					e.registerResolvedResourceWithExplicitAccess(ResourceRegistration{
-						Kind:          "docker_container",
-						ProviderUID:   c.ID, // Docker container ID is the stable provider ID
-						Name:          c.Name,
-						Aliases:       aliases,
-						HostUID:       host.ID,
-						HostName:      host.Hostname,
-						LocationChain: []string{"host:" + host.Hostname, "docker:" + c.Name},
-						Executors: []ExecutorRegistration{{
-							ExecutorID: host.Hostname,
-							Adapter:    "docker",
-							Actions:    []string{"query", "get", "logs", "exec", "restart", "stop", "start"},
-							Priority:   10,
-						}},
-					})
-					return NewJSONResult(response), nil
+			hostName := ""
+			hostUID := ""
+			executorID := ""
+			if host := dockerHostsByID[strings.TrimSpace(container.ParentID())]; host != nil {
+				hostName = strings.TrimSpace(host.Hostname())
+				hostUID = strings.TrimSpace(host.HostSourceID())
+				if hostUID == "" {
+					hostUID = strings.TrimSpace(host.ID())
+				}
+				if hostName == "" {
+					hostName = strings.TrimSpace(host.Name())
+				}
+				executorID = hostName
+				if executorID == "" {
+					executorID = hostUID
 				}
 			}
+
+			response := ResourceResponse{
+				Type:   "docker",
+				ID:     containerID,
+				Name:   container.Name(),
+				Status: state,
+				Host:   hostName,
+				Image:  container.Image(),
+				Health: container.Health(),
+				CPU: ResourceCPU{
+					Percent: container.CPUPercent(),
+				},
+				Memory: ResourceMemory{
+					Percent: container.MemoryPercent(),
+					UsedGB:  float64(container.MemoryUsed()) / (1024 * 1024 * 1024),
+					TotalGB: float64(container.MemoryTotal()) / (1024 * 1024 * 1024),
+				},
+				RestartCount: container.RestartCount(),
+				Labels:       container.Labels(),
+			}
+
+			if update := container.UpdateStatus(); update != nil && update.UpdateAvailable {
+				response.UpdateAvailable = true
+			}
+
+			for _, p := range container.Ports() {
+				response.Ports = append(response.Ports, PortInfo{
+					Private:  p.PrivatePort,
+					Public:   p.PublicPort,
+					Protocol: p.Protocol,
+					IP:       p.IP,
+				})
+			}
+
+			for _, n := range container.Networks() {
+				addresses := make([]string, 0, 2)
+				if n.IPv4 != "" {
+					addresses = append(addresses, n.IPv4)
+				}
+				if n.IPv6 != "" {
+					addresses = append(addresses, n.IPv6)
+				}
+				response.Networks = append(response.Networks, NetworkInfo{
+					Name:      n.Name,
+					Addresses: addresses,
+				})
+			}
+
+			for _, m := range container.Mounts() {
+				response.Mounts = append(response.Mounts, MountInfo{
+					Source:      m.Source,
+					Destination: m.Destination,
+					ReadWrite:   m.RW,
+				})
+			}
+
+			// Register in resolved context WITH explicit access (single-resource get operation)
+			aliases := []string{container.Name(), containerID}
+			if len(containerID) > 12 {
+				aliases = append(aliases, containerID[:12]) // Add short ID for longer IDs
+			}
+			locationHost := hostName
+			if locationHost == "" {
+				locationHost = hostUID
+			}
+			if locationHost == "" {
+				locationHost = "unknown"
+			}
+			if hostName == "" {
+				hostName = locationHost
+			}
+			if hostUID == "" {
+				hostUID = locationHost
+			}
+			if executorID == "" {
+				executorID = locationHost
+			}
+			response.Host = hostName
+			e.registerResolvedResourceWithExplicitAccess(ResourceRegistration{
+				Kind:          "docker_container",
+				ProviderUID:   containerID, // Docker container ID is the stable provider ID
+				Name:          container.Name(),
+				Aliases:       aliases,
+				HostUID:       hostUID,
+				HostName:      hostName,
+				LocationChain: []string{"host:" + locationHost, "docker:" + container.Name()},
+				Executors: []ExecutorRegistration{{
+					ExecutorID: executorID,
+					Adapter:    "docker",
+					Actions:    []string{"query", "get", "logs", "exec", "restart", "stop", "start"},
+					Priority:   10,
+				}},
+			})
+			return NewJSONResult(response), nil
 		}
 		return NewJSONResult(map[string]interface{}{
 			"error":       "not_found",
@@ -3560,25 +3621,18 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 		return false
 	}
 
-	// Helper to collect IP addresses from guest network interfaces
-	collectDockerIPs := func(networks []models.DockerContainerNetworkLink) []string {
-		var ips []string
-		for _, net := range networks {
-			if net.IPv4 != "" {
-				ips = append(ips, net.IPv4)
-			}
-			if net.IPv6 != "" {
-				ips = append(ips, net.IPv6)
-			}
-		}
-		return ips
-	}
-
 	queryLower := strings.ToLower(query)
-	state := e.stateProvider.GetState()
 	rs, err := e.readStateForControl()
 	if err != nil {
 		return NewErrorResult(err), nil
+	}
+
+	dockerHostsByID := make(map[string]*unifiedresources.DockerHostView)
+	for _, host := range rs.DockerHosts() {
+		if host == nil {
+			continue
+		}
+		dockerHostsByID[host.ID()] = host
 	}
 
 	// Build a set of connected agent hostnames for quick lookup
@@ -3680,52 +3734,89 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 	}
 
 	if typeFilter == "" || typeFilter == "docker_host" {
-		for _, host := range state.DockerHosts {
-			if statusFilter != "" && !strings.EqualFold(host.Status, statusFilter) {
+		for _, host := range rs.DockerHosts() {
+			if host == nil {
 				continue
 			}
-			if !matchesQuery(queryLower, host.ID, host.Hostname, host.DisplayName, host.CustomDisplayName) {
+			status := string(host.Status())
+			if statusFilter != "" && !strings.EqualFold(status, statusFilter) {
 				continue
 			}
-			displayName := host.DisplayName
-			if host.CustomDisplayName != "" {
-				displayName = host.CustomDisplayName
+			if !matchesQuery(queryLower, host.ID(), host.HostSourceID(), host.Hostname(), host.Name()) {
+				continue
 			}
+
+			hostID := strings.TrimSpace(host.HostSourceID())
+			if hostID == "" {
+				hostID = strings.TrimSpace(host.ID())
+			}
+			displayName := strings.TrimSpace(host.Name())
 			if displayName == "" {
-				displayName = host.Hostname
+				displayName = strings.TrimSpace(host.Hostname())
+			}
+			hostName := strings.TrimSpace(host.Hostname())
+			if hostName == "" {
+				hostName = displayName
 			}
 			addMatch(ResourceMatch{
 				Type:   "docker_host",
-				ID:     host.ID,
+				ID:     hostID,
 				Name:   displayName,
-				Status: host.Status,
-				Host:   host.Hostname,
+				Status: status,
+				Host:   hostName,
 			})
 		}
 	}
 
 	if typeFilter == "" || typeFilter == "docker" {
-		for _, host := range state.DockerHosts {
-			for _, c := range host.Containers {
-				if statusFilter != "" && !strings.EqualFold(c.State, statusFilter) {
-					continue
-				}
-				// Build searchable candidates: name, ID, image, IPs
-				candidates := []string{c.Name, c.ID, c.Image}
-				candidates = append(candidates, collectDockerIPs(c.Networks)...)
-
-				if !matchesQuery(queryLower, candidates...) {
-					continue
-				}
-				addMatch(ResourceMatch{
-					Type:   "docker",
-					ID:     c.ID,
-					Name:   c.Name,
-					Status: c.State,
-					Host:   host.Hostname,
-					Image:  c.Image,
-				})
+		for _, container := range rs.DockerContainers() {
+			if container == nil {
+				continue
 			}
+			state := strings.TrimSpace(container.ContainerState())
+			if state == "" {
+				state = string(container.Status())
+			}
+			if statusFilter != "" && !strings.EqualFold(state, statusFilter) {
+				continue
+			}
+
+			containerID := strings.TrimSpace(container.ContainerID())
+			if containerID == "" {
+				containerID = strings.TrimSpace(container.ID())
+			}
+
+			// Build searchable candidates: name, ID, image, IPs
+			candidates := []string{container.Name(), containerID, container.Image()}
+			for _, network := range container.Networks() {
+				if network.IPv4 != "" {
+					candidates = append(candidates, network.IPv4)
+				}
+				if network.IPv6 != "" {
+					candidates = append(candidates, network.IPv6)
+				}
+			}
+
+			if !matchesQuery(queryLower, candidates...) {
+				continue
+			}
+
+			hostName := ""
+			if host := dockerHostsByID[strings.TrimSpace(container.ParentID())]; host != nil {
+				hostName = strings.TrimSpace(host.Hostname())
+				if hostName == "" {
+					hostName = strings.TrimSpace(host.Name())
+				}
+			}
+
+			addMatch(ResourceMatch{
+				Type:   "docker",
+				ID:     containerID,
+				Name:   container.Name(),
+				Status: state,
+				Host:   hostName,
+				Image:  container.Image(),
+			})
 		}
 	}
 

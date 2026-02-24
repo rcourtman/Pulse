@@ -479,6 +479,7 @@ func TestView_DockerHostViewAccessors(t *testing.T) {
 		ChildCount: 2,
 		Docker: &DockerData{
 			Hostname:       "docker-host-1",
+			AgentID:        "docker-agent-1",
 			DockerVersion:  "25.0.0",
 			RuntimeVersion: "1.7.0",
 			OS:             "Ubuntu",
@@ -505,6 +506,9 @@ func TestView_DockerHostViewAccessors(t *testing.T) {
 	}
 	if v.Hostname() != "docker-host-1" || v.DockerVersion() != "25.0.0" || v.RuntimeVersion() != "1.7.0" || v.OS() != "Ubuntu" {
 		t.Fatalf("expected docker accessors to match, got hostname=%q docker=%q runtime=%q os=%q", v.Hostname(), v.DockerVersion(), v.RuntimeVersion(), v.OS())
+	}
+	if v.AgentID() != "docker-agent-1" {
+		t.Fatalf("expected agent id accessor to match, got %q", v.AgentID())
 	}
 	if v.KernelVersion() != "6.8.0" || v.Architecture() != "amd64" || v.AgentVersion() != "2.0.0" {
 		t.Fatalf("expected kernel/arch/agentVersion to match, got kernel=%q arch=%q agent=%q", v.KernelVersion(), v.Architecture(), v.AgentVersion())
