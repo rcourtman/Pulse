@@ -160,6 +160,7 @@ type MetricValue struct {
 
 // ProxmoxData contains Proxmox-specific data for a resource.
 type ProxmoxData struct {
+	SourceID       string     `json:"sourceId,omitempty"` // raw model ID from source snapshot
 	NodeName       string     `json:"nodeName,omitempty"`
 	ClusterName    string     `json:"clusterName,omitempty"`
 	Instance       string     `json:"instance,omitempty"`
@@ -650,12 +651,13 @@ type NetworkInterface struct {
 
 // DiskInfo describes disk usage.
 type DiskInfo struct {
-	Device     string `json:"device,omitempty"`
-	Mountpoint string `json:"mountpoint,omitempty"`
-	Filesystem string `json:"filesystem,omitempty"`
-	Total      int64  `json:"total,omitempty"`
-	Used       int64  `json:"used,omitempty"`
-	Free       int64  `json:"free,omitempty"`
+	Device     string  `json:"device,omitempty"`
+	Mountpoint string  `json:"mountpoint,omitempty"`
+	Filesystem string  `json:"filesystem,omitempty"`
+	Total      int64   `json:"total,omitempty"`
+	Used       int64   `json:"used,omitempty"`
+	Free       int64   `json:"free,omitempty"`
+	Usage      float64 `json:"usage,omitempty"`
 }
 
 // DockerSwarmInfo captures Docker Swarm details.

@@ -99,6 +99,13 @@ func (v VMView) VMID() int {
 	return v.r.Proxmox.VMID
 }
 
+func (v VMView) SourceID() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.SourceID
+}
+
 func (v VMView) Node() string {
 	if v.r == nil || v.r.Proxmox == nil {
 		return ""
@@ -280,6 +287,13 @@ func (v ContainerView) VMID() int {
 		return 0
 	}
 	return v.r.Proxmox.VMID
+}
+
+func (v ContainerView) SourceID() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.SourceID
 }
 
 func (v ContainerView) Node() string {

@@ -1393,7 +1393,8 @@ func (e *PulseToolExecutor) executeGetHostCephDetails(_ context.Context, args ma
 }
 
 func (e *PulseToolExecutor) executeGetResourceDisks(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
+	rs, err := e.readStateForControl()
+	if err != nil {
 		return NewTextResult("State provider not available."), nil
 	}
 
@@ -1402,41 +1403,60 @@ func (e *PulseToolExecutor) executeGetResourceDisks(_ context.Context, args map[
 	instanceFilter, _ := args["instance"].(string)
 	minUsage, _ := args["min_usage"].(float64)
 
-	state := e.stateProvider.GetState()
-
 	var resources []ResourceDisksSummary
 
 	// Process VMs
 	if typeFilter == "" || strings.EqualFold(typeFilter, "vm") {
-		for _, vm := range state.VMs {
+		for _, vm := range rs.VMs() {
+			if vm == nil {
+				continue
+			}
+
+			vmID := vm.VMID()
+			vmIDStr := strconv.Itoa(vmID)
+			vmSourceID := strings.TrimSpace(vm.SourceID())
+			if vmSourceID == "" {
+				vmSourceID = vm.ID()
+			}
+
 			// Apply filters
-			if resourceFilter != "" && vm.ID != resourceFilter && fmt.Sprintf("%d", vm.VMID) != resourceFilter {
+			if resourceFilter != "" && vmSourceID != resourceFilter && vmIDStr != resourceFilter {
 				continue
 			}
-			if instanceFilter != "" && vm.Instance != instanceFilter {
+			if instanceFilter != "" && vm.Instance() != instanceFilter {
 				continue
 			}
+
+			vmDisks := vm.Disks()
 			// Skip VMs without disk data
-			if len(vm.Disks) == 0 {
+			if len(vmDisks) == 0 {
 				continue
 			}
 
 			var disks []ResourceDiskInfo
 			maxUsage := 0.0
 
-			for _, disk := range vm.Disks {
-				if disk.Usage > maxUsage {
-					maxUsage = disk.Usage
+			for _, disk := range vmDisks {
+				usage := disk.Usage
+				if usage <= 0 && disk.Total > 0 {
+					usage = (float64(disk.Used) / float64(disk.Total)) * 100
+				}
+				if usage <= 0 && disk.Used > 0 {
+					usage = 100
+				}
+
+				if usage > maxUsage {
+					maxUsage = usage
 				}
 
 				disks = append(disks, ResourceDiskInfo{
 					Device:     disk.Device,
 					Mountpoint: disk.Mountpoint,
-					Type:       disk.Type,
+					Type:       disk.Filesystem,
 					TotalBytes: disk.Total,
 					UsedBytes:  disk.Used,
 					FreeBytes:  disk.Free,
-					Usage:      disk.Usage,
+					Usage:      usage,
 				})
 			}
 
@@ -1450,12 +1470,12 @@ func (e *PulseToolExecutor) executeGetResourceDisks(_ context.Context, args map[
 			}
 
 			resources = append(resources, ResourceDisksSummary{
-				ID:       vm.ID,
-				VMID:     vm.VMID,
-				Name:     vm.Name,
+				ID:       vmSourceID,
+				VMID:     vmID,
+				Name:     vm.Name(),
 				Type:     "vm",
-				Node:     vm.Node,
-				Instance: vm.Instance,
+				Node:     vm.Node(),
+				Instance: vm.Instance(),
 				Disks:    disks,
 			})
 		}
@@ -1463,35 +1483,56 @@ func (e *PulseToolExecutor) executeGetResourceDisks(_ context.Context, args map[
 
 	// Process containers
 	if typeFilter == "" || strings.EqualFold(typeFilter, "lxc") || strings.EqualFold(typeFilter, "system-container") {
-		for _, ct := range state.Containers {
+		for _, ct := range rs.Containers() {
+			if ct == nil {
+				continue
+			}
+
+			ctID := ct.VMID()
+			ctIDStr := strconv.Itoa(ctID)
+			ctSourceID := strings.TrimSpace(ct.SourceID())
+			if ctSourceID == "" {
+				ctSourceID = ct.ID()
+			}
+
 			// Apply filters
-			if resourceFilter != "" && ct.ID != resourceFilter && fmt.Sprintf("%d", ct.VMID) != resourceFilter {
+			if resourceFilter != "" && ctSourceID != resourceFilter && ctIDStr != resourceFilter {
 				continue
 			}
-			if instanceFilter != "" && ct.Instance != instanceFilter {
+			if instanceFilter != "" && ct.Instance() != instanceFilter {
 				continue
 			}
+
+			ctDisks := ct.Disks()
 			// Skip containers without disk data
-			if len(ct.Disks) == 0 {
+			if len(ctDisks) == 0 {
 				continue
 			}
 
 			var disks []ResourceDiskInfo
 			maxUsage := 0.0
 
-			for _, disk := range ct.Disks {
-				if disk.Usage > maxUsage {
-					maxUsage = disk.Usage
+			for _, disk := range ctDisks {
+				usage := disk.Usage
+				if usage <= 0 && disk.Total > 0 {
+					usage = (float64(disk.Used) / float64(disk.Total)) * 100
+				}
+				if usage <= 0 && disk.Used > 0 {
+					usage = 100
+				}
+
+				if usage > maxUsage {
+					maxUsage = usage
 				}
 
 				disks = append(disks, ResourceDiskInfo{
 					Device:     disk.Device,
 					Mountpoint: disk.Mountpoint,
-					Type:       disk.Type,
+					Type:       disk.Filesystem,
 					TotalBytes: disk.Total,
 					UsedBytes:  disk.Used,
 					FreeBytes:  disk.Free,
-					Usage:      disk.Usage,
+					Usage:      usage,
 				})
 			}
 
@@ -1505,12 +1546,12 @@ func (e *PulseToolExecutor) executeGetResourceDisks(_ context.Context, args map[
 			}
 
 			resources = append(resources, ResourceDisksSummary{
-				ID:       ct.ID,
-				VMID:     ct.VMID,
-				Name:     ct.Name,
+				ID:       ctSourceID,
+				VMID:     ctID,
+				Name:     ct.Name(),
 				Type:     "system-container",
-				Node:     ct.Node,
-				Instance: ct.Instance,
+				Node:     ct.Node(),
+				Instance: ct.Instance(),
 				Disks:    disks,
 			})
 		}

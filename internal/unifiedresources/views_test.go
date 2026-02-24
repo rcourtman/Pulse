@@ -63,6 +63,7 @@ func TestView_VMViewAccessors(t *testing.T) {
 		ParentID: &parentID,
 		Identity: ResourceIdentity{IPAddresses: []string{"10.0.0.10", "fd00::10"}},
 		Proxmox: &ProxmoxData{
+			SourceID:   "vm-source-1",
 			NodeName:   "pve-a",
 			Instance:   "lab",
 			VMID:       101,
@@ -70,6 +71,7 @@ func TestView_VMViewAccessors(t *testing.T) {
 			Uptime:     1234,
 			Template:   false,
 			LastBackup: lastBackup,
+			Disks:      []DiskInfo{{Device: "vda", Filesystem: "ext4", Total: 100, Used: 60, Free: 40, Mountpoint: "/"}},
 		},
 		Metrics: &ResourceMetrics{
 			CPU:    &MetricValue{Percent: 12.5},
@@ -94,6 +96,9 @@ func TestView_VMViewAccessors(t *testing.T) {
 	if v.VMID() != 101 {
 		t.Fatalf("expected VMID %d, got %d", 101, v.VMID())
 	}
+	if v.SourceID() != "vm-source-1" {
+		t.Fatalf("expected SourceID %q, got %q", "vm-source-1", v.SourceID())
+	}
 	if v.Node() != "pve-a" {
 		t.Fatalf("expected Node %q, got %q", "pve-a", v.Node())
 	}
@@ -111,6 +116,9 @@ func TestView_VMViewAccessors(t *testing.T) {
 	}
 	if !v.LastBackup().Equal(lastBackup) {
 		t.Fatalf("expected LastBackup %v, got %v", lastBackup, v.LastBackup())
+	}
+	if disks := v.Disks(); len(disks) != 1 || disks[0].Device != "vda" || disks[0].Filesystem != "ext4" {
+		t.Fatalf("expected disks to match, got %+v", disks)
 	}
 	assertStringSlice(t, v.Tags(), []string{"prod", "tier:web"})
 	if !v.LastSeen().Equal(now) {
@@ -192,6 +200,9 @@ func TestView_VMViewAccessors(t *testing.T) {
 		if v.VMID() != 0 || v.Node() != "" || v.Instance() != "" || v.Template() != false || v.CPUs() != 0 || v.Uptime() != 0 || !v.LastBackup().IsZero() {
 			t.Fatalf("expected proxmox accessors to return zero values when Proxmox is nil")
 		}
+		if v.Disks() != nil {
+			t.Fatalf("expected nil disks when Proxmox is nil, got %+v", v.Disks())
+		}
 		if v.CPUPercent() != 0 || v.MemoryUsed() != 0 || v.MemoryTotal() != 0 || v.MemoryPercent() != 0 || v.DiskUsed() != 0 || v.DiskTotal() != 0 || v.DiskPercent() != 0 || v.NetIn() != 0 || v.NetOut() != 0 {
 			t.Fatalf("expected metric accessors to return zero values when Metrics is nil")
 		}
@@ -216,6 +227,7 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 		ParentID: &parentID,
 		Identity: ResourceIdentity{IPAddresses: []string{"10.0.0.20"}},
 		Proxmox: &ProxmoxData{
+			SourceID:   "ct-source-1",
 			NodeName:   "pve-b",
 			Instance:   "lab",
 			VMID:       201,
@@ -223,6 +235,7 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 			Uptime:     888,
 			Template:   true,
 			LastBackup: lastBackup,
+			Disks:      []DiskInfo{{Device: "mp0", Filesystem: "xfs", Total: 200, Used: 25, Free: 175, Mountpoint: "/data"}},
 		},
 		Metrics: &ResourceMetrics{
 			CPU:    &MetricValue{Percent: 3},
@@ -241,8 +254,14 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 	if v.VMID() != 201 || v.Node() != "pve-b" || v.Instance() != "lab" || v.Template() != true || v.CPUs() != 2 || v.Uptime() != 888 {
 		t.Fatalf("expected proxmox accessors to match, got vmid=%d node=%q instance=%q template=%v cpus=%d uptime=%d", v.VMID(), v.Node(), v.Instance(), v.Template(), v.CPUs(), v.Uptime())
 	}
+	if v.SourceID() != "ct-source-1" {
+		t.Fatalf("expected SourceID %q, got %q", "ct-source-1", v.SourceID())
+	}
 	if !v.LastBackup().Equal(lastBackup) {
 		t.Fatalf("expected LastBackup %v, got %v", lastBackup, v.LastBackup())
+	}
+	if disks := v.Disks(); len(disks) != 1 || disks[0].Device != "mp0" || disks[0].Filesystem != "xfs" {
+		t.Fatalf("expected disks to match, got %+v", disks)
 	}
 	assertStringSlice(t, v.Tags(), []string{"prod", "tier:db"})
 	if !v.LastSeen().Equal(now) {
@@ -269,6 +288,7 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 			zero.CPUs() != 0 ||
 			zero.Uptime() != 0 ||
 			!zero.LastBackup().IsZero() ||
+			zero.Disks() != nil ||
 			zero.Tags() != nil ||
 			!zero.LastSeen().IsZero() ||
 			zero.ParentID() != "" ||
@@ -297,6 +317,9 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 
 		if v.VMID() != 0 || v.Node() != "" || v.Instance() != "" || v.Template() != false || v.CPUs() != 0 || v.Uptime() != 0 || !v.LastBackup().IsZero() {
 			t.Fatalf("expected proxmox accessors to return zero values when Proxmox is nil")
+		}
+		if v.Disks() != nil {
+			t.Fatalf("expected nil disks when Proxmox is nil, got %+v", v.Disks())
 		}
 		if v.CPUPercent() != 0 || v.MemoryUsed() != 0 || v.MemoryTotal() != 0 || v.MemoryPercent() != 0 || v.DiskUsed() != 0 || v.DiskTotal() != 0 || v.DiskPercent() != 0 || v.NetIn() != 0 || v.NetOut() != 0 {
 			t.Fatalf("expected metric accessors to return zero values when Metrics is nil")

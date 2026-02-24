@@ -483,6 +483,7 @@ func resourceFromPMGInstance(instance models.PMGInstance) (Resource, ResourceIde
 func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 	metrics := metricsFromVM(vm)
 	proxmox := &ProxmoxData{
+		SourceID:   vm.ID,
 		NodeName:   vm.Node,
 		Instance:   vm.Instance,
 		VMID:       vm.VMID,
@@ -516,6 +517,7 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 func resourceFromContainer(ct models.Container) (Resource, ResourceIdentity) {
 	metrics := metricsFromContainer(ct)
 	proxmox := &ProxmoxData{
+		SourceID:   ct.ID,
 		NodeName:   ct.Node,
 		Instance:   ct.Instance,
 		VMID:       ct.VMID,
@@ -1237,6 +1239,7 @@ func convertDisks(disks []models.Disk) []DiskInfo {
 			Total:      disk.Total,
 			Used:       disk.Used,
 			Free:       disk.Free,
+			Usage:      disk.Usage,
 		})
 	}
 	return out
