@@ -384,6 +384,13 @@ func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
 		return []APITokenRecord{}, nil
 	}
 
+	// Attempt decryption; fall back to plaintext for migration from unencrypted files.
+	if c.crypto != nil {
+		if decrypted, decErr := c.crypto.Decrypt(data); decErr == nil {
+			data = decrypted
+		}
+	}
+
 	var tokens []APITokenRecord
 	if err := json.Unmarshal(data, &tokens); err != nil {
 		return nil, fmt.Errorf("decode api tokens file %s: %w", c.apiTokensFile, err)
@@ -442,6 +449,14 @@ func (c *ConfigPersistence) SaveAPITokens(tokens []APITokenRecord) error {
 	data, err := json.Marshal(sanitized)
 	if err != nil {
 		return fmt.Errorf("marshal api token records: %w", err)
+	}
+
+	if c.crypto != nil {
+		if encrypted, encErr := c.crypto.Encrypt(data); encErr == nil {
+			data = encrypted
+		} else {
+			return fmt.Errorf("encrypt api tokens: %w", encErr)
+		}
 	}
 
 	if err := c.writeConfigFileLocked(c.apiTokensFile, data, 0600); err != nil {
@@ -1953,7 +1968,7 @@ func (c *ConfigPersistence) SaveAIFindingsWithSuppression(findings map[string]*A
 		SuppressionRules: suppressionRules,
 	}
 
-	if err := saveJSON(c, c.aiFindingsFile, data, false); err != nil {
+	if err := saveJSON(c, c.aiFindingsFile, data, true); err != nil {
 		return err
 	}
 
@@ -1989,6 +2004,13 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 			}, nil
 		}
 		return nil, err
+	}
+
+	// Attempt decryption; fall back to plaintext for migration from unencrypted files.
+	if c.crypto != nil {
+		if decrypted, decErr := c.crypto.Decrypt(data); decErr == nil {
+			data = decrypted
+		}
 	}
 
 	var findingsData AIFindingsData
@@ -2027,6 +2049,15 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 		// Persist the migrated (empty) file immediately to avoid re-migrating on restart
 		c.mu.Lock()
 		if jsonData, err := json.Marshal(findingsData); err == nil {
+			if c.crypto != nil {
+				encrypted, encErr := c.crypto.Encrypt(jsonData)
+				if encErr != nil {
+					log.Warn().Err(encErr).Msg("Failed to encrypt migrated AI findings — skipping write to avoid plaintext storage")
+					c.mu.Unlock()
+					return &findingsData, nil
+				}
+				jsonData = encrypted
+			}
 			if err := c.writeConfigFileLocked(c.aiFindingsFile, jsonData, 0600); err != nil {
 				log.Warn().Err(err).Msg("Failed to persist migrated AI findings file")
 			}
@@ -2038,6 +2069,15 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 		findingsData.LastSaved = time.Now()
 		c.mu.Lock()
 		if jsonData, err := json.Marshal(findingsData); err == nil {
+			if c.crypto != nil {
+				encrypted, encErr := c.crypto.Encrypt(jsonData)
+				if encErr != nil {
+					log.Warn().Err(encErr).Msg("Failed to encrypt migrated AI findings — skipping write to avoid plaintext storage")
+					c.mu.Unlock()
+					return &findingsData, nil
+				}
+				jsonData = encrypted
+			}
 			if err := c.writeConfigFileLocked(c.aiFindingsFile, jsonData, 0600); err != nil {
 				log.Warn().Err(err).Msg("Failed to persist migrated AI findings file")
 			}
@@ -2155,6 +2195,14 @@ func (c *ConfigPersistence) SaveAIUsageHistory(events []AIUsageEventRecord) erro
 		return fmt.Errorf("marshal ai usage history: %w", err)
 	}
 
+	if c.crypto != nil {
+		if encrypted, encErr := c.crypto.Encrypt(jsonData); encErr == nil {
+			jsonData = encrypted
+		} else {
+			return fmt.Errorf("encrypt ai usage history: %w", encErr)
+		}
+	}
+
 	if err := c.writeConfigFileLocked(c.aiUsageHistoryFile, jsonData, 0600); err != nil {
 		return fmt.Errorf("persist ai usage history: %w", err)
 	}
@@ -2173,11 +2221,14 @@ func newEmptyAIUsageHistoryData() *AIUsageHistoryData {
 	}
 }
 
-// loadHistoryData generic helper for loading history data from disk
+// loadHistoryData generic helper for loading history data from disk.
+// When crypto is non-nil, attempts to decrypt before parsing; falls back to
+// plaintext on decryption failure (transparent migration from unencrypted files).
 func loadHistoryData[T any](
 	fs FileSystem,
 	mu *sync.RWMutex,
 	filePath string,
+	cryptoMgr *crypto.CryptoManager,
 	emptyDataFactory func() *T,
 	normalizeSlice func(*T),
 	getCount func(*T) int,
@@ -2193,6 +2244,15 @@ func loadHistoryData[T any](
 			return emptyDataFactory(), nil
 		}
 		return nil, err
+	}
+
+	// Attempt decryption; fall back to plaintext for migration from unencrypted files.
+	if cryptoMgr != nil {
+		if decrypted, decErr := cryptoMgr.Decrypt(data); decErr == nil {
+			data = decrypted
+		} else {
+			log.Debug().Str("file", filePath).Msg("Failed to decrypt history data — falling back to plaintext")
+		}
 	}
 
 	var historyData T
@@ -2217,6 +2277,7 @@ func (c *ConfigPersistence) LoadAIUsageHistory() (*AIUsageHistoryData, error) {
 		c.fs,
 		&c.mu,
 		c.aiUsageHistoryFile,
+		c.crypto,
 		newEmptyAIUsageHistoryData,
 		func(data *AIUsageHistoryData) {
 			if data.Events == nil {
@@ -2253,6 +2314,14 @@ func (c *ConfigPersistence) SavePatrolRunHistory(runs []PatrolRunRecord) error {
 		return fmt.Errorf("marshal patrol run history: %w", err)
 	}
 
+	if c.crypto != nil {
+		if encrypted, encErr := c.crypto.Encrypt(jsonData); encErr == nil {
+			jsonData = encrypted
+		} else {
+			return fmt.Errorf("encrypt patrol run history: %w", encErr)
+		}
+	}
+
 	if err := c.writeConfigFileLocked(c.aiPatrolRunsFile, jsonData, 0600); err != nil {
 		return fmt.Errorf("persist patrol run history: %w", err)
 	}
@@ -2277,6 +2346,7 @@ func (c *ConfigPersistence) LoadPatrolRunHistory() (*PatrolRunHistoryData, error
 		c.fs,
 		&c.mu,
 		c.aiPatrolRunsFile,
+		c.crypto,
 		newEmptyPatrolRunHistoryData,
 		func(data *PatrolRunHistoryData) {
 			if data.Runs == nil {
@@ -2504,12 +2574,12 @@ func (c *ConfigPersistence) SaveProfileDeploymentStatus(status []models.ProfileD
 
 // LoadProfileChangeLogs loads change logs from file
 func (c *ConfigPersistence) LoadProfileChangeLogs() ([]models.ProfileChangeLog, error) {
-	return loadSlice[models.ProfileChangeLog](c, filepath.Join(c.configDir, "profile-changelog.json"), false)
+	return loadSlice[models.ProfileChangeLog](c, filepath.Join(c.configDir, "profile-changelog.json"), true)
 }
 
 // SaveProfileChangeLogs saves change logs to file
 func (c *ConfigPersistence) SaveProfileChangeLogs(logs []models.ProfileChangeLog) error {
-	return saveJSON(c, filepath.Join(c.configDir, "profile-changelog.json"), logs, false)
+	return saveJSON(c, filepath.Join(c.configDir, "profile-changelog.json"), logs, true)
 }
 
 // AppendProfileChangeLog adds a new entry to the change log
@@ -2594,6 +2664,14 @@ func (c *ConfigPersistence) SaveAIChatSessions(sessions map[string]*AIChatSessio
 		return fmt.Errorf("marshal ai chat sessions: %w", err)
 	}
 
+	if c.crypto != nil {
+		if encrypted, encErr := c.crypto.Encrypt(jsonData); encErr == nil {
+			jsonData = encrypted
+		} else {
+			return fmt.Errorf("encrypt ai chat sessions: %w", encErr)
+		}
+	}
+
 	if err := c.writeConfigFileLocked(c.aiChatSessionsFile, jsonData, 0600); err != nil {
 		return fmt.Errorf("persist ai chat sessions: %w", err)
 	}
@@ -2619,6 +2697,13 @@ func (c *ConfigPersistence) LoadAIChatSessions() (*AIChatSessionsData, error) {
 			}, nil
 		}
 		return nil, err
+	}
+
+	// Attempt decryption; fall back to plaintext for migration from unencrypted files.
+	if c.crypto != nil {
+		if decrypted, decErr := c.crypto.Decrypt(data); decErr == nil {
+			data = decrypted
+		}
 	}
 
 	var sessionsData AIChatSessionsData

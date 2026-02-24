@@ -59,10 +59,11 @@ func GetRateLimiterForEndpoint(path string, method string) *RateLimiter {
 	// Normalize path
 	path = strings.ToLower(path)
 
-	// Authentication endpoints
+	// Authentication endpoints (including bootstrap token validation — critical security credential)
 	if strings.Contains(path, "/api/login") ||
 		strings.Contains(path, "/api/logout") ||
 		strings.Contains(path, "/api/security/change-password") ||
+		strings.Contains(path, "/api/security/validate-bootstrap-token") ||
 		strings.Contains(path, "/api/auth") {
 		return globalRateLimitConfig.AuthEndpoints
 	}
@@ -107,7 +108,6 @@ func GetRateLimiterForEndpoint(path string, method string) *RateLimiter {
 	if strings.Contains(path, "/api/health") ||
 		strings.Contains(path, "/api/version") ||
 		strings.Contains(path, "/api/security/status") ||
-		strings.Contains(path, "/api/security/validate-bootstrap-token") ||
 		strings.Contains(path, "/metrics") {
 		return globalRateLimitConfig.PublicEndpoints
 	}
