@@ -70,7 +70,7 @@ test.describe('Mobile viewport flows', () => {
     expect(bodyScrollWidth, 'Infrastructure page body must not overflow horizontally').toBeLessThanOrEqual(viewportWidth + 1);
   });
 
-  test('Infrastructure table has overflow-x-auto wrapper', async ({ page }) => {
+  test('Infrastructure table wrapper enables horizontal overflow when needed', async ({ page }) => {
     await dismissWhatsNewModal(page);
     await page.goto('/infrastructure');
 
@@ -83,8 +83,24 @@ test.describe('Mobile viewport flows', () => {
       test.skip(true, 'No infrastructure table rendered (no resources or table not present)');
     }
 
-    const canScrollHorizontally = await tableWrapper.evaluate((el) => (el as HTMLElement).scrollWidth > (el as HTMLElement).clientWidth + 1);
-    expect(canScrollHorizontally).toBeTruthy();
+    const overflowBehavior = await tableWrapper.evaluate((el) => {
+      const wrapper = el as HTMLElement;
+      const table = wrapper.querySelector('table') as HTMLElement | null;
+      const style = window.getComputedStyle(wrapper);
+      return {
+        overflowX: style.overflowX,
+        wrapperClientWidth: wrapper.clientWidth,
+        wrapperScrollWidth: wrapper.scrollWidth,
+        tableScrollWidth: table?.scrollWidth ?? 0,
+      };
+    });
+
+    // In v6 some datasets fit cleanly on mobile after column/layout optimizations.
+    // The contract is that the wrapper is configured to allow horizontal scrolling
+    // if content exceeds available width.
+    expect(['auto', 'scroll']).toContain(overflowBehavior.overflowX);
+    expect(overflowBehavior.wrapperClientWidth).toBeGreaterThan(0);
+    expect(overflowBehavior.tableScrollWidth).toBeGreaterThan(0);
   });
 
   test('Tapping a resource row opens the detail drawer', async ({ page }) => {
@@ -139,4 +155,3 @@ test.describe('Mobile viewport flows', () => {
     expect(aiBottom).toBeLessThanOrEqual(navTop + 1);
   });
 });
-

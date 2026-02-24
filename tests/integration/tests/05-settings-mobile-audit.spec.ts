@@ -80,8 +80,18 @@ const auditHorizontalOverflow = async (
 const scrollToBottom = async (page: import('@playwright/test').Page): Promise<void> => {
     const viewportHeight = await page.evaluate(() => window.innerHeight || 800);
     const step = Math.max(240, Math.floor(viewportHeight * 0.75));
+    let wheelSupported = true;
     for (let i = 0; i < 20; i += 1) {
-        await page.mouse.wheel(0, step);
+        if (wheelSupported) {
+            try {
+                await page.mouse.wheel(0, step);
+            } catch {
+                wheelSupported = false;
+                await page.evaluate((deltaY) => window.scrollBy(0, deltaY), step);
+            }
+        } else {
+            await page.evaluate((deltaY) => window.scrollBy(0, deltaY), step);
+        }
         await page.waitForTimeout(60);
     }
 };

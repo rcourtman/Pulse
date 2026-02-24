@@ -130,6 +130,19 @@ test.describe.serial('Cloud billing lifecycle (post-checkout)', () => {
       'Desktop-only cloud billing lifecycle coverage',
     );
 
+    const requiredVars = [
+      'PULSE_CP_ADMIN_KEY',
+      'PULSE_E2E_STRIPE_API_KEY',
+      'PULSE_E2E_STRIPE_WEBHOOK_SECRET',
+    ] as const;
+    const missingVars = requiredVars.filter(
+      (name) => (process.env[name] || '').trim() === '',
+    );
+    test.skip(
+      missingVars.length > 0,
+      `Missing required env var(s): ${missingVars.join(', ')}`,
+    );
+
     const baseURL = cloudBaseURL();
     const adminKey = requiredEnv('PULSE_CP_ADMIN_KEY');
     const stripeSecretKey = requiredEnv('PULSE_E2E_STRIPE_API_KEY');

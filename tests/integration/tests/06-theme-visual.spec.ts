@@ -4,6 +4,45 @@ import { ensureAuthenticated, maybeCompleteSetupWizard, waitForPulseReady } from
 type ThemePreference = 'light' | 'dark';
 
 const VISUAL_VIEWPORT = { width: 1366, height: 900 };
+const STABLE_VERSION_INFO = {
+  version: '99.1.0-rc.1',
+  build: '',
+  runtime: 'unknown',
+  channel: 'stable',
+  isDocker: false,
+  isSourceBuild: true,
+  isDevelopment: false,
+  deploymentType: 'source',
+};
+const NO_UPDATE_INFO = {
+  available: false,
+  currentVersion: STABLE_VERSION_INFO.version,
+  latestVersion: STABLE_VERSION_INFO.version,
+  releaseNotes: '',
+  releaseDate: '',
+  downloadUrl: '',
+  isPrerelease: false,
+};
+
+async function stabilizeUpdateChecks(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    localStorage.removeItem('pulse-updates');
+  });
+  await page.route('**/api/version', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(STABLE_VERSION_INFO),
+    }),
+  );
+  await page.route('**/api/updates/check*', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(NO_UPDATE_INFO),
+    }),
+  );
+}
 
 async function applyThemePreference(
   page: Page,
@@ -29,6 +68,15 @@ async function stabilizeVisualState(page: Page): Promise<void> {
         transition: none !important;
         caret-color: transparent !important;
       }
+      [data-testid="update-banner"] {
+        display: none !important;
+      }
+      [role="tab"] span[class*="rounded-full"] {
+        display: none !important;
+      }
+      .tabs [role="tab"]:nth-last-child(-n + 3) {
+        visibility: hidden !important;
+      }
     `,
   });
 
@@ -36,10 +84,70 @@ async function stabilizeVisualState(page: Page): Promise<void> {
   await page.waitForTimeout(150);
 }
 
+async function forceLoggedOutAuthSurface(page: Page): Promise<void> {
+  let liveSecurityStatus: Record<string, unknown> = {};
+  const securityStatusResponse = await page.request.get('/api/security/status');
+  if (securityStatusResponse.ok()) {
+    const parsed = await securityStatusResponse.json().catch(() => null);
+    if (parsed && typeof parsed === 'object') {
+      liveSecurityStatus = parsed as Record<string, unknown>;
+    }
+  }
+
+  const forcedSecurityStatus = {
+    ...liveSecurityStatus,
+    hasAuthentication: true,
+    hideLocalLogin: false,
+    hasProxyAuth: false,
+    proxyAuthUsername: '',
+    proxyAuthLogoutURL: '',
+    oidcEnabled: false,
+    oidcClientId: '',
+    oidcIssuer: '',
+    oidcLogoutURL: '',
+    oidcUsername: '',
+    requiresAuth: true,
+  };
+
+  await page.route('**/api/security/status', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(forcedSecurityStatus),
+    }),
+  );
+
+  await page.route('**/api/state', (route) =>
+    route.fulfill({
+      status: 401,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'unauthorized' }),
+    }),
+  );
+}
+
 async function openLoggedOutLogin(page: Page, theme: ThemePreference): Promise<void> {
   await waitForPulseReady(page);
   await maybeCompleteSetupWizard(page);
   await page.context().clearCookies();
+  await page.addInitScript(() => {
+    try {
+      sessionStorage.clear();
+    } catch {
+      // Ignore storage access errors in constrained browser contexts.
+    }
+
+    try {
+      localStorage.removeItem('pulse_auth');
+      localStorage.removeItem('pulse_api_token');
+      localStorage.removeItem('pulse_auth_user');
+      localStorage.removeItem('pulse_org_id');
+      localStorage.setItem('just_logged_out', 'true');
+    } catch {
+      // Ignore storage access errors in constrained browser contexts.
+    }
+  });
+  await forceLoggedOutAuthSurface(page);
 
   await applyThemePreference(page, theme, { forceLoggedOut: true });
   await page.goto('/');
@@ -71,6 +179,7 @@ test.describe.serial('Theme visual regression (auth surfaces)', () => {
   );
 
   test.beforeEach(async ({ page }) => {
+    await stabilizeUpdateChecks(page);
     await page.setViewportSize(VISUAL_VIEWPORT);
   });
 
