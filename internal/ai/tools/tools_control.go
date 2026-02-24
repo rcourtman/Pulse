@@ -20,7 +20,7 @@ func (e *PulseToolExecutor) registerControlTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
 			Name:        "pulse_control",
-			Description: `WRITE operations: control VMs/LXCs (start/stop/restart/delete) or execute state-modifying commands. For read-only operations use pulse_read. For Docker use pulse_docker.`,
+			Description: `WRITE operations: control VMs/containers (start/stop/restart/delete) or execute state-modifying commands. For read-only operations use pulse_read. For Docker use pulse_docker.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
