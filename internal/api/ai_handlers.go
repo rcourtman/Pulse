@@ -32,6 +32,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -41,6 +42,7 @@ import (
 
 // AISettingsHandler handles AI settings endpoints
 type AISettingsHandler struct {
+	stateMu                 sync.RWMutex
 	mtPersistence           *config.MultiTenantPersistence
 	mtMonitor               *monitoring.MultiTenantMonitor
 	legacyConfig            *config.Config
@@ -77,9 +79,22 @@ type AISettingsHandler struct {
 	alertBridge       *unified.AlertBridge     // Bridge between alerts and unified store
 
 	// Event-driven patrol (Phase 7)
-	triggerManager      *ai.TriggerManager        // Event-driven patrol trigger manager
-	incidentCoordinator *ai.IncidentCoordinator   // Incident recording coordinator
-	incidentRecorder    *metrics.IncidentRecorder // High-frequency incident recorder
+	triggerManager       *ai.TriggerManager        // Event-driven patrol trigger manager
+	incidentCoordinator  *ai.IncidentCoordinator   // Incident recording coordinator
+	incidentRecorder     *metrics.IncidentRecorder // High-frequency incident recorder
+	intelligenceMu       sync.RWMutex
+	proxmoxCorrelators   map[string]*proxmox.EventCorrelator
+	learningStores       map[string]*learning.LearningStore
+	forecastServices     map[string]*forecast.Service
+	remediationEngines   map[string]*remediation.Engine
+	incidentStores       map[string]*memory.IncidentStore
+	circuitBreakers      map[string]*circuit.Breaker
+	discoveryStores      map[string]*servicediscovery.Store
+	unifiedStores        map[string]*unified.UnifiedStore
+	alertBridges         map[string]*unified.AlertBridge
+	triggerManagers      map[string]*ai.TriggerManager
+	incidentCoordinators map[string]*ai.IncidentCoordinator
+	incidentRecorders    map[string]*metrics.IncidentRecorder
 
 	// Investigation orchestration (Patrol Autonomy)
 	chatHandler         *AIHandler                      // Chat service handler for investigations
@@ -88,6 +103,77 @@ type AISettingsHandler struct {
 
 	// Discovery store for deep infrastructure discovery
 	discoveryStore *servicediscovery.Store
+}
+
+func (h *AISettingsHandler) stateRefs() (
+	*config.MultiTenantPersistence,
+	*monitoring.MultiTenantMonitor,
+	*config.Config,
+	*config.ConfigPersistence,
+	unifiedresources.ReadState,
+	ai.UnifiedResourceProvider,
+) {
+	h.stateMu.RLock()
+	defer h.stateMu.RUnlock()
+	return h.mtPersistence, h.mtMonitor, h.legacyConfig, h.legacyPersistence, h.readState, h.unifiedResourceProvider
+}
+
+type aiSettingsProviderSnapshot struct {
+	legacyAIService         *ai.Service
+	stateProvider           ai.StateProvider
+	metadataProvider        ai.MetadataProvider
+	patrolThresholdProvider ai.ThresholdProvider
+	metricsHistoryProvider  ai.MetricsHistoryProvider
+	baselineStore           *ai.BaselineStore
+	changeDetector          *ai.ChangeDetector
+	remediationLog          *ai.RemediationLog
+	incidentStore           *memory.IncidentStore
+	patternDetector         *ai.PatternDetector
+	correlationDetector     *ai.CorrelationDetector
+	discoveryStore          *servicediscovery.Store
+	licenseHandlers         *LicenseHandlers
+	chatHandler             *AIHandler
+}
+
+type tenantMonitorStateProvider struct {
+	mtMonitor *monitoring.MultiTenantMonitor
+	orgID     string
+}
+
+func (p *tenantMonitorStateProvider) GetState() models.StateSnapshot {
+	if p == nil || p.mtMonitor == nil {
+		return models.StateSnapshot{}
+	}
+	monitor, err := p.mtMonitor.GetMonitor(p.orgID)
+	if err != nil {
+		log.Warn().Err(err).Str("org_id", p.orgID).Msg("Failed to resolve tenant monitor for state provider")
+		return models.StateSnapshot{}
+	}
+	if monitor == nil {
+		return models.StateSnapshot{}
+	}
+	return monitor.GetState()
+}
+
+func (h *AISettingsHandler) providerSnapshot() aiSettingsProviderSnapshot {
+	h.stateMu.RLock()
+	defer h.stateMu.RUnlock()
+	return aiSettingsProviderSnapshot{
+		legacyAIService:         h.legacyAIService,
+		stateProvider:           h.stateProvider,
+		metadataProvider:        h.metadataProvider,
+		patrolThresholdProvider: h.patrolThresholdProvider,
+		metricsHistoryProvider:  h.metricsHistoryProvider,
+		baselineStore:           h.baselineStore,
+		changeDetector:          h.changeDetector,
+		remediationLog:          h.remediationLog,
+		incidentStore:           h.incidentStore,
+		patternDetector:         h.patternDetector,
+		correlationDetector:     h.correlationDetector,
+		discoveryStore:          h.discoveryStore,
+		licenseHandlers:         h.licenseHandlers,
+		chatHandler:             h.chatHandler,
+	}
 }
 
 // NewAISettingsHandler creates a new AI settings handler
@@ -116,24 +202,40 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 	}
 
 	return &AISettingsHandler{
-		mtPersistence:     mtp,
-		mtMonitor:         mtm,
-		legacyConfig:      defaultConfig,
-		legacyPersistence: defaultPersistence,
-		legacyAIService:   defaultAIService,
-		aiServices:        make(map[string]*ai.Service),
-		agentServer:       agentServer,
+		mtPersistence:        mtp,
+		mtMonitor:            mtm,
+		legacyConfig:         defaultConfig,
+		legacyPersistence:    defaultPersistence,
+		legacyAIService:      defaultAIService,
+		aiServices:           make(map[string]*ai.Service),
+		agentServer:          agentServer,
+		proxmoxCorrelators:   make(map[string]*proxmox.EventCorrelator),
+		learningStores:       make(map[string]*learning.LearningStore),
+		forecastServices:     make(map[string]*forecast.Service),
+		remediationEngines:   make(map[string]*remediation.Engine),
+		incidentStores:       make(map[string]*memory.IncidentStore),
+		circuitBreakers:      make(map[string]*circuit.Breaker),
+		discoveryStores:      make(map[string]*servicediscovery.Store),
+		unifiedStores:        make(map[string]*unified.UnifiedStore),
+		alertBridges:         make(map[string]*unified.AlertBridge),
+		triggerManagers:      make(map[string]*ai.TriggerManager),
+		incidentCoordinators: make(map[string]*ai.IncidentCoordinator),
+		incidentRecorders:    make(map[string]*metrics.IncidentRecorder),
 	}
 }
 
 // GetAIService returns the underlying AI service
 func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
+	mtPersistence, _, _, _, _, _ := h.stateRefs()
+	providers := h.providerSnapshot()
+	legacyAIService := providers.legacyAIService
+
 	orgID := GetOrgID(ctx)
 	if orgID == "default" || orgID == "" {
-		return h.legacyAIService
+		return legacyAIService
 	}
-	if h.mtPersistence == nil {
-		return h.legacyAIService
+	if mtPersistence == nil {
+		return legacyAIService
 	}
 
 	h.aiServicesMu.RLock()
@@ -153,10 +255,10 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	}
 
 	// Create new service for this tenant
-	persistence, err := h.mtPersistence.GetPersistence(orgID)
+	persistence, err := mtPersistence.GetPersistence(orgID)
 	if err != nil {
 		log.Warn().Str("orgID", orgID).Err(err).Msg("Failed to get persistence for AI service")
-		return h.legacyAIService
+		return legacyAIService
 	}
 
 	svc = ai.NewService(persistence, h.agentServer)
@@ -166,56 +268,62 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	}
 
 	// Set providers on new service
-	if h.stateProvider != nil {
-		svc.SetStateProvider(h.stateProvider)
+	if stateProvider := h.stateProviderForOrg(orgID, providers.stateProvider); stateProvider != nil {
+		svc.SetStateProvider(stateProvider)
 	}
-	if h.readState != nil {
-		svc.SetReadState(h.readState)
+	if readState := h.readStateForOrg(orgID); readState != nil {
+		svc.SetReadState(readState)
 	}
-	if h.unifiedResourceProvider != nil {
-		svc.SetUnifiedResourceProvider(h.unifiedResourceProvider)
+	if provider := h.unifiedResourceProviderForOrg(orgID); provider != nil {
+		svc.SetUnifiedResourceProvider(provider)
 	}
-	if h.metadataProvider != nil {
-		svc.SetMetadataProvider(h.metadataProvider)
+	if providers.metadataProvider != nil {
+		svc.SetMetadataProvider(providers.metadataProvider)
 	}
-	if h.patrolThresholdProvider != nil {
-		svc.SetPatrolThresholdProvider(h.patrolThresholdProvider)
+	if orgID == "default" {
+		if providers.patrolThresholdProvider != nil {
+			svc.SetPatrolThresholdProvider(providers.patrolThresholdProvider)
+		}
+		if providers.metricsHistoryProvider != nil {
+			svc.SetMetricsHistoryProvider(providers.metricsHistoryProvider)
+		}
+		if providers.baselineStore != nil {
+			svc.SetBaselineStore(providers.baselineStore)
+		}
+		if providers.changeDetector != nil {
+			svc.SetChangeDetector(providers.changeDetector)
+		}
+		if providers.remediationLog != nil {
+			svc.SetRemediationLog(providers.remediationLog)
+		}
 	}
-	if h.metricsHistoryProvider != nil {
-		svc.SetMetricsHistoryProvider(h.metricsHistoryProvider)
+	if incidentStore := h.GetIncidentStoreForOrg(orgID); incidentStore != nil {
+		svc.SetIncidentStore(incidentStore)
+	} else if orgID == "default" && providers.incidentStore != nil {
+		svc.SetIncidentStore(providers.incidentStore)
 	}
-	if h.baselineStore != nil {
-		svc.SetBaselineStore(h.baselineStore)
+	if orgID == "default" {
+		if providers.patternDetector != nil {
+			svc.SetPatternDetector(providers.patternDetector)
+		}
+		if providers.correlationDetector != nil {
+			svc.SetCorrelationDetector(providers.correlationDetector)
+		}
 	}
-	if h.changeDetector != nil {
-		svc.SetChangeDetector(h.changeDetector)
-	}
-	if h.remediationLog != nil {
-		svc.SetRemediationLog(h.remediationLog)
-	}
-	if h.incidentStore != nil {
-		svc.SetIncidentStore(h.incidentStore)
-	}
-	if h.patternDetector != nil {
-		svc.SetPatternDetector(h.patternDetector)
-	}
-	if h.correlationDetector != nil {
-		svc.SetCorrelationDetector(h.correlationDetector)
-	}
-	if h.discoveryStore != nil {
-		svc.SetDiscoveryStore(h.discoveryStore)
+	if providers.discoveryStore != nil {
+		svc.SetDiscoveryStore(providers.discoveryStore)
 	}
 
 	// Set license checker if handler available
-	if h.licenseHandlers != nil {
+	if providers.licenseHandlers != nil {
 		// Used context to resolve tenant license service
-		if licSvc, _, err := h.licenseHandlers.getTenantComponents(ctx); err == nil {
+		if licSvc, _, err := providers.licenseHandlers.getTenantComponents(ctx); err == nil {
 			svc.SetLicenseChecker(licSvc)
 		}
 	}
 
 	// Set up investigation orchestrator if chat handler is available
-	if h.chatHandler != nil {
+	if providers.chatHandler != nil {
 		h.setupInvestigationOrchestrator(orgID, svc)
 	}
 
@@ -225,45 +333,63 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 
 // RemoveTenantService removes the AI settings service for a specific tenant.
 func (h *AISettingsHandler) RemoveTenantService(orgID string) {
+	orgID = strings.TrimSpace(orgID)
 	if orgID == "default" || orgID == "" {
 		return
 	}
 
 	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
+	svc := h.aiServices[orgID]
 	delete(h.aiServices, orgID)
+	h.aiServicesMu.Unlock()
+	if svc != nil {
+		svc.StopPatrol()
+	}
+
+	h.RemoveTenantIntelligence(orgID)
+
+	h.investigationMu.Lock()
+	delete(h.investigationStores, orgID)
+	h.investigationMu.Unlock()
+
 	log.Debug().Str("orgID", orgID).Msg("Removed AI settings service for tenant")
 }
 
 // getConfig returns the config for the current context
 func (h *AISettingsHandler) getConfig(ctx context.Context) *config.Config {
+	_, mtMonitor, legacyConfig, _, _, _ := h.stateRefs()
 	orgID := GetOrgID(ctx)
-	if h.mtMonitor != nil {
-		if m, err := h.mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+	if mtMonitor != nil {
+		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
 			return m.GetConfig()
 		}
 	}
-	return h.legacyConfig
+	return legacyConfig
 }
 
 // GetPersistence returns the persistence for the current context
 func (h *AISettingsHandler) getPersistence(ctx context.Context) *config.ConfigPersistence {
+	mtPersistence, _, _, legacyPersistence, _, _ := h.stateRefs()
 	orgID := GetOrgID(ctx)
-	if h.mtPersistence != nil {
-		if p, err := h.mtPersistence.GetPersistence(orgID); err == nil {
+	if mtPersistence != nil {
+		if p, err := mtPersistence.GetPersistence(orgID); err == nil {
 			return p
 		}
 	}
-	return h.legacyPersistence
+	return legacyPersistence
 }
 
 // SetMultiTenantPersistence updates the persistence manager
 func (h *AISettingsHandler) SetMultiTenantPersistence(mtp *config.MultiTenantPersistence) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
 	h.mtPersistence = mtp
 }
 
 // SetMultiTenantMonitor updates the monitor manager
 func (h *AISettingsHandler) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
 	h.mtMonitor = mtm
 }
 
@@ -272,6 +398,8 @@ func (h *AISettingsHandler) SetConfig(cfg *config.Config) {
 	if cfg == nil {
 		return
 	}
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
 	h.legacyConfig = cfg
 }
 
@@ -298,12 +426,19 @@ func (h *AISettingsHandler) setSSECORSHeaders(w http.ResponseWriter, r *http.Req
 
 // SetStateProvider sets the state provider for infrastructure context
 func (h *AISettingsHandler) SetStateProvider(sp ai.StateProvider) {
+	h.stateMu.Lock()
 	h.stateProvider = sp
-	h.legacyAIService.SetStateProvider(sp)
+	legacyAIService := h.legacyAIService
+	h.stateMu.Unlock()
+	if legacyAIService != nil {
+		legacyAIService.SetStateProvider(sp)
+	}
 
 	h.aiServicesMu.Lock()
-	for _, svc := range h.aiServices {
-		svc.SetStateProvider(sp)
+	for orgID, svc := range h.aiServices {
+		if provider := h.stateProviderForOrg(orgID, sp); provider != nil {
+			svc.SetStateProvider(provider)
+		}
 	}
 	h.aiServicesMu.Unlock()
 
@@ -311,8 +446,8 @@ func (h *AISettingsHandler) SetStateProvider(sp ai.StateProvider) {
 	// Try to set up the investigation orchestrator if chat handler is ready.
 	// Note: This usually fails because chat service isn't started yet.
 	// The orchestrator will be wired via WireOrchestratorAfterChatStart() instead.
-	if h.chatHandler != nil {
-		h.setupInvestigationOrchestrator("default", h.legacyAIService)
+	if legacyAIService != nil {
+		h.setupInvestigationOrchestrator("default", legacyAIService)
 		h.aiServicesMu.RLock()
 		for orgID, svc := range h.aiServices {
 			h.setupInvestigationOrchestrator(orgID, svc)
@@ -323,7 +458,68 @@ func (h *AISettingsHandler) SetStateProvider(sp ai.StateProvider) {
 
 // GetStateProvider returns the state provider for infrastructure context
 func (h *AISettingsHandler) GetStateProvider() ai.StateProvider {
+	h.stateMu.RLock()
+	defer h.stateMu.RUnlock()
 	return h.stateProvider
+}
+
+func (h *AISettingsHandler) stateProviderForOrg(orgID string, fallback ai.StateProvider) ai.StateProvider {
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" || orgID == "default" {
+		return fallback
+	}
+	if h == nil || h.mtMonitor == nil {
+		// Security: never fall back to default-org provider for non-default orgs.
+		return nil
+	}
+	return &tenantMonitorStateProvider{
+		mtMonitor: h.mtMonitor,
+		orgID:     orgID,
+	}
+}
+
+func (h *AISettingsHandler) readStateForOrg(orgID string) unifiedresources.ReadState {
+	if h == nil {
+		return nil
+	}
+	_, mtMonitor, _, _, fallbackReadState, _ := h.stateRefs()
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		orgID = "default"
+	}
+
+	if mtMonitor != nil {
+		if monitor, err := mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
+			if readState := monitor.GetUnifiedReadState(); readState != nil {
+				return readState
+			}
+		}
+	}
+
+	return fallbackReadState
+}
+
+func (h *AISettingsHandler) unifiedResourceProviderForOrg(orgID string) ai.UnifiedResourceProvider {
+	if h == nil {
+		return nil
+	}
+	_, mtMonitor, _, _, _, fallbackProvider := h.stateRefs()
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		orgID = "default"
+	}
+
+	if mtMonitor != nil {
+		if monitor, err := mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
+			if readState := monitor.GetUnifiedReadState(); readState != nil {
+				if provider, ok := readState.(ai.UnifiedResourceProvider); ok && provider != nil {
+					return provider
+				}
+			}
+		}
+	}
+
+	return fallbackProvider
 }
 
 // SetReadState injects unified read-state context into AI services (patrol path).
@@ -331,25 +527,56 @@ func (h *AISettingsHandler) SetReadState(rs unifiedresources.ReadState) {
 	if h == nil {
 		return
 	}
+	h.stateMu.Lock()
 	h.readState = rs
+	legacyAIService := h.legacyAIService
+	h.stateMu.Unlock()
 
-	if h.legacyAIService != nil {
-		h.legacyAIService.SetReadState(rs)
+	if legacyAIService != nil {
+		legacyAIService.SetReadState(h.readStateForOrg("default"))
 	}
 
 	h.aiServicesMu.Lock()
-	for _, svc := range h.aiServices {
+	for orgID, svc := range h.aiServices {
 		if svc != nil {
-			svc.SetReadState(rs)
+			svc.SetReadState(h.readStateForOrg(orgID))
 		}
 	}
 	h.aiServicesMu.Unlock()
 }
 
+// SetUnifiedResourceProvider forwards unified-resource-native context to AI services.
+func (h *AISettingsHandler) SetUnifiedResourceProvider(urp ai.UnifiedResourceProvider) {
+	if h == nil {
+		return
+	}
+	h.stateMu.Lock()
+	h.unifiedResourceProvider = urp
+	legacyAIService := h.legacyAIService
+	h.stateMu.Unlock()
+
+	if legacyAIService != nil {
+		legacyAIService.SetUnifiedResourceProvider(h.unifiedResourceProviderForOrg("default"))
+	}
+
+	h.aiServicesMu.Lock()
+	defer h.aiServicesMu.Unlock()
+	for orgID, svc := range h.aiServices {
+		if svc != nil {
+			svc.SetUnifiedResourceProvider(h.unifiedResourceProviderForOrg(orgID))
+		}
+	}
+}
+
 // SetMetadataProvider sets the metadata provider for AI URL discovery
 func (h *AISettingsHandler) SetMetadataProvider(mp ai.MetadataProvider) {
+	h.stateMu.Lock()
 	h.metadataProvider = mp
-	h.legacyAIService.SetMetadataProvider(mp)
+	legacyAIService := h.legacyAIService
+	h.stateMu.Unlock()
+	if legacyAIService != nil {
+		legacyAIService.SetMetadataProvider(mp)
+	}
 
 	h.aiServicesMu.Lock()
 	defer h.aiServicesMu.Unlock()
@@ -370,13 +597,12 @@ func (h *AISettingsHandler) IsAIEnabled(ctx context.Context) bool {
 
 // SetPatrolThresholdProvider sets the threshold provider for the patrol service
 func (h *AISettingsHandler) SetPatrolThresholdProvider(provider ai.ThresholdProvider) {
+	h.stateMu.Lock()
 	h.patrolThresholdProvider = provider
-	h.legacyAIService.SetPatrolThresholdProvider(provider)
-
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
-		svc.SetPatrolThresholdProvider(provider)
+	legacyAIService := h.legacyAIService
+	h.stateMu.Unlock()
+	if legacyAIService != nil {
+		legacyAIService.SetPatrolThresholdProvider(provider)
 	}
 }
 
@@ -430,215 +656,884 @@ func (h *AISettingsHandler) SetPatrolRunHistoryPersistence(persistence ai.Patrol
 
 // SetMetricsHistoryProvider sets the metrics history provider for enriched AI context
 func (h *AISettingsHandler) SetMetricsHistoryProvider(provider ai.MetricsHistoryProvider) {
+	h.stateMu.Lock()
 	h.metricsHistoryProvider = provider
-	h.legacyAIService.SetMetricsHistoryProvider(provider)
-
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
-		svc.SetMetricsHistoryProvider(provider)
+	legacyAIService := h.legacyAIService
+	h.stateMu.Unlock()
+	if legacyAIService != nil {
+		legacyAIService.SetMetricsHistoryProvider(provider)
 	}
 }
 
 // SetBaselineStore sets the baseline store for anomaly detection
 func (h *AISettingsHandler) SetBaselineStore(store *ai.BaselineStore) {
+	h.stateMu.Lock()
 	h.baselineStore = store
-	h.legacyAIService.SetBaselineStore(store)
-
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
-		svc.SetBaselineStore(store)
+	legacyAIService := h.legacyAIService
+	h.stateMu.Unlock()
+	if legacyAIService != nil {
+		legacyAIService.SetBaselineStore(store)
 	}
 }
 
 // SetChangeDetector sets the change detector for operational memory
 func (h *AISettingsHandler) SetChangeDetector(detector *ai.ChangeDetector) {
+	h.stateMu.Lock()
 	h.changeDetector = detector
-	h.legacyAIService.SetChangeDetector(detector)
-
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
-		svc.SetChangeDetector(detector)
+	legacyAIService := h.legacyAIService
+	h.stateMu.Unlock()
+	if legacyAIService != nil {
+		legacyAIService.SetChangeDetector(detector)
 	}
 }
 
 // SetRemediationLog sets the remediation log for tracking fix attempts
 func (h *AISettingsHandler) SetRemediationLog(remLog *ai.RemediationLog) {
+	h.stateMu.Lock()
 	h.remediationLog = remLog
-	h.legacyAIService.SetRemediationLog(remLog)
-
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
-		svc.SetRemediationLog(remLog)
+	legacyAIService := h.legacyAIService
+	h.stateMu.Unlock()
+	if legacyAIService != nil {
+		legacyAIService.SetRemediationLog(remLog)
 	}
 }
 
-// SetIncidentStore sets the incident store for alert timelines.
+// SetIncidentStore sets the incident store for the default org.
 func (h *AISettingsHandler) SetIncidentStore(store *memory.IncidentStore) {
-	h.incidentStore = store
-	h.legacyAIService.SetIncidentStore(store)
+	h.SetIncidentStoreForOrg("default", store)
+}
 
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
+// SetIncidentStoreForOrg sets the incident store for alert timelines for an org.
+func (h *AISettingsHandler) SetIncidentStoreForOrg(orgID string, store *memory.IncidentStore) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if store == nil {
+		delete(h.incidentStores, orgID)
+	} else {
+		h.incidentStores[orgID] = store
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.stateMu.Lock()
+		h.incidentStore = store
+		legacyAIService := h.legacyAIService
+		h.stateMu.Unlock()
+		if legacyAIService != nil {
+			legacyAIService.SetIncidentStore(store)
+		}
+	}
+
+	h.aiServicesMu.RLock()
+	svc := h.aiServices[orgID]
+	h.aiServicesMu.RUnlock()
+	if svc != nil {
 		svc.SetIncidentStore(store)
 	}
 }
 
+// GetIncidentStoreForOrg returns the incident store for an org.
+func (h *AISettingsHandler) GetIncidentStoreForOrg(orgID string) *memory.IncidentStore {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if store := h.incidentStores[orgID]; store != nil {
+		h.intelligenceMu.RUnlock()
+		return store
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		h.stateMu.RLock()
+		store := h.incidentStore
+		h.stateMu.RUnlock()
+		return store
+	}
+	return nil
+}
+
 // SetPatternDetector sets the pattern detector for failure prediction
 func (h *AISettingsHandler) SetPatternDetector(detector *ai.PatternDetector) {
+	h.stateMu.Lock()
 	h.patternDetector = detector
-	h.legacyAIService.SetPatternDetector(detector)
-
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
-		svc.SetPatternDetector(detector)
+	legacyAIService := h.legacyAIService
+	h.stateMu.Unlock()
+	if legacyAIService != nil {
+		legacyAIService.SetPatternDetector(detector)
 	}
 }
 
 // SetCorrelationDetector sets the correlation detector for multi-resource correlation
 func (h *AISettingsHandler) SetCorrelationDetector(detector *ai.CorrelationDetector) {
+	h.stateMu.Lock()
 	h.correlationDetector = detector
-	h.legacyAIService.SetCorrelationDetector(detector)
-
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
-		svc.SetCorrelationDetector(detector)
+	legacyAIService := h.legacyAIService
+	h.stateMu.Unlock()
+	if legacyAIService != nil {
+		legacyAIService.SetCorrelationDetector(detector)
 	}
 }
 
-// SetCircuitBreaker sets the circuit breaker for resilient patrol
+// SetCircuitBreaker sets the circuit breaker for the default org.
 func (h *AISettingsHandler) SetCircuitBreaker(breaker *circuit.Breaker) {
-	h.circuitBreaker = breaker
+	h.SetCircuitBreakerForOrg("default", breaker)
 }
 
-// GetCircuitBreaker returns the circuit breaker
+// SetCircuitBreakerForOrg sets the circuit breaker for an org.
+func (h *AISettingsHandler) SetCircuitBreakerForOrg(orgID string, breaker *circuit.Breaker) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if breaker == nil {
+		delete(h.circuitBreakers, orgID)
+	} else {
+		h.circuitBreakers[orgID] = breaker
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.circuitBreaker = breaker
+	}
+}
+
+// GetCircuitBreaker returns the circuit breaker for the default org.
 func (h *AISettingsHandler) GetCircuitBreaker() *circuit.Breaker {
-	return h.circuitBreaker
+	return h.GetCircuitBreakerForOrg("default")
 }
 
-// SetLearningStore sets the learning store for feedback learning
+// GetCircuitBreakerForOrg returns the circuit breaker for an org.
+func (h *AISettingsHandler) GetCircuitBreakerForOrg(orgID string) *circuit.Breaker {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if breaker := h.circuitBreakers[orgID]; breaker != nil {
+		h.intelligenceMu.RUnlock()
+		return breaker
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.circuitBreaker
+	}
+	return nil
+}
+
+// SetLearningStore sets the learning store for the default org.
 func (h *AISettingsHandler) SetLearningStore(store *learning.LearningStore) {
-	h.learningStore = store
+	h.SetLearningStoreForOrg("default", store)
 }
 
-// GetLearningStore returns the learning store
+// SetLearningStoreForOrg sets the learning store for an org.
+func (h *AISettingsHandler) SetLearningStoreForOrg(orgID string, store *learning.LearningStore) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if store == nil {
+		delete(h.learningStores, orgID)
+	} else {
+		h.learningStores[orgID] = store
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.learningStore = store
+	}
+}
+
+// GetLearningStore returns the learning store for the default org.
 func (h *AISettingsHandler) GetLearningStore() *learning.LearningStore {
-	return h.learningStore
+	return h.GetLearningStoreForOrg("default")
 }
 
-// SetForecastService sets the forecast service for trend forecasting
+// GetLearningStoreForOrg returns the learning store for an org.
+func (h *AISettingsHandler) GetLearningStoreForOrg(orgID string) *learning.LearningStore {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if store := h.learningStores[orgID]; store != nil {
+		h.intelligenceMu.RUnlock()
+		return store
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.learningStore
+	}
+	return nil
+}
+
+// SetForecastService sets the forecast service for the default org.
 func (h *AISettingsHandler) SetForecastService(svc *forecast.Service) {
-	h.forecastService = svc
+	h.SetForecastServiceForOrg("default", svc)
 }
 
-// GetForecastService returns the forecast service
+// SetForecastServiceForOrg sets the forecast service for an org.
+func (h *AISettingsHandler) SetForecastServiceForOrg(orgID string, svc *forecast.Service) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if svc == nil {
+		delete(h.forecastServices, orgID)
+	} else {
+		h.forecastServices[orgID] = svc
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.forecastService = svc
+	}
+}
+
+// GetForecastService returns the forecast service for the default org.
 func (h *AISettingsHandler) GetForecastService() *forecast.Service {
-	return h.forecastService
+	return h.GetForecastServiceForOrg("default")
+}
+
+// GetForecastServiceForOrg returns the forecast service for an org.
+func (h *AISettingsHandler) GetForecastServiceForOrg(orgID string) *forecast.Service {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if svc := h.forecastServices[orgID]; svc != nil {
+		h.intelligenceMu.RUnlock()
+		return svc
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.forecastService
+	}
+	return nil
+}
+
+func normalizeAIIntelligenceOrgID(orgID string) string {
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return "default"
+	}
+	return orgID
+}
+
+func (h *AISettingsHandler) ensureIntelligenceMapsLocked() {
+	if h.proxmoxCorrelators == nil {
+		h.proxmoxCorrelators = make(map[string]*proxmox.EventCorrelator)
+	}
+	if h.learningStores == nil {
+		h.learningStores = make(map[string]*learning.LearningStore)
+	}
+	if h.forecastServices == nil {
+		h.forecastServices = make(map[string]*forecast.Service)
+	}
+	if h.remediationEngines == nil {
+		h.remediationEngines = make(map[string]*remediation.Engine)
+	}
+	if h.incidentStores == nil {
+		h.incidentStores = make(map[string]*memory.IncidentStore)
+	}
+	if h.circuitBreakers == nil {
+		h.circuitBreakers = make(map[string]*circuit.Breaker)
+	}
+	if h.discoveryStores == nil {
+		h.discoveryStores = make(map[string]*servicediscovery.Store)
+	}
+	if h.alertBridges == nil {
+		h.alertBridges = make(map[string]*unified.AlertBridge)
+	}
+	if h.unifiedStores == nil {
+		h.unifiedStores = make(map[string]*unified.UnifiedStore)
+	}
+	if h.triggerManagers == nil {
+		h.triggerManagers = make(map[string]*ai.TriggerManager)
+	}
+	if h.incidentCoordinators == nil {
+		h.incidentCoordinators = make(map[string]*ai.IncidentCoordinator)
+	}
+	if h.incidentRecorders == nil {
+		h.incidentRecorders = make(map[string]*metrics.IncidentRecorder)
+	}
+}
+
+// SetProxmoxCorrelatorForOrg sets the Proxmox event correlator for an org.
+func (h *AISettingsHandler) SetProxmoxCorrelatorForOrg(orgID string, correlator *proxmox.EventCorrelator) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if correlator == nil {
+		delete(h.proxmoxCorrelators, orgID)
+	} else {
+		h.proxmoxCorrelators[orgID] = correlator
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.proxmoxCorrelator = correlator
+	}
 }
 
 // SetProxmoxCorrelator sets the Proxmox event correlator
 func (h *AISettingsHandler) SetProxmoxCorrelator(correlator *proxmox.EventCorrelator) {
-	h.proxmoxCorrelator = correlator
+	h.SetProxmoxCorrelatorForOrg("default", correlator)
+}
+
+// GetProxmoxCorrelatorForOrg returns the Proxmox event correlator for an org.
+func (h *AISettingsHandler) GetProxmoxCorrelatorForOrg(orgID string) *proxmox.EventCorrelator {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if correlator := h.proxmoxCorrelators[orgID]; correlator != nil {
+		h.intelligenceMu.RUnlock()
+		return correlator
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.proxmoxCorrelator
+	}
+	return nil
 }
 
 // GetProxmoxCorrelator returns the Proxmox event correlator
 func (h *AISettingsHandler) GetProxmoxCorrelator() *proxmox.EventCorrelator {
-	return h.proxmoxCorrelator
+	return h.GetProxmoxCorrelatorForOrg("default")
 }
 
-// SetRemediationEngine sets the remediation engine for AI-guided fixes
+// SetRemediationEngine sets the remediation engine for the default org.
 func (h *AISettingsHandler) SetRemediationEngine(engine *remediation.Engine) {
-	h.remediationEngine = engine
+	h.SetRemediationEngineForOrg("default", engine)
 }
 
-// GetRemediationEngine returns the remediation engine
-func (h *AISettingsHandler) GetRemediationEngine() *remediation.Engine {
-	return h.remediationEngine
-}
-
-// SetUnifiedStore sets the unified store
-func (h *AISettingsHandler) SetUnifiedStore(store *unified.UnifiedStore) {
-	h.unifiedStore = store
-}
-
-// GetUnifiedStore returns the unified store
-func (h *AISettingsHandler) GetUnifiedStore() *unified.UnifiedStore {
-	return h.unifiedStore
-}
-
-// SetDiscoveryStore sets the discovery store for deep infrastructure discovery
-func (h *AISettingsHandler) SetDiscoveryStore(store *servicediscovery.Store) {
-	h.discoveryStore = store
-	// Also set on legacy service if it exists
-	if h.legacyAIService != nil {
-		h.legacyAIService.SetDiscoveryStore(store)
+// SetRemediationEngineForOrg sets the remediation engine for an org.
+func (h *AISettingsHandler) SetRemediationEngineForOrg(orgID string, engine *remediation.Engine) {
+	if h == nil {
+		return
 	}
-	// Set on all existing tenant services
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if engine == nil {
+		delete(h.remediationEngines, orgID)
+	} else {
+		h.remediationEngines[orgID] = engine
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.remediationEngine = engine
+	}
+}
+
+// GetRemediationEngine returns the remediation engine for the default org.
+func (h *AISettingsHandler) GetRemediationEngine() *remediation.Engine {
+	return h.GetRemediationEngineForOrg("default")
+}
+
+// GetRemediationEngineForOrg returns the remediation engine for an org.
+func (h *AISettingsHandler) GetRemediationEngineForOrg(orgID string) *remediation.Engine {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if engine := h.remediationEngines[orgID]; engine != nil {
+		h.intelligenceMu.RUnlock()
+		return engine
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.remediationEngine
+	}
+	return nil
+}
+
+// SetUnifiedStore sets the unified store for the default org.
+func (h *AISettingsHandler) SetUnifiedStore(store *unified.UnifiedStore) {
+	h.SetUnifiedStoreForOrg("default", store)
+}
+
+// SetUnifiedStoreForOrg sets the unified store for an org.
+func (h *AISettingsHandler) SetUnifiedStoreForOrg(orgID string, store *unified.UnifiedStore) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if store == nil {
+		delete(h.unifiedStores, orgID)
+	} else {
+		h.unifiedStores[orgID] = store
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.unifiedStore = store
+	}
+}
+
+// GetUnifiedStore returns the unified store for the default org.
+func (h *AISettingsHandler) GetUnifiedStore() *unified.UnifiedStore {
+	return h.GetUnifiedStoreForOrg("default")
+}
+
+// GetUnifiedStoreForOrg returns the unified store for an org.
+func (h *AISettingsHandler) GetUnifiedStoreForOrg(orgID string) *unified.UnifiedStore {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if store := h.unifiedStores[orgID]; store != nil {
+		h.intelligenceMu.RUnlock()
+		return store
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.unifiedStore
+	}
+	return nil
+}
+
+// SetDiscoveryStore sets the discovery store for the default org.
+func (h *AISettingsHandler) SetDiscoveryStore(store *servicediscovery.Store) {
+	h.SetDiscoveryStoreForOrg("default", store)
+}
+
+// SetDiscoveryStoreForOrg sets the discovery store for deep infrastructure discovery for an org.
+func (h *AISettingsHandler) SetDiscoveryStoreForOrg(orgID string, store *servicediscovery.Store) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if store == nil {
+		delete(h.discoveryStores, orgID)
+	} else {
+		h.discoveryStores[orgID] = store
+	}
+	h.intelligenceMu.Unlock()
+
+	if orgID == "default" {
+		h.stateMu.Lock()
+		h.discoveryStore = store
+		legacyAIService := h.legacyAIService
+		h.stateMu.Unlock()
+		if legacyAIService != nil {
+			legacyAIService.SetDiscoveryStore(store)
+		}
+	}
+
 	h.aiServicesMu.RLock()
-	defer h.aiServicesMu.RUnlock()
-	for _, svc := range h.aiServices {
+	svc := h.aiServices[orgID]
+	h.aiServicesMu.RUnlock()
+	if svc != nil {
 		svc.SetDiscoveryStore(store)
 	}
 }
 
-// GetDiscoveryStore returns the discovery store
+// GetDiscoveryStore returns the discovery store for the default org.
 func (h *AISettingsHandler) GetDiscoveryStore() *servicediscovery.Store {
-	return h.discoveryStore
+	return h.GetDiscoveryStoreForOrg("default")
+}
+
+// GetDiscoveryStoreForOrg returns the discovery store for an org.
+func (h *AISettingsHandler) GetDiscoveryStoreForOrg(orgID string) *servicediscovery.Store {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if store := h.discoveryStores[orgID]; store != nil {
+		h.intelligenceMu.RUnlock()
+		return store
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		h.stateMu.RLock()
+		store := h.discoveryStore
+		h.stateMu.RUnlock()
+		return store
+	}
+	return nil
 }
 
 // SetAlertBridge sets the alert bridge
 func (h *AISettingsHandler) SetAlertBridge(bridge *unified.AlertBridge) {
-	h.alertBridge = bridge
+	h.SetAlertBridgeForOrg("default", bridge)
+}
+
+// SetAlertBridgeForOrg sets the alert bridge for an org.
+func (h *AISettingsHandler) SetAlertBridgeForOrg(orgID string, bridge *unified.AlertBridge) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if bridge == nil {
+		delete(h.alertBridges, orgID)
+	} else {
+		h.alertBridges[orgID] = bridge
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.alertBridge = bridge
+	}
 }
 
 // GetAlertBridge returns the alert bridge
 func (h *AISettingsHandler) GetAlertBridge() *unified.AlertBridge {
-	return h.alertBridge
+	return h.GetAlertBridgeForOrg("default")
+}
+
+// GetAlertBridgeForOrg returns the alert bridge for an org.
+func (h *AISettingsHandler) GetAlertBridgeForOrg(orgID string) *unified.AlertBridge {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if bridge := h.alertBridges[orgID]; bridge != nil {
+		h.intelligenceMu.RUnlock()
+		return bridge
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.alertBridge
+	}
+	return nil
 }
 
 // SetTriggerManager sets the event-driven patrol trigger manager
 func (h *AISettingsHandler) SetTriggerManager(tm *ai.TriggerManager) {
-	h.triggerManager = tm
+	h.SetTriggerManagerForOrg("default", tm)
+}
+
+// SetTriggerManagerForOrg sets the event-driven patrol trigger manager for an org.
+func (h *AISettingsHandler) SetTriggerManagerForOrg(orgID string, tm *ai.TriggerManager) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if tm == nil {
+		delete(h.triggerManagers, orgID)
+	} else {
+		h.triggerManagers[orgID] = tm
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.triggerManager = tm
+	}
 }
 
 // GetTriggerManager returns the event-driven patrol trigger manager
 func (h *AISettingsHandler) GetTriggerManager() *ai.TriggerManager {
-	return h.triggerManager
+	return h.GetTriggerManagerForOrg("default")
+}
+
+// GetTriggerManagerForOrg returns the event-driven patrol trigger manager for an org.
+func (h *AISettingsHandler) GetTriggerManagerForOrg(orgID string) *ai.TriggerManager {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if tm := h.triggerManagers[orgID]; tm != nil {
+		h.intelligenceMu.RUnlock()
+		return tm
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.triggerManager
+	}
+	return nil
 }
 
 // SetIncidentCoordinator sets the incident recording coordinator
 func (h *AISettingsHandler) SetIncidentCoordinator(coordinator *ai.IncidentCoordinator) {
-	h.incidentCoordinator = coordinator
+	h.SetIncidentCoordinatorForOrg("default", coordinator)
+}
+
+// SetIncidentCoordinatorForOrg sets the incident recording coordinator for an org.
+func (h *AISettingsHandler) SetIncidentCoordinatorForOrg(orgID string, coordinator *ai.IncidentCoordinator) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if coordinator == nil {
+		delete(h.incidentCoordinators, orgID)
+	} else {
+		h.incidentCoordinators[orgID] = coordinator
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.incidentCoordinator = coordinator
+	}
 }
 
 // GetIncidentCoordinator returns the incident recording coordinator
 func (h *AISettingsHandler) GetIncidentCoordinator() *ai.IncidentCoordinator {
-	return h.incidentCoordinator
+	return h.GetIncidentCoordinatorForOrg("default")
+}
+
+// GetIncidentCoordinatorForOrg returns the incident recording coordinator for an org.
+func (h *AISettingsHandler) GetIncidentCoordinatorForOrg(orgID string) *ai.IncidentCoordinator {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if coordinator := h.incidentCoordinators[orgID]; coordinator != nil {
+		h.intelligenceMu.RUnlock()
+		return coordinator
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.incidentCoordinator
+	}
+	return nil
 }
 
 // SetIncidentRecorder sets the high-frequency incident recorder
 func (h *AISettingsHandler) SetIncidentRecorder(recorder *metrics.IncidentRecorder) {
-	h.incidentRecorder = recorder
+	h.SetIncidentRecorderForOrg("default", recorder)
+}
+
+// SetIncidentRecorderForOrg sets the high-frequency incident recorder for an org.
+func (h *AISettingsHandler) SetIncidentRecorderForOrg(orgID string, recorder *metrics.IncidentRecorder) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if recorder == nil {
+		delete(h.incidentRecorders, orgID)
+	} else {
+		h.incidentRecorders[orgID] = recorder
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.incidentRecorder = recorder
+	}
 }
 
 // GetIncidentRecorder returns the high-frequency incident recorder
 func (h *AISettingsHandler) GetIncidentRecorder() *metrics.IncidentRecorder {
-	return h.incidentRecorder
+	return h.GetIncidentRecorderForOrg("default")
+}
+
+// GetIncidentRecorderForOrg returns the high-frequency incident recorder for an org.
+func (h *AISettingsHandler) GetIncidentRecorderForOrg(orgID string) *metrics.IncidentRecorder {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if recorder := h.incidentRecorders[orgID]; recorder != nil {
+		h.intelligenceMu.RUnlock()
+		return recorder
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.incidentRecorder
+	}
+	return nil
+}
+
+// ListLearningStores returns learning stores keyed by org.
+func (h *AISettingsHandler) ListLearningStores() map[string]*learning.LearningStore {
+	out := make(map[string]*learning.LearningStore)
+	if h == nil {
+		return out
+	}
+	h.intelligenceMu.RLock()
+	for orgID, store := range h.learningStores {
+		if store != nil {
+			out[orgID] = store
+		}
+	}
+	h.intelligenceMu.RUnlock()
+	if _, ok := out["default"]; !ok && h.learningStore != nil {
+		out["default"] = h.learningStore
+	}
+	return out
+}
+
+// ListAlertBridges returns alert bridges keyed by org for shutdown/cleanup flows.
+func (h *AISettingsHandler) ListAlertBridges() map[string]*unified.AlertBridge {
+	out := make(map[string]*unified.AlertBridge)
+	if h == nil {
+		return out
+	}
+	h.intelligenceMu.RLock()
+	for orgID, bridge := range h.alertBridges {
+		if bridge != nil {
+			out[orgID] = bridge
+		}
+	}
+	h.intelligenceMu.RUnlock()
+	if _, ok := out["default"]; !ok && h.alertBridge != nil {
+		out["default"] = h.alertBridge
+	}
+	return out
+}
+
+// ListTriggerManagers returns trigger managers keyed by org for shutdown/cleanup flows.
+func (h *AISettingsHandler) ListTriggerManagers() map[string]*ai.TriggerManager {
+	out := make(map[string]*ai.TriggerManager)
+	if h == nil {
+		return out
+	}
+	h.intelligenceMu.RLock()
+	for orgID, tm := range h.triggerManagers {
+		if tm != nil {
+			out[orgID] = tm
+		}
+	}
+	h.intelligenceMu.RUnlock()
+	if _, ok := out["default"]; !ok && h.triggerManager != nil {
+		out["default"] = h.triggerManager
+	}
+	return out
+}
+
+// ListIncidentCoordinators returns incident coordinators keyed by org.
+func (h *AISettingsHandler) ListIncidentCoordinators() map[string]*ai.IncidentCoordinator {
+	out := make(map[string]*ai.IncidentCoordinator)
+	if h == nil {
+		return out
+	}
+	h.intelligenceMu.RLock()
+	for orgID, coordinator := range h.incidentCoordinators {
+		if coordinator != nil {
+			out[orgID] = coordinator
+		}
+	}
+	h.intelligenceMu.RUnlock()
+	if _, ok := out["default"]; !ok && h.incidentCoordinator != nil {
+		out["default"] = h.incidentCoordinator
+	}
+	return out
+}
+
+// ListIncidentRecorders returns incident recorders keyed by org.
+func (h *AISettingsHandler) ListIncidentRecorders() map[string]*metrics.IncidentRecorder {
+	out := make(map[string]*metrics.IncidentRecorder)
+	if h == nil {
+		return out
+	}
+	h.intelligenceMu.RLock()
+	for orgID, recorder := range h.incidentRecorders {
+		if recorder != nil {
+			out[orgID] = recorder
+		}
+	}
+	h.intelligenceMu.RUnlock()
+	if _, ok := out["default"]; !ok && h.incidentRecorder != nil {
+		out["default"] = h.incidentRecorder
+	}
+	return out
 }
 
 // StopPatrol stops the background AI patrol service
 func (h *AISettingsHandler) StopPatrol() {
-	h.legacyAIService.StopPatrol()
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
+	if h.legacyAIService != nil {
+		h.legacyAIService.StopPatrol()
+	}
+	h.aiServicesMu.RLock()
+	services := make([]*ai.Service, 0, len(h.aiServices))
 	for _, svc := range h.aiServices {
+		if svc != nil {
+			services = append(services, svc)
+		}
+	}
+	h.aiServicesMu.RUnlock()
+	for _, svc := range services {
 		svc.StopPatrol()
+	}
+}
+
+// StopPatrolForOrg stops patrol for a single org without affecting others.
+func (h *AISettingsHandler) StopPatrolForOrg(orgID string) {
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	if orgID == "default" {
+		if h.legacyAIService != nil {
+			h.legacyAIService.StopPatrol()
+		}
+		return
+	}
+
+	h.aiServicesMu.RLock()
+	svc := h.aiServices[orgID]
+	h.aiServicesMu.RUnlock()
+	if svc != nil {
+		svc.StopPatrol()
+	}
+}
+
+// RemoveTenantIntelligence stops and removes org-scoped intelligence components.
+func (h *AISettingsHandler) RemoveTenantIntelligence(orgID string) {
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	if orgID == "default" {
+		return
+	}
+
+	var (
+		bridge      *unified.AlertBridge
+		trigger     *ai.TriggerManager
+		coordinator *ai.IncidentCoordinator
+		recorder    *metrics.IncidentRecorder
+	)
+
+	h.intelligenceMu.Lock()
+	delete(h.learningStores, orgID)
+	delete(h.forecastServices, orgID)
+	delete(h.remediationEngines, orgID)
+	delete(h.incidentStores, orgID)
+	delete(h.circuitBreakers, orgID)
+	delete(h.discoveryStores, orgID)
+	bridge = h.alertBridges[orgID]
+	trigger = h.triggerManagers[orgID]
+	coordinator = h.incidentCoordinators[orgID]
+	recorder = h.incidentRecorders[orgID]
+	delete(h.unifiedStores, orgID)
+	delete(h.alertBridges, orgID)
+	delete(h.triggerManagers, orgID)
+	delete(h.incidentCoordinators, orgID)
+	delete(h.incidentRecorders, orgID)
+	delete(h.proxmoxCorrelators, orgID)
+	h.intelligenceMu.Unlock()
+
+	if bridge != nil {
+		bridge.Stop()
+	}
+	if trigger != nil {
+		trigger.Stop()
+	}
+	if coordinator != nil {
+		coordinator.Stop()
+	}
+	if recorder != nil {
+		recorder.Stop()
 	}
 }
 
@@ -649,12 +1544,20 @@ func (h *AISettingsHandler) GetAlertTriggeredAnalyzer(ctx context.Context) *ai.A
 
 // SetLicenseHandlers sets the license handlers for Pro feature gating
 func (h *AISettingsHandler) SetLicenseHandlers(handlers *LicenseHandlers) {
+	h.stateMu.Lock()
 	h.licenseHandlers = handlers
+	legacyAIService := h.legacyAIService
+	h.stateMu.Unlock()
+	if handlers == nil {
+		return
+	}
 	// Update legacy service?
 	// legacy service needs a legacy/default license checker?
 	// We can try to get it using background context (default tenant)
 	if svc, _, err := handlers.getTenantComponents(context.Background()); err == nil {
-		h.legacyAIService.SetLicenseChecker(svc)
+		if legacyAIService != nil {
+			legacyAIService.SetLicenseChecker(svc)
+		}
 	}
 }
 
@@ -673,7 +1576,10 @@ func (h *AISettingsHandler) SetOnControlSettingsChange(callback func()) {
 // SetChatHandler sets the chat handler for investigation orchestration
 // This enables the patrol service to spawn chat sessions to investigate findings
 func (h *AISettingsHandler) SetChatHandler(chatHandler *AIHandler) {
+	h.stateMu.Lock()
 	h.chatHandler = chatHandler
+	legacyAIService := h.legacyAIService
+	h.stateMu.Unlock()
 	h.investigationMu.Lock()
 	if h.investigationStores == nil {
 		h.investigationStores = make(map[string]*investigation.Store)
@@ -683,8 +1589,8 @@ func (h *AISettingsHandler) SetChatHandler(chatHandler *AIHandler) {
 	// Wire up orchestrator for the legacy service
 	// Note: This usually fails because chat service isn't started yet.
 	// The orchestrator will be wired via WireOrchestratorAfterChatStart() instead.
-	if h.legacyAIService != nil {
-		h.setupInvestigationOrchestrator("default", h.legacyAIService)
+	if legacyAIService != nil {
+		h.setupInvestigationOrchestrator("default", legacyAIService)
 	}
 
 	// Wire up orchestrator for any existing services
@@ -699,14 +1605,18 @@ func (h *AISettingsHandler) SetChatHandler(chatHandler *AIHandler) {
 // to wire up the investigation orchestrator. This must be called after aiHandler.Start()
 // because the orchestrator needs an active chat service.
 func (h *AISettingsHandler) WireOrchestratorAfterChatStart() {
-	if h.chatHandler == nil {
+	h.stateMu.RLock()
+	hasChatHandler := h.chatHandler != nil
+	legacyAIService := h.legacyAIService
+	h.stateMu.RUnlock()
+	if !hasChatHandler {
 		log.Warn().Msg("WireOrchestratorAfterChatStart called but chatHandler is nil")
 		return
 	}
 
 	// Wire up orchestrator for the legacy service
-	if h.legacyAIService != nil {
-		h.setupInvestigationOrchestrator("default", h.legacyAIService)
+	if legacyAIService != nil {
+		h.setupInvestigationOrchestrator("default", legacyAIService)
 	}
 
 	// Wire up orchestrator for any existing services
@@ -719,7 +1629,10 @@ func (h *AISettingsHandler) WireOrchestratorAfterChatStart() {
 
 // setupInvestigationOrchestrator creates and wires the investigation orchestrator for an AI service
 func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai.Service) {
-	if h.chatHandler == nil {
+	h.stateMu.RLock()
+	chatHandler := h.chatHandler
+	h.stateMu.RUnlock()
+	if chatHandler == nil {
 		log.Debug().Str("orgID", orgID).Msg("Chat handler not set, skipping orchestrator setup")
 		return
 	}
@@ -736,10 +1649,11 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 	if !exists {
 		// Get data directory from persistence
 		var dataDir string
-		if h.legacyPersistence != nil && orgID == "default" {
-			dataDir = h.legacyPersistence.DataDir()
-		} else if h.mtPersistence != nil {
-			if p, err := h.mtPersistence.GetPersistence(orgID); err == nil {
+		mtPersistence, _, _, legacyPersistence, _, _ := h.stateRefs()
+		if legacyPersistence != nil && orgID == "default" {
+			dataDir = legacyPersistence.DataDir()
+		} else if mtPersistence != nil {
+			if p, err := mtPersistence.GetPersistence(orgID); err == nil {
 				dataDir = p.DataDir()
 			}
 		}
@@ -753,7 +1667,7 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 
 	// Get chat service for this org using org-scoped context
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, orgID)
-	chatSvc := h.chatHandler.GetService(ctx)
+	chatSvc := chatHandler.GetService(ctx)
 	if chatSvc == nil {
 		log.Warn().Str("orgID", orgID).Msg("Chat service not available for orchestrator")
 		return
@@ -3638,7 +4552,7 @@ func (h *AISettingsHandler) HandleAcknowledgeFinding(w http.ResponseWriter, r *h
 	}
 
 	// If not in patrol findings, check the unified store (for threshold alerts)
-	unifiedStore := h.GetUnifiedStore()
+	unifiedStore := h.GetUnifiedStoreForOrg(GetOrgID(r.Context()))
 	if !foundInPatrol && unifiedStore != nil {
 		unifiedFinding := unifiedStore.Get(req.FindingID)
 		if unifiedFinding != nil {
@@ -3670,8 +4584,8 @@ func (h *AISettingsHandler) HandleAcknowledgeFinding(w http.ResponseWriter, r *h
 	}
 
 	// Record to learning store
-	if h.learningStore != nil {
-		h.learningStore.RecordFeedback(learning.FeedbackRecord{
+	if learningStore := h.GetLearningStoreForOrg(GetOrgID(r.Context())); learningStore != nil {
+		learningStore.RecordFeedback(learning.FeedbackRecord{
 			FindingID:    req.FindingID,
 			FindingKey:   findingKey,
 			ResourceID:   resourceID,
@@ -3758,7 +4672,7 @@ func (h *AISettingsHandler) HandleSnoozeFinding(w http.ResponseWriter, r *http.R
 	}
 
 	// If not in patrol findings, check the unified store (for threshold alerts)
-	unifiedStore := h.GetUnifiedStore()
+	unifiedStore := h.GetUnifiedStoreForOrg(GetOrgID(r.Context()))
 	if !foundInPatrol && unifiedStore != nil {
 		unifiedFinding := unifiedStore.Get(req.FindingID)
 		if unifiedFinding != nil {
@@ -3790,8 +4704,8 @@ func (h *AISettingsHandler) HandleSnoozeFinding(w http.ResponseWriter, r *http.R
 	}
 
 	// Record to learning store
-	if h.learningStore != nil {
-		h.learningStore.RecordFeedback(learning.FeedbackRecord{
+	if learningStore := h.GetLearningStoreForOrg(GetOrgID(r.Context())); learningStore != nil {
+		learningStore.RecordFeedback(learning.FeedbackRecord{
 			FindingID:    req.FindingID,
 			FindingKey:   findingKey,
 			ResourceID:   resourceID,
@@ -3871,13 +4785,13 @@ func (h *AISettingsHandler) HandleResolveFinding(w http.ResponseWriter, r *http.
 	}
 
 	// Mirror into unified store for consistent UI state
-	if store := h.GetUnifiedStore(); store != nil {
+	if store := h.GetUnifiedStoreForOrg(GetOrgID(r.Context())); store != nil {
 		store.Resolve(req.FindingID)
 	}
 
 	// Record to learning store - manual resolve = user fixed the issue
-	if h.learningStore != nil {
-		h.learningStore.RecordFeedback(learning.FeedbackRecord{
+	if learningStore := h.GetLearningStoreForOrg(GetOrgID(r.Context())); learningStore != nil {
+		learningStore.RecordFeedback(learning.FeedbackRecord{
 			FindingID:    req.FindingID,
 			FindingKey:   finding.Key,
 			ResourceID:   resourceID,
@@ -3943,7 +4857,7 @@ func (h *AISettingsHandler) HandleSetFindingNote(w http.ResponseWriter, r *http.
 
 	// Mirror the note to the unified store immediately so it's visible
 	// without waiting for the next patrol sync cycle
-	if unifiedStore := h.GetUnifiedStore(); unifiedStore != nil {
+	if unifiedStore := h.GetUnifiedStoreForOrg(GetOrgID(r.Context())); unifiedStore != nil {
 		unifiedStore.SetUserNote(req.FindingID, req.Note)
 	}
 
@@ -4025,7 +4939,7 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 	}
 
 	// If not in patrol findings, check the unified store (for threshold alerts)
-	unifiedStore := h.GetUnifiedStore()
+	unifiedStore := h.GetUnifiedStoreForOrg(GetOrgID(r.Context()))
 	if !foundInPatrol && unifiedStore != nil {
 		unifiedFinding := unifiedStore.Get(req.FindingID)
 		if unifiedFinding != nil {
@@ -4070,8 +4984,8 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 	}
 
 	// Record to learning store
-	if h.learningStore != nil {
-		h.learningStore.RecordFeedback(learning.FeedbackRecord{
+	if learningStore := h.GetLearningStoreForOrg(GetOrgID(r.Context())); learningStore != nil {
+		learningStore.RecordFeedback(learning.FeedbackRecord{
 			FindingID:    req.FindingID,
 			FindingKey:   findingKey,
 			ResourceID:   resourceID,
@@ -4152,13 +5066,13 @@ func (h *AISettingsHandler) HandleSuppressFinding(w http.ResponseWriter, r *http
 	}
 
 	// Mirror into unified store for consistent UI state
-	if store := h.GetUnifiedStore(); store != nil {
+	if store := h.GetUnifiedStoreForOrg(GetOrgID(r.Context())); store != nil {
 		store.Dismiss(req.FindingID, "not_an_issue", "Permanently suppressed by user")
 	}
 
 	// Record to learning store - suppress is a strong "not an issue" signal
-	if h.learningStore != nil {
-		h.learningStore.RecordFeedback(learning.FeedbackRecord{
+	if learningStore := h.GetLearningStoreForOrg(GetOrgID(r.Context())); learningStore != nil {
+		learningStore.RecordFeedback(learning.FeedbackRecord{
 			FindingID:    req.FindingID,
 			FindingKey:   finding.Key,
 			ResourceID:   resourceID,
