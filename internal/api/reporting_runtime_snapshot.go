@@ -134,11 +134,7 @@ func (h *ReportingHandlers) getRuntimeStateSnapshot(ctx context.Context, orgID s
 		})
 	}
 
-	if h.resourceRegistry == nil {
-		return snapshot, true
-	}
-
-	for _, resource := range h.resourceRegistry.List() {
+	for _, resource := range monitor.GetUnifiedResources() {
 		switch resource.Type {
 		case unifiedresources.ResourceTypeStorage:
 			storageNode := resource.ParentName

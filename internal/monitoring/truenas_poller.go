@@ -24,7 +24,6 @@ const defaultTrueNASPollInterval = 60 * time.Second
 
 // TrueNASPoller manages periodic polling of configured TrueNAS connections.
 type TrueNASPoller struct {
-	registry        *unifiedresources.ResourceRegistry
 	multiTenant     *config.MultiTenantPersistence
 	recoveryManager *recoverymanager.Manager
 	mu              sync.Mutex
@@ -38,7 +37,7 @@ type TrueNASPoller struct {
 }
 
 // NewTrueNASPoller builds a new TrueNAS poller with the provided poll interval.
-func NewTrueNASPoller(registry *unifiedresources.ResourceRegistry, multiTenant *config.MultiTenantPersistence, interval time.Duration, recoveryManager *recoverymanager.Manager) *TrueNASPoller {
+func NewTrueNASPoller(multiTenant *config.MultiTenantPersistence, interval time.Duration, recoveryManager *recoverymanager.Manager) *TrueNASPoller {
 	if interval <= 0 {
 		interval = defaultTrueNASPollInterval
 	}
@@ -47,7 +46,6 @@ func NewTrueNASPoller(registry *unifiedresources.ResourceRegistry, multiTenant *
 	close(stopped)
 
 	return &TrueNASPoller{
-		registry:           registry,
 		multiTenant:        multiTenant,
 		recoveryManager:    recoveryManager,
 		providersByOrg:     make(map[string]map[string]*truenas.Provider),
@@ -373,11 +371,6 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 		p.cachedRecordsByOrg[entry.orgID][entry.id] = cloneIngestRecords(records)
 		p.mu.Unlock()
 
-		// Legacy/global registry ingestion is default-org only to avoid cross-tenant leakage.
-		if p.registry != nil && strings.TrimSpace(entry.orgID) == "default" {
-			p.registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
-		}
-
 		p.ingestRecoveryPoints(ctx, entry.orgID, entry.id, entry.provider)
 	}
 }
@@ -422,6 +415,24 @@ func (p *TrueNASPoller) ingestRecoveryPoints(ctx context.Context, orgID string, 
 // GetCurrentRecords returns the latest known TrueNAS records across active connections.
 func (p *TrueNASPoller) GetCurrentRecords() []unifiedresources.IngestRecord {
 	return p.GetCurrentRecordsForOrg("default")
+}
+
+// SupplementalRecords adapts TrueNAS records to the monitor supplemental
+// provider contract.
+func (p *TrueNASPoller) SupplementalRecords(_ *Monitor, orgID string) []unifiedresources.IngestRecord {
+	return p.GetCurrentRecordsForOrg(orgID)
+}
+
+// SnapshotOwnedSources declares source-native ingest ownership for legacy
+// snapshot suppression (default/global call path).
+func (p *TrueNASPoller) SnapshotOwnedSources() []unifiedresources.DataSource {
+	return []unifiedresources.DataSource{unifiedresources.SourceTrueNAS}
+}
+
+// SnapshotOwnedSourcesForOrg declares source-native ingest ownership for a
+// specific tenant.
+func (p *TrueNASPoller) SnapshotOwnedSourcesForOrg(string) []unifiedresources.DataSource {
+	return []unifiedresources.DataSource{unifiedresources.SourceTrueNAS}
 }
 
 // GetCurrentRecordsForOrg returns the latest known TrueNAS records for the specified org.

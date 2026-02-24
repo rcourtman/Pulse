@@ -35,8 +35,7 @@ func TestTrueNASPollerPollsConfiguredConnections(t *testing.T) {
 		t.Fatalf("SaveTrueNASConfig() error = %v", err)
 	}
 
-	registry := unifiedresources.NewRegistry(nil)
-	poller := NewTrueNASPoller(registry, mtp, 50*time.Millisecond, nil)
+	poller := NewTrueNASPoller(mtp, 50*time.Millisecond, nil)
 	poller.Start(context.Background())
 	t.Cleanup(poller.Stop)
 
@@ -45,7 +44,7 @@ func TestTrueNASPollerPollsConfiguredConnections(t *testing.T) {
 	}, "expected at least one successful TrueNAS poll cycle")
 
 	poller.Stop()
-	if !hasTrueNASHost(registry, "nas-one") {
+	if !hasTrueNASHostForOrg(poller, "default", "nas-one") {
 		t.Fatal("expected TrueNAS resources to be ingested")
 	}
 }
@@ -64,8 +63,7 @@ func TestTrueNASPollerFeatureFlagGate(t *testing.T) {
 		t.Fatalf("SaveTrueNASConfig() error = %v", err)
 	}
 
-	registry := unifiedresources.NewRegistry(nil)
-	poller := NewTrueNASPoller(registry, mtp, 50*time.Millisecond, nil)
+	poller := NewTrueNASPoller(mtp, 50*time.Millisecond, nil)
 	initialStopped := poller.stopped
 
 	poller.Start(context.Background())
@@ -104,8 +102,7 @@ func TestTrueNASPollerEnableDisableCycle(t *testing.T) {
 		t.Fatalf("SaveTrueNASConfig() error = %v", err)
 	}
 
-	registry := unifiedresources.NewRegistry(nil)
-	poller := NewTrueNASPoller(registry, mtp, 50*time.Millisecond, nil)
+	poller := NewTrueNASPoller(mtp, 50*time.Millisecond, nil)
 	poller.Start(context.Background())
 	t.Cleanup(poller.Stop)
 
@@ -114,12 +111,12 @@ func TestTrueNASPollerEnableDisableCycle(t *testing.T) {
 	}, "expected enabled poller to start and poll configured TrueNAS connection")
 
 	poller.Stop()
-	if !hasTrueNASHost(registry, "nas-enable-disable") {
+	if !hasTrueNASHostForOrg(poller, "default", "nas-enable-disable") {
 		t.Fatal("expected enabled poller to ingest TrueNAS resources")
 	}
 
 	requestCountAfterStop := mock.RequestCount()
-	resourceCountAfterStop := len(registry.List())
+	recordCountAfterStop := len(poller.GetCurrentRecordsForOrg("default"))
 
 	truenas.SetFeatureEnabled(false)
 	poller.Start(context.Background())
@@ -133,8 +130,8 @@ func TestTrueNASPollerEnableDisableCycle(t *testing.T) {
 		return time.Now().After(noPollDeadline) && mock.RequestCount() == requestCountAfterStop
 	}, "expected no additional polling requests after disable and restart attempt")
 
-	if got := len(registry.List()); got != resourceCountAfterStop {
-		t.Fatalf("expected no new resources after disable restart attempt, got before=%d after=%d", resourceCountAfterStop, got)
+	if got := len(poller.GetCurrentRecordsForOrg("default")); got != recordCountAfterStop {
+		t.Fatalf("expected no new records after disable restart attempt, got before=%d after=%d", recordCountAfterStop, got)
 	}
 }
 
@@ -152,8 +149,7 @@ func TestTrueNASPollerKillSwitchAllConnectionsRemoved(t *testing.T) {
 		t.Fatalf("SaveTrueNASConfig() error = %v", err)
 	}
 
-	registry := unifiedresources.NewRegistry(nil)
-	poller := NewTrueNASPoller(registry, mtp, 50*time.Millisecond, nil)
+	poller := NewTrueNASPoller(mtp, 50*time.Millisecond, nil)
 	poller.Start(context.Background())
 	t.Cleanup(poller.Stop)
 
@@ -229,8 +225,7 @@ func TestTrueNASPollerRecordsMetrics(t *testing.T) {
 		t.Fatalf("SaveTrueNASConfig() error = %v", err)
 	}
 
-	registry := unifiedresources.NewRegistry(nil)
-	poller := NewTrueNASPoller(registry, mtp, 50*time.Millisecond, nil)
+	poller := NewTrueNASPoller(mtp, 50*time.Millisecond, nil)
 	poller.Start(context.Background())
 	t.Cleanup(poller.Stop)
 
@@ -239,7 +234,7 @@ func TestTrueNASPollerRecordsMetrics(t *testing.T) {
 	}, "expected successful requests after initial failures")
 
 	poller.Stop()
-	if !hasTrueNASHost(registry, "metrics-host") {
+	if !hasTrueNASHostForOrg(poller, "default", "metrics-host") {
 		t.Fatal("expected TrueNAS resources to appear after initial failures")
 	}
 
@@ -271,8 +266,7 @@ func TestTrueNASPollerHandlesConnectionAddRemove(t *testing.T) {
 		t.Fatalf("SaveTrueNASConfig() initial error = %v", err)
 	}
 
-	registry := unifiedresources.NewRegistry(nil)
-	poller := NewTrueNASPoller(registry, mtp, 50*time.Millisecond, nil)
+	poller := NewTrueNASPoller(mtp, 50*time.Millisecond, nil)
 	poller.Start(context.Background())
 	t.Cleanup(poller.Stop)
 
@@ -297,10 +291,10 @@ func TestTrueNASPollerHandlesConnectionAddRemove(t *testing.T) {
 	}, "expected removed connection provider to be pruned")
 
 	poller.Stop()
-	if !hasTrueNASHost(registry, "nas-one") {
-		t.Fatal("expected first host resources to remain in registry after pruning provider")
+	if hasTrueNASHostForOrg(poller, "default", "nas-one") {
+		t.Fatal("expected first host resources to be removed after pruning provider")
 	}
-	if !hasTrueNASHost(registry, "nas-two") {
+	if !hasTrueNASHostForOrg(poller, "default", "nas-two") {
 		t.Fatal("expected second host resources to be ingested")
 	}
 }
@@ -345,8 +339,7 @@ func TestTrueNASPollerAPITimeout(t *testing.T) {
 		t.Fatalf("SaveTrueNASConfig() error = %v", err)
 	}
 
-	registry := unifiedresources.NewRegistry(nil)
-	poller := NewTrueNASPoller(registry, mtp, 50*time.Millisecond, nil)
+	poller := NewTrueNASPoller(mtp, 50*time.Millisecond, nil)
 	injectTrueNASProviderTimeout(t, poller, connection, 75*time.Millisecond)
 	poller.Start(context.Background())
 	t.Cleanup(poller.Stop)
@@ -363,7 +356,7 @@ func TestTrueNASPollerAPITimeout(t *testing.T) {
 	}, "expected at least one successful poll cycle after timeout clears")
 
 	poller.Stop()
-	if !hasTrueNASHost(registry, "timeout-host") {
+	if !hasTrueNASHostForOrg(poller, "default", "timeout-host") {
 		t.Fatal("expected poller to recover and ingest TrueNAS resources after timeout clears")
 	}
 }
@@ -388,8 +381,7 @@ func TestTrueNASPollerAuthFailure(t *testing.T) {
 		t.Fatalf("SaveTrueNASConfig() error = %v", err)
 	}
 
-	registry := unifiedresources.NewRegistry(nil)
-	poller := NewTrueNASPoller(registry, mtp, 50*time.Millisecond, nil)
+	poller := NewTrueNASPoller(mtp, 50*time.Millisecond, nil)
 	poller.Start(context.Background())
 	t.Cleanup(poller.Stop)
 
@@ -409,7 +401,7 @@ func TestTrueNASPollerAuthFailure(t *testing.T) {
 	}
 
 	poller.Stop()
-	if hasTrueNASHost(registry, "auth-failure-host") {
+	if hasTrueNASHostForOrg(poller, "default", "auth-failure-host") {
 		t.Fatal("expected no resources to be ingested when every poll fails auth")
 	}
 }
@@ -484,8 +476,7 @@ func TestTrueNASPollerStaleDataRecovery(t *testing.T) {
 		t.Fatalf("SaveTrueNASConfig() error = %v", err)
 	}
 
-	registry := unifiedresources.NewRegistry(nil)
-	poller := NewTrueNASPoller(registry, mtp, 50*time.Millisecond, nil)
+	poller := NewTrueNASPoller(mtp, 50*time.Millisecond, nil)
 	poller.Start(context.Background())
 	t.Cleanup(poller.Stop)
 
@@ -502,7 +493,7 @@ func TestTrueNASPollerStaleDataRecovery(t *testing.T) {
 	}, "expected poller to recover and ingest refreshed data after failures")
 
 	poller.Stop()
-	if !hasTrueNASHost(registry, "stale-after") {
+	if !hasTrueNASHostForOrg(poller, "default", "stale-after") {
 		t.Fatal("expected recovered TrueNAS host data to be ingested")
 	}
 }
@@ -561,8 +552,7 @@ func TestTrueNASPollerConnectionFlap(t *testing.T) {
 		t.Fatalf("SaveTrueNASConfig() error = %v", err)
 	}
 
-	registry := unifiedresources.NewRegistry(nil)
-	poller := NewTrueNASPoller(registry, mtp, 50*time.Millisecond, nil)
+	poller := NewTrueNASPoller(mtp, 50*time.Millisecond, nil)
 	poller.Start(context.Background())
 	t.Cleanup(poller.Stop)
 
@@ -584,7 +574,7 @@ func TestTrueNASPollerConnectionFlap(t *testing.T) {
 	}, "expected poller to recover ingestion after endpoint returns")
 
 	poller.Stop()
-	if !hasTrueNASHost(registry, "flap-after") {
+	if !hasTrueNASHostForOrg(poller, "default", "flap-after") {
 		t.Fatal("expected recovered endpoint data to be ingested")
 	}
 }
@@ -606,8 +596,7 @@ func TestTrueNASPollerConcurrentConfigChange(t *testing.T) {
 		t.Fatalf("SaveTrueNASConfig() initial error = %v", err)
 	}
 
-	registry := unifiedresources.NewRegistry(nil)
-	poller := NewTrueNASPoller(registry, mtp, 50*time.Millisecond, nil)
+	poller := NewTrueNASPoller(mtp, 50*time.Millisecond, nil)
 	poller.Start(context.Background())
 	t.Cleanup(poller.Stop)
 
@@ -632,7 +621,7 @@ func TestTrueNASPollerConcurrentConfigChange(t *testing.T) {
 	}, "expected provider map to converge after removing first connection")
 
 	poller.Stop()
-	if !hasTrueNASHost(registry, "config-change-two") {
+	if !hasTrueNASHostForOrg(poller, "default", "config-change-two") {
 		t.Fatal("expected second connection resources to be ingested")
 	}
 }
@@ -654,8 +643,7 @@ func TestTrueNASPollerSkipsDisabledConnections(t *testing.T) {
 		t.Fatalf("SaveTrueNASConfig() error = %v", err)
 	}
 
-	registry := unifiedresources.NewRegistry(nil)
-	poller := NewTrueNASPoller(registry, mtp, 50*time.Millisecond, nil)
+	poller := NewTrueNASPoller(mtp, 50*time.Millisecond, nil)
 	poller.Start(context.Background())
 	t.Cleanup(poller.Stop)
 
@@ -671,11 +659,56 @@ func TestTrueNASPollerSkipsDisabledConnections(t *testing.T) {
 		t.Fatalf("expected disabled connection to be skipped, got %d requests", disabled.RequestCount())
 	}
 	poller.Stop()
-	if !hasTrueNASHost(registry, "nas-enabled") {
-		t.Fatal("expected enabled connection host to be present in registry")
+	if !hasTrueNASHostForOrg(poller, "default", "nas-enabled") {
+		t.Fatal("expected enabled connection host to be present in cached records")
 	}
-	if hasTrueNASHost(registry, "nas-disabled") {
-		t.Fatal("expected disabled connection host to be absent from registry")
+	if hasTrueNASHostForOrg(poller, "default", "nas-disabled") {
+		t.Fatal("expected disabled connection host to be absent from cached records")
+	}
+}
+
+func TestTrueNASPollerCachesRecordsPerOrganization(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	defaultOrgMock := newTrueNASMockServer(t, "default-nas")
+	tenantMock := newTrueNASMockServer(t, "tenant-nas")
+	t.Cleanup(defaultOrgMock.Close)
+	t.Cleanup(tenantMock.Close)
+
+	mtp, defaultPersistence := newTestTenantPersistence(t)
+	defaultConn := trueNASInstanceForServer(t, "default-conn", defaultOrgMock.URL(), true)
+	if err := defaultPersistence.SaveTrueNASConfig([]config.TrueNASInstance{defaultConn}); err != nil {
+		t.Fatalf("SaveTrueNASConfig(default) error = %v", err)
+	}
+
+	tenantPersistence, err := mtp.GetPersistence("org-a")
+	if err != nil {
+		t.Fatalf("GetPersistence(org-a) error = %v", err)
+	}
+	tenantConn := trueNASInstanceForServer(t, "tenant-conn", tenantMock.URL(), true)
+	if err := tenantPersistence.SaveTrueNASConfig([]config.TrueNASInstance{tenantConn}); err != nil {
+		t.Fatalf("SaveTrueNASConfig(org-a) error = %v", err)
+	}
+
+	poller := NewTrueNASPoller(mtp, 50*time.Millisecond, nil)
+	poller.Start(context.Background())
+	t.Cleanup(poller.Stop)
+
+	waitForCondition(t, 2*time.Second, func() bool {
+		return defaultOrgMock.RequestCount() >= 5 && tenantMock.RequestCount() >= 5
+	}, "expected polling for both default and org-a TrueNAS connections")
+
+	poller.Stop()
+	if !hasTrueNASHostForOrg(poller, "default", "default-nas") {
+		t.Fatal("expected default org records to include default host")
+	}
+	if hasTrueNASHostForOrg(poller, "default", "tenant-nas") {
+		t.Fatal("expected default org records to exclude tenant host")
+	}
+	if !hasTrueNASHostForOrg(poller, "org-a", "tenant-nas") {
+		t.Fatal("expected tenant records to include tenant host")
 	}
 }
 
@@ -685,8 +718,7 @@ func TestTrueNASPollerStopsCleanly(t *testing.T) {
 	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
 
 	mtp, _ := newTestTenantPersistence(t)
-	registry := unifiedresources.NewRegistry(nil)
-	poller := NewTrueNASPoller(registry, mtp, 50*time.Millisecond, nil)
+	poller := NewTrueNASPoller(mtp, 50*time.Millisecond, nil)
 	poller.Start(context.Background())
 	poller.Stop()
 
@@ -697,10 +729,24 @@ func TestTrueNASPollerStopsCleanly(t *testing.T) {
 	}
 }
 
+func TestTrueNASPollerSnapshotOwnedSources(t *testing.T) {
+	poller := NewTrueNASPoller(nil, time.Second, nil)
+
+	defaultSources := poller.SnapshotOwnedSources()
+	if len(defaultSources) != 1 || defaultSources[0] != unifiedresources.SourceTrueNAS {
+		t.Fatalf("default owned sources = %#v, want [%q]", defaultSources, unifiedresources.SourceTrueNAS)
+	}
+
+	orgSources := poller.SnapshotOwnedSourcesForOrg("org-a")
+	if len(orgSources) != 1 || orgSources[0] != unifiedresources.SourceTrueNAS {
+		t.Fatalf("org owned sources = %#v, want [%q]", orgSources, unifiedresources.SourceTrueNAS)
+	}
+}
+
 func TestTrueNASPollerSyncConnectionsLogsStructuredContextWhenPersistenceNil(t *testing.T) {
 	logOutput := captureTrueNASPollerLogs(t)
 
-	poller := NewTrueNASPoller(unifiedresources.NewRegistry(nil), nil, time.Second, nil)
+	poller := NewTrueNASPoller(nil, time.Second, nil)
 	poller.syncConnections()
 
 	for _, expected := range []string{
@@ -718,7 +764,7 @@ func TestTrueNASPollerSyncConnectionsLogsStructuredContextWhenPersistenceNil(t *
 func TestTrueNASPollerPollAllLogsStructuredContextOnRefreshFailure(t *testing.T) {
 	logOutput := captureTrueNASPollerLogs(t)
 
-	poller := NewTrueNASPoller(unifiedresources.NewRegistry(nil), nil, time.Second, nil)
+	poller := NewTrueNASPoller(nil, time.Second, nil)
 	poller.mu.Lock()
 	if poller.providersByOrg == nil {
 		poller.providersByOrg = make(map[string]map[string]*truenas.Provider)
@@ -958,6 +1004,21 @@ func newTestTenantPersistence(t *testing.T) (*config.MultiTenantPersistence, *co
 		t.Fatalf("GetPersistence(default) error = %v", err)
 	}
 	return mtp, persistence
+}
+
+func hasTrueNASHostForOrg(poller *TrueNASPoller, orgID, hostname string) bool {
+	if poller == nil {
+		return false
+	}
+
+	records := poller.GetCurrentRecordsForOrg(orgID)
+	if len(records) == 0 {
+		return false
+	}
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
+	return hasTrueNASHost(registry, hostname)
 }
 
 func hasTrueNASHost(registry *unifiedresources.ResourceRegistry, hostname string) bool {

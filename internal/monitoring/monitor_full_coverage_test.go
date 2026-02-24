@@ -297,6 +297,11 @@ func TestMonitor_GettersAndSetters(t *testing.T) {
 }
 
 func TestMonitor_DiscoveryService(t *testing.T) {
+	// Use a canceled context so service startup logic is exercised without
+	// running a real discovery scan against the host network.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
 	m := &Monitor{
 		config:                  &config.Config{},
 		nodePendingUpdatesCache: make(map[string]pendingUpdatesCache),
@@ -304,7 +309,7 @@ func TestMonitor_DiscoveryService(t *testing.T) {
 
 	// StartDiscoveryService
 	// It creates a new service if nil.
-	m.StartDiscoveryService(context.Background(), nil, "auto")
+	m.StartDiscoveryService(ctx, nil, "127.0.0.1/32")
 	if m.discoveryService == nil {
 		t.Error("StartDiscoveryService failed to create service")
 	}

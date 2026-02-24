@@ -22,17 +22,15 @@ var validResourceID = regexp.MustCompile(`^[a-zA-Z0-9._:-]+$`)
 
 // ReportingHandlers handles reporting-related requests
 type ReportingHandlers struct {
-	mtMonitor        *monitoring.MultiTenantMonitor
-	resourceRegistry *unifiedresources.ResourceRegistry
-	recoveryManager  *recoverymanager.Manager
+	mtMonitor       *monitoring.MultiTenantMonitor
+	recoveryManager *recoverymanager.Manager
 }
 
 // NewReportingHandlers creates a new ReportingHandlers
-func NewReportingHandlers(mtMonitor *monitoring.MultiTenantMonitor, registry *unifiedresources.ResourceRegistry, recoveryManager *recoverymanager.Manager) *ReportingHandlers {
+func NewReportingHandlers(mtMonitor *monitoring.MultiTenantMonitor, recoveryManager *recoverymanager.Manager) *ReportingHandlers {
 	return &ReportingHandlers{
-		mtMonitor:        mtMonitor,
-		resourceRegistry: registry,
-		recoveryManager:  recoveryManager,
+		mtMonitor:       mtMonitor,
+		recoveryManager: recoveryManager,
 	}
 }
 
@@ -233,7 +231,7 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 	if h.mtMonitor != nil {
 		orgID := GetOrgID(r.Context())
 		if monitor, err := h.mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
-			h.enrichReportRequest(r.Context(), orgID, &req, monitor.GetState(), start, end)
+			h.enrichReportRequest(r.Context(), orgID, &req, monitor.GetState(), monitor.GetUnifiedResources(), start, end)
 		}
 	}
 
@@ -269,10 +267,10 @@ func sanitizeFilename(s string) string {
 }
 
 // enrichReportRequest populates enrichment data from the monitor state
-func (h *ReportingHandlers) enrichReportRequest(ctx context.Context, orgID string, req *reporting.MetricReportRequest, state models.StateSnapshot, start, end time.Time) {
+func (h *ReportingHandlers) enrichReportRequest(ctx context.Context, orgID string, req *reporting.MetricReportRequest, state models.StateSnapshot, resources []unifiedresources.Resource, start, end time.Time) {
 	switch req.ResourceType {
 	case "node":
-		h.enrichNodeReport(req, state, start, end)
+		h.enrichNodeReport(req, state, resources, start, end)
 	case "vm":
 		h.enrichVMReport(ctx, orgID, req, state, start, end)
 	case "container":
@@ -281,7 +279,7 @@ func (h *ReportingHandlers) enrichReportRequest(ctx context.Context, orgID strin
 }
 
 // enrichNodeReport adds node-specific data to the report request
-func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest, state models.StateSnapshot, start, end time.Time) {
+func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest, state models.StateSnapshot, resources []unifiedresources.Resource, start, end time.Time) {
 	// Find the node
 	var node *models.Node
 	for i := range state.Nodes {
@@ -347,13 +345,10 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 		}
 	}
 
-	// Find storage pools for this node via unified resources
-	// No fallback: if the registry is nil, skip this section.
-	if h.resourceRegistry != nil {
-		for _, r := range h.resourceRegistry.List() {
-			if r.Type != unifiedresources.ResourceTypeStorage {
-				continue
-			}
+	// Find storage pools and physical disks for this node via unified resources.
+	for _, r := range resources {
+		switch r.Type {
+		case unifiedresources.ResourceTypeStorage:
 			storageNode := r.ParentName
 			if storageNode == "" && len(r.Identity.Hostnames) > 0 {
 				storageNode = r.Identity.Hostnames[0]
@@ -396,13 +391,8 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 				UsagePerc: usagePerc,
 				Content:   content,
 			})
-		}
-	}
-
-	// Find physical disks for this node via unified resources
-	if h.resourceRegistry != nil {
-		for _, r := range h.resourceRegistry.List() {
-			if r.Type != unifiedresources.ResourceTypePhysicalDisk || r.PhysicalDisk == nil {
+		case unifiedresources.ResourceTypePhysicalDisk:
+			if r.PhysicalDisk == nil {
 				continue
 			}
 			diskNode := r.ParentName
@@ -586,11 +576,13 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 
 	// Get monitor state for enrichment
 	var state models.StateSnapshot
+	var resources []unifiedresources.Resource
 	var hasState bool
 	if h.mtMonitor != nil {
 		orgID := GetOrgID(r.Context())
 		if monitor, err := h.mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
 			state = monitor.GetState()
+			resources = monitor.GetUnifiedResources()
 			hasState = true
 		}
 	}
@@ -619,7 +611,7 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 		// Enrich with resource data
 		if hasState {
 			orgID := GetOrgID(r.Context())
-			h.enrichReportRequest(r.Context(), orgID, &req, state, start, end)
+			h.enrichReportRequest(r.Context(), orgID, &req, state, resources, start, end)
 		}
 
 		multiReq.Resources = append(multiReq.Resources, req)

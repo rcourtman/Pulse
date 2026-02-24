@@ -37,7 +37,7 @@ func (s *stubReportingEngine) GenerateMulti(req reporting.MultiReportRequest) ([
 }
 
 func TestReportingHandlers_MethodNotAllowed(t *testing.T) {
-	handler := NewReportingHandlers(nil, nil, nil)
+	handler := NewReportingHandlers(nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/api/reporting", nil)
 	rr := httptest.NewRecorder()
 
@@ -53,7 +53,7 @@ func TestReportingHandlers_EngineUnavailable(t *testing.T) {
 	reporting.SetEngine(nil)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil, nil, nil)
+	handler := NewReportingHandlers(nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/reporting?resourceType=node&resourceId=1", nil)
 	rr := httptest.NewRecorder()
 
@@ -78,7 +78,7 @@ func TestReportingHandlers_InvalidFormatAndParams(t *testing.T) {
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil, nil, nil)
+	handler := NewReportingHandlers(nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/reporting?format=txt&resourceType=node&resourceId=1", nil)
 	rr := httptest.NewRecorder()
@@ -101,7 +101,7 @@ func TestReportingHandlers_GenerateReport(t *testing.T) {
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil, nil, nil)
+	handler := NewReportingHandlers(nil, nil)
 
 	start := time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)
 	end := time.Now().UTC().Format(time.RFC3339)

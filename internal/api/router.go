@@ -81,6 +81,7 @@ type Router struct {
 	resourceRegistry           *unifiedresources.ResourceRegistry
 	trueNASPoller              *monitoring.TrueNASPoller
 	monitorResourceAdapter     *unifiedresources.MonitorAdapter
+	monitorSupplementalRecords map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider
 	aiUnifiedAdapter           *unifiedresources.UnifiedAIAdapter
 	reportingHandlers          *ReportingHandlers
 	configProfileHandler       *ConfigProfileHandler
@@ -204,6 +205,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		lifecycleCancel:            lifecycleCancel,
 		hostedMode:                 os.Getenv("PULSE_HOSTED_MODE") == "true",
 		conversionStore:            store,
+		monitorSupplementalRecords: make(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider),
 	}
 	if r.hostedMode {
 		// Use defaults: 2000 req/min per org.
@@ -334,7 +336,7 @@ func (r *Router) setupRoutes() {
 	if r.monitor != nil {
 		r.monitor.SetRecoveryManager(recoveryManager)
 	}
-	r.trueNASPoller = monitoring.NewTrueNASPoller(r.resourceRegistry, r.multiTenant, 0, recoveryManager)
+	r.trueNASPoller = monitoring.NewTrueNASPoller(r.multiTenant, 0, recoveryManager)
 	r.trueNASPoller.Start(r.lifecycleCtx)
 	updateHandlers := NewUpdateHandlersWithContext(r.updateManager, r.updateHistory, r.lifecycleCtx)
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.mtMonitor, r.monitor, r.wsHub, r.config)
@@ -345,9 +347,18 @@ func (r *Router) setupRoutes() {
 	if mock.IsMockEnabled() {
 		truenas.SetFeatureEnabled(true)
 		mockTrueNASProvider := truenas.NewDefaultProvider()
-		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, trueNASRecordsAdapter{provider: mockTrueNASProvider})
+		adapter := trueNASRecordsAdapter{provider: mockTrueNASProvider}
+		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, adapter)
+		r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, adapter)
 	} else if r.trueNASPoller != nil {
 		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
+		r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
+	}
+	if r.monitor != nil {
+		r.configureMonitorDependencies(r.monitor)
+	}
+	if r.mtMonitor != nil {
+		r.mtMonitor.SetMonitorInitializer(r.configureMonitorDependencies)
 	}
 	r.configProfileHandler = NewConfigProfileHandler(r.multiTenant)
 	r.licenseHandlers = NewLicenseHandlers(r.multiTenant, r.hostedMode, r.config)
@@ -356,7 +367,7 @@ func (r *Router) setupRoutes() {
 	orgHandlers := NewOrgHandlers(r.multiTenant, r.mtMonitor, rbacProvider)
 	// Wire license service provider so middleware can access per-tenant license services
 	SetLicenseServiceProvider(r.licenseHandlers)
-	r.reportingHandlers = NewReportingHandlers(r.mtMonitor, r.resourceRegistry, recoveryManager)
+	r.reportingHandlers = NewReportingHandlers(r.mtMonitor, recoveryManager)
 	r.logHandlers = NewLogHandlers(r.config, r.persistence)
 	rbacHandlers := NewRBACHandlers(r.config, rbacProvider)
 	var magicLinkService *MagicLinkService
@@ -854,13 +865,7 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 				mgr.SetPublicURL(url)
 			}
 		}
-		// Inject unified resource adapter for polling optimization
-		if r.monitorResourceAdapter != nil {
-			log.Debug().Msg("[Router] Injecting unified resource adapter into monitor")
-			m.SetResourceStore(r.monitorResourceAdapter)
-		} else {
-			log.Warn().Msg("[Router] monitorResourceAdapter is nil, cannot inject resource store")
-		}
+		r.configureMonitorDependencies(m)
 		if r.resourceHandlers != nil {
 			r.resourceHandlers.SetStateProvider(m)
 		}
@@ -904,6 +909,60 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 			m.SetDockerChecker(checker)
 			log.Info().Msg("[Router] Docker detector configured for automatic LXC Docker detection")
 		}
+	}
+}
+
+func (r *Router) configureMonitorDependencies(m *monitoring.Monitor) {
+	if r == nil || m == nil {
+		return
+	}
+
+	if r.monitorResourceAdapter != nil {
+		log.Debug().Msg("[Router] Injecting unified resource adapter into monitor")
+		m.SetResourceStore(r.monitorResourceAdapter)
+	}
+
+	if len(r.monitorSupplementalRecords) == 0 {
+		return
+	}
+
+	keys := make([]string, 0, len(r.monitorSupplementalRecords))
+	for source := range r.monitorSupplementalRecords {
+		keys = append(keys, string(source))
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		source := unifiedresources.DataSource(key)
+		provider := r.monitorSupplementalRecords[source]
+		m.SetSupplementalRecordsProvider(source, provider)
+	}
+}
+
+func (r *Router) setMonitorSupplementalRecordsProvider(source unifiedresources.DataSource, provider monitoring.MonitorSupplementalRecordsProvider) {
+	if r == nil {
+		return
+	}
+
+	normalized := unifiedresources.DataSource(strings.ToLower(strings.TrimSpace(string(source))))
+	if normalized == "" {
+		return
+	}
+
+	if r.monitorSupplementalRecords == nil {
+		r.monitorSupplementalRecords = make(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider)
+	}
+	if provider == nil {
+		delete(r.monitorSupplementalRecords, normalized)
+	} else {
+		r.monitorSupplementalRecords[normalized] = provider
+	}
+
+	if r.monitor != nil {
+		r.monitor.SetSupplementalRecordsProvider(normalized, provider)
+	}
+	if r.mtMonitor != nil {
+		r.mtMonitor.SetMonitorInitializer(r.configureMonitorDependencies)
 	}
 }
 
@@ -8402,6 +8461,18 @@ func (a trueNASRecordsAdapter) GetCurrentRecordsForOrg(orgID string) []unifiedre
 		return nil
 	}
 	return a.provider.Records()
+}
+
+func (a trueNASRecordsAdapter) SupplementalRecords(_ *monitoring.Monitor, orgID string) []unifiedresources.IngestRecord {
+	return a.GetCurrentRecordsForOrg(orgID)
+}
+
+func (a trueNASRecordsAdapter) SnapshotOwnedSources() []unifiedresources.DataSource {
+	return []unifiedresources.DataSource{unifiedresources.SourceTrueNAS}
+}
+
+func (a trueNASRecordsAdapter) SnapshotOwnedSourcesForOrg(string) []unifiedresources.DataSource {
+	return []unifiedresources.DataSource{unifiedresources.SourceTrueNAS}
 }
 
 // trigger rebuild Fri Jan 16 10:52:41 UTC 2026

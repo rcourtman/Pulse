@@ -20,6 +20,7 @@ type MultiTenantMonitor struct {
 	baseConfig   *config.Config
 	wsHub        *websocket.Hub
 	recoveryMgr  *recoverymanager.Manager
+	initializer  func(*Monitor)
 	globalCtx    context.Context
 	globalCancel context.CancelFunc
 }
@@ -47,6 +48,32 @@ func (mtm *MultiTenantMonitor) SetRecoveryManager(manager *recoverymanager.Manag
 			continue
 		}
 		monitor.SetRecoveryManager(manager)
+	}
+}
+
+// SetMonitorInitializer configures a callback that is applied to all existing
+// and future tenant monitors after creation.
+func (mtm *MultiTenantMonitor) SetMonitorInitializer(initializer func(*Monitor)) {
+	if mtm == nil {
+		return
+	}
+
+	mtm.mu.Lock()
+	mtm.initializer = initializer
+	monitors := make([]*Monitor, 0, len(mtm.monitors))
+	for _, monitor := range mtm.monitors {
+		if monitor == nil {
+			continue
+		}
+		monitors = append(monitors, monitor)
+	}
+	mtm.mu.Unlock()
+
+	if initializer == nil {
+		return
+	}
+	for _, monitor := range monitors {
+		initializer(monitor)
 	}
 }
 
@@ -125,6 +152,9 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 	monitor.SetOrgID(orgID)
 	if mtm.recoveryMgr != nil {
 		monitor.SetRecoveryManager(mtm.recoveryMgr)
+	}
+	if mtm.initializer != nil {
+		mtm.initializer(monitor)
 	}
 
 	// 3. Start Monitor

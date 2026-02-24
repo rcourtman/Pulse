@@ -1,8 +1,11 @@
 package monitoring
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 func TestMultiTenantMonitorRemoveTenant(t *testing.T) {
@@ -93,5 +96,48 @@ func TestMultiTenantMonitorPeekMonitorTrimsOrgID(t *testing.T) {
 	}
 	if got != expected {
 		t.Fatalf("expected same monitor pointer, got %p want %p", got, expected)
+	}
+}
+
+func TestMultiTenantMonitorSetMonitorInitializerAppliesToExisting(t *testing.T) {
+	first := &Monitor{}
+	second := &Monitor{}
+	mtm := &MultiTenantMonitor{
+		monitors: map[string]*Monitor{
+			"org-1": first,
+			"org-2": second,
+		},
+	}
+
+	var called atomic.Int32
+	mtm.SetMonitorInitializer(func(m *Monitor) {
+		if m != nil {
+			called.Add(1)
+		}
+	})
+
+	if called.Load() != 2 {
+		t.Fatalf("expected initializer to run for existing monitors, got %d", called.Load())
+	}
+}
+
+func TestMultiTenantMonitorSetMonitorInitializerAppliesToNewMonitor(t *testing.T) {
+	mtp, _ := newTestTenantPersistence(t)
+	baseCfg := &config.Config{DataPath: t.TempDir()}
+	mtm := NewMultiTenantMonitor(baseCfg, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	var called atomic.Int32
+	mtm.SetMonitorInitializer(func(m *Monitor) {
+		if m != nil {
+			called.Add(1)
+		}
+	})
+
+	if _, err := mtm.GetMonitor("org-init"); err != nil {
+		t.Fatalf("GetMonitor(org-init) error = %v", err)
+	}
+	if called.Load() != 1 {
+		t.Fatalf("expected initializer to run for new monitor, got %d", called.Load())
 	}
 }
