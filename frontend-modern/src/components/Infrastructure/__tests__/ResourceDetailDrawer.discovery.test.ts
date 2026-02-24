@@ -60,6 +60,153 @@ describe('toDiscoveryConfig', () => {
       targetLabel: 'host',
     });
   });
+
+  it('prefers docker hostSourceId for docker-host fallback mapping', () => {
+    const resource: Resource = {
+      ...baseResource(),
+      id: 'resource:docker:abc123',
+      type: 'docker-host',
+      platformType: 'docker',
+      platformData: {
+        sources: ['docker'],
+        docker: {
+          hostSourceId: 'docker-host-1',
+          hostname: 'edge-docker',
+        },
+      },
+    };
+
+    const config = toDiscoveryConfig(resource);
+    expect(config).toEqual({
+      resourceType: 'host',
+      hostId: 'docker-host-1',
+      resourceId: 'docker-host-1',
+      hostname: 'stale-hostname',
+      metadataKind: 'host',
+      metadataId: 'docker-host-1',
+      targetLabel: 'host',
+    });
+  });
+
+  it('prefers proxmox vmid for vm fallback resourceId', () => {
+    const resource: Resource = {
+      ...baseResource(),
+      id: 'resource:vm:hash-101',
+      type: 'vm',
+      platformData: {
+        sources: ['proxmox'],
+        proxmox: {
+          nodeName: 'pve1',
+          vmid: 101,
+        },
+      },
+    };
+
+    const config = toDiscoveryConfig(resource);
+    expect(config).toEqual({
+      resourceType: 'vm',
+      hostId: 'pve1',
+      resourceId: '101',
+      hostname: 'stale-hostname',
+      metadataKind: 'guest',
+      metadataId: 'resource:vm:hash-101',
+      targetLabel: 'guest',
+    });
+  });
+
+  it('prefers docker hostSourceId for docker-container fallback hostId', () => {
+    const resource: Resource = {
+      ...baseResource(),
+      id: 'resource:docker-container:hash-1',
+      type: 'docker-container',
+      platformType: 'docker',
+      platformData: {
+        sources: ['docker'],
+        docker: {
+          hostSourceId: 'docker-host-1',
+          containerId: 'container-abc123',
+        },
+      },
+    };
+
+    const config = toDiscoveryConfig(resource);
+    expect(config).toEqual({
+      resourceType: 'docker',
+      hostId: 'docker-host-1',
+      resourceId: 'container-abc123',
+      hostname: 'stale-hostname',
+      metadataKind: 'guest',
+      metadataId: 'resource:docker-container:hash-1',
+      targetLabel: 'container',
+    });
+  });
+
+  it('prefers kubernetes cluster/pod IDs for pod fallback mapping', () => {
+    const resource: Resource = {
+      ...baseResource(),
+      id: 'resource:pod:hash-1',
+      type: 'pod',
+      platformType: 'kubernetes',
+      clusterId: 'cluster-a',
+      kubernetes: {
+        clusterId: 'cluster-a',
+        podUid: 'pod-uid-1',
+        namespace: 'default',
+      },
+      platformData: {
+        sources: ['kubernetes'],
+        kubernetes: {
+          clusterId: 'cluster-a',
+          namespace: 'default',
+        },
+      },
+    };
+
+    const config = toDiscoveryConfig(resource);
+    expect(config).toEqual({
+      resourceType: 'k8s',
+      hostId: 'cluster-a',
+      resourceId: 'pod-uid-1',
+      hostname: 'stale-hostname',
+      metadataKind: 'guest',
+      metadataId: 'resource:pod:hash-1',
+      targetLabel: 'workload',
+    });
+  });
+
+  it('prefers kubernetes agentId over clusterId for pod fallback hostId', () => {
+    const resource: Resource = {
+      ...baseResource(),
+      id: 'resource:pod:hash-2',
+      type: 'pod',
+      platformType: 'kubernetes',
+      kubernetes: {
+        agentId: 'k8s-agent-1',
+        clusterId: 'cluster-a',
+        podUid: 'pod-uid-2',
+        namespace: 'default',
+      },
+      platformData: {
+        sources: ['kubernetes'],
+        kubernetes: {
+          agentId: 'k8s-agent-1',
+          clusterId: 'cluster-a',
+          namespace: 'default',
+        },
+      },
+    };
+
+    const config = toDiscoveryConfig(resource);
+    expect(config).toEqual({
+      resourceType: 'k8s',
+      hostId: 'k8s-agent-1',
+      resourceId: 'pod-uid-2',
+      hostname: 'stale-hostname',
+      metadataKind: 'guest',
+      metadataId: 'resource:pod:hash-2',
+      targetLabel: 'workload',
+    });
+  });
 });
 
 describe('buildWorkloadsHref', () => {
