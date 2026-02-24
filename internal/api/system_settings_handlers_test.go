@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/discovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -29,6 +31,20 @@ func (m *mockMonitor) StopDiscoveryService()                                    
 func (m *mockMonitor) EnableTemperatureMonitoring()                               {}
 func (m *mockMonitor) DisableTemperatureMonitoring()                              {}
 func (m *mockMonitor) GetNotificationManager() *notifications.NotificationManager { return nil }
+
+type mockTenantMonitorProvider struct {
+	orgID   string
+	monitor *monitoring.Monitor
+	err     error
+}
+
+func (m *mockTenantMonitorProvider) GetMonitor(orgID string) (*monitoring.Monitor, error) {
+	m.orgID = orgID
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.monitor, nil
+}
 
 func newTestSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPersistence, monitor SystemSettingsMonitor, reloadSystemSettingsFunc func(), reloadMonitorFunc func() error) *SystemSettingsHandler {
 	handler := NewSystemSettingsHandler(cfg, persistence, nil, nil, monitor, reloadSystemSettingsFunc, reloadMonitorFunc)
@@ -221,5 +237,42 @@ func TestHandleUpdateSystemSettings_Validation(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400, got %d", rec.Code)
+	}
+}
+
+func TestSystemSettingsHandler_GetMonitor_UsesTenantMonitorInterface(t *testing.T) {
+	tenantMonitor := &monitoring.Monitor{}
+	legacyMonitor := &mockMonitor{}
+	provider := &mockTenantMonitorProvider{monitor: tenantMonitor}
+
+	handler := &SystemSettingsHandler{
+		mtMonitor:     provider,
+		legacyMonitor: legacyMonitor,
+	}
+
+	got := handler.getMonitor(context.Background())
+	if got != tenantMonitor {
+		t.Fatalf("expected tenant monitor, got %#v", got)
+	}
+	if provider.orgID != "default" {
+		t.Fatalf("expected org lookup for default context org, got %q", provider.orgID)
+	}
+}
+
+func TestSystemSettingsHandler_GetMonitor_FallsBackToLegacyOnTenantError(t *testing.T) {
+	legacyMonitor := &mockMonitor{}
+	provider := &mockTenantMonitorProvider{err: errors.New("boom")}
+
+	handler := &SystemSettingsHandler{
+		mtMonitor:     provider,
+		legacyMonitor: legacyMonitor,
+	}
+
+	got := handler.getMonitor(context.WithValue(context.Background(), OrgIDContextKey, "acme"))
+	if got != legacyMonitor {
+		t.Fatalf("expected legacy monitor fallback, got %#v", got)
+	}
+	if provider.orgID != "acme" {
+		t.Fatalf("expected tenant org lookup for acme, got %q", provider.orgID)
 	}
 }

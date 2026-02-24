@@ -2,11 +2,13 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -252,6 +254,31 @@ func TestAlertHandlers_SetMonitor(t *testing.T) {
 	assert.Equal(t, mockMonitor1, h.legacyMonitor)
 	h.SetMonitor(mockMonitor2)
 	assert.Equal(t, mockMonitor2, h.legacyMonitor)
+}
+
+func TestAlertHandlers_SetMonitorConcurrentAccess(t *testing.T) {
+	mockMonitor1 := new(MockAlertMonitor)
+	mockMonitor2 := new(MockAlertMonitor)
+	h := NewAlertHandlers(nil, mockMonitor1, nil)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			for j := 0; j < 500; j++ {
+				if (worker+j)%2 == 0 {
+					h.SetMonitor(mockMonitor1)
+				} else {
+					h.SetMonitor(mockMonitor2)
+				}
+				_ = h.getMonitor(context.Background())
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	assert.NotNil(t, h.getMonitor(context.Background()))
 }
 
 func TestGetAlertHistory(t *testing.T) {

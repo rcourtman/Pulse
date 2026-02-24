@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -35,6 +36,7 @@ type SystemSettingsMonitor interface {
 
 // SystemSettingsHandler handles system settings
 type SystemSettingsHandler struct {
+	stateMu                  sync.RWMutex
 	config                   *config.Config
 	persistence              *config.ConfigPersistence
 	wsHub                    *websocket.Hub
@@ -74,36 +76,41 @@ func (h *SystemSettingsHandler) SetTelemetryToggleFunc(fn func(enabled bool)) {
 
 // SetMonitor updates the monitor reference used by the handler at runtime.
 func (h *SystemSettingsHandler) SetMonitor(m SystemSettingsMonitor) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
 	h.legacyMonitor = m
 }
 
 // SetMultiTenantMonitor updates the multi-tenant monitor reference
 func (h *SystemSettingsHandler) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
-	h.mtMonitor = mtm
+	var legacy SystemSettingsMonitor
 	if mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {
-			h.legacyMonitor = m
+			legacy = m
 		}
+	}
+
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.mtMonitor = mtm
+	if legacy != nil {
+		h.legacyMonitor = legacy
 	}
 }
 
 func (h *SystemSettingsHandler) getMonitor(ctx context.Context) SystemSettingsMonitor {
-	// Note: SystemSettingsMonitor interface methods (GetDiscoveryService etc.)
-	// must be implemented by *monitoring.Monitor directly.
-	// Since decoupling *monitoring.Monitor from specific interfaces involves casting or wrappers,
-	// we assume here that *monitoring.Monitor satisfies SystemSettingsMonitor.
+	h.stateMu.RLock()
+	mtMonitor := h.mtMonitor
+	legacyMonitor := h.legacyMonitor
+	h.stateMu.RUnlock()
 
-	if h.mtMonitor != nil {
-		// Use GetOrgID helper from current package or context
-		// Assuming we can access GetOrgID from api package context helpers
+	if mtMonitor != nil {
 		orgID := GetOrgID(ctx)
-		if mtm, ok := h.mtMonitor.(*monitoring.MultiTenantMonitor); ok {
-			if m, err := mtm.GetMonitor(orgID); err == nil && m != nil {
-				return m
-			}
+		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+			return m
 		}
 	}
-	return h.legacyMonitor
+	return legacyMonitor
 }
 
 // SetConfig updates the configuration reference used by the handler.

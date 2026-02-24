@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
@@ -52,6 +53,7 @@ type AlertMonitor interface {
 
 // AlertHandlers handles alert-related HTTP endpoints
 type AlertHandlers struct {
+	stateMu       sync.RWMutex
 	mtMonitor     *monitoring.MultiTenantMonitor
 	legacyMonitor AlertMonitor
 	wsHub         *websocket.Hub
@@ -74,27 +76,41 @@ func NewAlertHandlers(mtm *monitoring.MultiTenantMonitor, monitor AlertMonitor, 
 
 // SetMultiTenantMonitor updates the multi-tenant monitor reference
 func (h *AlertHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
-	h.mtMonitor = mtm
+	var legacy AlertMonitor
 	if mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {
-			h.legacyMonitor = NewAlertMonitorWrapper(m)
+			legacy = NewAlertMonitorWrapper(m)
 		}
+	}
+
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.mtMonitor = mtm
+	if legacy != nil {
+		h.legacyMonitor = legacy
 	}
 }
 
 // SetMonitor updates the monitor reference for alert handlers.
 func (h *AlertHandlers) SetMonitor(m AlertMonitor) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
 	h.legacyMonitor = m
 }
 
 func (h *AlertHandlers) getMonitor(ctx context.Context) AlertMonitor {
+	h.stateMu.RLock()
+	mtMonitor := h.mtMonitor
+	legacyMonitor := h.legacyMonitor
+	h.stateMu.RUnlock()
+
 	orgID := GetOrgID(ctx)
-	if h.mtMonitor != nil {
-		if m, err := h.mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+	if mtMonitor != nil {
+		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
 			return NewAlertMonitorWrapper(m)
 		}
 	}
-	return h.legacyMonitor
+	return legacyMonitor
 }
 
 func (h *AlertHandlers) broadcastStateForContext(ctx context.Context) {

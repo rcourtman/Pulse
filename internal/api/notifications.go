@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -59,6 +60,7 @@ type NotificationMonitor interface {
 
 // NotificationHandlers handles notification-related HTTP endpoints
 type NotificationHandlers struct {
+	stateMu       sync.RWMutex
 	mtMonitor     *monitoring.MultiTenantMonitor
 	legacyMonitor NotificationMonitor
 }
@@ -79,27 +81,41 @@ func NewNotificationHandlers(mtm *monitoring.MultiTenantMonitor, monitor Notific
 
 // SetMonitor updates the monitor reference for notification handlers.
 func (h *NotificationHandlers) SetMonitor(m NotificationMonitor) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
 	h.legacyMonitor = m
 }
 
 // SetMultiTenantMonitor updates the multi-tenant monitor reference
 func (h *NotificationHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
-	h.mtMonitor = mtm
+	var legacy NotificationMonitor
 	if mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {
-			h.legacyMonitor = NewNotificationMonitorWrapper(m)
+			legacy = NewNotificationMonitorWrapper(m)
 		}
+	}
+
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.mtMonitor = mtm
+	if legacy != nil {
+		h.legacyMonitor = legacy
 	}
 }
 
 func (h *NotificationHandlers) getMonitor(ctx context.Context) NotificationMonitor {
+	h.stateMu.RLock()
+	mtMonitor := h.mtMonitor
+	legacyMonitor := h.legacyMonitor
+	h.stateMu.RUnlock()
+
 	orgID := GetOrgID(ctx)
-	if h.mtMonitor != nil {
-		if m, err := h.mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+	if mtMonitor != nil {
+		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
 			return NewNotificationMonitorWrapper(m)
 		}
 	}
-	return h.legacyMonitor
+	return legacyMonitor
 }
 
 // GetEmailConfig returns the current email configuration

@@ -63,18 +63,23 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 		m.mu.Lock()
 		missingPVE := []config.PVEInstance{}
 		missingPBS := []config.PBSInstance{}
+		connectionTimeout := 0 * time.Second
 
-		// Find PVE instances without clients
-		for _, pve := range m.config.PVEInstances {
-			if _, exists := m.pveClients[pve.Name]; !exists {
-				missingPVE = append(missingPVE, pve)
+		if m.config != nil {
+			connectionTimeout = m.config.ConnectionTimeout
+
+			// Find PVE instances without clients
+			for _, pve := range m.config.PVEInstances {
+				if _, exists := m.pveClients[pve.Name]; !exists {
+					missingPVE = append(missingPVE, pve)
+				}
 			}
-		}
 
-		// Find PBS instances without clients
-		for _, pbsInst := range m.config.PBSInstances {
-			if _, exists := m.pbsClients[pbsInst.Name]; !exists {
-				missingPBS = append(missingPBS, pbsInst)
+			// Find PBS instances without clients
+			for _, pbsInst := range m.config.PBSInstances {
+				if _, exists := m.pbsClients[pbsInst.Name]; !exists {
+					missingPBS = append(missingPBS, pbsInst)
+				}
 			}
 		}
 		m.mu.Unlock()
@@ -98,13 +103,13 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 				endpoints, endpointFingerprints := m.buildClusterEndpointsForReconnect(pve)
 
 				clientConfig := config.CreateProxmoxConfig(&pve)
-				clientConfig.Timeout = m.config.ConnectionTimeout
+				clientConfig.Timeout = connectionTimeout
 				clusterClient := proxmox.NewClusterClient(pve.Name, clientConfig, endpoints, endpointFingerprints)
 
 				m.mu.Lock()
 				m.pveClients[pve.Name] = clusterClient
-				m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, true)
 				m.mu.Unlock()
+				m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, true)
 
 				log.Info().
 					Str("instance", pve.Name).
@@ -115,7 +120,7 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 
 			// Create regular client
 			clientConfig := config.CreateProxmoxConfig(&pve)
-			clientConfig.Timeout = m.config.ConnectionTimeout
+			clientConfig.Timeout = connectionTimeout
 			client, err := newProxmoxClientFunc(clientConfig)
 			if err != nil {
 				log.Warn().
@@ -127,8 +132,8 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 
 			m.mu.Lock()
 			m.pveClients[pve.Name] = client
-			m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, true)
 			m.mu.Unlock()
+			m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, true)
 
 			log.Info().
 				Str("instance", pve.Name).
@@ -150,8 +155,8 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 
 			m.mu.Lock()
 			m.pbsClients[pbsInst.Name] = client
-			m.setProviderConnectionHealth(InstanceTypePBS, pbsInst.Name, true)
 			m.mu.Unlock()
+			m.setProviderConnectionHealth(InstanceTypePBS, pbsInst.Name, true)
 
 			log.Info().
 				Str("instance", pbsInst.Name).

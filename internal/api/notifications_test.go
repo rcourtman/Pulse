@@ -2,11 +2,13 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -695,4 +697,29 @@ func TestNotificationHandlers(t *testing.T) {
 		h.TestWebhook(w, req)
 		assert.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
 	})
+}
+
+func TestNotificationHandlers_SetMonitorConcurrentAccess(t *testing.T) {
+	mockMonitor1 := new(MockNotificationMonitor)
+	mockMonitor2 := new(MockNotificationMonitor)
+	h := NewNotificationHandlers(nil, mockMonitor1)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			for j := 0; j < 500; j++ {
+				if (worker+j)%2 == 0 {
+					h.SetMonitor(mockMonitor1)
+				} else {
+					h.SetMonitor(mockMonitor2)
+				}
+				_ = h.getMonitor(context.Background())
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	assert.NotNil(t, h.getMonitor(context.Background()))
 }
