@@ -174,11 +174,20 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 		{ID: "docker:dock1:cid:part", Name: "homepage", Type: "docker"},
 		{ID: "host:host1", Name: "host1", Type: "host"},
 		{ID: "container:node1:201", Name: "beta", Type: "container", Node: "node1"},
+		{ID: "docker:resource:docker:abc:cid-simple", Name: "homepage2", Type: "docker"},
 	}
+	state.DockerHosts = append(state.DockerHosts, models.DockerHost{
+		ID:       "resource:docker:abc",
+		Hostname: "dock2",
+		Containers: []models.DockerContainer{{
+			ID:   "cid-simple",
+			Name: "homepage2",
+		}},
+	})
 
 	mentions := prefetcher.resolveStructuredMentions(structured, state)
-	if len(mentions) != 3 {
-		t.Fatalf("expected 3 mentions, got %d", len(mentions))
+	if len(mentions) != 4 {
+		t.Fatalf("expected 4 mentions, got %d", len(mentions))
 	}
 
 	if mentions[0].ResourceID != "cid:part" {
@@ -192,6 +201,12 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 	}
 	if mentions[2].ResourceType != "lxc" {
 		t.Fatalf("expected container type normalized to lxc, got %q", mentions[2].ResourceType)
+	}
+	if mentions[3].HostID != "resource:docker:abc" {
+		t.Fatalf("expected docker host ID with colons preserved, got %q", mentions[3].HostID)
+	}
+	if mentions[3].ResourceID != "cid-simple" {
+		t.Fatalf("expected docker container ID parsed correctly, got %q", mentions[3].ResourceID)
 	}
 
 	unknown := prefetcher.resolveStructuredMentions([]StructuredMention{{ID: "weird:1", Name: "mystery", Type: "weird"}}, state)

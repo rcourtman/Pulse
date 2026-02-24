@@ -77,16 +77,18 @@ func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, struct
 	vmsCount := 0
 	containersCount := 0
 	nodesCount := 0
+	dockerHostsCount := 0
 	if p.readState != nil {
 		vmsCount = len(p.readState.VMs())
 		containersCount = len(p.readState.Containers())
 		nodesCount = len(p.readState.Nodes())
+		dockerHostsCount = len(p.readState.DockerHosts())
 	}
 	log.Info().
 		Int("vms", vmsCount).
 		Int("containers", containersCount).
 		Int("nodes", nodesCount).
-		Int("dockerHosts", len(state.DockerHosts)).
+		Int("dockerHosts", dockerHostsCount).
 		Msg("[ContextPrefetch] Got state for matching")
 
 	var mentions []ResourceMention
@@ -421,12 +423,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 			})
 
 		case "docker":
-			hostID := ""
-			containerID := ""
-			if len(parts) >= 3 {
-				hostID = parts[1]
-				containerID = strings.Join(parts[2:], ":") // container ID may contain colons
-			}
+			hostID, containerID := parseStructuredDockerMentionID(sm.ID, state)
 
 			// Gather bind mounts from state
 			var mounts []MountInfo
@@ -501,6 +498,51 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 	}
 
 	return mentions
+}
+
+func parseStructuredDockerMentionID(mentionID string, state models.StateSnapshot) (hostID string, containerID string) {
+	const prefix = "docker:"
+	if !strings.HasPrefix(mentionID, prefix) {
+		return "", ""
+	}
+
+	raw := strings.TrimPrefix(mentionID, prefix)
+	if raw == "" {
+		return "", ""
+	}
+
+	// Prefer matching known docker host IDs from state so host IDs containing
+	// colons remain intact (V6 unified IDs can include colon separators).
+	bestHostID := ""
+	bestContainerID := ""
+	for _, dockerHost := range state.DockerHosts {
+		id := strings.TrimSpace(dockerHost.ID)
+		if id == "" {
+			continue
+		}
+		hostPrefix := id + ":"
+		if !strings.HasPrefix(raw, hostPrefix) {
+			continue
+		}
+		candidateContainerID := strings.TrimPrefix(raw, hostPrefix)
+		if candidateContainerID == "" {
+			continue
+		}
+		if len(id) > len(bestHostID) {
+			bestHostID = id
+			bestContainerID = candidateContainerID
+		}
+	}
+	if bestHostID != "" {
+		return bestHostID, bestContainerID
+	}
+
+	// Legacy fallback: split once after the docker prefix.
+	parts := strings.SplitN(raw, ":", 2)
+	if len(parts) < 2 {
+		return "", ""
+	}
+	return parts[0], parts[1]
 }
 
 // getOrTriggerDiscovery gets existing discovery or triggers a new one
