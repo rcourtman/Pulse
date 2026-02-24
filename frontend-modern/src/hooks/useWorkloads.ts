@@ -11,7 +11,7 @@ import { eventBus } from '@/stores/events';
 import { normalizeDiskArray } from '@/utils/format';
 import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
 
-const WORKLOADS_URL = '/api/resources?type=vm,lxc,docker_container,pod';
+const WORKLOADS_URL = '/api/resources?type=vm,system-container,app-container,pod';
 const WORKLOADS_PAGE_LIMIT = 200;
 const WORKLOADS_MAX_PAGES = 20;
 const WORKLOADS_CACHE_MAX_AGE_MS = 15_000;

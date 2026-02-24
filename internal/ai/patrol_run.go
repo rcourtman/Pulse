@@ -900,9 +900,9 @@ func (p *PatrolService) filterStateByScope(state models.StateSnapshot, scope Pat
 		if trimmed == "" {
 			return
 		}
-		typeSet[trimmed] = true
+		// Normalize to semantic type names; expand subtypes for group matching.
 		switch trimmed {
-		case "docker", "docker_host", "docker_container":
+		case "docker", "docker_host", "docker_container", "app-container", "app_container":
 			typeSet["docker"] = true
 			typeSet["docker_host"] = true
 			typeSet["docker_container"] = true
@@ -910,13 +910,10 @@ func (p *PatrolService) filterStateByScope(state models.StateSnapshot, scope Pat
 			typeSet["k8s"] = true
 			typeSet["kubernetes"] = true
 			typeSet["kubernetes_cluster"] = true
-		case "lxc", "container", "system-container":
-			typeSet["lxc"] = true
-			typeSet["container"] = true
+		case "lxc", "container", "system-container", "system_container":
 			typeSet["system-container"] = true
 		case "vm", "qemu":
 			typeSet["vm"] = true
-			typeSet["qemu"] = true
 		case "host", "host_raid", "host_sensor":
 			typeSet["host"] = true
 			typeSet["host_raid"] = true
@@ -925,6 +922,8 @@ func (p *PatrolService) filterStateByScope(state models.StateSnapshot, scope Pat
 			typeSet["pbs"] = true
 			typeSet["pbs_datastore"] = true
 			typeSet["pbs_job"] = true
+		default:
+			typeSet[trimmed] = true
 		}
 	}
 	for _, t := range scope.ResourceTypes {
@@ -979,12 +978,12 @@ func (p *PatrolService) filterStateByScope(state models.StateSnapshot, scope Pat
 		}
 	}
 	for _, vm := range state.VMs {
-		if matchesType("vm", "qemu") && matchesID(vm.ID, vm.Name) {
+		if matchesType("vm") && matchesID(vm.ID, vm.Name) {
 			filtered.VMs = append(filtered.VMs, vm)
 		}
 	}
 	for _, c := range state.Containers {
-		if matchesType("container", "lxc", "system-container") && matchesID(c.ID, c.Name) {
+		if matchesType("system-container") && matchesID(c.ID, c.Name) {
 			filtered.Containers = append(filtered.Containers, c)
 		}
 	}

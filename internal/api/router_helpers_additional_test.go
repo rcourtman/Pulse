@@ -228,7 +228,7 @@ func TestDeriveResourceTypeFromAlert(t *testing.T) {
 		{
 			name:  "lxc alert",
 			alert: &alerts.Alert{Type: "lxc_disk", ResourceID: "cluster/lxc/200"},
-			want:  "container",
+			want:  "system-container",
 		},
 		{
 			name:  "docker alert",

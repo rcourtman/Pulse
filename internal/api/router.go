@@ -2919,7 +2919,7 @@ func deriveResourceTypeFromAlert(alert *alerts.Alert) string {
 	case strings.Contains(alertType, "qemu") || strings.Contains(alert.ResourceID, "/qemu/"):
 		return "vm"
 	case strings.Contains(alertType, "lxc") || strings.Contains(alert.ResourceID, "/lxc/"):
-		return "container"
+		return "system-container"
 	case strings.Contains(alertType, "docker"):
 		return "docker"
 	case strings.Contains(alertType, "storage"):
@@ -2934,7 +2934,7 @@ func deriveResourceTypeFromAlert(alert *alerts.Alert) string {
 			return "vm"
 		}
 		if strings.Contains(alert.ResourceID, "/lxc/") {
-			return "container"
+			return "system-container"
 		}
 		if strings.Contains(alert.ResourceID, "docker") {
 			return "docker"

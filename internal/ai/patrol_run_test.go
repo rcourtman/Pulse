@@ -116,6 +116,49 @@ func TestFilterStateByScope_TypeAliases(t *testing.T) {
 	if len(filtered.Containers) != 1 {
 		t.Errorf("expected 'container' alias to match LXC, got %d", len(filtered.Containers))
 	}
+
+	// "system-container" (semantic name) should match LXC containers
+	scope = PatrolScope{ResourceTypes: []string{"system-container"}}
+	filtered = ps.filterStateByScope(state, scope)
+	if len(filtered.Containers) != 1 {
+		t.Errorf("expected 'system-container' to match LXC containers, got %d", len(filtered.Containers))
+	}
+
+	// "system_container" (underscore variant) should also match
+	scope = PatrolScope{ResourceTypes: []string{"system_container"}}
+	filtered = ps.filterStateByScope(state, scope)
+	if len(filtered.Containers) != 1 {
+		t.Errorf("expected 'system_container' to match LXC containers, got %d", len(filtered.Containers))
+	}
+}
+
+func TestFilterStateByScope_AppContainerAlias(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	state := models.StateSnapshot{
+		DockerHosts: []models.DockerHost{
+			{
+				ID:       "dh1",
+				Hostname: "docker-host-1",
+				Containers: []models.DockerContainer{
+					{ID: "c1", Name: "web"},
+				},
+			},
+		},
+	}
+
+	// "app-container" (semantic name) should match Docker resources
+	scope := PatrolScope{ResourceTypes: []string{"app-container"}}
+	filtered := ps.filterStateByScope(state, scope)
+	if len(filtered.DockerHosts) != 1 {
+		t.Errorf("expected 'app-container' to match Docker hosts, got %d", len(filtered.DockerHosts))
+	}
+
+	// "app_container" (underscore variant) should also match
+	scope = PatrolScope{ResourceTypes: []string{"app_container"}}
+	filtered = ps.filterStateByScope(state, scope)
+	if len(filtered.DockerHosts) != 1 {
+		t.Errorf("expected 'app_container' to match Docker hosts, got %d", len(filtered.DockerHosts))
+	}
 }
 
 func TestFilterStateByScope_DockerHost(t *testing.T) {
