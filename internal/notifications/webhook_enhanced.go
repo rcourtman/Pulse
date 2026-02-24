@@ -58,6 +58,11 @@ type WebhookPayloadData struct {
 	AckTime            string
 	AckUser            string
 
+	// Event context (alert vs resolved)
+	Event         string // "alert" or "resolved"
+	ResolvedAt    string // RFC3339 timestamp when alert was resolved
+	ResolvedAtISO string // Same as ResolvedAt (alias for template consistency)
+
 	// Additional context
 	Metadata     map[string]interface{}
 	CustomFields map[string]interface{}

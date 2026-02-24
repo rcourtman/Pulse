@@ -2,13 +2,14 @@ package notifications
 
 // WebhookTemplate represents a webhook template for popular services
 type WebhookTemplate struct {
-	Service         string            `json:"service"`
-	Name            string            `json:"name"`
-	URLPattern      string            `json:"urlPattern"`
-	Method          string            `json:"method"`
-	Headers         map[string]string `json:"headers"`
-	PayloadTemplate string            `json:"payloadTemplate"`
-	Instructions    string            `json:"instructions"`
+	Service                 string            `json:"service"`
+	Name                    string            `json:"name"`
+	URLPattern              string            `json:"urlPattern"`
+	Method                  string            `json:"method"`
+	Headers                 map[string]string `json:"headers"`
+	PayloadTemplate         string            `json:"payloadTemplate"`
+	ResolvedPayloadTemplate string            `json:"resolvedPayloadTemplate"`
+	Instructions            string            `json:"instructions"`
 }
 
 // GetWebhookTemplates returns templates for popular webhook services
@@ -41,6 +42,25 @@ func GetWebhookTemplates() []WebhookTemplate {
 					}
 				}]
 			}`,
+			ResolvedPayloadTemplate: `{
+				"username": "Pulse Monitoring",
+				"embeds": [{
+					"title": "Resolved: {{.ResourceName}}",
+					"description": "{{.Message}}",
+					"color": 3066993,
+					"fields": [
+						{"name": "Resource", "value": "{{.ResourceName}}", "inline": true},
+						{"name": "Node", "value": "{{.Node}}", "inline": true},
+						{"name": "Type", "value": "{{.Type | title}}", "inline": true},
+						{"name": "Duration", "value": "{{.Duration}}", "inline": true},
+						{"name": "Resolved At", "value": "{{.ResolvedAt}}", "inline": true}
+					],
+					"timestamp": "{{.Timestamp}}",
+					"footer": {
+						"text": "Pulse Monitoring"
+					}
+				}]
+			}`,
 			Instructions: "1. In Discord, go to Server Settings > Integrations > Webhooks\n2. Create a new webhook and copy the URL\n3. Paste the URL here (format: https://discord.com/api/webhooks/...)\n4. Optional: Add a mention in the Mention field (e.g., @everyone, <@USER_ID>, <@&ROLE_ID>)",
 		},
 		{
@@ -52,6 +72,12 @@ func GetWebhookTemplates() []WebhookTemplate {
 			PayloadTemplate: `{
 				"chat_id": "{{.ChatID}}",
 				"text": "*Pulse Alert: {{.Level | title}}*\n\n{{.Message}}\n\n*Details:*\n• Resource: {{.ResourceName}}\n• Node: {{.Node}}\n• Type: {{.Type | title}}\n• Value: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n• Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n• Duration: {{.Duration}}\n\n[View in Pulse]({{.Instance}})",
+				"parse_mode": "Markdown",
+				"disable_web_page_preview": true
+			}`,
+			ResolvedPayloadTemplate: `{
+				"chat_id": "{{.ChatID}}",
+				"text": "*Resolved: {{.ResourceName}}*\n\n{{.Message}}\n\n*Details:*\n• Resource: {{.ResourceName}}\n• Node: {{.Node}}\n• Type: {{.Type | title}}\n• Duration: {{.Duration}}\n• Resolved At: {{.ResolvedAt}}",
 				"parse_mode": "Markdown",
 				"disable_web_page_preview": true
 			}`,
@@ -110,6 +136,45 @@ func GetWebhookTemplates() []WebhookTemplate {
 					}
 				]
 			}`,
+			ResolvedPayloadTemplate: `{
+				"text": "Resolved: {{.ResourceName}}",
+				"blocks": [
+					{
+						"type": "header",
+						"text": {
+							"type": "plain_text",
+							"text": "Resolved: {{.ResourceName}}",
+							"emoji": true
+						}
+					},
+					{
+						"type": "section",
+						"text": {
+							"type": "mrkdwn",
+							"text": "{{.Message}}"
+						}
+					},
+					{
+						"type": "section",
+						"fields": [
+							{"type": "mrkdwn", "text": "*Resource:*\n{{.ResourceName}}"},
+							{"type": "mrkdwn", "text": "*Node:*\n{{.Node}}"},
+							{"type": "mrkdwn", "text": "*Type:*\n{{.Type | title}}"},
+							{"type": "mrkdwn", "text": "*Duration:*\n{{.Duration}}"},
+							{"type": "mrkdwn", "text": "*Resolved At:*\n{{.ResolvedAt}}"}
+						]
+					},
+					{
+						"type": "context",
+						"elements": [
+							{
+								"type": "mrkdwn",
+								"text": "Alert ID: {{.ID}}"
+							}
+						]
+					}
+				]
+			}`,
 			Instructions: "1. In Slack, go to Apps > Incoming Webhooks\n2. Add to Slack and choose a channel\n3. Copy the webhook URL and paste it here (format: https://hooks.slack.com/services/...)\n4. Optional: Add a mention in the Mention field (e.g., @channel, @here, <@USER_ID>, <!subteam^ID>)",
 		},
 		{
@@ -145,6 +210,24 @@ func GetWebhookTemplates() []WebhookTemplate {
 						"os": "default",
 						"uri": "{{.Instance}}"
 					}]
+				}]
+			}`,
+			ResolvedPayloadTemplate: `{
+				"@type": "MessageCard",
+				"@context": "http://schema.org/extensions",
+				"themeColor": "2DC72D",
+				"summary": "Resolved: {{.ResourceName}}",
+				"sections": [{
+					"activityTitle": "Resolved: {{.ResourceName}}",
+					"activitySubtitle": "{{.Message}}",
+					"facts": [
+						{"name": "Resource", "value": "{{.ResourceName}}"},
+						{"name": "Node", "value": "{{.Node}}"},
+						{"name": "Type", "value": "{{.Type | title}}"},
+						{"name": "Duration", "value": "{{.Duration}}"},
+						{"name": "Resolved At", "value": "{{.ResolvedAt}}"}
+					],
+					"markdown": true
 				}]
 			}`,
 			Instructions: "1. In Teams channel, click ... > Connectors\n2. Configure Incoming Webhook\n3. Copy the URL and paste it here\n4. Optional: Add a mention in the Mention field (e.g., @General)\n\nNote: MessageCard format is supported until December 2025. For new implementations, consider using Adaptive Cards.",
@@ -185,6 +268,11 @@ func GetWebhookTemplates() []WebhookTemplate {
 					"href": "{{.Instance}}",
 					"text": "View in Proxmox"
 				}]
+			}`,
+			ResolvedPayloadTemplate: `{
+				"routing_key": "{{.CustomFields.routing_key}}",
+				"event_action": "resolve",
+				"dedup_key": "{{.ID}}"
 			}`,
 			Instructions: "1. In PagerDuty, go to Configuration > Services\n2. Add an integration > Events API V2\n3. Copy the Integration Key\n4. Add the key as a custom field named 'routing_key'\n\nNote: PagerDuty recommends using Events API v2 for new integrations.",
 		},
@@ -237,6 +325,43 @@ func GetWebhookTemplates() []WebhookTemplate {
 					}
 				}]
 			}`,
+			ResolvedPayloadTemplate: `{
+				"type": "message",
+				"attachments": [{
+					"contentType": "application/vnd.microsoft.card.adaptive",
+					"content": {
+						"type": "AdaptiveCard",
+						"$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+						"version": "1.4",
+						"body": [
+							{
+								"type": "TextBlock",
+								"text": "Resolved: {{.ResourceName}}",
+								"weight": "Bolder",
+								"size": "Large",
+								"color": "Good"
+							},
+							{
+								"type": "TextBlock",
+								"text": "{{.Message}}",
+								"wrap": true,
+								"spacing": "Small"
+							},
+							{
+								"type": "FactSet",
+								"facts": [
+									{"title": "Resource", "value": "{{.ResourceName}}"},
+									{"title": "Node", "value": "{{.Node}}"},
+									{"title": "Type", "value": "{{.Type | title}}"},
+									{"title": "Duration", "value": "{{.Duration}}"},
+									{"title": "Resolved At", "value": "{{.ResolvedAt}}"},
+									{"title": "Alert ID", "value": "{{.ID}}"}
+								]
+							}
+						]
+					}
+				}]
+			}`,
 			Instructions: "1. In Teams channel, click ... > Connectors\n2. Configure Incoming Webhook\n3. Copy the URL and paste it here\n\nThis uses the modern Adaptive Card format recommended for new implementations.",
 		},
 		{
@@ -253,6 +378,15 @@ func GetWebhookTemplates() []WebhookTemplate {
 				"priority": {{if .CustomFields.priority}}{{.CustomFields.priority}}{{else}}{{if eq .Level "critical"}}1{{else if eq .Level "warning"}}0{{else}}-1{{end}}{{end}},
 				"sound": "{{if .CustomFields.sound}}{{.CustomFields.sound}}{{else}}{{if eq .Level "critical"}}siren{{else if eq .Level "warning"}}tugboat{{else}}pushover{{end}}{{end}}",
 				"device": "{{if .CustomFields.device}}{{.CustomFields.device}}{{else}}{{.ResourceName}}{{end}}",
+				"timestamp": "{{.Timestamp}}"
+			}`,
+			ResolvedPayloadTemplate: `{
+				"token": "{{.CustomFields.app_token}}",
+				"user": "{{.CustomFields.user_token}}",
+				"title": "Resolved: {{.ResourceName}}",
+				"message": "{{.Message}}\n\n• Resource: {{.ResourceName}}\n• Node: {{.Node}}\n• Type: {{.Type | title}}\n• Duration: {{.Duration}}\n• Resolved At: {{.ResolvedAt}}",
+				"priority": -1,
+				"sound": "pushover",
 				"timestamp": "{{.Timestamp}}"
 			}`,
 			Instructions: "1. Create an application at https://pushover.net/apps\n2. Copy your Application Token\n3. Get your User Key from your Pushover dashboard\n4. URL: https://api.pushover.net/1/messages.json\n5. Add custom fields:\n   • app_token: YOUR_APP_TOKEN (required)\n   • user_token: YOUR_USER_KEY (required)\n   • sound: notification sound (optional, e.g., spacealarm, siren, tugboat)\n   • priority: -2 to 2 (optional, overrides level-based default)\n   • device: specific device name (optional, overrides ResourceName)",
@@ -281,6 +415,24 @@ func GetWebhookTemplates() []WebhookTemplate {
 						"threshold": {{.Threshold}},
 						"duration": "{{.Duration}}",
 						"instance": "{{.Instance}}"
+					}
+				}
+			}`,
+			ResolvedPayloadTemplate: `{
+				"message": "**RESOLVED**: **{{.ResourceName}}** on **{{.Node}}**\n\n{{.Message}}\n\n**Details:**\n- **Resource:** {{.ResourceName}}\n- **Node:** {{.Node}}\n- **Type:** {{.Type | title}}\n- **Duration:** {{.Duration}}\n- **Resolved At:** {{.ResolvedAt}}\n- **Alert ID:** {{.ID}}",
+				"title": "Resolved: {{.ResourceName}} - {{.Type | title}}",
+				"priority": 2,
+				"extras": {
+					"client::display": {
+						"contentType": "text/markdown"
+					},
+					"pulse::alert": {
+						"id": "{{.ID}}",
+						"event": "resolved",
+						"resource_name": "{{.ResourceName}}",
+						"node": "{{.Node}}",
+						"duration": "{{.Duration}}",
+						"resolved_at": "{{.ResolvedAt}}"
 					}
 				}
 			}`,
@@ -323,6 +475,11 @@ View in Pulse: {{.Instance}}`,
 				"icon_url": "https://raw.githubusercontent.com/rcourtman/Pulse/main/frontend-modern/public/android-chrome-192x192.png",
 				"text": "{{if eq .Level "critical"}}:rotating_light: **CRITICAL ALERT**{{else if eq .Level "warning"}}:warning: **WARNING ALERT**{{else}}:information_source: **INFO**{{end}}\n\n**{{.ResourceName}}** on **{{.Node}}**\n\n{{.Message}}\n\n| Detail | Value |\n|:-------|:------|\n| Resource | {{.ResourceName}} |\n| Node | {{.Node}} |\n| Type | {{.Type | title}} |\n| Current | {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}} |\n| Threshold | {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}} |\n| Duration | {{.Duration}} |\n| Alert ID | {{.ID}} |\n\n[View in Pulse]({{.Instance}})"
 			}`,
+			ResolvedPayloadTemplate: `{
+				"username": "Pulse Monitoring",
+				"icon_url": "https://raw.githubusercontent.com/rcourtman/Pulse/main/frontend-modern/public/android-chrome-192x192.png",
+				"text": ":white_check_mark: **RESOLVED**\n\n**{{.ResourceName}}** on **{{.Node}}**\n\n{{.Message}}\n\n| Detail | Value |\n|:-------|:------|\n| Resource | {{.ResourceName}} |\n| Node | {{.Node}} |\n| Type | {{.Type | title}} |\n| Duration | {{.Duration}} |\n| Resolved At | {{.ResolvedAt}} |\n| Alert ID | {{.ID}} |"
+			}`,
 			Instructions: "1. In Mattermost, go to Integrations > Incoming Webhooks\n2. Create a new webhook and select the channel\n3. Copy the webhook URL and paste it here\n\nNote: This template uses Markdown formatting which is fully supported by Mattermost.",
 		},
 		{
@@ -344,6 +501,21 @@ View in Pulse: {{.Instance}}`,
 					"start_time": "{{.StartTime}}",
 					"duration": "{{.Duration}}"
 				},
+				"timestamp": "{{.Timestamp}}",
+				"source": "pulse-monitoring"
+			}`,
+			ResolvedPayloadTemplate: `{
+				"event": "resolved",
+				"alert": {
+					"id": "{{.ID}}",
+					"type": "{{.Type}}",
+					"resource_name": "{{.ResourceName}}",
+					"node": "{{.Node}}",
+					"message": "{{.Message}}",
+					"start_time": "{{.StartTime}}",
+					"duration": "{{.Duration}}"
+				},
+				"resolved_at": "{{.ResolvedAt}}",
 				"timestamp": "{{.Timestamp}}",
 				"source": "pulse-monitoring"
 			}`,

@@ -1869,24 +1869,18 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 
 		if hasServiceTemplate {
 			templates := GetWebhookTemplates()
-			templateFound := false
 			for _, tmpl := range templates {
-				if tmpl.Service == webhook.Service {
-					templateFound = true
-					jsonData, err := n.generatePayloadFromTemplateWithService(tmpl.PayloadTemplate, data, webhook.Service)
+				if tmpl.Service == webhook.Service && tmpl.ResolvedPayloadTemplate != "" {
+					jsonData, err := n.generatePayloadFromTemplateWithService(tmpl.ResolvedPayloadTemplate, data, webhook.Service)
 					if err == nil {
 						return n.sendWebhookRequest(webhook, jsonData, "resolved")
 					}
 					return fmt.Errorf("failed to render resolved %s template for %s: %w", webhook.Service, webhook.Name, err)
 				}
 			}
-			if !templateFound {
-				return fmt.Errorf("no template found for service %s on webhook %s", webhook.Service, webhook.Name)
-			}
+			// No resolved template for this service — fall through to generic payload
 		}
-
-		// Had a custom template but no service template, and custom template failed
-		return fmt.Errorf("failed to render resolved custom template for %s and no service template available", webhook.Name)
+		// Fall through to generic payload below
 	}
 
 	// Generic payload for webhooks with no service and no custom template
@@ -2429,6 +2423,7 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 		Acknowledged:       alert.Acknowledged,
 		AckTime:            ackTime,
 		AckUser:            alert.AckUser,
+		Event:              "alert",
 		Metadata:           metadataCopy,
 		CustomFields:       customFields,
 		AlertCount:         1,
@@ -2494,6 +2489,9 @@ func (n *NotificationManager) prepareResolvedWebhookData(alert *alerts.Alert, we
 		Acknowledged:       alert.Acknowledged,
 		AckTime:            ackTime,
 		AckUser:            alert.AckUser,
+		Event:              "resolved",
+		ResolvedAt:         resolvedAt.Format(time.RFC3339),
+		ResolvedAtISO:      resolvedAt.Format(time.RFC3339),
 		Metadata:           metadataCopy,
 		CustomFields:       convertWebhookCustomFields(webhook.CustomFields),
 		AlertCount:         1,
