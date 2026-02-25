@@ -34,7 +34,6 @@ import {
 import { EmptyState } from '@/components/shared/EmptyState';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
 import { MigrationNoticeBanner } from '@/components/shared/MigrationNoticeBanner';
-import { PageHeader } from '@/components/shared/PageHeader';
 import { isNodeOnline } from '@/utils/status';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { logger } from '@/utils/logger';
@@ -1400,13 +1399,6 @@ export function Dashboard(props: DashboardProps) {
 
   return (
     <div class="space-y-3">
-      <Show when={isWorkloadsRoute()}>
-        <PageHeader
-          title="Workloads"
-          description="Live resource usage and status for compute workloads across environments."
-        />
-      </Show>
-
       <Show when={isWorkloadsRoute() && !workloadsSummaryCollapsed()}>
         <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-surface">
           <WorkloadsSummary

@@ -26,7 +26,6 @@ import { formatBytes, formatPercent } from '@/utils/format';
 import { segmentedButtonClass } from '@/utils/segmentedButton';
 import { getProxmoxData } from '@/utils/resourcePlatformData';
 import { useKioskMode } from '@/hooks/useKioskMode';
-import { PageHeader } from '@/components/shared/PageHeader';
 import { useStorageRouteState } from './useStorageRouteState';
 import { isCephRecord, useStorageCephModel } from './useStorageCephModel';
 import { useStorageAlertState } from './useStorageAlertState';
@@ -372,11 +371,6 @@ const Storage: Component = () => {
 
   return (
     <div class="space-y-4">
-      <PageHeader
-        title="Storage"
-        description="Pool capacity, disk inventory, and usage trends across environments."
-      />
-
       <StorageHero
         summary={summary()}
         healthBreakdown={healthBreakdown()}
