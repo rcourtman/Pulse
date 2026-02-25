@@ -1,8 +1,6 @@
 package handoff
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"html/template"
 	"net"
 	"net/http"
@@ -12,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auditlog"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/cpsec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rs/zerolog/log"
 )
@@ -190,14 +189,8 @@ func HandleHandoff(reg *registry.TenantRegistry, tenantsDir string) http.Handler
 			return
 		}
 
-		// Generate a per-request nonce for the inline script.
-		// Note: The control plane doesn't set CSP headers yet, so this nonce is
-		// forward-compatible but not enforced until CSP is added to the CP server.
-		var nonce string
-		b := make([]byte, 16)
-		if _, err := rand.Read(b); err == nil {
-			nonce = base64.StdEncoding.EncodeToString(b)
-		}
+		// Read the per-request nonce set by CPSecurityHeaders middleware.
+		nonce := cpsec.NonceFromContext(r.Context())
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)

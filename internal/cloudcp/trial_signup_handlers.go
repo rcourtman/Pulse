@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/cpsec"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 	stripe "github.com/stripe/stripe-go/v82"
@@ -27,7 +28,7 @@ var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Pa
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Start Pulse Pro Trial</title>
-  <style>
+  <style nonce="{{.Nonce}}">
     :root { color-scheme: light; }
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: linear-gradient(140deg, #f7fafc, #edf2f7); color: #1a202c; }
     .wrap { max-width: 720px; margin: 36px auto; padding: 0 16px; }
@@ -103,6 +104,7 @@ type trialSignupPageData struct {
 	Company      string
 	ErrorMessage string
 	Cancelled    bool
+	Nonce        string
 }
 
 func NewTrialSignupHandlers(cfg *CPConfig) *TrialSignupHandlers {
@@ -131,7 +133,7 @@ func (h *TrialSignupHandlers) HandleStartProTrial(w http.ResponseWriter, r *http
 	if data.ReturnURL == "" {
 		data.ErrorMessage = "Missing return_url. Please restart from Pulse Settings > Pro License."
 	}
-	h.renderTrialSignupPage(w, http.StatusOK, data)
+	h.renderTrialSignupPage(w, r, http.StatusOK, data)
 }
 
 // HandleCheckout creates a Stripe Checkout Session for trial signup.
@@ -155,17 +157,17 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 
 	if !isValidTrialReturnURL(data.ReturnURL) {
 		data.ErrorMessage = "A valid return URL is required. Please restart from Pulse Settings > Pro License."
-		h.renderTrialSignupPage(w, http.StatusBadRequest, data)
+		h.renderTrialSignupPage(w, r, http.StatusBadRequest, data)
 		return
 	}
 	if !isValidTrialEmail(data.Email) {
 		data.ErrorMessage = "A valid email address is required."
-		h.renderTrialSignupPage(w, http.StatusBadRequest, data)
+		h.renderTrialSignupPage(w, r, http.StatusBadRequest, data)
 		return
 	}
 	if strings.TrimSpace(h.cfg.StripeAPIKey) == "" || strings.TrimSpace(h.cfg.TrialSignupPriceID) == "" {
 		data.ErrorMessage = "Checkout is not configured yet. Please contact support."
-		h.renderTrialSignupPage(w, http.StatusServiceUnavailable, data)
+		h.renderTrialSignupPage(w, r, http.StatusServiceUnavailable, data)
 		return
 	}
 
@@ -211,7 +213,7 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 			Str("email", data.Email).
 			Msg("trial signup checkout session creation failed")
 		data.ErrorMessage = "Unable to create checkout session. Please try again."
-		h.renderTrialSignupPage(w, http.StatusBadGateway, data)
+		h.renderTrialSignupPage(w, r, http.StatusBadGateway, data)
 		return
 	}
 
@@ -304,7 +306,8 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 	http.Redirect(w, r, finalReturnURL, http.StatusSeeOther)
 }
 
-func (h *TrialSignupHandlers) renderTrialSignupPage(w http.ResponseWriter, status int, data trialSignupPageData) {
+func (h *TrialSignupHandlers) renderTrialSignupPage(w http.ResponseWriter, r *http.Request, status int, data trialSignupPageData) {
+	data.Nonce = cpsec.NonceFromContext(r.Context())
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	if err := trialSignupPageTemplate.Execute(w, data); err != nil {

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/cpsec"
 	cpemail "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rs/zerolog/log"
@@ -26,7 +27,7 @@ var publicCloudSignupPageTemplate = template.Must(template.New("public-cloud-sig
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Start Pulse Cloud</title>
-  <style>
+  <style nonce="{{.Nonce}}">
     :root { color-scheme: light; }
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: linear-gradient(140deg, #f8fafc, #e2e8f0); color: #0f172a; }
     .wrap { max-width: 760px; margin: 36px auto; padding: 0 16px; }
@@ -80,7 +81,7 @@ var publicCloudSignupCompleteTemplate = template.Must(template.New("public-cloud
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pulse Cloud Signup Complete</title>
-  <style>
+  <style nonce="{{.Nonce}}">
     :root { color-scheme: light; }
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f8fafc; color: #0f172a; }
     .wrap { max-width: 680px; margin: 48px auto; padding: 0 16px; }
@@ -116,6 +117,12 @@ type publicCloudSignupPageData struct {
 	OrgName      string
 	ErrorMessage string
 	Cancelled    bool
+	Nonce        string
+}
+
+// publicCloudSignupCompleteData carries nonce for the signup-complete page.
+type publicCloudSignupCompleteData struct {
+	Nonce string
 }
 
 type publicCloudSignupRequest struct {
@@ -147,7 +154,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 			OrgName:   strings.TrimSpace(r.URL.Query().Get("org_name")),
 			Cancelled: strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("cancelled")), "1"),
 		}
-		h.renderSignupPage(w, http.StatusOK, data)
+		h.renderSignupPage(w, r, http.StatusOK, data)
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "Invalid form body", http.StatusBadRequest)
@@ -156,7 +163,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 		email := strings.TrimSpace(r.FormValue("email"))
 		orgName := strings.TrimSpace(r.FormValue("org_name"))
 		if !isValidCloudSignupEmail(email) {
-			h.renderSignupPage(w, http.StatusBadRequest, publicCloudSignupPageData{
+			h.renderSignupPage(w, r, http.StatusBadRequest, publicCloudSignupPageData{
 				Email:        email,
 				OrgName:      orgName,
 				ErrorMessage: "A valid email address is required.",
@@ -164,7 +171,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 			return
 		}
 		if !isValidCloudSignupOrgName(orgName) {
-			h.renderSignupPage(w, http.StatusBadRequest, publicCloudSignupPageData{
+			h.renderSignupPage(w, r, http.StatusBadRequest, publicCloudSignupPageData{
 				Email:        email,
 				OrgName:      orgName,
 				ErrorMessage: "Organization name must be 3-64 characters and cannot contain slashes.",
@@ -175,7 +182,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 		checkoutURL, err := h.createCheckout(email, orgName)
 		if err != nil {
 			log.Warn().Err(err).Str("email", email).Msg("public cloud signup checkout creation failed")
-			h.renderSignupPage(w, http.StatusBadGateway, publicCloudSignupPageData{
+			h.renderSignupPage(w, r, http.StatusBadGateway, publicCloudSignupPageData{
 				Email:        email,
 				OrgName:      orgName,
 				ErrorMessage: "Unable to create checkout session. Please try again.",
@@ -194,7 +201,9 @@ func (h *PublicCloudSignupHandlers) HandleSignupComplete(w http.ResponseWriter, 
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := publicCloudSignupCompleteTemplate.Execute(w, nil); err != nil {
+	if err := publicCloudSignupCompleteTemplate.Execute(w, publicCloudSignupCompleteData{
+		Nonce: cpsec.NonceFromContext(r.Context()),
+	}); err != nil {
 		log.Error().Err(err).Msg("public cloud signup complete page render failed")
 	}
 }
@@ -357,7 +366,8 @@ func (h *PublicCloudSignupHandlers) createCheckout(email, orgName string) (strin
 	return strings.TrimSpace(session.URL), nil
 }
 
-func (h *PublicCloudSignupHandlers) renderSignupPage(w http.ResponseWriter, status int, data publicCloudSignupPageData) {
+func (h *PublicCloudSignupHandlers) renderSignupPage(w http.ResponseWriter, r *http.Request, status int, data publicCloudSignupPageData) {
+	data.Nonce = cpsec.NonceFromContext(r.Context())
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	if err := publicCloudSignupPageTemplate.Execute(w, data); err != nil {

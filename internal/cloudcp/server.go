@@ -112,7 +112,7 @@ func Run(ctx context.Context, version string) error {
 	addr := fmt.Sprintf("%s:%d", cfg.BindAddress, cfg.Port)
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           mux,
+		Handler:           CPSecurityHeaders(mux),
 		ReadHeaderTimeout: 15 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
