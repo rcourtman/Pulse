@@ -64,7 +64,7 @@
     /* Semantic Colors - Dark Mode */
     --color-bg-base: theme('colors.slate.900');
     --color-bg-surface: theme('colors.slate.800');
-    --color-bg-surface-hover: theme('colors.slate.750', #2d3748);
+    --color-bg-surface-hover: theme('colors.slate.700');
     --color-bg-surface-alt: theme('colors.slate.800');
     /* Fallback */
     --color-border-subtle: theme('colors.slate.800');
