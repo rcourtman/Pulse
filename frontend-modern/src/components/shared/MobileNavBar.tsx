@@ -15,7 +15,7 @@ type PlatformTab = {
 };
 
 type UtilityTab = {
-  id: 'alerts' | 'ai' | 'settings';
+  id: 'alerts' | 'ai' | 'operations' | 'settings';
   label: string;
   route: string;
   tooltip: string;
@@ -56,7 +56,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
 
   const orderedUtilityTabs = createMemo(() => {
     const tabs = props.utilityTabs();
-    const priority = ['alerts', 'settings', 'ai'];
+    const priority = ['alerts', 'ai', 'operations', 'settings'];
     const prioritySet = new Set(priority);
     const byId = new Map(tabs.map((tab) => [tab.id, tab]));
     const ordered: UtilityTab[] = [];

@@ -20,6 +20,10 @@ describe('navigation routing helpers', () => {
     expect(getActiveTabForPath('/mail')).toBe('infrastructure');
     expect(getActiveTabForPath('/services')).toBe('infrastructure');
     expect(getActiveTabForPath('/alerts/open')).toBe('alerts');
+    expect(getActiveTabForPath('/ai')).toBe('ai');
+    expect(getActiveTabForPath('/operations')).toBe('operations');
+    expect(getActiveTabForPath('/operations/diagnostics')).toBe('operations');
+    expect(getActiveTabForPath('/operations/logs')).toBe('operations');
     expect(getActiveTabForPath('/settings/security')).toBe('settings');
   });
 

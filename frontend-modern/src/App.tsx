@@ -1620,17 +1620,6 @@ function AppLayout(props: {
         ),
         alwaysShow: true,
       })),
-      {
-        id: 'operations' as const,
-        label: 'Operations',
-        route: '/operations',
-        settingsRoute: '/operations',
-        tooltip: 'System operations, diagnostics, and reporting',
-        enabled: true,
-        live: true,
-        icon: <ActivityIcon class="w-4 h-4 shrink-0" />,
-        alwaysShow: true,
-      },
     ];
 
     // Filter out platforms that should be hidden when not configured
@@ -1683,17 +1672,6 @@ function AppLayout(props: {
         ),
         alwaysShow: true,
       })),
-      {
-        id: 'operations' as const,
-        label: 'Operations',
-        route: '/operations',
-        settingsRoute: '/operations',
-        tooltip: 'System operations, diagnostics, and reporting',
-        enabled: true,
-        live: true,
-        icon: <ActivityIcon class="w-4 h-4 shrink-0" />,
-        alwaysShow: true,
-      },
     ];
 
     return allPlatforms.filter((p) => p.alwaysShow || p.enabled);
@@ -1724,7 +1702,7 @@ function AppLayout(props: {
       !scopes || scopes.length === 0 || scopes.includes('*') || scopes.includes('settings:read');
 
     const tabs: Array<{
-      id: 'alerts' | 'ai' | 'settings';
+      id: 'alerts' | 'ai' | 'operations' | 'settings';
       label: string;
       route: string;
       tooltip: string;
@@ -1752,6 +1730,16 @@ function AppLayout(props: {
         count: undefined,
         breakdown: undefined,
         icon: <PulsePatrolLogo class="w-4 h-4 shrink-0" />,
+      },
+      {
+        id: 'operations',
+        label: 'Operations',
+        route: '/operations',
+        tooltip: 'System operations, diagnostics, and reporting',
+        badge: null,
+        count: undefined,
+        breakdown: undefined,
+        icon: <ActivityIcon class="w-4 h-4 shrink-0" />,
       },
     ];
 
