@@ -6915,7 +6915,7 @@ func (h *AISettingsHandler) HandleReinvestigateFinding(w http.ResponseWriter, r 
 		return
 	}
 
-	autonomyLevel := cfg.GetPatrolAutonomyLevel()
+	autonomyLevel := aiService.GetEffectivePatrolAutonomyLevel()
 	if autonomyLevel == config.PatrolAutonomyMonitor {
 		writeErrorResponse(w, http.StatusBadRequest, "autonomy_disabled",
 			"Patrol autonomy is set to 'monitor' mode. Enable 'approval', 'assisted', or 'full' mode to investigate findings.", nil)

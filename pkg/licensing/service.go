@@ -310,7 +310,7 @@ func (s *Service) GetLicenseStateString() (string, bool) {
 // This is the primary method for feature gating.
 func (s *Service) RequireFeature(feature string) error {
 	if !s.HasFeature(feature) {
-		return fmt.Errorf("%w: %s requires Pulse Pro", ErrFeatureNotIncluded, GetFeatureDisplayName(feature))
+		return fmt.Errorf("%w: %s requires Pulse %s or above", ErrFeatureNotIncluded, GetFeatureDisplayName(feature), GetFeatureMinTierName(feature))
 	}
 	return nil
 }

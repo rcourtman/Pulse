@@ -211,6 +211,19 @@ func GetTierDisplayName(tier Tier) string {
 	}
 }
 
+// GetFeatureMinTierName returns the display name of the lowest tier that includes the given feature.
+// This is used for user-facing messages like "requires Pulse Relay or above".
+// The tier ordering is: Free < Relay < Pro < MSP < Enterprise.
+func GetFeatureMinTierName(feature string) string {
+	orderedTiers := []Tier{TierFree, TierRelay, TierPro, TierMSP, TierEnterprise}
+	for _, tier := range orderedTiers {
+		if TierHasFeature(tier, feature) {
+			return GetTierDisplayName(tier)
+		}
+	}
+	return "Pro" // fallback
+}
+
 // GetFeatureDisplayName returns a human-readable name for a feature.
 func GetFeatureDisplayName(feature string) string {
 	switch feature {

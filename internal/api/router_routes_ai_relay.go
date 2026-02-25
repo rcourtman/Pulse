@@ -63,19 +63,19 @@ func (r *Router) registerAIRelayRoutesGroup() {
 		if !ensureSettingsReadScope(r.config, w, req) {
 			return
 		}
-		r.handleGetOnboardingQR(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureRelayKey, r.handleGetOnboardingQR)(w, req)
 	})))
 	r.mux.HandleFunc("POST /api/onboarding/validate", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureSettingsReadScope(r.config, w, req) {
 			return
 		}
-		r.handleValidateOnboardingConnection(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureRelayKey, r.handleValidateOnboardingConnection)(w, req)
 	})))
 	r.mux.HandleFunc("GET /api/onboarding/deep-link", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureSettingsReadScope(r.config, w, req) {
 			return
 		}
-		r.handleGetOnboardingDeepLink(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureRelayKey, r.handleGetOnboardingDeepLink)(w, req)
 	})))
 
 	// AI Patrol routes for background monitoring
