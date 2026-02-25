@@ -21,9 +21,6 @@ import (
 )
 
 func TestTrialStart_DefaultOrgWritesBillingJSONAndEnablesTrialEntitlements(t *testing.T) {
-	t.Setenv("PULSE_ALLOW_LOCAL_TRIAL_START", "true")
-	t.Setenv("PULSE_DEV", "true")
-
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
 	h := NewLicenseHandlers(mtp, false)
@@ -134,7 +131,7 @@ func TestTrialStart_DefaultOrgWritesBillingJSONAndEnablesTrialEntitlements(t *te
 	}
 }
 
-func TestTrialStart_DefaultPathRequiresHostedSignup(t *testing.T) {
+func TestTrialStart_LocalTrialStartAlwaysEnabled(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
 	h := NewLicenseHandlers(mtp, false)
@@ -144,112 +141,44 @@ func TestTrialStart_DefaultPathRequiresHostedSignup(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.HandleStartTrial(rec, req)
 
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusConflict, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
 	}
 
-	var apiErr APIError
-	if err := json.NewDecoder(rec.Body).Decode(&apiErr); err != nil {
-		t.Fatalf("decode APIError: %v", err)
+	var state entitlements.BillingState
+	if err := json.NewDecoder(rec.Body).Decode(&state); err != nil {
+		t.Fatalf("decode response: %v", err)
 	}
-	if apiErr.Code != "trial_signup_required" {
-		t.Fatalf("code=%q, want %q", apiErr.Code, "trial_signup_required")
-	}
-	actionURL := apiErr.Details["action_url"]
-	parsedActionURL, err := url.Parse(actionURL)
-	if err != nil {
-		t.Fatalf("parse action_url: %v", err)
-	}
-	parsedDefaultURL, err := url.Parse(pkglicensing.DefaultProTrialSignupURL)
-	if err != nil {
-		t.Fatalf("parse default trial signup url: %v", err)
-	}
-	if parsedActionURL.Scheme != parsedDefaultURL.Scheme || parsedActionURL.Host != parsedDefaultURL.Host || parsedActionURL.Path != parsedDefaultURL.Path {
-		t.Fatalf("action_url base=%q://%q%q, want %q://%q%q",
-			parsedActionURL.Scheme, parsedActionURL.Host, parsedActionURL.Path,
-			parsedDefaultURL.Scheme, parsedDefaultURL.Host, parsedDefaultURL.Path)
-	}
-	if parsedActionURL.Query().Get("org_id") != "default" {
-		t.Fatalf("action_url org_id=%q, want %q", parsedActionURL.Query().Get("org_id"), "default")
-	}
-	if parsedActionURL.Query().Get("return_url") != "http://example.com/auth/trial-activate" {
-		t.Fatalf("action_url return_url=%q, want %q", parsedActionURL.Query().Get("return_url"), "http://example.com/auth/trial-activate")
+	if state.SubscriptionState != entitlements.SubStateTrial {
+		t.Fatalf("subscription_state=%q, want %q", state.SubscriptionState, entitlements.SubStateTrial)
 	}
 }
 
-func TestTrialStart_LocalStartOverrideIgnoredOutsideDevMode(t *testing.T) {
-	t.Setenv("PULSE_ALLOW_LOCAL_TRIAL_START", "true")
-	t.Setenv("PULSE_DEV", "false")
-	t.Setenv("NODE_ENV", "production")
-
+func TestTrialStart_RejectsSecondAttemptWithoutEnvVars(t *testing.T) {
+	// Verifies that even without env vars, the first trial start succeeds
+	// but the second is rejected (eligibility check blocks it).
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
 	h := NewLicenseHandlers(mtp, false)
 
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
-	req := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
-	rec := httptest.NewRecorder()
-	h.HandleStartTrial(rec, req)
 
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusConflict, rec.Body.String())
-	}
-
-	var apiErr APIError
-	if err := json.NewDecoder(rec.Body).Decode(&apiErr); err != nil {
-		t.Fatalf("decode APIError: %v", err)
-	}
-	if apiErr.Code != "trial_signup_required" {
-		t.Fatalf("code=%q, want %q", apiErr.Code, "trial_signup_required")
-	}
-}
-
-func TestTrialStart_DefaultPathUsesConfiguredTrialSignupURL(t *testing.T) {
-	baseDir := t.TempDir()
-	mtp := config.NewMultiTenantPersistence(baseDir)
-
-	cfg := &config.Config{ProTrialSignupURL: "https://billing.example.com/start-pro-trial?source=test"}
-	h := NewLicenseHandlers(mtp, false, cfg)
-
-	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
-	req := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
-	rec := httptest.NewRecorder()
-	h.HandleStartTrial(rec, req)
-
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusConflict, rec.Body.String())
+	req1 := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
+	rec1 := httptest.NewRecorder()
+	h.HandleStartTrial(rec1, req1)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("first status=%d, want %d: %s", rec1.Code, http.StatusOK, rec1.Body.String())
 	}
 
-	var apiErr APIError
-	if err := json.NewDecoder(rec.Body).Decode(&apiErr); err != nil {
-		t.Fatalf("decode APIError: %v", err)
-	}
-	actionURL := apiErr.Details["action_url"]
-	parsedActionURL, err := url.Parse(actionURL)
-	if err != nil {
-		t.Fatalf("parse action_url: %v", err)
-	}
-	parsedConfiguredURL, err := url.Parse(cfg.ProTrialSignupURL)
-	if err != nil {
-		t.Fatalf("parse configured trial signup url: %v", err)
-	}
-	if parsedActionURL.Scheme != parsedConfiguredURL.Scheme || parsedActionURL.Host != parsedConfiguredURL.Host || parsedActionURL.Path != parsedConfiguredURL.Path {
-		t.Fatalf("action_url base=%q://%q%q, want %q://%q%q",
-			parsedActionURL.Scheme, parsedActionURL.Host, parsedActionURL.Path,
-			parsedConfiguredURL.Scheme, parsedConfiguredURL.Host, parsedConfiguredURL.Path)
-	}
-	if parsedActionURL.Query().Get("org_id") != "default" {
-		t.Fatalf("action_url org_id=%q, want %q", parsedActionURL.Query().Get("org_id"), "default")
-	}
-	if parsedActionURL.Query().Get("return_url") != "http://example.com/auth/trial-activate" {
-		t.Fatalf("action_url return_url=%q, want %q", parsedActionURL.Query().Get("return_url"), "http://example.com/auth/trial-activate")
+	req2 := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
+	rec2 := httptest.NewRecorder()
+	h.HandleStartTrial(rec2, req2)
+	if rec2.Code != http.StatusConflict {
+		t.Fatalf("second status=%d, want %d: %s", rec2.Code, http.StatusConflict, rec2.Body.String())
 	}
 }
 
 func TestTrialStart_RejectsSecondAttemptForSameOrg(t *testing.T) {
-	t.Setenv("PULSE_ALLOW_LOCAL_TRIAL_START", "true")
-	t.Setenv("PULSE_DEV", "true")
-
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
 	h := NewLicenseHandlers(mtp, false)

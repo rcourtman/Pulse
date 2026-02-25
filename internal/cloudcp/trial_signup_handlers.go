@@ -51,7 +51,7 @@ var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Pa
   <div class="wrap">
     <div class="card">
       <h1>Start Your 14-Day Pulse Pro Trial</h1>
-      <p>Complete registration to start your trial. Your card is collected now and billing begins only after the trial period unless you cancel first.</p>
+      <p>Complete registration to start your free 14-day trial. No credit card required.</p>
 
       {{if .ErrorMessage}}<div class="error">{{.ErrorMessage}}</div>{{end}}
       {{if .Cancelled}}<div class="note">Checkout was cancelled. You can retry at any time.</div>{{end}}
@@ -187,7 +187,7 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 		SuccessURL:              stripe.String(successURL),
 		CancelURL:               stripe.String(cancelURL),
 		CustomerEmail:           stripe.String(data.Email),
-		PaymentMethodCollection: stripe.String(string(stripe.CheckoutSessionPaymentMethodCollectionAlways)),
+		PaymentMethodCollection: stripe.String(string(stripe.CheckoutSessionPaymentMethodCollectionIfRequired)),
 		LineItems: []*stripe.CheckoutSessionLineItemParams{
 			{
 				Price:    stripe.String(strings.TrimSpace(h.cfg.TrialSignupPriceID)),
@@ -196,6 +196,11 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 		},
 		SubscriptionData: &stripe.CheckoutSessionSubscriptionDataParams{
 			TrialPeriodDays: stripe.Int64(trialSignupTrialDays),
+			TrialSettings: &stripe.CheckoutSessionSubscriptionDataTrialSettingsParams{
+				EndBehavior: &stripe.CheckoutSessionSubscriptionDataTrialSettingsEndBehaviorParams{
+					MissingPaymentMethod: stripe.String("cancel"),
+				},
+			},
 		},
 		Metadata: map[string]string{
 			"org_id":     data.OrgID,

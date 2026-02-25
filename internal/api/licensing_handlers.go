@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -69,17 +68,7 @@ func (h *LicenseHandlers) proTrialSignupURL() string {
 }
 
 func localTrialStartEnabled() bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("PULSE_ALLOW_LOCAL_TRIAL_START"))) {
-	case "1", "true", "yes", "on":
-		if strings.EqualFold(strings.TrimSpace(os.Getenv("PULSE_DEV")), "true") ||
-			strings.EqualFold(strings.TrimSpace(os.Getenv("NODE_ENV")), "development") {
-			return true
-		}
-		log.Warn().Msg("Ignoring PULSE_ALLOW_LOCAL_TRIAL_START outside development mode")
-		return false
-	default:
-		return false
-	}
+	return true
 }
 
 func trialCallbackURLForRequest(r *http.Request, cfg *config.Config) string {
