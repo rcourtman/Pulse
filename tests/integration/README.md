@@ -28,9 +28,9 @@ End-to-end Playwright tests that validate critical user flows against a running 
   - Logged-out login page (full page + form card)
   - Authenticated Settings → Authentication page
 - `tests/07-trial-signup-return.spec.ts` — trial workflow contract:
-  - Click "Start 14-day Pro Trial" redirects to hosted signup URL
-  - Complete real Stripe sandbox checkout
-  - Return to Pulse and verify real trial expiry/countdown state (not lifetime)
+  - Start local 14-day Pro trial via API (no credit card required)
+  - Verify Pro entitlements activate with trial expiry/countdown state (not lifetime)
+  - Verify second trial start is rejected
 - `tests/08-cloud-hosting.spec.ts` — hosted cloud signup contract:
   - Public `/cloud/signup` form creates a real Stripe sandbox checkout session
   - Checkout completes and returns to hosted signup completion page

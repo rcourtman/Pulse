@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
 import { apiRequest, ensureAuthenticated } from './helpers';
-import { completeStripeSandboxCheckout } from './stripe-sandbox';
 
 type EntitlementPayload = {
   subscription_state?: string;
@@ -11,18 +10,8 @@ type EntitlementPayload = {
   is_lifetime?: boolean;
 };
 
-function trialIdentity() {
-  const suffix = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
-  const domain = (process.env.PULSE_E2E_TRIAL_EMAIL_DOMAIN || 'example.com').trim() || 'example.com';
-  return {
-    name: `Trial E2E ${suffix}`,
-    email: `trial-e2e-${suffix}@${domain}`,
-    company: 'Pulse E2E',
-  };
-}
-
 test.describe.serial('Trial signup return flow', () => {
-  test('completes hosted signup via Stripe sandbox and activates real trial', async ({ page }, testInfo) => {
+  test('starts local trial without credit card and activates entitlements', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only trial workflow coverage');
 
     await ensureAuthenticated(page);
@@ -40,46 +29,16 @@ test.describe.serial('Trial signup return flow', () => {
       'Expected trial_eligible=true before test.',
     ).toBe(true);
 
-    await page.goto('/settings');
-    await page.getByRole('button', { name: /pulse pro/i }).first().click();
-    await expect(page.getByRole('heading', { name: 'Current License' })).toBeVisible();
-
-    const refreshButton = page.getByRole('button', { name: /refresh/i }).first();
-    if (await refreshButton.isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await refreshButton.click();
-    }
-
-    const startTrialButton = page.getByRole('button', { name: /start.*trial/i }).first();
-    await expect(startTrialButton).toBeVisible();
-    await startTrialButton.click();
-
-    await page.waitForURL(/\/start-pro-trial\?/, { timeout: 30_000 });
-
-    const identity = trialIdentity();
-    await page.locator('#name').fill(identity.name);
-    await page.locator('#email').fill(identity.email);
-    await page.locator('#company').fill(identity.company);
-    await page.getByRole('button', { name: /continue to secure checkout/i }).click();
-
-    const redirectedToStripe = await page
-      .waitForURL(/checkout\.stripe\.com/i, { timeout: 20_000 })
-      .then(() => true)
-      .catch(() => false);
-    test.skip(
-      !redirectedToStripe,
-      'Stripe checkout redirect unavailable; configure hosted trial + Stripe in this environment.',
-    );
-    if (!redirectedToStripe) {
-      return;
-    }
-
-    await completeStripeSandboxCheckout(page, {
-      email: identity.email,
-      cardholderName: identity.name,
+    // Start trial via API (no credit card required).
+    const startRes = await apiRequest(page, '/api/license/trial/start', {
+      method: 'POST',
     });
+    expect(startRes.ok(), `trial start failed: HTTP ${startRes.status()}`).toBeTruthy();
 
-    await page.waitForURL(/\/settings\?trial=activated/, { timeout: 120_000 });
+    const startPayload = await startRes.json();
+    expect(startPayload.subscription_state).toBe('trial');
 
+    // Verify entitlements reflect active trial.
     await expect.poll(async () => {
       const res = await apiRequest(page, '/api/license/entitlements');
       if (!res.ok()) {
@@ -98,6 +57,7 @@ test.describe.serial('Trial signup return flow', () => {
     expect(post.is_lifetime ?? false).toBe(false);
     expect(post.trial_eligible).toBe(false);
 
+    // Verify UI reflects trial state.
     await page.goto('/settings');
     await page.getByRole('button', { name: /pulse pro/i }).first().click();
     await expect(page.getByRole('heading', { name: 'Current License' })).toBeVisible();
@@ -118,5 +78,11 @@ test.describe.serial('Trial signup return flow', () => {
     const daysRemaining = Number.parseInt(daysRemainingText, 10);
     expect(Number.isNaN(daysRemaining)).toBeFalsy();
     expect(daysRemaining).toBeGreaterThan(0);
+
+    // Verify second trial start is rejected.
+    const secondRes = await apiRequest(page, '/api/license/trial/start', {
+      method: 'POST',
+    });
+    expect(secondRes.status()).toBe(409);
   });
 });

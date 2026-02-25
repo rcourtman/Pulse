@@ -25,7 +25,7 @@
     {
       "id": "trial-signup",
       "name": "Pro Trial Signup Return",
-      "description": "Ensures trial flow redirects to hosted signup, completes Stripe sandbox checkout, and returns with trial entitlements.",
+      "description": "Ensures local trial starts without credit card, activates Pro entitlements, and prevents duplicate trials.",
       "deterministic": {
         "command": [
           "npx",

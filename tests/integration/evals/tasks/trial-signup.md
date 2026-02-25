@@ -1,7 +1,7 @@
-# Scenario: Pro Trial Signup Return
+# Scenario: Pro Trial Signup
 
 ## Goal
-Prove the real trial activation path requires hosted signup, completes Stripe sandbox checkout, and returns with real trial expiry details (not lifetime).
+Prove the local trial activation path works without a credit card, activates Pro entitlements, and prevents duplicate trials.
 
 ## Environment
 - Base URL: `{{base_url}}`
@@ -9,11 +9,11 @@ Prove the real trial activation path requires hosted signup, completes Stripe sa
 - Password: `{{password}}`
 
 ## Required checks
-1. Open settings and locate Pro trial action.
-2. Start trial and confirm redirect to hosted signup endpoint.
-3. Submit hosted trial form and complete Stripe sandbox checkout with test card details.
+1. Verify pre-trial entitlements show `trial_eligible=true`.
+2. Start trial via `POST /api/license/trial/start` and confirm HTTP 200 with `subscription_state=trial`.
+3. Verify post-trial entitlements are `tier=pro`, `subscription_state=trial`, and not lifetime.
 4. Verify license panel shows trial expiry date and day countdown.
-5. Verify backend entitlements are `tier=pro`, `subscription_state=trial`, and not lifetime.
+5. Verify second trial start is rejected with HTTP 409.
 
 ## Output contract
 Write JSON to `{{result_json}}` with this shape:

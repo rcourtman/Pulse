@@ -7,7 +7,6 @@ set -euo pipefail
 PULSE_BASE_URL="${PULSE_BASE_URL:-http://127.0.0.1:7655}"
 PULSE_E2E_USERNAME="${PULSE_E2E_USERNAME:-admin}"
 PULSE_E2E_PASSWORD="${PULSE_E2E_PASSWORD:-admin}"
-TRIAL_ORG_ID="${TRIAL_ORG_ID:-default}"
 WAIT_TIMEOUT_SECONDS="${WAIT_TIMEOUT_SECONDS:-60}"
 
 if ! command -v curl >/dev/null 2>&1; then

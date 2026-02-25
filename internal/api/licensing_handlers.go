@@ -57,20 +57,6 @@ func (h *LicenseHandlers) SetConfig(cfg *config.Config) {
 	h.cfg = cfg
 }
 
-func (h *LicenseHandlers) proTrialSignupURL() string {
-	config.Mu.RLock()
-	defer config.Mu.RUnlock()
-
-	if h != nil && h.cfg != nil {
-		return proTrialSignupURLFromLicensing(h.cfg.ProTrialSignupURL)
-	}
-	return proTrialSignupURLFromLicensing("")
-}
-
-func localTrialStartEnabled() bool {
-	return true
-}
-
 func trialCallbackURLForRequest(r *http.Request, cfg *config.Config) string {
 	baseURL := ""
 	if cfg != nil {
@@ -115,24 +101,6 @@ func normalizeHostForTrial(raw string) string {
 	}
 	raw = strings.Trim(raw, "[]")
 	return strings.ToLower(strings.TrimSpace(raw))
-}
-
-func (h *LicenseHandlers) hostedTrialSignupActionURL(r *http.Request, orgID string) string {
-	base := h.proTrialSignupURL()
-	parsed, err := url.Parse(base)
-	if err != nil || parsed == nil {
-		return base
-	}
-
-	query := parsed.Query()
-	if trimmedOrg := strings.TrimSpace(orgID); trimmedOrg != "" {
-		query.Set("org_id", trimmedOrg)
-	}
-	if callback := trialCallbackURLForRequest(r, h.cfg); callback != "" {
-		query.Set("return_url", callback)
-	}
-	parsed.RawQuery = query.Encode()
-	return parsed.String()
 }
 
 // getTenantComponents resolves the license service and persistence for the current tenant.
@@ -278,16 +246,6 @@ func (h *LicenseHandlers) HandleStartTrial(w http.ResponseWriter, r *http.Reques
 	orgID := GetOrgID(r.Context())
 	if orgID == "" {
 		orgID = "default"
-	}
-
-	// Default path: require hosted signup/checkout for trial starts.
-	// This avoids anonymous local trial activation that can be abused by fresh installs.
-	if !localTrialStartEnabled() {
-		writeErrorResponse(w, http.StatusConflict, "trial_signup_required", "Trial signup is required before activation", map[string]string{
-			"org_id":     orgID,
-			"action_url": h.hostedTrialSignupActionURL(r, orgID),
-		})
-		return
 	}
 
 	svc, _, err := h.getTenantComponents(r.Context())
