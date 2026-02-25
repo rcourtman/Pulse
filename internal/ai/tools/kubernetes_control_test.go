@@ -209,7 +209,7 @@ func TestExecuteKubernetesScale(t *testing.T) {
 			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
 		}
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			return cmd.Command == "kubectl -n default scale deployment nginx --replicas=3" &&
+			return cmd.Command == "kubectl -n 'default' scale deployment 'nginx' --replicas=3" &&
 				cmd.TargetType == "host"
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
@@ -256,7 +256,7 @@ func TestExecuteKubernetesRestart(t *testing.T) {
 			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
 		}
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			return cmd.Command == "kubectl -n default rollout restart deployment/nginx"
+			return cmd.Command == "kubectl -n 'default' rollout restart deployment/'nginx'"
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   "deployment.apps/nginx restarted",
@@ -300,7 +300,7 @@ func TestExecuteKubernetesDeletePod(t *testing.T) {
 			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
 		}
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			return cmd.Command == "kubectl -n default delete pod nginx-abc123"
+			return cmd.Command == "kubectl -n 'default' delete pod 'nginx-abc123'"
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   "pod \"nginx-abc123\" deleted",
@@ -563,7 +563,7 @@ func TestExecuteKubernetesLogs(t *testing.T) {
 			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
 		}
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			return cmd.Command == "kubectl -n default logs nginx-pod --tail=50"
+			return cmd.Command == "kubectl -n 'default' logs 'nginx-pod' --tail=50"
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   "2024-01-01 10:00:00 Request received\n2024-01-01 10:00:01 Response sent",
@@ -596,7 +596,7 @@ func TestExecuteKubernetesLogs(t *testing.T) {
 			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
 		}
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			return cmd.Command == "kubectl -n default logs nginx-pod -c sidecar --tail=100"
+			return cmd.Command == "kubectl -n 'default' logs 'nginx-pod' -c 'sidecar' --tail=100"
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   "Sidecar logs here",

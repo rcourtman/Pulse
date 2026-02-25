@@ -551,7 +551,11 @@ var (
 	sessionsMu  sync.RWMutex
 )
 
-// TrackUserSession tracks which sessions belong to which user
+// maxSessionsPerUser limits concurrent sessions to prevent session accumulation.
+const maxSessionsPerUser = 10
+
+// TrackUserSession tracks which sessions belong to which user.
+// When the limit is exceeded, the oldest sessions are evicted.
 func TrackUserSession(user, sessionID string) {
 	sessionsMu.Lock()
 	defer sessionsMu.Unlock()
@@ -559,7 +563,32 @@ func TrackUserSession(user, sessionID string) {
 	if allSessions[user] == nil {
 		allSessions[user] = []string{}
 	}
+
+	// Add the new session
 	allSessions[user] = append(allSessions[user], sessionID)
+
+	// If near the limit, prune stale session IDs (already deleted via logout/
+	// rotation/expiry) before evicting valid sessions.
+	if len(allSessions[user]) > maxSessionsPerUser {
+		store := GetSessionStore()
+		alive := make([]string, 0, len(allSessions[user]))
+		for _, sid := range allSessions[user] {
+			if store.ValidateSession(sid) {
+				alive = append(alive, sid)
+			}
+		}
+		allSessions[user] = alive
+
+		// After pruning stale entries, evict oldest if still over the limit
+		if len(allSessions[user]) > maxSessionsPerUser {
+			excess := allSessions[user][:len(allSessions[user])-maxSessionsPerUser]
+			for _, oldSID := range excess {
+				store.DeleteSession(oldSID)
+				GetCSRFStore().DeleteCSRFToken(oldSID)
+			}
+			allSessions[user] = allSessions[user][len(allSessions[user])-maxSessionsPerUser:]
+		}
+	}
 }
 
 // GetSessionUsername returns the username associated with a session ID
@@ -608,17 +637,40 @@ func InvalidateUserSessions(user string) {
 		Msg("Invalidated all user sessions")
 }
 
-// UntrackUserSession removes a single session from a user's session list
+// UntrackUserSession removes all occurrences of a session from a user's session list
 // (used for single session logout, not password change which clears all)
 func UntrackUserSession(user, sessionID string) {
 	sessionsMu.Lock()
 	defer sessionsMu.Unlock()
 
 	sessions := allSessions[user]
-	for i, sid := range sessions {
-		if sid == sessionID {
-			allSessions[user] = append(sessions[:i], sessions[i+1:]...)
-			break
+	filtered := sessions[:0]
+	for _, sid := range sessions {
+		if sid != sessionID {
+			filtered = append(filtered, sid)
 		}
+	}
+	allSessions[user] = filtered
+}
+
+// InvalidateOldSessionFromRequest destroys any pre-existing session cookie to
+// prevent session fixation attacks. Call this before creating a new session.
+// It deletes the session from the persistent store, its CSRF token, and
+// removes it from the in-memory user session tracking map.
+func InvalidateOldSessionFromRequest(r *http.Request) {
+	cookie, err := r.Cookie("pulse_session")
+	if err != nil || cookie.Value == "" {
+		return
+	}
+	oldToken := cookie.Value
+
+	// Remove from persistent store
+	GetSessionStore().DeleteSession(oldToken)
+	GetCSRFStore().DeleteCSRFToken(oldToken)
+
+	// Remove from in-memory tracking so GetSessionUsername won't resolve it
+	user := GetSessionUsername(oldToken)
+	if user != "" {
+		UntrackUserSession(user, oldToken)
 	}
 }

@@ -529,7 +529,7 @@ func (e *PulseToolExecutor) executeKubernetesScale(ctx context.Context, args map
 	}
 
 	// Build command
-	command := fmt.Sprintf("kubectl -n %s scale deployment %s --replicas=%d", namespace, deployment, replicas)
+	command := fmt.Sprintf("kubectl -n %s scale deployment %s --replicas=%d", shellEscape(namespace), shellEscape(deployment), replicas)
 	clusterScope := cluster.ID
 	if clusterScope == "" {
 		clusterScope = clusterArg
@@ -609,7 +609,7 @@ func (e *PulseToolExecutor) executeKubernetesRestart(ctx context.Context, args m
 	}
 
 	// Build command
-	command := fmt.Sprintf("kubectl -n %s rollout restart deployment/%s", namespace, deployment)
+	command := fmt.Sprintf("kubectl -n %s rollout restart deployment/%s", shellEscape(namespace), shellEscape(deployment))
 	clusterScope := cluster.ID
 	if clusterScope == "" {
 		clusterScope = clusterArg
@@ -689,7 +689,7 @@ func (e *PulseToolExecutor) executeKubernetesDeletePod(ctx context.Context, args
 	}
 
 	// Build command
-	command := fmt.Sprintf("kubectl -n %s delete pod %s", namespace, pod)
+	command := fmt.Sprintf("kubectl -n %s delete pod %s", shellEscape(namespace), shellEscape(pod))
 	clusterScope := cluster.ID
 	if clusterScope == "" {
 		clusterScope = clusterArg
@@ -871,9 +871,9 @@ func (e *PulseToolExecutor) executeKubernetesLogs(ctx context.Context, args map[
 	// Build kubectl command - logs is read-only so no approval needed
 	var kubectlCmd string
 	if container != "" {
-		kubectlCmd = fmt.Sprintf("kubectl -n %s logs %s -c %s --tail=%d", namespace, pod, container, lines)
+		kubectlCmd = fmt.Sprintf("kubectl -n %s logs %s -c %s --tail=%d", shellEscape(namespace), shellEscape(pod), shellEscape(container), lines)
 	} else {
-		kubectlCmd = fmt.Sprintf("kubectl -n %s logs %s --tail=%d", namespace, pod, lines)
+		kubectlCmd = fmt.Sprintf("kubectl -n %s logs %s --tail=%d", shellEscape(namespace), shellEscape(pod), lines)
 	}
 
 	if e.agentServer == nil {

@@ -171,6 +171,35 @@ var ReadOnlyPatterns = []string{
 	"cat /sys/",
 }
 
+// containsShellChaining checks if a command contains shell operators that could
+// chain a write operation after a read-only command (e.g., "cat foo; rm bar",
+// "ls && rm file", "$(dangerous)", or subshells).
+func containsShellChaining(command string) bool {
+	// Check for command chaining operators and subshell syntax.
+	// Order matters: check multi-char patterns before single-char ones.
+	dangerousPatterns := []string{
+		"&&", "||",
+		"$(", ">(", "<(",
+		";", "`",
+		"\n", // newline-separated commands
+	}
+	for _, p := range dangerousPatterns {
+		if strings.Contains(command, p) {
+			return true
+		}
+	}
+	// Background operator: "cat /etc/passwd & rm -rf /" runs both commands.
+	// Check for standalone & (not part of && which is already caught above).
+	if strings.Contains(command, "&") {
+		return true
+	}
+	// Check for subshells: ( ... )
+	if strings.Contains(command, "(") {
+		return true
+	}
+	return false
+}
+
 // IsReadOnlyCommand checks if a command is safe to execute without approval
 // Returns true for diagnostic/inspection commands that cannot modify system state
 func IsReadOnlyCommand(command string) bool {
@@ -180,7 +209,14 @@ func IsReadOnlyCommand(command string) bool {
 		return false
 	}
 
-	// Check for piped commands FIRST - only safe if ALL parts are read-only
+	// Reject any command with chaining operators or subshells — these can
+	// smuggle write operations after an otherwise-safe read command.
+	// Pipe (|) is handled separately below since piped reads are common and safe.
+	if containsShellChaining(command) {
+		return false
+	}
+
+	// Check for piped commands - only safe if ALL parts are read-only
 	if strings.Contains(command, "|") {
 		parts := strings.Split(command, "|")
 		for _, part := range parts {

@@ -386,6 +386,9 @@ type SAMLSessionInfo struct {
 
 // establishSAMLSession creates a session for a SAML-authenticated user
 func (r *Router) establishSAMLSession(w http.ResponseWriter, req *http.Request, username string, samlInfo *SAMLSessionInfo) error {
+	// Invalidate any pre-existing session to prevent session fixation attacks.
+	InvalidateOldSessionFromRequest(req)
+
 	token := generateSessionToken()
 	if token == "" {
 		return fmt.Errorf("failed to generate session token")

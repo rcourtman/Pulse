@@ -491,6 +491,9 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 
 							// Valid credentials - create session
 							if w != nil {
+								// Invalidate any pre-existing session to prevent session fixation attacks.
+								InvalidateOldSessionFromRequest(r)
+
 								token := generateSessionToken()
 								if token == "" {
 									return false

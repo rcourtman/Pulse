@@ -157,6 +157,9 @@ func (h *MagicLinkHandlers) HandlePublicMagicLinkVerify(w http.ResponseWriter, r
 		return
 	}
 
+	// Invalidate any pre-existing session to prevent session fixation attacks.
+	InvalidateOldSessionFromRequest(r)
+
 	// Create a session (reusing the existing session infrastructure).
 	sessionToken := generateSessionToken()
 	if sessionToken == "" {

@@ -68,6 +68,9 @@ func HandleCloudHandoff(dataPath string) http.HandlerFunc {
 			return
 		}
 
+		// Invalidate any pre-existing session to prevent session fixation attacks.
+		InvalidateOldSessionFromRequest(r)
+
 		// Create session using existing machinery (same pattern as HandlePublicMagicLinkVerify).
 		sessionToken := generateSessionToken()
 		if sessionToken == "" {

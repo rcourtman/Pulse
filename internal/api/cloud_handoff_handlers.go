@@ -275,6 +275,9 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 			return
 		}
 
+		// Invalidate any pre-existing session to prevent session fixation attacks.
+		InvalidateOldSessionFromRequest(r)
+
 		sessionToken := generateSessionToken()
 		if sessionToken == "" {
 			http.Error(w, "internal error", http.StatusInternalServerError)

@@ -67,13 +67,33 @@ var BlockedCommands = []string{
 // Both investigation and remediation subsystems should use this single source of truth.
 var DestructivePatterns = BlockedCommands
 
+// normalizeCommandForCheck strips shell quoting, escape characters, and
+// normalizes whitespace so that patterns like `'rm' -rf`, `\rm -rf`, or
+// `rm\t-rf` are still matched against the blocked list.
+func normalizeCommandForCheck(cmd string) string {
+	// Remove common escape/quoting characters that could be used to bypass pattern matching
+	replacer := strings.NewReplacer(
+		"\\", "", // backslash escapes: \rm -> rm
+		"'", "", // single quotes: 'rm' -> rm
+		"\"", "", // double quotes: "rm" -> rm
+		"`", "", // backticks: `rm` -> rm
+	)
+	result := replacer.Replace(cmd)
+
+	// Normalize all whitespace (tabs, multiple spaces, etc.) to single spaces
+	fields := strings.Fields(result)
+	return strings.Join(fields, " ")
+}
+
 // IsBlockedCommand checks if a command contains any blocked pattern (case-insensitive).
 // Used by the remediation engine to reject plans containing dangerous commands.
+// The command is normalized to strip quoting/escaping before pattern matching
+// to prevent bypass via 'rm' -rf, \rm -rf, etc.
 func IsBlockedCommand(command string) bool {
 	if command == "" {
 		return false
 	}
-	cmdLower := strings.ToLower(command)
+	cmdLower := strings.ToLower(normalizeCommandForCheck(command))
 	for _, pattern := range BlockedCommands {
 		if strings.Contains(cmdLower, strings.ToLower(pattern)) {
 			return true

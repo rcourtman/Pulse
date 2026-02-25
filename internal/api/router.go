@@ -4100,6 +4100,9 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) establishSession(w http.ResponseWriter, req *http.Request, username string) error {
+	// Invalidate any pre-existing session to prevent session fixation attacks.
+	InvalidateOldSessionFromRequest(req)
+
 	token := generateSessionToken()
 	if token == "" {
 		return fmt.Errorf("failed to generate session token")
@@ -4140,6 +4143,9 @@ func (r *Router) establishSession(w http.ResponseWriter, req *http.Request, user
 
 // establishOIDCSession creates a session with OIDC token information for refresh token support
 func (r *Router) establishOIDCSession(w http.ResponseWriter, req *http.Request, username string, oidcTokens *OIDCTokenInfo) error {
+	// Invalidate any pre-existing session to prevent session fixation attacks.
+	InvalidateOldSessionFromRequest(req)
+
 	token := generateSessionToken()
 	if token == "" {
 		return fmt.Errorf("failed to generate session token")
@@ -4248,6 +4254,9 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		// Clear failed login attempts
 		ClearFailedLogins(loginReq.Username)
 		ClearFailedLogins(clientIP)
+
+		// Invalidate any pre-existing session to prevent session fixation attacks.
+		InvalidateOldSessionFromRequest(req)
 
 		// Create session
 		token := generateSessionToken()
