@@ -489,7 +489,7 @@ func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOr
 		// Enable HSTS only for requests known to be HTTPS.
 		// Forwarded proto is trusted only when the direct peer is a trusted proxy.
 		if shouldSetHSTS(r) {
-			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
 		}
 
 		next.ServeHTTP(w, r)

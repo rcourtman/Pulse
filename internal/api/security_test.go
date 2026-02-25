@@ -933,8 +933,8 @@ func TestSecurityHeadersWithConfig_SetsHSTSForTLSRequest(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if got := rec.Header().Get("Strict-Transport-Security"); got != "max-age=31536000; includeSubDomains" {
-		t.Fatalf("Strict-Transport-Security = %q, want max-age=31536000; includeSubDomains", got)
+	if got := rec.Header().Get("Strict-Transport-Security"); got != "max-age=31536000; includeSubDomains; preload" {
+		t.Fatalf("Strict-Transport-Security = %q, want max-age=31536000; includeSubDomains; preload", got)
 	}
 }
 
@@ -973,8 +973,8 @@ func TestSecurityHeadersWithConfig_SetsHSTSForTrustedProxyHTTPS(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if got := rec.Header().Get("Strict-Transport-Security"); got != "max-age=31536000; includeSubDomains" {
-		t.Fatalf("Strict-Transport-Security = %q, want max-age=31536000; includeSubDomains", got)
+	if got := rec.Header().Get("Strict-Transport-Security"); got != "max-age=31536000; includeSubDomains; preload" {
+		t.Fatalf("Strict-Transport-Security = %q, want max-age=31536000; includeSubDomains; preload", got)
 	}
 }
 
