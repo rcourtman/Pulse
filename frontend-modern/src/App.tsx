@@ -44,6 +44,7 @@ import { DemoBanner } from './components/DemoBanner';
 import { GitHubStarBanner } from './components/GitHubStarBanner';
 import { TrialBanner } from './components/shared/TrialBanner';
 import { HostLimitWarningBanner } from './components/shared/HostLimitWarningBanner';
+import { ActiveUseTrialNudge } from './components/shared/ActiveUseTrialNudge';
 import { WhatsNewModal } from './components/shared/WhatsNewModal';
 import { KeyboardShortcutsModal } from './components/shared/KeyboardShortcutsModal';
 import { CommandPaletteModal } from './components/shared/CommandPaletteModal';
@@ -1109,6 +1110,7 @@ function App() {
                         <UpdateBanner />
                         <TrialBanner />
                         <HostLimitWarningBanner />
+                        <ActiveUseTrialNudge />
                         <GitHubStarBanner />
                         <WhatsNewModal />
                         <GlobalUpdateProgressWatcher />

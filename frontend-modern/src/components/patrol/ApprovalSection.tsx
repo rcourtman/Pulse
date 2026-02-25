@@ -9,7 +9,7 @@ import { Component, Show, createSignal, createResource, createMemo } from 'solid
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
-import { hasFeature } from '@/stores/license';
+import { hasFeature, licenseStatus, startProTrial } from '@/stores/license';
 import { AIAPI, type ApprovalRequest, type ApprovalExecutionResult } from '@/api/ai';
 import { RemediationStatus } from './RemediationStatus';
 
@@ -39,6 +39,41 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   });
 
   const canAutoFix = createMemo(() => hasFeature('ai_autofix'));
+
+  const [startingTrial, setStartingTrial] = createSignal(false);
+  const canStartTrial = createMemo(() => {
+    const ent = licenseStatus();
+    if (!ent) return false;
+    if (ent.subscription_state === 'active' || ent.subscription_state === 'trial') return false;
+    return ent.trial_eligible !== false;
+  });
+
+  const handleStartTrial = async (e: Event) => {
+    e.stopPropagation();
+    if (startingTrial()) return;
+    setStartingTrial(true);
+    try {
+      const result = await startProTrial();
+      if (result?.outcome === 'redirect') {
+        if (typeof window !== 'undefined') {
+          window.location.href = result.actionUrl;
+        }
+        return;
+      }
+      notificationStore.success('Pro trial started');
+    } catch (err) {
+      const statusCode = (err as { status?: number } | null)?.status;
+      if (statusCode === 409) {
+        notificationStore.error('Trial already used');
+      } else if (statusCode === 429) {
+        notificationStore.error('Try again later');
+      } else {
+        notificationStore.error(err instanceof Error ? err.message : 'Failed to start Pro trial');
+      }
+    } finally {
+      setStartingTrial(false);
+    }
+  };
 
   const handleFixWithAssistant = (
     approval: ApprovalRequest | null,
@@ -292,6 +327,16 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                       </svg>
                       Fix with Assistant
                     </button>
+                    <Show when={canStartTrial()}>
+                      <button
+                        type="button"
+                        class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:underline disabled:opacity-60"
+                        disabled={startingTrial()}
+                        onClick={handleStartTrial}
+                      >
+                        Apply fixes automatically — start a free 14-day trial
+                      </button>
+                    </Show>
                   </Show>
                 </div>
               </>
@@ -390,6 +435,16 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                       </svg>
                       Fix with Assistant
                     </button>
+                    <Show when={canStartTrial()}>
+                      <button
+                        type="button"
+                        class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:underline disabled:opacity-60"
+                        disabled={startingTrial()}
+                        onClick={handleStartTrial}
+                      >
+                        Apply fixes automatically — start a free 14-day trial
+                      </button>
+                    </Show>
                   </Show>
                 </div>
               </>

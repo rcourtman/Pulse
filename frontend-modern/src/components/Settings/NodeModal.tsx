@@ -1,4 +1,4 @@
-import { Component, Show, For, createSignal, createEffect } from 'solid-js';
+import { Component, Show, For, createSignal, createEffect, createMemo } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { NodeConfig } from '@/types/nodes';
 import type { SecurityStatus } from '@/types/config';
@@ -18,6 +18,7 @@ import {
 } from '@/components/shared/Form';
 import { logger } from '@/utils/logger';
 import { TogglePrimitive } from '@/components/shared/Toggle';
+import { getLimit, licenseStatus, startProTrial } from '@/stores/license';
 
 interface NodeModalProps {
   isOpen: boolean;
@@ -96,6 +97,46 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   const showTemperatureMonitoringSection = () =>
     typeof props.temperatureMonitoringEnabled === 'boolean';
   const temperatureMonitoringEnabledValue = () => props.temperatureMonitoringEnabled ?? true;
+
+  // Host limit detection for trial prompt
+  const [startingTrial, setStartingTrial] = createSignal(false);
+  const hostLimitReached = createMemo(() => {
+    if (props.editingNode) return false;
+    const limit = getLimit('max_nodes');
+    if (!limit || limit.limit <= 0) return false;
+    return limit.current >= limit.limit;
+  });
+  const canStartTrial = createMemo(() => {
+    const ent = licenseStatus();
+    if (!ent) return false;
+    if (ent.subscription_state === 'active' || ent.subscription_state === 'trial') return false;
+    return ent.trial_eligible !== false;
+  });
+  const handleStartTrial = async () => {
+    if (startingTrial()) return;
+    setStartingTrial(true);
+    try {
+      const result = await startProTrial();
+      if (result?.outcome === 'redirect') {
+        if (typeof window !== 'undefined') {
+          window.location.href = result.actionUrl;
+        }
+        return;
+      }
+      notificationStore.success('Pro trial started');
+    } catch (err) {
+      const statusCode = (err as { status?: number } | null)?.status;
+      if (statusCode === 409) {
+        notificationStore.error('Trial already used');
+      } else if (statusCode === 429) {
+        notificationStore.error('Try again later');
+      } else {
+        notificationStore.error(err instanceof Error ? err.message : 'Failed to start Pro trial');
+      }
+    } finally {
+      setStartingTrial(false);
+    }
+  };
   const quickSetupExpiryLabel = () => {
     const expiry = quickSetupExpiry();
     if (!expiry) {
@@ -2378,6 +2419,30 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                           </div>
                         </Show>
                       </div>
+                    </div>
+                  </div>
+                </Show>
+
+                {/* Host limit warning with trial prompt */}
+                <Show when={hostLimitReached()}>
+                  <div class="mx-6 mb-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-900/30 px-4 py-3">
+                    <p class="text-sm font-medium text-amber-800 dark:text-amber-200">
+                      Host limit reached — this node may not be added.
+                    </p>
+                    <div class="mt-2 flex items-center gap-3">
+                      <span class="text-xs text-amber-700 dark:text-amber-300">
+                        Need more hosts?
+                      </span>
+                      <Show when={canStartTrial()}>
+                        <button
+                          type="button"
+                          class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:underline disabled:opacity-60"
+                          disabled={startingTrial()}
+                          onClick={handleStartTrial}
+                        >
+                          Start your free 14-day trial
+                        </button>
+                      </Show>
                     </div>
                   </div>
                 </Show>
