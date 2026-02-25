@@ -102,8 +102,6 @@ const WORKLOADS_SUMMARY_CACHE_MAX_CHARS = 900_000;
 const WORKLOAD_CHART_DEFAULT_POINT_LIMIT = 180;
 const WORKLOADS_IDLE_THRESHOLD_MS = 2 * 60_000;
 const WORKLOADS_DEEP_IDLE_THRESHOLD_MS = 10 * 60_000;
-let lastWorkloadsSummaryCharts: WorkloadChartsResponse | null = null;
-let lastWorkloadsSummaryScopeKey: string | null = null;
 
 type CachedChartData = Pick<
   ChartData,
@@ -408,6 +406,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
   let activeFetchController: AbortController | null = null;
   let pollingToken = 0;
   let lastInteractionAt = Date.now();
+  let cacheHydrationTimer: ReturnType<typeof setTimeout> | undefined;
 
   const clearRefreshTimer = () => {
     if (!refreshTimer) return;
@@ -448,16 +447,18 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
       persistWorkloadsSummaryCache(range, selectedNodeScope(), currentOrgScope, response);
       setCharts(response);
       setLoadedScopeKey(scopeKey);
-      lastWorkloadsSummaryCharts = response;
-      lastWorkloadsSummaryScopeKey = scopeKey;
       setFetchFailed(false);
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         return;
       }
       if (activeFetchController === controller) {
-        setLoadedScopeKey(scopeKey);
         setFetchFailed(true);
+        // Only mark scope as loaded on failure if no deferred cache
+        // hydration is pending — otherwise let the cache timer fire first.
+        if (!cacheHydrationTimer) {
+          setLoadedScopeKey(scopeKey);
+        }
       }
     } finally {
       if (activeFetchController === controller) {
@@ -474,18 +475,29 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
     const token = ++pollingToken;
 
     clearRefreshTimer();
+    if (cacheHydrationTimer) {
+      clearTimeout(cacheHydrationTimer);
+      cacheHydrationTimer = undefined;
+    }
+
+    // Clear stale data from the previous scope/range so old charts don't
+    // linger during the defer window.
+    setCharts(null);
+    setLoadedScopeKey(null);
+
+    // Defer cache hydration briefly so the fresh fetch can land first.
+    // This avoids a visible flash where downsampled cached data renders
+    // and then gets immediately replaced by full-resolution API data.
     const cached = readWorkloadsSummaryCache(range, nodeScope, currentOrgScope);
     if (cached) {
-      setCharts(cached);
-      setLoadedScopeKey(scopeKey);
-      lastWorkloadsSummaryCharts = cached;
-      lastWorkloadsSummaryScopeKey = scopeKey;
-    } else if (lastWorkloadsSummaryCharts && lastWorkloadsSummaryScopeKey === scopeKey) {
-      setCharts(lastWorkloadsSummaryCharts);
-      setLoadedScopeKey(lastWorkloadsSummaryScopeKey);
-    } else {
-      setCharts(null);
-      setLoadedScopeKey(null);
+      cacheHydrationTimer = setTimeout(() => {
+        cacheHydrationTimer = undefined;
+        // Only hydrate if the fresh fetch hasn't already landed for this scope.
+        if (loadedScopeKey() !== scopeKey) {
+          setCharts(cached);
+          setLoadedScopeKey(scopeKey);
+        }
+      }, 200);
     }
     setFetchFailed(false);
     void fetchCharts({ prioritize: true }).finally(() => scheduleNextFetch(token));
@@ -530,6 +542,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
 
   onCleanup(() => {
     clearRefreshTimer();
+    if (cacheHydrationTimer) clearTimeout(cacheHydrationTimer);
     if (activeFetchController) activeFetchController.abort();
     unsubscribeOrgSwitch();
   });

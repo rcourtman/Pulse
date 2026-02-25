@@ -130,41 +130,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
   let activeFetchController: AbortController | null = null;
   let activeFetchRequest = 0;
   let activeRange: TimeRange | null = null;
-  const infraSummaryPerfEnabled =
-    import.meta.env.DEV && import.meta.env.VITE_INFRA_SUMMARY_PERF === '1';
-
-  const hydrateFromRangeCache = (range: TimeRange): boolean => {
-    const cached = readInfrastructureSummaryCache(range);
-    if (!cached) {
-      if (infraSummaryPerfEnabled) {
-        console.debug('[InfraSummaryPerf] cache miss', { caller: 'InfrastructureSummary', range });
-      }
-      return false;
-    }
-
-    if (infraSummaryPerfEnabled) {
-      const points = Array.from(cached.map.values()).reduce((total, data) => {
-        total += data.cpu?.length ?? 0;
-        total += data.memory?.length ?? 0;
-        total += data.disk?.length ?? 0;
-        total += data.netin?.length ?? 0;
-        total += data.netout?.length ?? 0;
-        return total;
-      }, 0);
-      console.debug('[InfraSummaryPerf] cache hit', {
-        caller: 'InfrastructureSummary',
-        range,
-        ageMs: Date.now() - cached.cachedAt,
-        series: cached.map.size,
-        points,
-      });
-    }
-
-    setChartMap(cached.map);
-    setChartRange(range);
-    setLoadedRange(range);
-    return true;
-  };
+  let cacheHydrationTimer: ReturnType<typeof setTimeout> | undefined;
 
   const awaitAbortable = <T,>(promise: Promise<T>, signal: AbortSignal): Promise<T> => {
     if (signal.aborted) {
@@ -251,6 +217,10 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
         clearInterval(refreshTimer);
         refreshTimer = undefined;
       }
+      if (cacheHydrationTimer) {
+        clearTimeout(cacheHydrationTimer);
+        cacheHydrationTimer = undefined;
+      }
       if (activeFetchController) {
         activeFetchController.abort();
         activeFetchController = null;
@@ -269,8 +239,31 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     const nextRange = selectedRange();
     if (activeRange !== nextRange) {
       activeRange = nextRange;
-      if (!hydrateFromRangeCache(nextRange)) {
-        setLoadedRange((current) => (current === nextRange ? current : null));
+      if (cacheHydrationTimer) {
+        clearTimeout(cacheHydrationTimer);
+        cacheHydrationTimer = undefined;
+      }
+
+      // Clear stale data from the previous range so old charts don't
+      // linger during the defer window.
+      setChartMap(new Map());
+      setChartRange(null);
+      setLoadedRange(null);
+
+      // Defer cache hydration briefly so the fresh fetch can land first.
+      // This avoids a visible flash where downsampled cached data renders
+      // and then gets immediately replaced by full-resolution API data.
+      const cachedData = readInfrastructureSummaryCache(nextRange);
+      if (cachedData) {
+        cacheHydrationTimer = setTimeout(() => {
+          cacheHydrationTimer = undefined;
+          // Only hydrate if the fresh fetch hasn't already landed for this range.
+          if (chartRange() !== nextRange) {
+            setChartMap(cachedData.map);
+            setChartRange(nextRange);
+            setLoadedRange(nextRange);
+          }
+        }, 200);
       }
       void fetchCharts({ prioritize: true });
     }
@@ -278,6 +271,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
 
   onCleanup(() => {
     if (refreshTimer) clearInterval(refreshTimer);
+    if (cacheHydrationTimer) clearTimeout(cacheHydrationTimer);
     if (activeFetchController) {
       activeFetchController.abort();
       activeFetchController = null;
