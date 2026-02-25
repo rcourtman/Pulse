@@ -50,6 +50,7 @@ interface WorkloadSeries {
   cpu: MetricPoint[];
   memory: MetricPoint[];
   disk: MetricPoint[];
+  diskio: MetricPoint[];
   network: MetricPoint[];
 }
 
@@ -94,7 +95,7 @@ const WORKLOAD_COLORS = [
 
 const WORKLOADS_SUMMARY_CACHE_PREFIX = 'pulse.workloadsSummaryCharts.';
 const DEFAULT_ORG_SCOPE = 'default';
-const WORKLOADS_SUMMARY_CACHE_VERSION = 2;
+const WORKLOADS_SUMMARY_CACHE_VERSION = 3;
 const WORKLOADS_SUMMARY_CACHE_MAX_AGE_MS = 5 * 60_000;
 const WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES = 360;
 const WORKLOADS_SUMMARY_CACHE_MAX_CHARS = 900_000;
@@ -104,7 +105,10 @@ const WORKLOADS_DEEP_IDLE_THRESHOLD_MS = 10 * 60_000;
 let lastWorkloadsSummaryCharts: WorkloadChartsResponse | null = null;
 let lastWorkloadsSummaryScopeKey: string | null = null;
 
-type CachedChartData = Pick<ChartData, 'cpu' | 'memory' | 'disk' | 'netin' | 'netout'>;
+type CachedChartData = Pick<
+  ChartData,
+  'cpu' | 'memory' | 'disk' | 'diskread' | 'diskwrite' | 'netin' | 'netout'
+>;
 
 interface CachedWorkloadsSummary {
   version: number;
@@ -147,6 +151,8 @@ const toCachedChartData = (data: ChartData): CachedChartData => ({
   cpu: trimPoints(data.cpu, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
   memory: trimPoints(data.memory, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
   disk: trimPoints(data.disk, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
+  diskread: trimPoints(data.diskread, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
+  diskwrite: trimPoints(data.diskwrite, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
   netin: trimPoints(data.netin, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
   netout: trimPoints(data.netout, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
 });
@@ -353,6 +359,12 @@ const buildLiveSeries = (
   cpu: ensureRenderableSeries(sanitizeMetricPoints(chartData.cpu, clampPercent)),
   memory: ensureRenderableSeries(sanitizeMetricPoints(chartData.memory, clampPercent)),
   disk: ensureRenderableSeries(sanitizeMetricPoints(chartData.disk, clampPercent)),
+  diskio: ensureRenderableSeries(
+    sanitizeMetricPoints(
+      mergeNetworkPoints(chartData.diskread, chartData.diskwrite),
+      clampNonNegative,
+    ),
+  ),
   network: ensureRenderableSeries(
     sanitizeMetricPoints(mergeNetworkPoints(chartData.netin, chartData.netout), clampNonNegative),
   ),
@@ -609,6 +621,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
         cpu: live.cpu,
         memory: live.memory,
         disk: live.disk,
+        diskio: live.diskio,
         network: live.network,
       });
     }
@@ -647,10 +660,10 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
       name: series.name,
     })),
   );
-  const diskSeries = createMemo<InteractiveSparklineSeries[]>(() =>
+  const diskioSeries = createMemo<InteractiveSparklineSeries[]>(() =>
     displaySeries().map((series) => ({
       id: series.id,
-      data: series.disk,
+      data: series.diskio,
       color: series.color,
       name: series.name,
     })),
@@ -666,7 +679,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
 
   const hasCpuData = createMemo(() => cpuSeries().some((series) => series.data.length >= 2));
   const hasMemoryData = createMemo(() => memorySeries().some((series) => series.data.length >= 2));
-  const hasDiskData = createMemo(() => diskSeries().some((series) => series.data.length >= 2));
+  const hasDiskIOData = createMemo(() => diskioSeries().some((series) => series.data.length >= 2));
   const hasNetworkData = createMemo(() =>
     networkSeries().some((series) => series.data.length >= 2),
   );
@@ -798,7 +811,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
             <div class="flex items-center justify-between mb-1.5">
               <div class="flex items-center min-w-0">
                 <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
-                  Storage
+                  Disk I/O
                 </span>
                 <Show when={focusedWorkloadName()}>
                   <span class="text-xs text-muted ml-1.5 truncate">
@@ -808,7 +821,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
               </div>
             </div>
             <Show
-              when={hasDiskData()}
+              when={hasDiskIOData()}
               fallback={
                 <div class="flex h-[56px] items-center text-sm text-muted">
                   {fallbackTrendMessage()}
@@ -816,15 +829,11 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
               }
             >
               <div class="flex-1 min-h-0">
-                <InteractiveSparkline
-                  series={diskSeries()}
+                <DensityMap
+                  series={diskioSeries()}
                   rangeLabel={selectedRange()}
                   timeRange={selectedRange()}
-                  yMode="percent"
-                  sortTooltipByValue
-                  maxTooltipRows={8}
-                  highlightNearestSeriesOnHover
-                  highlightSeriesId={props.hoveredWorkloadId}
+                  formatValue={formatRate}
                 />
               </div>
             </Show>

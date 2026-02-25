@@ -43,6 +43,8 @@ function countChartMapPoints(map: Map<string, ChartData>): number {
     total += data.cpu?.length ?? 0;
     total += data.memory?.length ?? 0;
     total += data.disk?.length ?? 0;
+    total += data.diskread?.length ?? 0;
+    total += data.diskwrite?.length ?? 0;
     total += data.netin?.length ?? 0;
     total += data.netout?.length ?? 0;
   }
@@ -71,7 +73,10 @@ function mergeChartData(existing: ChartData | undefined, incoming: ChartData): C
   };
 }
 
-type CachedChartData = Pick<ChartData, 'cpu' | 'memory' | 'disk' | 'netin' | 'netout'>;
+type CachedChartData = Pick<
+  ChartData,
+  'cpu' | 'memory' | 'disk' | 'diskread' | 'diskwrite' | 'netin' | 'netout'
+>;
 
 interface CachedInfrastructureSummary {
   version: number;
@@ -100,6 +105,8 @@ const toCachedChartData = (data: ChartData): CachedChartData => ({
   cpu: trimPoints(data.cpu ?? [], INFRA_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
   memory: trimPoints(data.memory ?? [], INFRA_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
   disk: trimPoints(data.disk ?? [], INFRA_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
+  diskread: trimPoints(data.diskread ?? [], INFRA_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
+  diskwrite: trimPoints(data.diskwrite ?? [], INFRA_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
   netin: trimPoints(data.netin ?? [], INFRA_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
   netout: trimPoints(data.netout ?? [], INFRA_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
 });
@@ -251,6 +258,8 @@ export function readInfrastructureSummaryCache(
           cpu: Array.isArray(value?.cpu) ? value.cpu : [],
           memory: Array.isArray(value?.memory) ? value.memory : [],
           disk: Array.isArray(value?.disk) ? value.disk : [],
+          diskread: Array.isArray(value?.diskread) ? value.diskread : [],
+          diskwrite: Array.isArray(value?.diskwrite) ? value.diskwrite : [],
           netin: Array.isArray(value?.netin) ? value.netin : [],
           netout: Array.isArray(value?.netout) ? value.netout : [],
         },

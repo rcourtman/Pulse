@@ -66,6 +66,8 @@ const makeChartsResponse = (ids: string[]): WorkloadChartsResponse => ({
         cpu: twoPointSeries,
         memory: twoPointSeries,
         disk: twoPointSeries,
+        diskread: twoPointSeries,
+        diskwrite: twoPointSeries,
         netin: twoPointSeries,
         netout: twoPointSeries,
       },
@@ -105,7 +107,7 @@ describe('WorkloadsSummary performance behavior', () => {
   it('hydrates from cache immediately while live fetch is pending', async () => {
     const workloadId = 'cluster-a:pve1:101';
     const cachePayload = {
-      version: 2,
+      version: 3,
       range: '1h',
       nodeScope: '',
       cachedAt: now,
@@ -114,6 +116,8 @@ describe('WorkloadsSummary performance behavior', () => {
           cpu: twoPointSeries,
           memory: twoPointSeries,
           disk: twoPointSeries,
+          diskread: twoPointSeries,
+          diskwrite: twoPointSeries,
           netin: twoPointSeries,
           netout: twoPointSeries,
         },

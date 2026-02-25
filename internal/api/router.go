@@ -5134,15 +5134,16 @@ func capMetricPointSeries(points []MetricPoint, maxPoints int) []MetricPoint {
 	return result
 }
 
-// sparklineMetrics lists the metric types consumed by summary sparklines.
-// Metrics not in this set (e.g. diskread, diskwrite) are omitted to keep
-// payloads small.
+// sparklineMetrics lists the metric types consumed by summary sparklines
+// and density maps. Metrics not in this set are omitted to keep payloads small.
 var sparklineMetrics = map[string]bool{
-	"cpu":    true,
-	"memory": true,
-	"disk":   true,
-	"netin":  true,
-	"netout": true,
+	"cpu":       true,
+	"memory":    true,
+	"disk":      true,
+	"diskread":  true,
+	"diskwrite": true,
+	"netin":     true,
+	"netout":    true,
 }
 
 func convertMetricsForChart(

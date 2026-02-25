@@ -5,7 +5,7 @@ import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import { DensityMap } from '@/components/shared/DensityMap';
 import { SparklineSkeleton } from '@/components/shared/SparklineSkeleton';
 import type { Resource } from '@/types/resource';
-import { getDisplayName } from '@/types/resource';
+import { getDisplayName, getDiskPercent } from '@/types/resource';
 import type { MetricPoint, ChartData, TimeRange } from '@/api/charts';
 import { useResources } from '@/hooks/useResources';
 import {
@@ -412,6 +412,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
         netin: metricSeries('netin'),
         netout: metricSeries('netout'),
         network: combineHostNetSeries(metricSeries('netin'), metricSeries('netout')),
+        diskio: combineHostNetSeries(metricSeries('diskread'), metricSeries('diskwrite')),
         color: HOST_COLORS[i % HOST_COLORS.length],
         name: getDisplayName(host),
       };
@@ -447,6 +448,24 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
   );
 
   const hasNetData = () => displaySeries().some((s) => s.network.length >= 1);
+
+  const diskioSeries = createMemo(() =>
+    displaySeries().map((s) => ({
+      id: s.id,
+      data: s.diskio,
+      color: s.color,
+      name: s.name,
+    })),
+  );
+
+  const hasDiskIOData = () => displaySeries().some((s) => s.diskio.length >= 1);
+
+  const avgDiskCapacity = createMemo(() => {
+    const hosts = props.hosts.filter((h) => h.disk && h.disk.total);
+    if (hosts.length === 0) return null;
+    const avg = hosts.reduce((sum, h) => sum + getDiskPercent(h), 0) / hosts.length;
+    return Math.round(avg);
+  });
 
   // Keep the network card visible when we have capability but limited history.
   const hasNetworkCapability = createMemo(() =>
@@ -611,21 +630,26 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
               </div>
             </Card>
 
-            {/* Storage Card */}
+            {/* Disk I/O Card */}
             <Card padding="sm" class="h-full">
               <div class="flex flex-col h-full">
                 <div class="flex items-center mb-1.5 min-w-0">
                   <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
-                    Storage
+                    Disk I/O
                   </span>
                   <Show when={focusedHostName()}>
                     <span class="text-xs text-muted ml-1.5 truncate">
                       &mdash; {focusedHostName()}
                     </span>
                   </Show>
+                  <Show when={!focusedHostName() && avgDiskCapacity() !== null}>
+                    <span class="text-[10px] text-muted ml-auto shrink-0">
+                      Capacity: {avgDiskCapacity()}%
+                    </span>
+                  </Show>
                 </div>
                 <Show
-                  when={hasData('disk')}
+                  when={hasDiskIOData()}
                   fallback={
                     isCurrentRangeLoaded() ? (
                       <div class="text-sm text-muted py-2">No history yet</div>
@@ -635,13 +659,11 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                   }
                 >
                   <div class="flex-1 min-h-0">
-                    <InteractiveSparkline
-                      series={seriesFor('disk')}
+                    <DensityMap
+                      series={diskioSeries()}
                       rangeLabel={rangeLabel()}
                       timeRange={props.timeRange}
-                      yMode="percent"
-                      highlightNearestSeriesOnHover
-                      highlightSeriesId={props.hoveredHostId}
+                      formatValue={formatRate}
                     />
                   </div>
                 </Show>
