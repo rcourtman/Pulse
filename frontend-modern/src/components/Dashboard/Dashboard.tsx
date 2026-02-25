@@ -1506,13 +1506,15 @@ export function Dashboard(props: DashboardProps) {
             title="No Proxmox VE nodes configured"
             description="Install the Pulse agent for extra capabilities (temperature monitoring and Pulse Patrol automation), or add a node via API token in Settings → Unified Agents (or Infrastructure for API-only)."
             actions={
-              <button
-                type="button"
-                onClick={() => navigate('/settings')}
-                class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Go to Settings
-              </button>
+              !kioskMode() ? (
+                <button
+                  type="button"
+                  onClick={() => navigate('/settings')}
+                  class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Go to Settings
+                </button>
+              ) : undefined
             }
           />
         </Card>
