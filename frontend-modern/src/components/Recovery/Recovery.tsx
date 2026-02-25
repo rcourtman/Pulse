@@ -5,7 +5,6 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  onMount,
   untrack,
 } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
@@ -23,7 +22,7 @@ import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { formatAbsoluteTime, formatBytes, formatRelativeTime } from '@/utils/format';
 import { STORAGE_KEYS, createLocalStorageBooleanSignal } from '@/utils/localStorage';
-import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
+import { useKioskMode } from '@/hooks/useKioskMode';
 import { useStorageRecoveryResources } from '@/hooks/useUnifiedResources';
 import { useRecoveryRollups } from '@/hooks/useRecoveryRollups';
 import { useRecoveryPoints } from '@/hooks/useRecoveryPoints';
@@ -281,13 +280,7 @@ const Recovery: Component = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [kioskMode, setKioskMode] = createSignal(isKioskMode());
-  onMount(() => {
-    const unsubscribe = subscribeToKioskMode((enabled) => {
-      setKioskMode(enabled);
-    });
-    return unsubscribe;
-  });
+  const kioskMode = useKioskMode();
 
   const storageBackupsResources = useStorageRecoveryResources();
   const recoveryRollups = useRecoveryRollups();

@@ -1,5 +1,5 @@
-import { JSX, Show, createSignal, onCleanup, onMount, splitProps } from 'solid-js';
-import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
+import { JSX, Show, splitProps } from 'solid-js';
+import { useKioskMode } from '@/hooks/useKioskMode';
 
 type PageHeaderProps = {
   id?: string;
@@ -24,14 +24,10 @@ export function PageHeader(props: PageHeaderProps) {
     'descriptionClass',
   ]);
 
-  const [kiosk, setKiosk] = createSignal(isKioskMode());
-  onMount(() => {
-    const unsubscribe = subscribeToKioskMode(setKiosk);
-    onCleanup(unsubscribe);
-  });
+  const kioskMode = useKioskMode();
 
   return (
-    <Show when={!kiosk()}>
+    <Show when={!kioskMode()}>
       <div
         class={`flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between ${local.class ?? ''}`.trim()}
         {...rest}

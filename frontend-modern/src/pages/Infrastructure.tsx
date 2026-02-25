@@ -5,7 +5,6 @@ import {
   createMemo,
   createSignal,
   onCleanup,
-  onMount,
   untrack,
 } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
@@ -26,7 +25,7 @@ import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { segmentedButtonClass } from '@/utils/segmentedButton';
-import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
+import { useKioskMode } from '@/hooks/useKioskMode';
 import { isSummaryTimeRange } from '@/components/shared/summaryTimeRange';
 import {
   tokenizeSearch,
@@ -53,13 +52,7 @@ export function Infrastructure() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [kioskMode, setKioskMode] = createSignal(isKioskMode());
-  onMount(() => {
-    const unsubscribe = subscribeToKioskMode((enabled) => {
-      setKioskMode(enabled);
-    });
-    return unsubscribe;
-  });
+  const kioskMode = useKioskMode();
 
   // Track if we've completed initial load to prevent flash of empty state
   const [initialLoadComplete, setInitialLoadComplete] = createSignal(false);

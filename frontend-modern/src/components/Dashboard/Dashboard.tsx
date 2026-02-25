@@ -46,7 +46,7 @@ import { STORAGE_KEYS } from '@/utils/localStorage';
 import { getOrgID } from '@/utils/apiClient';
 import { aiChatStore } from '@/stores/aiChat';
 import { eventBus } from '@/stores/events';
-import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
+import { useKioskMode } from '@/hooks/useKioskMode';
 import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
 import {
   WorkloadsSummary,
@@ -310,18 +310,7 @@ export function Dashboard(props: DashboardProps) {
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
   const isWorkloadsRoute = () => location.pathname === WORKLOADS_PATH;
 
-  // Kiosk mode - hide filter panel for clean dashboard display
-  // Usage: Add ?kiosk=1 to URL or use the toggle button in the header
-  const [kioskMode, setKioskMode] = createSignal(isKioskMode());
-
-  // Subscribe to kiosk mode changes from toggle button or URL params
-  onMount(() => {
-    const unsubscribe = subscribeToKioskMode((enabled) => {
-      setKioskMode(enabled);
-    });
-    // Cleanup on unmount would go here, but Dashboard is always mounted
-    return unsubscribe;
-  });
+  const kioskMode = useKioskMode();
 
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);

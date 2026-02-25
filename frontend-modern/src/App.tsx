@@ -80,12 +80,11 @@ import {
 } from '@/utils/infrastructureSummaryCache';
 import {
   initKioskMode,
-  isKioskMode,
   setKioskMode,
-  subscribeToKioskMode,
   getKioskModePreference,
   getPulseWebSocketUrl,
 } from './utils/url';
+import { useKioskMode, syncKioskMode } from '@/hooks/useKioskMode';
 import {
   buildLegacyRedirectTarget,
   getActiveTabForPath,
@@ -307,15 +306,10 @@ function App() {
   // Initialize kiosk mode from URL params immediately (persists to sessionStorage)
   // This must happen before any renders so kiosk state is available everywhere
   initKioskMode();
+  syncKioskMode(); // Re-sync shared signal after URL params are processed
 
   // Reactive kiosk state for App-level components (banners, etc.)
-  const [kioskMode, setKioskModeSignal] = createSignal(isKioskMode());
-  onMount(() => {
-    const unsubscribe = subscribeToKioskMode((enabled) => {
-      setKioskModeSignal(enabled);
-    });
-    onCleanup(unsubscribe);
-  });
+  const kioskMode = useKioskMode();
 
   const TooltipRoot = createTooltipSystem();
   const owner = getOwner();
@@ -1435,8 +1429,8 @@ function AppLayout(props: {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Reactive kiosk mode state
-  const [kioskMode, setKioskModeSignal] = createSignal(isKioskMode());
+  // Reactive kiosk mode state (shared across all components)
+  const kioskMode = useKioskMode();
 
   // Kiosk-mode header auto-hide/reveal state
   const [headerVisible, setHeaderVisible] = createSignal(true);
@@ -1463,14 +1457,6 @@ function AppLayout(props: {
     }, delayMs);
   };
 
-  // Subscribe to kiosk mode changes from other sources (like URL params)
-  onMount(() => {
-    const unsubscribe = subscribeToKioskMode((enabled) => {
-      setKioskModeSignal(enabled);
-    });
-    onCleanup(unsubscribe);
-  });
-
   // Auto-enable kiosk mode for monitoring-only tokens (if no user preference is set)
   createEffect(() => {
     const scopes = props.tokenScopes();
@@ -1486,9 +1472,7 @@ function AppLayout(props: {
   });
 
   const toggleKioskMode = () => {
-    const newValue = !kioskMode();
-    setKioskMode(newValue);
-    setKioskModeSignal(newValue);
+    setKioskMode(!kioskMode());
   };
 
   // Kiosk-mode header behavior: visible briefly on entry, hover/touch to reveal, Escape to exit.

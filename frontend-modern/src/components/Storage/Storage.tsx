@@ -8,7 +8,6 @@ import {
   createMemo,
   createSignal,
   onCleanup,
-  onMount,
 } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { useResources } from '@/hooks/useResources';
@@ -26,7 +25,7 @@ import { buildStoragePath, parseStorageLinkSearch } from '@/routing/resourceLink
 import { formatBytes, formatPercent } from '@/utils/format';
 import { segmentedButtonClass } from '@/utils/segmentedButton';
 import { getProxmoxData } from '@/utils/resourcePlatformData';
-import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
+import { useKioskMode } from '@/hooks/useKioskMode';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { useStorageRouteState } from './useStorageRouteState';
 import { isCephRecord, useStorageCephModel } from './useStorageCephModel';
@@ -101,13 +100,7 @@ const Storage: Component = () => {
     useWebSocket();
   const { byType } = useResources();
 
-  const [kioskMode, setKioskMode] = createSignal(isKioskMode());
-  onMount(() => {
-    const unsubscribe = subscribeToKioskMode((enabled) => {
-      setKioskMode(enabled);
-    });
-    return unsubscribe;
-  });
+  const kioskMode = useKioskMode();
 
   const nodes = createMemo(() => byType('node'));
   const physicalDisks = createMemo(() => byType('physical_disk'));

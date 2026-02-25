@@ -6,7 +6,6 @@ import {
   createSignal,
   createEffect,
   onCleanup,
-  onMount,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { useWebSocket } from '@/App';
@@ -24,7 +23,7 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { PageHeader } from '@/components/shared/PageHeader';
 import type { CephCluster, CephPool, CephServiceStatus } from '@/types/api';
 import { formatBytes } from '@/utils/format';
-import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
+import { useKioskMode } from '@/hooks/useKioskMode';
 
 // Service type icon component with proper styling
 const ServiceIcon: Component<{ type: string; class?: string }> = (props) => {
@@ -333,13 +332,7 @@ const Ceph: Component = () => {
   const { connected, initialDataReceived, reconnecting, reconnect } = useWebSocket();
   const { byType } = useResources();
 
-  const [kioskMode, setKioskMode] = createSignal(isKioskMode());
-  onMount(() => {
-    const unsubscribe = subscribeToKioskMode((enabled) => {
-      setKioskMode(enabled);
-    });
-    return unsubscribe;
-  });
+  const kioskMode = useKioskMode();
 
   const [searchTerm, setSearchTerm] = createSignal('');
   let searchInputRef: HTMLInputElement | undefined;
