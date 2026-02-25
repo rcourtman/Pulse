@@ -43,6 +43,7 @@ import { UpdateBanner } from './components/UpdateBanner';
 import { DemoBanner } from './components/DemoBanner';
 import { GitHubStarBanner } from './components/GitHubStarBanner';
 import { TrialBanner } from './components/shared/TrialBanner';
+import { HostLimitWarningBanner } from './components/shared/HostLimitWarningBanner';
 import { WhatsNewModal } from './components/shared/WhatsNewModal';
 import { KeyboardShortcutsModal } from './components/shared/KeyboardShortcutsModal';
 import { CommandPaletteModal } from './components/shared/CommandPaletteModal';
@@ -136,7 +137,7 @@ const AIIntelligencePage = lazy(() =>
 );
 const MigrationGuidePage = lazy(() => import('./pages/MigrationGuide'));
 const NotFoundPage = lazy(() => import('./pages/NotFound'));
-const PricingPage = lazy(() => import('./pages/Pricing'));
+const PricingPage = lazy(() => import('./pages/PricingV6'));
 const HostedSignupPage = lazy(() => import('./pages/HostedSignup'));
 const Operations = lazy(() => import('./pages/Operations'));
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
@@ -1107,6 +1108,7 @@ function App() {
                         <DemoBanner />
                         <UpdateBanner />
                         <TrialBanner />
+                        <HostLimitWarningBanner />
                         <GitHubStarBanner />
                         <WhatsNewModal />
                         <GlobalUpdateProgressWatcher />

@@ -88,10 +88,16 @@ describe('settingsNavigation integration scaffold', () => {
       expect(isTabLocked('proxmox', hasFeatures([]), () => true)).toBe(false);
     });
 
-    it('getTabLockReason returns reason for locked tabs and null for unlocked', () => {
+    it('getTabLockReason returns tier-specific reason for locked tabs and null for unlocked', () => {
+      const expectedTierLabels: Record<string, string> = {
+        relay: 'Relay',
+        multi_tenant: 'MSP',
+        audit_logging: 'Pro',
+      };
       for (const [tab, requiredFeature] of gatedTabs) {
+        const tierLabel = expectedTierLabels[requiredFeature] ?? 'Pro';
         expect(getTabLockReason(tab, hasFeatures([]), () => true)).toBe(
-          'This settings section requires Pro.',
+          `This settings section requires ${tierLabel}.`,
         );
         expect(getTabLockReason(tab, hasFeatures([requiredFeature]), () => true)).toBeNull();
       }

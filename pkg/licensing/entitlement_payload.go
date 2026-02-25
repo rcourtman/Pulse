@@ -240,8 +240,13 @@ func LimitState(current, limit int64) string {
 	if current >= limit {
 		return "enforced"
 	}
-	// 90% threshold for warning.
-	if current*10 >= limit*9 {
+	// For small limits (≤10, but >1), warn at N-1 so users get notice before hitting the wall.
+	// For larger limits, use 90% threshold.
+	if limit > 1 && limit <= 10 {
+		if current >= limit-1 {
+			return "warning"
+		}
+	} else if current*10 >= limit*9 {
 		return "warning"
 	}
 	return "ok"

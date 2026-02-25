@@ -209,6 +209,16 @@ func TestLimitState(t *testing.T) {
 		{name: "enforced_at_limit", current: 100, limit: 100, want: "enforced"},
 		{name: "enforced_above_limit", current: 110, limit: 100, want: "enforced"},
 		{name: "ok_unlimited", current: 50, limit: 0, want: "ok"},
+		// Small-limit behavior: warn at N-1
+		{name: "small_limit_ok", current: 3, limit: 5, want: "ok"},
+		{name: "small_limit_warning_at_n_minus_1", current: 4, limit: 5, want: "warning"},
+		{name: "small_limit_enforced_at_limit", current: 5, limit: 5, want: "enforced"},
+		{name: "small_limit_8_warning", current: 7, limit: 8, want: "warning"},
+		{name: "small_limit_8_ok", current: 6, limit: 8, want: "ok"},
+		{name: "small_limit_10_warning", current: 9, limit: 10, want: "warning"},
+		{name: "small_limit_10_ok", current: 8, limit: 10, want: "ok"},
+		{name: "limit_1_zero_usage_ok", current: 0, limit: 1, want: "ok"},
+		{name: "limit_1_at_limit_enforced", current: 1, limit: 1, want: "enforced"},
 	}
 
 	for _, tc := range tests {

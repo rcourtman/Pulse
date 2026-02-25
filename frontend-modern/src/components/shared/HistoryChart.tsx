@@ -25,6 +25,7 @@ import {
   isRangeLocked,
   licenseStatus,
   loadLicenseStatus,
+  maxHistoryDays,
   startProTrial,
 } from '@/stores/license';
 import { Portal } from 'solid-js/web';
@@ -160,6 +161,13 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
   const isLocked = createMemo(() => isRangeLocked(range()));
 
   const lockDays = createMemo(() => (range() === '30d' ? '30' : '90'));
+
+  const lockTierLabel = createMemo(() => {
+    const max = maxHistoryDays();
+    const targetDays = range() === '30d' ? 30 : range() === '90d' ? 90 : 14;
+    if (max <= 7 && targetDays <= 14) return 'Relay';
+    return 'Pro';
+  });
 
   createEffect((wasLockOverlayVisible) => {
     const lockOverlayVisible = isLocked() && !props.hideLock;
@@ -712,7 +720,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
             </div>
             <h3 class="text-lg font-bold text-base-content mb-1">{lockDays()}-Day History</h3>
             <p class="text-sm text-muted text-center max-w-[200px] mb-4">
-              Upgrade to Pro to unlock {lockDays()} days of historical data retention.
+              Upgrade to {lockTierLabel()} to unlock {lockDays()} days of historical data retention.
             </p>
             <div class="flex flex-col items-center gap-2">
               <a
@@ -722,7 +730,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                 onClick={() => trackUpgradeClicked('history_chart', 'long_term_metrics')}
                 class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md shadow-sm transition-colors"
               >
-                Unlock Pro Features
+                Unlock {lockTierLabel()} Features
               </a>
               <Show when={canStartTrial()}>
                 <button

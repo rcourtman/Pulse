@@ -11,6 +11,13 @@ export const tabFeatureRequirements: Partial<Record<SettingsTab, string[]>> = {
   'organization-billing-admin': ['multi_tenant'],
 };
 
+const featureMinTier: Record<string, string> = {
+  relay: 'Relay',
+  mobile_app: 'Relay',
+  push_notifications: 'Relay',
+  multi_tenant: 'MSP',
+};
+
 export function isFeatureLocked(
   features: string[] | undefined,
   hasFeature: (feature: string) => boolean,
@@ -43,5 +50,6 @@ export function getTabLockReason(
   if (primaryRequiredFeature) {
     trackPaywallViewed(primaryRequiredFeature, 'settings_tab');
   }
-  return 'This settings section requires Pro.';
+  const tierLabel = featureMinTier[primaryRequiredFeature ?? ''] ?? 'Pro';
+  return `This settings section requires ${tierLabel}.`;
 }

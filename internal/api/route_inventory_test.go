@@ -404,6 +404,7 @@ var allRouteAllowlist = []string{
 	"/api/license/clear",
 	"GET /api/license/entitlements",
 	"POST /api/license/trial/start",
+	"GET /api/license/host-ledger",
 	"POST /api/upgrade-metrics/events",
 	"GET /api/upgrade-metrics/stats",
 	"GET /api/upgrade-metrics/health",

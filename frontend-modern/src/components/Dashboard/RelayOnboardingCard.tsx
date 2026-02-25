@@ -14,31 +14,14 @@ import {
 import { showError, showSuccess } from '@/utils/toast';
 import { logger } from '@/utils/logger';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
+import { isUpsellSnoozed, snoozeUpsell } from '@/utils/snooze';
 
-const DISMISSED_KEY = 'pulse_relay_onboarding_dismissed';
+const SNOOZE_KEY = 'pulse_relay_onboarding_snoozed';
 const RELAY_SETTINGS_PATH = '/settings/system-relay';
-
-function readDismissed(): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    return window.localStorage.getItem(DISMISSED_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function writeDismissed(): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(DISMISSED_KEY, '1');
-  } catch {
-    // Ignore storage quota / privacy-mode failures.
-  }
-}
 
 export const RelayOnboardingCard: Component = () => {
   const navigate = useNavigate();
-  const [dismissed, setDismissed] = createSignal(readDismissed());
+  const [dismissed, setDismissed] = createSignal(isUpsellSnoozed(SNOOZE_KEY));
   const [licenseReady, setLicenseReady] = createSignal<boolean>(licenseLoaded());
 
   const [status, setStatus] = createSignal<RelayStatus | null>(null);
@@ -115,7 +98,7 @@ export const RelayOnboardingCard: Component = () => {
   });
 
   const dismiss = () => {
-    writeDismissed();
+    snoozeUpsell(SNOOZE_KEY);
     setDismissed(true);
   };
 
@@ -192,7 +175,9 @@ export const RelayOnboardingCard: Component = () => {
                     onClick={() => void handleStartTrial()}
                     disabled={trialStarting()}
                   >
-                    {trialStarting() ? 'Starting trial...' : 'Requires Pro \u2014 Start free trial'}
+                    {trialStarting()
+                      ? 'Starting trial...'
+                      : 'Requires Relay \u2014 Start free trial'}
                   </button>
                 }
               >

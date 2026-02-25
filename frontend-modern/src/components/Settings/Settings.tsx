@@ -33,6 +33,7 @@ import { UpdatesSettingsPanel } from './UpdatesSettingsPanel';
 import { UpdateConfirmationModal } from '@/components/UpdateConfirmationModal';
 import { BackupsSettingsPanel } from './BackupsSettingsPanel';
 import { ProLicensePanel } from './ProLicensePanel';
+import { HostLedgerPanel } from './HostLedgerPanel';
 import { SecurityAuthPanel } from './SecurityAuthPanel';
 import { APIAccessPanel } from './APIAccessPanel';
 import { SecurityOverviewPanel } from './SecurityOverviewPanel';
@@ -3548,7 +3549,10 @@ const Settings: Component<SettingsProps> = (props) => {
 
               {/* Pulse Pro License Tab */}
               <Show when={activeTab() === 'system-pro'}>
-                <ProLicensePanel />
+                <div class="space-y-6">
+                  <ProLicensePanel />
+                  <HostLedgerPanel />
+                </div>
               </Show>
 
               {/* API Access */}
