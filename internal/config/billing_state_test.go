@@ -260,3 +260,128 @@ func TestBillingState_CapabilityOrderIndependent(t *testing.T) {
 
 	assert.Equal(t, hmac1, state2.Integrity, "HMAC should be independent of capability ordering")
 }
+
+func TestBillingState_AllFieldsSurviveRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(t.TempDir(), ".encryption.key"))
+	writeTestEncryptionKey(t, dir)
+
+	store := NewFileBillingStore(dir)
+
+	now := int64(1700000000)
+	endsAt := int64(1701209600)
+	extendedAt := int64(1700500000)
+
+	state := &entitlements.BillingState{
+		Capabilities:         []string{"relay", "ai_autofix"},
+		Limits:               map[string]int64{"max_nodes": 50, "max_hosts": 100},
+		MetersEnabled:        []string{"active_agents", "api_calls"},
+		PlanVersion:          "pro-v2",
+		SubscriptionState:    entitlements.SubStateActive,
+		TrialStartedAt:       &now,
+		TrialEndsAt:          &endsAt,
+		TrialExtendedAt:      &extendedAt,
+		StripeCustomerID:     "cus_123",
+		StripeSubscriptionID: "sub_456",
+		StripePriceID:        "price_789",
+	}
+
+	require.NoError(t, store.SaveBillingState("default", state))
+	assert.NotEmpty(t, state.Integrity, "integrity should be set after save")
+
+	loaded, err := store.GetBillingState("default")
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+
+	// Every field must survive save → reload → HMAC verify.
+	assert.ElementsMatch(t, []string{"relay", "ai_autofix"}, loaded.Capabilities)
+	assert.Equal(t, map[string]int64{"max_nodes": 50, "max_hosts": 100}, loaded.Limits)
+	assert.ElementsMatch(t, []string{"active_agents", "api_calls"}, loaded.MetersEnabled)
+	assert.Equal(t, "pro-v2", loaded.PlanVersion)
+	assert.Equal(t, entitlements.SubStateActive, loaded.SubscriptionState)
+	assert.Equal(t, now, *loaded.TrialStartedAt)
+	assert.Equal(t, endsAt, *loaded.TrialEndsAt)
+	assert.Equal(t, extendedAt, *loaded.TrialExtendedAt)
+	assert.Equal(t, "cus_123", loaded.StripeCustomerID)
+	assert.Equal(t, "sub_456", loaded.StripeSubscriptionID)
+	assert.Equal(t, "price_789", loaded.StripePriceID)
+	assert.Equal(t, state.Integrity, loaded.Integrity)
+}
+
+func TestBillingState_LegacyHMACMigration(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(t.TempDir(), ".encryption.key"))
+	writeTestEncryptionKey(t, dir)
+
+	store := NewFileBillingStore(dir)
+
+	now := int64(1700000000)
+	endsAt := int64(1701209600)
+
+	state := &entitlements.BillingState{
+		Capabilities:      []string{"relay"},
+		Limits:            map[string]int64{"max_nodes": 10},
+		PlanVersion:       "trial",
+		SubscriptionState: entitlements.SubStateTrial,
+		TrialStartedAt:    &now,
+		TrialEndsAt:       &endsAt,
+	}
+
+	// Compute a legacy HMAC (without Limits in payload) and write directly to disk.
+	hmacKey, err := store.loadHMACKey()
+	require.NoError(t, err)
+	state.Integrity = billingIntegrityLegacy(state, hmacKey)
+
+	data, err := json.Marshal(state)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "billing.json"), data, 0o600))
+
+	// Load should succeed: legacy HMAC is recognized and auto-migrated.
+	loaded, err := store.GetBillingState("default")
+	require.NoError(t, err)
+	require.NotNil(t, loaded, "state with legacy HMAC should not be treated as tampered")
+	assert.Equal(t, entitlements.SubStateTrial, loaded.SubscriptionState)
+
+	// Verify the HMAC was re-signed with the new format.
+	newHMAC := billingIntegrity(loaded, hmacKey)
+	assert.Equal(t, newHMAC, loaded.Integrity, "HMAC should be migrated to new format")
+}
+
+func TestBillingState_LimitsIncludedInHMAC(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(t.TempDir(), ".encryption.key"))
+	writeTestEncryptionKey(t, dir)
+
+	store := NewFileBillingStore(dir)
+
+	now := int64(1700000000)
+	endsAt := int64(1701209600)
+
+	state := &entitlements.BillingState{
+		Capabilities:      []string{"relay"},
+		Limits:            map[string]int64{"max_nodes": 10},
+		PlanVersion:       "trial",
+		SubscriptionState: entitlements.SubStateTrial,
+		TrialStartedAt:    &now,
+		TrialEndsAt:       &endsAt,
+	}
+
+	require.NoError(t, store.SaveBillingState("default", state))
+
+	// Tamper: change limits in the JSON file.
+	billingPath := filepath.Join(dir, "billing.json")
+	fileData, err := os.ReadFile(billingPath)
+	require.NoError(t, err)
+
+	var raw map[string]interface{}
+	require.NoError(t, json.Unmarshal(fileData, &raw))
+	raw["limits"] = map[string]interface{}{"max_nodes": float64(9999)}
+	tampered, err := json.Marshal(raw)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(billingPath, tampered, 0o600))
+
+	// Tampered limits should be detected.
+	loaded, err := store.GetBillingState("default")
+	require.NoError(t, err)
+	assert.Nil(t, loaded, "state with tampered limits should be treated as nonexistent")
+}

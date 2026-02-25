@@ -228,20 +228,18 @@ func ptrInt64(v int64) *int64 {
 }
 
 func cloneBillingStateForTest(state BillingState) BillingState {
-	return BillingState{
-		Capabilities:         cloneStringSliceForTest(state.Capabilities),
-		Limits:               cloneInt64MapForTest(state.Limits),
-		MetersEnabled:        cloneStringSliceForTest(state.MetersEnabled),
-		PlanVersion:          state.PlanVersion,
-		SubscriptionState:    state.SubscriptionState,
-		TrialStartedAt:       cloneInt64PtrForTest(state.TrialStartedAt),
-		TrialEndsAt:          cloneInt64PtrForTest(state.TrialEndsAt),
-		TrialExtendedAt:      cloneInt64PtrForTest(state.TrialExtendedAt),
-		Integrity:            state.Integrity,
-		StripeCustomerID:     state.StripeCustomerID,
-		StripeSubscriptionID: state.StripeSubscriptionID,
-		StripePriceID:        state.StripePriceID,
-	}
+	// Start with a full value copy so new fields are never silently dropped.
+	cp := state
+
+	// Deep-clone reference types to break aliasing.
+	cp.Capabilities = cloneStringSliceForTest(state.Capabilities)
+	cp.Limits = cloneInt64MapForTest(state.Limits)
+	cp.MetersEnabled = cloneStringSliceForTest(state.MetersEnabled)
+	cp.TrialStartedAt = cloneInt64PtrForTest(state.TrialStartedAt)
+	cp.TrialEndsAt = cloneInt64PtrForTest(state.TrialEndsAt)
+	cp.TrialExtendedAt = cloneInt64PtrForTest(state.TrialExtendedAt)
+
+	return cp
 }
 
 func cloneStringSliceForTest(values []string) []string {

@@ -17,23 +17,31 @@ func NormalizeBillingState(state *BillingState) *BillingState {
 		return DefaultBillingState()
 	}
 
-	normalized := &BillingState{
-		Capabilities:      append([]string(nil), state.Capabilities...),
-		Limits:            make(map[string]int64, len(state.Limits)),
-		MetersEnabled:     append([]string(nil), state.MetersEnabled...),
-		PlanVersion:       strings.TrimSpace(state.PlanVersion),
-		SubscriptionState: SubscriptionState(strings.ToLower(strings.TrimSpace(string(state.SubscriptionState)))),
-		TrialStartedAt:    state.TrialStartedAt,
-		TrialEndsAt:       state.TrialEndsAt,
+	// Start with a full struct copy so new fields are never silently dropped.
+	cp := *state
+	normalized := &cp
 
-		StripeCustomerID:     strings.TrimSpace(state.StripeCustomerID),
-		StripeSubscriptionID: strings.TrimSpace(state.StripeSubscriptionID),
-		StripePriceID:        strings.TrimSpace(state.StripePriceID),
-	}
+	// Deep-clone reference types to avoid aliasing the original.
+	normalized.Capabilities = append([]string(nil), state.Capabilities...)
+	normalized.MetersEnabled = append([]string(nil), state.MetersEnabled...)
+	normalized.Limits = make(map[string]int64, len(state.Limits))
 	for key, value := range state.Limits {
 		normalized.Limits[key] = value
 	}
 
+	// Clone pointer fields so the caller can't mutate through the original.
+	normalized.TrialStartedAt = cloneInt64Ptr(state.TrialStartedAt)
+	normalized.TrialEndsAt = cloneInt64Ptr(state.TrialEndsAt)
+	normalized.TrialExtendedAt = cloneInt64Ptr(state.TrialExtendedAt)
+
+	// Normalize string fields.
+	normalized.PlanVersion = strings.TrimSpace(normalized.PlanVersion)
+	normalized.SubscriptionState = SubscriptionState(strings.ToLower(strings.TrimSpace(string(normalized.SubscriptionState))))
+	normalized.StripeCustomerID = strings.TrimSpace(normalized.StripeCustomerID)
+	normalized.StripeSubscriptionID = strings.TrimSpace(normalized.StripeSubscriptionID)
+	normalized.StripePriceID = strings.TrimSpace(normalized.StripePriceID)
+
+	// Ensure slices/maps are never nil (JSON marshals as [] / {} instead of null).
 	if normalized.Capabilities == nil {
 		normalized.Capabilities = []string{}
 	}

@@ -73,6 +73,161 @@ func TestNormalizeBillingStateNil(t *testing.T) {
 	}
 }
 
+func TestNormalizeBillingState_PreservesAllFields(t *testing.T) {
+	trialStarted := int64(100)
+	trialEnds := int64(200)
+	trialExtended := int64(150)
+
+	input := &BillingState{
+		Capabilities:         []string{"relay", "ai"},
+		Limits:               map[string]int64{"max_nodes": 50},
+		MetersEnabled:        []string{"active_agents"},
+		PlanVersion:          "pro-v2",
+		SubscriptionState:    SubStateActive,
+		TrialStartedAt:       &trialStarted,
+		TrialEndsAt:          &trialEnds,
+		TrialExtendedAt:      &trialExtended,
+		Integrity:            "deadbeef",
+		StripeCustomerID:     "cus_123",
+		StripeSubscriptionID: "sub_456",
+		StripePriceID:        "price_789",
+	}
+
+	normalized := NormalizeBillingState(input)
+
+	// Verify every field survives normalization.
+	if len(normalized.Capabilities) != 2 {
+		t.Fatalf("capabilities: got %v", normalized.Capabilities)
+	}
+	if normalized.Limits["max_nodes"] != 50 {
+		t.Fatalf("limits[max_nodes]: got %d", normalized.Limits["max_nodes"])
+	}
+	if normalized.MetersEnabled[0] != "active_agents" {
+		t.Fatalf("meters_enabled: got %v", normalized.MetersEnabled)
+	}
+	if normalized.PlanVersion != "pro-v2" {
+		t.Fatalf("plan_version: got %q", normalized.PlanVersion)
+	}
+	if normalized.SubscriptionState != SubStateActive {
+		t.Fatalf("subscription_state: got %q", normalized.SubscriptionState)
+	}
+	if normalized.TrialStartedAt == nil || *normalized.TrialStartedAt != 100 {
+		t.Fatalf("trial_started_at: got %v", normalized.TrialStartedAt)
+	}
+	if normalized.TrialEndsAt == nil || *normalized.TrialEndsAt != 200 {
+		t.Fatalf("trial_ends_at: got %v", normalized.TrialEndsAt)
+	}
+	if normalized.TrialExtendedAt == nil || *normalized.TrialExtendedAt != 150 {
+		t.Fatalf("trial_extended_at: got %v", normalized.TrialExtendedAt)
+	}
+	if normalized.Integrity != "deadbeef" {
+		t.Fatalf("integrity: got %q", normalized.Integrity)
+	}
+	if normalized.StripeCustomerID != "cus_123" {
+		t.Fatalf("stripe_customer_id: got %q", normalized.StripeCustomerID)
+	}
+	if normalized.StripeSubscriptionID != "sub_456" {
+		t.Fatalf("stripe_subscription_id: got %q", normalized.StripeSubscriptionID)
+	}
+	if normalized.StripePriceID != "price_789" {
+		t.Fatalf("stripe_price_id: got %q", normalized.StripePriceID)
+	}
+
+	// Verify pointer fields are deep-copied (not aliased).
+	*input.TrialStartedAt = 999
+	if *normalized.TrialStartedAt != 100 {
+		t.Fatal("trial_started_at was aliased, not cloned")
+	}
+	*input.TrialExtendedAt = 999
+	if *normalized.TrialExtendedAt != 150 {
+		t.Fatal("trial_extended_at was aliased, not cloned")
+	}
+}
+
+func TestCloneBillingState_PreservesAllFields(t *testing.T) {
+	trialStarted := int64(100)
+	trialEnds := int64(200)
+	trialExtended := int64(150)
+
+	input := BillingState{
+		Capabilities:         []string{"relay", "ai"},
+		Limits:               map[string]int64{"max_nodes": 50},
+		MetersEnabled:        []string{"active_agents"},
+		PlanVersion:          "pro-v2",
+		SubscriptionState:    SubStateActive,
+		TrialStartedAt:       &trialStarted,
+		TrialEndsAt:          &trialEnds,
+		TrialExtendedAt:      &trialExtended,
+		Integrity:            "deadbeef",
+		StripeCustomerID:     "cus_123",
+		StripeSubscriptionID: "sub_456",
+		StripePriceID:        "price_789",
+	}
+
+	cloned := cloneBillingState(input)
+
+	if cloned.Integrity != "deadbeef" {
+		t.Fatalf("integrity: got %q", cloned.Integrity)
+	}
+	if cloned.StripeCustomerID != "cus_123" {
+		t.Fatalf("stripe_customer_id: got %q", cloned.StripeCustomerID)
+	}
+	if cloned.StripeSubscriptionID != "sub_456" {
+		t.Fatalf("stripe_subscription_id: got %q", cloned.StripeSubscriptionID)
+	}
+	if cloned.StripePriceID != "price_789" {
+		t.Fatalf("stripe_price_id: got %q", cloned.StripePriceID)
+	}
+	if cloned.TrialExtendedAt == nil || *cloned.TrialExtendedAt != 150 {
+		t.Fatalf("trial_extended_at: got %v", cloned.TrialExtendedAt)
+	}
+
+	// Verify deep copy.
+	*input.TrialExtendedAt = 999
+	input.Capabilities[0] = "changed"
+	if *cloned.TrialExtendedAt != 150 {
+		t.Fatal("trial_extended_at was aliased")
+	}
+	if cloned.Capabilities[0] != "relay" {
+		t.Fatal("capabilities were aliased")
+	}
+}
+
+func TestNormalizeThenClone_RoundTrip(t *testing.T) {
+	trialStarted := int64(100)
+	trialEnds := int64(200)
+	trialExtended := int64(150)
+
+	original := &BillingState{
+		Capabilities:         []string{"relay"},
+		Limits:               map[string]int64{"max_nodes": 50},
+		MetersEnabled:        []string{"active_agents"},
+		PlanVersion:          "pro-v2",
+		SubscriptionState:    SubStateActive,
+		TrialStartedAt:       &trialStarted,
+		TrialEndsAt:          &trialEnds,
+		TrialExtendedAt:      &trialExtended,
+		Integrity:            "abc123",
+		StripeCustomerID:     "cus_1",
+		StripeSubscriptionID: "sub_2",
+		StripePriceID:        "price_3",
+	}
+
+	normalized := NormalizeBillingState(original)
+	cloned := cloneBillingState(*normalized)
+
+	// Every field must survive the full normalize → clone chain.
+	if cloned.Integrity != "abc123" {
+		t.Fatalf("integrity lost in round-trip: got %q", cloned.Integrity)
+	}
+	if cloned.StripeCustomerID != "cus_1" {
+		t.Fatalf("stripe_customer_id lost: got %q", cloned.StripeCustomerID)
+	}
+	if cloned.TrialExtendedAt == nil || *cloned.TrialExtendedAt != 150 {
+		t.Fatalf("trial_extended_at lost: got %v", cloned.TrialExtendedAt)
+	}
+}
+
 func TestIsValidBillingSubscriptionState(t *testing.T) {
 	valid := []SubscriptionState{
 		SubStateTrial,

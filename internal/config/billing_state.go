@@ -75,8 +75,20 @@ func (s *FileBillingStore) GetBillingState(orgID string) (*pkglicensing.BillingS
 					Msg("Failed to persist billing integrity migration")
 			}
 		} else if !verifyBillingIntegrity(&state, hmacKey) {
-			// Tampered state — treat as nonexistent (free tier).
-			return nil, nil
+			// Check legacy HMAC format (without Limits) for format migration.
+			if verifyBillingIntegrityLegacy(&state, hmacKey) {
+				// Valid legacy signature — re-sign with current format and persist.
+				state.Integrity = billingIntegrity(&state, hmacKey)
+				if saveErr := s.SaveBillingState(orgID, &state); saveErr != nil {
+					log.Warn().
+						Err(saveErr).
+						Str("org_id", orgID).
+						Msg("Failed to persist billing integrity format migration")
+				}
+			} else {
+				// Tampered state — treat as nonexistent (free tier).
+				return nil, nil
+			}
 		}
 	}
 
@@ -175,10 +187,16 @@ func (s *FileBillingStore) loadHMACKey() ([]byte, error) {
 	return h.Sum(nil), nil
 }
 
-// billingIntegrityPayload contains only the critical fields used for HMAC computation.
-// Adding non-critical fields to BillingState won't break existing signatures.
+// billingIntegrityPayload contains only the entitlement-critical fields used
+// for HMAC computation. Non-critical metadata (e.g. Stripe IDs) is excluded so
+// adding informational fields to BillingState won't break existing signatures.
+//
+// IMPORTANT: When adding a new field to BillingState that gates entitlements or
+// affects billing logic, add it here too. Existing on-disk signatures will
+// auto-migrate on next read (see GetBillingState migration path).
 type billingIntegrityPayload struct {
 	Capabilities      []string                       `json:"capabilities"`
+	Limits            map[string]int64               `json:"limits"`
 	PlanVersion       string                         `json:"plan_version"`
 	SubscriptionState pkglicensing.SubscriptionState `json:"subscription_state"`
 	TrialStartedAt    *int64                         `json:"trial_started_at"`
@@ -192,8 +210,16 @@ func billingIntegrity(state *pkglicensing.BillingState, key []byte) string {
 	copy(caps, state.Capabilities)
 	sort.Strings(caps)
 
+	// Clone and canonicalize limits: nil → empty map for deterministic JSON.
+	// Snapshot avoids aliasing; callers must not mutate state concurrently.
+	limits := make(map[string]int64, len(state.Limits))
+	for k, v := range state.Limits {
+		limits[k] = v
+	}
+
 	payload := billingIntegrityPayload{
 		Capabilities:      caps,
+		Limits:            limits,
 		PlanVersion:       state.PlanVersion,
 		SubscriptionState: state.SubscriptionState,
 		TrialStartedAt:    state.TrialStartedAt,
@@ -210,5 +236,43 @@ func billingIntegrity(state *pkglicensing.BillingState, key []byte) string {
 // verifyBillingIntegrity checks whether the stored HMAC matches the computed one.
 func verifyBillingIntegrity(state *pkglicensing.BillingState, key []byte) bool {
 	expected := billingIntegrity(state, key)
+	return hmac.Equal([]byte(expected), []byte(state.Integrity))
+}
+
+// billingIntegrityPayloadLegacy is the pre-v6 HMAC payload format (without Limits).
+// Kept only for migration verification — new signatures always use billingIntegrityPayload.
+type billingIntegrityPayloadLegacy struct {
+	Capabilities      []string                       `json:"capabilities"`
+	PlanVersion       string                         `json:"plan_version"`
+	SubscriptionState pkglicensing.SubscriptionState `json:"subscription_state"`
+	TrialStartedAt    *int64                         `json:"trial_started_at"`
+	TrialEndsAt       *int64                         `json:"trial_ends_at"`
+	TrialExtendedAt   *int64                         `json:"trial_extended_at"`
+}
+
+// billingIntegrityLegacy computes the legacy HMAC (without Limits) for migration checks.
+func billingIntegrityLegacy(state *pkglicensing.BillingState, key []byte) string {
+	caps := make([]string, len(state.Capabilities))
+	copy(caps, state.Capabilities)
+	sort.Strings(caps)
+
+	payload := billingIntegrityPayloadLegacy{
+		Capabilities:      caps,
+		PlanVersion:       state.PlanVersion,
+		SubscriptionState: state.SubscriptionState,
+		TrialStartedAt:    state.TrialStartedAt,
+		TrialEndsAt:       state.TrialEndsAt,
+		TrialExtendedAt:   state.TrialExtendedAt,
+	}
+
+	data, _ := json.Marshal(payload)
+	mac := hmac.New(sha256.New, key)
+	mac.Write(data)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// verifyBillingIntegrityLegacy checks if a stored HMAC was signed with the legacy format.
+func verifyBillingIntegrityLegacy(state *pkglicensing.BillingState, key []byte) bool {
+	expected := billingIntegrityLegacy(state, key)
 	return hmac.Equal([]byte(expected), []byte(state.Integrity))
 }

@@ -133,41 +133,40 @@ func (d *DatabaseSource) currentState() BillingState {
 }
 
 func (d *DatabaseSource) defaultState() BillingState {
-	defaults := BillingState{
-		PlanVersion:       string(SubStateTrial),
-		SubscriptionState: SubStateTrial,
-	}
-
 	if d == nil {
-		return defaults
+		return BillingState{
+			PlanVersion:       string(SubStateTrial),
+			SubscriptionState: SubStateTrial,
+		}
 	}
 
-	if d.defaults.PlanVersion != "" {
-		defaults.PlanVersion = d.defaults.PlanVersion
-	}
-	if d.defaults.SubscriptionState != "" {
-		defaults.SubscriptionState = d.defaults.SubscriptionState
-	}
+	// Clone the full defaults struct so new fields are never silently dropped.
+	defaults := cloneBillingState(d.defaults)
 
-	defaults.Capabilities = cloneStringSlice(d.defaults.Capabilities)
-	defaults.Limits = cloneInt64Map(d.defaults.Limits)
-	defaults.MetersEnabled = cloneStringSlice(d.defaults.MetersEnabled)
-	defaults.TrialStartedAt = cloneInt64Ptr(d.defaults.TrialStartedAt)
-	defaults.TrialEndsAt = cloneInt64Ptr(d.defaults.TrialEndsAt)
+	// Apply fallback values for required fields.
+	if defaults.PlanVersion == "" {
+		defaults.PlanVersion = string(SubStateTrial)
+	}
+	if defaults.SubscriptionState == "" {
+		defaults.SubscriptionState = SubStateTrial
+	}
 
 	return defaults
 }
 
 func cloneBillingState(state BillingState) BillingState {
-	return BillingState{
-		Capabilities:      cloneStringSlice(state.Capabilities),
-		Limits:            cloneInt64Map(state.Limits),
-		MetersEnabled:     cloneStringSlice(state.MetersEnabled),
-		PlanVersion:       state.PlanVersion,
-		SubscriptionState: state.SubscriptionState,
-		TrialStartedAt:    cloneInt64Ptr(state.TrialStartedAt),
-		TrialEndsAt:       cloneInt64Ptr(state.TrialEndsAt),
-	}
+	// Start with a full value copy so new fields are never silently dropped.
+	cp := state
+
+	// Deep-clone reference types to break aliasing.
+	cp.Capabilities = cloneStringSlice(state.Capabilities)
+	cp.Limits = cloneInt64Map(state.Limits)
+	cp.MetersEnabled = cloneStringSlice(state.MetersEnabled)
+	cp.TrialStartedAt = cloneInt64Ptr(state.TrialStartedAt)
+	cp.TrialEndsAt = cloneInt64Ptr(state.TrialEndsAt)
+	cp.TrialExtendedAt = cloneInt64Ptr(state.TrialExtendedAt)
+
+	return cp
 }
 
 func cloneStringSlice(values []string) []string {
