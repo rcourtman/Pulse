@@ -709,7 +709,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           </Show>
         </div>
         <Show when={props.onTimeRangeChange}>
-          <div class="inline-flex shrink-0 rounded border bg-surface p-0.5 text-xs ">
+          <div class="inline-flex shrink-0 rounded border border-border bg-surface p-0.5 text-xs">
             <For each={SUMMARY_TIME_RANGES}>
               {(range) => (
                 <button
