@@ -3915,6 +3915,9 @@ const Settings: Component<SettingsProps> = (props) => {
           }
         }
         isApplying={isInstallingUpdate()}
+        isPrerelease={updateInfo()?.isPrerelease}
+        isMajorUpgrade={updateInfo()?.isMajorUpgrade}
+        warning={updateInfo()?.warning}
       />
 
       {/* Export Dialog */}

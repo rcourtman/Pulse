@@ -9,6 +9,9 @@ interface UpdateConfirmationModalProps {
   latestVersion: string;
   plan: UpdatePlan;
   isApplying: boolean;
+  isPrerelease?: boolean;
+  isMajorUpgrade?: boolean;
+  warning?: string;
 }
 
 export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
@@ -71,6 +74,69 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
                 <span class="font-mono text-sm font-semibold">{props.latestVersion}</span>
               </div>
             </div>
+
+            {/* Major version / pre-release warning */}
+            <Show when={props.warning}>
+              <div
+                class={`rounded-md p-4 border ${
+                  props.isMajorUpgrade && props.isPrerelease
+                    ? 'bg-orange-50 dark:bg-orange-950 border-orange-300 dark:border-orange-700'
+                    : props.isMajorUpgrade
+                      ? 'bg-amber-50 dark:bg-amber-950 border-amber-300 dark:border-amber-700'
+                      : 'bg-blue-50 dark:bg-blue-950 border-blue-300 dark:border-blue-700'
+                }`}
+              >
+                <div class="flex items-start gap-3">
+                  <svg
+                    class={`w-5 h-5 flex-shrink-0 mt-0.5 ${
+                      props.isMajorUpgrade && props.isPrerelease
+                        ? 'text-orange-500 dark:text-orange-400'
+                        : props.isMajorUpgrade
+                          ? 'text-amber-500 dark:text-amber-400'
+                          : 'text-blue-500 dark:text-blue-400'
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
+                  </svg>
+                  <div class="text-sm">
+                    <p
+                      class={`font-medium ${
+                        props.isMajorUpgrade && props.isPrerelease
+                          ? 'text-orange-800 dark:text-orange-200'
+                          : props.isMajorUpgrade
+                            ? 'text-amber-800 dark:text-amber-200'
+                            : 'text-blue-800 dark:text-blue-200'
+                      }`}
+                    >
+                      {props.isMajorUpgrade && props.isPrerelease
+                        ? 'Major Version Pre-Release'
+                        : props.isMajorUpgrade
+                          ? 'Major Version Upgrade'
+                          : 'Pre-Release Build'}
+                    </p>
+                    <p
+                      class={`mt-1 ${
+                        props.isMajorUpgrade && props.isPrerelease
+                          ? 'text-orange-700 dark:text-orange-300'
+                          : props.isMajorUpgrade
+                            ? 'text-amber-700 dark:text-amber-300'
+                            : 'text-blue-700 dark:text-blue-300'
+                      }`}
+                    >
+                      {props.warning}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </Show>
 
             {/* Estimated Time */}
             <Show when={props.plan.estimatedTime}>

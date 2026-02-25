@@ -58,6 +58,7 @@ type UpdateInfo struct {
 	ReleaseDate    time.Time `json:"releaseDate"`
 	DownloadURL    string    `json:"downloadUrl"`
 	IsPrerelease   bool      `json:"isPrerelease"`
+	IsMajorUpgrade bool      `json:"isMajorUpgrade"`
 	Warning        string    `json:"warning,omitempty"`
 }
 
@@ -363,6 +364,11 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 		}
 	}
 
+	isMajorUpgrade := latestVer.Major > currentVer.Major
+	// Derive prerelease from the parsed version tag (not GitHub metadata) so the
+	// warning is correct even if the release was published with prerelease=false.
+	isPrerelease := release.Prerelease || latestVer.IsPrerelease()
+
 	info := &UpdateInfo{
 		Available:      latestVer.IsNewerThan(currentVer),
 		CurrentVersion: currentInfo.Version,
@@ -370,7 +376,25 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 		ReleaseNotes:   release.Body,
 		ReleaseDate:    release.PublishedAt,
 		DownloadURL:    downloadURL,
-		IsPrerelease:   release.Prerelease,
+		IsPrerelease:   isPrerelease,
+		IsMajorUpgrade: isMajorUpgrade,
+	}
+
+	// Add warning for major version pre-release upgrades
+	if info.Available && isMajorUpgrade && isPrerelease {
+		info.Warning = fmt.Sprintf(
+			"This is a major version upgrade (v%d → v%d) and a pre-release build. "+
+				"We strongly recommend installing this as a separate instance rather than upgrading your production installation. "+
+				"Pre-release builds may contain bugs and are intended for testing.",
+			currentVer.Major, latestVer.Major,
+		)
+	} else if info.Available && isMajorUpgrade {
+		info.Warning = fmt.Sprintf(
+			"This is a major version upgrade (v%d → v%d). Please review the release notes carefully before updating.",
+			currentVer.Major, latestVer.Major,
+		)
+	} else if info.Available && isPrerelease {
+		info.Warning = "This is a pre-release build. Pre-release builds are tested but may have rough edges."
 	}
 
 	// Cache the result (only if using saved channel)
@@ -785,6 +809,13 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 			releaseVer, err := ParseVersion(releases[i].TagName)
 			if err != nil {
 				log.Debug().Str("tag", releases[i].TagName).Err(err).Msg("Failed to parse release version")
+				continue
+			}
+
+			// Also skip if the version tag itself indicates a prerelease
+			// (guards against GitHub metadata being set incorrectly)
+			if releaseVer.IsPrerelease() {
+				log.Debug().Str("tag", releases[i].TagName).Msg("Skipping release with prerelease version tag on stable channel")
 				continue
 			}
 

@@ -797,7 +797,9 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                     >
                       Release Candidate
                     </p>
-                    <p class="text-xs text-muted">Preview upcoming features</p>
+                    <p class="text-xs text-muted">
+                      Preview upcoming features (may include beta builds)
+                    </p>
                   </div>
                 </div>
               </button>

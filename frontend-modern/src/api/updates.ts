@@ -8,6 +8,7 @@ export interface UpdateInfo {
   releaseDate: string;
   downloadUrl: string;
   isPrerelease: boolean;
+  isMajorUpgrade: boolean;
   warning?: string;
 }
 

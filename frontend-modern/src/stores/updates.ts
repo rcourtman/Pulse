@@ -32,6 +32,7 @@ const normalizeUpdateInfo = (value: unknown): UpdateInfo | undefined => {
     releaseDate,
     downloadUrl,
     isPrerelease,
+    isMajorUpgrade,
     warning,
   } = value;
 
@@ -59,6 +60,7 @@ const normalizeUpdateInfo = (value: unknown): UpdateInfo | undefined => {
     releaseDate,
     downloadUrl,
     isPrerelease,
+    isMajorUpgrade: typeof isMajorUpgrade === 'boolean' ? isMajorUpgrade : false,
     ...(warning !== undefined ? { warning } : {}),
   };
 };
@@ -327,6 +329,7 @@ export const updateStore = {
       releaseDate: new Date().toISOString(),
       downloadUrl: '#',
       isPrerelease: false,
+      isMajorUpgrade: false,
     });
     setUpdateAvailable(true);
     setIsDismissed(false);

@@ -134,6 +134,13 @@ export function UpdateBanner() {
               <div class="flex items-center gap-3 flex-wrap">
                 <span class="text-sm font-medium">{getShortMessage()}</span>
 
+                {/* Pre-release badge */}
+                <Show when={updateStore.updateInfo()?.isPrerelease && !isExpanded()}>
+                  <span class="px-2 py-0.5 text-xs font-medium bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-200 rounded">
+                    Pre-release
+                  </span>
+                </Show>
+
                 {/* Apply Update Button (automated deployments) */}
                 <Show when={updatePlan()?.canAutoUpdate && !isExpanded()}>
                   <button
@@ -225,10 +232,34 @@ export function UpdateBanner() {
                     <span class="font-medium">Quick upgrade:</span> {getUpdateInstructions()}
                   </p>
                 )}
-                <Show when={updateStore.updateInfo()?.isPrerelease}>
-                  <p class="text-orange-600 dark:text-orange-400 text-xs">
-                    This is a pre-release version
-                  </p>
+                <Show when={updateStore.updateInfo()?.warning}>
+                  <div
+                    class={`mt-2 p-3 rounded-md border text-sm ${
+                      updateStore.updateInfo()?.isMajorUpgrade &&
+                      updateStore.updateInfo()?.isPrerelease
+                        ? 'bg-orange-50 dark:bg-orange-950 border-orange-300 dark:border-orange-700 text-orange-800 dark:text-orange-200'
+                        : updateStore.updateInfo()?.isMajorUpgrade
+                          ? 'bg-amber-50 dark:bg-amber-950 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200'
+                          : 'bg-blue-100 dark:bg-blue-950 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200'
+                    }`}
+                  >
+                    <div class="flex items-start gap-2">
+                      <svg
+                        class="w-4 h-4 mt-0.5 flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                        />
+                      </svg>
+                      <span>{updateStore.updateInfo()?.warning}</span>
+                    </div>
+                  </div>
                 </Show>
 
                 {/* Manual Update Instructions */}
@@ -340,6 +371,9 @@ export function UpdateBanner() {
           }
         }
         isApplying={isApplying()}
+        isPrerelease={updateStore.updateInfo()?.isPrerelease}
+        isMajorUpgrade={updateStore.updateInfo()?.isMajorUpgrade}
+        warning={updateStore.updateInfo()?.warning}
       />
     </Show>
   );
