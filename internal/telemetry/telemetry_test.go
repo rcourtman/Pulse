@@ -171,6 +171,28 @@ func TestSend_Success(t *testing.T) {
 	}
 }
 
+func TestJitteredHeartbeat_WithinBounds(t *testing.T) {
+	min := heartbeatInterval - maxHeartbeatJitter
+	max := heartbeatInterval + maxHeartbeatJitter
+
+	for i := 0; i < 1000; i++ {
+		d := jitteredHeartbeat()
+		if d < min || d > max {
+			t.Fatalf("jitteredHeartbeat() = %v, want [%v, %v]", d, min, max)
+		}
+	}
+}
+
+func TestJitteredHeartbeat_NotConstant(t *testing.T) {
+	seen := make(map[time.Duration]bool)
+	for i := 0; i < 100; i++ {
+		seen[jitteredHeartbeat()] = true
+	}
+	if len(seen) < 2 {
+		t.Fatal("jitteredHeartbeat() returned the same value 100 times — jitter is not working")
+	}
+}
+
 func TestStartStop_DisabledByDefault(t *testing.T) {
 	// Start should be a no-op when Enabled is false (the default).
 	Start(context.Background(), Config{

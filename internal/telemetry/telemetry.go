@@ -44,6 +44,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -60,8 +61,13 @@ import (
 var pingEndpoint = "https://license.pulserelay.pro/v1/telemetry/ping"
 
 const (
-	// heartbeatInterval is how often a running instance phones home.
+	// heartbeatInterval is the base interval between daily pings.
+	// Each cycle adds random jitter of ±maxHeartbeatJitter to prevent
+	// thundering-herd effects when many installations start simultaneously.
 	heartbeatInterval = 24 * time.Hour
+
+	// maxHeartbeatJitter is the maximum random offset added to each heartbeat.
+	maxHeartbeatJitter = 30 * time.Minute
 
 	// startupDelay is how long to wait after startup before sending the first
 	// ping, giving the monitor time to connect to nodes and populate state.
@@ -204,10 +210,12 @@ func Start(ctx context.Context, cfg Config) {
 		defer r.wg.Done()
 
 		// Wait for the monitor to connect and populate state before the first ping.
+		startTimer := time.NewTimer(startupDelay)
 		select {
 		case <-ctx.Done():
+			startTimer.Stop()
 			return
-		case <-time.After(startupDelay):
+		case <-startTimer.C:
 		}
 
 		// Send startup ping with current snapshot.
@@ -215,15 +223,14 @@ func Start(ctx context.Context, cfg Config) {
 		ping.Event = "startup"
 		send(ctx, ping)
 
-		// Daily heartbeat.
-		ticker := time.NewTicker(heartbeatInterval)
-		defer ticker.Stop()
-
+		// Daily heartbeat with jitter.
 		for {
+			timer := time.NewTimer(jitteredHeartbeat())
 			select {
 			case <-ctx.Done():
+				timer.Stop()
 				return
-			case <-ticker.C:
+			case <-timer.C:
 				ping = applySnapshot(base, cfg.GetSnapshot)
 				ping.Event = "heartbeat"
 				send(ctx, ping)
@@ -253,6 +260,12 @@ func IsEnabled() bool {
 		return true // enabled by default
 	}
 	return v == "true" || v == "1"
+}
+
+// jitteredHeartbeat returns heartbeatInterval ± a random offset up to maxHeartbeatJitter.
+func jitteredHeartbeat() time.Duration {
+	jitter := time.Duration(rand.Int63n(int64(2*maxHeartbeatJitter)+1)) - maxHeartbeatJitter
+	return heartbeatInterval + jitter
 }
 
 // applySnapshot merges dynamic state into the base ping.
