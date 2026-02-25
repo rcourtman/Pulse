@@ -5,6 +5,7 @@ import { AlertsAPI } from '@/api/alerts';
 import { formatRelativeTime } from '@/utils/format';
 import { notificationStore } from '@/stores/notifications';
 import type { Alert } from '@/types/api';
+import BellIcon from 'lucide-solid/icons/bell';
 
 const MAX_SHOWN = 8;
 
@@ -73,9 +74,12 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
   };
 
   return (
-    <Card padding="none" tone="default" class="px-4 py-3.5 border-border-subtle">
-      <div class="flex items-center justify-between gap-2">
-        <h2 class="text-sm font-semibold text-base-content">Alerts</h2>
+    <Card padding="none" tone="default" class="border-border-subtle overflow-hidden">
+      <div class="px-4 py-3 flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <BellIcon class="w-4 h-4 text-muted" aria-hidden="true" />
+          <h2 class="text-sm font-semibold text-base-content">Alerts</h2>
+        </div>
         <div class="flex items-center gap-2">
           <Show when={unackedAlerts().length > 1}>
             <button
@@ -104,16 +108,16 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
         </div>
       </div>
 
-      <Show
-        when={props.alerts.length > 0}
-        fallback={
-          <p class="text-xs font-medium text-emerald-700 dark:text-emerald-300 mt-1">
-            No active alerts
-          </p>
-        }
-      >
-        <div class="mt-1">
-          <p class="text-xs text-muted mb-1">
+      <div class="px-4 pb-3">
+        <Show
+          when={props.alerts.length > 0}
+          fallback={
+            <p class="text-xs font-medium text-emerald-700 dark:text-emerald-300 pt-0.5">
+              No active alerts
+            </p>
+          }
+        >
+          <p class="text-xs text-muted mb-1.5">
             <span class="font-mono font-semibold text-red-600 dark:text-red-400">
               {props.criticalCount}
             </span>{' '}
@@ -127,7 +131,7 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
           <ul class="space-y-0.5" role="list">
             <For each={recent()}>
               {(alert) => (
-                <li class="flex items-center gap-2 -mx-1 px-1 py-0.5 rounded hover:bg-surface-hover transition-colors">
+                <li class="flex items-center gap-2 -mx-1 px-1 py-1 rounded hover:bg-surface-hover transition-colors">
                   <span class={severityBadgeClass(alert.level)}>
                     {alert.level === 'critical' ? 'CRIT' : 'WARN'}
                   </span>
@@ -151,7 +155,7 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
           </ul>
 
           <Show when={props.alerts.length > MAX_SHOWN}>
-            <p class="mt-1 text-[11px] text-muted">
+            <p class="mt-1.5 text-[11px] text-muted">
               <a
                 href={ALERTS_OVERVIEW_PATH}
                 class="text-blue-600 hover:underline dark:text-blue-400"
@@ -160,8 +164,8 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
               </a>
             </p>
           </Show>
-        </div>
-      </Show>
+        </Show>
+      </div>
     </Card>
   );
 }

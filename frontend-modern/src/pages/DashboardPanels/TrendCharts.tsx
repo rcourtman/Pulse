@@ -12,6 +12,7 @@ import {
 } from '@/components/shared/summaryTimeRange';
 import type { HistoryTimeRange, MetricPoint } from '@/api/charts';
 import { HOST_COLORS } from './hostColors';
+import TrendingUpIcon from 'lucide-solid/icons/trending-up';
 
 interface TrendChartsProps {
   trends: import('@/hooks/useDashboardTrends').DashboardTrends;
@@ -88,8 +89,11 @@ export function TrendCharts(props: TrendChartsProps) {
 
   return (
     <div>
-      <div class="flex items-center justify-between mb-1.5">
-        <p class="text-xs font-semibold text-muted uppercase tracking-wide">Trends</p>
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-1.5">
+          <TrendingUpIcon class="w-4 h-4 text-muted" aria-hidden="true" />
+          <p class="text-xs font-semibold text-muted uppercase tracking-wide">Trends</p>
+        </div>
         <div class="flex items-center gap-1.5">
           <For each={SUMMARY_TIME_RANGES}>
             {(range) => {

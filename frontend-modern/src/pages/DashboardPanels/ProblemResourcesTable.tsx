@@ -58,12 +58,17 @@ function formatType(type: string): string {
 export function ProblemResourcesTable(props: ProblemResourcesTableProps) {
   return (
     <Show when={props.problems.length > 0}>
-      <Card padding="none" tone="default">
-        <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
-          <AlertTriangleIcon class="w-4 h-4 text-red-500 dark:text-red-400" />
+      <Card padding="none" tone="default" class="overflow-hidden">
+        <div class="px-4 py-3 flex items-center gap-2 bg-red-50/40 dark:bg-red-950/20 border-b border-red-100 dark:border-red-900/30">
+          <div class="flex items-center justify-center w-6 h-6 rounded-full bg-red-100 dark:bg-red-900/50">
+            <AlertTriangleIcon
+              class="w-3.5 h-3.5 text-red-600 dark:text-red-400"
+              aria-hidden="true"
+            />
+          </div>
           <h2 class="text-sm font-semibold text-base-content">Problem Resources</h2>
-          <span class="text-xs text-muted ml-auto">
-            {props.problems.length} resource{props.problems.length !== 1 ? 's' : ''}
+          <span class="ml-auto text-[10px] font-medium text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/50 px-1.5 py-0.5 rounded-full">
+            {props.problems.length}
           </span>
         </div>
 

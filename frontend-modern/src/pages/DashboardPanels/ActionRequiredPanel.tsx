@@ -365,23 +365,45 @@ export function ActionRequiredPanel(props: ActionRequiredPanelProps) {
 
   return (
     <Show when={hasAny()}>
-      <Card padding="md" tone="default" class="border-amber-200 dark:border-amber-800">
-        <div class="flex items-center gap-2 mb-3">
-          <AlertTriangleIcon class="w-4 h-4 text-amber-500 dark:text-amber-400" />
-          <h2 class="text-sm font-semibold text-base-content">Action Required</h2>
+      <Card
+        padding="none"
+        tone="default"
+        class="border-amber-200 dark:border-amber-800 overflow-hidden"
+      >
+        <div class="bg-amber-50/50 dark:bg-amber-950/30 px-4 py-3 border-b border-amber-100 dark:border-amber-900/50">
+          <div class="flex items-center gap-2">
+            <div class="flex items-center justify-center w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-900/50">
+              <AlertTriangleIcon
+                class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400"
+                aria-hidden="true"
+              />
+            </div>
+            <h2 class="text-sm font-semibold text-base-content">Action Required</h2>
+            <span class="ml-auto text-[10px] font-medium text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/50 px-1.5 py-0.5 rounded-full">
+              {(hasApprovals() ? props.pendingApprovals.length : 0) +
+                (hasAlerts() ? props.unackedCriticalAlerts.length : 0) +
+                (hasFindings() ? props.findingsNeedingAttention.length : 0)}
+            </span>
+          </div>
         </div>
 
-        <div class="space-y-4">
+        <div class="px-4 py-3 divide-y divide-border">
           <Show when={hasApprovals()}>
-            <PendingApprovalRows approvals={props.pendingApprovals} />
+            <div class="py-3 first:pt-0 last:pb-0">
+              <PendingApprovalRows approvals={props.pendingApprovals} />
+            </div>
           </Show>
 
           <Show when={hasAlerts()}>
-            <UnackedAlertRows alerts={props.unackedCriticalAlerts} />
+            <div class="py-3 first:pt-0 last:pb-0">
+              <UnackedAlertRows alerts={props.unackedCriticalAlerts} />
+            </div>
           </Show>
 
           <Show when={hasFindings()}>
-            <FindingsAttentionRows findings={props.findingsNeedingAttention} />
+            <div class="py-3 first:pt-0 last:pb-0">
+              <FindingsAttentionRows findings={props.findingsNeedingAttention} />
+            </div>
           </Show>
         </div>
       </Card>

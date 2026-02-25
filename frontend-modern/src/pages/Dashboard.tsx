@@ -177,17 +177,27 @@ export default function Dashboard() {
 
       <Switch>
         <Match when={isLoading() && !hasCachedData() && !hasConnectionError()}>
-          <section class="space-y-2" data-testid="dashboard-loading">
+          <section class="space-y-4" data-testid="dashboard-loading">
             {/* KPI strip skeleton */}
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-              <For each={Array.from({ length: 4 })}>
-                {() => (
-                  <div
-                    data-testid="dashboard-skeleton-block"
-                    class="animate-pulse bg-surface-hover rounded-md h-20"
-                  />
-                )}
-              </For>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {(() => {
+                const colors = [
+                  'border-l-blue-500/40',
+                  'border-l-violet-500/40',
+                  'border-l-cyan-500/40',
+                  'border-l-amber-500/40',
+                ];
+                return (
+                  <For each={colors}>
+                    {(color) => (
+                      <div
+                        data-testid="dashboard-skeleton-block"
+                        class={`animate-pulse bg-surface border border-border rounded-md border-l-[3px] ${color} h-[88px]`}
+                      />
+                    )}
+                  </For>
+                );
+              })()}
             </div>
             {/* Widget skeletons */}
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -195,9 +205,12 @@ export default function Dashboard() {
                 {() => (
                   <div
                     data-testid="dashboard-skeleton-block"
-                    class="border border-border rounded-md p-4 sm:p-5 bg-surface"
+                    class="border border-border rounded-md bg-surface"
                   >
-                    <div class="animate-pulse bg-surface-hover rounded h-24" />
+                    <div class="px-4 py-3">
+                      <div class="animate-pulse bg-surface-hover rounded h-3 w-16 mb-3" />
+                      <div class="animate-pulse bg-surface-hover rounded h-[200px]" />
+                    </div>
                   </div>
                 )}
               </For>
