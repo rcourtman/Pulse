@@ -6,7 +6,8 @@ Goal: every eval run starts from the exact same filesystem and runtime state, so
 
 ## Scope
 
-- Validates trial gate behavior (`trial_signup_required`)
+- Validates local trial start (no credit card required)
+- Validates post-trial entitlements and idempotency (second start rejected)
 - Validates real Stripe sandbox checkout completion for Pulse Pro trial
 - Validates post-trial downgrade behavior by forcing trial expiry and asserting entitlements
 - Validates real Stripe sandbox checkout completion for Pulse Cloud signup
@@ -79,9 +80,9 @@ This script asserts:
 
 1. Login succeeds.
 2. Pre-trial entitlements are fetched and trial is eligible.
-3. `POST /api/license/trial/start` returns `409` with code `trial_signup_required`.
-4. Hosted signup page loads and contains expected marker text.
-5. Checkout endpoint returns `303` and redirects to `checkout.stripe.com`.
+3. `POST /api/license/trial/start` returns `200` and starts a local trial (no credit card required).
+4. Post-trial entitlements reflect active trial (`trial_eligible=false`).
+5. Second trial start is rejected with `409` (already used).
 
 Run inside container:
 

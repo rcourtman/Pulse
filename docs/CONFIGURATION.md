@@ -341,7 +341,6 @@ These are primarily for development or test harnesses and should not be used in 
 | `PULSE_AI_ALLOW_LOOPBACK` | Allow AI tool HTTP fetches to loopback addresses | `false` |
 | `PULSE_LICENSE_PUBLIC_KEY` | Override embedded license public key (base64, dev only) | *(unset)* |
 | `PULSE_LICENSE_DEV_MODE` | Skip license verification (development only) | `false` |
-| `PULSE_ALLOW_LOCAL_TRIAL_START` | Re-enable legacy local `POST /api/license/trial/start` activation **only when dev mode is enabled** (`PULSE_DEV=true` or `NODE_ENV=development`). Ignored outside development mode. | `false` |
 
 ### Metrics Retention (Tiered)
 
