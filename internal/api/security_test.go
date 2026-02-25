@@ -983,7 +983,7 @@ func TestSecurityHeadersWithConfig_EmbeddingEnabledNoOrigins(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		}),
 		true, // allowEmbedding
-		"",   // allowedOrigins - empty means allow all
+		"",   // allowedOrigins - empty defaults to 'self' for clickjacking protection
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -996,10 +996,10 @@ func TestSecurityHeadersWithConfig_EmbeddingEnabledNoOrigins(t *testing.T) {
 		t.Errorf("X-Frame-Options = %q, want empty (not set)", got)
 	}
 
-	// Check CSP has frame-ancestors * (allow any)
+	// Check CSP has frame-ancestors 'self' (safe default when no origins specified)
 	csp := rec.Header().Get("Content-Security-Policy")
-	if !strings.Contains(csp, "frame-ancestors *") {
-		t.Errorf("CSP should contain 'frame-ancestors *', got: %s", csp)
+	if !strings.Contains(csp, "frame-ancestors 'self'") {
+		t.Errorf("CSP should contain \"frame-ancestors 'self'\", got: %s", csp)
 	}
 }
 

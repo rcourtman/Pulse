@@ -419,7 +419,7 @@ func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOr
 		// Configure clickjacking protection based on embedding settings
 		if allowEmbedding {
 			// When embedding is allowed, don't set X-Frame-Options header
-			// This allows embedding from any origin
+			// frame-ancestors CSP directive controls allowed embed origins below
 			// Security note: User explicitly enabled this for iframe embedding
 		} else {
 			// Deny all embedding when not explicitly allowed
@@ -435,8 +435,8 @@ func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOr
 		// Build Content Security Policy
 		cspDirectives := []string{
 			"default-src 'self'",
-			"script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Needed for React
-			"style-src 'self' 'unsafe-inline'",                // Needed for inline styles
+			"script-src 'self' 'unsafe-inline' 'unsafe-eval'", // TODO: migrate to nonce-based CSP; currently needed for SolidJS bundled output
+			"style-src 'self' 'unsafe-inline'",                // Needed for inline styles in SolidJS components
 			"img-src 'self' data: blob:",
 			"connect-src 'self' ws: wss:", // WebSocket support
 			"font-src 'self' data:",
@@ -456,12 +456,18 @@ func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOr
 				}
 				cspDirectives = append(cspDirectives, frameAncestors)
 			} else {
-				// Allow embedding from any origin (user explicitly enabled this)
-				cspDirectives = append(cspDirectives, "frame-ancestors *")
+				// Default to self-only when embedding is enabled but no specific origins configured.
+				// This prevents clickjacking while still allowing same-origin iframes.
+				cspDirectives = append(cspDirectives, "frame-ancestors 'self'")
 			}
 		} else {
 			// Deny all embedding
 			cspDirectives = append(cspDirectives, "frame-ancestors 'none'")
+		}
+
+		// Upgrade HTTP sub-resource requests to HTTPS when the page is served over HTTPS
+		if shouldSetHSTS(r) {
+			cspDirectives = append(cspDirectives, "upgrade-insecure-requests")
 		}
 
 		w.Header().Set("Content-Security-Policy", strings.Join(cspDirectives, "; "))
