@@ -11,41 +11,54 @@ type ReasonEntry struct {
 }
 
 // UpgradeReasonMatrix is the canonical feature-to-upgrade-reason mapping.
+// Relay features use "Upgrade to Relay" messaging; Pro features use "Upgrade to Pro".
 var UpgradeReasonMatrix = []ReasonEntry{
 	{
-		Feature:   FeatureAIAutoFix,
-		Reason:    "Upgrade to Pro to enable automatic remediation — Pulse Patrol will fix issues it finds without manual intervention.",
-		ActionURL: UpgradeURLForFeature(FeatureAIAutoFix),
+		Feature:   FeatureRelay,
+		Reason:    "Get Relay for secure remote access to your dashboard from anywhere — plus mobile app and push notifications.",
+		ActionURL: UpgradeURLForFeature(FeatureRelay),
+		Priority:  1,
+	},
+	{
+		Feature:   FeatureMobileApp,
+		Reason:    "Get Relay to monitor your infrastructure on the go with the Pulse mobile app.",
+		ActionURL: UpgradeURLForFeature(FeatureMobileApp),
+		Priority:  1,
+	},
+	{
+		Feature:   FeaturePushNotifications,
+		Reason:    "Get Relay for instant push notifications when alerts fire — never miss a critical event.",
+		ActionURL: UpgradeURLForFeature(FeaturePushNotifications),
 		Priority:  1,
 	},
 	{
 		Feature:   FeatureLongTermMetrics,
-		Reason:    "Upgrade to Pro for 90 days of historical metrics — spot trends, plan capacity, and investigate past incidents.",
+		Reason:    "Get Relay for 14 days of metrics history, or Pro for 90 days — spot trends, plan capacity, and investigate past incidents.",
 		ActionURL: UpgradeURLForFeature(FeatureLongTermMetrics),
 		Priority:  2,
 	},
 	{
-		Feature:   FeatureRelay,
-		Reason:    "Upgrade to Pro to enable secure relay-based remote access. Pulse mobile app rollout is staged and coming soon.",
-		ActionURL: UpgradeURLForFeature(FeatureRelay),
+		Feature:   FeatureAIAutoFix,
+		Reason:    "Upgrade to Pro to enable automatic remediation — Pulse Patrol will fix issues it finds without manual intervention.",
+		ActionURL: UpgradeURLForFeature(FeatureAIAutoFix),
 		Priority:  3,
-	},
-	{
-		Feature:   FeatureRBAC,
-		Reason:    "Upgrade to Pro to control who can view, manage, and modify your infrastructure with fine-grained roles.",
-		ActionURL: UpgradeURLForFeature(FeatureRBAC),
-		Priority:  4,
 	},
 	{
 		Feature:   FeatureAIAlerts,
 		Reason:    "Upgrade to Pro for AI-powered alert analysis — get root cause insights when alerts fire.",
 		ActionURL: UpgradeURLForFeature(FeatureAIAlerts),
-		Priority:  5,
+		Priority:  4,
 	},
 	{
 		Feature:   FeatureKubernetesAI,
 		Reason:    "Upgrade to Pro for AI-powered Kubernetes insights — analyze pod health, resource pressure, and cluster issues.",
 		ActionURL: UpgradeURLForFeature(FeatureKubernetesAI),
+		Priority:  5,
+	},
+	{
+		Feature:   FeatureRBAC,
+		Reason:    "Upgrade to Pro to control who can view, manage, and modify your infrastructure with fine-grained roles.",
+		ActionURL: UpgradeURLForFeature(FeatureRBAC),
 		Priority:  6,
 	},
 	{

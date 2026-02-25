@@ -53,10 +53,12 @@ func TestGetTierDisplayNameCoversAllKnownTiers(t *testing.T) {
 		tier Tier
 		want string
 	}{
-		{tier: TierFree, want: "Free"},
-		{tier: TierPro, want: "Pro Intelligence (Monthly)"},
-		{tier: TierProAnnual, want: "Pro Intelligence (Annual)"},
-		{tier: TierLifetime, want: "Pro Intelligence (Lifetime)"},
+		{tier: TierFree, want: "Community"},
+		{tier: TierRelay, want: "Relay"},
+		{tier: TierPro, want: "Pro"},
+		{tier: TierProPlus, want: "Pro+"},
+		{tier: TierProAnnual, want: "Pro (Annual)"},
+		{tier: TierLifetime, want: "Pro (Lifetime)"},
 		{tier: TierCloud, want: "Cloud"},
 		{tier: TierMSP, want: "MSP"},
 		{tier: TierEnterprise, want: "Enterprise"},
@@ -86,12 +88,14 @@ func TestGetFeatureDisplayNameCoversKnownFeaturesAndFallback(t *testing.T) {
 		{feature: FeatureMultiTenant, want: "Multi-Tenant Mode"},
 		{feature: FeatureUnlimited, want: "Unlimited Instances"},
 		{feature: FeatureAgentProfiles, want: "Centralized Agent Profiles"},
-		{feature: FeatureAuditLogging, want: "Enterprise Audit Logging"},
+		{feature: FeatureAuditLogging, want: "Audit Logging"},
 		{feature: FeatureSSO, want: "Basic SSO (OIDC)"},
 		{feature: FeatureAdvancedSSO, want: "Advanced SSO (SAML/Multi-Provider)"},
-		{feature: FeatureRelay, want: "Remote Access (Mobile Relay)"},
-		{feature: FeatureAdvancedReporting, want: "Advanced Infrastructure Reporting (PDF/CSV)"},
-		{feature: FeatureLongTermMetrics, want: "90-Day Metric History"},
+		{feature: FeatureRelay, want: "Pulse Relay (Remote Access)"},
+		{feature: FeatureMobileApp, want: "Mobile App Access"},
+		{feature: FeaturePushNotifications, want: "Push Notifications"},
+		{feature: FeatureAdvancedReporting, want: "PDF/CSV Reporting"},
+		{feature: FeatureLongTermMetrics, want: "Extended Metric History"},
 		{feature: "custom_feature", want: "custom_feature"},
 	}
 

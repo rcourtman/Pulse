@@ -3,7 +3,7 @@ package license
 
 import "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 
-// Feature constants represent gated features in Pulse Pro.
+// Feature constants represent gated features in Pulse.
 // These are embedded in license JWTs and checked at runtime.
 const (
 	FeatureAIPatrol          = licensing.FeatureAIPatrol
@@ -19,6 +19,8 @@ const (
 	FeatureAdvancedReporting = licensing.FeatureAdvancedReporting
 	FeatureLongTermMetrics   = licensing.FeatureLongTermMetrics
 	FeatureRelay             = licensing.FeatureRelay
+	FeatureMobileApp         = licensing.FeatureMobileApp
+	FeaturePushNotifications = licensing.FeaturePushNotifications
 	FeatureMultiUser         = licensing.FeatureMultiUser
 	FeatureWhiteLabel        = licensing.FeatureWhiteLabel
 	FeatureMultiTenant       = licensing.FeatureMultiTenant
@@ -30,7 +32,9 @@ type Tier = licensing.Tier
 
 const (
 	TierFree       = licensing.TierFree
+	TierRelay      = licensing.TierRelay
 	TierPro        = licensing.TierPro
+	TierProPlus    = licensing.TierProPlus
 	TierProAnnual  = licensing.TierProAnnual
 	TierLifetime   = licensing.TierLifetime
 	TierCloud      = licensing.TierCloud
@@ -40,6 +44,12 @@ const (
 
 // TierFeatures maps each tier to its included features.
 var TierFeatures = licensing.TierFeatures
+
+// TierHostLimits defines the maximum host count per tier.
+var TierHostLimits = licensing.TierHostLimits
+
+// TierHistoryDays defines the maximum metrics history retention per tier.
+var TierHistoryDays = licensing.TierHistoryDays
 
 // DeriveCapabilitiesFromTier derives effective capabilities from tier and explicit features.
 func DeriveCapabilitiesFromTier(tier Tier, explicitFeatures []string) []string {

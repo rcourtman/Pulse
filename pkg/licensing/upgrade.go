@@ -52,18 +52,22 @@ func validateProTrialSignupURLOverride(raw string) (string, bool) {
 // UpgradeURLForFeature returns the canonical upgrade URL for a capability key.
 func UpgradeURLForFeature(feature string) string {
 	switch feature {
-	case FeatureAIAutoFix:
-		return DefaultUpgradeURL + "&feature=ai_autofix"
-	case FeatureLongTermMetrics:
-		return DefaultUpgradeURL + "&feature=long_term_metrics"
 	case FeatureRelay:
 		return DefaultUpgradeURL + "&feature=relay"
-	case FeatureRBAC:
-		return DefaultUpgradeURL + "&feature=rbac"
+	case FeatureMobileApp:
+		return DefaultUpgradeURL + "&feature=mobile_app"
+	case FeaturePushNotifications:
+		return DefaultUpgradeURL + "&feature=push_notifications"
+	case FeatureLongTermMetrics:
+		return DefaultUpgradeURL + "&feature=long_term_metrics"
+	case FeatureAIAutoFix:
+		return DefaultUpgradeURL + "&feature=ai_autofix"
 	case FeatureAIAlerts:
 		return DefaultUpgradeURL + "&feature=ai_alerts"
 	case FeatureKubernetesAI:
 		return DefaultUpgradeURL + "&feature=kubernetes_ai"
+	case FeatureRBAC:
+		return DefaultUpgradeURL + "&feature=rbac"
 	case FeatureAgentProfiles:
 		return DefaultUpgradeURL + "&feature=agent_profiles"
 	case FeatureAdvancedSSO:

@@ -84,10 +84,14 @@ Stripe key mode must match environment:
 - `CP_ENV=production` -> `STRIPE_API_KEY` must be `sk_live_...`
 - `CP_ENV=staging` -> `STRIPE_API_KEY` must be `sk_test_...`
 
-Pricing note:
+Pricing note (see `docs/architecture/v6-pricing-and-tiering.md` for canonical pricing):
 
-- Current v6 production monthly price ID: `price_1T47OVBrHBocJIGHg4sMHMV7` ($15/mo).
-- Existing v5 subscriptions should remain on their current recurring prices until grandfathering policy changes.
+- Cloud Starter: $29/mo or $249/yr (founding: $19/mo for first 100)
+- Cloud Power: $49/mo or $449/yr
+- Cloud Max: $79/mo or $699/yr
+- `CP_TRIAL_SIGNUP_PRICE_ID` should be set to the Cloud Starter monthly Stripe price ID.
+- Old v6 Pro price ID (`price_1T47OVBrHBocJIGHg4sMHMV7`, $15/mo) is being replaced — see launch checklist.
+- Existing v5 subscriptions remain on their current recurring prices (grandfathered).
 
 Recommended rate-limit overrides (all are requests/minute per source IP):
 

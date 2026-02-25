@@ -455,10 +455,10 @@ func TestLicenseStatus(t *testing.T) {
 }
 
 func TestGetTierDisplayName(t *testing.T) {
-	if GetTierDisplayName(TierPro) != "Pro Intelligence (Monthly)" {
+	if GetTierDisplayName(TierPro) != "Pro" {
 		t.Error("Wrong display name for Pro")
 	}
-	if GetTierDisplayName(TierLifetime) != "Pro Intelligence (Lifetime)" {
+	if GetTierDisplayName(TierLifetime) != "Pro (Lifetime)" {
 		t.Error("Wrong display name for Lifetime")
 	}
 }

@@ -8,8 +8,8 @@ import (
 
 func TestGenerateUpgradeReasons_EmptyCapabilitiesReturnsAll(t *testing.T) {
 	reasons := GenerateUpgradeReasons(nil)
-	if len(reasons) != 10 {
-		t.Fatalf("expected 10 reasons, got %d", len(reasons))
+	if len(reasons) != len(UpgradeReasonMatrix) {
+		t.Fatalf("expected %d reasons, got %d", len(UpgradeReasonMatrix), len(reasons))
 	}
 }
 

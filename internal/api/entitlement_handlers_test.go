@@ -58,8 +58,10 @@ func TestBuildEntitlementPayload_FreeTier(t *testing.T) {
 
 	payload := buildEntitlementPayload(status, "")
 
-	if len(payload.UpgradeReasons) != 10 {
-		t.Fatalf("expected 10 upgrade reasons for free tier, got %d", len(payload.UpgradeReasons))
+	// Upgrade reasons should cover every Pro feature not in Free.
+	proMinusFree := countProMinusFreeFeatures()
+	if len(payload.UpgradeReasons) != proMinusFree {
+		t.Fatalf("expected %d upgrade reasons for free tier, got %d", proMinusFree, len(payload.UpgradeReasons))
 	}
 	for _, reason := range payload.UpgradeReasons {
 		if reason.ActionURL == "" {
@@ -351,4 +353,19 @@ func TestEntitlementHandler_TrialEligibility_AlreadyUsedDenied(t *testing.T) {
 	if payload.TrialEligibilityReason != "already_used" {
 		t.Fatalf("trial_eligibility_reason=%q, want %q", payload.TrialEligibilityReason, "already_used")
 	}
+}
+
+// countProMinusFreeFeatures returns the number of Pro features not included in Free.
+func countProMinusFreeFeatures() int {
+	freeSet := make(map[string]struct{}, len(license.TierFeatures[license.TierFree]))
+	for _, f := range license.TierFeatures[license.TierFree] {
+		freeSet[f] = struct{}{}
+	}
+	count := 0
+	for _, f := range license.TierFeatures[license.TierPro] {
+		if _, ok := freeSet[f]; !ok {
+			count++
+		}
+	}
+	return count
 }

@@ -6,33 +6,31 @@ package licensing
 
 import "sort"
 
-// Feature constants represent gated features in Pulse Pro.
+// Feature constants represent gated features in Pulse.
 // These are embedded in license JWTs and checked at runtime.
 const (
-	// Pro tier features - AI
-	FeatureAIPatrol     = "ai_patrol"     // Background AI health monitoring
-	FeatureAIAlerts     = "ai_alerts"     // AI analysis when alerts fire
-	FeatureAIAutoFix    = "ai_autofix"    // Automatic remediation
-	FeatureKubernetesAI = "kubernetes_ai" // AI analysis of K8s (NOT basic monitoring)
+	// Free tier features
+	FeatureUpdateAlerts = "update_alerts" // Alerts for pending container/package updates
+	FeatureSSO          = "sso"           // Basic OIDC/SSO authentication
+	FeatureAIPatrol     = "ai_patrol"     // Background AI health monitoring (BYOK, free with own key)
 
-	// Pro tier features - Fleet Management
-	FeatureAgentProfiles = "agent_profiles" // Centralized agent configuration profiles
+	// Relay tier features (everything in Free, plus:)
+	FeatureRelay             = "relay"              // Relay remote access
+	FeatureMobileApp         = "mobile_app"         // Mobile app access
+	FeaturePushNotifications = "push_notifications" // Push notifications
+	FeatureLongTermMetrics   = "long_term_metrics"  // Extended historical metrics (14d Relay, 90d Pro)
 
-	// Free tier features - Monitoring
-	FeatureUpdateAlerts = "update_alerts" // Alerts for pending container/package updates (free feature)
-
-	// Pro tier features - Team & Compliance
+	// Pro tier features (everything in Relay, plus:)
+	FeatureAIAlerts          = "ai_alerts"          // AI analysis when alerts fire
+	FeatureAIAutoFix         = "ai_autofix"         // Automatic remediation (one-click apply)
+	FeatureKubernetesAI      = "kubernetes_ai"      // AI analysis of K8s (NOT basic monitoring)
+	FeatureAgentProfiles     = "agent_profiles"     // Centralized agent configuration profiles
 	FeatureRBAC              = "rbac"               // Role-Based Access Control
 	FeatureAuditLogging      = "audit_logging"      // Persistent audit logs with signing
-	FeatureSSO               = "sso"                // OIDC/SSO authentication (Basic)
 	FeatureAdvancedSSO       = "advanced_sso"       // SAML, Multi-provider, Role Mapping
 	FeatureAdvancedReporting = "advanced_reporting" // PDF/CSV reporting engine
-	FeatureLongTermMetrics   = "long_term_metrics"  // 90-day historical metrics (SQLite)
 
-	// Pro tier features - Remote Access
-	FeatureRelay = "relay" // Mobile relay for remote access
-
-	// MSP/Enterprise tier features (for volume deals)
+	// MSP/Enterprise tier features
 	FeatureMultiUser   = "multi_user"   // Multi-user (likely merged with RBAC)
 	FeatureWhiteLabel  = "white_label"  // Custom branding - NOT IMPLEMENTED YET
 	FeatureMultiTenant = "multi_tenant" // Multi-tenant organizations
@@ -44,118 +42,100 @@ type Tier string
 
 const (
 	TierFree       Tier = "free"
+	TierRelay      Tier = "relay"
 	TierPro        Tier = "pro"
-	TierProAnnual  Tier = "pro_annual"
-	TierLifetime   Tier = "lifetime"
+	TierProPlus    Tier = "pro_plus"
+	TierProAnnual  Tier = "pro_annual" // Legacy: same features as TierPro
+	TierLifetime   Tier = "lifetime"   // Legacy: same features as TierPro
 	TierCloud      Tier = "cloud"
 	TierMSP        Tier = "msp"
 	TierEnterprise Tier = "enterprise"
 )
 
+// TierHostLimits defines the maximum host count per tier.
+// A value of 0 means unlimited (enforced at the MSP/Enterprise level).
+var TierHostLimits = map[Tier]int{
+	TierFree:       5,
+	TierRelay:      8,
+	TierPro:        15,
+	TierProPlus:    50,
+	TierProAnnual:  15, // Legacy: same as Pro
+	TierLifetime:   15, // Legacy: same as Pro
+	TierCloud:      0,  // Cloud tiers have per-plan limits set in license claims
+	TierMSP:        0,  // MSP tiers have per-plan pool limits set in license claims
+	TierEnterprise: 0,  // Custom
+}
+
+// TierHistoryDays defines the maximum metrics history retention per tier.
+var TierHistoryDays = map[Tier]int{
+	TierFree:       7,
+	TierRelay:      14,
+	TierPro:        90,
+	TierProPlus:    90,
+	TierProAnnual:  90,
+	TierLifetime:   90,
+	TierCloud:      90,
+	TierMSP:        90,
+	TierEnterprise: 90,
+}
+
+// freeFeatures are the base capabilities available to all users.
+var freeFeatures = []string{
+	FeatureUpdateAlerts,
+	FeatureSSO,
+	FeatureAIPatrol, // Patrol is free with BYOK — auto-fix requires Pro
+}
+
+// relayFeatures adds remote access and mobile on top of free.
+var relayFeatures = appendFeatures(freeFeatures,
+	FeatureRelay,
+	FeatureMobileApp,
+	FeaturePushNotifications,
+	FeatureLongTermMetrics, // 14 days (vs 7 for free)
+)
+
+// proFeatures adds AI automation, fleet management, and compliance on top of relay.
+var proFeatures = appendFeatures(relayFeatures,
+	FeatureAIAlerts,
+	FeatureAIAutoFix,
+	FeatureKubernetesAI,
+	FeatureAgentProfiles,
+	FeatureAdvancedSSO,
+	FeatureRBAC,
+	FeatureAuditLogging,
+	FeatureAdvancedReporting,
+)
+
+// mspFeatures adds multi-tenant and unlimited on top of pro.
+var mspFeatures = appendFeatures(proFeatures,
+	FeatureUnlimited,
+	FeatureMultiTenant,
+)
+
+// enterpriseFeatures adds white-label and multi-user on top of MSP.
+var enterpriseFeatures = appendFeatures(mspFeatures,
+	FeatureMultiUser,
+	FeatureWhiteLabel,
+)
+
+// appendFeatures returns a new slice with extra features appended (no mutation).
+func appendFeatures(base []string, extra ...string) []string {
+	result := make([]string, len(base), len(base)+len(extra))
+	copy(result, base)
+	return append(result, extra...)
+}
+
 // TierFeatures maps each tier to its included features.
 var TierFeatures = map[Tier][]string{
-	TierFree: {
-		// Free tier includes update alerts (container image updates) - basic monitoring feature
-		FeatureUpdateAlerts,
-		FeatureSSO,
-		FeatureAIPatrol, // Patrol is free with BYOK - auto-fix requires Pro
-	},
-	TierPro: {
-		FeatureAIPatrol,
-		FeatureAIAlerts,
-		FeatureAIAutoFix,
-		FeatureKubernetesAI,
-		FeatureAgentProfiles,
-		FeatureUpdateAlerts,
-		FeatureRelay,
-		FeatureSSO,
-		FeatureAdvancedSSO,
-		FeatureRBAC,
-		FeatureAuditLogging,
-		FeatureAdvancedReporting,
-		FeatureLongTermMetrics,
-	},
-	TierProAnnual: {
-		FeatureAIPatrol,
-		FeatureAIAlerts,
-		FeatureAIAutoFix,
-		FeatureKubernetesAI,
-		FeatureAgentProfiles,
-		FeatureUpdateAlerts,
-		FeatureRelay,
-		FeatureSSO,
-		FeatureAdvancedSSO,
-		FeatureRBAC,
-		FeatureAuditLogging,
-		FeatureAdvancedReporting,
-		FeatureLongTermMetrics,
-	},
-	TierLifetime: {
-		FeatureAIPatrol,
-		FeatureAIAlerts,
-		FeatureAIAutoFix,
-		FeatureKubernetesAI,
-		FeatureAgentProfiles,
-		FeatureUpdateAlerts,
-		FeatureRelay,
-		FeatureSSO,
-		FeatureAdvancedSSO,
-		FeatureRBAC,
-		FeatureAuditLogging,
-		FeatureAdvancedReporting,
-		FeatureLongTermMetrics,
-	},
-	TierCloud: {
-		FeatureAIPatrol,
-		FeatureAIAlerts,
-		FeatureAIAutoFix,
-		FeatureKubernetesAI,
-		FeatureAgentProfiles,
-		FeatureUpdateAlerts,
-		FeatureRelay,
-		FeatureSSO,
-		FeatureAdvancedSSO,
-		FeatureRBAC,
-		FeatureAuditLogging,
-		FeatureAdvancedReporting,
-		FeatureLongTermMetrics,
-	},
-	TierMSP: {
-		FeatureAIPatrol,
-		FeatureAIAlerts,
-		FeatureAIAutoFix,
-		FeatureKubernetesAI,
-		FeatureAgentProfiles,
-		FeatureUpdateAlerts,
-		FeatureRelay,
-		FeatureUnlimited,
-		FeatureSSO,
-		FeatureAdvancedSSO,
-		FeatureRBAC,
-		FeatureAuditLogging,
-		FeatureAdvancedReporting,
-		FeatureLongTermMetrics,
-		// Note: FeatureMultiUser, FeatureWhiteLabel are not yet included in MSP tier
-	},
-	TierEnterprise: {
-		FeatureAIPatrol,
-		FeatureAIAlerts,
-		FeatureAIAutoFix,
-		FeatureKubernetesAI,
-		FeatureAgentProfiles,
-		FeatureUpdateAlerts,
-		FeatureRelay,
-		FeatureUnlimited,
-		FeatureMultiUser,
-		FeatureWhiteLabel,
-		FeatureMultiTenant,
-		FeatureAuditLogging,
-		FeatureSSO,
-		FeatureAdvancedSSO,
-		FeatureRBAC,
-		FeatureAdvancedReporting,
-		FeatureLongTermMetrics,
-	},
+	TierFree:       freeFeatures,
+	TierRelay:      relayFeatures,
+	TierPro:        proFeatures,
+	TierProPlus:    proFeatures, // Same features as Pro, just higher host limit
+	TierProAnnual:  proFeatures, // Legacy: same features as Pro
+	TierLifetime:   proFeatures, // Legacy: same features as Pro
+	TierCloud:      proFeatures, // Cloud includes all Pro features + managed hosting
+	TierMSP:        mspFeatures,
+	TierEnterprise: enterpriseFeatures,
 }
 
 // DeriveCapabilitiesFromTier derives effective capabilities from tier and explicit features.
@@ -209,13 +189,17 @@ func TierHasFeature(tier Tier, feature string) bool {
 func GetTierDisplayName(tier Tier) string {
 	switch tier {
 	case TierFree:
-		return "Free"
+		return "Community"
+	case TierRelay:
+		return "Relay"
 	case TierPro:
-		return "Pro Intelligence (Monthly)"
+		return "Pro"
+	case TierProPlus:
+		return "Pro+"
 	case TierProAnnual:
-		return "Pro Intelligence (Annual)"
+		return "Pro (Annual)"
 	case TierLifetime:
-		return "Pro Intelligence (Lifetime)"
+		return "Pro (Lifetime)"
 	case TierCloud:
 		return "Cloud"
 	case TierMSP:
@@ -253,17 +237,21 @@ func GetFeatureDisplayName(feature string) string {
 	case FeatureAgentProfiles:
 		return "Centralized Agent Profiles"
 	case FeatureAuditLogging:
-		return "Enterprise Audit Logging"
+		return "Audit Logging"
 	case FeatureSSO:
 		return "Basic SSO (OIDC)"
 	case FeatureAdvancedSSO:
 		return "Advanced SSO (SAML/Multi-Provider)"
 	case FeatureRelay:
-		return "Remote Access (Mobile Relay)"
+		return "Pulse Relay (Remote Access)"
+	case FeatureMobileApp:
+		return "Mobile App Access"
+	case FeaturePushNotifications:
+		return "Push Notifications"
 	case FeatureAdvancedReporting:
-		return "Advanced Infrastructure Reporting (PDF/CSV)"
+		return "PDF/CSV Reporting"
 	case FeatureLongTermMetrics:
-		return "90-Day Metric History"
+		return "Extended Metric History"
 	default:
 		return feature
 	}
