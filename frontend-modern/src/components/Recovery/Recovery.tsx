@@ -10,6 +10,7 @@ import {
 } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
+import { PageHeader } from '@/components/shared/PageHeader';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { SearchInput } from '@/components/shared/SearchInput';
@@ -956,6 +957,11 @@ const Recovery: Component = () => {
 
   return (
     <div data-testid="recovery-page" class="flex flex-col gap-4">
+      <PageHeader
+        title="Recovery"
+        description="Backup protection status, recovery points, and replication health across platforms."
+      />
+
       <Show when={view() === 'protected'}>
         <Show when={rollupsSummary().total > 0}>
           <ProtectionHero summary={rollupsSummary()} />

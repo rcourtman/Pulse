@@ -27,6 +27,7 @@ import { formatBytes, formatPercent } from '@/utils/format';
 import { segmentedButtonClass } from '@/utils/segmentedButton';
 import { getProxmoxData } from '@/utils/resourcePlatformData';
 import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
+import { PageHeader } from '@/components/shared/PageHeader';
 import { useStorageRouteState } from './useStorageRouteState';
 import { isCephRecord, useStorageCephModel } from './useStorageCephModel';
 import { useStorageAlertState } from './useStorageAlertState';
@@ -378,6 +379,11 @@ const Storage: Component = () => {
 
   return (
     <div class="space-y-4">
+      <PageHeader
+        title="Storage"
+        description="Storage pools, physical disks, and capacity across connected platforms."
+      />
+
       <StorageHero
         summary={summary()}
         healthBreakdown={healthBreakdown()}
