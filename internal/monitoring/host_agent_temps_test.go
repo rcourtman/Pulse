@@ -389,6 +389,116 @@ func TestConvertHostSensorsToTemperature_ExtraBranches(t *testing.T) {
 	})
 }
 
+func TestGetClusterSensorTemperature(t *testing.T) {
+	m := &Monitor{
+		state:               models.NewState(),
+		clusterSensorsCache: make(map[string]clusterSensorsCacheEntry),
+	}
+
+	t.Run("empty cache returns nil", func(t *testing.T) {
+		result := m.getClusterSensorTemperature("node1")
+		assert.Nil(t, result)
+	})
+
+	t.Run("cached data returned", func(t *testing.T) {
+		m.clusterSensorsCache["node2"] = clusterSensorsCacheEntry{
+			sensors: models.HostSensorSummary{
+				TemperatureCelsius: map[string]float64{
+					"cpu_package": 58.0,
+					"cpu_core_0":  55.0,
+				},
+			},
+			updatedAt: time.Now(),
+		}
+
+		result := m.getClusterSensorTemperature("node2")
+		assert.NotNil(t, result)
+		assert.Equal(t, 58.0, result.CPUPackage)
+		assert.True(t, result.HasCPU)
+	})
+
+	t.Run("stale data returns nil", func(t *testing.T) {
+		m.clusterSensorsCache["stale-node"] = clusterSensorsCacheEntry{
+			sensors: models.HostSensorSummary{
+				TemperatureCelsius: map[string]float64{"cpu_package": 50.0},
+			},
+			updatedAt: time.Now().Add(-5 * time.Minute), // older than 2min threshold
+		}
+
+		result := m.getClusterSensorTemperature("stale-node")
+		assert.Nil(t, result)
+	})
+
+	t.Run("case insensitive lookup", func(t *testing.T) {
+		m.clusterSensorsCache["mynode"] = clusterSensorsCacheEntry{
+			sensors: models.HostSensorSummary{
+				TemperatureCelsius: map[string]float64{"cpu_package": 60.0},
+			},
+			updatedAt: time.Now(),
+		}
+
+		result := m.getClusterSensorTemperature("MyNode")
+		assert.NotNil(t, result)
+		assert.Equal(t, 60.0, result.CPUPackage)
+	})
+
+	t.Run("empty node name returns nil", func(t *testing.T) {
+		result := m.getClusterSensorTemperature("")
+		assert.Nil(t, result)
+	})
+}
+
+func TestGetHostAgentTemperatureByID_ClusterFallback(t *testing.T) {
+	m := &Monitor{
+		state:               models.NewState(),
+		clusterSensorsCache: make(map[string]clusterSensorsCacheEntry),
+	}
+
+	// No host agent, but cluster cache has data
+	m.clusterSensorsCache["orphan-node"] = clusterSensorsCacheEntry{
+		sensors: models.HostSensorSummary{
+			TemperatureCelsius: map[string]float64{
+				"cpu_package": 62.0,
+			},
+		},
+		updatedAt: time.Now(),
+	}
+
+	result := m.getHostAgentTemperatureByID("", "orphan-node")
+	assert.NotNil(t, result, "should fall back to cluster sensor cache")
+	assert.Equal(t, 62.0, result.CPUPackage)
+}
+
+func TestGetHostAgentTemperatureByID_LocalAgentTakesPriority(t *testing.T) {
+	m := &Monitor{
+		state:               models.NewState(),
+		clusterSensorsCache: make(map[string]clusterSensorsCacheEntry),
+	}
+
+	// Both local agent and cluster cache have data for the same node
+	m.state.UpsertHost(models.Host{
+		ID:       "host-local",
+		Hostname: "shared-node",
+		Sensors: models.HostSensorSummary{
+			TemperatureCelsius: map[string]float64{
+				"cpu_package": 70.0, // local agent reports 70
+			},
+		},
+	})
+	m.clusterSensorsCache["shared-node"] = clusterSensorsCacheEntry{
+		sensors: models.HostSensorSummary{
+			TemperatureCelsius: map[string]float64{
+				"cpu_package": 55.0, // cluster cache says 55
+			},
+		},
+		updatedAt: time.Now(),
+	}
+
+	result := m.getHostAgentTemperatureByID("", "shared-node")
+	assert.NotNil(t, result)
+	assert.Equal(t, 70.0, result.CPUPackage, "local agent data should take priority over cluster cache")
+}
+
 func TestMergeTemperatureData_HistoricalOverrides(t *testing.T) {
 	t.Run("historical max update", func(t *testing.T) {
 		host := &models.Temperature{CPUPackage: 70.0, HasCPU: true, Available: true}

@@ -4,18 +4,28 @@ import "time"
 
 // Report represents the payload sent by the pulse-host-agent.
 type Report struct {
-	Agent      AgentInfo          `json:"agent"`
-	Host       HostInfo           `json:"host"`
-	Metrics    Metrics            `json:"metrics"`
-	Disks      []Disk             `json:"disks,omitempty"`
-	DiskIO     []DiskIO           `json:"diskIO,omitempty"`
-	Network    []NetworkInterface `json:"network,omitempty"`
-	Sensors    Sensors            `json:"sensors,omitempty"`
-	RAID       []RAIDArray        `json:"raid,omitempty"`
-	Ceph       *CephCluster       `json:"ceph,omitempty"`
-	Tags       []string           `json:"tags,omitempty"`
-	Timestamp  time.Time          `json:"timestamp"`
-	SequenceID string             `json:"sequenceId,omitempty"`
+	Agent          AgentInfo            `json:"agent"`
+	Host           HostInfo             `json:"host"`
+	Metrics        Metrics              `json:"metrics"`
+	Disks          []Disk               `json:"disks,omitempty"`
+	DiskIO         []DiskIO             `json:"diskIO,omitempty"`
+	Network        []NetworkInterface   `json:"network,omitempty"`
+	Sensors        Sensors              `json:"sensors,omitempty"`
+	RAID           []RAIDArray          `json:"raid,omitempty"`
+	Ceph           *CephCluster         `json:"ceph,omitempty"`
+	ClusterSensors []ClusterNodeSensors `json:"clusterSensors,omitempty"`
+	Tags           []string             `json:"tags,omitempty"`
+	Timestamp      time.Time            `json:"timestamp"`
+	SequenceID     string               `json:"sequenceId,omitempty"`
+}
+
+// ClusterNodeSensors contains temperature sensor data collected from a Proxmox
+// cluster sibling node via SSH. The agent on one node SSHes to peers using the
+// cluster's pre-existing root SSH trust to run `sensors -j`.
+type ClusterNodeSensors struct {
+	NodeName    string  `json:"nodeName"`              // Proxmox cluster node name (lowercase)
+	Sensors     Sensors `json:"sensors"`               // Temperature/fan/additional sensor data
+	CollectedAt string  `json:"collectedAt,omitempty"` // RFC3339 timestamp of collection
 }
 
 // AgentInfo describes the reporting agent.

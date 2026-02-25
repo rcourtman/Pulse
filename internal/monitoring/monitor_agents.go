@@ -1645,7 +1645,57 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		}
 	}
 
+	// Store cluster peer sensor data if present and evict stale entries
+	m.applyClusterSensors(report.ClusterSensors, timestamp)
+
 	return host, nil
+}
+
+// applyClusterSensors stores temperature data collected from Proxmox cluster
+// siblings via SSH. Each entry is keyed by lowercase node name so that
+// getHostAgentTemperatureByID can use it as a fallback.
+func (m *Monitor) applyClusterSensors(entries []agentshost.ClusterNodeSensors, reportTime time.Time) {
+	// Fast path: nothing to add and cache is empty — skip lock
+	if len(entries) == 0 {
+		m.clusterSensorsMu.RLock()
+		empty := len(m.clusterSensorsCache) == 0
+		m.clusterSensorsMu.RUnlock()
+		if empty {
+			return
+		}
+	}
+
+	m.clusterSensorsMu.Lock()
+	defer m.clusterSensorsMu.Unlock()
+
+	for _, entry := range entries {
+		nodeName := strings.ToLower(strings.TrimSpace(entry.NodeName))
+		if nodeName == "" {
+			continue
+		}
+		if len(entry.Sensors.TemperatureCelsius) == 0 {
+			continue
+		}
+
+		m.clusterSensorsCache[nodeName] = clusterSensorsCacheEntry{
+			sensors: models.HostSensorSummary{
+				TemperatureCelsius: cloneStringFloatMap(entry.Sensors.TemperatureCelsius),
+				FanRPM:             cloneStringFloatMap(entry.Sensors.FanRPM),
+				Additional:         cloneStringFloatMap(entry.Sensors.Additional),
+			},
+			updatedAt: reportTime,
+		}
+	}
+
+	// Evict stale entries to prevent unbounded cache growth.
+	// Cluster sizes are small (3-16 nodes) so this is cheap.
+	const staleThreshold = 5 * time.Minute
+	now := time.Now()
+	for key, entry := range m.clusterSensorsCache {
+		if now.Sub(entry.updatedAt) > staleThreshold {
+			delete(m.clusterSensorsCache, key)
+		}
+	}
 }
 
 // findLinkedProxmoxEntity searches for a PVE node, VM, or container with a matching hostname.

@@ -781,6 +781,16 @@ type Monitor struct {
 	// Agent profile cache to avoid disk I/O on every report (refs #1094)
 	agentProfileCacheMu sync.RWMutex
 	agentProfileCache   *agentProfileCacheEntry
+	// Cluster sensor cache: temperature data collected by an agent on one Proxmox
+	// cluster node via SSH to its siblings. Keyed by lowercase node name.
+	clusterSensorsMu    sync.RWMutex
+	clusterSensorsCache map[string]clusterSensorsCacheEntry
+}
+
+// clusterSensorsCacheEntry stores temperature data collected by a sibling agent via SSH.
+type clusterSensorsCacheEntry struct {
+	sensors   models.HostSensorSummary
+	updatedAt time.Time
 }
 
 type rrdMemCacheEntry struct {
@@ -1259,6 +1269,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		removedKubernetesClusters:  make(map[string]time.Time),
 		kubernetesTokenBindings:    make(map[string]string),
 		hostTokenBindings:          make(map[string]string),
+		clusterSensorsCache:        make(map[string]clusterSensorsCacheEntry),
 		dockerCommands:             make(map[string]*dockerHostCommand),
 		dockerCommandIndex:         make(map[string]string),
 		guestMetadataCache:         make(map[string]guestMetadataCacheEntry),

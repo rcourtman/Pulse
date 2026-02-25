@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
+	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
@@ -515,6 +516,11 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	// Collect Ceph cluster data (best effort - only on Ceph nodes)
 	cephData := a.collectCephStatus(collectCtx)
 
+	// Collect temperature data from Proxmox cluster peers via SSH (best effort).
+	// Uses parent ctx, not collectCtx — cluster SSH has its own 15s budget that
+	// would be capped by collectCtx's 10s timeout.
+	clusterSensors := a.collectClusterSensors(ctx)
+
 	report := agentshost.Report{
 		Agent: agentshost.AgentInfo{
 			ID:              a.agentID,
@@ -546,14 +552,15 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			CPUUsagePercent: snapshot.CPUUsagePercent,
 			Memory:          snapshot.Memory,
 		},
-		Disks:     append([]agentshost.Disk(nil), snapshot.Disks...),
-		DiskIO:    append([]agentshost.DiskIO(nil), snapshot.DiskIO...),
-		Network:   append([]agentshost.NetworkInterface(nil), snapshot.Network...),
-		Sensors:   sensorData,
-		RAID:      raidData,
-		Ceph:      cephData,
-		Tags:      append([]string(nil), a.cfg.Tags...),
-		Timestamp: a.collector.Now(),
+		Disks:          append([]agentshost.Disk(nil), snapshot.Disks...),
+		DiskIO:         append([]agentshost.DiskIO(nil), snapshot.DiskIO...),
+		Network:        append([]agentshost.NetworkInterface(nil), snapshot.Network...),
+		Sensors:        sensorData,
+		RAID:           raidData,
+		Ceph:           cephData,
+		ClusterSensors: clusterSensors,
+		Tags:           append([]string(nil), a.cfg.Tags...),
+		Timestamp:      a.collector.Now(),
 	}
 
 	return report, nil
@@ -732,7 +739,39 @@ func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 		return agentshost.Sensors{}
 	}
 
-	// Convert to host agent sensor format
+	result := convertTemperatureDataToSensors(tempData)
+
+	// Collect power consumption data (Intel RAPL, etc.)
+	if powerData, err := a.collector.SensorsPower(ctx); err == nil && powerData != nil && powerData.Available {
+		result.PowerWatts = make(map[string]float64)
+		if powerData.PackageWatts > 0 {
+			result.PowerWatts["cpu_package"] = powerData.PackageWatts
+		}
+		if powerData.CoreWatts > 0 {
+			result.PowerWatts["cpu_core"] = powerData.CoreWatts
+		}
+		if powerData.DRAMWatts > 0 {
+			result.PowerWatts["dram"] = powerData.DRAMWatts
+		}
+		a.logger.Debug().
+			Float64("packageWatts", powerData.PackageWatts).
+			Str("source", powerData.Source).
+			Msg("Collected power data")
+	}
+
+	a.logger.Debug().
+		Int("temperatureCount", len(result.TemperatureCelsius)).
+		Int("fanCount", len(result.FanRPM)).
+		Int("powerCount", len(result.PowerWatts)).
+		Int("additionalCount", len(result.Additional)).
+		Msg("Collected sensor data")
+
+	return result
+}
+
+// convertTemperatureDataToSensors converts parsed sensor data into the agent report
+// sensor format. This is shared between local collection and cluster peer collection.
+func convertTemperatureDataToSensors(tempData *sensors.TemperatureData) agentshost.Sensors {
 	result := agentshost.Sensors{
 		TemperatureCelsius: make(map[string]float64),
 	}
@@ -744,7 +783,6 @@ func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 
 	// Add individual core temperatures
 	for coreName, temp := range tempData.Cores {
-		// Normalize core name (e.g., "Core 0" -> "cpu_core_0")
 		normalizedName := strings.ToLower(strings.ReplaceAll(coreName, " ", "_"))
 		result.TemperatureCelsius["cpu_"+normalizedName] = temp
 	}
@@ -774,31 +812,6 @@ func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 			result.Additional[sensorName] = temp
 		}
 	}
-
-	// Collect power consumption data (Intel RAPL, etc.)
-	if powerData, err := a.collector.SensorsPower(ctx); err == nil && powerData != nil && powerData.Available {
-		result.PowerWatts = make(map[string]float64)
-		if powerData.PackageWatts > 0 {
-			result.PowerWatts["cpu_package"] = powerData.PackageWatts
-		}
-		if powerData.CoreWatts > 0 {
-			result.PowerWatts["cpu_core"] = powerData.CoreWatts
-		}
-		if powerData.DRAMWatts > 0 {
-			result.PowerWatts["dram"] = powerData.DRAMWatts
-		}
-		a.logger.Debug().
-			Float64("packageWatts", powerData.PackageWatts).
-			Str("source", powerData.Source).
-			Msg("Collected power data")
-	}
-
-	a.logger.Debug().
-		Int("temperatureCount", len(result.TemperatureCelsius)).
-		Int("fanCount", len(result.FanRPM)).
-		Int("powerCount", len(result.PowerWatts)).
-		Int("additionalCount", len(result.Additional)).
-		Msg("Collected sensor data")
 
 	return result
 }

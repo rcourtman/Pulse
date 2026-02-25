@@ -31,7 +31,8 @@ func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.T
 
 	hosts := m.state.GetHosts()
 	if len(hosts) == 0 {
-		return nil
+		// No host agents at all — check cluster sensor cache as fallback
+		return m.getClusterSensorTemperature(nodeName)
 	}
 
 	var matchedHost *models.Host
@@ -67,16 +68,44 @@ func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.T
 	}
 
 	if matchedHost == nil {
-		return nil
+		// No directly-linked host agent found — check cluster sensor cache
+		return m.getClusterSensorTemperature(nodeName)
 	}
 
 	// Check if the host agent has temperature data
 	if len(matchedHost.Sensors.TemperatureCelsius) == 0 {
-		return nil
+		// Host agent exists but has no temperature data — try cluster cache
+		return m.getClusterSensorTemperature(nodeName)
 	}
 
 	// Convert host agent sensor data to Temperature model
 	return convertHostSensorsToTemperature(matchedHost.Sensors, matchedHost.LastSeen)
+}
+
+// getClusterSensorTemperature looks up cached temperature data that was collected
+// by a sibling agent in the same Proxmox cluster via SSH. Returns nil if no
+// recent data is available.
+func (m *Monitor) getClusterSensorTemperature(nodeName string) *models.Temperature {
+	if nodeName == "" {
+		return nil
+	}
+
+	key := strings.ToLower(strings.TrimSpace(nodeName))
+
+	m.clusterSensorsMu.RLock()
+	entry, ok := m.clusterSensorsCache[key]
+	m.clusterSensorsMu.RUnlock()
+
+	if !ok {
+		return nil
+	}
+
+	// Reuse the same staleness threshold as direct host agents (2 minutes)
+	if !isHostAgentTemperatureRecent(entry.updatedAt) {
+		return nil
+	}
+
+	return convertHostSensorsToTemperature(entry.sensors, entry.updatedAt)
 }
 
 // convertHostSensorsToTemperature converts HostSensorSummary to the Temperature model.
