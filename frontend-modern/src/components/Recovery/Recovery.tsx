@@ -959,7 +959,7 @@ const Recovery: Component = () => {
     <div data-testid="recovery-page" class="flex flex-col gap-4">
       <PageHeader
         title="Recovery"
-        description="Backup protection status, recovery points, and replication health across platforms."
+        description="Protection status, recovery points, and backup health across environments."
       />
 
       <Show when={view() === 'protected'}>

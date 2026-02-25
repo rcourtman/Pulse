@@ -1414,7 +1414,7 @@ export function Dashboard(props: DashboardProps) {
       <Show when={isWorkloadsRoute()}>
         <PageHeader
           title="Workloads"
-          description="Virtual machines, containers, and Kubernetes workloads across all platforms."
+          description="Live resource usage and status for compute workloads across environments."
         />
       </Show>
 

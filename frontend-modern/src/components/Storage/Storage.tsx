@@ -381,7 +381,7 @@ const Storage: Component = () => {
     <div class="space-y-4">
       <PageHeader
         title="Storage"
-        description="Storage pools, physical disks, and capacity across connected platforms."
+        description="Pool capacity, disk inventory, and usage trends across environments."
       />
 
       <StorageHero
