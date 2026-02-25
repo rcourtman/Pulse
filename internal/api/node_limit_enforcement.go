@@ -76,10 +76,12 @@ func enforceNodeLimitForConfigRegistration(
 
 // enforceNodeLimitForReport is the shared implementation for all report-type node limit checks.
 // targetsExisting should return true if the report corresponds to an already-registered node.
+// additions is the number of host slots this report would consume (usually 1; K8s uses node count).
 func enforceNodeLimitForReport(
 	w http.ResponseWriter,
 	ctx context.Context,
 	monitor *monitoring.Monitor,
+	additions int,
 	targetsExisting func(models.StateSnapshot) bool,
 ) bool {
 	limit := maxNodesLimitForContext(ctx)
@@ -93,7 +95,7 @@ func enforceNodeLimitForReport(
 	}
 
 	current := registeredNodeSlotCount(monitor.GetConfig(), monitor)
-	if !exceedsNodeLimitFromLicensing(current, 1, limit) {
+	if !exceedsNodeLimitFromLicensing(current, additions, limit) {
 		return false
 	}
 
@@ -108,7 +110,7 @@ func enforceNodeLimitForHostReport(
 	report agentshost.Report,
 	tokenRecord *config.APITokenRecord,
 ) bool {
-	return enforceNodeLimitForReport(w, ctx, monitor, func(snapshot models.StateSnapshot) bool {
+	return enforceNodeLimitForReport(w, ctx, monitor, 1, func(snapshot models.StateSnapshot) bool {
 		return hostReportTargetsExistingHost(snapshot, report, tokenRecord)
 	})
 }
@@ -120,7 +122,7 @@ func enforceNodeLimitForDockerReport(
 	report agentsdocker.Report,
 	tokenRecord *config.APITokenRecord,
 ) bool {
-	return enforceNodeLimitForReport(w, ctx, monitor, func(snapshot models.StateSnapshot) bool {
+	return enforceNodeLimitForReport(w, ctx, monitor, 1, func(snapshot models.StateSnapshot) bool {
 		return dockerReportTargetsExistingHost(snapshot, report, tokenRecord)
 	})
 }
@@ -132,7 +134,12 @@ func enforceNodeLimitForKubernetesReport(
 	report agentsk8s.Report,
 	tokenRecord *config.APITokenRecord,
 ) bool {
-	return enforceNodeLimitForReport(w, ctx, monitor, func(snapshot models.StateSnapshot) bool {
+	// A K8s cluster contributes one slot per node (minimum 1 when node list is empty).
+	additions := len(report.Nodes)
+	if additions == 0 {
+		additions = 1
+	}
+	return enforceNodeLimitForReport(w, ctx, monitor, additions, func(snapshot models.StateSnapshot) bool {
 		return kubernetesReportTargetsExistingCluster(snapshot, report, tokenRecord)
 	})
 }
