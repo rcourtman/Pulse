@@ -17,6 +17,8 @@ import {
   SUMMARY_TIME_RANGE_LABEL,
 } from '@/components/shared/summaryTimeRange';
 import { HOST_COLORS } from '@/pages/DashboardPanels/hostColors';
+import { getOrgID } from '@/utils/apiClient';
+import { eventBus } from '@/stores/events';
 
 const normalizeHostIdentifier = (value?: string | null): string[] => {
   if (!value) return [];
@@ -113,11 +115,39 @@ interface InfrastructureSummaryProps {
   onTimeRangeChange?: (range: TimeRange) => void;
 }
 
+// In-memory full-resolution cache keyed by "org::range".
+// Survives component unmount/remount (page navigation) without the
+// downsampling artifacts that localStorage cache introduces.
+// Capped at MAX_IN_MEMORY_ENTRIES to prevent unbounded growth.
+const MAX_IN_MEMORY_INFRA_ENTRIES = 20;
+const inMemoryChartCache = new Map<string, Map<string, ChartData>>();
+
+function inMemoryCacheKey(range: TimeRange): string {
+  return `${getOrgID() || 'default'}::${range}`;
+}
+
+/** @internal Test-only reset for in-memory chart cache. */
+export function __resetInMemoryChartCacheForTests(): void {
+  inMemoryChartCache.clear();
+}
+
+// Clear in-memory cache on org switch to prevent cross-org data leakage.
+const unsubscribeInfraOrgSwitch = eventBus.on('org_switched', () => {
+  inMemoryChartCache.clear();
+});
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    unsubscribeInfraOrgSwitch();
+  });
+}
+
 export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (props) => {
   // Chart data keyed by resource identifier (node name, host id, etc.)
   const [chartMap, setChartMap] = createSignal<Map<string, ChartData>>(new Map());
   const [chartRange, setChartRange] = createSignal<TimeRange | null>(null);
   const [loadedRange, setLoadedRange] = createSignal<TimeRange | null>(null);
+  const [fetchFailed, setFetchFailed] = createSignal(false);
   const selectedRange = createMemo<TimeRange>(() => props.timeRange || '1h');
   const hasCurrentRangeCharts = createMemo(() => chartRange() === selectedRange());
   const isCurrentRangeLoaded = createMemo(() => loadedRange() === selectedRange());
@@ -125,12 +155,17 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
   const { workloads, byType } = useResources();
   const hostAgents = createMemo(() => byType('host'));
 
+  // Track org switches so the effect re-runs when the org changes.
+  const [orgVersion, setOrgVersion] = createSignal(0);
+  const unsubscribeOrgSwitch = eventBus.on('org_switched', () => {
+    setOrgVersion((v) => v + 1);
+  });
+
   // Fetch charts data directly — no dependency on dashboard sparkline store
   let refreshTimer: ReturnType<typeof setInterval> | undefined;
   let activeFetchController: AbortController | null = null;
   let activeFetchRequest = 0;
-  let activeRange: TimeRange | null = null;
-  let cacheHydrationTimer: ReturnType<typeof setTimeout> | undefined;
+  let activeScopeKey: string | null = null;
 
   const awaitAbortable = <T,>(promise: Promise<T>, signal: AbortSignal): Promise<T> => {
     if (signal.aborted) {
@@ -172,7 +207,6 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     const controller = new AbortController();
     const requestId = ++activeFetchRequest;
     activeFetchController = controller;
-    let requestSucceeded = false;
 
     try {
       const fetched = await awaitAbortable(
@@ -182,26 +216,45 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
       if (requestId !== activeFetchRequest) {
         return;
       }
-      requestSucceeded = true;
       const map = fetched.map;
 
       // If the backend returns an empty payload transiently, keep the last
       // good map to avoid flashing the "no history / static" fallbacks.
       const currentMapMatchesRequestedRange = chartRange() === requestedRange;
       if (map.size > 0 || chartMap().size === 0 || !currentMapMatchesRequestedRange) {
+        const cacheKey = inMemoryCacheKey(requestedRange);
+        if (
+          !inMemoryChartCache.has(cacheKey) &&
+          inMemoryChartCache.size >= MAX_IN_MEMORY_INFRA_ENTRIES
+        ) {
+          const oldest = inMemoryChartCache.keys().next().value;
+          if (oldest !== undefined) inMemoryChartCache.delete(oldest);
+        }
+        inMemoryChartCache.set(cacheKey, map);
         setChartMap(map);
         setChartRange(requestedRange);
       }
+      setFetchFailed(false);
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         return;
       }
-      // Silently degrade — cards show fallback numbers
+      if (requestId === activeFetchRequest) {
+        setFetchFailed(true);
+        // Fall back to localStorage cache on fetch failure.
+        if (chartRange() !== requestedRange) {
+          const cached = readInfrastructureSummaryCache(requestedRange);
+          if (cached) {
+            setChartMap(cached.map);
+            setChartRange(requestedRange);
+          }
+        }
+      }
     } finally {
       if (activeFetchController === controller) {
         activeFetchController = null;
       }
-      if (requestId === activeFetchRequest && requestSucceeded) {
+      if (requestId === activeFetchRequest) {
         setLoadedRange(requestedRange);
       }
     }
@@ -212,20 +265,18 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     // and recreate the interval on every props update, or we end up refetching
     // charts at the websocket update cadence (causing visible UI flashes).
     const hasHosts = props.hosts.length > 0;
+    // Read orgVersion to subscribe to org switches.
+    const currentOrg = orgVersion();
     if (!hasHosts) {
       if (refreshTimer) {
         clearInterval(refreshTimer);
         refreshTimer = undefined;
       }
-      if (cacheHydrationTimer) {
-        clearTimeout(cacheHydrationTimer);
-        cacheHydrationTimer = undefined;
-      }
       if (activeFetchController) {
         activeFetchController.abort();
         activeFetchController = null;
       }
-      activeRange = null;
+      activeScopeKey = null;
       setChartMap(new Map());
       setChartRange(null);
       setLoadedRange(null);
@@ -237,45 +288,34 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     }
 
     const nextRange = selectedRange();
-    if (activeRange !== nextRange) {
-      activeRange = nextRange;
-      if (cacheHydrationTimer) {
-        clearTimeout(cacheHydrationTimer);
-        cacheHydrationTimer = undefined;
-      }
+    const nextScopeKey = `${currentOrg}::${nextRange}`;
+    if (activeScopeKey !== nextScopeKey) {
+      activeScopeKey = nextScopeKey;
 
-      // Clear stale data from the previous range so old charts don't
-      // linger during the defer window.
-      setChartMap(new Map());
-      setChartRange(null);
-      setLoadedRange(null);
-
-      // Defer cache hydration briefly so the fresh fetch can land first.
-      // This avoids a visible flash where downsampled cached data renders
-      // and then gets immediately replaced by full-resolution API data.
-      const cachedData = readInfrastructureSummaryCache(nextRange);
-      if (cachedData) {
-        cacheHydrationTimer = setTimeout(() => {
-          cacheHydrationTimer = undefined;
-          // Only hydrate if the fresh fetch hasn't already landed for this range.
-          if (chartRange() !== nextRange) {
-            setChartMap(cachedData.map);
-            setChartRange(nextRange);
-            setLoadedRange(nextRange);
-          }
-        }, 200);
+      // Hydrate from in-memory cache (full-resolution, no curve shift).
+      // Only falls back to skeleton if this range was never fetched in this session.
+      const memCached = inMemoryChartCache.get(inMemoryCacheKey(nextRange));
+      if (memCached && memCached.size > 0) {
+        setChartMap(memCached);
+        setChartRange(nextRange);
+        setLoadedRange(nextRange);
+      } else {
+        setChartMap(new Map());
+        setChartRange(null);
+        setLoadedRange(null);
       }
+      setFetchFailed(false);
       void fetchCharts({ prioritize: true });
     }
   });
 
   onCleanup(() => {
     if (refreshTimer) clearInterval(refreshTimer);
-    if (cacheHydrationTimer) clearTimeout(cacheHydrationTimer);
     if (activeFetchController) {
       activeFetchController.abort();
       activeFetchController = null;
     }
+    unsubscribeOrgSwitch();
   });
 
   // Match a unified resource to its chart data.
@@ -567,7 +607,9 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                   when={hasData('cpu')}
                   fallback={
                     isCurrentRangeLoaded() ? (
-                      <div class="text-sm text-muted py-2">No history yet</div>
+                      <div class="text-sm text-muted py-2">
+                        {fetchFailed() ? 'Trend data unavailable' : 'No history yet'}
+                      </div>
                     ) : (
                       <SparklineSkeleton />
                     )
@@ -604,7 +646,9 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                   when={hasData('memory')}
                   fallback={
                     isCurrentRangeLoaded() ? (
-                      <div class="text-sm text-muted py-2">No history yet</div>
+                      <div class="text-sm text-muted py-2">
+                        {fetchFailed() ? 'Trend data unavailable' : 'No history yet'}
+                      </div>
                     ) : (
                       <SparklineSkeleton />
                     )
@@ -646,7 +690,9 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                   when={hasDiskIOData()}
                   fallback={
                     isCurrentRangeLoaded() ? (
-                      <div class="text-sm text-muted py-2">No history yet</div>
+                      <div class="text-sm text-muted py-2">
+                        {fetchFailed() ? 'Trend data unavailable' : 'No history yet'}
+                      </div>
                     ) : (
                       <SparklineSkeleton />
                     )

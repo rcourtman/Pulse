@@ -1,13 +1,12 @@
 import { createSignal } from 'solid-js';
 import { render, waitFor, cleanup } from '@solidjs/testing-library';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { InfrastructureSummary } from './InfrastructureSummary';
+import { InfrastructureSummary, __resetInMemoryChartCacheForTests } from './InfrastructureSummary';
 import type { Resource } from '@/types/resource';
 import type { TimeRange } from '@/api/charts';
 import { __resetInfrastructureSummaryFetchesForTests } from '@/utils/infrastructureSummaryCache';
 
 const mockGetCharts = vi.fn();
-const INFRA_SUMMARY_CACHE_KEY_PREFIX = 'pulse.infrastructureSummaryCharts.default::';
 let mockHostAgentResources: Resource[] = [];
 
 vi.mock('@/api/charts', async () => {
@@ -89,6 +88,7 @@ describe('InfrastructureSummary range behavior', () => {
     mockGetCharts.mockReset();
     mockGetCharts.mockResolvedValue(makeChartsResponse());
     __resetInfrastructureSummaryFetchesForTests();
+    __resetInMemoryChartCacheForTests();
     localStorage.clear();
     mockHostAgentResources = [];
   });
@@ -140,43 +140,24 @@ describe('InfrastructureSummary range behavior', () => {
   });
 
   it('hydrates sparklines from cache immediately while live fetch is pending', async () => {
-    const now = Date.now();
-    const cachePayload = {
-      version: 1,
-      range: '1h',
-      cachedAt: now,
-      oldestDataTimestamp: now - 60_000,
-      charts: {
-        'node-1': {
-          cpu: [
-            { timestamp: now - 60_000, value: 20 },
-            { timestamp: now, value: 25 },
-          ],
-          memory: [
-            { timestamp: now - 60_000, value: 35 },
-            { timestamp: now, value: 40 },
-          ],
-          disk: [
-            { timestamp: now - 60_000, value: 45 },
-            { timestamp: now, value: 50 },
-          ],
-          netin: [],
-          netout: [],
-        },
-      },
-    };
-    localStorage.setItem(`${INFRA_SUMMARY_CACHE_KEY_PREFIX}1h`, JSON.stringify(cachePayload));
+    // First render: fetch succeeds, populating the in-memory cache.
+    mockGetCharts.mockReset();
+    mockGetCharts.mockResolvedValueOnce(makeChartsResponse());
+    const { container: firstContainer, unmount } = render(() => (
+      <InfrastructureSummary hosts={[makeHost()]} timeRange="1h" />
+    ));
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(firstContainer.querySelector('svg.cursor-crosshair')).toBeTruthy();
+    });
+    unmount();
 
+    // Second render: fetch hangs, but in-memory cache provides instant data.
     mockGetCharts.mockReset();
     mockGetCharts.mockImplementationOnce(() => new Promise(() => {}));
-
     const { container } = render(() => (
       <InfrastructureSummary hosts={[makeHost()]} timeRange="1h" />
     ));
-
-    await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('1h');
-    });
 
     await waitFor(() => {
       const path = container
@@ -186,34 +167,7 @@ describe('InfrastructureSummary range behavior', () => {
     });
   });
 
-  it('clears cached-data status once live history is applied', async () => {
-    const now = Date.now();
-    const cachePayload = {
-      version: 1,
-      range: '1h',
-      cachedAt: now,
-      oldestDataTimestamp: now - 60_000,
-      charts: {
-        'node-1': {
-          cpu: [
-            { timestamp: now - 60_000, value: 20 },
-            { timestamp: now, value: 25 },
-          ],
-          memory: [
-            { timestamp: now - 60_000, value: 35 },
-            { timestamp: now, value: 40 },
-          ],
-          disk: [
-            { timestamp: now - 60_000, value: 45 },
-            { timestamp: now, value: 50 },
-          ],
-          netin: [],
-          netout: [],
-        },
-      },
-    };
-    localStorage.setItem(`${INFRA_SUMMARY_CACHE_KEY_PREFIX}1h`, JSON.stringify(cachePayload));
-
+  it('renders charts once live fetch resolves', async () => {
     let resolveFetch: ((value: ReturnType<typeof makeChartsResponse>) => void) | undefined;
     mockGetCharts.mockReset();
     mockGetCharts.mockImplementationOnce(
@@ -229,13 +183,18 @@ describe('InfrastructureSummary range behavior', () => {
 
     await waitFor(() => {
       expect(mockGetCharts).toHaveBeenCalledWith('1h');
-      expect(container.querySelector('svg.cursor-crosshair')).toBeTruthy();
     });
+
+    // While fetch is pending, skeleton should be shown (no in-memory cache yet).
+    expect(container.querySelectorAll('[data-testid="sparkline-skeleton"]').length).toBeGreaterThan(
+      0,
+    );
 
     resolveFetch?.(makeChartsResponse());
 
     await waitFor(() => {
       expect(container.querySelector('svg.cursor-crosshair')).toBeTruthy();
+      expect(container.querySelectorAll('[data-testid="sparkline-skeleton"]')).toHaveLength(0);
     });
   });
 
@@ -329,7 +288,7 @@ describe('InfrastructureSummary range behavior', () => {
     });
   });
 
-  it('keeps loading state when the newly selected range request fails', async () => {
+  it('shows error state when the newly selected range request fails', async () => {
     mockGetCharts.mockReset();
     mockGetCharts.mockImplementationOnce(() => Promise.resolve(makeChartsResponse()));
     mockGetCharts.mockImplementationOnce(() => Promise.reject(new Error('network error')));
@@ -354,9 +313,7 @@ describe('InfrastructureSummary range behavior', () => {
 
     await waitFor(() => {
       expect(container.querySelector('svg.cursor-crosshair')).toBeNull();
-      expect(
-        container.querySelectorAll('[data-testid="sparkline-skeleton"]').length,
-      ).toBeGreaterThan(0);
+      expect(container.textContent).toContain('Trend data unavailable');
     });
   });
 

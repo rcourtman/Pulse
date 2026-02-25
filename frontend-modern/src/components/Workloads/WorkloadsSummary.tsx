@@ -5,6 +5,7 @@ import {
   type InteractiveSparklineSeries,
 } from '@/components/shared/InteractiveSparkline';
 import { DensityMap } from '@/components/shared/DensityMap';
+import { SparklineSkeleton } from '@/components/shared/SparklineSkeleton';
 import {
   ChartsAPI,
   type ChartData,
@@ -102,6 +103,29 @@ const WORKLOADS_SUMMARY_CACHE_MAX_CHARS = 900_000;
 const WORKLOAD_CHART_DEFAULT_POINT_LIMIT = 180;
 const WORKLOADS_IDLE_THRESHOLD_MS = 2 * 60_000;
 const WORKLOADS_DEEP_IDLE_THRESHOLD_MS = 10 * 60_000;
+
+// In-memory full-resolution cache keyed by scope key (org::range::node).
+// Survives component unmount/remount (page navigation) without the
+// downsampling artifacts that localStorage cache introduces.
+// Capped at MAX_IN_MEMORY_ENTRIES to prevent unbounded growth.
+const MAX_IN_MEMORY_WORKLOAD_ENTRIES = 20;
+const inMemoryWorkloadCache = new Map<string, WorkloadChartsResponse>();
+
+/** @internal Test-only reset for in-memory workload cache. */
+export function __resetInMemoryWorkloadCacheForTests(): void {
+  inMemoryWorkloadCache.clear();
+}
+
+// Clear in-memory cache on org switch to prevent cross-org data leakage.
+const unsubscribeWorkloadOrgSwitch = eventBus.on('org_switched', () => {
+  inMemoryWorkloadCache.clear();
+});
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    unsubscribeWorkloadOrgSwitch();
+  });
+}
 
 type CachedChartData = Pick<
   ChartData,
@@ -406,7 +430,6 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
   let activeFetchController: AbortController | null = null;
   let pollingToken = 0;
   let lastInteractionAt = Date.now();
-  let cacheHydrationTimer: ReturnType<typeof setTimeout> | undefined;
 
   const clearRefreshTimer = () => {
     if (!refreshTimer) return;
@@ -445,6 +468,14 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
       });
       if (activeFetchController !== controller) return;
       persistWorkloadsSummaryCache(range, selectedNodeScope(), currentOrgScope, response);
+      if (
+        !inMemoryWorkloadCache.has(scopeKey) &&
+        inMemoryWorkloadCache.size >= MAX_IN_MEMORY_WORKLOAD_ENTRIES
+      ) {
+        const oldest = inMemoryWorkloadCache.keys().next().value;
+        if (oldest !== undefined) inMemoryWorkloadCache.delete(oldest);
+      }
+      inMemoryWorkloadCache.set(scopeKey, response);
       setCharts(response);
       setLoadedScopeKey(scopeKey);
       setFetchFailed(false);
@@ -454,11 +485,14 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
       }
       if (activeFetchController === controller) {
         setFetchFailed(true);
-        // Only mark scope as loaded on failure if no deferred cache
-        // hydration is pending — otherwise let the cache timer fire first.
-        if (!cacheHydrationTimer) {
-          setLoadedScopeKey(scopeKey);
+        // Fall back to localStorage cache on fetch failure.
+        if (loadedScopeKey() !== scopeKey) {
+          const cached = readWorkloadsSummaryCache(range, selectedNodeScope(), currentOrgScope);
+          if (cached) {
+            setCharts(cached);
+          }
         }
+        setLoadedScopeKey(scopeKey);
       }
     } finally {
       if (activeFetchController === controller) {
@@ -469,35 +503,19 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
 
   createEffect(() => {
     const scopeKey = activeScopeKey();
-    const range = selectedRange();
-    const nodeScope = selectedNodeScope();
-    const currentOrgScope = orgScope();
     const token = ++pollingToken;
 
     clearRefreshTimer();
-    if (cacheHydrationTimer) {
-      clearTimeout(cacheHydrationTimer);
-      cacheHydrationTimer = undefined;
-    }
 
-    // Clear stale data from the previous scope/range so old charts don't
-    // linger during the defer window.
-    setCharts(null);
-    setLoadedScopeKey(null);
-
-    // Defer cache hydration briefly so the fresh fetch can land first.
-    // This avoids a visible flash where downsampled cached data renders
-    // and then gets immediately replaced by full-resolution API data.
-    const cached = readWorkloadsSummaryCache(range, nodeScope, currentOrgScope);
-    if (cached) {
-      cacheHydrationTimer = setTimeout(() => {
-        cacheHydrationTimer = undefined;
-        // Only hydrate if the fresh fetch hasn't already landed for this scope.
-        if (loadedScopeKey() !== scopeKey) {
-          setCharts(cached);
-          setLoadedScopeKey(scopeKey);
-        }
-      }, 200);
+    // Hydrate from in-memory cache (full-resolution, no curve shift).
+    // Only falls back to skeleton if this scope was never fetched in this session.
+    const memCached = inMemoryWorkloadCache.get(scopeKey);
+    if (memCached) {
+      setCharts(memCached);
+      setLoadedScopeKey(scopeKey);
+    } else {
+      setCharts(null);
+      setLoadedScopeKey(null);
     }
     setFetchFailed(false);
     void fetchCharts({ prioritize: true }).finally(() => scheduleNextFetch(token));
@@ -542,7 +560,6 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
 
   onCleanup(() => {
     clearRefreshTimer();
-    if (cacheHydrationTimer) clearTimeout(cacheHydrationTimer);
     if (activeFetchController) activeFetchController.abort();
     unsubscribeOrgSwitch();
   });
@@ -697,9 +714,11 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
     networkSeries().some((series) => series.data.length >= 2),
   );
 
+  const isLoading = createMemo(() => guestCounts().total > 0 && !hasCurrentRangeData());
+
   const fallbackTrendMessage = () => {
     if (guestCounts().total === 0) return 'No workloads';
-    if (!hasCurrentRangeData()) return '';
+    if (!hasCurrentRangeData()) return null;
     if (fetchFailed()) return 'Trend data unavailable';
     return 'No history yet';
   };
@@ -760,9 +779,13 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
             <Show
               when={hasCpuData()}
               fallback={
-                <div class="flex h-[56px] items-center text-sm text-muted">
-                  {fallbackTrendMessage()}
-                </div>
+                isLoading() ? (
+                  <SparklineSkeleton />
+                ) : (
+                  <div class="flex h-[56px] items-center text-sm text-muted">
+                    {fallbackTrendMessage()}
+                  </div>
+                )
               }
             >
               <div class="flex-1 min-h-0">
@@ -798,9 +821,13 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
             <Show
               when={hasMemoryData()}
               fallback={
-                <div class="flex h-[56px] items-center text-sm text-muted">
-                  {fallbackTrendMessage()}
-                </div>
+                isLoading() ? (
+                  <SparklineSkeleton />
+                ) : (
+                  <div class="flex h-[56px] items-center text-sm text-muted">
+                    {fallbackTrendMessage()}
+                  </div>
+                )
               }
             >
               <div class="flex-1 min-h-0">
@@ -836,9 +863,13 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
             <Show
               when={hasDiskIOData()}
               fallback={
-                <div class="flex h-[56px] items-center text-sm text-muted">
-                  {fallbackTrendMessage()}
-                </div>
+                isLoading() ? (
+                  <SparklineSkeleton />
+                ) : (
+                  <div class="flex h-[56px] items-center text-sm text-muted">
+                    {fallbackTrendMessage()}
+                  </div>
+                )
               }
             >
               <div class="flex-1 min-h-0">
@@ -870,9 +901,13 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
             <Show
               when={hasNetworkData()}
               fallback={
-                <div class="flex h-[56px] items-center text-sm text-muted">
-                  {fallbackTrendMessage()}
-                </div>
+                isLoading() ? (
+                  <SparklineSkeleton />
+                ) : (
+                  <div class="flex h-[56px] items-center text-sm text-muted">
+                    {fallbackTrendMessage()}
+                  </div>
+                )
               }
             >
               <div class="flex-1 min-h-0">

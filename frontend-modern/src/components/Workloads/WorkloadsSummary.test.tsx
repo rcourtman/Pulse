@@ -1,6 +1,10 @@
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { WorkloadsSummary, type WorkloadSummarySnapshot } from './WorkloadsSummary';
+import {
+  WorkloadsSummary,
+  __resetInMemoryWorkloadCacheForTests,
+  type WorkloadSummarySnapshot,
+} from './WorkloadsSummary';
 import type { WorkloadChartsResponse } from '@/api/charts';
 
 const mockGetWorkloadCharts = vi.fn();
@@ -91,12 +95,10 @@ const makeSnapshots = (ids: string[]): WorkloadSummarySnapshot[] =>
     network: 1_000,
   }));
 
-const makeCacheKey = (range: string, nodeScope: string, orgScope = 'default') =>
-  `pulse.workloadsSummaryCharts.${encodeURIComponent(orgScope)}::${range}::${encodeURIComponent(nodeScope || '__all__')}`;
-
 describe('WorkloadsSummary performance behavior', () => {
   beforeEach(() => {
     mockGetWorkloadCharts.mockReset();
+    __resetInMemoryWorkloadCacheForTests();
     localStorage.clear();
   });
 
@@ -106,28 +108,25 @@ describe('WorkloadsSummary performance behavior', () => {
 
   it('hydrates from cache immediately while live fetch is pending', async () => {
     const workloadId = 'cluster-a:pve1:101';
-    const cachePayload = {
-      version: 3,
-      range: '1h',
-      nodeScope: '',
-      cachedAt: now,
-      data: {
-        [workloadId]: {
-          cpu: twoPointSeries,
-          memory: twoPointSeries,
-          disk: twoPointSeries,
-          diskread: twoPointSeries,
-          diskwrite: twoPointSeries,
-          netin: twoPointSeries,
-          netout: twoPointSeries,
-        },
-      },
-      dockerData: {},
-    };
-    localStorage.setItem(makeCacheKey('1h', ''), JSON.stringify(cachePayload));
 
+    // First render: fetch succeeds, populating the in-memory cache.
+    mockGetWorkloadCharts.mockResolvedValueOnce(makeChartsResponse([workloadId]));
+    const { unmount } = render(() => (
+      <WorkloadsSummary
+        timeRange="1h"
+        fallbackGuestCounts={{ total: 1, running: 1, stopped: 0 }}
+        fallbackSnapshots={makeSnapshots([workloadId])}
+      />
+    ));
+    await waitFor(() => {
+      expect(mockGetWorkloadCharts).toHaveBeenCalledTimes(1);
+      const sparklines = screen.getAllByTestId('sparkline');
+      expect(sparklines).toHaveLength(4);
+    });
+    unmount();
+
+    // Second render: fetch hangs, but in-memory cache provides instant data.
     mockGetWorkloadCharts.mockImplementationOnce(() => new Promise(() => {}));
-
     render(() => (
       <WorkloadsSummary
         timeRange="1h"
@@ -135,10 +134,6 @@ describe('WorkloadsSummary performance behavior', () => {
         fallbackSnapshots={makeSnapshots([workloadId])}
       />
     ));
-
-    await waitFor(() => {
-      expect(mockGetWorkloadCharts).toHaveBeenCalledTimes(1);
-    });
 
     await waitFor(() => {
       const sparklines = screen.getAllByTestId('sparkline');
