@@ -527,8 +527,9 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 
 				token, err := GetRecoveryTokenStore().GenerateRecoveryToken(time.Duration(duration) * time.Minute)
 				if err != nil {
+					log.Error().Err(err).Msg("Failed to generate recovery token")
 					response["success"] = false
-					response["message"] = fmt.Sprintf("Failed to generate recovery token: %v", err)
+					response["message"] = "Failed to generate recovery token"
 				} else {
 					response["success"] = true
 					response["token"] = token
@@ -546,8 +547,9 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 				recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
 				content := fmt.Sprintf("Recovery mode enabled at %s\nAuth temporarily disabled for local access\nEnabled by: %s\n", time.Now().Format(time.RFC3339), clientIP)
 				if err := os.WriteFile(recoveryFile, []byte(content), 0600); err != nil {
+					log.Error().Err(err).Msg("Failed to enable recovery mode")
 					response["success"] = false
-					response["message"] = fmt.Sprintf("Failed to enable recovery mode: %v", err)
+					response["message"] = "Failed to enable recovery mode"
 				} else {
 					response["success"] = true
 					response["message"] = "Recovery mode enabled. Auth disabled for localhost. Delete .auth_recovery file to re-enable."
@@ -562,8 +564,9 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 				// Re-enable auth by removing recovery file
 				recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
 				if err := os.Remove(recoveryFile); err != nil {
+					log.Error().Err(err).Msg("Failed to disable recovery mode")
 					response["success"] = false
-					response["message"] = fmt.Sprintf("Failed to disable recovery mode: %v", err)
+					response["message"] = "Failed to disable recovery mode"
 				} else {
 					response["success"] = true
 					response["message"] = "Recovery mode disabled. Authentication re-enabled."
@@ -966,18 +969,20 @@ func previewSAMLMetadataFromRuntime(ctx context.Context, req extensions.Metadata
 		}
 		rawXML, metadata, err = fetchSAMLMetadataFromURL(ctx, httpClient, req.MetadataURL)
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to fetch SAML metadata for preview")
 			return extensions.MetadataPreviewResponse{}, &extensions.MetadataPreviewError{
 				Code:    "fetch_error",
-				Message: "Failed to fetch metadata: " + err.Error(),
+				Message: "Failed to fetch metadata from the provided URL",
 			}
 		}
 	} else {
 		rawXML = []byte(req.MetadataXML)
 		metadata, err = parseSAMLMetadataXML(rawXML)
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to parse SAML metadata XML for preview")
 			return extensions.MetadataPreviewResponse{}, &extensions.MetadataPreviewError{
 				Code:    "parse_error",
-				Message: "Failed to parse metadata: " + err.Error(),
+				Message: "Failed to parse metadata XML",
 			}
 		}
 	}

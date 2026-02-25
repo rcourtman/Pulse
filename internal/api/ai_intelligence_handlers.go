@@ -961,9 +961,10 @@ func (h *AISettingsHandler) HandleGetForecast(w http.ResponseWriter, r *http.Req
 
 	forecast, err := forecastSvc.Forecast(resourceID, resourceName, metric, horizon, threshold)
 	if err != nil {
+		log.Error().Err(err).Str("resource_id", resourceID).Str("metric", metric).Msg("Forecast failed")
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"forecast": nil,
-			"error":    err.Error(),
+			"error":    "Forecast generation failed",
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write forecast error response")
 		}
@@ -1025,9 +1026,10 @@ func (h *AISettingsHandler) HandleGetForecastOverview(w http.ResponseWriter, r *
 
 	overview, err := forecastSvc.ForecastAll(metric, horizon, threshold)
 	if err != nil {
+		log.Error().Err(err).Str("metric", metric).Msg("Forecast overview failed")
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"forecasts":     []interface{}{},
-			"error":         err.Error(),
+			"error":         "Forecast generation failed",
 			"metric":        metric,
 			"threshold":     threshold,
 			"horizon_hours": int(horizon.Hours()),
@@ -1523,7 +1525,8 @@ func (h *AISettingsHandler) HandleApproveRemediationPlan(w http.ResponseWriter, 
 
 	execution, err := engine.ApprovePlan(req.PlanID, req.ApprovedBy)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Error().Err(err).Str("plan_id", req.PlanID).Msg("Failed to approve remediation plan")
+		http.Error(w, "Failed to approve plan", http.StatusBadRequest)
 		return
 	}
 
@@ -1567,14 +1570,16 @@ func (h *AISettingsHandler) HandleExecuteRemediationPlan(w http.ResponseWriter, 
 		// Auto-approve the plan if only plan_id is provided
 		exec, err := engine.ApprovePlan(req.PlanID, "api")
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			log.Error().Err(err).Str("plan_id", req.PlanID).Msg("Failed to auto-approve remediation plan")
+			http.Error(w, "Failed to approve plan", http.StatusBadRequest)
 			return
 		}
 		req.ExecutionID = exec.ID
 	}
 
 	if err := engine.Execute(r.Context(), req.ExecutionID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Error().Err(err).Str("execution_id", req.ExecutionID).Msg("Remediation execution failed")
+		http.Error(w, "Execution failed", http.StatusBadRequest)
 		return
 	}
 
@@ -1657,7 +1662,8 @@ func (h *AISettingsHandler) HandleRollbackRemediationPlan(w http.ResponseWriter,
 	}
 
 	if err := engine.Rollback(r.Context(), req.ExecutionID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Error().Err(err).Str("execution_id", req.ExecutionID).Msg("Remediation rollback failed")
+		http.Error(w, "Rollback failed", http.StatusBadRequest)
 		return
 	}
 

@@ -207,7 +207,7 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 			r.config.APITokens = r.config.APITokens[:len(r.config.APITokens)-1]
 			r.auditTokenEvent(req, "token_created", false, "Failed to persist API token")
 			log.Error().Err(err).Msg("Failed to persist API tokens after creation")
-			http.Error(w, "Failed to save token to disk: "+err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Failed to save token", http.StatusInternalServerError)
 			return
 		}
 	}

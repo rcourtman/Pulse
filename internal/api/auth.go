@@ -52,9 +52,14 @@ func GetSessionStore() *SessionStore {
 	return sessionStore
 }
 
-// detectProxy checks if the request is coming through a reverse proxy
+// detectProxy checks if the request is coming through a reverse proxy.
+// Only trusts proxy-set headers when the direct peer is a known trusted proxy
+// to prevent attackers from injecting these headers on direct connections.
 func detectProxy(r *http.Request) bool {
-	// Check multiple headers that proxies commonly set
+	peerIP := extractRemoteIP(r.RemoteAddr)
+	if !isTrustedProxyIP(peerIP) {
+		return false
+	}
 	return r.Header.Get("X-Forwarded-For") != "" ||
 		r.Header.Get("X-Real-IP") != "" ||
 		r.Header.Get("X-Forwarded-Proto") != "" ||
@@ -66,10 +71,19 @@ func detectProxy(r *http.Request) bool {
 		r.Header.Get("X-Forwarded-Port") != "" // Some proxies
 }
 
-// isConnectionSecure checks if the connection is over HTTPS
+// isConnectionSecure checks if the connection is over HTTPS.
+// Forwarded-proto headers are only trusted when the direct peer is a known
+// trusted proxy, preventing attackers from injecting X-Forwarded-Proto: https
+// on plain HTTP connections to influence cookie security attributes.
 func isConnectionSecure(r *http.Request) bool {
-	return r.TLS != nil ||
-		r.Header.Get("X-Forwarded-Proto") == "https" ||
+	if r.TLS != nil {
+		return true
+	}
+	peerIP := extractRemoteIP(r.RemoteAddr)
+	if !isTrustedProxyIP(peerIP) {
+		return false
+	}
+	return r.Header.Get("X-Forwarded-Proto") == "https" ||
 		strings.Contains(r.Header.Get("Forwarded"), "proto=https")
 }
 

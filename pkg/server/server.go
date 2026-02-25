@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -465,6 +466,9 @@ func Run(ctx context.Context, version string) error {
 		ReadHeaderTimeout: 15 * time.Second,
 		WriteTimeout:      0, // Disabled to support SSE/streaming
 		IdleTimeout:       120 * time.Second,
+		TLSConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		},
 	}
 
 	// Start config watcher for .env file changes

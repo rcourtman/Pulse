@@ -79,7 +79,7 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 			Str("path", r.URL.Path).
 			Str("session", safePrefixForLog(cookie.Value, 8)+"...").
 			Msg("Missing CSRF token")
-		clearCSRFCookie(w)
+		clearCSRFCookie(w, r)
 		if newToken := issueNewCSRFCookie(w, r, cookie.Value); newToken != "" {
 			w.Header().Set("X-CSRF-Token", newToken)
 			log.Debug().Str("new_token", safePrefixForLog(newToken, 8)+"...").Msg("Issued new CSRF token after missing")
@@ -94,7 +94,7 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 			Str("session", safePrefixForLog(cookie.Value, 8)+"...").
 			Str("provided_token", safePrefixForLog(csrfToken, 8)+"...").
 			Msg("Invalid CSRF token")
-		clearCSRFCookie(w)
+		clearCSRFCookie(w, r)
 		if newToken := issueNewCSRFCookie(w, r, cookie.Value); newToken != "" {
 			w.Header().Set("X-CSRF-Token", newToken)
 			log.Debug().Str("new_token", safePrefixForLog(newToken, 8)+"...").Msg("Issued new CSRF token after invalid")
@@ -109,9 +109,14 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-func clearCSRFCookie(w http.ResponseWriter) {
+func clearCSRFCookie(w http.ResponseWriter, r *http.Request) {
 	if w == nil {
 		return
+	}
+	var secure bool
+	var sameSite http.SameSite
+	if r != nil {
+		secure, sameSite = getCookieSettings(r)
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "pulse_csrf",
@@ -119,6 +124,8 @@ func clearCSRFCookie(w http.ResponseWriter) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: false,
+		Secure:   secure,
+		SameSite: sameSite,
 	})
 }
 
@@ -429,8 +436,9 @@ func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOr
 		// Prevent MIME type sniffing
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 
-		// Enable XSS protection
-		w.Header().Set("X-XSS-Protection", "1; mode=block")
+		// Disable legacy XSS auditor — it is removed from modern browsers and
+		// can introduce vulnerabilities in older ones.  CSP provides XSS protection.
+		w.Header().Set("X-XSS-Protection", "0")
 
 		// Build Content Security Policy
 		cspDirectives := []string{
@@ -476,7 +484,7 @@ func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOr
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 
 		// Permissions Policy (formerly Feature Policy)
-		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()")
 
 		// Enable HSTS only for requests known to be HTTPS.
 		// Forwarded proto is trusted only when the direct peer is a trusted proxy.

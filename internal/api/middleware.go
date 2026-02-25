@@ -111,6 +111,16 @@ func writeErrorResponse(w http.ResponseWriter, statusCode int, code, message str
 	}
 }
 
+// sanitizeErrorForClient returns a generic, safe message for an internal error.
+// The raw error is logged server-side; the client only sees the generic message.
+// Use this instead of passing err.Error() to http.Error or writeErrorResponse.
+func sanitizeErrorForClient(err error, genericMsg string) string {
+	if err != nil {
+		log.Error().Err(err).Msg(genericMsg)
+	}
+	return genericMsg
+}
+
 // responseWriter wraps http.ResponseWriter to capture status codes
 type responseWriter struct {
 	http.ResponseWriter

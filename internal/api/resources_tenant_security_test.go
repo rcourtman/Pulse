@@ -40,8 +40,8 @@ func TestResourceHandlers_NonDefaultOrgRequiresTenantStateProvider(t *testing.T)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "tenant state provider unavailable") {
-		t.Fatalf("expected tenant provider error body, got %q", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "Internal server error") {
+		t.Fatalf("expected internal server error body, got %q", rec.Body.String())
 	}
 }
 

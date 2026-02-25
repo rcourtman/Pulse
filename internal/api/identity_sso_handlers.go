@@ -749,20 +749,22 @@ func (r *Router) testSAMLConnection(ctx context.Context, cfg *SAMLTestConfig) SS
 	if cfg.IDPMetadataURL != "" {
 		rawXML, metadata, err = fetchSAMLMetadataFromURL(ctx, httpClient, cfg.IDPMetadataURL)
 		if err != nil {
+			log.Error().Err(err).Msg("SSO test: failed to fetch SAML metadata from URL")
 			return SSOTestResponse{
 				Success: false,
 				Message: "Failed to fetch metadata from URL",
-				Error:   err.Error(),
+				Error:   "fetch_failed",
 			}
 		}
 	} else if cfg.IDPMetadataXML != "" {
 		rawXML = []byte(cfg.IDPMetadataXML)
 		metadata, err = parseSAMLMetadataXML(rawXML)
 		if err != nil {
+			log.Error().Err(err).Msg("SSO test: failed to parse SAML metadata XML")
 			return SSOTestResponse{
 				Success: false,
 				Message: "Failed to parse metadata XML",
-				Error:   err.Error(),
+				Error:   "parse_failed",
 			}
 		}
 	} else {
@@ -857,19 +859,21 @@ func (r *Router) testOIDCConnection(ctx context.Context, cfg *OIDCTestConfig) SS
 	httpClient := newTestHTTPClient()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, discoveryURL, nil)
 	if err != nil {
+		log.Error().Err(err).Msg("OIDC test: failed to create discovery request")
 		return SSOTestResponse{
 			Success: false,
 			Message: "Failed to create discovery request",
-			Error:   err.Error(),
+			Error:   "request_failed",
 		}
 	}
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
+		log.Error().Err(err).Msg("OIDC test: failed to fetch discovery document")
 		return SSOTestResponse{
 			Success: false,
 			Message: "Failed to fetch OIDC discovery document",
-			Error:   err.Error(),
+			Error:   "fetch_failed",
 		}
 	}
 	defer resp.Body.Close()
@@ -884,10 +888,11 @@ func (r *Router) testOIDCConnection(ctx context.Context, cfg *OIDCTestConfig) SS
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
+		log.Error().Err(err).Msg("OIDC test: failed to read discovery response")
 		return SSOTestResponse{
 			Success: false,
 			Message: "Failed to read discovery response",
-			Error:   err.Error(),
+			Error:   "read_failed",
 		}
 	}
 
@@ -901,10 +906,11 @@ func (r *Router) testOIDCConnection(ctx context.Context, cfg *OIDCTestConfig) SS
 	}
 
 	if err := json.Unmarshal(body, &discovery); err != nil {
+		log.Error().Err(err).Msg("OIDC test: failed to parse discovery document")
 		return SSOTestResponse{
 			Success: false,
 			Message: "Failed to parse discovery document",
-			Error:   err.Error(),
+			Error:   "parse_failed",
 		}
 	}
 
@@ -1019,14 +1025,16 @@ func (r *Router) handleMetadataPreview(w http.ResponseWriter, req *http.Request)
 		}
 		rawXML, metadata, err = fetchSAMLMetadataFromURL(ctx, httpClient, previewReq.MetadataURL)
 		if err != nil {
-			writeErrorResponse(w, http.StatusBadRequest, "fetch_error", "Failed to fetch metadata: "+err.Error(), nil)
+			log.Error().Err(err).Str("url", previewReq.MetadataURL).Msg("Failed to fetch SAML metadata")
+			writeErrorResponse(w, http.StatusBadRequest, "fetch_error", "Failed to fetch metadata from the provided URL", nil)
 			return
 		}
 	} else {
 		rawXML = []byte(previewReq.MetadataXML)
 		metadata, err = parseSAMLMetadataXML(rawXML)
 		if err != nil {
-			writeErrorResponse(w, http.StatusBadRequest, "parse_error", "Failed to parse metadata: "+err.Error(), nil)
+			log.Error().Err(err).Msg("Failed to parse SAML metadata XML")
+			writeErrorResponse(w, http.StatusBadRequest, "parse_error", "Failed to parse metadata XML", nil)
 			return
 		}
 	}

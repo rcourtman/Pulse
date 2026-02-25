@@ -299,7 +299,7 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		// Validate the bcrypt hash is complete
 		if err := validateBcryptHash(hashedPassword); err != nil {
 			log.Error().Err(err).Msg("Generated invalid bcrypt hash")
-			http.Error(w, fmt.Sprintf("Password hashing error: %v", err), http.StatusInternalServerError)
+			http.Error(w, "Failed to process password", http.StatusInternalServerError)
 			return
 		}
 

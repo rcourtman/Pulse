@@ -822,7 +822,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.Error().Err(err).Msg("Chat stream error")
-		errData, _ := json.Marshal(chat.ErrorData{Message: err.Error()})
+		errData, _ := json.Marshal(chat.ErrorData{Message: "An error occurred while processing your request"})
 		writeEvent(chat.StreamEvent{Type: "error", Data: errData})
 	}
 
@@ -848,7 +848,7 @@ func (h *AIHandler) HandleSessions(w http.ResponseWriter, r *http.Request) {
 
 	sessions, err := svc.ListSessions(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -879,7 +879,7 @@ func (h *AIHandler) HandleCreateSession(w http.ResponseWriter, r *http.Request) 
 
 	session, err := svc.CreateSession(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -902,7 +902,7 @@ func (h *AIHandler) HandleDeleteSession(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if err := svc.DeleteSession(ctx, sessionID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -925,7 +925,7 @@ func (h *AIHandler) HandleMessages(w http.ResponseWriter, r *http.Request, sessi
 
 	messages, err := svc.GetMessages(ctx, sessionID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -956,7 +956,7 @@ func (h *AIHandler) HandleAbort(w http.ResponseWriter, r *http.Request, sessionI
 	}
 
 	if err := svc.AbortSession(ctx, sessionID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -991,7 +991,7 @@ func (h *AIHandler) HandleSummarize(w http.ResponseWriter, r *http.Request, sess
 
 	result, err := svc.SummarizeSession(ctx, sessionID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -1016,7 +1016,7 @@ func (h *AIHandler) HandleDiff(w http.ResponseWriter, r *http.Request, sessionID
 
 	diff, err := svc.GetSessionDiff(ctx, sessionID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -1041,7 +1041,7 @@ func (h *AIHandler) HandleFork(w http.ResponseWriter, r *http.Request, sessionID
 
 	session, err := svc.ForkSession(ctx, sessionID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -1066,7 +1066,7 @@ func (h *AIHandler) HandleRevert(w http.ResponseWriter, r *http.Request, session
 
 	result, err := svc.RevertSession(ctx, sessionID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -1091,7 +1091,7 @@ func (h *AIHandler) HandleUnrevert(w http.ResponseWriter, r *http.Request, sessi
 
 	result, err := svc.UnrevertSession(ctx, sessionID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -1143,7 +1143,7 @@ func (h *AIHandler) HandleAnswerQuestion(w http.ResponseWriter, r *http.Request,
 
 	if err := svc.AnswerQuestion(ctx, questionID, answers); err != nil {
 		log.Error().Err(err).Str("questionID", questionID).Msg("Failed to answer question")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 

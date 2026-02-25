@@ -2284,7 +2284,7 @@ func (h *ConfigHandlers) handleAgentInstallCommand(w http.ResponseWriter, r *htt
 			http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		case errors.Is(err, errAgentInstallTokenPersist):
 			log.Error().Err(err).Msg("Failed to persist API tokens after creation")
-			http.Error(w, "Failed to save token to disk: "+err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Failed to save token", http.StatusInternalServerError)
 		default:
 			log.Error().Err(err).Msg("Failed to create API token for agent install")
 			http.Error(w, "Failed to generate API token", http.StatusInternalServerError)

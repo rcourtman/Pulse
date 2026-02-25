@@ -108,7 +108,7 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 	orgID := GetOrgID(r.Context())
 	registry, err := h.buildRegistry(orgID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -164,7 +164,7 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 	orgID := GetOrgID(r.Context())
 	registry, err := h.buildRegistry(orgID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -224,7 +224,7 @@ func (h *ResourceHandlers) HandleGetChildren(w http.ResponseWriter, r *http.Requ
 	orgID := GetOrgID(r.Context())
 	registry, err := h.buildRegistry(orgID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -254,7 +254,7 @@ func (h *ResourceHandlers) HandleGetMetrics(w http.ResponseWriter, r *http.Reque
 	orgID := GetOrgID(r.Context())
 	registry, err := h.buildRegistry(orgID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -286,7 +286,7 @@ func (h *ResourceHandlers) HandleStats(w http.ResponseWriter, r *http.Request) {
 	orgID := GetOrgID(r.Context())
 	registry, err := h.buildRegistry(orgID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -304,7 +304,7 @@ func (h *ResourceHandlers) HandleLink(w http.ResponseWriter, r *http.Request) {
 	orgID := GetOrgID(r.Context())
 	store, err := h.getStore(orgID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -339,7 +339,7 @@ func (h *ResourceHandlers) HandleLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := store.AddLink(link); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 	h.invalidateCache(orgID)
@@ -361,7 +361,7 @@ func (h *ResourceHandlers) HandleUnlink(w http.ResponseWriter, r *http.Request) 
 	orgID := GetOrgID(r.Context())
 	store, err := h.getStore(orgID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -395,7 +395,7 @@ func (h *ResourceHandlers) HandleUnlink(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := store.AddExclusion(exclusion); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 	h.invalidateCache(orgID)
@@ -417,7 +417,7 @@ func (h *ResourceHandlers) HandleReportMerge(w http.ResponseWriter, r *http.Requ
 	orgID := GetOrgID(r.Context())
 	store, err := h.getStore(orgID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -440,7 +440,7 @@ func (h *ResourceHandlers) HandleReportMerge(w http.ResponseWriter, r *http.Requ
 
 	registry, err := h.buildRegistry(orgID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -501,7 +501,7 @@ func (h *ResourceHandlers) HandleReportMerge(w http.ResponseWriter, r *http.Requ
 				Str("resourceID", path).
 				Str("candidateID", target.CandidateID).
 				Msg("Failed to add resource merge exclusion")
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 			return
 		}
 		exclusionsAdded += 1

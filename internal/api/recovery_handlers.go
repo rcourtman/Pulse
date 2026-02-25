@@ -136,13 +136,13 @@ func (h *RecoveryHandlers) HandleListPoints(w http.ResponseWriter, r *http.Reque
 		orgID := GetOrgID(r.Context())
 		store, err := h.storeForOrg(orgID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 			return
 		}
 
 		p, t, err := store.ListPoints(r.Context(), opts)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 			return
 		}
 		points = p
@@ -243,12 +243,12 @@ func (h *RecoveryHandlers) HandleListSeries(w http.ResponseWriter, r *http.Reque
 		orgID := GetOrgID(r.Context())
 		store, err := h.storeForOrg(orgID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 			return
 		}
 		s, err := store.ListPointsSeries(r.Context(), opts, tzOffsetMin)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 			return
 		}
 		series = s
@@ -307,12 +307,12 @@ func (h *RecoveryHandlers) HandleListFacets(w http.ResponseWriter, r *http.Reque
 		orgID := GetOrgID(r.Context())
 		store, err := h.storeForOrg(orgID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 			return
 		}
 		f, err := store.ListPointsFacets(r.Context(), opts)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 			return
 		}
 		facets = f
@@ -554,13 +554,13 @@ func (h *RecoveryHandlers) HandleListRollups(w http.ResponseWriter, r *http.Requ
 		orgID := GetOrgID(r.Context())
 		store, err := h.storeForOrg(orgID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 			return
 		}
 
 		r, t, err := store.ListRollups(r.Context(), opts)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 			return
 		}
 		rollups = r

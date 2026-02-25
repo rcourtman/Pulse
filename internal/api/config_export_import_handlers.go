@@ -110,7 +110,7 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 		LogAuditEventForTenant(GetOrgID(r.Context()), "config_imported", importUser, GetClientIP(r), r.URL.Path, false,
 			"Import failed")
 		log.Error().Err(err).Msg("Failed to import configuration")
-		http.Error(w, "Failed to import configuration: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "Failed to import configuration. Verify the backup file and passphrase are correct.", http.StatusBadRequest)
 		return
 	}
 

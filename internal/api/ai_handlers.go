@@ -2498,7 +2498,8 @@ func (h *AISettingsHandler) HandleTestAIConnection(w http.ResponseWriter, r *htt
 	err := h.GetAIService(r.Context()).TestConnection(ctx)
 	if err != nil {
 		testResult.Success = false
-		testResult.Message = err.Error()
+		testResult.Message = "Connection test failed"
+		log.Error().Err(err).Msg("AI connection test failed")
 	} else {
 		cfg := h.GetAIService(r.Context()).GetConfig()
 		testResult.Success = true
@@ -2586,7 +2587,8 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 	testProvider, err := providers.NewForProvider(cfg, provider, cfg.GetModel())
 	if err != nil {
 		testResult.Success = false
-		testResult.Message = fmt.Sprintf("Failed to create provider: %v", err)
+		testResult.Message = "Failed to create provider"
+		log.Error().Err(err).Str("provider", provider).Msg("AI provider creation failed")
 		if err := utils.WriteJSONResponse(w, testResult); err != nil {
 			log.Error().Err(err).Msg("failed to write JSON response")
 		}
@@ -2596,7 +2598,8 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 	err = testProvider.TestConnection(ctx)
 	if err != nil {
 		testResult.Success = false
-		testResult.Message = err.Error()
+		testResult.Message = "Connection test failed"
+		log.Error().Err(err).Str("provider", provider).Msg("AI provider connection test failed")
 	} else {
 		testResult.Success = true
 		testResult.Message = "Connection successful"
@@ -2639,9 +2642,10 @@ func (h *AISettingsHandler) HandleListModels(w http.ResponseWriter, r *http.Requ
 	models, cached, err := h.GetAIService(r.Context()).ListModelsWithCache(ctx)
 	if err != nil {
 		// Return error but don't fail the request - frontend can show a fallback
+		log.Error().Err(err).Msg("Failed to list AI models")
 		resp := Response{
 			Models: []ModelInfo{},
-			Error:  err.Error(),
+			Error:  "Failed to fetch model list",
 		}
 		if jsonErr := utils.WriteJSONResponse(w, resp); jsonErr != nil {
 			log.Error().Err(jsonErr).Msg("Failed to write AI models response")
@@ -3170,7 +3174,8 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if _, err := store.ConsumeApproval(req.ApprovalID, req.Command, approvalTargetType, approvalTargetID); err != nil {
-		http.Error(w, "Failed to consume approval: "+err.Error(), http.StatusConflict)
+		log.Error().Err(err).Str("approval_id", req.ApprovalID).Msg("Failed to consume approval")
+		http.Error(w, "Failed to consume approval", http.StatusConflict)
 		return
 	}
 
@@ -3199,7 +3204,7 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to execute command")
-		http.Error(w, "Failed to execute command: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to execute command", http.StatusInternalServerError)
 		return
 	}
 
@@ -3265,7 +3270,7 @@ func (h *AISettingsHandler) HandleGetGuestKnowledge(w http.ResponseWriter, r *ht
 
 	knowledge, err := h.GetAIService(r.Context()).GetGuestKnowledge(guestID)
 	if err != nil {
-		http.Error(w, "Failed to get knowledge: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Failed to get knowledge"), http.StatusInternalServerError)
 		return
 	}
 
@@ -3296,7 +3301,7 @@ func (h *AISettingsHandler) HandleSaveGuestNote(w http.ResponseWriter, r *http.R
 	}
 
 	if err := h.GetAIService(r.Context()).SaveGuestNote(req.GuestID, req.GuestName, req.GuestType, req.Category, req.Title, req.Content); err != nil {
-		http.Error(w, "Failed to save note: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Failed to save note"), http.StatusInternalServerError)
 		return
 	}
 
@@ -3322,7 +3327,7 @@ func (h *AISettingsHandler) HandleDeleteGuestNote(w http.ResponseWriter, r *http
 	}
 
 	if err := h.GetAIService(r.Context()).DeleteGuestNote(req.GuestID, req.NoteID); err != nil {
-		http.Error(w, "Failed to delete note: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Failed to delete note"), http.StatusInternalServerError)
 		return
 	}
 
@@ -3340,7 +3345,7 @@ func (h *AISettingsHandler) HandleExportGuestKnowledge(w http.ResponseWriter, r 
 
 	knowledge, err := h.GetAIService(r.Context()).GetGuestKnowledge(guestID)
 	if err != nil {
-		http.Error(w, "Failed to get knowledge: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Failed to get knowledge"), http.StatusInternalServerError)
 		return
 	}
 
@@ -3376,7 +3381,7 @@ func (h *AISettingsHandler) HandleImportGuestKnowledge(w http.ResponseWriter, r 
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&importData); err != nil {
-		http.Error(w, "Invalid import data: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "Invalid import data", http.StatusBadRequest)
 		return
 	}
 
@@ -3458,7 +3463,7 @@ func (h *AISettingsHandler) HandleClearGuestKnowledge(w http.ResponseWriter, r *
 	// Get existing knowledge and delete all notes
 	existing, err := h.GetAIService(r.Context()).GetGuestKnowledge(req.GuestID)
 	if err != nil {
-		http.Error(w, "Failed to get knowledge: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Failed to get knowledge"), http.StatusInternalServerError)
 		return
 	}
 
@@ -3949,7 +3954,7 @@ func (h *AISettingsHandler) HandleOAuthExchange(w http.ResponseWriter, r *http.R
 	tokens, err := exchangeOAuthCodeForTokens(ctx, code, binding.session)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to exchange OAuth code for tokens")
-		http.Error(w, "Failed to exchange authorization code: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "Failed to exchange authorization code", http.StatusBadRequest)
 		return
 	}
 
@@ -3964,7 +3969,7 @@ func (h *AISettingsHandler) HandleOAuthExchange(w http.ResponseWriter, r *http.R
 			// This is fine for Pro/Max users - they'll use OAuth tokens
 		} else {
 			log.Error().Err(err).Msg("Failed to create API key from OAuth token")
-			http.Error(w, "Failed to create API key: "+err.Error(), http.StatusBadRequest)
+			http.Error(w, "Failed to create API key", http.StatusBadRequest)
 			return
 		}
 	}
@@ -6802,7 +6807,8 @@ func (h *AISettingsHandler) HandleReapproveInvestigationFix(w http.ResponseWrite
 	}
 
 	if err := store.CreateApproval(req); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "create_failed", "Failed to create approval: "+err.Error(), nil)
+		log.Error().Err(err).Str("finding_id", findingID).Msg("Failed to create approval request")
+		writeErrorResponse(w, http.StatusInternalServerError, "create_failed", "Failed to create approval request", nil)
 		return
 	}
 

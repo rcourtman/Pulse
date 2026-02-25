@@ -488,12 +488,14 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 		client, err := proxmox.NewClient(testCfg)
 		if err != nil {
 			nodeDiag.Connected = false
-			nodeDiag.Error = err.Error()
+			nodeDiag.Error = "Failed to initialize connection"
+			log.Error().Err(err).Str("node", node.Name).Msg("Diagnostics: Proxmox client init failed")
 		} else {
 			nodes, err := client.GetNodes(ctx)
 			if err != nil {
 				nodeDiag.Connected = false
-				nodeDiag.Error = "Failed to connect to Proxmox API: " + err.Error()
+				nodeDiag.Error = "Failed to connect to Proxmox API"
+				log.Error().Err(err).Str("node", node.Name).Msg("Diagnostics: Proxmox API connection failed")
 			} else {
 				nodeDiag.Connected = true
 
@@ -545,11 +547,13 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 		client, err := pbs.NewClient(testCfg)
 		if err != nil {
 			pbsDiag.Connected = false
-			pbsDiag.Error = err.Error()
+			pbsDiag.Error = "Failed to initialize connection"
+			log.Error().Err(err).Str("pbs", pbsNode.Name).Msg("Diagnostics: PBS client init failed")
 		} else {
 			if version, err := client.GetVersion(ctx); err != nil {
 				pbsDiag.Connected = false
-				pbsDiag.Error = "Connection established but version check failed: " + err.Error()
+				pbsDiag.Error = "Connection established but version check failed"
+				log.Error().Err(err).Str("pbs", pbsNode.Name).Msg("Diagnostics: PBS version check failed")
 			} else {
 				pbsDiag.Connected = true
 				pbsDiag.Details = &PBSDetails{Version: version.Version}
@@ -1171,7 +1175,8 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 	// Get all nodes to check
 	nodes, err := client.GetNodes(ctx)
 	if err != nil {
-		result.TestResult = "Failed to get nodes: " + err.Error()
+		log.Error().Err(err).Msg("VM disk check: failed to get nodes")
+		result.TestResult = "Failed to get nodes"
 		return result
 	}
 
@@ -1221,12 +1226,12 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 			vmStatus, err := client.GetVMStatus(statusCtx, vmNode, vm.VMID)
 			statusCancel()
 			if err != nil {
-				errStr := err.Error()
+				log.Error().Err(err).Int("vmid", vm.VMID).Msg("VM disk check: failed to get VM status")
 				result.ProblematicVMs = append(result.ProblematicVMs, VMDiskIssue{
 					VMID:   vm.VMID,
 					Name:   vm.Name,
 					Status: vm.Status,
-					Issue:  "Failed to get VM status: " + errStr,
+					Issue:  "Failed to get VM status",
 				})
 			} else if vmStatus != nil && vmStatus.Agent.Value > 0 {
 				result.VMsWithAgent++
@@ -1240,7 +1245,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 						VMID:   vm.VMID,
 						Name:   vm.Name,
 						Status: vm.Status,
-						Issue:  "Agent enabled but failed to get filesystem info: " + err.Error(),
+						Issue:  "Agent enabled but failed to get filesystem info",
 					})
 					if testVM == nil {
 						testVM = &vms[i]
@@ -1310,7 +1315,8 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 		statusCancel()
 		if err != nil {
 			errStr := err.Error()
-			result.TestResult = "Failed to get VM status: " + errStr
+			log.Error().Err(err).Int("vmid", testVM.VMID).Msg("VM disk check: failed to get VM status for test VM")
+			result.TestResult = "Failed to get VM status"
 			if errors.Is(err, context.DeadlineExceeded) || strings.Contains(errStr, "context deadline exceeded") {
 				result.Recommendations = append(result.Recommendations,
 					"VM status request timed out; check network connectivity to the node",
@@ -1358,7 +1364,8 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 						"Consider increasing the diagnostics timeout if the environment is large",
 					)
 				} else {
-					result.TestResult = "Failed to get guest agent data: " + errStr
+					log.Error().Err(err).Int("vmid", testVM.VMID).Msg("VM disk check: failed to get guest agent data")
+					result.TestResult = "Failed to get guest agent data"
 				}
 			} else if len(fsInfo) == 0 {
 				result.TestResult = "Guest agent returned no filesystem info"
@@ -1436,7 +1443,8 @@ func (r *Router) checkPhysicalDisks(ctx context.Context, client *proxmox.Client,
 	// Get all nodes
 	nodes, err := client.GetNodes(ctx)
 	if err != nil {
-		result.TestResult = "Failed to get nodes: " + err.Error()
+		log.Error().Err(err).Msg("Physical disk check: failed to get nodes")
+		result.TestResult = "Failed to get nodes"
 		return result
 	}
 
@@ -1461,7 +1469,8 @@ func (r *Router) checkPhysicalDisks(ctx context.Context, client *proxmox.Client,
 		diskCancel()
 		if err != nil {
 			errStr := err.Error()
-			nodeResult.Error = errStr
+			log.Error().Err(err).Str("node", node.Node).Msg("Physical disk check: failed to get disks")
+			nodeResult.Error = "Failed to query disk information"
 
 			// Provide specific recommendations based on error
 			if strings.Contains(errStr, "401") || strings.Contains(errStr, "403") {

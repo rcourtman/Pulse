@@ -776,13 +776,14 @@ func TestGetSessionUsername(t *testing.T) {
 
 func TestClearCSRFCookie(t *testing.T) {
 	t.Run("nil writer does not panic", func(t *testing.T) {
-		clearCSRFCookie(nil)
+		clearCSRFCookie(nil, nil)
 		// Should not panic
 	})
 
 	t.Run("sets cookie with maxage -1", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		clearCSRFCookie(w)
+		r := httptest.NewRequest("GET", "/", nil)
+		clearCSRFCookie(w, r)
 
 		cookies := w.Result().Cookies()
 		if len(cookies) != 1 {
@@ -907,8 +908,8 @@ func TestSecurityHeadersWithConfig_EmbeddingDisabled(t *testing.T) {
 	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
 		t.Errorf("X-Content-Type-Options = %q, want nosniff", got)
 	}
-	if got := rec.Header().Get("X-XSS-Protection"); got != "1; mode=block" {
-		t.Errorf("X-XSS-Protection = %q, want '1; mode=block'", got)
+	if got := rec.Header().Get("X-XSS-Protection"); got != "0" {
+		t.Errorf("X-XSS-Protection = %q, want '0'", got)
 	}
 	if got := rec.Header().Get("Referrer-Policy"); got != "strict-origin-when-cross-origin" {
 		t.Errorf("Referrer-Policy = %q, want strict-origin-when-cross-origin", got)
