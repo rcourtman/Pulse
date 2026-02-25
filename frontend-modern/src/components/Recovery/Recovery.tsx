@@ -2022,7 +2022,7 @@ const Recovery: Component = () => {
           </Show>
 
           <Card padding="none" tone="card" class="mb-4 overflow-hidden">
-            <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 ">
+            <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
               Recovery Events
             </div>
             <Show

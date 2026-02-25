@@ -964,7 +964,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
           </div>
 
           <Show when={sortedPBSResources().length > 0}>
-            <div class="border-b border-border-subtle px-3 py-2 text-[11px] font-semibold uppercase tracking-wide ">
+            <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
               PBS Services
             </div>
             <div class="overflow-x-auto">
@@ -1250,7 +1250,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
           </Show>
 
           <Show when={sortedPMGResources().length > 0}>
-            <div class="border-b px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
               PMG Services
             </div>
             <div class="overflow-x-auto">

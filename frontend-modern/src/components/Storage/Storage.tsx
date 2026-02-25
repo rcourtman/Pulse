@@ -554,8 +554,8 @@ const Storage: Component = () => {
         </Card>
       </Show>
 
-      <Card padding="none" class="overflow-hidden">
-        <div class="border-b px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 ">
+      <Card padding="none" tone="card" class="overflow-hidden">
+        <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
           {view() === 'pools' ? 'Storage Pools' : 'Physical Disks'}
         </div>
         <Show when={view() === 'disks'}>
