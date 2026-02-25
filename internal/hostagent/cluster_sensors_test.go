@@ -432,6 +432,101 @@ func TestCollectPeerSensors_EmptyOutput(t *testing.T) {
 	}
 }
 
+func TestCollectPeerSensors_EmptyJSONObject(t *testing.T) {
+	logger := zerolog.New(zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+		w.Out = os.Stderr
+	})).Level(zerolog.DebugLevel)
+
+	a := &Agent{
+		logger: logger,
+		collector: &mockCollector{
+			commandCombinedOutputFn: func(ctx context.Context, name string, arg ...string) (string, error) {
+				return "{}", nil // sensors installed but no hardware sensors detected
+			},
+		},
+	}
+
+	result, err := a.collectPeerSensors(context.Background(), clusterPeer{
+		Name: "peer1",
+		IP:   "10.0.0.2",
+	}, "/root/.ssh/id_rsa")
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.TemperatureCelsius) != 0 {
+		t.Errorf("expected empty sensors for '{}' output, got %v", result)
+	}
+}
+
+func TestCollectPeerSensors_NonJSONOutput(t *testing.T) {
+	logger := zerolog.New(zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+		w.Out = os.Stderr
+	})).Level(zerolog.DebugLevel)
+
+	a := &Agent{
+		logger: logger,
+		collector: &mockCollector{
+			commandCombinedOutputFn: func(ctx context.Context, name string, arg ...string) (string, error) {
+				// Unexpected non-JSON output (e.g., SSH warning that bleeds into combined output)
+				return "Warning: Permanently added '10.0.0.2' (ED25519) to the list of known hosts.", nil
+			},
+			sensorsParseFn: func(jsonStr string) (*sensors.TemperatureData, error) {
+				return sensors.Parse(jsonStr) // will fail on non-JSON
+			},
+		},
+	}
+
+	result, err := a.collectPeerSensors(context.Background(), clusterPeer{
+		Name: "peer1",
+		IP:   "10.0.0.2",
+	}, "/root/.ssh/id_rsa")
+
+	if err == nil {
+		t.Fatal("expected error for non-JSON output, got nil")
+	}
+	if len(result.TemperatureCelsius) != 0 {
+		t.Errorf("expected empty sensors on parse error, got %v", result)
+	}
+}
+
+func TestCollectPeerSensors_SensorsInstalledNoData(t *testing.T) {
+	logger := zerolog.New(zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+		w.Out = os.Stderr
+	})).Level(zerolog.DebugLevel)
+
+	// sensors installed but returns chips with no temperature readings
+	noTempJSON := `{
+		"acpitz-acpi-0":{
+			"Adapter": "ACPI interface"
+		}
+	}`
+
+	a := &Agent{
+		logger: logger,
+		collector: &mockCollector{
+			commandCombinedOutputFn: func(ctx context.Context, name string, arg ...string) (string, error) {
+				return noTempJSON, nil
+			},
+			sensorsParseFn: func(jsonStr string) (*sensors.TemperatureData, error) {
+				return sensors.Parse(jsonStr)
+			},
+		},
+	}
+
+	result, err := a.collectPeerSensors(context.Background(), clusterPeer{
+		Name: "peer1",
+		IP:   "10.0.0.2",
+	}, "/root/.ssh/id_rsa")
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.TemperatureCelsius) != 0 {
+		t.Errorf("expected empty sensors when no temp data available, got %v", result)
+	}
+}
+
 // Verify the ClusterNodeSensors type is correctly structured
 func TestClusterNodeSensorsType(t *testing.T) {
 	entry := agentshost.ClusterNodeSensors{
