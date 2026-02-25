@@ -25,15 +25,27 @@ func NodeLimitExceededMessage(current, limit int) string {
 	return fmt.Sprintf("Node limit reached (%d/%d). Remove a node or upgrade your license.", current, limit)
 }
 
-func ConfiguredNodeCount(pveInstances, pbsInstances, pmgInstances int) int {
-	return pveInstances + pbsInstances + pmgInstances
+// ConfiguredNodeCount returns the number of host slots occupied by configured
+// Proxmox infrastructure. For PVE, the count is the number of *actual nodes*
+// discovered at runtime (a single PVE connection may represent a multi-node
+// cluster). PBS and PMG are always 1:1 (one connection = one host).
+func ConfiguredNodeCount(pveNodes, pbsInstances, pmgInstances int) int {
+	return pveNodes + pbsInstances + pmgInstances
 }
 
 func RegisteredNodeSlotCount(configuredCount int, state models.StateSnapshot) int {
 	count := configuredCount
 	count += len(state.Hosts)
 	count += len(state.DockerHosts)
-	count += len(state.KubernetesClusters)
+	// K8s: count individual nodes across all clusters, not the cluster count.
+	for _, cluster := range state.KubernetesClusters {
+		n := len(cluster.Nodes)
+		if n == 0 {
+			// Cluster registered but node list not yet populated — count as 1.
+			n = 1
+		}
+		count += n
+	}
 	return count
 }
 

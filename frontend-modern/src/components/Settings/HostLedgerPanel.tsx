@@ -108,7 +108,9 @@ export function HostLedgerPanel() {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Source</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>First Seen</TableHead>
                   <TableHead>Last Seen</TableHead>
                 </TableRow>
               </TableHeader>
@@ -123,9 +125,19 @@ export function HostLedgerPanel() {
                         <TypeBadge type={host.type} />
                       </TableCell>
                       <TableCell>
+                        <span class="text-xs text-muted">{host.source || '—'}</span>
+                      </TableCell>
+                      <TableCell>
                         <span class="inline-flex items-center gap-1.5">
                           <StatusDot variant={statusVariant(host.status)} size="sm" />
                           <span class="text-xs text-muted capitalize">{host.status}</span>
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span class="text-xs text-muted">
+                          {host.first_seen
+                            ? formatRelativeTime(host.first_seen, { compact: true })
+                            : '—'}
                         </span>
                       </TableCell>
                       <TableCell>

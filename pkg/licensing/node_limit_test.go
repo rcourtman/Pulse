@@ -10,9 +10,11 @@ import (
 )
 
 func TestConfiguredNodeCount(t *testing.T) {
-	got := ConfiguredNodeCount(2, 3, 4)
-	if got != 9 {
-		t.Fatalf("expected 9, got %d", got)
+	// First arg is PVE node count (not connection count). A 3-node PVE cluster
+	// contributes 3, plus 2 PBS + 1 PMG = 6 total.
+	got := ConfiguredNodeCount(3, 2, 1)
+	if got != 6 {
+		t.Fatalf("expected 6, got %d", got)
 	}
 }
 
@@ -49,15 +51,33 @@ func TestNodeLimitExceededMessage(t *testing.T) {
 }
 
 func TestRegisteredNodeSlotCount(t *testing.T) {
-	snapshot := models.StateSnapshot{
-		Hosts:              []models.Host{{ID: "h1"}},
-		DockerHosts:        []models.DockerHost{{ID: "d1"}, {ID: "d2"}},
-		KubernetesClusters: []models.KubernetesCluster{{ID: "k1"}},
-	}
-	got := RegisteredNodeSlotCount(5, snapshot)
-	if got != 9 {
-		t.Fatalf("expected 9, got %d", got)
-	}
+	t.Run("counts_k8s_nodes_not_clusters", func(t *testing.T) {
+		snapshot := models.StateSnapshot{
+			Hosts:       []models.Host{{ID: "h1"}},
+			DockerHosts: []models.DockerHost{{ID: "d1"}, {ID: "d2"}},
+			KubernetesClusters: []models.KubernetesCluster{
+				{ID: "k1", Nodes: []models.KubernetesNode{{UID: "n1"}, {UID: "n2"}, {UID: "n3"}}},
+			},
+		}
+		// 5 configured + 1 host + 2 docker + 3 k8s nodes = 11
+		got := RegisteredNodeSlotCount(5, snapshot)
+		if got != 11 {
+			t.Fatalf("expected 11, got %d", got)
+		}
+	})
+
+	t.Run("empty_node_list_counts_as_one", func(t *testing.T) {
+		snapshot := models.StateSnapshot{
+			KubernetesClusters: []models.KubernetesCluster{
+				{ID: "k1", Nodes: nil},
+			},
+		}
+		// 0 configured + 1 k8s (no nodes, counts as 1) = 1
+		got := RegisteredNodeSlotCount(0, snapshot)
+		if got != 1 {
+			t.Fatalf("expected 1, got %d", got)
+		}
+	})
 }
 
 func TestCollectNonEmptyStrings(t *testing.T) {

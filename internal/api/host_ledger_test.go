@@ -8,16 +8,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 func TestHostLedgerEntryTypes(t *testing.T) {
-	// Verify the structs marshal correctly.
+	// Verify the structs marshal correctly including source and first_seen.
 	entry := HostLedgerEntry{
-		Name:     "node1",
-		Type:     "proxmox-pve",
-		Status:   "online",
-		LastSeen: "2025-01-01T00:00:00Z",
+		Name:      "node1",
+		Type:      "proxmox-pve",
+		Status:    "online",
+		LastSeen:  "2025-01-01T00:00:00Z",
+		Source:    "proxmox",
+		FirstSeen: "2024-12-01T00:00:00Z",
 	}
 	data, err := json.Marshal(entry)
 	if err != nil {
@@ -29,6 +32,12 @@ func TestHostLedgerEntryTypes(t *testing.T) {
 	}
 	if decoded.Name != "node1" || decoded.Type != "proxmox-pve" || decoded.Status != "online" {
 		t.Errorf("round-trip mismatch: %+v", decoded)
+	}
+	if decoded.Source != "proxmox" {
+		t.Errorf("source mismatch: got %q", decoded.Source)
+	}
+	if decoded.FirstSeen != "2024-12-01T00:00:00Z" {
+		t.Errorf("first_seen mismatch: got %q", decoded.FirstSeen)
 	}
 }
 
@@ -65,12 +74,23 @@ func TestFormatLastSeen(t *testing.T) {
 }
 
 func TestDisplayNameHelpers(t *testing.T) {
-	// PVE
-	if got := pveDisplayName("MyPVE", "https://pve:8006"); got != "MyPVE" {
-		t.Errorf("pveDisplayName with name = %q", got)
+	// PVE node
+	if got := pveNodeDisplayName("My Node", "node1", "id1"); got != "My Node" {
+		t.Errorf("pveNodeDisplayName with display = %q", got)
 	}
-	if got := pveDisplayName("", "https://pve:8006"); got != "https://pve:8006" {
-		t.Errorf("pveDisplayName fallback = %q", got)
+	if got := pveNodeDisplayName("", "node1", "id1"); got != "node1" {
+		t.Errorf("pveNodeDisplayName fallback name = %q", got)
+	}
+	if got := pveNodeDisplayName("", "", "id1"); got != "id1" {
+		t.Errorf("pveNodeDisplayName fallback id = %q", got)
+	}
+
+	// TrueNAS
+	if got := trueNASDisplayName("MyNAS", "https://nas:443"); got != "MyNAS" {
+		t.Errorf("trueNASDisplayName with name = %q", got)
+	}
+	if got := trueNASDisplayName("", "https://nas:443"); got != "https://nas:443" {
+		t.Errorf("trueNASDisplayName fallback = %q", got)
 	}
 
 	// Host
@@ -327,4 +347,51 @@ func sortHostLedgerEntries(entries []HostLedgerEntry) {
 		}
 		return entries[i].Name < entries[j].Name
 	})
+}
+
+func TestConfiguredNodeCountFallback(t *testing.T) {
+	cfg := &config.Config{
+		PVEInstances: []config.PVEInstance{{Host: "pve1"}, {Host: "pve2"}},
+		PBSInstances: []config.PBSInstance{{Host: "pbs1"}},
+		PMGInstances: []config.PMGInstance{{Host: "pmg1"}},
+	}
+
+	t.Run("uses_runtime_nodes_when_populated", func(t *testing.T) {
+		state := models.StateSnapshot{
+			Nodes: []models.Node{{ID: "n1"}, {ID: "n2"}, {ID: "n3"}, {ID: "n4"}, {ID: "n5"}},
+		}
+		// 5 PVE nodes + 1 PBS + 1 PMG = 7
+		got := configuredNodeCount(cfg, state)
+		if got != 7 {
+			t.Fatalf("expected 7, got %d", got)
+		}
+	})
+
+	t.Run("falls_back_to_connection_count_when_no_nodes", func(t *testing.T) {
+		state := models.StateSnapshot{}
+		// 2 PVE connections + 1 PBS + 1 PMG = 4
+		got := configuredNodeCount(cfg, state)
+		if got != 4 {
+			t.Fatalf("expected 4, got %d", got)
+		}
+	})
+
+	t.Run("nil_config_returns_zero", func(t *testing.T) {
+		state := models.StateSnapshot{
+			Nodes: []models.Node{{ID: "n1"}},
+		}
+		got := configuredNodeCount(nil, state)
+		if got != 0 {
+			t.Fatalf("expected 0, got %d", got)
+		}
+	})
+}
+
+func TestK8sNodeStatus(t *testing.T) {
+	if got := k8sNodeStatus(true); got != "online" {
+		t.Errorf("ready=true → %q, want online", got)
+	}
+	if got := k8sNodeStatus(false); got != "offline" {
+		t.Errorf("ready=false → %q, want offline", got)
+	}
 }

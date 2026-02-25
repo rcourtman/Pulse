@@ -24,19 +24,26 @@ func maxNodesLimitForContext(ctx context.Context) int {
 	return status.MaxNodes
 }
 
-func configuredNodeCount(cfg *config.Config) int {
+func configuredNodeCount(cfg *config.Config, state models.StateSnapshot) int {
 	if cfg == nil {
 		return 0
 	}
-	return configuredNodeCountFromLicensing(len(cfg.PVEInstances), len(cfg.PBSInstances), len(cfg.PMGInstances))
+	// PVE: count actual discovered nodes (a single connection may be a multi-node cluster).
+	// Fall back to connection count when the monitor has not populated nodes yet.
+	pveCount := len(state.Nodes)
+	if pveCount == 0 {
+		pveCount = len(cfg.PVEInstances)
+	}
+	return configuredNodeCountFromLicensing(pveCount, len(cfg.PBSInstances), len(cfg.PMGInstances))
 }
 
 func registeredNodeSlotCount(cfg *config.Config, monitor *monitoring.Monitor) int {
-	count := configuredNodeCount(cfg)
 	if monitor == nil {
-		return count
+		return configuredNodeCount(cfg, models.StateSnapshot{})
 	}
-	return registeredNodeSlotCountFromLicensing(count, monitor.GetLiveStateSnapshot())
+	state := monitor.GetLiveStateSnapshot()
+	count := configuredNodeCount(cfg, state)
+	return registeredNodeSlotCountFromLicensing(count, state)
 }
 
 func writeMaxNodesLimitExceeded(w http.ResponseWriter, current, limit int) {
