@@ -1,6 +1,8 @@
 package handoff
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"html/template"
 	"net"
 	"net/http"
@@ -23,7 +25,7 @@ var handoffHTMLTemplate = template.Must(template.New("handoff").Parse(`<!DOCTYPE
 <form method="POST" action="https://{{.TenantID}}.{{.BaseDomain}}/api/cloud/handoff/exchange">
   <input type="hidden" name="token" value="{{.Token}}" />
 </form>
-<script>document.forms[0].submit()</script>
+<script nonce="{{.Nonce}}">document.forms[0].submit()</script>
 </body></html>
 `))
 
@@ -31,6 +33,7 @@ type handoffHTMLData struct {
 	TenantID    string
 	BaseDomain  string
 	Token       string
+	Nonce       string
 	GeneratedAt time.Time
 }
 
@@ -187,12 +190,22 @@ func HandleHandoff(reg *registry.TenantRegistry, tenantsDir string) http.Handler
 			return
 		}
 
+		// Generate a per-request nonce for the inline script.
+		// Note: The control plane doesn't set CSP headers yet, so this nonce is
+		// forward-compatible but not enforced until CSP is added to the CP server.
+		var nonce string
+		b := make([]byte, 16)
+		if _, err := rand.Read(b); err == nil {
+			nonce = base64.StdEncoding.EncodeToString(b)
+		}
+
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		if err := handoffHTMLTemplate.Execute(w, handoffHTMLData{
 			TenantID:    tenantID,
 			BaseDomain:  baseDomain,
 			Token:       token,
+			Nonce:       nonce,
 			GeneratedAt: now,
 		}); err != nil {
 			log.Error().Err(err).

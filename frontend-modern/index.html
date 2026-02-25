@@ -7,7 +7,7 @@
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <title>Pulse</title>
     <!-- Inline critical styles to prevent flash of unstyled content -->
-    <style>
+    <style nonce="__CSP_NONCE__">
       /* Apply theme immediately before any CSS loads */
       html { background-color: #f3f4f6; } /* gray-100 */
       html.dark { background-color: #111827; } /* gray-900 */
@@ -22,7 +22,7 @@
       }
     </style>
     <!-- Apply theme immediately from localStorage to prevent flash -->
-    <script>
+    <script nonce="__CSP_NONCE__">
       (function() {
         try {
           var themePreference = localStorage.getItem('pulseThemePreference');

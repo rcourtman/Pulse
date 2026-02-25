@@ -256,7 +256,8 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	// 5. Error handling
 	// 6. Security headers with embedding configuration
 	// Note: TimeoutHandler breaks WebSocket upgrades
-	handler := SecurityHeadersWithConfig(r, allowEmbedding, allowedOrigins)
+	devMode := utils.GetenvTrim("FRONTEND_DEV_SERVER") != ""
+	handler := SecurityHeadersWithConfig(r, allowEmbedding, allowedOrigins, devMode)
 	handler = ErrorHandler(handler)
 	handler = DemoModeMiddleware(cfg, handler)
 
@@ -3360,7 +3361,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			Str("path", req.URL.Path).
 			Dur("duration", time.Since(start)).
 			Msg("Request handled")
-	}), allowEmbedding, allowedEmbedOrigins).ServeHTTP(w, req)
+	}), allowEmbedding, allowedEmbedOrigins, utils.GetenvTrim("FRONTEND_DEV_SERVER") != "").ServeHTTP(w, req)
 }
 
 func (r *Router) capturePublicURLFromRequest(req *http.Request) {
@@ -7602,11 +7603,17 @@ func (r *Router) handleWebSocket(w http.ResponseWriter, req *http.Request) {
 
 // handleSimpleStats serves a simple stats page
 func (r *Router) handleSimpleStats(w http.ResponseWriter, req *http.Request) {
+	nonce := CSPNonceFromContext(req.Context())
+	nonceAttr := ""
+	if nonce != "" {
+		nonceAttr = ` nonce="` + nonce + `"`
+	}
+
 	html := `<!DOCTYPE html>
 <html>
 <head>
     <title>Simple Pulse Stats</title>
-    <style>
+    <style` + nonceAttr + `>
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
@@ -7672,6 +7679,7 @@ func (r *Router) handleSimpleStats(w http.ResponseWriter, req *http.Request) {
             font-family: monospace;
             text-align: right;
         }
+        #update-indicator { display: none; }
     </style>
 </head>
 <body>
@@ -7679,7 +7687,7 @@ func (r *Router) handleSimpleStats(w http.ResponseWriter, req *http.Request) {
     <div id="status">
         <div>
             <span id="status-text">Connecting...</span>
-            <span class="update-indicator" id="update-indicator" style="display:none"></span>
+            <span class="update-indicator" id="update-indicator"></span>
         </div>
         <div class="update-timer" id="update-timer"></div>
     </div>
@@ -7701,7 +7709,7 @@ func (r *Router) handleSimpleStats(w http.ResponseWriter, req *http.Request) {
         <tbody></tbody>
     </table>
 
-    <script>
+    <script` + nonceAttr + `>
         let ws;
         let lastUpdateTime = null;
         let updateCount = 0;

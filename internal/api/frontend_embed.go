@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"embed"
 	"io"
 	"io/fs"
@@ -13,6 +14,22 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
+
+// cspNoncePlaceholder is replaced at serve time with the per-request nonce.
+var cspNoncePlaceholder = []byte("__CSP_NONCE__")
+
+// serveIndexWithNonce writes index.html content to w, replacing any
+// __CSP_NONCE__ placeholders with the nonce from the request context.
+func serveIndexWithNonce(w http.ResponseWriter, r *http.Request, content []byte) {
+	if nonce := CSPNonceFromContext(r.Context()); nonce != "" {
+		content = bytes.ReplaceAll(content, cspNoncePlaceholder, []byte(nonce))
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+	w.Write(content)
+}
 
 // Embed the entire frontend dist directory
 //
@@ -113,12 +130,7 @@ func serveFrontendHandler() http.HandlerFunc {
 				return
 			}
 
-			// Serve the content with cache-busting headers
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-			w.Header().Set("Pragma", "no-cache")
-			w.Header().Set("Expires", "0")
-			w.Write(content)
+			serveIndexWithNonce(w, r, content)
 			return
 		}
 
@@ -141,7 +153,9 @@ func serveFrontendHandler() http.HandlerFunc {
 					isImmutable := false
 
 					if strings.HasSuffix(lookupPath, ".html") {
-						contentType = "text/html; charset=utf-8"
+						// HTML files get nonce injection
+						serveIndexWithNonce(w, r, content)
+						return
 					} else if strings.HasSuffix(lookupPath, ".css") {
 						contentType = "text/css; charset=utf-8"
 						// CSS files with hashes are immutable (e.g., index-abc123.css)
@@ -184,11 +198,7 @@ func serveFrontendHandler() http.HandlerFunc {
 				defer indexFile.Close()
 				content, err := io.ReadAll(indexFile)
 				if err == nil {
-					w.Header().Set("Content-Type", "text/html; charset=utf-8")
-					w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-					w.Header().Set("Pragma", "no-cache")
-					w.Header().Set("Expires", "0")
-					w.Write(content)
+					serveIndexWithNonce(w, r, content)
 					return
 				}
 			}

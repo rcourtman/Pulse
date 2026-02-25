@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
@@ -886,6 +887,7 @@ func TestSecurityHeadersWithConfig_EmbeddingDisabled(t *testing.T) {
 		}),
 		false, // allowEmbedding
 		"",    // allowedOrigins
+		false, // devMode
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -902,6 +904,17 @@ func TestSecurityHeadersWithConfig_EmbeddingDisabled(t *testing.T) {
 	csp := rec.Header().Get("Content-Security-Policy")
 	if !strings.Contains(csp, "frame-ancestors 'none'") {
 		t.Errorf("CSP should contain frame-ancestors 'none', got: %s", csp)
+	}
+
+	// In production mode, CSP should use nonce-based directives
+	if !strings.Contains(csp, "'nonce-") {
+		t.Errorf("CSP should contain nonce in production mode, got: %s", csp)
+	}
+	if strings.Contains(csp, "'unsafe-inline'") {
+		t.Errorf("CSP should not contain 'unsafe-inline' in production mode, got: %s", csp)
+	}
+	if strings.Contains(csp, "'unsafe-eval'") {
+		t.Errorf("CSP should not contain 'unsafe-eval' in production mode, got: %s", csp)
 	}
 
 	// Check other security headers are present
@@ -925,7 +938,7 @@ func TestSecurityHeadersWithConfig_SetsHSTSForTLSRequest(t *testing.T) {
 
 	handler := SecurityHeadersWithConfig(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	}), false, "")
+	}), false, "", false)
 
 	req := httptest.NewRequest(http.MethodGet, "https://example.com/test", nil)
 	req.TLS = &tls.ConnectionState{}
@@ -944,7 +957,7 @@ func TestSecurityHeadersWithConfig_DoesNotTrustForwardedProtoFromUntrustedPeer(t
 
 	handler := SecurityHeadersWithConfig(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	}), false, "")
+	}), false, "", false)
 
 	req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 	req.RemoteAddr = "198.51.100.20:44321"
@@ -964,7 +977,7 @@ func TestSecurityHeadersWithConfig_SetsHSTSForTrustedProxyHTTPS(t *testing.T) {
 
 	handler := SecurityHeadersWithConfig(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	}), false, "")
+	}), false, "", false)
 
 	req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 	req.RemoteAddr = "127.0.0.1:54321"
@@ -983,8 +996,9 @@ func TestSecurityHeadersWithConfig_EmbeddingEnabledNoOrigins(t *testing.T) {
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}),
-		true, // allowEmbedding
-		"",   // allowedOrigins - empty defaults to 'self' for clickjacking protection
+		true,  // allowEmbedding
+		"",    // allowedOrigins - empty defaults to 'self' for clickjacking protection
+		false, // devMode
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -1011,6 +1025,7 @@ func TestSecurityHeadersWithConfig_EmbeddingEnabledWithOrigins(t *testing.T) {
 		}),
 		true,                                     // allowEmbedding
 		"https://example.com, https://other.com", // allowedOrigins
+		false,                                    // devMode
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -1038,6 +1053,7 @@ func TestSecurityHeadersWithConfig_EmbeddingWithEmptyOriginEntries(t *testing.T)
 		}),
 		true,                       // allowEmbedding
 		"https://example.com, , ,", // allowedOrigins with empty entries
+		false,                      // devMode
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -1061,6 +1077,7 @@ func TestSecurityHeadersWithConfig_NextHandlerCalled(t *testing.T) {
 		}),
 		false,
 		"",
+		false, // devMode
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -1070,6 +1087,85 @@ func TestSecurityHeadersWithConfig_NextHandlerCalled(t *testing.T) {
 
 	if !called {
 		t.Error("next handler was not called")
+	}
+}
+
+func TestSecurityHeadersWithConfig_DevMode(t *testing.T) {
+	handler := SecurityHeadersWithConfig(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// In dev mode, no nonce should be in context
+			if nonce := CSPNonceFromContext(r.Context()); nonce != "" {
+				t.Errorf("expected no nonce in dev mode context, got %q", nonce)
+			}
+			w.WriteHeader(http.StatusOK)
+		}),
+		false, // allowEmbedding
+		"",    // allowedOrigins
+		true,  // devMode
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	csp := rec.Header().Get("Content-Security-Policy")
+
+	// Dev mode should have unsafe-inline and unsafe-eval
+	if !strings.Contains(csp, "'unsafe-inline'") {
+		t.Errorf("CSP in dev mode should contain 'unsafe-inline', got: %s", csp)
+	}
+	if !strings.Contains(csp, "'unsafe-eval'") {
+		t.Errorf("CSP in dev mode should contain 'unsafe-eval', got: %s", csp)
+	}
+
+	// Dev mode should NOT have nonce
+	if strings.Contains(csp, "'nonce-") {
+		t.Errorf("CSP in dev mode should not contain nonce, got: %s", csp)
+	}
+}
+
+func TestSecurityHeadersWithConfig_ProductionNonceInContext(t *testing.T) {
+	var capturedNonce string
+	handler := SecurityHeadersWithConfig(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedNonce = CSPNonceFromContext(r.Context())
+			w.WriteHeader(http.StatusOK)
+		}),
+		false, // allowEmbedding
+		"",    // allowedOrigins
+		false, // devMode (production)
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	// Nonce should be present in context in production mode
+	if capturedNonce == "" {
+		t.Fatal("expected nonce in production mode context, got empty string")
+	}
+
+	// Nonce in CSP header should match context nonce
+	csp := rec.Header().Get("Content-Security-Policy")
+	expectedFragment := "'nonce-" + capturedNonce + "'"
+	if !strings.Contains(csp, expectedFragment) {
+		t.Errorf("CSP should contain %s, got: %s", expectedFragment, csp)
+	}
+}
+
+func TestCSPNonceFromContext_Empty(t *testing.T) {
+	ctx := context.Background()
+	if got := CSPNonceFromContext(ctx); got != "" {
+		t.Errorf("CSPNonceFromContext on empty context = %q, want empty", got)
+	}
+}
+
+func TestCSPNonceFromContext_RoundTrip(t *testing.T) {
+	ctx := context.WithValue(context.Background(), cspNonceKey{}, "test-nonce-123")
+	if got := CSPNonceFromContext(ctx); got != "test-nonce-123" {
+		t.Errorf("CSPNonceFromContext = %q, want test-nonce-123", got)
 	}
 }
 

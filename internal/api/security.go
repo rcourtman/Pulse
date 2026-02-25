@@ -1,6 +1,9 @@
 package api
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"net"
 	"net/http"
 	"strings"
@@ -11,6 +14,30 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rs/zerolog/log"
 )
+
+// cspNonceKey is the context key for the per-request CSP nonce.
+type cspNonceKey struct{}
+
+// CSPNonceFromContext returns the CSP nonce stored in the request context, or ""
+// if none is present (e.g. dev mode).
+func CSPNonceFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(cspNonceKey{}).(string); ok {
+		return v
+	}
+	return ""
+}
+
+// generateCSPNonce returns a 16-byte (128-bit) base64-encoded cryptographic nonce.
+func generateCSPNonce() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand should never fail; if it does, fall back to empty which
+		// will leave the CSP without a nonce (equivalent to current behaviour).
+		log.Error().Err(err).Msg("CSP nonce generation failed — falling back to unsafe-inline")
+		return ""
+	}
+	return base64.StdEncoding.EncodeToString(b)
+}
 
 // Security improvements for Pulse
 
@@ -420,9 +447,23 @@ func ResetLockout(identifier string) {
 		Msg("Lockout manually reset")
 }
 
-// SecurityHeadersWithConfig applies security headers with embedding configuration
-func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOrigins string) http.Handler {
+// SecurityHeadersWithConfig applies security headers with embedding configuration.
+// When devMode is false, a per-request cryptographic nonce is generated and used
+// in script-src / style-src instead of 'unsafe-inline'/'unsafe-eval'.
+// When devMode is true, 'unsafe-inline' and 'unsafe-eval' are kept so Vite HMR works.
+func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOrigins string, devMode bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Generate a per-request nonce in production mode and store it in context
+		// so downstream handlers (e.g. serveIndexWithNonce) can inject it into HTML.
+		var nonce string
+		if !devMode {
+			nonce = generateCSPNonce()
+			if nonce != "" {
+				ctx := context.WithValue(r.Context(), cspNonceKey{}, nonce)
+				r = r.WithContext(ctx)
+			}
+		}
+
 		// Configure clickjacking protection based on embedding settings
 		if allowEmbedding {
 			// When embedding is allowed, don't set X-Frame-Options header
@@ -440,11 +481,31 @@ func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOr
 		// can introduce vulnerabilities in older ones.  CSP provides XSS protection.
 		w.Header().Set("X-XSS-Protection", "0")
 
-		// Build Content Security Policy
+		// Build Content Security Policy.
+		// In production, use nonce-based directives — browsers that support nonces
+		// (CSP Level 2+) automatically ignore 'unsafe-inline' when a nonce is present,
+		// so we omit 'unsafe-inline' entirely.
+		// In dev mode, keep 'unsafe-inline'/'unsafe-eval' for Vite HMR scripts.
+		var scriptSrc, styleSrc string
+		if devMode {
+			scriptSrc = "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+			styleSrc = "style-src 'self' 'unsafe-inline'"
+		} else {
+			if nonce != "" {
+				scriptSrc = "script-src 'self' 'nonce-" + nonce + "'"
+				styleSrc = "style-src 'self' 'nonce-" + nonce + "'"
+			} else {
+				// Fallback if nonce generation failed — keep unsafe-inline so the
+				// app still works, though with weaker CSP protection.
+				scriptSrc = "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+				styleSrc = "style-src 'self' 'unsafe-inline'"
+			}
+		}
+
 		cspDirectives := []string{
 			"default-src 'self'",
-			"script-src 'self' 'unsafe-inline' 'unsafe-eval'", // TODO: migrate to nonce-based CSP; currently needed for SolidJS bundled output
-			"style-src 'self' 'unsafe-inline'",                // Needed for inline styles in SolidJS components
+			scriptSrc,
+			styleSrc,
 			"img-src 'self' data: blob:",
 			"connect-src 'self' ws: wss:", // WebSocket support
 			"font-src 'self' data:",
