@@ -411,7 +411,8 @@ class ApiClient {
       const cookies = document.cookie.split(';');
       for (const cookie of cookies) {
         const [name] = cookie.trim().split('=');
-        if (name === 'pulse_session') {
+        // Check both the plain and __Host- prefixed session cookie names.
+        if (name === 'pulse_session' || name === '__Host-pulse_session') {
           return true;
         }
       }

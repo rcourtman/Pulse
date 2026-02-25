@@ -240,7 +240,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			hasValidSession := false
 			sessionUsername := ""
 			sessionIsAdmin := false
-			if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+			if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" {
 				hasValidSession = ValidateSession(cookie.Value)
 				if hasValidSession {
 					sessionUsername = strings.TrimSpace(GetSessionUsername(cookie.Value))
@@ -370,7 +370,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			hasValidSession := false
 			sessionUsername := ""
 			sessionIsAdmin := false
-			if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+			if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" {
 				hasValidSession = ValidateSession(cookie.Value)
 				if hasValidSession {
 					sessionUsername = strings.TrimSpace(GetSessionUsername(cookie.Value))

@@ -295,7 +295,7 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 		cookieMaxAge := int(sessionDuration.Seconds())
 
 		http.SetCookie(w, &http.Cookie{
-			Name:     "pulse_session",
+			Name:     sessionCookieName(isSecure),
 			Value:    sessionToken,
 			Path:     "/",
 			HttpOnly: true,
@@ -304,7 +304,7 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 			MaxAge:   cookieMaxAge,
 		})
 		http.SetCookie(w, &http.Cookie{
-			Name:     "pulse_csrf",
+			Name:     CookieNameCSRF,
 			Value:    csrfToken,
 			Path:     "/",
 			Secure:   isSecure,
@@ -312,7 +312,7 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 			MaxAge:   cookieMaxAge,
 		})
 		http.SetCookie(w, &http.Cookie{
-			Name:     "pulse_org_id",
+			Name:     CookieNameOrgID,
 			Value:    tenantID,
 			Path:     "/",
 			Secure:   isSecure,

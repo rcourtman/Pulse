@@ -145,7 +145,7 @@ func (h *DiscoveryHandlers) isAdminRequest(r *http.Request) bool {
 	}
 
 	// 3. Check for configured admin session (OIDC/SAML/local session)
-	if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+	if cookie, err := readSessionCookie(r); err == nil && cookie.Value != "" {
 		if ValidateSession(cookie.Value) {
 			configuredAdmin := strings.TrimSpace(h.config.AuthUser)
 			if configuredAdmin != "" {

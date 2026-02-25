@@ -148,6 +148,7 @@ type Config struct {
 	DisableLocalUpgradeMetrics  bool             `envconfig:"PULSE_DISABLE_LOCAL_UPGRADE_METRICS" default:"false"`  // Disable local-only upgrade UX metrics collection
 	TelemetryEnabled            bool             `envconfig:"PULSE_TELEMETRY" default:"true"`                       // Anonymous telemetry enabled by default (install ID, version, resource counts, feature flags — opt out any time)
 	MultiTenantEnabled          bool             `envconfig:"PULSE_MULTI_TENANT_ENABLED" default:"false"`           // Enable multi-tenant support
+	MetricsToken                string           `envconfig:"PULSE_METRICS_TOKEN" default:"" json:"-"`              // Bearer token for /metrics endpoint (empty = unauthenticated)
 	ProTrialSignupURL           string           `envconfig:"PULSE_PRO_TRIAL_SIGNUP_URL" default:""`                // Hosted signup/checkout URL for starting Pulse Pro trials
 
 	// Proxy authentication settings
@@ -1540,6 +1541,12 @@ func Load() (*Config, error) {
 			cfg.EnvOverrides["HTTP_REDIRECT_PORT"] = true
 			log.Debug().Int("port", p).Msg("HTTP redirect port from env var")
 		}
+	}
+
+	if metricsToken := utils.GetenvTrim("PULSE_METRICS_TOKEN"); metricsToken != "" {
+		cfg.MetricsToken = metricsToken
+		cfg.EnvOverrides["PULSE_METRICS_TOKEN"] = true
+		log.Debug().Msg("Metrics token configured from env var")
 	}
 
 	// Support PULSE_AGENT_URL as an alias for PULSE_AGENT_CONNECT_URL

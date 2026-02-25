@@ -224,7 +224,7 @@ func Run(ctx context.Context, version string) error {
 
 	// Metrics port is configurable via MetricsPort variable
 	metricsAddr := fmt.Sprintf("%s:%d", cfg.BindAddress, MetricsPort)
-	startMetricsServer(ctx, metricsAddr)
+	startMetricsServer(ctx, metricsAddr, cfg.MetricsToken)
 
 	// Initialize WebSocket hub first
 	wsHub := websocket.NewHub(nil)
@@ -662,10 +662,25 @@ shutdown:
 	return nil
 }
 
-// startMetricsServer is moved from main.go
-func startMetricsServer(ctx context.Context, addr string) {
+// startMetricsServer starts the Prometheus /metrics endpoint. When metricsToken
+// is non-empty, requests must include a matching Authorization: Bearer <token> header.
+func startMetricsServer(ctx context.Context, addr string, metricsToken string) {
+	handler := promhttp.Handler()
+	if metricsToken != "" {
+		inner := handler
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			auth := r.Header.Get("Authorization")
+			const prefix = "Bearer "
+			if len(auth) < len(prefix) || !strings.EqualFold(auth[:len(prefix)], prefix) || auth[len(prefix):] != metricsToken {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			inner.ServeHTTP(w, r)
+		})
+		log.Info().Msg("Metrics endpoint requires bearer token authentication")
+	}
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/metrics", handler)
 
 	srv := &http.Server{
 		Addr:              addr,

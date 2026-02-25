@@ -45,7 +45,7 @@ func resolveTenantOrgID(r *http.Request) string {
 		orgID = strings.TrimSpace(r.Header.Get("X-Pulse-Org-ID"))
 		explicitOrg = orgID != ""
 		if orgID == "" {
-			if cookie, err := r.Cookie("pulse_org_id"); err == nil {
+			if cookie, err := r.Cookie(CookieNameOrgID); err == nil {
 				orgID = strings.TrimSpace(cookie.Value)
 				explicitOrg = orgID != ""
 			}

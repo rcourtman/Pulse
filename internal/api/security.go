@@ -51,7 +51,7 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 	}
 
 	// Get session from cookie
-	cookie, err := r.Cookie("pulse_session")
+	cookie, err := readSessionCookie(r)
 	if err != nil {
 		// No session cookie means no CSRF check needed
 		// (either no auth configured or using basic auth which doesn't use sessions)
@@ -119,7 +119,7 @@ func clearCSRFCookie(w http.ResponseWriter, r *http.Request) {
 		secure, sameSite = getCookieSettings(r)
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_csrf",
+		Name:     CookieNameCSRF,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
@@ -141,7 +141,7 @@ func issueNewCSRFCookie(w http.ResponseWriter, r *http.Request, sessionID string
 	secure, sameSite := getCookieSettings(r)
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_csrf",
+		Name:     CookieNameCSRF,
 		Value:    newToken,
 		Path:     "/",
 		Secure:   secure,
@@ -672,7 +672,7 @@ func UntrackUserSession(user, sessionID string) {
 // It deletes the session from the persistent store, its CSRF token, and
 // removes it from the in-memory user session tracking map.
 func InvalidateOldSessionFromRequest(r *http.Request) {
-	cookie, err := r.Cookie("pulse_session")
+	cookie, err := readSessionCookie(r)
 	if err != nil || cookie.Value == "" {
 		return
 	}

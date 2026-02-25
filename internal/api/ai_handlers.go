@@ -5874,7 +5874,7 @@ func (h *AISettingsHandler) HandleDeleteAIChatSession(w http.ResponseWriter, r *
 // getAuthUsername extracts the username from the current auth context
 func getAuthUsername(cfg *config.Config, r *http.Request) string {
 	// Check OIDC session first
-	if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+	if cookie, err := readSessionCookie(r); err == nil && cookie.Value != "" {
 		if username := GetSessionUsername(cookie.Value); username != "" {
 			return username
 		}

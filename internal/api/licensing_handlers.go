@@ -452,7 +452,7 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 
 	isSecure, sameSite := getCookieSettings(r)
 	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_org_id",
+		Name:     CookieNameOrgID,
 		Value:    orgID,
 		Path:     "/",
 		Secure:   isSecure,

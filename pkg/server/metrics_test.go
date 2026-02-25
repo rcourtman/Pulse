@@ -19,7 +19,7 @@ func TestStartMetricsServer(t *testing.T) {
 	addr := listener.Addr().String()
 	listener.Close()
 
-	startMetricsServer(ctx, addr)
+	startMetricsServer(ctx, addr, "")
 
 	client := &http.Client{Timeout: 200 * time.Millisecond}
 	deadline := time.Now().Add(2 * time.Second)

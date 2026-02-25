@@ -178,7 +178,7 @@ func (h *MagicLinkHandlers) HandlePublicMagicLinkVerify(w http.ResponseWriter, r
 	cookieMaxAge := int(sessionDuration.Seconds())
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_session",
+		Name:     sessionCookieName(isSecure),
 		Value:    sessionToken,
 		Path:     "/",
 		HttpOnly: true,
@@ -187,16 +187,17 @@ func (h *MagicLinkHandlers) HandlePublicMagicLinkVerify(w http.ResponseWriter, r
 		MaxAge:   cookieMaxAge,
 	})
 	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_csrf",
+		Name:     CookieNameCSRF,
 		Value:    csrfToken,
 		Path:     "/",
 		Secure:   isSecure,
 		SameSite: sameSitePolicy,
 		MaxAge:   cookieMaxAge,
 	})
-	// Org cookie is intentionally JS-readable because the frontend persists/synchronizes org context.
+	// Org cookie is intentionally NOT HttpOnly — the frontend reads/writes it to
+	// synchronize org context for WebSocket connections (which cannot send custom headers).
 	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_org_id",
+		Name:     CookieNameOrgID,
 		Value:    token.OrgID,
 		Path:     "/",
 		Secure:   isSecure,

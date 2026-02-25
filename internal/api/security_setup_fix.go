@@ -54,7 +54,7 @@ func isRunningAsRoot() bool {
 
 func ensureAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
 	// Session users must match configured admin identity for privileged operations.
-	if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
+	if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
 		sessionUser := strings.TrimSpace(GetSessionUsername(cookie.Value))
 		configuredAdmin := ""
 		if cfg != nil {

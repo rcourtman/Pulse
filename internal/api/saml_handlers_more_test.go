@@ -103,8 +103,9 @@ func TestClearSession(t *testing.T) {
 	router.clearSession(rec, req)
 
 	cookies := rec.Result().Cookies()
-	if len(cookies) != 2 {
-		t.Fatalf("expected 2 cookies (pulse_session + pulse_csrf), got %d", len(cookies))
+	// 3 cookies: pulse_session (unprefixed), __Host-pulse_session (prefixed), pulse_csrf
+	if len(cookies) != 3 {
+		t.Fatalf("expected 3 cookies (pulse_session + __Host-pulse_session + pulse_csrf), got %d", len(cookies))
 	}
 	var sessionCookie *http.Cookie
 	for _, c := range cookies {

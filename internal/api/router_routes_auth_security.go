@@ -214,7 +214,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			// without rate limiting. Only check session cookies and X-API-Token header.
 			isAuthenticated := false
 			var tokenScopes []string
-			if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
+			if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
 				isAuthenticated = true
 			} else if token := strings.TrimSpace(req.Header.Get("X-API-Token")); token != "" {
 				if record, ok := r.config.ValidateAPIToken(token); ok {
@@ -244,7 +244,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			// Check for OIDC session
 			oidcUsername := ""
 			if oidcCfg != nil && oidcCfg.Enabled {
-				if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+				if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" {
 					if ValidateSession(cookie.Value) {
 						oidcUsername = GetSessionUsername(cookie.Value)
 					}

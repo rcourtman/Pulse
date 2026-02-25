@@ -418,7 +418,7 @@ func (r *Router) establishSAMLSession(w http.ResponseWriter, req *http.Request, 
 	isSecure, sameSitePolicy := getCookieSettings(req)
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_session",
+		Name:     sessionCookieName(isSecure),
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
@@ -428,7 +428,7 @@ func (r *Router) establishSAMLSession(w http.ResponseWriter, req *http.Request, 
 	})
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_csrf",
+		Name:     CookieNameCSRF,
 		Value:    csrfToken,
 		Path:     "/",
 		Secure:   isSecure,
@@ -441,7 +441,7 @@ func (r *Router) establishSAMLSession(w http.ResponseWriter, req *http.Request, 
 
 // getSAMLSessionInfo retrieves SAML session info from the current session
 func (r *Router) getSAMLSessionInfo(req *http.Request) *SAMLSessionInfo {
-	cookie, err := req.Cookie("pulse_session")
+	cookie, err := readSessionCookie(req)
 	if err != nil || cookie.Value == "" {
 		return nil
 	}
@@ -464,7 +464,7 @@ func (r *Router) clearSession(w http.ResponseWriter, req *http.Request) {
 	isSecure, sameSitePolicy := getCookieSettings(req)
 
 	// Invalidate server-side session first
-	if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+	if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" {
 		// Get username before deleting session for untracking
 		if username := GetSessionUsername(cookie.Value); username != "" {
 			UntrackUserSession(username, cookie.Value)
@@ -472,20 +472,22 @@ func (r *Router) clearSession(w http.ResponseWriter, req *http.Request) {
 		GetSessionStore().InvalidateSession(cookie.Value)
 	}
 
-	// Clear pulse_session cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_session",
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   isSecure,
-		SameSite: sameSitePolicy,
-	})
+	// Clear both session cookie variants (prefixed and unprefixed)
+	for _, name := range []string{cookieNameSession, cookieNameSessionSecure} {
+		http.SetCookie(w, &http.Cookie{
+			Name:     name,
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+			Secure:   isSecure,
+			SameSite: sameSitePolicy,
+		})
+	}
 
 	// Clear pulse_csrf cookie
 	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_csrf",
+		Name:     CookieNameCSRF,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,

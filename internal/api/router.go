@@ -3300,16 +3300,16 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		// Issue CSRF token for GET requests if session exists but CSRF cookie is missing
 		// This ensures the frontend has a token before making POST requests
 		if req.Method == "GET" && strings.HasPrefix(req.URL.Path, "/api/") {
-			sessionCookie, err := req.Cookie("pulse_session")
+			sessionCookie, err := readSessionCookie(req)
 			if err == nil && sessionCookie.Value != "" {
 				// Check if CSRF cookie exists
-				_, csrfErr := req.Cookie("pulse_csrf")
+				_, csrfErr := req.Cookie(CookieNameCSRF)
 				if csrfErr != nil {
 					// Session exists but no CSRF cookie - issue one
 					csrfToken := generateCSRFToken(sessionCookie.Value)
 					isSecure, sameSitePolicy := getCookieSettings(req)
 					http.SetCookie(w, &http.Cookie{
-						Name:     "pulse_csrf",
+						Name:     CookieNameCSRF,
 						Value:    csrfToken,
 						Path:     "/",
 						Secure:   isSecure,
@@ -3650,7 +3650,7 @@ func canCapturePublicURL(cfg *config.Config, req *http.Request) bool {
 
 	// Session (Browser): allow capture only for the configured local admin session.
 	// This prevents low-privilege session users from poisoning public URL auto-detection.
-	if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+	if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" {
 		if ValidateSession(cookie.Value) {
 			adminUser := strings.TrimSpace(cfg.AuthUser)
 			if adminUser != "" {
@@ -4057,7 +4057,7 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 
 	// Get session token from cookie
 	var sessionToken string
-	if cookie, err := req.Cookie("pulse_session"); err == nil {
+	if cookie, err := readSessionCookie(req); err == nil {
 		sessionToken = cookie.Value
 	}
 
@@ -4072,16 +4072,19 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 	// Get appropriate cookie settings based on proxy detection (consistent with login)
 	isSecure, sameSitePolicy := getCookieSettings(req)
 
-	// Clear the session cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_session",
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   isSecure,
-		SameSite: sameSitePolicy,
-	})
+	// Clear both session cookie variants (prefixed and unprefixed) to ensure
+	// a clean logout regardless of how the cookie was originally set.
+	for _, name := range []string{cookieNameSession, cookieNameSessionSecure} {
+		http.SetCookie(w, &http.Cookie{
+			Name:     name,
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+			Secure:   isSecure,
+			SameSite: sameSitePolicy,
+		})
+	}
 
 	// Audit log logout (use admin as username since we have single user for now)
 	LogAuditEventForTenant(GetOrgID(req.Context()), "logout", "admin", GetClientIP(req), req.URL.Path, true, "User logged out")
@@ -4120,7 +4123,7 @@ func (r *Router) establishSession(w http.ResponseWriter, req *http.Request, user
 	isSecure, sameSitePolicy := getCookieSettings(req)
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_session",
+		Name:     sessionCookieName(isSecure),
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
@@ -4130,7 +4133,7 @@ func (r *Router) establishSession(w http.ResponseWriter, req *http.Request, user
 	})
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_csrf",
+		Name:     CookieNameCSRF,
 		Value:    csrfToken,
 		Path:     "/",
 		Secure:   isSecure,
@@ -4165,7 +4168,7 @@ func (r *Router) establishOIDCSession(w http.ResponseWriter, req *http.Request, 
 	isSecure, sameSitePolicy := getCookieSettings(req)
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_session",
+		Name:     sessionCookieName(isSecure),
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
@@ -4175,7 +4178,7 @@ func (r *Router) establishOIDCSession(w http.ResponseWriter, req *http.Request, 
 	})
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_csrf",
+		Name:     CookieNameCSRF,
 		Value:    csrfToken,
 		Path:     "/",
 		Secure:   isSecure,
@@ -4288,7 +4291,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 
 		// Set session cookie
 		http.SetCookie(w, &http.Cookie{
-			Name:     "pulse_session",
+			Name:     sessionCookieName(isSecure),
 			Value:    token,
 			Path:     "/",
 			HttpOnly: true,
@@ -4299,7 +4302,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 
 		// Set CSRF cookie (not HttpOnly so JS can read it)
 		http.SetCookie(w, &http.Cookie{
-			Name:     "pulse_csrf",
+			Name:     CookieNameCSRF,
 			Value:    csrfToken,
 			Path:     "/",
 			Secure:   isSecure,
@@ -7874,7 +7877,7 @@ func resolveExplicitWebSocketOrgID(req *http.Request) (string, bool) {
 		return headerOrg, true
 	}
 
-	if cookie, err := req.Cookie("pulse_org_id"); err == nil {
+	if cookie, err := req.Cookie(CookieNameOrgID); err == nil {
 		if cookieOrg := strings.TrimSpace(cookie.Value); cookieOrg != "" {
 			return cookieOrg, true
 		}

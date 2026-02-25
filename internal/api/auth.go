@@ -129,6 +129,38 @@ func getCookieSettings(r *http.Request) (secure bool, sameSite http.SameSite) {
 	return isSecure, sameSitePolicy
 }
 
+// Cookie name constants. The session cookie uses the __Host- prefix when served
+// over HTTPS, which instructs browsers to reject the cookie unless Secure is set,
+// Path is "/", and no Domain attribute is present — preventing cookie injection via
+// related subdomains. The CSRF and org cookies do not use the prefix: the CSRF
+// cookie must be JS-readable for AJAX headers, and the org cookie must be
+// JS-readable for WebSocket org context synchronization.
+const (
+	cookieNameSession       = "pulse_session"
+	cookieNameSessionSecure = "__Host-pulse_session"
+	CookieNameCSRF          = "pulse_csrf"
+	CookieNameOrgID         = "pulse_org_id"
+)
+
+// sessionCookieName returns the appropriate session cookie name based on whether
+// the connection is secure. When secure, the __Host- prefix is used.
+func sessionCookieName(secure bool) string {
+	if secure {
+		return cookieNameSessionSecure
+	}
+	return cookieNameSession
+}
+
+// readSessionCookie reads the session cookie from the request, checking for the
+// __Host- prefixed name first (HTTPS) then falling back to the unprefixed name
+// (HTTP or upgrade transition). This ensures sessions survive an HTTP→HTTPS migration.
+func readSessionCookie(r *http.Request) (*http.Cookie, error) {
+	if c, err := r.Cookie(cookieNameSessionSecure); err == nil {
+		return c, nil
+	}
+	return r.Cookie(cookieNameSession)
+}
+
 // generateSessionToken creates a cryptographically secure session token
 func generateSessionToken() string {
 	b := make([]byte, 32)
@@ -252,7 +284,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 
 	// Check for OIDC session cookie
 	if cfg.OIDC != nil && cfg.OIDC.Enabled {
-		if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+		if cookie, err := readSessionCookie(r); err == nil && cookie.Value != "" {
 			if ValidateSession(cookie.Value) {
 				// Check if this is an OIDC session
 				if username := GetSessionUsername(cookie.Value); username != "" {
@@ -400,7 +432,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 	}
 
 	// Check session cookie (for WebSocket and UI)
-	if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+	if cookie, err := readSessionCookie(r); err == nil && cookie.Value != "" {
 		// Use ValidateAndExtendSession for sliding expiration
 		if ValidateAndExtendSession(cookie.Value) {
 			username := GetSessionUsername(cookie.Value)
@@ -547,7 +579,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 
 								// Set session cookie
 								http.SetCookie(w, &http.Cookie{
-									Name:     "pulse_session",
+									Name:     sessionCookieName(isSecure),
 									Value:    token,
 									Path:     "/",
 									HttpOnly: true,
@@ -558,7 +590,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 
 								// Set CSRF cookie (not HttpOnly so JS can read it)
 								http.SetCookie(w, &http.Cookie{
-									Name:     "pulse_csrf",
+									Name:     CookieNameCSRF,
 									Value:    csrfToken,
 									Path:     "/",
 									Secure:   isSecure,
@@ -924,7 +956,7 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 
 	// Check OIDC session
 	if cfg.OIDC != nil && cfg.OIDC.Enabled {
-		if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+		if cookie, err := readSessionCookie(r); err == nil && cookie.Value != "" {
 			if ValidateSession(cookie.Value) {
 				if username := GetSessionUsername(cookie.Value); username != "" {
 					return attachUserContext(r, username)
@@ -945,7 +977,7 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 			orgID := "default"
 			if headerOrgID := r.Header.Get("X-Pulse-Org-ID"); headerOrgID != "" {
 				orgID = headerOrgID
-			} else if cookie, err := r.Cookie("pulse_org_id"); err == nil && cookie.Value != "" {
+			} else if cookie, err := r.Cookie(CookieNameOrgID); err == nil && cookie.Value != "" {
 				orgID = cookie.Value
 			}
 
@@ -1030,7 +1062,7 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 	}
 
 	// Check session cookie
-	if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+	if cookie, err := readSessionCookie(r); err == nil && cookie.Value != "" {
 		if ValidateSession(cookie.Value) {
 			if username := GetSessionUsername(cookie.Value); username != "" {
 				return attachUserContext(r, username)
