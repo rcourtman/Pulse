@@ -14,6 +14,17 @@ type BillingState struct {
 	// TrialExtendedAt is the Unix timestamp when the trial was extended (one extension per trial).
 	TrialExtendedAt *int64 `json:"trial_extended_at,omitempty"`
 
+	// OverflowGrantedAt is the Unix timestamp when the onboarding overflow (+1 host)
+	// was granted. Set-once on first free-tier entitlement access; never reset.
+	// The overflow window is 14 days from this timestamp.
+	OverflowGrantedAt *int64 `json:"overflow_granted_at,omitempty"`
+
+	// Quickstart credits: 25 free hosted Patrol runs for every new workspace.
+	// No API key needed — uses the Pulse-hosted MiniMax proxy.
+	QuickstartCreditsGranted   bool   `json:"quickstart_credits_granted,omitempty"`
+	QuickstartCreditsUsed      int    `json:"quickstart_credits_used,omitempty"`
+	QuickstartCreditsGrantedAt *int64 `json:"quickstart_credits_granted_at,omitempty"`
+
 	// Integrity is an HMAC-SHA256 over critical billing fields.
 	// Used for tamper detection on self-hosted installations.
 	Integrity string `json:"integrity,omitempty"`

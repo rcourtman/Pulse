@@ -156,8 +156,9 @@ func (s hostedTestSource) PlanVersion() string      { return "cloud_trial" }
 func (s hostedTestSource) SubscriptionState() pkglicensing.SubscriptionState {
 	return s.subscriptionState
 }
-func (s hostedTestSource) TrialStartedAt() *int64 { return s.trialStartedAt }
-func (s hostedTestSource) TrialEndsAt() *int64    { return s.trialEndsAt }
+func (s hostedTestSource) TrialStartedAt() *int64    { return s.trialStartedAt }
+func (s hostedTestSource) TrialEndsAt() *int64       { return s.trialEndsAt }
+func (s hostedTestSource) OverflowGrantedAt() *int64 { return nil }
 
 // setupHostedLicenseProvider configures a LicenseServiceProvider backed by an evaluator
 // with the given subscription state and trial timestamps (no JWT license).

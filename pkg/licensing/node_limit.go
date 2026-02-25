@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
@@ -47,6 +48,34 @@ func RegisteredNodeSlotCount(configuredCount int, state models.StateSnapshot) in
 		count += n
 	}
 	return count
+}
+
+// DeduplicatedHostCount returns the number of unique physical/virtual hosts
+// after cross-connector deduplication. A machine seen via multiple connectors
+// (e.g. Proxmox + host agent + Docker) counts once.
+func DeduplicatedHostCount(
+	state models.StateSnapshot,
+	configPVE []unifiedresources.ConfigEntry,
+	configPBS []unifiedresources.ConfigEntry,
+	configPMG []unifiedresources.ConfigEntry,
+	configTrueNAS []unifiedresources.ConfigEntry,
+) int {
+	candidates := unifiedresources.CollectHostCandidates(state, configPVE, configPBS, configPMG, configTrueNAS)
+	resolved := unifiedresources.ResolveHosts(candidates)
+	return len(resolved.Hosts)
+}
+
+// DeduplicatedHosts returns the full resolved host set after cross-connector
+// deduplication. Used by the host ledger API.
+func DeduplicatedHosts(
+	state models.StateSnapshot,
+	configPVE []unifiedresources.ConfigEntry,
+	configPBS []unifiedresources.ConfigEntry,
+	configPMG []unifiedresources.ConfigEntry,
+	configTrueNAS []unifiedresources.ConfigEntry,
+) *unifiedresources.ResolvedHostSet {
+	candidates := unifiedresources.CollectHostCandidates(state, configPVE, configPBS, configPMG, configTrueNAS)
+	return unifiedresources.ResolveHosts(candidates)
 }
 
 func HostReportTargetsExistingHost(

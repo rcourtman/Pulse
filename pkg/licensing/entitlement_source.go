@@ -9,4 +9,5 @@ type EntitlementSource interface {
 	SubscriptionState() SubscriptionState
 	TrialStartedAt() *int64
 	TrialEndsAt() *int64
+	OverflowGrantedAt() *int64
 }

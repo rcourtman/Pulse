@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 // EntitlementPayload is the normalized entitlement response for frontend consumption.
@@ -37,7 +39,21 @@ func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Requ
 	status := svc.Status()
 	usage := h.entitlementUsageSnapshot(r.Context())
 	trialEndsAtUnix := trialEndsAtUnixFromService(svc)
+
+	// Onboarding overflow: +1 host for 14 days on free tier.
+	overflowGrantedAt := h.ensureOnboardingOverflow(r.Context(), status.Tier)
+	now := time.Now()
+	if bonus := pkglicensing.OverflowBonus(status.Tier, overflowGrantedAt, now); bonus > 0 {
+		status.MaxNodes += bonus
+	}
+
 	payload := buildEntitlementPayloadWithUsage(status, svc.SubscriptionState(), usage, trialEndsAtUnix)
+
+	// Surface overflow days remaining for frontend messaging.
+	if days := pkglicensing.OverflowDaysRemaining(status.Tier, overflowGrantedAt, now); days > 0 {
+		payload.OverflowDaysRemaining = &days
+	}
+
 	if eval := svc.Evaluator(); eval != nil {
 		if pv := strings.TrimSpace(eval.PlanVersion()); pv != "" {
 			payload.PlanVersion = pv
@@ -112,6 +128,112 @@ func buildEntitlementPayloadWithUsage(
 // Exported for testing.
 func limitState(current, limit int64) string {
 	return limitStateFromLicensing(current, limit)
+}
+
+// ensureOnboardingOverflow lazy-initializes the overflow grant for free-tier workspaces.
+// Returns the OverflowGrantedAt timestamp (may be nil for non-free tiers or missing billing store).
+func (h *LicenseHandlers) ensureOnboardingOverflow(ctx context.Context, tier pkglicensing.Tier) *int64 {
+	if tier != pkglicensing.TierFree || h == nil || h.mtPersistence == nil {
+		return nil
+	}
+
+	orgID := GetOrgID(ctx)
+	if orgID == "" {
+		orgID = "default"
+	}
+
+	billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
+	existing, err := billingStore.GetBillingState(orgID)
+	if err != nil {
+		return nil
+	}
+
+	now := time.Now().Unix()
+
+	if existing == nil {
+		// No billing state yet. Re-read to handle the case where a concurrent
+		// request (e.g. trial start) created billing state between our reads.
+		fresh, freshErr := billingStore.GetBillingState(orgID)
+		if freshErr != nil {
+			return nil
+		}
+		if fresh != nil {
+			// Another request created billing state first — add overflow to it.
+			if fresh.OverflowGrantedAt != nil {
+				return fresh.OverflowGrantedAt
+			}
+			fresh.OverflowGrantedAt = &now
+			if saveErr := billingStore.SaveBillingState(orgID, fresh); saveErr != nil {
+				return nil
+			}
+			return &now
+		}
+
+		// Still nil — create minimal state with only the overflow grant.
+		// Use empty subscription state (not trial) to avoid accidentally changing
+		// the org's subscription lifecycle.
+		state := &pkglicensing.BillingState{
+			Capabilities:      []string{},
+			Limits:            map[string]int64{},
+			MetersEnabled:     []string{},
+			OverflowGrantedAt: &now,
+		}
+		if saveErr := billingStore.SaveBillingState(orgID, state); saveErr != nil {
+			return nil
+		}
+		return &now
+	}
+
+	// Already granted — return existing timestamp (set-once).
+	if existing.OverflowGrantedAt != nil {
+		return existing.OverflowGrantedAt
+	}
+
+	// First access with existing billing state but no overflow yet — grant now.
+	// Re-read to minimize the race window with concurrent billing state writers
+	// (e.g. trial start). We only touch OverflowGrantedAt, preserving all other fields.
+	fresh, freshErr := billingStore.GetBillingState(orgID)
+	if freshErr != nil || fresh == nil {
+		return nil
+	}
+	if fresh.OverflowGrantedAt != nil {
+		// Another request won the race — use their timestamp.
+		return fresh.OverflowGrantedAt
+	}
+	fresh.OverflowGrantedAt = &now
+	if saveErr := billingStore.SaveBillingState(orgID, fresh); saveErr != nil {
+		return nil
+	}
+	return &now
+}
+
+// overflowGrantedAtForContext returns the OverflowGrantedAt timestamp for the
+// current org, reading from the evaluator first (hosted path), then falling
+// back to billing state on disk (self-hosted path). Does NOT lazy-initialize.
+func (h *LicenseHandlers) overflowGrantedAtForContext(ctx context.Context) *int64 {
+	if h == nil || h.mtPersistence == nil {
+		return nil
+	}
+
+	// Hosted path: evaluator already has OverflowGrantedAt cached.
+	svc, _, err := h.getTenantComponents(ctx)
+	if err == nil && svc != nil {
+		if eval := svc.Evaluator(); eval != nil {
+			return eval.OverflowGrantedAt()
+		}
+	}
+
+	// Self-hosted path: read from billing state directly.
+	orgID := GetOrgID(ctx)
+	if orgID == "" {
+		orgID = "default"
+	}
+	billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
+	existing, readErr := billingStore.GetBillingState(orgID)
+	if readErr != nil || existing == nil {
+		return nil
+	}
+	return existing.OverflowGrantedAt
 }
 
 func (h *LicenseHandlers) trialStartEligibility(ctx context.Context, svc *licenseService) (eligible bool, reason string) {

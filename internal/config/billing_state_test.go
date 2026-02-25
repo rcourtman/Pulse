@@ -347,6 +347,65 @@ func TestBillingState_LegacyHMACMigration(t *testing.T) {
 	assert.Equal(t, newHMAC, loaded.Integrity, "HMAC should be migrated to new format")
 }
 
+func TestBillingState_OverflowGrantedAtIncludedInHMAC(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(t.TempDir(), ".encryption.key"))
+	writeTestEncryptionKey(t, dir)
+
+	store := NewFileBillingStore(dir)
+
+	now := int64(1700000000)
+	state := &entitlements.BillingState{
+		Capabilities:      []string{},
+		SubscriptionState: entitlements.SubStateTrial,
+		PlanVersion:       "trial",
+		OverflowGrantedAt: &now,
+	}
+
+	require.NoError(t, store.SaveBillingState("default", state))
+
+	// Tamper: change overflow_granted_at in the JSON file.
+	billingPath := filepath.Join(dir, "billing.json")
+	fileData, err := os.ReadFile(billingPath)
+	require.NoError(t, err)
+
+	var raw map[string]interface{}
+	require.NoError(t, json.Unmarshal(fileData, &raw))
+	raw["overflow_granted_at"] = float64(1600000000) // backdated to extend overflow window
+	tampered, err := json.Marshal(raw)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(billingPath, tampered, 0o600))
+
+	// Tampered overflow_granted_at should be detected.
+	loaded, err := store.GetBillingState("default")
+	require.NoError(t, err)
+	assert.Nil(t, loaded, "state with tampered overflow_granted_at should be treated as nonexistent")
+}
+
+func TestBillingState_OverflowSurvivesRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(t.TempDir(), ".encryption.key"))
+	writeTestEncryptionKey(t, dir)
+
+	store := NewFileBillingStore(dir)
+
+	now := int64(1700000000)
+	state := &entitlements.BillingState{
+		Capabilities:      []string{"relay"},
+		SubscriptionState: entitlements.SubStateTrial,
+		PlanVersion:       "trial",
+		OverflowGrantedAt: &now,
+	}
+
+	require.NoError(t, store.SaveBillingState("default", state))
+
+	loaded, err := store.GetBillingState("default")
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	require.NotNil(t, loaded.OverflowGrantedAt, "OverflowGrantedAt should survive round trip")
+	assert.Equal(t, now, *loaded.OverflowGrantedAt)
+}
+
 func TestBillingState_LimitsIncludedInHMAC(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(t.TempDir(), ".encryption.key"))

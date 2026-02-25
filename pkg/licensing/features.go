@@ -4,7 +4,10 @@
 // licensing metadata without importing internal packages.
 package licensing
 
-import "sort"
+import (
+	"sort"
+	"time"
+)
 
 // Feature constants represent gated features in Pulse.
 // These are embedded in license JWTs and checked at runtime.
@@ -169,6 +172,45 @@ func DeriveEntitlements(tier Tier, features []string, maxNodes int, maxGuests in
 	}
 
 	return capabilities, limits
+}
+
+// OnboardingOverflowDuration is the window during which free-tier workspaces
+// receive +1 host slot after initial setup.
+const OnboardingOverflowDuration = 14 * 24 * time.Hour
+
+// OverflowBonus returns the number of bonus host slots granted by the
+// onboarding overflow. Returns 1 if the tier is free, overflowGrantedAt
+// is set, and the current time is within 14 days of the grant. Otherwise 0.
+func OverflowBonus(tier Tier, overflowGrantedAt *int64, now time.Time) int {
+	if tier != TierFree || overflowGrantedAt == nil {
+		return 0
+	}
+	grantedAt := time.Unix(*overflowGrantedAt, 0)
+	elapsed := now.Sub(grantedAt)
+	if elapsed < 0 {
+		// Future timestamp — treat as not yet granted.
+		return 0
+	}
+	if elapsed < OnboardingOverflowDuration {
+		return 1
+	}
+	return 0
+}
+
+// OverflowDaysRemaining returns the number of days remaining in the overflow
+// window. Returns 0 if overflow is not active.
+func OverflowDaysRemaining(tier Tier, overflowGrantedAt *int64, now time.Time) int {
+	if OverflowBonus(tier, overflowGrantedAt, now) == 0 {
+		return 0
+	}
+	grantedAt := time.Unix(*overflowGrantedAt, 0)
+	expiresAt := grantedAt.Add(OnboardingOverflowDuration)
+	remaining := expiresAt.Sub(now)
+	days := int(remaining.Hours()/24) + 1 // ceiling: partial day counts as 1
+	if days < 0 {
+		return 0
+	}
+	return days
 }
 
 // TierHasFeature checks if a tier includes a specific feature.

@@ -3,12 +3,13 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-	"sort"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // HostLedgerEntry represents a single host that counts against the license limit.
@@ -17,7 +18,7 @@ type HostLedgerEntry struct {
 	Type      string `json:"type"`       // "proxmox-pve", "proxmox-pbs", "proxmox-pmg", "host-agent", "docker", "kubernetes", "truenas"
 	Status    string `json:"status"`     // "online", "offline", "unknown"
 	LastSeen  string `json:"last_seen"`  // RFC3339 or empty
-	Source    string `json:"source"`     // how discovered — e.g. "proxmox", "agent", "docker", "kubernetes", "truenas"
+	Source    string `json:"source"`     // how discovered — e.g. "proxmox", "agent", "docker", "kubernetes", "truenas", or "proxmox + agent" when deduped
 	FirstSeen string `json:"first_seen"` // RFC3339 or empty
 }
 
@@ -30,9 +31,6 @@ type HostLedgerResponse struct {
 
 func (r *Router) handleHostLedger(w http.ResponseWriter, req *http.Request) {
 	orgID := GetOrgID(req.Context())
-
-	// Collect config-based hosts (PVE/PBS/PMG).
-	var entries []HostLedgerEntry
 
 	persistence, err := r.multiTenant.GetPersistence(orgID)
 	if err != nil {
@@ -65,120 +63,52 @@ func (r *Router) handleHostLedger(w http.ResponseWriter, req *http.Request) {
 		state = r.monitor.GetState()
 	}
 
-	// PVE: list individual nodes discovered at runtime (one PVE connection may
-	// represent a multi-node cluster). Each node counts as one host slot.
-	// If the monitor has no state yet, fall back to listing configured connections.
-	if len(state.Nodes) > 0 {
-		for _, n := range state.Nodes {
-			entries = append(entries, HostLedgerEntry{
-				Name:     pveNodeDisplayName(n.DisplayName, n.Name, n.ID),
-				Type:     "proxmox-pve",
-				Status:   normalizeStatus(n.Status),
-				LastSeen: formatLastSeen(n.LastSeen),
-				Source:   "proxmox",
-			})
-		}
-	} else if nodesConfig != nil {
-		for _, pve := range nodesConfig.PVEInstances {
-			entries = append(entries, HostLedgerEntry{
-				Name:   pbsPmgDisplayName(pve.Name, pve.Host),
-				Type:   "proxmox-pve",
-				Status: "unknown",
-				Source: "proxmox",
-			})
-		}
-	}
-
+	// Build config entries for the dedup layer.
+	var configPVE, configPBS, configPMG, configTrueNAS []unifiedresources.ConfigEntry
 	if nodesConfig != nil {
+		for _, pve := range nodesConfig.PVEInstances {
+			configPVE = append(configPVE, unifiedresources.ConfigEntry{
+				ID: pve.Host, Name: pve.Name, Host: pve.Host,
+			})
+		}
 		for _, pbs := range nodesConfig.PBSInstances {
-			entry := HostLedgerEntry{
-				Name:   pbsPmgDisplayName(pbs.Name, pbs.Host),
-				Type:   "proxmox-pbs",
-				Source: "proxmox",
-			}
-			enrichPBSStatus(&entry, pbs.Host, state)
-			entries = append(entries, entry)
+			configPBS = append(configPBS, unifiedresources.ConfigEntry{
+				ID: pbs.Host, Name: pbs.Name, Host: pbs.Host,
+			})
 		}
 		for _, pmg := range nodesConfig.PMGInstances {
-			entry := HostLedgerEntry{
-				Name:   pbsPmgDisplayName(pmg.Name, pmg.Host),
-				Type:   "proxmox-pmg",
-				Source: "proxmox",
-			}
-			enrichPMGStatus(&entry, pmg.Host, state)
-			entries = append(entries, entry)
+			configPMG = append(configPMG, unifiedresources.ConfigEntry{
+				ID: pmg.Host, Name: pmg.Name, Host: pmg.Host,
+			})
 		}
 	}
 
-	// Collect TrueNAS instances from config.
 	trueNASInstances, trueNASErr := persistence.LoadTrueNASConfig()
 	if trueNASErr != nil {
 		log.Warn().Err(trueNASErr).Str("org", orgID).Msg("host-ledger: failed to load TrueNAS config")
 	}
 	for _, nas := range trueNASInstances {
-		entries = append(entries, HostLedgerEntry{
-			Name:   trueNASDisplayName(nas.Name, nas.Host),
-			Type:   "truenas",
-			Status: "unknown",
-			Source: "truenas",
+		configTrueNAS = append(configTrueNAS, unifiedresources.ConfigEntry{
+			ID: nas.ID, Name: nas.Name, Host: nas.Host,
 		})
 	}
 
-	// Collect runtime-only hosts (agents).
-	for _, h := range state.Hosts {
-		entries = append(entries, HostLedgerEntry{
-			Name:     hostDisplayName(h.DisplayName, h.Hostname, h.ID),
-			Type:     "host-agent",
-			Status:   normalizeStatus(h.Status),
-			LastSeen: formatLastSeen(h.LastSeen),
-			Source:   "agent",
-		})
-	}
-	for _, d := range state.DockerHosts {
-		entries = append(entries, HostLedgerEntry{
-			Name:     dockerDisplayName(d.DisplayName, d.CustomDisplayName, d.Hostname, d.ID),
-			Type:     "docker",
-			Status:   normalizeStatus(d.Status),
-			LastSeen: formatLastSeen(d.LastSeen),
-			Source:   "docker",
-		})
-	}
-	for _, k := range state.KubernetesClusters {
-		clusterName := k8sDisplayName(k.DisplayName, k.CustomDisplayName, k.Name, k.ID)
-		if len(k.Nodes) > 0 {
-			// List individual K8s nodes — enforcement counts nodes, not clusters.
-			for _, kn := range k.Nodes {
-				nodeName := kn.Name
-				if nodeName == "" {
-					nodeName = kn.UID
-				}
-				entries = append(entries, HostLedgerEntry{
-					Name:     clusterName + "/" + nodeName,
-					Type:     "kubernetes",
-					Status:   k8sNodeStatus(kn.Ready),
-					LastSeen: formatLastSeen(k.LastSeen),
-					Source:   "kubernetes",
-				})
-			}
-		} else {
-			// No node list yet — count cluster as 1 slot (matches enforcement fallback).
-			entries = append(entries, HostLedgerEntry{
-				Name:     clusterName,
-				Type:     "kubernetes",
-				Status:   normalizeStatus(k.Status),
-				LastSeen: formatLastSeen(k.LastSeen),
-				Source:   "kubernetes",
-			})
-		}
-	}
+	// Resolve deduplicated hosts.
+	candidates := unifiedresources.CollectHostCandidates(state, configPVE, configPBS, configPMG, configTrueNAS)
+	resolved := unifiedresources.ResolveHosts(candidates)
 
-	// Sort by type then name for stable output.
-	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].Type != entries[j].Type {
-			return entries[i].Type < entries[j].Type
-		}
-		return entries[i].Name < entries[j].Name
-	})
+	// Convert resolved hosts to ledger entries.
+	entries := make([]HostLedgerEntry, 0, len(resolved.Hosts))
+	for _, h := range resolved.Hosts {
+		entries = append(entries, HostLedgerEntry{
+			Name:      h.Name,
+			Type:      h.PrimaryType,
+			Status:    h.Status,
+			LastSeen:  h.LastSeen,
+			Source:    strings.Join(h.SourceLabels, " + "),
+			FirstSeen: h.FirstSeen,
+		})
+	}
 
 	// Determine node limit.
 	limit := maxNodesLimitForContext(req.Context())
@@ -197,7 +127,7 @@ func (r *Router) handleHostLedger(w http.ResponseWriter, req *http.Request) {
 }
 
 // ---------------------------------------------------------------------------
-// Display-name helpers
+// Display-name helpers (still used by other files in the api package)
 // ---------------------------------------------------------------------------
 
 func pveNodeDisplayName(display, name, id string) string {
@@ -261,11 +191,9 @@ func k8sDisplayName(display, custom, name, id string) string {
 }
 
 // ---------------------------------------------------------------------------
-// Status enrichment helpers
+// Status enrichment helpers (still used by other files)
 // ---------------------------------------------------------------------------
 
-// pveStatusFromState finds the status for a PVE config entry by matching its
-// Host URL against runtime nodes. Returns the status of the first matching node.
 func pveStatusFromState(host string, state models.StateSnapshot) string {
 	for _, n := range state.Nodes {
 		if n.Host == host {

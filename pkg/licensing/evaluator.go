@@ -121,6 +121,14 @@ func (e *Evaluator) TrialEndsAt() *int64 {
 	return cloneInt64Ptr(e.source.TrialEndsAt())
 }
 
+// OverflowGrantedAt returns the overflow grant timestamp (Unix seconds) when available.
+func (e *Evaluator) OverflowGrantedAt() *int64 {
+	if e == nil || e.source == nil {
+		return nil
+	}
+	return cloneInt64Ptr(e.source.OverflowGrantedAt())
+}
+
 func cloneInt64Ptr(v *int64) *int64 {
 	if v == nil {
 		return nil

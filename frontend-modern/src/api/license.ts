@@ -50,6 +50,7 @@ export interface LicenseEntitlements {
   trial_eligible?: boolean;
   trial_eligibility_reason?: string;
   max_history_days?: number;
+  overflow_days_remaining?: number;
 }
 
 export interface ActivateLicenseResponse {

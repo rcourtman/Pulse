@@ -21,6 +21,7 @@ func (m mockSource) PlanVersion() string                  { return m.planVersion
 func (m mockSource) SubscriptionState() SubscriptionState { return m.subState }
 func (m mockSource) TrialStartedAt() *int64               { return m.trialStarted }
 func (m mockSource) TrialEndsAt() *int64                  { return m.trialEnds }
+func (m mockSource) OverflowGrantedAt() *int64            { return nil }
 
 func TestEvaluator_HasCapability(t *testing.T) {
 	tests := []struct {

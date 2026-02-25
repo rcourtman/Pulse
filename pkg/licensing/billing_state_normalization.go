@@ -33,6 +33,8 @@ func NormalizeBillingState(state *BillingState) *BillingState {
 	normalized.TrialStartedAt = cloneInt64Ptr(state.TrialStartedAt)
 	normalized.TrialEndsAt = cloneInt64Ptr(state.TrialEndsAt)
 	normalized.TrialExtendedAt = cloneInt64Ptr(state.TrialExtendedAt)
+	normalized.OverflowGrantedAt = cloneInt64Ptr(state.OverflowGrantedAt)
+	normalized.QuickstartCreditsGrantedAt = cloneInt64Ptr(state.QuickstartCreditsGrantedAt)
 
 	// Normalize string fields.
 	normalized.PlanVersion = strings.TrimSpace(normalized.PlanVersion)

@@ -1253,6 +1253,10 @@ func (s staticEntitlementSource) TrialEndsAt() *int64 {
 	return s.trialEndsAt
 }
 
+func (s staticEntitlementSource) OverflowGrantedAt() *int64 {
+	return nil
+}
+
 func featureSet(features []string) map[string]struct{} {
 	set := make(map[string]struct{}, len(features))
 	for _, f := range features {

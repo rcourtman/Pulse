@@ -71,6 +71,11 @@ func (d *DatabaseSource) TrialEndsAt() *int64 {
 	return cloneInt64Ptr(d.currentState().TrialEndsAt)
 }
 
+// OverflowGrantedAt returns the stored overflow grant timestamp (Unix seconds) when present.
+func (d *DatabaseSource) OverflowGrantedAt() *int64 {
+	return cloneInt64Ptr(d.currentState().OverflowGrantedAt)
+}
+
 func (d *DatabaseSource) currentState() BillingState {
 	defaults := d.defaultState()
 	if d == nil {
@@ -165,6 +170,7 @@ func cloneBillingState(state BillingState) BillingState {
 	cp.TrialStartedAt = cloneInt64Ptr(state.TrialStartedAt)
 	cp.TrialEndsAt = cloneInt64Ptr(state.TrialEndsAt)
 	cp.TrialExtendedAt = cloneInt64Ptr(state.TrialExtendedAt)
+	cp.OverflowGrantedAt = cloneInt64Ptr(state.OverflowGrantedAt)
 
 	return cp
 }

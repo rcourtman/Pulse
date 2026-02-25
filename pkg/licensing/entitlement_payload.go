@@ -65,6 +65,10 @@ type EntitlementPayload struct {
 
 	// MaxHistoryDays is the maximum metrics history retention in days for the current tier.
 	MaxHistoryDays int `json:"max_history_days"`
+
+	// OverflowDaysRemaining is set when the onboarding overflow (+1 host) is active.
+	// Indicates the number of days remaining in the 14-day overflow window.
+	OverflowDaysRemaining *int `json:"overflow_days_remaining,omitempty"`
 }
 
 // LimitStatus represents a quantitative limit with current usage state.

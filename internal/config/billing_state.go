@@ -75,9 +75,24 @@ func (s *FileBillingStore) GetBillingState(orgID string) (*pkglicensing.BillingS
 					Msg("Failed to persist billing integrity migration")
 			}
 		} else if !verifyBillingIntegrity(&state, hmacKey) {
-			// Check legacy HMAC format (without Limits) for format migration.
-			if verifyBillingIntegrityLegacy(&state, hmacKey) {
+			// Try migration chain: v6-pre-quickstart → pre-v6-legacy → tampered.
+			if verifyBillingIntegrityV6PreQuickstart(&state, hmacKey) {
+				// Valid v6 signature (before quickstart fields) — re-sign with current format.
+				state.Integrity = billingIntegrity(&state, hmacKey)
+				if saveErr := s.SaveBillingState(orgID, &state); saveErr != nil {
+					log.Warn().
+						Err(saveErr).
+						Str("org_id", orgID).
+						Msg("Failed to persist billing integrity quickstart migration")
+				}
+			} else if verifyBillingIntegrityLegacy(&state, hmacKey) {
 				// Valid legacy signature — re-sign with current format and persist.
+				// Strip fields that didn't exist in the legacy era to prevent
+				// injection via tampered JSON before the HMAC covered them.
+				state.OverflowGrantedAt = nil
+				state.QuickstartCreditsGranted = false
+				state.QuickstartCreditsUsed = 0
+				state.QuickstartCreditsGrantedAt = nil
 				state.Integrity = billingIntegrity(&state, hmacKey)
 				if saveErr := s.SaveBillingState(orgID, &state); saveErr != nil {
 					log.Warn().
@@ -202,6 +217,11 @@ type billingIntegrityPayload struct {
 	TrialStartedAt    *int64                         `json:"trial_started_at"`
 	TrialEndsAt       *int64                         `json:"trial_ends_at"`
 	TrialExtendedAt   *int64                         `json:"trial_extended_at"`
+	OverflowGrantedAt *int64                         `json:"overflow_granted_at"`
+	// Quickstart credits gate free hosted Patrol runs — must be HMAC-protected.
+	QuickstartCreditsGranted   bool   `json:"quickstart_credits_granted"`
+	QuickstartCreditsUsed      int    `json:"quickstart_credits_used"`
+	QuickstartCreditsGrantedAt *int64 `json:"quickstart_credits_granted_at"`
 }
 
 // billingIntegrity computes the HMAC-SHA256 over the critical billing fields.
@@ -218,13 +238,17 @@ func billingIntegrity(state *pkglicensing.BillingState, key []byte) string {
 	}
 
 	payload := billingIntegrityPayload{
-		Capabilities:      caps,
-		Limits:            limits,
-		PlanVersion:       state.PlanVersion,
-		SubscriptionState: state.SubscriptionState,
-		TrialStartedAt:    state.TrialStartedAt,
-		TrialEndsAt:       state.TrialEndsAt,
-		TrialExtendedAt:   state.TrialExtendedAt,
+		Capabilities:               caps,
+		Limits:                     limits,
+		PlanVersion:                state.PlanVersion,
+		SubscriptionState:          state.SubscriptionState,
+		TrialStartedAt:             state.TrialStartedAt,
+		TrialEndsAt:                state.TrialEndsAt,
+		TrialExtendedAt:            state.TrialExtendedAt,
+		OverflowGrantedAt:          state.OverflowGrantedAt,
+		QuickstartCreditsGranted:   state.QuickstartCreditsGranted,
+		QuickstartCreditsUsed:      state.QuickstartCreditsUsed,
+		QuickstartCreditsGrantedAt: state.QuickstartCreditsGrantedAt,
 	}
 
 	data, _ := json.Marshal(payload) // struct marshal cannot fail
@@ -274,5 +298,50 @@ func billingIntegrityLegacy(state *pkglicensing.BillingState, key []byte) string
 // verifyBillingIntegrityLegacy checks if a stored HMAC was signed with the legacy format.
 func verifyBillingIntegrityLegacy(state *pkglicensing.BillingState, key []byte) bool {
 	expected := billingIntegrityLegacy(state, key)
+	return hmac.Equal([]byte(expected), []byte(state.Integrity))
+}
+
+// billingIntegrityPayloadV6PreQuickstart is the v6 HMAC format before quickstart credits.
+// Has Limits and OverflowGrantedAt but not the quickstart fields.
+type billingIntegrityPayloadV6PreQuickstart struct {
+	Capabilities      []string                       `json:"capabilities"`
+	Limits            map[string]int64               `json:"limits"`
+	PlanVersion       string                         `json:"plan_version"`
+	SubscriptionState pkglicensing.SubscriptionState `json:"subscription_state"`
+	TrialStartedAt    *int64                         `json:"trial_started_at"`
+	TrialEndsAt       *int64                         `json:"trial_ends_at"`
+	TrialExtendedAt   *int64                         `json:"trial_extended_at"`
+	OverflowGrantedAt *int64                         `json:"overflow_granted_at"`
+}
+
+func billingIntegrityV6PreQuickstart(state *pkglicensing.BillingState, key []byte) string {
+	caps := make([]string, len(state.Capabilities))
+	copy(caps, state.Capabilities)
+	sort.Strings(caps)
+
+	limits := make(map[string]int64, len(state.Limits))
+	for k, v := range state.Limits {
+		limits[k] = v
+	}
+
+	payload := billingIntegrityPayloadV6PreQuickstart{
+		Capabilities:      caps,
+		Limits:            limits,
+		PlanVersion:       state.PlanVersion,
+		SubscriptionState: state.SubscriptionState,
+		TrialStartedAt:    state.TrialStartedAt,
+		TrialEndsAt:       state.TrialEndsAt,
+		TrialExtendedAt:   state.TrialExtendedAt,
+		OverflowGrantedAt: state.OverflowGrantedAt,
+	}
+
+	data, _ := json.Marshal(payload)
+	mac := hmac.New(sha256.New, key)
+	mac.Write(data)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func verifyBillingIntegrityV6PreQuickstart(state *pkglicensing.BillingState, key []byte) bool {
+	expected := billingIntegrityV6PreQuickstart(state, key)
 	return hmac.Equal([]byte(expected), []byte(state.Integrity))
 }

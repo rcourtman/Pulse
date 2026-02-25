@@ -1,5 +1,5 @@
 import { Component, Show, createMemo } from 'solid-js';
-import { getLimit, getUpgradeActionUrlOrFallback } from '@/stores/license';
+import { entitlements, getLimit, getUpgradeActionUrlOrFallback } from '@/stores/license';
 
 export const HostLimitWarningBanner: Component = () => {
   // No onMount load — TrialBanner (mounted above) already calls loadLicenseStatus().
@@ -10,6 +10,8 @@ export const HostLimitWarningBanner: Component = () => {
     const state = nodeLimit()?.state;
     return state === 'warning' || state === 'enforced';
   });
+
+  const overflowDaysRemaining = createMemo(() => entitlements()?.overflow_days_remaining);
 
   return (
     <Show when={nodeLimit()}>
@@ -27,6 +29,11 @@ export const HostLimitWarningBanner: Component = () => {
             Hosts: {nodeLimit()!.current}/{nodeLimit()!.limit}
           </span>
           <div class="flex items-center gap-3">
+            <Show when={overflowDaysRemaining()}>
+              <span class="text-xs text-muted">
+                Includes 1 bonus host ({overflowDaysRemaining()}d remaining)
+              </span>
+            </Show>
             <a
               class="text-xs font-medium underline underline-offset-2 hover:opacity-90"
               href="/settings/system-pro"

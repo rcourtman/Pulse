@@ -41,6 +41,10 @@ func (s staticSource) TrialEndsAt() *int64 {
 	return nil
 }
 
+func (s staticSource) OverflowGrantedAt() *int64 {
+	return nil
+}
+
 type panicSource struct {
 	panicCapabilities bool
 	panicLimits       bool
@@ -81,6 +85,10 @@ func (p panicSource) TrialStartedAt() *int64 {
 }
 
 func (p panicSource) TrialEndsAt() *int64 {
+	return nil
+}
+
+func (p panicSource) OverflowGrantedAt() *int64 {
 	return nil
 }
 

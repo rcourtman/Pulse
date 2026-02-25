@@ -375,6 +375,8 @@ func (r *Router) setupRoutes() {
 	})
 	// Wire license service provider so middleware can access per-tenant license services
 	SetLicenseServiceProvider(r.licenseHandlers)
+	// Wire base data dir for overflow enforcement (reads OverflowGrantedAt from billing state).
+	SetOverflowBaseDataDir(r.config.DataPath)
 	r.reportingHandlers = NewReportingHandlers(r.mtMonitor, recoveryManager)
 	r.logHandlers = NewLogHandlers(r.config, r.persistence)
 	rbacHandlers := NewRBACHandlers(r.config, rbacProvider)

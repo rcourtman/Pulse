@@ -48,6 +48,10 @@ func (m mockSource) TrialEndsAt() *int64 {
 	return m.trialEndsAt
 }
 
+func (m mockSource) OverflowGrantedAt() *int64 {
+	return nil
+}
+
 func TestEvaluatorHasCapability(t *testing.T) {
 	t.Run("found", func(t *testing.T) {
 		e := NewEvaluator(mockSource{capabilities: []string{"rbac", "relay"}})

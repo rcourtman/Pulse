@@ -70,3 +70,9 @@ func (t *TokenSource) TrialStartedAt() *int64 {
 func (t *TokenSource) TrialEndsAt() *int64 {
 	return nil
 }
+
+// OverflowGrantedAt returns nil for token-backed entitlements.
+// Onboarding overflow is managed via billing state, not JWT claims.
+func (t *TokenSource) OverflowGrantedAt() *int64 {
+	return nil
+}
