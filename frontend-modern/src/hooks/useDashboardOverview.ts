@@ -2,7 +2,14 @@ import { createMemo, type Accessor } from 'solid-js';
 import type { Alert } from '@/types/api';
 import type { Resource, ResourceMetric, ResourceStatus } from '@/types/resource';
 import { isInfrastructure, isStorage, isWorkload } from '@/types/resource';
-import { METRIC_THRESHOLDS } from '@/utils/metricThresholds';
+import { METRIC_THRESHOLDS, getMetricSeverity } from '@/utils/metricThresholds';
+import { OFFLINE_HEALTH_STATUSES, DEGRADED_HEALTH_STATUSES } from '@/utils/status';
+
+export interface ProblemResource {
+  resource: Resource;
+  problems: string[];
+  worstValue: number; // 0–100 for metrics, 200 for offline, 150 for degraded
+}
 
 export interface DashboardOverview {
   health: {
@@ -36,6 +43,7 @@ export interface DashboardOverview {
     activeWarning: number;
     total: number;
   };
+  problemResources: ProblemResource[];
 }
 
 const RESOURCE_STATUSES: ResourceStatus[] = [
@@ -99,6 +107,49 @@ function buildTopInfrastructureMetrics(
 
   rows.sort((a, b) => b.percent - a.percent);
   return rows.slice(0, 5);
+}
+
+function buildProblemResources(resources: Resource[]): ProblemResource[] {
+  const results: ProblemResource[] = [];
+
+  for (const resource of resources) {
+    const problems: string[] = [];
+    let worstValue = 0;
+
+    const status = resource.status;
+    if (OFFLINE_HEALTH_STATUSES.has(status)) {
+      problems.push('Offline');
+      worstValue = 200; // Sort offline first
+    } else if (DEGRADED_HEALTH_STATUSES.has(status)) {
+      problems.push('Degraded');
+      worstValue = Math.max(worstValue, 150);
+    }
+
+    const cpuPercent = getMetricPercent(resource.cpu);
+    if (cpuPercent !== null && getMetricSeverity(cpuPercent, 'cpu') === 'critical') {
+      problems.push(`CPU ${Math.round(cpuPercent)}%`);
+      worstValue = Math.max(worstValue, cpuPercent);
+    }
+
+    const memPercent = getMetricPercent(resource.memory);
+    if (memPercent !== null && getMetricSeverity(memPercent, 'memory') === 'critical') {
+      problems.push(`Memory ${Math.round(memPercent)}%`);
+      worstValue = Math.max(worstValue, memPercent);
+    }
+
+    const diskPercent = getMetricPercent(resource.disk);
+    if (diskPercent !== null && getMetricSeverity(diskPercent, 'disk') === 'critical') {
+      problems.push(`Disk ${Math.round(diskPercent)}%`);
+      worstValue = Math.max(worstValue, diskPercent);
+    }
+
+    if (problems.length > 0) {
+      results.push({ resource, problems, worstValue });
+    }
+  }
+
+  results.sort((a, b) => b.worstValue - a.worstValue);
+  return results.slice(0, 8);
 }
 
 export function computeDashboardOverview(
@@ -201,6 +252,7 @@ export function computeDashboardOverview(
       activeWarning: alertCounts.warning,
       total: activeAlerts.length,
     },
+    problemResources: buildProblemResources(resources),
   };
 }
 

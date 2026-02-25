@@ -1,14 +1,25 @@
-import { For, Match, Switch, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import {
+  For,
+  Match,
+  Show,
+  Switch,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+} from 'solid-js';
 import { useWebSocket } from '@/App';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { useDashboardOverview } from '@/hooks/useDashboardOverview';
 import { useDashboardTrends } from '@/hooks/useDashboardTrends';
-import { useDashboardRecovery } from '@/hooks/useDashboardRecovery';
 import { useDashboardLayout } from '@/hooks/useDashboardLayout';
+import { useDashboardActions } from '@/hooks/useDashboardActions';
 import type { HistoryTimeRange } from '@/api/charts';
 import type { Alert } from '@/types/api';
 import {
-  DashboardHero,
+  ActionRequiredPanel,
+  ProblemResourcesTable,
+  KPIStrip,
   RecentAlertsPanel,
   TrendCharts,
   DashboardCustomizer,
@@ -30,8 +41,8 @@ export default function Dashboard() {
   const overview = useDashboardOverview(resources, alertsList);
   const [trendRange, setTrendRange] = createSignal<HistoryTimeRange>('1h');
   const trends = useDashboardTrends(overview, resources, trendRange);
-  const recovery = useDashboardRecovery();
   const layout = useDashboardLayout();
+  const actions = useDashboardActions(alertsList);
 
   // Loading timeout: if REST fetch takes >30s, treat as connection error.
   const [loadingTimedOut, setLoadingTimedOut] = createSignal(false);
@@ -39,12 +50,12 @@ export default function Dashboard() {
 
   const isLoading = createMemo(() => dashboardResources.loading());
 
-  // Track whether we've completed the initial load so that subsequent
+  // Track whether we've completed the initial load successfully so that subsequent
   // background refetches don't tear down the content tree (which causes
-  // flickering and scroll-position resets).
+  // flickering and scroll-position resets). Only set on successful load (not errors).
   const [initialLoadComplete, setInitialLoadComplete] = createSignal(false);
   createEffect(() => {
-    if (!isLoading() && !initialLoadComplete()) {
+    if (!isLoading() && !initialLoadComplete() && !dashboardResources.error()) {
       setInitialLoadComplete(true);
     }
   });
@@ -73,9 +84,10 @@ export default function Dashboard() {
     return !isLoading() && !connected() && !reconnecting();
   });
 
-  const isEmpty = createMemo(
-    () => !isLoading() && !hasConnectionError() && (resources()?.length ?? 0) === 0,
-  );
+  // True when we have renderable cached data (even if connection is now lost)
+  const hasCachedData = createMemo(() => (resources()?.length ?? 0) > 0);
+
+  const isEmpty = createMemo(() => !isLoading() && initialLoadComplete() && !hasCachedData());
 
   const storageCapacityPercent = createMemo(() => {
     const { totalUsed, totalCapacity } = overview().storage;
@@ -140,43 +152,44 @@ export default function Dashboard() {
 
   return (
     <main data-testid="dashboard-page" class="space-y-6">
-      <div class="flex justify-end">
-        <DashboardCustomizer
-          allWidgets={layout.allWidgetsOrdered}
-          isHidden={layout.isHidden}
-          toggleWidget={layout.toggleWidget}
-          moveUp={layout.moveUp}
-          moveDown={layout.moveDown}
-          resetToDefaults={layout.resetToDefaults}
-          isDefault={layout.isDefault}
-        />
-      </div>
+      {/* Connection warning banner — shown above all content, NOT a full-page takeover */}
+      <Show when={hasConnectionError() && initialLoadComplete()}>
+        <div
+          class="flex items-center justify-between gap-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 px-4 py-2.5"
+          role="alert"
+          aria-live="polite"
+        >
+          <div>
+            <p class="text-sm font-medium text-amber-900 dark:text-amber-100">Connection lost</p>
+            <p class="text-xs text-amber-700 dark:text-amber-300">
+              Real-time data is currently unavailable. Showing last-known state.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => reconnect()}
+            class="shrink-0 inline-flex items-center rounded-md border border-amber-300 dark:border-amber-700 px-3 py-1.5 text-xs font-medium text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900 transition-colors"
+          >
+            Reconnect
+          </button>
+        </div>
+      </Show>
 
       <Switch>
-        <Match when={isLoading() && !initialLoadComplete()}>
+        <Match when={isLoading() && !hasCachedData() && !hasConnectionError()}>
           <section class="space-y-2" data-testid="dashboard-loading">
-            <div class="border border-border rounded-md p-4 sm:p-5 bg-surface">
-              <div class="space-y-4">
-                <For each={['h-4 w-44', 'h-10 w-40']}>
-                  {(dims) => (
-                    <div
-                      data-testid="dashboard-skeleton-block"
-                      class={`animate-pulse bg-surface-hover rounded ${dims}`}
-                    />
-                  )}
-                </For>
-                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-                  <For each={Array.from({ length: 5 })}>
-                    {() => (
-                      <div
-                        data-testid="dashboard-skeleton-block"
-                        class="animate-pulse bg-surface-hover rounded h-8"
-                      />
-                    )}
-                  </For>
-                </div>
-              </div>
+            {/* KPI strip skeleton */}
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+              <For each={Array.from({ length: 4 })}>
+                {() => (
+                  <div
+                    data-testid="dashboard-skeleton-block"
+                    class="animate-pulse bg-surface-hover rounded-md h-20"
+                  />
+                )}
+              </For>
             </div>
+            {/* Widget skeletons */}
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <For each={Array.from({ length: 2 })}>
                 {() => (
@@ -192,7 +205,8 @@ export default function Dashboard() {
           </section>
         </Match>
 
-        <Match when={hasConnectionError()}>
+        {/* Full-page connection error only when we have NO cached data */}
+        <Match when={hasConnectionError() && !initialLoadComplete()}>
           <section class="border border-border rounded-md p-4 sm:p-5 bg-surface" aria-live="polite">
             <h2 class="text-base sm:text-lg font-semibold text-base-content">
               Dashboard unavailable
@@ -219,37 +233,41 @@ export default function Dashboard() {
           </section>
         </Match>
 
-        <Match when={initialLoadComplete() && !hasConnectionError() && !isEmpty()}>
+        <Match when={initialLoadComplete() && hasCachedData()}>
           <section class="space-y-5">
-            <DashboardHero
-              criticalAlerts={overview().health.criticalAlerts}
-              warningAlerts={overview().health.warningAlerts}
+            {/* 1. Action Required Panel — only when actions exist */}
+            <ActionRequiredPanel
+              pendingApprovals={actions.pendingApprovals()}
+              unackedCriticalAlerts={actions.unackedCriticalAlerts()}
+              findingsNeedingAttention={actions.findingsNeedingAttention()}
+            />
+
+            {/* 2. Problem Resources Table — only when problems exist */}
+            <ProblemResourcesTable problems={overview().problemResources} />
+
+            {/* 3. KPI Strip — always visible */}
+            <KPIStrip
               infrastructure={{
                 total: overview().infrastructure.total,
                 online: overview().infrastructure.byStatus.online ?? 0,
-                byType: overview().infrastructure.byType,
               }}
               workloads={{
                 total: overview().workloads.total,
                 running: overview().workloads.running,
-                stopped: overview().workloads.stopped,
-                byType: overview().workloads.byType,
               }}
               storage={{
                 capacityPercent: storageCapacityPercent(),
                 totalUsed: overview().storage.totalUsed,
                 totalCapacity: overview().storage.totalCapacity,
-                warningCount: overview().storage.warningCount,
-                criticalCount: overview().storage.criticalCount,
               }}
               alerts={{
                 activeCritical: overview().alerts.activeCritical,
                 activeWarning: overview().alerts.activeWarning,
                 total: overview().alerts.total,
               }}
-              recovery={recovery()}
-              topCPU={overview().infrastructure.topCPU}
             />
+
+            {/* 4–5. Customizable widgets: Trend Charts, Recent Alerts */}
             <For each={widgetGroups()}>
               {(group) =>
                 group.type === 'full' ? (
@@ -261,6 +279,19 @@ export default function Dashboard() {
                 )
               }
             </For>
+
+            {/* Customize button at the bottom-right of widget area */}
+            <div class="flex justify-end">
+              <DashboardCustomizer
+                allWidgets={layout.allWidgetsOrdered}
+                isHidden={layout.isHidden}
+                toggleWidget={layout.toggleWidget}
+                moveUp={layout.moveUp}
+                moveDown={layout.moveDown}
+                resetToDefaults={layout.resetToDefaults}
+                isDefault={layout.isDefault}
+              />
+            </div>
           </section>
         </Match>
       </Switch>

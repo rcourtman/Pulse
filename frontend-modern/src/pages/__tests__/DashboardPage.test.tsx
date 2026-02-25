@@ -42,6 +42,7 @@ const overviewMock: DashboardOverview = {
     activeWarning: 0,
     total: 0,
   },
+  problemResources: [],
 };
 
 vi.mock('@/App', () => ({
@@ -83,12 +84,13 @@ vi.mock('@/hooks/useDashboardTrends', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useDashboardRecovery', () => ({
-  useDashboardRecovery: () => () => ({
-    totalProtected: 0,
-    byOutcome: {},
-    latestEventTimestamp: null,
-    hasData: false,
+vi.mock('@/hooks/useDashboardActions', () => ({
+  useDashboardActions: () => ({
+    pendingApprovals: () => [],
+    unackedCriticalAlerts: () => [],
+    findingsNeedingAttention: () => [],
+    hasAnyActions: () => false,
+    totalActionCount: () => 0,
   }),
 }));
 
