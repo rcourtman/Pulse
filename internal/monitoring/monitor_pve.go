@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -752,6 +753,23 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			}
 		}
 
+		// Build a lookup map of node name → disk exclusion patterns by
+		// cross-referencing linked host agents. This lets --disk-exclude on the
+		// agent suppress server-side Proxmox disk health/wearout alerts.
+		diskExcludeByNode := make(map[string][]string)
+		hostByID := make(map[string]models.Host, len(currentState.Hosts))
+		for _, h := range currentState.Hosts {
+			hostByID[h.ID] = h
+		}
+		for _, n := range currentState.Nodes {
+			if n.LinkedHostAgentID == "" || n.Instance != inst {
+				continue
+			}
+			if linkedHost, ok := hostByID[n.LinkedHostAgentID]; ok && len(linkedHost.DiskExclude) > 0 {
+				diskExcludeByNode[n.Name] = linkedHost.DiskExclude
+			}
+		}
+
 		var allDisks []models.PhysicalDisk
 		polledNodes := make(map[string]bool) // Track which nodes we successfully polled
 
@@ -829,6 +847,19 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 					Str("health", disk.Health).
 					Int("wearout", disk.Wearout).
 					Msg("Checking disk health")
+
+				// If the linked host agent has --disk-exclude patterns that match
+				// this disk, send a synthetic healthy status to clear any existing
+				// alerts and skip normal health/wearout checks.
+				if excludePatterns, ok := diskExcludeByNode[node.Node]; ok {
+					if fsfilters.MatchesDeviceExclude(disk.DevPath, excludePatterns) {
+						healthyDisk := disk
+						healthyDisk.Health = "PASSED"
+						healthyDisk.Wearout = 100
+						m.alertManager.CheckDiskHealth(inst, node.Node, healthyDisk)
+						continue
+					}
+				}
 
 				normalizedHealth := strings.ToUpper(strings.TrimSpace(disk.Health))
 				if normalizedHealth != "" && normalizedHealth != "UNKNOWN" && normalizedHealth != "PASSED" && normalizedHealth != "OK" {

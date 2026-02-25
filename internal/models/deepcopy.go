@@ -282,6 +282,7 @@ func cloneHost(src Host) Host {
 	dest.Ceph = cloneHostCephCluster(src.Ceph)
 	dest.TokenLastUsedAt = cloneTimePtr(src.TokenLastUsedAt)
 	dest.Tags = append([]string(nil), src.Tags...)
+	dest.DiskExclude = append([]string(nil), src.DiskExclude...)
 	return dest
 }
 

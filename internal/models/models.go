@@ -207,6 +207,7 @@ type Host struct {
 	TokenHint         string                 `json:"tokenHint,omitempty"`
 	TokenLastUsedAt   *time.Time             `json:"tokenLastUsedAt,omitempty"`
 	Tags              []string               `json:"tags,omitempty"`
+	DiskExclude       []string               `json:"diskExclude,omitempty"` // Agent's --disk-exclude patterns
 	IsLegacy          bool                   `json:"isLegacy,omitempty"`
 
 	// Computed I/O rates (bytes/sec), populated from cumulative counters by rate tracker

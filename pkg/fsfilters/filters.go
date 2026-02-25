@@ -77,6 +77,10 @@ var virtualFSTypes = map[string]bool{
 	"overlay":    true, // Docker/container overlay filesystems (issue #942)
 	"overlayfs":  true, // Alternative overlay name
 	"autofs":     true, // Systemd automount placeholders (issue #942)
+	"fdescfs":    true, // FreeBSD file descriptor filesystem
+	"devfs":      true, // FreeBSD device filesystem
+	"linprocfs":  true, // FreeBSD Linux proc compatibility layer
+	"linsysfs":   true, // FreeBSD Linux sys compatibility layer
 }
 
 // networkFSPatterns are substrings that indicate network/remote filesystems.
@@ -88,6 +92,7 @@ var specialMountPrefixes = []string{
 	"/proc",
 	"/sys",
 	"/run",
+	"/var/run/", // FreeBSD: /var/run is not a symlink to /run
 	"/var/lib/docker",
 	"/var/lib/containers",
 	"/snap",
@@ -144,7 +149,7 @@ func ShouldSkipFilesystem(fsType, mountpoint string, totalBytes, usedBytes uint6
 	}
 
 	// Check specific special mountpoints
-	if mountpoint == "/boot/efi" {
+	if mountpoint == "/boot/efi" || mountpoint == "/var/run" {
 		reasons = append(reasons, "special-mountpoint")
 	}
 

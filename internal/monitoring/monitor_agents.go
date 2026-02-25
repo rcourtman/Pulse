@@ -1462,6 +1462,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		CommandsEnabled: report.Agent.CommandsEnabled,
 		ReportIP:        strings.TrimSpace(report.Host.ReportIP),
 		Tags:            append([]string(nil), report.Tags...),
+		DiskExclude:     append([]string(nil), report.Agent.DiskExclude...),
 		IsLegacy:        isLegacyAgent(report.Agent.Type),
 	}
 
