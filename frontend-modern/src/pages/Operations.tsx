@@ -56,7 +56,6 @@ export const Operations: Component = () => {
 
   return (
     <div class="space-y-6">
-
       {/* Modern Tabs Navigation */}
       <div class="mb-6">
         <nav

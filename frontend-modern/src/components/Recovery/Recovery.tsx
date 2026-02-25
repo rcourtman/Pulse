@@ -1,12 +1,4 @@
-import {
-  Component,
-  For,
-  Show,
-  createEffect,
-  createMemo,
-  createSignal,
-  untrack,
-} from 'solid-js';
+import { Component, For, Show, createEffect, createMemo, createSignal, untrack } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';

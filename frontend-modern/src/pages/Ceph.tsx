@@ -1,12 +1,4 @@
-import {
-  Component,
-  For,
-  Show,
-  createMemo,
-  createSignal,
-  createEffect,
-  onCleanup,
-} from 'solid-js';
+import { Component, For, Show, createMemo, createSignal, createEffect, onCleanup } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { useWebSocket } from '@/App';
 import { useResources } from '@/hooks/useResources';

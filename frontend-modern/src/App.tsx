@@ -1510,8 +1510,7 @@ function AppLayout(props: {
       (p) => normalizedPath === p || normalizedPath.startsWith(p + '/'),
     );
 
-    const isAlertsPath =
-      normalizedPath === '/alerts' || normalizedPath.startsWith('/alerts/');
+    const isAlertsPath = normalizedPath === '/alerts' || normalizedPath.startsWith('/alerts/');
     const isAlertConfigTab =
       isAlertsPath &&
       normalizedPath !== '/alerts' &&

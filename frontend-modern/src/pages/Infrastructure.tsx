@@ -1,12 +1,4 @@
-import {
-  For,
-  Show,
-  createEffect,
-  createMemo,
-  createSignal,
-  onCleanup,
-  untrack,
-} from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Card } from '@/components/shared/Card';
