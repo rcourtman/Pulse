@@ -3007,6 +3007,13 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	// Apply security headers with embedding configuration
 	SecurityHeadersWithConfig(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		// Prevent caching of API responses that may contain sensitive data
+		// (auth state, infrastructure topology, tokens, settings).
+		// Static assets and HTML have their own cache headers set elsewhere.
+		if strings.HasPrefix(req.URL.Path, "/api/") {
+			w.Header().Set("Cache-Control", "no-store")
+		}
+
 		// Add CORS headers if configured
 		if r.config.AllowedOrigins != "" {
 			reqOrigin := req.Header.Get("Origin")
@@ -3028,12 +3035,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 					}
 				}
 			} else {
-				// No Origin header (same-origin or direct request)
-				// Set to first allowed origin for simple responses, though not strictly required for same-origin
-				origins := strings.Split(r.config.AllowedOrigins, ",")
-				if len(origins) > 0 {
-					allowedOrigin = strings.TrimSpace(origins[0])
-				}
+				// No Origin header — same-origin or non-browser (e.g. curl).
+				// CORS headers are only meaningful when a browser sends an Origin,
+				// so skip setting any CORS headers for these requests.
 			}
 
 			if allowedOrigin != "" {
@@ -3046,6 +3050,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 					w.Header().Set("Access-Control-Allow-Credentials", "true")
 					// Must add Vary: Origin when Origin is used to decide the response
 					w.Header().Add("Vary", "Origin")
+				}
+				// Cache preflight results for 1 hour (only meaningful on OPTIONS).
+				if req.Method == "OPTIONS" {
+					w.Header().Set("Access-Control-Max-Age", "3600")
 				}
 			}
 		}

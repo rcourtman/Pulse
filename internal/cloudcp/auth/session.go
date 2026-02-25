@@ -12,7 +12,9 @@ import (
 
 const (
 	// SessionCookieName is the cookie used for control-plane authenticated sessions.
-	SessionCookieName = "pulse_cp_session"
+	// The __Host- prefix binds the cookie to the origin (Secure, Path="/", no Domain)
+	// preventing subdomain injection attacks.
+	SessionCookieName = "__Host-pulse_cp_session"
 	// SessionTTL is the default session token lifetime.
 	SessionTTL    = 12 * time.Hour
 	sessionPrefix = "cps1_"

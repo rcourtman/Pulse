@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
+import sri from 'vite-plugin-sri-gen';
 import path from 'path';
 import { URL } from 'node:url';
 import { configDefaults } from 'vitest/config';
@@ -38,7 +39,7 @@ const backendWsUrl =
 const srcAlias = path.resolve(__dirname, './src');
 
 export default defineConfig({
-  plugins: [solid()],
+  plugins: [solid(), sri({ algorithm: 'sha384' })],
   resolve: {
     alias: {
       '@': srcAlias,

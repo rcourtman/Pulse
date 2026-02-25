@@ -137,23 +137,34 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 	allowedOrigins := append([]string(nil), h.allowedOrigins...)
 	h.mu.RUnlock()
 
-	// Determine the actual origin (accounting for proxy headers)
+	// Determine the actual origin (accounting for proxy headers).
+	// Only trust X-Forwarded-* headers when the peer is a known trusted proxy,
+	// consistent with how auth.go gates proxy header trust via isTrustedProxyIP.
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
 	}
 
-	// Check X-Forwarded-Proto or X-Forwarded-Scheme for proxied requests
-	if forwardedProto := r.Header.Get("X-Forwarded-Proto"); forwardedProto != "" {
-		scheme = normalizeForwardedProto(forwardedProto, scheme)
-	} else if forwardedScheme := r.Header.Get("X-Forwarded-Scheme"); forwardedScheme != "" {
-		scheme = normalizeForwardedProto(forwardedScheme, scheme)
+	h.mu.RLock()
+	trustedProxyFn := h.isTrustedProxy
+	h.mu.RUnlock()
+
+	peerIP := extractPeerIP(r.RemoteAddr)
+	peerIsTrusted := trustedProxyFn != nil && trustedProxyFn(peerIP)
+
+	if peerIsTrusted {
+		if forwardedProto := r.Header.Get("X-Forwarded-Proto"); forwardedProto != "" {
+			scheme = normalizeForwardedProto(forwardedProto, scheme)
+		} else if forwardedScheme := r.Header.Get("X-Forwarded-Scheme"); forwardedScheme != "" {
+			scheme = normalizeForwardedProto(forwardedScheme, scheme)
+		}
 	}
 
-	// Use X-Forwarded-Host if present (for proxied requests)
 	host := r.Host
-	if forwardedHost := r.Header.Get("X-Forwarded-Host"); forwardedHost != "" {
-		host = forwardedHost
+	if peerIsTrusted {
+		if forwardedHost := r.Header.Get("X-Forwarded-Host"); forwardedHost != "" {
+			host = forwardedHost
+		}
 	}
 
 	requestOrigin := scheme + "://" + host
@@ -399,6 +410,7 @@ type Hub struct {
 	allowedOrigins      []string                       // Allowed origins for CORS
 	orgAuthChecker      OrgAuthChecker                 // Org authorization checker
 	multiTenantChecker  MultiTenantChecker             // Multi-tenant feature flag and license checker
+	isTrustedProxy      func(ip string) bool           // Optional: checks if peer IP is a trusted reverse proxy
 	legacyPayloadCompat bool                           // when true, include legacy per-type arrays in state payloads
 	// Broadcast coalescing fields
 	coalesceWindow  time.Duration
@@ -443,6 +455,15 @@ func (h *Hub) SetMultiTenantChecker(checker MultiTenantChecker) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.multiTenantChecker = checker
+}
+
+// SetTrustedProxyChecker sets the function used to verify whether a peer IP is a
+// trusted reverse proxy. When set, X-Forwarded-Host/X-Forwarded-Proto are only
+// trusted in checkOrigin when the peer passes this check.
+func (h *Hub) SetTrustedProxyChecker(fn func(ip string) bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.isTrustedProxy = fn
 }
 
 // SetLegacyPayloadCompat controls whether legacy per-type arrays are kept in websocket state payloads.

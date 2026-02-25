@@ -294,6 +294,12 @@ func firstValidForwardedIP(header string) string {
 	return ""
 }
 
+// IsTrustedProxyIP reports whether ipStr belongs to a CIDR in PULSE_TRUSTED_PROXY_CIDRS.
+// Exported so the websocket hub can gate X-Forwarded-* trust on the same list.
+func IsTrustedProxyIP(ipStr string) bool {
+	return isTrustedProxyIP(ipStr)
+}
+
 func isTrustedProxyIP(ipStr string) bool {
 	ipStr = strings.TrimSpace(strings.Trim(ipStr, "[]"))
 	if ipStr == "" {
@@ -383,6 +389,31 @@ func isTrustedNetwork(ip string, trustedNetworks []string) bool {
 	}
 
 	return false
+}
+
+func init() {
+	// Periodically purge expired failedLogins entries to prevent unbounded
+	// memory growth from brute-force attempts with many distinct identifiers.
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			cleanupExpiredFailedLogins()
+		}
+	}()
+}
+
+func cleanupExpiredFailedLogins() {
+	now := time.Now()
+	failedMu.Lock()
+	defer failedMu.Unlock()
+	for id, f := range failedLogins {
+		// Remove entries whose lockout has expired (or were never locked) and
+		// haven't had a new attempt in 2x the lockout window.
+		if now.After(f.LockedUntil) && now.Sub(f.LastAttempt) > 2*lockoutDuration {
+			delete(failedLogins, id)
+		}
+	}
 }
 
 // RecordFailedLogin tracks failed login attempts

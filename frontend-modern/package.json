@@ -68,6 +68,7 @@
     "typescript-eslint": "^8.54.0",
     "vite": "^6.4.1",
     "vite-plugin-solid": "^2.8.0",
+    "vite-plugin-sri-gen": "^1.3.2",
     "vitest": "^3.2.4"
   }
 }

@@ -141,7 +141,6 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 				Secure:   true,
 				SameSite: http.SameSiteLaxMode,
 				MaxAge:   int(SessionTTL.Seconds()),
-				Expires:  time.Now().UTC().Add(SessionTTL),
 			})
 		}
 

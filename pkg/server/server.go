@@ -228,6 +228,9 @@ func Run(ctx context.Context, version string) error {
 
 	// Initialize WebSocket hub first
 	wsHub := websocket.NewHub(nil)
+	// Gate X-Forwarded-* trust in checkOrigin on the same trusted-proxy list
+	// used by the main API's auth.go / security.go.
+	wsHub.SetTrustedProxyChecker(api.IsTrustedProxyIP)
 	// Set allowed origins from configuration
 	if cfg.AllowedOrigins != "" {
 		if cfg.AllowedOrigins == "*" {

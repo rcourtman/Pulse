@@ -853,6 +853,12 @@ func TestHub_CheckOrigin(t *testing.T) {
 				hub.SetAllowedOrigins(tc.allowedOrigins)
 			}
 
+			// When tests use forwarded headers, set a trusted proxy checker
+			// so the hub trusts X-Forwarded-* from this peer.
+			if tc.forwardedProto != "" || tc.forwardedHost != "" {
+				hub.SetTrustedProxyChecker(func(ip string) bool { return true })
+			}
+
 			req := &http.Request{
 				Host:       tc.host,
 				Header:     make(http.Header),
@@ -878,6 +884,7 @@ func TestHub_CheckOrigin(t *testing.T) {
 
 func TestHub_CheckOrigin_XForwardedScheme(t *testing.T) {
 	hub := NewHub(nil)
+	hub.SetTrustedProxyChecker(func(ip string) bool { return true })
 
 	req := &http.Request{
 		Host:   "example.com",
@@ -889,5 +896,23 @@ func TestHub_CheckOrigin_XForwardedScheme(t *testing.T) {
 	result := hub.checkOrigin(req)
 	if !result {
 		t.Error("checkOrigin should allow same-origin with X-Forwarded-Scheme")
+	}
+}
+
+func TestHub_CheckOrigin_UntrustedProxyIgnoresForwarded(t *testing.T) {
+	hub := NewHub(nil)
+	// No trusted proxy checker set — forwarded headers should be ignored
+
+	req := &http.Request{
+		Host:       "backend:8080",
+		Header:     make(http.Header),
+		RemoteAddr: "10.0.0.5:12345",
+	}
+	req.Header.Set("Origin", "http://proxy.example.com")
+	req.Header.Set("X-Forwarded-Host", "proxy.example.com")
+
+	result := hub.checkOrigin(req)
+	if result {
+		t.Error("checkOrigin should reject forwarded headers from untrusted peers")
 	}
 }

@@ -64,6 +64,8 @@ func GetRateLimiterForEndpoint(path string, method string) *RateLimiter {
 		strings.Contains(path, "/api/logout") ||
 		strings.Contains(path, "/api/security/change-password") ||
 		strings.Contains(path, "/api/security/validate-bootstrap-token") ||
+		strings.Contains(path, "/api/security/regenerate-token") ||
+		strings.Contains(path, "/api/security/validate-token") ||
 		strings.Contains(path, "/api/auth") {
 		return globalRateLimitConfig.AuthEndpoints
 	}
