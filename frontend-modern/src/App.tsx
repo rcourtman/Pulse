@@ -1514,6 +1514,33 @@ function AppLayout(props: {
     onCleanup(() => window.removeEventListener('keydown', onKeyDown));
   });
 
+  // Kiosk route guard: redirect away from config/control-plane pages.
+  // Data pages (dashboard, infrastructure, workloads, storage, recovery, ceph) are allowed.
+  // Alerts allows read-only tabs (overview, history); config tabs redirect.
+  createEffect(() => {
+    if (!kioskMode()) return;
+    const normalizedPath = location.pathname.replace(/\/+$/, '') || '/';
+
+    const blockedPrefixes = ['/settings', '/operations', '/ai'];
+    const isBlocked = blockedPrefixes.some(
+      (p) => normalizedPath === p || normalizedPath.startsWith(p + '/'),
+    );
+
+    const isAlertsPath =
+      normalizedPath === '/alerts' || normalizedPath.startsWith('/alerts/');
+    const isAlertConfigTab =
+      isAlertsPath &&
+      normalizedPath !== '/alerts' &&
+      normalizedPath !== '/alerts/overview' &&
+      normalizedPath !== '/alerts/history' &&
+      !normalizedPath.startsWith('/alerts/overview/') &&
+      !normalizedPath.startsWith('/alerts/history/');
+
+    if ((isBlocked || isAlertConfigTab) && normalizedPath !== DASHBOARD_PATH) {
+      navigate(DASHBOARD_PATH, { replace: true });
+    }
+  });
+
   createEffect(() => {
     if (!kioskMode()) return;
 
