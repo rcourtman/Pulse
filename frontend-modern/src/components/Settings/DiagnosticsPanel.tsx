@@ -423,7 +423,7 @@ export const DiagnosticsPanel: Component = () => {
         }
       >
         {/* Quick Actions */}
-        <div class="px-4 sm:px-6 py-3 sm:py-4 hover:bg-surface-hover transition-colors flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div class="px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <p class="text-xs text-muted">Test all connections and inspect runtime configuration</p>
           <Show when={diagnosticsData()}>
             <div class="flex items-center gap-2 flex-wrap">

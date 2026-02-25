@@ -103,7 +103,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
           <Show
             when={!loading()}
             fallback={
-              <div class="space-y-5 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+              <div class="space-y-5 p-4 sm:p-6">
                 <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {Array.from({ length: 4 }).map(() => (
                     <div class="rounded-md border border-border p-3 space-y-2">
@@ -142,7 +142,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
             <Show when={org()}>
               {(currentOrg) => (
                 <>
-                  <div class="space-y-6 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+                  <div class="space-y-6 p-4 sm:p-6">
                     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       <div class="rounded-md border border-border p-3">
                         <p class="text-xs uppercase tracking-wide text-muted">Organization</p>
@@ -201,7 +201,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
                     </div>
                   </div>
 
-                  <div class="space-y-2 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+                  <div class="space-y-2 p-4 sm:p-6">
                     <h4 class="text-sm font-semibold text-base-content">Membership</h4>
                     <div class="mt-4 -mx-4 sm:mx-0 overflow-x-auto w-full">
                       <PulseDataGrid

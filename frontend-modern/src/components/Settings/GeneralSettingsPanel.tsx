@@ -65,7 +65,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         noPadding
         bodyClass="divide-y divide-border"
       >
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-6">
           <div class="flex items-center gap-3 min-w-0">
             {/* Animated theme icon */}
             <div
@@ -130,7 +130,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         </div>
 
         {/* Temperature Unit Selector */}
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6">
           <div class="flex items-center gap-3 min-w-0">
             <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
               <Thermometer class="w-5 h-5" strokeWidth={2} />
@@ -169,7 +169,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         </div>
 
         {/* Full-width Mode Toggle */}
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6">
           <div class="flex items-center gap-3 min-w-0">
             <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
               <Maximize2 class="w-5 h-5 text-slate-500" strokeWidth={2} />
@@ -197,7 +197,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         noPadding
         bodyClass="divide-y divide-border"
       >
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6">
           <div class="flex-1 min-w-0 space-y-1">
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-base-content truncate">
@@ -227,7 +227,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           />
         </div>
 
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6">
           <div class="flex-1 min-w-0 space-y-1">
             <div class="text-sm font-medium text-base-content truncate">Reduce Pro prompts</div>
             <p class="text-xs text-muted line-clamp-2">
@@ -243,7 +243,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           />
         </div>
 
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6">
           <div class="flex-1 min-w-0 space-y-1">
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-base-content truncate">
@@ -274,7 +274,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           />
         </div>
 
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6">
           <div class="flex-1 min-w-0 space-y-1">
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-base-content truncate">
@@ -320,7 +320,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         noPadding
         bodyClass="divide-y divide-border"
       >
-        <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+        <div class="p-4 sm:p-6">
           <div class="space-y-4">
             <div class="space-y-2">
               <p class="text-[10px] font-bold uppercase tracking-wider text-muted">

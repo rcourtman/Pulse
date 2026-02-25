@@ -993,7 +993,7 @@ export const AISettings: Component = () => {
 
           <Show when={!loading()}>
             <Show when={form.enabled}>
-              <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+              <div class="p-4 sm:p-6">
                 <div class="flex items-start gap-2 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md p-3">
                   <svg
                     class="w-4 h-4 mt-0.5 shrink-0"
@@ -1025,7 +1025,7 @@ export const AISettings: Component = () => {
                 </div>
               </div>
             </Show>
-            <div class="space-y-6 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+            <div class="space-y-6 p-4 sm:p-6">
               {/* Default Model Selection - Always visible */}
               <div class={formField}>
                 <div class="flex items-center justify-between mb-1">
@@ -2433,7 +2433,7 @@ export const AISettings: Component = () => {
 
             {/* Status indicator */}
             <Show when={settings()}>
-              <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+              <div class="p-4 sm:p-6">
                 <div
                   class={`flex items-center gap-2 p-3 rounded-md ${
                     settings()?.configured

@@ -121,7 +121,7 @@ export function ReportingPanel() {
         description="Generate reports across infrastructure, workloads, storage, and backup resources."
         icon={<BarChart class="w-5 h-5" strokeWidth={2} />}
       >
-        <div class="space-y-6 p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+        <div class="space-y-6 p-4 sm:p-6">
           <FormField label="Resources" helpText="Select the resources to include in the report">
             <ResourcePicker selected={selectedResources} onSelectionChange={setSelectedResources} />
           </FormField>
@@ -187,7 +187,7 @@ export function ReportingPanel() {
           </div>
         </div>
 
-        <div class="flex justify-end p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+        <div class="flex justify-end p-4 sm:p-6">
           <button
             class={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-md font-semibold transition-all ${
               generating()

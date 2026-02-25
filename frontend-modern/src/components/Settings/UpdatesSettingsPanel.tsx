@@ -43,7 +43,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
         noPadding
         bodyClass="divide-y divide-border"
       >
-        <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+        <div class="p-4 sm:p-6">
           <div class="space-y-4">
             {/* Version Status Section */}
             <div class="rounded-md border border-border overflow-hidden">
@@ -667,7 +667,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
           </div>
         </div>
 
-        <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+        <div class="p-4 sm:p-6">
           <div class="space-y-5">
             <h4 class="flex items-center gap-2 text-sm font-medium text-base-content">
               <svg

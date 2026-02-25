@@ -106,7 +106,7 @@ export const SystemLogsPanel: Component = () => {
         icon={<Terminal class="w-5 h-5" strokeWidth={2} />}
       >
         {/* Controls */}
-        <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+        <div class="p-4 sm:p-6">
           <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div class="flex items-center space-x-3">
               <label class="text-sm font-medium text-base-content">Log Level:</label>
@@ -154,7 +154,7 @@ export const SystemLogsPanel: Component = () => {
         </div>
 
         {/* Terminal View */}
-        <div class="p-4 sm:p-6 hover:bg-surface-hover transition-colors">
+        <div class="p-4 sm:p-6">
           <div
             ref={logContainer}
             class="bg-slate-950 text-slate-300 font-mono text-xs p-4 rounded-md h-[500px] overflow-y-auto whitespace-pre-wrap leading-relaxed border border-border-subtle scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
