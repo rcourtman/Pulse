@@ -13,6 +13,7 @@ import {
   getUpgradeActionUrlOrFallback,
   getLimit,
   isRangeLocked,
+  maxHistoryDays,
   entitlements,
   licenseLoaded,
 } from '@/stores/license';
@@ -221,28 +222,57 @@ describe('license store', () => {
   });
 
   describe('isRangeLocked', () => {
-    it('returns false for ranges within free limit', async () => {
-      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockFreeEntitlements);
+    it('returns false for ranges within free limit (7d)', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
+        ...mockFreeEntitlements,
+        max_history_days: 7,
+      });
       await loadLicenseStatus(true);
       expect(isRangeLocked('1h')).toBe(false);
       expect(isRangeLocked('7d')).toBe(false);
       expect(isRangeLocked('168h')).toBe(false); // exactly 7 days
     });
 
-    it('returns true for ranges exceeding free limit', async () => {
-      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockFreeEntitlements);
+    it('returns true for ranges exceeding free limit (7d)', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
+        ...mockFreeEntitlements,
+        max_history_days: 7,
+      });
       await loadLicenseStatus(true);
-      expect(isRangeLocked('8d')).toBe(true); // 8 days
+      expect(isRangeLocked('8d')).toBe(true);
       expect(isRangeLocked('200h')).toBe(true); // 8.3 days
     });
 
-    it('returns false for ranges with long_term_metrics feature', async () => {
+    it('uses tier-specific max_history_days (relay = 14d)', async () => {
       vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
         ...mockProEntitlements,
-        capabilities: ['long_term_metrics'],
+        tier: 'relay',
+        max_history_days: 14,
       });
       await loadLicenseStatus(true);
-      expect(isRangeLocked('8d')).toBe(false);
+      expect(isRangeLocked('14d')).toBe(false);
+      expect(isRangeLocked('15d')).toBe(true);
+      expect(maxHistoryDays()).toBe(14);
+    });
+
+    it('uses tier-specific max_history_days (pro = 90d)', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
+        ...mockProEntitlements,
+        max_history_days: 90,
+      });
+      await loadLicenseStatus(true);
+      expect(isRangeLocked('90d')).toBe(false);
+      expect(isRangeLocked('91d')).toBe(true);
+      expect(maxHistoryDays()).toBe(90);
+    });
+
+    it('defaults to 7 days when max_history_days is not set', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
+        ...mockFreeEntitlements,
+      });
+      await loadLicenseStatus(true);
+      expect(maxHistoryDays()).toBe(7);
+      expect(isRangeLocked('8d')).toBe(true);
     });
 
     it('handles invalid range strings', async () => {

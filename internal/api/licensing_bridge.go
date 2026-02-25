@@ -245,3 +245,14 @@ func recordConversionSkippedMetric(reason string) {
 func recordConversionEventMetric(eventType, surface string) {
 	pkglicensing.GetConversionMetrics().RecordEvent(eventType, surface)
 }
+
+// freeHistoryDaysDefault is the fallback history days when no license service is available.
+var freeHistoryDaysDefault = pkglicensing.TierHistoryDays[pkglicensing.TierFree]
+
+func tierHistoryDaysFromLicensing(tier pkglicensing.Tier) int {
+	days := pkglicensing.TierHistoryDays[tier]
+	if days == 0 {
+		days = freeHistoryDaysDefault
+	}
+	return days
+}

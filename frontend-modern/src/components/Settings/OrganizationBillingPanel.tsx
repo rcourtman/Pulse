@@ -15,10 +15,13 @@ interface OrganizationBillingPanelProps {
 }
 
 const tierLabel: Record<string, string> = {
-  free: 'Free',
+  free: 'Community',
+  relay: 'Relay',
   pro: 'Pro',
+  pro_plus: 'Pro+',
   pro_annual: 'Pro Annual',
   lifetime: 'Lifetime',
+  cloud: 'Cloud',
   msp: 'MSP',
   enterprise: 'Enterprise',
 };

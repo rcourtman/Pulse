@@ -16,10 +16,13 @@ import BadgeCheck from 'lucide-solid/icons/badge-check';
 import { trackUpgradeMetricEvent } from '@/utils/upgradeMetrics';
 
 const TIER_LABELS: Record<string, string> = {
-  free: 'Free',
+  free: 'Community',
+  relay: 'Relay',
   pro: 'Pro',
+  pro_plus: 'Pro+',
   pro_annual: 'Pro Annual',
   lifetime: 'Lifetime',
+  cloud: 'Cloud',
   msp: 'MSP',
   enterprise: 'Enterprise',
 };

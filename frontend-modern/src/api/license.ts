@@ -49,6 +49,7 @@ export interface LicenseEntitlements {
   grace_period_end?: string;
   trial_eligible?: boolean;
   trial_eligibility_reason?: string;
+  max_history_days?: number;
 }
 
 export interface ActivateLicenseResponse {

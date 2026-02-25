@@ -62,6 +62,9 @@ type EntitlementPayload struct {
 
 	// TrialEligibilityReason is set when trial start is denied.
 	TrialEligibilityReason string `json:"trial_eligibility_reason,omitempty"`
+
+	// MaxHistoryDays is the maximum metrics history retention in days for the current tier.
+	MaxHistoryDays int `json:"max_history_days"`
 }
 
 // LimitStatus represents a quantitative limit with current usage state.
@@ -116,7 +119,13 @@ func BuildEntitlementPayloadWithUsage(
 			SubscriptionState: string(SubStateExpired),
 			UpgradeReasons:    []UpgradeReason{},
 			Tier:              string(TierFree),
+			MaxHistoryDays:    TierHistoryDays[TierFree],
 		}
+	}
+
+	maxHistDays := TierHistoryDays[status.Tier]
+	if maxHistDays == 0 {
+		maxHistDays = TierHistoryDays[TierFree]
 	}
 
 	payload := EntitlementPayload{
@@ -131,6 +140,7 @@ func BuildEntitlementPayloadWithUsage(
 		DaysRemaining:  status.DaysRemaining,
 		InGracePeriod:  status.InGracePeriod,
 		GracePeriodEnd: status.GracePeriodEnd,
+		MaxHistoryDays: maxHistDays,
 	}
 
 	if payload.Capabilities == nil {
@@ -151,6 +161,11 @@ func BuildEntitlementPayloadWithUsage(
 
 	if payload.SubscriptionState == string(SubStateTrial) {
 		applyTrialWindow(&payload, status, trialEndsAtUnix, time.Now().Unix())
+	}
+
+	// When subscription state doesn't grant paid features, cap history to free tier.
+	if !subscriptionStateHasPaidFeatures(SubscriptionState(payload.SubscriptionState)) {
+		payload.MaxHistoryDays = TierHistoryDays[TierFree]
 	}
 
 	// Build limits.

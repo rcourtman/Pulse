@@ -160,6 +160,43 @@ func TestBuildEntitlementPayload_CopiesStatusDisplayFields(t *testing.T) {
 	}
 }
 
+func TestBuildEntitlementPayload_MaxHistoryDays(t *testing.T) {
+	tests := []struct {
+		name     string
+		tier     Tier
+		wantDays int
+	}{
+		{"free tier gets 7 days", TierFree, 7},
+		{"relay tier gets 14 days", TierRelay, 14},
+		{"pro tier gets 90 days", TierPro, 90},
+		{"pro_plus tier gets 90 days", TierProPlus, 90},
+		{"pro_annual tier gets 90 days", TierProAnnual, 90},
+		{"lifetime tier gets 90 days", TierLifetime, 90},
+		{"cloud tier gets 90 days", TierCloud, 90},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			status := &LicenseStatus{
+				Valid:    true,
+				Tier:     tc.tier,
+				Features: append([]string(nil), TierFeatures[tc.tier]...),
+			}
+			payload := BuildEntitlementPayload(status, "")
+			if payload.MaxHistoryDays != tc.wantDays {
+				t.Fatalf("expected MaxHistoryDays=%d for tier %q, got %d", tc.wantDays, tc.tier, payload.MaxHistoryDays)
+			}
+		})
+	}
+}
+
+func TestBuildEntitlementPayload_NilStatus_MaxHistoryDays(t *testing.T) {
+	payload := BuildEntitlementPayloadWithUsage(nil, "", EntitlementUsageSnapshot{}, nil)
+	if payload.MaxHistoryDays != TierHistoryDays[TierFree] {
+		t.Fatalf("expected MaxHistoryDays=%d for nil status, got %d", TierHistoryDays[TierFree], payload.MaxHistoryDays)
+	}
+}
+
 func TestLimitState(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -143,11 +143,8 @@ export function getLimit(key: string) {
   return current.limits.find((limit) => limit.key === key);
 }
 
-/**
- * Max free range in days — must match backend maxFreeDuration (7 * 24 * time.Hour).
- * Any range exceeding this requires the long_term_metrics feature.
- */
-const MAX_FREE_DAYS = 7;
+/** Default max history days when entitlements aren't loaded yet. */
+const DEFAULT_MAX_HISTORY_DAYS = 7;
 
 function parseRangeDays(range: string): number {
   const match = range.match(/^(\d+)(h|d)$/);
@@ -157,11 +154,19 @@ function parseRangeDays(range: string): number {
 }
 
 /**
- * Check if a time range requires Pro and the user doesn't have it.
- * Ranges exceeding 7 days require the long_term_metrics feature.
+ * Return the tier-specific max history days from the entitlements payload.
+ * Falls back to DEFAULT_MAX_HISTORY_DAYS when entitlements aren't loaded.
+ */
+export function maxHistoryDays(): number {
+  return entitlements()?.max_history_days ?? DEFAULT_MAX_HISTORY_DAYS;
+}
+
+/**
+ * Check if a time range exceeds the current tier's history limit.
+ * The limit is tier-aware (Free=7d, Relay=14d, Pro/Pro+=90d) via `max_history_days`.
  */
 export function isRangeLocked(range: string): boolean {
-  return parseRangeDays(range) > MAX_FREE_DAYS && !hasFeature('long_term_metrics');
+  return parseRangeDays(range) > maxHistoryDays();
 }
 
 // Ensure org-scoped entitlements do not leak across tenant switches.

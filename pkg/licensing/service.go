@@ -376,6 +376,11 @@ func (s *Service) Status() *LicenseStatus {
 				// Keep effective capabilities free-tier only when subscription is not entitled.
 				status.Features = append([]string(nil), TierFeatures[TierFree]...)
 			}
+		} else {
+			// No license, no evaluator — apply free tier host limit default.
+			if defaultNodes := TierHostLimits[TierFree]; defaultNodes > 0 {
+				status.MaxNodes = defaultNodes
+			}
 		}
 		return status
 	}
@@ -391,6 +396,17 @@ func (s *Service) Status() *LicenseStatus {
 	}
 	if maxGuests, ok := s.license.Claims.EffectiveLimits()["max_guests"]; ok {
 		status.MaxGuests = safeIntFromInt64(maxGuests)
+	}
+
+	// Apply tier default host limit when license claims don't specify max_nodes.
+	// For recognized tiers, use their defined limit (0 = unlimited for Cloud/MSP/Enterprise).
+	// For unrecognized tiers, fall back to free tier limit to prevent unlimited access.
+	if status.MaxNodes == 0 {
+		if defaultNodes, ok := TierHostLimits[status.Tier]; ok {
+			status.MaxNodes = defaultNodes
+		} else {
+			status.MaxNodes = TierHostLimits[TierFree]
+		}
 	}
 
 	if s.license.ExpiresAt() != nil {
@@ -411,6 +427,13 @@ func (s *Service) Status() *LicenseStatus {
 	default:
 		status.Valid = false
 		status.Features = append([]string(nil), TierFeatures[TierFree]...)
+		// Downgrade limits to free tier when subscription is not entitled.
+		if defaultNodes := TierHostLimits[TierFree]; defaultNodes > 0 {
+			status.MaxNodes = defaultNodes
+		} else {
+			status.MaxNodes = 0
+		}
+		status.MaxGuests = 0
 	}
 
 	return status
