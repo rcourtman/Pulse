@@ -169,16 +169,25 @@ export const RelayOnboardingCard: Component = () => {
               <Show
                 when={hasRelay()}
                 fallback={
-                  <button
-                    type="button"
-                    class="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
-                    onClick={() => void handleStartTrial()}
-                    disabled={trialStarting()}
-                  >
-                    {trialStarting()
-                      ? 'Starting trial...'
-                      : 'Requires Relay \u2014 Start free trial'}
-                  </button>
+                  <>
+                    <a
+                      class="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
+                      href={getUpgradeActionUrlOrFallback('relay')}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => trackUpgradeClicked('dashboard_onboarding', 'relay')}
+                    >
+                      Get Relay &mdash; $49/yr
+                    </a>
+                    <button
+                      type="button"
+                      class="inline-flex items-center rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content shadow-sm hover:bg-surface-hover disabled:opacity-50"
+                      onClick={() => void handleStartTrial()}
+                      disabled={trialStarting()}
+                    >
+                      {trialStarting() ? 'Starting trial...' : 'or start a Pro trial'}
+                    </button>
+                  </>
                 }
               >
                 <button

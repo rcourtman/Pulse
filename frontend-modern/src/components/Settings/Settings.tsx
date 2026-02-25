@@ -486,8 +486,6 @@ const Settings: Component<SettingsProps> = (props) => {
   // Miscellaneous System settings
   const [disableLegacyRouteRedirects, setDisableLegacyRouteRedirects] = createSignal(false);
   const [savingLegacyRedirects, setSavingLegacyRedirects] = createSignal(false);
-  const [reduceProUpsellNoise, setReduceProUpsellNoise] = createSignal(false);
-  const [savingReduceUpsells, setSavingReduceUpsells] = createSignal(false);
   const [disableLocalUpgradeMetrics, setDisableLocalUpgradeMetrics] = createSignal(false);
   const [savingUpgradeMetrics, setSavingUpgradeMetrics] = createSignal(false);
   const [telemetryEnabled, setTelemetryEnabled] = createSignal(true);
@@ -662,27 +660,6 @@ const Settings: Component<SettingsProps> = (props) => {
       setDisableLegacyRouteRedirects(previous);
     } finally {
       setSavingLegacyRedirects(false);
-    }
-  };
-
-  const handleReduceProUpsellNoiseChange = async (enabled: boolean): Promise<void> => {
-    if (savingReduceUpsells()) return;
-    const previous = reduceProUpsellNoise();
-    setReduceProUpsellNoise(enabled);
-    setSavingReduceUpsells(true);
-    try {
-      await SettingsAPI.updateSystemSettings({ reduceProUpsellNoise: enabled });
-      const { updateReduceProUpsellNoiseSetting } = await import('@/stores/systemSettings');
-      updateReduceProUpsellNoiseSetting(enabled);
-      notificationStore.success(enabled ? 'Pro prompts reduced' : 'Pro prompts restored', 2000);
-    } catch (error) {
-      logger.error('Failed to update reduce upsell noise setting', error);
-      notificationStore.error(
-        error instanceof Error ? error.message : 'Failed to update reduce upsell noise setting',
-      );
-      setReduceProUpsellNoise(previous);
-    } finally {
-      setSavingReduceUpsells(false);
     }
   };
 
@@ -1704,7 +1681,6 @@ const Settings: Component<SettingsProps> = (props) => {
         setDisableDockerUpdateActions(systemSettings.disableDockerUpdateActions ?? false);
 
         setDisableLegacyRouteRedirects(systemSettings.disableLegacyRouteRedirects ?? false);
-        setReduceProUpsellNoise(systemSettings.reduceProUpsellNoise ?? false);
         setDisableLocalUpgradeMetrics(systemSettings.disableLocalUpgradeMetrics ?? false);
         setTelemetryEnabled(systemSettings.telemetryEnabled ?? true);
 
@@ -3442,9 +3418,6 @@ const Settings: Component<SettingsProps> = (props) => {
                   disableLegacyRouteRedirectsLocked={disableLegacyRouteRedirectsLocked}
                   savingLegacyRedirects={savingLegacyRedirects}
                   handleDisableLegacyRouteRedirectsChange={handleDisableLegacyRouteRedirectsChange}
-                  reduceProUpsellNoise={reduceProUpsellNoise}
-                  savingReduceUpsells={savingReduceUpsells}
-                  handleReduceProUpsellNoiseChange={handleReduceProUpsellNoiseChange}
                   disableLocalUpgradeMetrics={disableLocalUpgradeMetrics}
                   disableLocalUpgradeMetricsLocked={disableLocalUpgradeMetricsLocked}
                   savingUpgradeMetrics={savingUpgradeMetrics}

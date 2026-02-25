@@ -1,8 +1,12 @@
-import { Component, Show, createMemo, onMount } from 'solid-js';
+import { Component, Show, createMemo, createSignal, onMount } from 'solid-js';
 import { getUpgradeActionUrlOrFallback, licenseStatus, loadLicenseStatus } from '@/stores/license';
-import { shouldReduceProUpsellNoise } from '@/stores/systemSettings';
+import { isUpsellSnoozed, snoozeUpsell } from '@/utils/snooze';
+
+const SNOOZE_KEY = 'pulse_trial_banner_snoozed';
 
 export const TrialBanner: Component = () => {
+  const [snoozed, setSnoozed] = createSignal(isUpsellSnoozed(SNOOZE_KEY));
+
   onMount(() => {
     // Best-effort: if already loaded, this is a no-op.
     void loadLicenseStatus();
@@ -26,6 +30,11 @@ export const TrialBanner: Component = () => {
     return 'border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900 dark:bg-blue-900 dark:text-blue-100';
   });
 
+  const handleSnooze = () => {
+    snoozeUpsell(SNOOZE_KEY);
+    setSnoozed(true);
+  };
+
   return (
     <Show when={isTrial()}>
       <div
@@ -40,15 +49,24 @@ export const TrialBanner: Component = () => {
               <span class="ml-2">{daysRemaining()} days remaining</span>
             </Show>
           </div>
-          <Show when={!shouldReduceProUpsellNoise()}>
-            <a
-              class="text-xs font-semibold underline underline-offset-2 hover:opacity-90"
-              href={getUpgradeActionUrlOrFallback('trial_banner')}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Upgrade
-            </a>
+          <Show when={!snoozed()}>
+            <div class="flex items-center gap-2">
+              <a
+                class="text-xs font-semibold underline underline-offset-2 hover:opacity-90"
+                href={getUpgradeActionUrlOrFallback('trial_banner')}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Upgrade
+              </a>
+              <button
+                type="button"
+                class="text-xs opacity-70 hover:opacity-100"
+                onClick={handleSnooze}
+              >
+                Snooze 7d
+              </button>
+            </div>
           </Show>
         </div>
       </div>

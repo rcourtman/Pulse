@@ -39,10 +39,6 @@ interface GeneralSettingsPanelProps {
   savingLegacyRedirects: Accessor<boolean>;
   handleDisableLegacyRouteRedirectsChange: (disabled: boolean) => Promise<void>;
 
-  reduceProUpsellNoise: Accessor<boolean>;
-  savingReduceUpsells: Accessor<boolean>;
-  handleReduceProUpsellNoiseChange: (enabled: boolean) => Promise<void>;
-
   disableLocalUpgradeMetrics: Accessor<boolean>;
   disableLocalUpgradeMetricsLocked: () => boolean;
   savingUpgradeMetrics: Accessor<boolean>;
@@ -224,22 +220,6 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             onChange={() =>
               props.handleDisableLegacyRouteRedirectsChange(!props.disableLegacyRouteRedirects())
             }
-          />
-        </div>
-
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6">
-          <div class="flex-1 min-w-0 space-y-1">
-            <div class="text-sm font-medium text-base-content truncate">Reduce Pro prompts</div>
-            <p class="text-xs text-muted line-clamp-2">
-              Hides proactive upgrade prompts (for example, the relay onboarding card). Paywalls
-              still appear if you try to use a gated feature.
-            </p>
-          </div>
-          <Toggle
-            checked={props.reduceProUpsellNoise()}
-            class="shrink-0"
-            disabled={props.savingReduceUpsells()}
-            onChange={() => props.handleReduceProUpsellNoiseChange(!props.reduceProUpsellNoise())}
           />
         </div>
 

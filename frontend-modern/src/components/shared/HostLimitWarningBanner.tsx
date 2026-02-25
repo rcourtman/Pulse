@@ -6,27 +6,44 @@ export const HostLimitWarningBanner: Component = () => {
 
   const nodeLimit = createMemo(() => getLimit('max_nodes'));
 
-  const isWarning = createMemo(() => nodeLimit()?.state === 'warning');
+  const isUrgent = createMemo(() => {
+    const state = nodeLimit()?.state;
+    return state === 'warning' || state === 'enforced';
+  });
 
   return (
-    <Show when={isWarning()}>
+    <Show when={nodeLimit()}>
       <div
-        class="mb-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-900 dark:text-amber-100"
+        class={`mb-2 rounded-md border px-3 py-2 text-sm ${
+          isUrgent()
+            ? 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-900 dark:text-amber-100'
+            : 'border-border bg-surface text-muted'
+        }`}
         role="status"
         aria-live="polite"
       >
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <span class="font-medium">
-            You're using {nodeLimit()!.current}/{nodeLimit()!.limit} hosts.
+          <span class={isUrgent() ? 'font-medium' : ''}>
+            Hosts: {nodeLimit()!.current}/{nodeLimit()!.limit}
           </span>
-          <a
-            class="text-xs font-semibold underline underline-offset-2 hover:opacity-90"
-            href={getUpgradeActionUrlOrFallback('max_nodes')}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Upgrade to add more
-          </a>
+          <div class="flex items-center gap-3">
+            <a
+              class="text-xs font-medium underline underline-offset-2 hover:opacity-90"
+              href="/settings/system-pro"
+            >
+              See what's counted
+            </a>
+            <Show when={isUrgent()}>
+              <a
+                class="text-xs font-semibold underline underline-offset-2 hover:opacity-90"
+                href={getUpgradeActionUrlOrFallback('max_nodes')}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Upgrade to add more
+              </a>
+            </Show>
+          </div>
         </div>
       </div>
     </Show>

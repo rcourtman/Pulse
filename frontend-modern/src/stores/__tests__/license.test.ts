@@ -119,10 +119,28 @@ describe('license store', () => {
   });
 
   describe('isPro', () => {
-    it('returns true for non-free tier', async () => {
+    it('returns true for pro tier', async () => {
       vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockProEntitlements);
       await loadLicenseStatus(true);
       expect(isPro()).toBe(true);
+    });
+
+    it('returns true for pro_plus tier', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
+        ...mockProEntitlements,
+        tier: 'pro_plus',
+      });
+      await loadLicenseStatus(true);
+      expect(isPro()).toBe(true);
+    });
+
+    it('returns false for relay tier (paid but not Pro)', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
+        ...mockProEntitlements,
+        tier: 'relay',
+      });
+      await loadLicenseStatus(true);
+      expect(isPro()).toBe(false);
     });
 
     it('returns false for free tier', async () => {

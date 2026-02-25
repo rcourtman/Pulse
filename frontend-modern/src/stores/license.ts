@@ -87,13 +87,25 @@ export async function startProTrial(): Promise<StartProTrialResult> {
   return { outcome: 'activated' };
 }
 
+/** Tiers that qualify as "Pro" for UI gating (support link, Pro badges, etc.). */
+const PRO_TIERS = new Set([
+  'pro',
+  'pro_annual',
+  'pro_plus',
+  'lifetime',
+  'cloud',
+  'msp',
+  'enterprise',
+]);
+
 /**
- * Helper to check if the current license is Pulse Pro (any paid tier).
+ * Helper to check if the current license is Pulse Pro (Pro tier or above).
+ * Relay is a paid tier but does NOT count as Pro.
  */
 export const isPro = createRoot(() =>
   createMemo(() => {
     const current = entitlements();
-    return Boolean(current && current.tier !== 'free');
+    return Boolean(current && PRO_TIERS.has(current.tier));
   }),
 );
 
