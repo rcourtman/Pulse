@@ -5,10 +5,12 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -501,6 +503,61 @@ func Run(ctx context.Context, version string) error {
 		defer configWatcher.Stop()
 	}
 
+	// Start HTTP→HTTPS redirect server when HTTPS is active and redirect port is configured.
+	var redirectSrv *http.Server
+	if cfg.HTTPSEnabled && cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" && cfg.HTTPRedirectPort > 0 {
+		if cfg.HTTPRedirectPort == cfg.FrontendPort {
+			log.Error().
+				Int("redirect_port", cfg.HTTPRedirectPort).
+				Int("frontend_port", cfg.FrontendPort).
+				Msg("HTTP_REDIRECT_PORT must differ from FRONTEND_PORT; skipping redirect server")
+		} else {
+			httpsPort := cfg.FrontendPort
+			redirectSrv = &http.Server{
+				Addr: fmt.Sprintf("%s:%d", cfg.BindAddress, cfg.HTTPRedirectPort),
+				Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Host == "" {
+						http.Error(w, "Bad Request", http.StatusBadRequest)
+						return
+					}
+					// Extract the hostname, stripping any port. net.SplitHostPort
+					// handles IPv6 bracket notation (e.g. [::1]:80 → "::1").
+					// If SplitHostPort fails, the Host has no port — strip any
+					// stray brackets that a bare IPv6 literal may carry.
+					host := r.Host
+					if h, _, err := net.SplitHostPort(host); err == nil {
+						host = h
+					} else {
+						host = strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")
+					}
+					// Rebuild the authority with the HTTPS port.
+					// net.JoinHostPort handles IPv6 bracketing automatically.
+					var authority string
+					if httpsPort != 443 {
+						authority = net.JoinHostPort(host, strconv.Itoa(httpsPort))
+					} else if strings.Contains(host, ":") {
+						authority = "[" + host + "]"
+					} else {
+						authority = host
+					}
+					target := "https://" + authority + r.URL.RequestURI()
+					http.Redirect(w, r, target, http.StatusMovedPermanently)
+				}),
+				ReadHeaderTimeout: 5 * time.Second,
+			}
+			go func() {
+				log.Info().
+					Str("host", cfg.BindAddress).
+					Int("port", cfg.HTTPRedirectPort).
+					Int("https_port", httpsPort).
+					Msg("HTTP→HTTPS redirect server listening")
+				if err := redirectSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+					log.Error().Err(err).Msg("Failed to start HTTP redirect server")
+				}
+			}()
+		}
+	}
+
 	// Start server
 	go func() {
 		if cfg.HTTPSEnabled && cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
@@ -564,6 +621,11 @@ shutdown:
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
+	if redirectSrv != nil {
+		if err := redirectSrv.Shutdown(shutdownCtx); err != nil {
+			log.Error().Err(err).Msg("HTTP redirect server shutdown error")
+		}
+	}
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error().Err(err).Msg("Server shutdown error")
 	}

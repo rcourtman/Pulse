@@ -161,9 +161,10 @@ type Config struct {
 	// OIDC configuration
 	OIDC *OIDCConfig `json:"-"`
 	// HTTPS/TLS settings
-	HTTPSEnabled bool   `envconfig:"HTTPS_ENABLED" default:"false"`
-	TLSCertFile  string `envconfig:"TLS_CERT_FILE" default:""`
-	TLSKeyFile   string `envconfig:"TLS_KEY_FILE" default:""`
+	HTTPSEnabled     bool   `envconfig:"HTTPS_ENABLED" default:"false"`
+	TLSCertFile      string `envconfig:"TLS_CERT_FILE" default:""`
+	TLSKeyFile       string `envconfig:"TLS_KEY_FILE" default:""`
+	HTTPRedirectPort int    `envconfig:"HTTP_REDIRECT_PORT" default:"0"` // When HTTPS is enabled, start an HTTP listener on this port that redirects to HTTPS (0 = disabled)
 
 	// Update settings
 	UpdateChannel           string
@@ -1533,6 +1534,13 @@ func Load() (*Config, error) {
 		cfg.TLSKeyFile = tlsKeyFile
 		log.Debug().Str("key_file", tlsKeyFile).Msg("TLS key file from env var")
 	}
+	if redirectPort := os.Getenv("HTTP_REDIRECT_PORT"); redirectPort != "" {
+		if p, err := strconv.Atoi(redirectPort); err == nil && p > 0 && p <= 65535 {
+			cfg.HTTPRedirectPort = p
+			cfg.EnvOverrides["HTTP_REDIRECT_PORT"] = true
+			log.Debug().Int("port", p).Msg("HTTP redirect port from env var")
+		}
+	}
 
 	// Support PULSE_AGENT_URL as an alias for PULSE_AGENT_CONNECT_URL
 	// (Check this first so standard PULSE_AGENT_CONNECT_URL takes precedence if both set)
@@ -1817,6 +1825,14 @@ func (c *Config) Validate() error {
 	}
 	if c.SSHPort != 0 && (c.SSHPort < 1 || c.SSHPort > 65535) {
 		return fmt.Errorf("invalid SSH port: %d (must be between 1 and 65535)", c.SSHPort)
+	}
+	if c.HTTPRedirectPort != 0 {
+		if c.HTTPRedirectPort < 1 || c.HTTPRedirectPort > 65535 {
+			return fmt.Errorf("invalid HTTP redirect port: %d (must be between 1 and 65535)", c.HTTPRedirectPort)
+		}
+		if c.HTTPRedirectPort == c.FrontendPort {
+			return fmt.Errorf("HTTP redirect port (%d) must differ from frontend port", c.HTTPRedirectPort)
+		}
 	}
 
 	// Validate monitoring settings
