@@ -1756,6 +1756,11 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 		} else {
 			store = investigation.NewStore(dataDir)
 		}
+		if store == nil {
+			log.Error().Str("orgID", orgID).Msg("Investigation store factory returned nil")
+			h.investigationMu.Unlock()
+			return
+		}
 		if err := store.LoadFromDisk(); err != nil {
 			log.Warn().Err(err).Str("orgID", orgID).Msg("Failed to load investigation store")
 		}
