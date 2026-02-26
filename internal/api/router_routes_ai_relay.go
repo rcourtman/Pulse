@@ -323,10 +323,7 @@ func newAIAutoFixRuntime(r *Router) extensions.AIAutoFixRuntime {
 		HasLicenseFeature:    hasLicenseFeature,
 		WriteLicenseRequired: WriteLicenseRequired,
 		WriteError:           writeErrorResponse,
-		CoreHandlers:         extensions.AIAutoFixCoreHandlers{
-			// All handlers moved to enterprise — nil.
-		},
-		HandlerDeps: newAIAutoFixHandlerDeps(r),
+		HandlerDeps:          newAIAutoFixHandlerDeps(r),
 	}
 }
 

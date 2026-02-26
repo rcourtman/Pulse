@@ -41,31 +41,9 @@ type AIAutoFixRuntime struct {
 	WriteLicenseRequired func(http.ResponseWriter, string, string)
 	WriteError           func(http.ResponseWriter, int, string, string, map[string]string)
 
-	// CoreHandlers provides access to the core handler implementations.
-	// Enterprise binders use these to delegate to the real handlers after license checks.
-	// Handlers that have been moved to enterprise are nil.
-	CoreHandlers AIAutoFixCoreHandlers
-
 	// HandlerDeps provides dependency callbacks for enterprise handler implementations.
 	// Enterprise handlers call these instead of accessing internal packages directly.
 	HandlerDeps AIAutoFixHandlerDeps
-}
-
-// AIAutoFixCoreHandlers contains function references to the core handler implementations
-// in internal/api. These are populated at route registration time and allow enterprise
-// binders to delegate to the real handlers without importing internal packages.
-type AIAutoFixCoreHandlers struct {
-	// All handlers moved to enterprise — these fields are nil.
-	HandleReinvestigateFinding      http.HandlerFunc
-	HandleReapproveInvestigationFix http.HandlerFunc
-	HandleUpdatePatrolAutonomy      http.HandlerFunc
-	HandleApproveInvestigationFix   http.HandlerFunc
-	HandleListApprovals             http.HandlerFunc
-	HandleGetRemediationPlans       http.HandlerFunc
-	HandleGetRemediationPlan        http.HandlerFunc
-	HandleApproveRemediationPlan    http.HandlerFunc
-	HandleExecuteRemediationPlan    http.HandlerFunc
-	HandleRollbackRemediationPlan   http.HandlerFunc
 }
 
 // AIAutoFixHandlerDeps provides dependency callbacks for enterprise handler
