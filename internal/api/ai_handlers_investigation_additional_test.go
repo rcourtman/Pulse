@@ -3,10 +3,12 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,10 +17,210 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/investigation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
+
+// testInvestigationStore is a minimal in-memory store for tests that need
+// Create/Get/Update/Complete on investigation sessions. It satisfies the
+// aicontracts.InvestigationStore interface.
+type testInvestigationStore struct {
+	mu        sync.RWMutex
+	sessions  map[string]*aicontracts.InvestigationSession
+	byFinding map[string][]string
+	counter   int
+}
+
+func newTestInvestigationStore() *testInvestigationStore {
+	return &testInvestigationStore{
+		sessions:  make(map[string]*aicontracts.InvestigationSession),
+		byFinding: make(map[string][]string),
+	}
+}
+
+func (s *testInvestigationStore) LoadFromDisk() error { return nil }
+func (s *testInvestigationStore) ForceSave() error    { return nil }
+
+func (s *testInvestigationStore) Create(findingID, chatSessionID string) *aicontracts.InvestigationSession {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.counter++
+	session := &aicontracts.InvestigationSession{
+		ID:        fmt.Sprintf("inv-%d", s.counter),
+		FindingID: findingID,
+		SessionID: chatSessionID,
+		Status:    aicontracts.InvestigationStatusPending,
+		StartedAt: time.Now(),
+	}
+	s.sessions[session.ID] = session
+	s.byFinding[findingID] = append(s.byFinding[findingID], session.ID)
+	return session
+}
+
+func (s *testInvestigationStore) Get(id string) *aicontracts.InvestigationSession {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if sess, ok := s.sessions[id]; ok {
+		cp := *sess
+		if sess.ProposedFix != nil {
+			fc := *sess.ProposedFix
+			cp.ProposedFix = &fc
+		}
+		return &cp
+	}
+	return nil
+}
+
+func (s *testInvestigationStore) GetByFinding(findingID string) []*aicontracts.InvestigationSession {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var result []*aicontracts.InvestigationSession
+	for _, id := range s.byFinding[findingID] {
+		if sess, ok := s.sessions[id]; ok {
+			cp := *sess
+			if sess.ProposedFix != nil {
+				fc := *sess.ProposedFix
+				cp.ProposedFix = &fc
+			}
+			result = append(result, &cp)
+		}
+	}
+	return result
+}
+
+func (s *testInvestigationStore) GetLatestByFinding(findingID string) *aicontracts.InvestigationSession {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	ids := s.byFinding[findingID]
+	if len(ids) == 0 {
+		return nil
+	}
+	var latest *aicontracts.InvestigationSession
+	for _, id := range ids {
+		if sess, ok := s.sessions[id]; ok {
+			if latest == nil || sess.StartedAt.After(latest.StartedAt) {
+				latest = sess
+			}
+		}
+	}
+	if latest != nil {
+		cp := *latest
+		if latest.ProposedFix != nil {
+			fc := *latest.ProposedFix
+			cp.ProposedFix = &fc
+		}
+		return &cp
+	}
+	return nil
+}
+
+func (s *testInvestigationStore) GetRunning() []*aicontracts.InvestigationSession { return nil }
+func (s *testInvestigationStore) CountRunning() int                               { return 0 }
+
+func (s *testInvestigationStore) Update(session *aicontracts.InvestigationSession) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.sessions[session.ID]; !ok {
+		return false
+	}
+	cp := *session
+	if session.ProposedFix != nil {
+		fc := *session.ProposedFix
+		cp.ProposedFix = &fc
+	}
+	s.sessions[session.ID] = &cp
+	return true
+}
+
+func (s *testInvestigationStore) UpdateStatus(id string, status aicontracts.InvestigationStatus) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if sess, ok := s.sessions[id]; ok {
+		sess.Status = status
+		return true
+	}
+	return false
+}
+
+func (s *testInvestigationStore) Complete(id string, outcome aicontracts.InvestigationOutcome, summary string, proposedFix *aicontracts.Fix) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if sess, ok := s.sessions[id]; ok {
+		sess.Status = aicontracts.InvestigationStatusCompleted
+		sess.Outcome = outcome
+		sess.Summary = summary
+		if proposedFix != nil {
+			fc := *proposedFix
+			sess.ProposedFix = &fc
+		}
+		now := time.Now()
+		sess.CompletedAt = &now
+		return true
+	}
+	return false
+}
+
+func (s *testInvestigationStore) Fail(id string, errorMsg string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if sess, ok := s.sessions[id]; ok {
+		sess.Status = aicontracts.InvestigationStatusFailed
+		sess.Error = errorMsg
+		now := time.Now()
+		sess.CompletedAt = &now
+		return true
+	}
+	return false
+}
+
+func (s *testInvestigationStore) SetOutcome(id string, outcome aicontracts.InvestigationOutcome) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if sess, ok := s.sessions[id]; ok {
+		sess.Outcome = outcome
+		return true
+	}
+	return false
+}
+
+func (s *testInvestigationStore) IncrementTurnCount(id string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if sess, ok := s.sessions[id]; ok {
+		sess.TurnCount++
+		return sess.TurnCount
+	}
+	return 0
+}
+
+func (s *testInvestigationStore) SetApprovalID(id, approvalID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if sess, ok := s.sessions[id]; ok {
+		sess.ApprovalID = approvalID
+		return true
+	}
+	return false
+}
+
+func (s *testInvestigationStore) GetAll() []*aicontracts.InvestigationSession {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]*aicontracts.InvestigationSession, 0, len(s.sessions))
+	for _, sess := range s.sessions {
+		cp := *sess
+		if sess.ProposedFix != nil {
+			fc := *sess.ProposedFix
+			cp.ProposedFix = &fc
+		}
+		result = append(result, &cp)
+	}
+	return result
+}
+
+func (s *testInvestigationStore) CountFixed() int             { return 0 }
+func (s *testInvestigationStore) Cleanup(_ time.Duration) int { return 0 }
+func (s *testInvestigationStore) EnforceSizeLimit(_ int) int  { return 0 }
 
 type stubInvestigationOrchestrator struct {
 	session           *ai.InvestigationSession
@@ -100,33 +302,13 @@ func TestSetupInvestigationOrchestrator_WiresTenantBudgetChecker(t *testing.T) {
 	// Register factories so setupInvestigationOrchestrator can create a store and orchestrator.
 	prevStoreFactory := getCreateInvestigationStore()
 	SetCreateInvestigationStore(func(dataDir string) aicontracts.InvestigationStore {
-		return investigation.NewStore(dataDir)
+		return newTestInvestigationStore()
 	})
 	t.Cleanup(func() { SetCreateInvestigationStore(prevStoreFactory) })
 
 	prevOrchestratorFactory := getCreateInvestigationOrchestrator()
 	SetCreateInvestigationOrchestrator(func(deps aicontracts.OrchestratorDeps) aicontracts.InvestigationOrchestrator {
-		invConfig := deps.Config
-		o := investigation.NewOrchestrator(deps.ChatService, deps.Store, deps.FindingsStore, deps.ApprovalStore, invConfig)
-		if deps.CmdExecutor != nil {
-			o.SetCommandExecutor(deps.CmdExecutor)
-		}
-		if deps.Autonomy != nil {
-			o.SetAutonomyLevelProvider(deps.Autonomy)
-		}
-		if deps.InfraContext != nil {
-			o.SetInfrastructureContextProvider(deps.InfraContext)
-		}
-		if deps.FixVerifier != nil {
-			o.SetFixVerifier(deps.FixVerifier)
-		}
-		if deps.License != nil {
-			o.SetLicenseChecker(deps.License)
-		}
-		if deps.Metrics != nil {
-			o.SetMetricsCallback(deps.Metrics)
-		}
-		return o
+		return &stubInvestigationOrchestrator{}
 	})
 	t.Cleanup(func() { SetCreateInvestigationOrchestrator(prevOrchestratorFactory) })
 
@@ -718,9 +900,9 @@ func TestExecuteInvestigationFix_MCPTool(t *testing.T) {
 		Description:  "desc",
 	})
 
-	store := investigation.NewStore("")
+	store := newTestInvestigationStore()
 	session := store.Create(findingID, "session-1")
-	session.ProposedFix = &investigation.Fix{
+	session.ProposedFix = &aicontracts.Fix{
 		ID:          "fix-1",
 		Description: "Get capabilities",
 		Commands:    []string{"pulse_get_capabilities()"},
@@ -759,12 +941,12 @@ func TestExecuteInvestigationFix_MCPTool(t *testing.T) {
 	}
 
 	updatedFinding := findings.Get(findingID)
-	if updatedFinding == nil || updatedFinding.InvestigationOutcome != string(investigation.OutcomeFixFailed) {
+	if updatedFinding == nil || updatedFinding.InvestigationOutcome != string(aicontracts.OutcomeFixFailed) {
 		t.Fatalf("unexpected finding outcome: %+v", updatedFinding)
 	}
 
 	updatedSession := store.Get(session.ID)
-	if updatedSession == nil || updatedSession.Outcome != investigation.OutcomeFixFailed {
+	if updatedSession == nil || updatedSession.Outcome != aicontracts.OutcomeFixFailed {
 		t.Fatalf("unexpected investigation outcome: %+v", updatedSession)
 	}
 }
@@ -795,9 +977,9 @@ func TestExecuteInvestigationFix_TargetDriftBlocked(t *testing.T) {
 		Description:  "desc",
 	})
 
-	store := investigation.NewStore("")
+	store := newTestInvestigationStore()
 	session := store.Create(findingID, "session-1")
-	session.ProposedFix = &investigation.Fix{
+	session.ProposedFix = &aicontracts.Fix{
 		ID:          "fix-1",
 		Description: "Restart service",
 		Commands:    []string{"echo ok"},

@@ -388,7 +388,7 @@ func (f *Finding) ToCoreFinding() *InvestigationFinding {
 	}
 }
 
-// Getter methods for investigation.AIFinding interface
+// Getter methods for aicontracts.OrchestratorAIFinding interface
 
 func (f *Finding) GetID() string                     { return f.ID }
 func (f *Finding) GetSeverity() string               { return string(f.Severity) }
@@ -407,7 +407,7 @@ func (f *Finding) GetLastInvestigatedAt() *time.Time { return f.LastInvestigated
 func (f *Finding) GetInvestigationAttempts() int     { return f.InvestigationAttempts }
 func (f *Finding) GetLoopState() string              { return f.LoopState }
 
-// Setter methods for investigation.AIFinding interface
+// Setter methods for aicontracts.OrchestratorAIFinding interface
 
 func (f *Finding) SetInvestigationSessionID(v string) { f.InvestigationSessionID = v }
 func (f *Finding) SetInvestigationStatus(v string)    { f.InvestigationStatus = v }

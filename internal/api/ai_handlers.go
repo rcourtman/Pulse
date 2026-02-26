@@ -23,7 +23,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/forecast"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/investigation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
@@ -2095,7 +2094,7 @@ type findingsStoreWrapper struct {
 	store *ai.FindingsStore
 }
 
-func (w *findingsStoreWrapper) Get(id string) investigation.AIFinding {
+func (w *findingsStoreWrapper) Get(id string) aicontracts.OrchestratorAIFinding {
 	if w.store == nil {
 		return nil
 	}
@@ -6556,9 +6555,9 @@ func (h *AISettingsHandler) executeInvestigationFix(w http.ResponseWriter, r *ht
 	}
 
 	// Update the investigation outcome
-	newOutcome := investigation.OutcomeFixExecuted
+	newOutcome := aicontracts.OutcomeFixExecuted
 	if err != nil || exitCode != 0 {
-		newOutcome = investigation.OutcomeFixFailed
+		newOutcome = aicontracts.OutcomeFixFailed
 	}
 
 	invStore.Complete(session.ID, newOutcome, fmt.Sprintf("Fix executed with exit code %d", exitCode), session.ProposedFix)
@@ -6595,13 +6594,13 @@ func (h *AISettingsHandler) executeInvestigationFix(w http.ResponseWriter, r *ht
 			verified, verifyErr := patrol.VerifyFixResolved(bgCtx, finding.ResourceID, finding.ResourceType, finding.Key, finding.ID)
 			if verifyErr != nil {
 				log.Error().Err(verifyErr).Str("findingID", findingID).Msg("Post-fix verification failed with error")
-				invStore.Complete(session.ID, investigation.OutcomeFixVerificationFailed, fmt.Sprintf("Fix executed but verification error: %v", verifyErr), session.ProposedFix)
+				invStore.Complete(session.ID, aicontracts.OutcomeFixVerificationFailed, fmt.Sprintf("Fix executed but verification error: %v", verifyErr), session.ProposedFix)
 			} else if !verified {
 				log.Warn().Str("findingID", findingID).Msg("Post-fix verification: issue persists")
-				invStore.Complete(session.ID, investigation.OutcomeFixVerificationFailed, "Fix executed but issue persists after verification.", session.ProposedFix)
+				invStore.Complete(session.ID, aicontracts.OutcomeFixVerificationFailed, "Fix executed but issue persists after verification.", session.ProposedFix)
 			} else {
 				log.Info().Str("findingID", findingID).Msg("Post-fix verification: issue resolved")
-				invStore.Complete(session.ID, investigation.OutcomeFixVerified, "Fix executed and verified - issue resolved.", session.ProposedFix)
+				invStore.Complete(session.ID, aicontracts.OutcomeFixVerified, "Fix executed and verified - issue resolved.", session.ProposedFix)
 			}
 			h.updateFindingOutcome(bgCtx, orgID, findingID, string(invStore.GetLatestByFinding(findingID).Outcome))
 		}()
@@ -7343,7 +7342,7 @@ func (h *AISettingsHandler) HandleReinvestigateFinding(w http.ResponseWriter, r 
 	invStore := h.investigationStores[orgID]
 	h.investigationMu.RUnlock()
 	if invStore != nil {
-		if latest := invStore.GetLatestByFinding(findingID); latest != nil && latest.Status == investigation.StatusRunning {
+		if latest := invStore.GetLatestByFinding(findingID); latest != nil && latest.Status == aicontracts.InvestigationStatusRunning {
 			writeErrorResponse(w, http.StatusConflict, "investigation_running",
 				"An investigation is already running for this finding", nil)
 			return

@@ -13,12 +13,12 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/investigation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
 )
 
@@ -1252,7 +1252,7 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 // within the investigation goroutine.
 func (p *PatrolService) VerifyFixResolved(ctx context.Context, resourceID, resourceType, findingKey, findingID string) (bool, error) {
 	if p == nil || p.stateProvider == nil {
-		return false, fmt.Errorf("%w: no state provider available", investigation.ErrVerificationUnknown)
+		return false, fmt.Errorf("%w: no state provider available", aicontracts.ErrVerificationUnknown)
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -1329,7 +1329,7 @@ func (p *PatrolService) verifyFixDeterministically(
 ) (bool, error) {
 	key := normalizeFindingKey(findingKey)
 	if key == "" {
-		return false, fmt.Errorf("%w: missing finding key", investigation.ErrVerificationUnknown)
+		return false, fmt.Errorf("%w: missing finding key", aicontracts.ErrVerificationUnknown)
 	}
 
 	// State-only verifiers (no tools required).
@@ -1377,25 +1377,25 @@ func (p *PatrolService) verifyFixDeterministically(
 		guestID := strings.TrimSpace(resourceID)
 		return p.verifyBySignals(ctx, executor, sigThresholds, key, guestID, "")
 	default:
-		return false, fmt.Errorf("%w: no deterministic verifier for key=%q (finding_id=%s)", investigation.ErrVerificationUnknown, key, findingID)
+		return false, fmt.Errorf("%w: no deterministic verifier for key=%q (finding_id=%s)", aicontracts.ErrVerificationUnknown, key, findingID)
 	}
 }
 
 func (p *PatrolService) getExecutorForVerification() (*tools.PulseToolExecutor, error) {
 	if p == nil || p.aiService == nil {
-		return nil, fmt.Errorf("%w: AI service unavailable", investigation.ErrVerificationUnknown)
+		return nil, fmt.Errorf("%w: AI service unavailable", aicontracts.ErrVerificationUnknown)
 	}
 	cs := p.aiService.GetChatService()
 	if cs == nil {
-		return nil, fmt.Errorf("%w: chat service unavailable", investigation.ErrVerificationUnknown)
+		return nil, fmt.Errorf("%w: chat service unavailable", aicontracts.ErrVerificationUnknown)
 	}
 	executorAccessor, ok := cs.(chatServiceExecutorAccessor)
 	if !ok {
-		return nil, fmt.Errorf("%w: chat service does not expose tool executor", investigation.ErrVerificationUnknown)
+		return nil, fmt.Errorf("%w: chat service does not expose tool executor", aicontracts.ErrVerificationUnknown)
 	}
 	exec := executorAccessor.GetExecutor()
 	if exec == nil {
-		return nil, fmt.Errorf("%w: tool executor unavailable", investigation.ErrVerificationUnknown)
+		return nil, fmt.Errorf("%w: tool executor unavailable", aicontracts.ErrVerificationUnknown)
 	}
 	return exec, nil
 }
@@ -1409,7 +1409,7 @@ func (p *PatrolService) verifyBySignals(
 	resourceName string,
 ) (bool, error) {
 	if executor == nil {
-		return false, fmt.Errorf("%w: tool executor unavailable", investigation.ErrVerificationUnknown)
+		return false, fmt.Errorf("%w: tool executor unavailable", aicontracts.ErrVerificationUnknown)
 	}
 
 	var toolName string
@@ -1428,7 +1428,7 @@ func (p *PatrolService) verifyBySignals(
 			args["guest_id"] = resourceID
 		}
 	default:
-		return false, fmt.Errorf("%w: unhandled signal verifier key=%q", investigation.ErrVerificationUnknown, findingKey)
+		return false, fmt.Errorf("%w: unhandled signal verifier key=%q", aicontracts.ErrVerificationUnknown, findingKey)
 	}
 
 	tc, err := executeToolCall(ctx, executor, toolName, args)
@@ -1460,10 +1460,10 @@ func (p *PatrolService) verifyBySignals(
 
 func executeToolCall(ctx context.Context, executor *tools.PulseToolExecutor, toolName string, args map[string]interface{}) (ToolCallRecord, error) {
 	if executor == nil {
-		return ToolCallRecord{}, fmt.Errorf("%w: tool executor unavailable", investigation.ErrVerificationUnknown)
+		return ToolCallRecord{}, fmt.Errorf("%w: tool executor unavailable", aicontracts.ErrVerificationUnknown)
 	}
 	if toolName == "" {
-		return ToolCallRecord{}, fmt.Errorf("%w: missing tool name", investigation.ErrVerificationUnknown)
+		return ToolCallRecord{}, fmt.Errorf("%w: missing tool name", aicontracts.ErrVerificationUnknown)
 	}
 	if args == nil {
 		args = map[string]interface{}{}
@@ -1484,16 +1484,16 @@ func executeToolCall(ctx context.Context, executor *tools.PulseToolExecutor, too
 	end := time.Now().UnixMilli()
 
 	if execErr != nil {
-		return ToolCallRecord{}, fmt.Errorf("%w: tool execution failed (%s): %v", investigation.ErrVerificationUnknown, toolName, execErr)
+		return ToolCallRecord{}, fmt.Errorf("%w: tool execution failed (%s): %v", aicontracts.ErrVerificationUnknown, toolName, execErr)
 	}
 	if result.IsError {
-		return ToolCallRecord{}, fmt.Errorf("%w: tool returned error (%s): %s", investigation.ErrVerificationUnknown, toolName, output)
+		return ToolCallRecord{}, fmt.Errorf("%w: tool returned error (%s): %s", aicontracts.ErrVerificationUnknown, toolName, output)
 	}
 	// Most verification probes rely on parsing structured JSON outputs. If we receive
 	// non-JSON text, treat verification as inconclusive rather than "resolved".
 	if toolName == "pulse_storage" || toolName == "pulse_metrics" || toolName == "pulse_alerts" {
 		if !isValidJSON(output) {
-			return ToolCallRecord{}, fmt.Errorf("%w: tool returned non-JSON output (%s)", investigation.ErrVerificationUnknown, toolName)
+			return ToolCallRecord{}, fmt.Errorf("%w: tool returned non-JSON output (%s)", aicontracts.ErrVerificationUnknown, toolName)
 		}
 	}
 
@@ -1524,7 +1524,7 @@ func isValidJSON(s string) bool {
 func verifyBackupFresh(state models.StateSnapshot, guestID string) (bool, error) {
 	vmID := strings.TrimSpace(guestID)
 	if vmID == "" {
-		return false, fmt.Errorf("%w: missing guest id", investigation.ErrVerificationUnknown)
+		return false, fmt.Errorf("%w: missing guest id", aicontracts.ErrVerificationUnknown)
 	}
 
 	now := time.Now()
@@ -1545,7 +1545,7 @@ func verifyBackupFresh(state models.StateSnapshot, guestID string) (bool, error)
 	}
 	if last.IsZero() {
 		// If the guest cannot be found, verification can't be concluded deterministically.
-		return false, fmt.Errorf("%w: guest not found for backup verification (%s)", investigation.ErrVerificationUnknown, vmID)
+		return false, fmt.Errorf("%w: guest not found for backup verification (%s)", aicontracts.ErrVerificationUnknown, vmID)
 	}
 
 	if now.Sub(last) <= 48*time.Hour {
@@ -1557,7 +1557,7 @@ func verifyBackupFresh(state models.StateSnapshot, guestID string) (bool, error)
 func verifyMetricRecovered(state models.StateSnapshot, thresholds PatrolThresholds, key, resourceID, resourceType string) (bool, error) {
 	rid := strings.TrimSpace(resourceID)
 	if rid == "" {
-		return false, fmt.Errorf("%w: missing resource id", investigation.ErrVerificationUnknown)
+		return false, fmt.Errorf("%w: missing resource id", aicontracts.ErrVerificationUnknown)
 	}
 
 	// Use a small margin to avoid flapping around exact thresholds.
@@ -1616,7 +1616,7 @@ func verifyMetricRecovered(state models.StateSnapshot, thresholds PatrolThreshol
 	}
 
 	// If we can't locate the resource, verification is inconclusive.
-	return false, fmt.Errorf("%w: resource not found for metric verification (%s)", investigation.ErrVerificationUnknown, rid)
+	return false, fmt.Errorf("%w: resource not found for metric verification (%s)", aicontracts.ErrVerificationUnknown, rid)
 }
 
 func (p *PatrolService) verifyGuestReachability(ctx context.Context, state models.StateSnapshot, guestID string) (bool, error) {
@@ -1624,12 +1624,12 @@ func (p *PatrolService) verifyGuestReachability(ctx context.Context, state model
 	prober := p.guestProber
 	p.mu.RUnlock()
 	if prober == nil {
-		return false, fmt.Errorf("%w: guest prober not configured", investigation.ErrVerificationUnknown)
+		return false, fmt.Errorf("%w: guest prober not configured", aicontracts.ErrVerificationUnknown)
 	}
 
 	vmID := strings.TrimSpace(guestID)
 	if vmID == "" {
-		return false, fmt.Errorf("%w: missing guest id", investigation.ErrVerificationUnknown)
+		return false, fmt.Errorf("%w: missing guest id", aicontracts.ErrVerificationUnknown)
 	}
 
 	var node string
@@ -1655,17 +1655,17 @@ func (p *PatrolService) verifyGuestReachability(ctx context.Context, state model
 		}
 	}
 	if node == "" || ip == "" {
-		return false, fmt.Errorf("%w: missing node/ip for guest reachability verification (guest=%s)", investigation.ErrVerificationUnknown, vmID)
+		return false, fmt.Errorf("%w: missing node/ip for guest reachability verification (guest=%s)", aicontracts.ErrVerificationUnknown, vmID)
 	}
 
 	agentID, ok := prober.GetAgentForHost(node)
 	if !ok || strings.TrimSpace(agentID) == "" {
-		return false, fmt.Errorf("%w: no agent available for host %s", investigation.ErrVerificationUnknown, node)
+		return false, fmt.Errorf("%w: no agent available for host %s", aicontracts.ErrVerificationUnknown, node)
 	}
 
 	results, err := prober.PingGuests(ctx, agentID, []string{ip})
 	if err != nil {
-		return false, fmt.Errorf("%w: reachability probe failed: %v", investigation.ErrVerificationUnknown, err)
+		return false, fmt.Errorf("%w: reachability probe failed: %v", aicontracts.ErrVerificationUnknown, err)
 	}
 	if res, ok := results[ip]; ok {
 		if res.Reachable {
@@ -1673,5 +1673,5 @@ func (p *PatrolService) verifyGuestReachability(ctx context.Context, state model
 		}
 		return false, nil
 	}
-	return false, fmt.Errorf("%w: missing ping result for %s", investigation.ErrVerificationUnknown, ip)
+	return false, fmt.Errorf("%w: missing ping result for %s", aicontracts.ErrVerificationUnknown, ip)
 }
