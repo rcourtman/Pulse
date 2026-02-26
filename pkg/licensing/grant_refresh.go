@@ -2,6 +2,7 @@ package licensing
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -201,8 +202,8 @@ func (s *Service) refreshGrantOnce(ctx context.Context) error {
 		return fmt.Errorf("refresh grant: %w", err)
 	}
 
-	// Parse the new grant JWT.
-	gc, err := parseGrantJWT(resp.Grant.JWT)
+	// Parse and verify the new grant JWT.
+	gc, err := verifyAndParseGrantJWT(resp.Grant.JWT)
 	if err != nil {
 		return fmt.Errorf("parse refreshed grant: %w", err)
 	}
@@ -311,10 +312,60 @@ func (s *Service) nextRefreshInterval(consecutiveFailures int) time.Duration {
 	return interval + time.Duration(offset)
 }
 
-// parseGrantJWT extracts GrantClaims from a grant JWT without signature verification.
-// Grant JWTs are validated by the license server; the client trusts the TLS connection.
-func parseGrantJWT(jwt string) (*GrantClaims, error) {
-	parts := splitJWT(jwt)
+// verifyAndParseGrantJWT verifies the Ed25519 signature on a grant JWT and
+// extracts the GrantClaims. Follows the same verification pattern as
+// ValidateLicense() in service.go.
+func verifyAndParseGrantJWT(token string) (*GrantClaims, error) {
+	parts := splitJWT(token)
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("invalid grant JWT: expected 3 parts, got %d", len(parts))
+	}
+
+	// Decode signature.
+	signature, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil {
+		return nil, fmt.Errorf("decode grant signature: %w", err)
+	}
+
+	// Verify signature (same pattern as ValidateLicense).
+	devMode := isLicenseValidationDevMode()
+	signedData := []byte(parts[0] + "." + parts[1])
+	key := currentPublicKey()
+
+	if len(key) > 0 {
+		if !ed25519.Verify(key, signedData, signature) {
+			return nil, ErrSignatureInvalid
+		}
+	} else if !devMode {
+		return nil, fmt.Errorf("%w: grant signature verification required", ErrNoPublicKey)
+	}
+	// If devMode and no public key, skip signature verification (for testing only).
+
+	// Decode and parse payload.
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("decode grant payload: %w", err)
+	}
+
+	var gc GrantClaims
+	if err := json.Unmarshal(payload, &gc); err != nil {
+		return nil, fmt.Errorf("unmarshal grant claims: %w", err)
+	}
+
+	if gc.LicenseID == "" {
+		return nil, fmt.Errorf("grant missing license ID")
+	}
+	if gc.Tier == "" {
+		return nil, fmt.Errorf("grant missing tier")
+	}
+
+	return &gc, nil
+}
+
+// parseGrantJWTUnsafe extracts GrantClaims from a grant JWT without signature
+// verification. Only used in tests that specifically test claim parsing.
+func parseGrantJWTUnsafe(token string) (*GrantClaims, error) {
+	parts := splitJWT(token)
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("invalid grant JWT: expected 3 parts, got %d", len(parts))
 	}

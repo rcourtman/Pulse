@@ -227,7 +227,7 @@ func (s *Service) ActivateWithKey(activationKey string) (*License, error) {
 	}
 
 	// Parse the grant JWT to extract claims.
-	gc, err := parseGrantJWT(resp.Grant.JWT)
+	gc, err := verifyAndParseGrantJWT(resp.Grant.JWT)
 	if err != nil {
 		return nil, fmt.Errorf("parse grant from activation: %w", err)
 	}
@@ -309,7 +309,7 @@ func (s *Service) ExchangeLegacyLicense(legacyJWT string) (*License, error) {
 		return nil, fmt.Errorf("exchange failed: %w", err)
 	}
 
-	gc, err := parseGrantJWT(resp.Grant.JWT)
+	gc, err := verifyAndParseGrantJWT(resp.Grant.JWT)
 	if err != nil {
 		return nil, fmt.Errorf("parse grant from exchange: %w", err)
 	}
@@ -393,7 +393,7 @@ func (s *Service) ExchangeLegacyLicenseIfCurrent(expectedRawJWT string) (*Licens
 		return nil, fmt.Errorf("exchange failed: %w", err)
 	}
 
-	gc, err := parseGrantJWT(resp.Grant.JWT)
+	gc, err := verifyAndParseGrantJWT(resp.Grant.JWT)
 	if err != nil {
 		return nil, fmt.Errorf("parse grant from exchange: %w", err)
 	}
@@ -486,7 +486,7 @@ func (s *Service) RestoreActivation(state *ActivationState) error {
 		return nil
 	}
 
-	gc, err := parseGrantJWT(state.GrantJWT)
+	gc, err := verifyAndParseGrantJWT(state.GrantJWT)
 	if err != nil {
 		return fmt.Errorf("parse persisted grant: %w", err)
 	}

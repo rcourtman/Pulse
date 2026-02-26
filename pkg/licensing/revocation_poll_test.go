@@ -89,6 +89,8 @@ func TestClientFetchRevocations(t *testing.T) {
 }
 
 func TestHandleRevocationEvent_RevokeLicense(t *testing.T) {
+	setupTestPublicKey(t)
+
 	initialJWT := makeTestGrantJWT(t, &GrantClaims{
 		LicenseID: "lic_revoked",
 		Tier:      "pro",
@@ -130,6 +132,8 @@ func TestHandleRevocationEvent_RevokeLicense(t *testing.T) {
 }
 
 func TestHandleRevocationEvent_RevokeInstallation(t *testing.T) {
+	setupTestPublicKey(t)
+
 	initialJWT := makeTestGrantJWT(t, &GrantClaims{
 		LicenseID: "lic_test",
 		Tier:      "pro",
@@ -158,6 +162,8 @@ func TestHandleRevocationEvent_RevokeInstallation(t *testing.T) {
 }
 
 func TestHandleRevocationEvent_BumpLicenseVersion(t *testing.T) {
+	setupTestPublicKey(t)
+
 	// When bump_license_version fires, it should trigger an immediate grant refresh.
 	var refreshCalled atomic.Int32
 	newJWT := makeTestGrantJWT(t, &GrantClaims{
@@ -273,6 +279,8 @@ func TestPollRevocationsOnce_NoActivation(t *testing.T) {
 }
 
 func TestPollRevocationsOnce_Pagination(t *testing.T) {
+	setupTestPublicKey(t)
+
 	page := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		page++

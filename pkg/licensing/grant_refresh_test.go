@@ -26,6 +26,8 @@ func TestGrantRefreshLoop_StartStop(t *testing.T) {
 }
 
 func TestGrantRefreshLoop_RefreshesGrant(t *testing.T) {
+	setupTestPublicKey(t)
+
 	// Set up a mock license server that serves a new grant on refresh.
 	var refreshCount atomic.Int32
 	newGrantJWT := makeTestGrantJWT(t, &GrantClaims{
@@ -104,6 +106,8 @@ func TestGrantRefreshLoop_RefreshesGrant(t *testing.T) {
 }
 
 func TestGrantRefreshLoop_401ClearsActivation(t *testing.T) {
+	setupTestPublicKey(t)
+
 	// This test exercises the full runGrantRefreshLoop 401 branch, which calls
 	// clearActivationState to revert to free tier and exit the loop.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -360,6 +364,8 @@ func TestSetRefreshHints(t *testing.T) {
 }
 
 func TestRefreshGrantOnce_PersistsState(t *testing.T) {
+	setupTestPublicKey(t)
+
 	newGrantJWT := makeTestGrantJWT(t, &GrantClaims{
 		LicenseID: "lic_persisted",
 		Tier:      "pro",
@@ -439,6 +445,8 @@ func TestRefreshGrantOnce_PersistsState(t *testing.T) {
 }
 
 func TestRefreshGrantOnce_CallsLicenseChangeCallback(t *testing.T) {
+	setupTestPublicKey(t)
+
 	newGrantJWT := makeTestGrantJWT(t, &GrantClaims{
 		LicenseID: "lic_callback",
 		Tier:      "relay",

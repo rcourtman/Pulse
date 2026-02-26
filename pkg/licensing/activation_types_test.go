@@ -178,7 +178,7 @@ func TestGrantClaimsToLicense(t *testing.T) {
 	})
 }
 
-func TestParseGrantJWT(t *testing.T) {
+func TestParseGrantJWTUnsafe(t *testing.T) {
 	tests := []struct {
 		name    string
 		jwt     string
@@ -206,25 +206,25 @@ func TestParseGrantJWT(t *testing.T) {
 		},
 		{
 			name:    "invalid - bad JSON",
-			jwt:     makeTestJWT(t, "not json"),
+			jwt:     makeUnsignedTestJWT(t, "not json"),
 			wantErr: true,
 			errMsg:  "unmarshal grant claims",
 		},
 		{
 			name:    "invalid - missing license ID",
-			jwt:     makeTestGrantJWT(t, &GrantClaims{Tier: "pro"}),
+			jwt:     makeUnsignedTestGrantJWT(t, &GrantClaims{Tier: "pro"}),
 			wantErr: true,
 			errMsg:  "grant missing license ID",
 		},
 		{
 			name:    "invalid - missing tier",
-			jwt:     makeTestGrantJWT(t, &GrantClaims{LicenseID: "lic_123"}),
+			jwt:     makeUnsignedTestGrantJWT(t, &GrantClaims{LicenseID: "lic_123"}),
 			wantErr: true,
 			errMsg:  "grant missing tier",
 		},
 		{
 			name: "valid grant",
-			jwt: makeTestGrantJWT(t, &GrantClaims{
+			jwt: makeUnsignedTestGrantJWT(t, &GrantClaims{
 				LicenseID:      "lic_test",
 				InstallationID: "inst_abc",
 				State:          "active",
@@ -253,7 +253,7 @@ func TestParseGrantJWT(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gc, err := parseGrantJWT(tt.jwt)
+			gc, err := parseGrantJWTUnsafe(tt.jwt)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")

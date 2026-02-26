@@ -106,6 +106,8 @@ func TestClientExchangeLegacy(t *testing.T) {
 }
 
 func TestServiceExchangeLegacyLicense(t *testing.T) {
+	setupTestPublicKey(t)
+
 	grantJWT := makeTestGrantJWT(t, &GrantClaims{
 		LicenseID: "lic_v6",
 		Tier:      "pro",
