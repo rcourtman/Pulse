@@ -55,23 +55,17 @@ type AIAutoFixRuntime struct {
 // in internal/api. These are populated at route registration time and allow enterprise
 // binders to delegate to the real handlers without importing internal packages.
 type AIAutoFixCoreHandlers struct {
-	// Moved to enterprise — these fields are nil:
-	// HandleReinvestigateFinding, HandleReapproveInvestigationFix,
-	// HandleUpdatePatrolAutonomy, HandleApproveInvestigationFix,
-	// HandleListApprovals
-
+	// All handlers moved to enterprise — these fields are nil.
 	HandleReinvestigateFinding      http.HandlerFunc
 	HandleReapproveInvestigationFix http.HandlerFunc
 	HandleUpdatePatrolAutonomy      http.HandlerFunc
 	HandleApproveInvestigationFix   http.HandlerFunc
 	HandleListApprovals             http.HandlerFunc
-
-	// Remediation handlers remain in core
-	HandleGetRemediationPlans     http.HandlerFunc
-	HandleGetRemediationPlan      http.HandlerFunc
-	HandleApproveRemediationPlan  http.HandlerFunc
-	HandleExecuteRemediationPlan  http.HandlerFunc
-	HandleRollbackRemediationPlan http.HandlerFunc
+	HandleGetRemediationPlans       http.HandlerFunc
+	HandleGetRemediationPlan        http.HandlerFunc
+	HandleApproveRemediationPlan    http.HandlerFunc
+	HandleExecuteRemediationPlan    http.HandlerFunc
+	HandleRollbackRemediationPlan   http.HandlerFunc
 }
 
 // AIAutoFixHandlerDeps provides dependency callbacks for enterprise handler
@@ -98,6 +92,12 @@ type AIAutoFixHandlerDeps struct {
 	GetOrchestrator        func(r *http.Request) aicontracts.InvestigationOrchestrator
 	SetupOrchestrator      func(orgID string)
 	IsInvestigationEnabled func() bool
+
+	// Remediation engine per org
+	GetRemediationEngine func(orgID string) aicontracts.RemediationEngine
+
+	// Post-remediation fix verification (background goroutine)
+	LaunchRemediationVerification func(ctx context.Context, findingID, executionID string, engine aicontracts.RemediationEngine)
 
 	// Context helpers
 	GetOrgID       func(ctx context.Context) string

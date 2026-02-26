@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,7 +14,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 type stubForecastProvider struct {
@@ -474,100 +472,6 @@ func TestHandleGetProxmoxCorrelations_ResourceFilter(t *testing.T) {
 	}
 }
 
-func TestHandleExecuteRemediationPlan_Errors(t *testing.T) {
-	t.Run("no_engine", func(t *testing.T) {
-		handler := &AISettingsHandler{}
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/execute", nil)
-		rec := httptest.NewRecorder()
-		handler.HandleExecuteRemediationPlan(rec, req)
-		if rec.Code != http.StatusServiceUnavailable {
-			t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
-		}
-	})
-
-	t.Run("invalid_body", func(t *testing.T) {
-		handler := &AISettingsHandler{remediationEngine: newTestRemediationEngine()}
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/execute", bytes.NewBufferString("bad-json"))
-		rec := httptest.NewRecorder()
-		handler.HandleExecuteRemediationPlan(rec, req)
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-		}
-	})
-
-	t.Run("missing_ids", func(t *testing.T) {
-		handler := &AISettingsHandler{remediationEngine: newTestRemediationEngine()}
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/execute", bytes.NewBufferString("{}"))
-		rec := httptest.NewRecorder()
-		handler.HandleExecuteRemediationPlan(rec, req)
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-		}
-	})
-
-	t.Run("execution_error", func(t *testing.T) {
-		engine := newTestRemediationEngine()
-		plan := &aicontracts.RemediationPlan{
-			ID:          "plan-no-exec",
-			FindingID:   "finding-1",
-			ResourceID:  "res-1",
-			Title:       "Restart",
-			Description: "Restart service",
-			Steps: []aicontracts.RemediationStep{
-				{
-					Order:       0,
-					Description: "Restart",
-					Command:     "echo ok",
-					Target:      "host-1",
-				},
-			},
-		}
-		if err := engine.CreatePlan(plan); err != nil {
-			t.Fatalf("CreatePlan: %v", err)
-		}
-		handler := &AISettingsHandler{remediationEngine: engine}
-		body := bytes.NewBufferString(`{"plan_id":"plan-no-exec"}`)
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-no-exec/execute", body)
-		rec := httptest.NewRecorder()
-		handler.HandleExecuteRemediationPlan(rec, req)
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-		}
-	})
-}
-
-func TestHandleRollbackRemediationPlan_Errors(t *testing.T) {
-	t.Run("no_engine", func(t *testing.T) {
-		handler := &AISettingsHandler{}
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/rollback", nil)
-		rec := httptest.NewRecorder()
-		handler.HandleRollbackRemediationPlan(rec, req)
-		if rec.Code != http.StatusServiceUnavailable {
-			t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
-		}
-	})
-
-	t.Run("invalid_body", func(t *testing.T) {
-		handler := &AISettingsHandler{remediationEngine: newTestRemediationEngine()}
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/rollback", bytes.NewBufferString("bad-json"))
-		rec := httptest.NewRecorder()
-		handler.HandleRollbackRemediationPlan(rec, req)
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-		}
-	})
-
-	t.Run("missing_execution_id", func(t *testing.T) {
-		handler := &AISettingsHandler{remediationEngine: newTestRemediationEngine()}
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/rollback", bytes.NewBufferString("{}"))
-		rec := httptest.NewRecorder()
-		handler.HandleRollbackRemediationPlan(rec, req)
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-		}
-	})
-}
-
 func TestHandleGetIncidentData_Errors(t *testing.T) {
 	t.Run("invalid_path", func(t *testing.T) {
 		handler := &AISettingsHandler{}
@@ -756,30 +660,6 @@ func TestHandleGetProxmoxCorrelations_MethodNotAllowed(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	handler.HandleGetProxmoxCorrelations(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
-	}
-}
-
-func TestHandleExecuteRemediationPlan_MethodNotAllowed(t *testing.T) {
-	handler := &AISettingsHandler{}
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/remediation/plans/plan-1/execute", nil)
-	rec := httptest.NewRecorder()
-
-	handler.HandleExecuteRemediationPlan(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
-	}
-}
-
-func TestHandleRollbackRemediationPlan_MethodNotAllowed(t *testing.T) {
-	handler := &AISettingsHandler{}
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/remediation/plans/plan-1/rollback", nil)
-	rec := httptest.NewRecorder()
-
-	handler.HandleRollbackRemediationPlan(rec, req)
 
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)

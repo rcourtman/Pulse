@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,7 +9,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 func TestHandleGetRemediations_WithLog(t *testing.T) {
@@ -109,105 +107,5 @@ func TestHandleGetRemediations_LicenseHeader(t *testing.T) {
 	}
 	if rec.Header().Get("X-License-Feature") != license.FeatureAIAutoFix {
 		t.Fatalf("expected license feature header")
-	}
-}
-
-func TestHandleGetRemediationPlans_StatusMapping(t *testing.T) {
-	engine := newTestRemediationEngine()
-	plan := &aicontracts.RemediationPlan{
-		ID:          "plan-1",
-		Title:       "Critical fix",
-		Description: "fix it",
-		RiskLevel:   aicontracts.RiskCritical,
-		Steps: []aicontracts.RemediationStep{
-			{Order: 0, Command: "echo ok"},
-		},
-	}
-	if err := engine.CreatePlan(plan); err != nil {
-		t.Fatalf("CreatePlan: %v", err)
-	}
-	if _, err := engine.ApprovePlan(plan.ID, "tester"); err != nil {
-		t.Fatalf("ApprovePlan: %v", err)
-	}
-
-	handler := &AISettingsHandler{}
-	handler.SetRemediationEngine(engine)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/remediation/plans?limit=5", nil)
-	rec := httptest.NewRecorder()
-	handler.HandleGetRemediationPlans(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-
-	var payload map[string]interface{}
-	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	plans := payload["plans"].([]interface{})
-	if len(plans) != 1 {
-		t.Fatalf("expected 1 plan, got %d", len(plans))
-	}
-	planView := plans[0].(map[string]interface{})
-	if planView["risk_level"] != string(aicontracts.RiskHigh) {
-		t.Fatalf("expected risk_level high, got %#v", planView["risk_level"])
-	}
-	if planView["status"] != "approved" {
-		t.Fatalf("expected status approved, got %#v", planView["status"])
-	}
-}
-
-func TestHandleGetRemediationPlan_Success(t *testing.T) {
-	engine := newTestRemediationEngine()
-	plan := &aicontracts.RemediationPlan{
-		ID:    "plan-2",
-		Title: "Fix",
-		Steps: []aicontracts.RemediationStep{{Order: 0, Command: "echo ok"}},
-	}
-	if err := engine.CreatePlan(plan); err != nil {
-		t.Fatalf("CreatePlan: %v", err)
-	}
-
-	handler := &AISettingsHandler{}
-	handler.SetRemediationEngine(engine)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/remediation/plans/plan-2?plan_id=plan-2", nil)
-	rec := httptest.NewRecorder()
-	handler.HandleGetRemediationPlan(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-	var got aicontracts.RemediationPlan
-	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if got.ID != "plan-2" {
-		t.Fatalf("unexpected plan id: %s", got.ID)
-	}
-}
-
-func TestHandleApproveRemediationPlan_Success(t *testing.T) {
-	engine := newTestRemediationEngine()
-	plan := &aicontracts.RemediationPlan{
-		ID:    "plan-3",
-		Title: "Approve",
-		Steps: []aicontracts.RemediationStep{{Order: 0, Command: "echo ok"}},
-	}
-	if err := engine.CreatePlan(plan); err != nil {
-		t.Fatalf("CreatePlan: %v", err)
-	}
-
-	handler := &AISettingsHandler{}
-	handler.SetRemediationEngine(engine)
-
-	body := []byte(`{"plan_id":"plan-3"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-3/approve", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
-	handler.HandleApproveRemediationPlan(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
 }

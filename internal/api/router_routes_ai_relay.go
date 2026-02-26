@@ -323,19 +323,8 @@ func newAIAutoFixRuntime(r *Router) extensions.AIAutoFixRuntime {
 		HasLicenseFeature:    hasLicenseFeature,
 		WriteLicenseRequired: WriteLicenseRequired,
 		WriteError:           writeErrorResponse,
-		CoreHandlers: extensions.AIAutoFixCoreHandlers{
-			// Moved to enterprise — nil:
-			HandleReinvestigateFinding:      nil,
-			HandleReapproveInvestigationFix: nil,
-			HandleUpdatePatrolAutonomy:      nil,
-			HandleApproveInvestigationFix:   nil,
-			HandleListApprovals:             nil,
-			// Remediation handlers remain in core
-			HandleGetRemediationPlans:     r.aiSettingsHandler.HandleGetRemediationPlans,
-			HandleGetRemediationPlan:      r.aiSettingsHandler.HandleGetRemediationPlan,
-			HandleApproveRemediationPlan:  r.aiSettingsHandler.HandleApproveRemediationPlan,
-			HandleExecuteRemediationPlan:  r.aiSettingsHandler.HandleExecuteRemediationPlan,
-			HandleRollbackRemediationPlan: r.aiSettingsHandler.HandleRollbackRemediationPlan,
+		CoreHandlers:         extensions.AIAutoFixCoreHandlers{
+			// All handlers moved to enterprise — nil.
 		},
 		HandlerDeps: newAIAutoFixHandlerDeps(r),
 	}
@@ -372,6 +361,51 @@ func newAIAutoFixHandlerDeps(r *Router) extensions.AIAutoFixHandlerDeps {
 				return nil
 			}
 			return &patrolConfigUpdateAdapter{handler: h, ctx: req.Context()}
+		},
+		GetRemediationEngine: func(orgID string) aicontracts.RemediationEngine {
+			return h.GetRemediationEngineForOrg(orgID)
+		},
+		LaunchRemediationVerification: func(ctx context.Context, findingID, executionID string, engine aicontracts.RemediationEngine) {
+			aiSvc := h.GetAIService(ctx)
+			if aiSvc == nil {
+				return
+			}
+			go func() {
+				time.Sleep(30 * time.Second)
+
+				patrol := aiSvc.GetPatrolService()
+				if patrol == nil {
+					log.Warn().Str("findingID", findingID).Msg("[Remediation] Post-fix verification skipped: no patrol service")
+					return
+				}
+
+				finding := patrol.GetFindings().Get(findingID)
+				if finding == nil {
+					log.Warn().Str("findingID", findingID).Msg("[Remediation] Post-fix verification skipped: finding not found")
+					return
+				}
+
+				bgCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				defer cancel()
+
+				verified, verifyErr := patrol.VerifyFixResolved(bgCtx, finding.ResourceID, finding.ResourceType, finding.Key, finding.ID)
+				if verifyErr != nil {
+					log.Error().Err(verifyErr).Str("findingID", findingID).Msg("[Remediation] Post-fix verification failed with error")
+				} else if !verified {
+					log.Warn().Str("findingID", findingID).Msg("[Remediation] Post-fix verification: issue persists")
+				} else {
+					log.Info().Str("findingID", findingID).Msg("[Remediation] Post-fix verification: issue resolved")
+				}
+
+				// Update execution status based on verification result
+				if verifyErr != nil {
+					engine.SetExecutionVerification(executionID, false, fmt.Sprintf("Verification error: %v", verifyErr))
+				} else if !verified {
+					engine.SetExecutionVerification(executionID, false, "Issue persists after fix")
+				} else {
+					engine.SetExecutionVerification(executionID, true, "Issue resolved")
+				}
+			}()
 		},
 		GetOrchestrator: func(req *http.Request) aicontracts.InvestigationOrchestrator {
 			svc := h.GetAIService(req.Context())

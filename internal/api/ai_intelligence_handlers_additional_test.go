@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
@@ -244,54 +243,6 @@ func TestHandleGetProxmoxCorrelations_WithCorrelator(t *testing.T) {
 	}
 }
 
-func TestHandleGetRemediationPlans_WithEngine(t *testing.T) {
-	handler := &AISettingsHandler{remediationEngine: newTestRemediationEngine()}
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/remediation/plans", nil)
-	rec := httptest.NewRecorder()
-
-	handler.HandleGetRemediationPlans(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-}
-
-func TestHandleGetRemediationPlan_MissingID(t *testing.T) {
-	handler := &AISettingsHandler{remediationEngine: newTestRemediationEngine()}
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/remediation/plans/plan-1", nil)
-	rec := httptest.NewRecorder()
-
-	handler.HandleGetRemediationPlan(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-	}
-}
-
-func TestHandleApproveRemediationPlan_InvalidBody(t *testing.T) {
-	handler := &AISettingsHandler{remediationEngine: newTestRemediationEngine()}
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/approve", strings.NewReader("bad-json"))
-	rec := httptest.NewRecorder()
-
-	handler.HandleApproveRemediationPlan(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-	}
-}
-
-func TestHandleApproveRemediationPlan_MissingID(t *testing.T) {
-	handler := &AISettingsHandler{remediationEngine: newTestRemediationEngine()}
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/approve", strings.NewReader(`{\"plan_id\":\"\"}`))
-	rec := httptest.NewRecorder()
-
-	handler.HandleApproveRemediationPlan(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-	}
-}
-
 func TestHandleGetForecast_NoService(t *testing.T) {
 	handler := &AISettingsHandler{}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/forecast", nil)
@@ -369,49 +320,5 @@ func TestHandleGetProxmoxCorrelations_NoCorrelator(t *testing.T) {
 	}
 	if payload["message"] != "Proxmox event correlator not available" {
 		t.Fatalf("unexpected message: %#v", payload["message"])
-	}
-}
-
-func TestHandleGetRemediationPlans_NoEngine(t *testing.T) {
-	handler := &AISettingsHandler{}
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/remediation/plans", nil)
-	rec := httptest.NewRecorder()
-
-	handler.HandleGetRemediationPlans(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-
-	var payload map[string]interface{}
-	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if payload["message"] != "Remediation engine not available" {
-		t.Fatalf("unexpected message: %#v", payload["message"])
-	}
-}
-
-func TestHandleGetRemediationPlan_NoEngine(t *testing.T) {
-	handler := &AISettingsHandler{}
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/remediation/plans/plan-1", nil)
-	rec := httptest.NewRecorder()
-
-	handler.HandleGetRemediationPlan(rec, req)
-
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
-	}
-}
-
-func TestHandleApproveRemediationPlan_NoEngine(t *testing.T) {
-	handler := &AISettingsHandler{}
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/approve", nil)
-	rec := httptest.NewRecorder()
-
-	handler.HandleApproveRemediationPlan(rec, req)
-
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
 	}
 }
