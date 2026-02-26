@@ -1613,15 +1613,20 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, orgID, da
 	r.aiSettingsHandler.SetProxmoxCorrelatorForOrg(orgID, proxmoxCorrelator)
 	log.Info().Msg("AI Intelligence: Proxmox event correlator initialized")
 
-	// 7. Initialize remediation engine for AI-guided fixes
-	remediationCfg := remediation.DefaultEngineConfig()
-	remediationCfg.DataDir = dataDir
-	remediationEngine := remediation.NewEngine(remediationCfg)
-	// Wire up command executor (disabled by default for safety)
-	cmdExecutor := adapters.NewCommandExecutorAdapter()
-	remediationEngine.SetCommandExecutor(cmdExecutor)
-	r.aiSettingsHandler.SetRemediationEngineForOrg(orgID, remediationEngine)
-	log.Info().Msg("AI Intelligence: Remediation engine initialized (command execution disabled)")
+	// 7. Initialize remediation engine for AI-guided fixes (requires Pulse Pro)
+	var remediationEngine *remediation.Engine
+	if isAIInvestigationEnabled() {
+		remediationCfg := remediation.DefaultEngineConfig()
+		remediationCfg.DataDir = dataDir
+		remediationEngine = remediation.NewEngine(remediationCfg)
+		// Wire up command executor (disabled by default for safety)
+		cmdExecutor := adapters.NewCommandExecutorAdapter()
+		remediationEngine.SetCommandExecutor(cmdExecutor)
+		r.aiSettingsHandler.SetRemediationEngineForOrg(orgID, remediationEngine)
+		log.Info().Msg("AI Intelligence: Remediation engine initialized (command execution disabled)")
+	} else {
+		log.Info().Msg("AI Intelligence: Remediation engine skipped (requires Pulse Pro)")
+	}
 
 	// 8. Initialize unified alert/finding system and bridge
 	if monitor != nil {

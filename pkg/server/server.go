@@ -72,6 +72,12 @@ type BusinessHooks struct {
 	// BindAIAlertAnalysisEndpoints allows enterprise modules to replace or decorate
 	// AI alert analysis endpoints (alert investigation, Kubernetes analysis).
 	BindAIAlertAnalysisEndpoints extensions.BindAIAlertAnalysisEndpointsFunc
+
+	// AIInvestigationEnabled controls whether premium AI investigation and
+	// remediation components are created at runtime. When nil or returns false,
+	// patrol runs in monitor-only mode (findings reported but never investigated,
+	// no remediation plans generated). Enterprise sets this to return true.
+	AIInvestigationEnabled func() bool
 }
 
 var (
@@ -270,8 +276,10 @@ func Run(ctx context.Context, version string) error {
 	bindReportingAdminEndpoints := globalHooks.BindReportingAdminEndpoints
 	bindAIAutoFixEndpoints := globalHooks.BindAIAutoFixEndpoints
 	bindAIAlertAnalysisEndpoints := globalHooks.BindAIAlertAnalysisEndpoints
+	aiInvestigationEnabled := globalHooks.AIInvestigationEnabled
 	globalHooksMu.Unlock()
 
+	api.SetAIInvestigationEnabled(aiInvestigationEnabled)
 	api.SetRBACAdminEndpointsBinder(bindRBACAdminEndpoints)
 	api.SetAuditAdminEndpointsBinder(bindAuditAdminEndpoints)
 	api.SetSSOAdminEndpointsBinder(bindSSOAdminEndpoints)

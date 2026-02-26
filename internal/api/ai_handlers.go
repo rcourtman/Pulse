@@ -389,7 +389,7 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	}
 
 	// Set up investigation orchestrator if chat handler is available
-	if providers.chatHandler != nil {
+	if providers.chatHandler != nil && isAIInvestigationEnabled() {
 		h.setupInvestigationOrchestrator(orgID, svc)
 	}
 
@@ -522,7 +522,7 @@ func (h *AISettingsHandler) SetStateProvider(sp ai.StateProvider) {
 	// Try to set up the investigation orchestrator if chat handler is ready.
 	// Note: This usually fails because chat service isn't started yet.
 	// The orchestrator will be wired via WireOrchestratorAfterChatStart() instead.
-	if legacyAIService != nil {
+	if legacyAIService != nil && isAIInvestigationEnabled() {
 		h.setupInvestigationOrchestrator("default", legacyAIService)
 		h.aiServicesMu.RLock()
 		for orgID, svc := range h.aiServices {
@@ -1673,22 +1673,29 @@ func (h *AISettingsHandler) SetChatHandler(chatHandler *AIHandler) {
 	// Wire up orchestrator for the legacy service
 	// Note: This usually fails because chat service isn't started yet.
 	// The orchestrator will be wired via WireOrchestratorAfterChatStart() instead.
-	if legacyAIService != nil {
+	if legacyAIService != nil && isAIInvestigationEnabled() {
 		h.setupInvestigationOrchestrator("default", legacyAIService)
 	}
 
 	// Wire up orchestrator for any existing services
-	h.aiServicesMu.RLock()
-	for orgID, svc := range h.aiServices {
-		h.setupInvestigationOrchestrator(orgID, svc)
+	if isAIInvestigationEnabled() {
+		h.aiServicesMu.RLock()
+		for orgID, svc := range h.aiServices {
+			h.setupInvestigationOrchestrator(orgID, svc)
+		}
+		h.aiServicesMu.RUnlock()
 	}
-	h.aiServicesMu.RUnlock()
 }
 
 // WireOrchestratorAfterChatStart is called after the chat service is started
 // to wire up the investigation orchestrator. This must be called after aiHandler.Start()
 // because the orchestrator needs an active chat service.
 func (h *AISettingsHandler) WireOrchestratorAfterChatStart() {
+	if !isAIInvestigationEnabled() {
+		log.Info().Msg("WireOrchestratorAfterChatStart skipped (requires Pulse Pro)")
+		return
+	}
+
 	h.stateMu.RLock()
 	hasChatHandler := h.chatHandler != nil
 	legacyAIService := h.legacyAIService
@@ -7105,8 +7112,8 @@ func (h *AISettingsHandler) HandleReinvestigateFinding(w http.ResponseWriter, r 
 
 	orchestrator := patrol.GetInvestigationOrchestrator()
 	if orchestrator == nil {
-		// Try lazy initialization if chat handler is available
-		if h.chatHandler != nil {
+		// Try lazy initialization if chat handler is available and investigation is enabled
+		if h.chatHandler != nil && isAIInvestigationEnabled() {
 			log.Debug().Msg("Attempting lazy orchestrator initialization for reinvestigation")
 			h.setupInvestigationOrchestrator("default", aiService)
 			orchestrator = patrol.GetInvestigationOrchestrator()
