@@ -1,10 +1,19 @@
 package api
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
+)
 
 var (
 	aiInvestigationEnabledMu   sync.RWMutex
 	aiInvestigationEnabledFunc func() bool
+
+	// Factory hooks for premium component creation.
+	aiFactoryMu                  sync.RWMutex
+	createRemediationEngineFunc  func(cfg aicontracts.EngineConfig) aicontracts.RemediationEngine
+	createInvestigationStoreFunc func(dataDir string) aicontracts.InvestigationStore
 )
 
 // SetAIInvestigationEnabled registers the enterprise hook that controls
@@ -21,4 +30,36 @@ func isAIInvestigationEnabled() bool {
 	aiInvestigationEnabledMu.RLock()
 	defer aiInvestigationEnabledMu.RUnlock()
 	return aiInvestigationEnabledFunc != nil && aiInvestigationEnabledFunc()
+}
+
+// SetCreateRemediationEngine registers the enterprise factory for creating
+// remediation engines. When set, router.go uses this instead of directly
+// constructing remediation.NewEngine.
+func SetCreateRemediationEngine(fn func(cfg aicontracts.EngineConfig) aicontracts.RemediationEngine) {
+	aiFactoryMu.Lock()
+	defer aiFactoryMu.Unlock()
+	createRemediationEngineFunc = fn
+}
+
+// getCreateRemediationEngine returns the registered factory, or nil.
+func getCreateRemediationEngine() func(cfg aicontracts.EngineConfig) aicontracts.RemediationEngine {
+	aiFactoryMu.RLock()
+	defer aiFactoryMu.RUnlock()
+	return createRemediationEngineFunc
+}
+
+// SetCreateInvestigationStore registers the enterprise factory for creating
+// investigation stores. When set, ai_handlers.go uses this instead of
+// directly constructing investigation.NewStore.
+func SetCreateInvestigationStore(fn func(dataDir string) aicontracts.InvestigationStore) {
+	aiFactoryMu.Lock()
+	defer aiFactoryMu.Unlock()
+	createInvestigationStoreFunc = fn
+}
+
+// getCreateInvestigationStore returns the registered factory, or nil.
+func getCreateInvestigationStore() func(dataDir string) aicontracts.InvestigationStore {
+	aiFactoryMu.RLock()
+	defer aiFactoryMu.RUnlock()
+	return createInvestigationStoreFunc
 }

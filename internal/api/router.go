@@ -54,6 +54,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
@@ -1614,11 +1615,15 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, orgID, da
 	log.Info().Msg("AI Intelligence: Proxmox event correlator initialized")
 
 	// 7. Initialize remediation engine for AI-guided fixes (requires Pulse Pro)
-	var remediationEngine *remediation.Engine
+	var remediationEngine aicontracts.RemediationEngine
 	if isAIInvestigationEnabled() {
 		remediationCfg := remediation.DefaultEngineConfig()
 		remediationCfg.DataDir = dataDir
-		remediationEngine = remediation.NewEngine(remediationCfg)
+		if factory := getCreateRemediationEngine(); factory != nil {
+			remediationEngine = factory(remediationCfg)
+		} else {
+			remediationEngine = remediation.NewEngine(remediationCfg)
+		}
 		// Wire up command executor (disabled by default for safety)
 		cmdExecutor := adapters.NewCommandExecutorAdapter()
 		remediationEngine.SetCommandExecutor(cmdExecutor)

@@ -29,6 +29,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
@@ -78,6 +79,15 @@ type BusinessHooks struct {
 	// patrol runs in monitor-only mode (findings reported but never investigated,
 	// no remediation plans generated). Enterprise sets this to return true.
 	AIInvestigationEnabled func() bool
+
+	// CreateRemediationEngine creates the premium remediation engine.
+	// Returns nil in OSS (no implementation available). Enterprise provides
+	// the concrete *remediation.Engine wrapped behind the interface.
+	CreateRemediationEngine func(cfg aicontracts.EngineConfig) aicontracts.RemediationEngine
+
+	// CreateInvestigationStore creates the premium investigation session store.
+	// Returns nil in OSS. Enterprise provides the concrete *investigation.Store.
+	CreateInvestigationStore func(dataDir string) aicontracts.InvestigationStore
 }
 
 var (
@@ -277,9 +287,13 @@ func Run(ctx context.Context, version string) error {
 	bindAIAutoFixEndpoints := globalHooks.BindAIAutoFixEndpoints
 	bindAIAlertAnalysisEndpoints := globalHooks.BindAIAlertAnalysisEndpoints
 	aiInvestigationEnabled := globalHooks.AIInvestigationEnabled
+	createRemediationEngine := globalHooks.CreateRemediationEngine
+	createInvestigationStore := globalHooks.CreateInvestigationStore
 	globalHooksMu.Unlock()
 
 	api.SetAIInvestigationEnabled(aiInvestigationEnabled)
+	api.SetCreateRemediationEngine(createRemediationEngine)
+	api.SetCreateInvestigationStore(createInvestigationStore)
 	api.SetRBACAdminEndpointsBinder(bindRBACAdminEndpoints)
 	api.SetAuditAdminEndpointsBinder(bindAuditAdminEndpoints)
 	api.SetSSOAdminEndpointsBinder(bindSSOAdminEndpoints)
