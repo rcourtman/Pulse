@@ -1,12 +1,21 @@
 package api
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -241,7 +250,7 @@ func (r *Router) registerAIRelayRoutesGroup() {
 
 	// AI approval endpoints - for command approval workflow
 	// Require ai:execute scope to prevent low-privilege tokens from enumerating or denying approvals
-	r.mux.HandleFunc("/api/ai/approvals", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleListApprovals)))
+	r.mux.HandleFunc("/api/ai/approvals", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiAutoFixEndpoints.HandleListApprovals)))
 	r.mux.HandleFunc("/api/ai/approvals/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.routeApprovals)))
 
 	// AI question endpoints - require ai:chat scope for interactive AI features
@@ -295,31 +304,100 @@ func (aiAutoFixFreeAdapter) HandleApproveInvestigationFix(w http.ResponseWriter,
 	WriteLicenseRequired(w, featureAIAutoFixKey, "Auto-Fix requires Pulse Pro")
 }
 
+func (aiAutoFixFreeAdapter) HandleListApprovals(w http.ResponseWriter, _ *http.Request) {
+	WriteLicenseRequired(w, featureAIAutoFixKey, "Approval management requires Pulse Pro")
+}
+
 func newAIAutoFixRuntime(r *Router) extensions.AIAutoFixRuntime {
+	hasLicenseFeature := func(req *http.Request, feature string) bool {
+		if r.licenseHandlers == nil {
+			return false
+		}
+		svc := r.licenseHandlers.FeatureService(req.Context())
+		if svc == nil {
+			return false
+		}
+		return svc.RequireFeature(feature) == nil
+	}
 	return extensions.AIAutoFixRuntime{
-		HasLicenseFeature: func(req *http.Request, feature string) bool {
-			if r.licenseHandlers == nil {
-				return false
-			}
-			svc := r.licenseHandlers.FeatureService(req.Context())
-			if svc == nil {
-				return false
-			}
-			return svc.RequireFeature(feature) == nil
-		},
+		HasLicenseFeature:    hasLicenseFeature,
 		WriteLicenseRequired: WriteLicenseRequired,
 		WriteError:           writeErrorResponse,
 		CoreHandlers: extensions.AIAutoFixCoreHandlers{
-			HandleReinvestigateFinding:      r.aiSettingsHandler.HandleReinvestigateFinding,
-			HandleReapproveInvestigationFix: r.aiSettingsHandler.HandleReapproveInvestigationFix,
-			HandleUpdatePatrolAutonomy:      r.aiSettingsHandler.HandleUpdatePatrolAutonomy,
-			HandleGetRemediationPlans:       r.aiSettingsHandler.HandleGetRemediationPlans,
-			HandleGetRemediationPlan:        r.aiSettingsHandler.HandleGetRemediationPlan,
-			HandleApproveRemediationPlan:    r.aiSettingsHandler.HandleApproveRemediationPlan,
-			HandleExecuteRemediationPlan:    r.aiSettingsHandler.HandleExecuteRemediationPlan,
-			HandleRollbackRemediationPlan:   r.aiSettingsHandler.HandleRollbackRemediationPlan,
-			HandleApproveInvestigationFix:   r.aiSettingsHandler.HandleApproveAndExecuteInvestigationFix,
+			// Moved to enterprise — nil:
+			HandleReinvestigateFinding:      nil,
+			HandleReapproveInvestigationFix: nil,
+			HandleUpdatePatrolAutonomy:      nil,
+			HandleApproveInvestigationFix:   nil,
+			HandleListApprovals:             nil,
+			// Remediation handlers remain in core
+			HandleGetRemediationPlans:     r.aiSettingsHandler.HandleGetRemediationPlans,
+			HandleGetRemediationPlan:      r.aiSettingsHandler.HandleGetRemediationPlan,
+			HandleApproveRemediationPlan:  r.aiSettingsHandler.HandleApproveRemediationPlan,
+			HandleExecuteRemediationPlan:  r.aiSettingsHandler.HandleExecuteRemediationPlan,
+			HandleRollbackRemediationPlan: r.aiSettingsHandler.HandleRollbackRemediationPlan,
 		},
+		HandlerDeps: newAIAutoFixHandlerDeps(r),
+	}
+}
+
+func newAIAutoFixHandlerDeps(r *Router) extensions.AIAutoFixHandlerDeps {
+	h := r.aiSettingsHandler
+	return extensions.AIAutoFixHandlerDeps{
+		GetInvestigationStore: func(orgID string) aicontracts.InvestigationStore {
+			h.investigationMu.RLock()
+			defer h.investigationMu.RUnlock()
+			return h.investigationStores[orgID]
+		},
+		Approvals: func() aicontracts.ApprovalStoreAccessor {
+			if approval.GetStore() == nil {
+				return nil
+			}
+			return &approvalStoreAdapter{}
+		},
+		MCPExecutor:    &mcpToolAdapter{handler: h},
+		AgentExecutor:  &agentCommandAdapter{handler: h},
+		FindingUpdater: &findingOutcomeAdapter{handler: h},
+		FixVerifier:    &fixVerificationAdapter{handler: h},
+		PatrolConfig: func(req *http.Request) aicontracts.PatrolConfigAccessor {
+			svc := h.GetAIService(req.Context())
+			if svc == nil {
+				return nil
+			}
+			return &patrolConfigAdapter{svc: svc}
+		},
+		PatrolConfigUpdate: func(req *http.Request) aicontracts.PatrolConfigUpdater {
+			svc := h.GetAIService(req.Context())
+			if svc == nil {
+				return nil
+			}
+			return &patrolConfigUpdateAdapter{handler: h, ctx: req.Context()}
+		},
+		GetOrchestrator: func(req *http.Request) aicontracts.InvestigationOrchestrator {
+			svc := h.GetAIService(req.Context())
+			if svc == nil {
+				return nil
+			}
+			patrol := svc.GetPatrolService()
+			if patrol == nil {
+				return nil
+			}
+			return patrol.GetInvestigationOrchestrator()
+		},
+		SetupOrchestrator: func(orgID string) {
+			h.setupInvestigationOrchestrator(orgID, h.GetAIService(context.Background()))
+		},
+		IsInvestigationEnabled: isAIInvestigationEnabled,
+		GetOrgID:               GetOrgID,
+		NormalizeOrgID:         approval.NormalizeOrgID,
+		GetUsername: func(req *http.Request) string {
+			return getAuthUsername(h.getConfig(req.Context()), req)
+		},
+		EnsureScope: func(w http.ResponseWriter, req *http.Request, scope string) bool {
+			return ensureScope(w, req, scope)
+		},
+		AuditLog:    LogAuditEvent,
+		GetClientIP: GetClientIP,
 	}
 }
 
@@ -335,6 +413,449 @@ func (aiAlertAnalysisFreeAdapter) HandleInvestigateAlert(w http.ResponseWriter, 
 
 func (aiAlertAnalysisFreeAdapter) HandleAnalyzeKubernetesCluster(w http.ResponseWriter, _ *http.Request) {
 	WriteLicenseRequired(w, featureKubernetesAIKey, "Kubernetes AI analysis requires Pulse Pro")
+}
+
+// ===========================================================================
+// Adapter implementations for AIAutoFixHandlerDeps
+// ===========================================================================
+
+// approvalStoreAdapter implements aicontracts.ApprovalStoreAccessor by
+// wrapping the global approval.Store singleton.
+type approvalStoreAdapter struct{}
+
+var _ aicontracts.ApprovalStoreAccessor = (*approvalStoreAdapter)(nil)
+
+func (a *approvalStoreAdapter) GetApproval(id string) (*aicontracts.ApprovalInfo, bool) {
+	store := approval.GetStore()
+	if store == nil {
+		return nil, false
+	}
+	req, ok := store.GetApproval(id)
+	if !ok {
+		return nil, false
+	}
+	return approvalRequestToInfo(req), true
+}
+
+func (a *approvalStoreAdapter) Approve(id, username string) (*aicontracts.ApprovalInfo, error) {
+	store := approval.GetStore()
+	if store == nil {
+		return nil, fmt.Errorf("approval store not initialized")
+	}
+	req, err := store.Approve(id, username)
+	if err != nil {
+		return nil, err
+	}
+	return approvalRequestToInfo(req), nil
+}
+
+func (a *approvalStoreAdapter) CreateApproval(info *aicontracts.ApprovalInfo) error {
+	store := approval.GetStore()
+	if store == nil {
+		return fmt.Errorf("approval store not initialized")
+	}
+	req := &approval.ApprovalRequest{
+		OrgID:      info.OrgID,
+		ToolID:     info.ToolID,
+		Command:    info.Command,
+		TargetType: info.TargetType,
+		TargetID:   info.TargetID,
+		TargetName: info.TargetName,
+		Context:    info.Context,
+		RiskLevel:  approval.RiskLevel(info.RiskLevel),
+	}
+	if err := store.CreateApproval(req); err != nil {
+		return err
+	}
+	// Backfill the generated ID
+	info.ID = req.ID
+	return nil
+}
+
+func (a *approvalStoreAdapter) GetPendingForOrg(orgID string) ([]*aicontracts.ApprovalInfo, map[string]int) {
+	store := approval.GetStore()
+	if store == nil {
+		return nil, nil
+	}
+	pending := store.GetPendingApprovalsForOrg(orgID)
+	infos := make([]*aicontracts.ApprovalInfo, len(pending))
+	for i, req := range pending {
+		infos[i] = approvalRequestToInfo(req)
+	}
+	return infos, store.GetStatsForOrg(orgID)
+}
+
+func (a *approvalStoreAdapter) BelongsToOrg(info *aicontracts.ApprovalInfo, orgID string) bool {
+	if info == nil {
+		return false
+	}
+	// Reuse the canonical approval.BelongsToOrg logic
+	req := &approval.ApprovalRequest{OrgID: info.OrgID}
+	return approval.BelongsToOrg(req, orgID)
+}
+
+func (a *approvalStoreAdapter) AssessRiskLevel(command, targetType string) string {
+	return string(approval.AssessRiskLevel(command, targetType))
+}
+
+func approvalRequestToInfo(req *approval.ApprovalRequest) *aicontracts.ApprovalInfo {
+	if req == nil {
+		return nil
+	}
+	return &aicontracts.ApprovalInfo{
+		ID:          req.ID,
+		OrgID:       req.OrgID,
+		ExecutionID: req.ExecutionID,
+		ToolID:      req.ToolID,
+		Command:     req.Command,
+		TargetType:  req.TargetType,
+		TargetID:    req.TargetID,
+		TargetName:  req.TargetName,
+		Context:     req.Context,
+		RiskLevel:   string(req.RiskLevel),
+		Status:      string(req.Status),
+		RequestedAt: req.RequestedAt,
+		ExpiresAt:   req.ExpiresAt,
+		DecidedAt:   req.DecidedAt,
+		DecidedBy:   req.DecidedBy,
+		DenyReason:  req.DenyReason,
+		CommandHash: req.CommandHash,
+		Consumed:    req.Consumed,
+	}
+}
+
+// mcpToolAdapter implements aicontracts.MCPToolExecutor by wrapping the chat service.
+type mcpToolAdapter struct {
+	handler *AISettingsHandler
+}
+
+var _ aicontracts.MCPToolExecutor = (*mcpToolAdapter)(nil)
+
+func (m *mcpToolAdapter) ExecuteMCPTool(ctx context.Context, command, approvalID string) (string, int, error) {
+	if m.handler.chatHandler == nil {
+		return "", -1, fmt.Errorf("chat handler not available")
+	}
+	chatSvc := m.handler.chatHandler.GetService(ctx)
+	if chatSvc == nil {
+		return "", -1, fmt.Errorf("chat service not available")
+	}
+	chatService, ok := chatSvc.(*chat.Service)
+	if !ok {
+		return "", -1, fmt.Errorf("chat service type mismatch")
+	}
+	toolName, args, err := parseMCPToolCall(command)
+	if err != nil {
+		return "", -1, fmt.Errorf("failed to parse tool call: %w", err)
+	}
+	if approvalID != "" {
+		args["_approval_id"] = approvalID
+	}
+	log.Info().Str("tool", toolName).Str("approvalID", approvalID).Interface("args", args).Msg("Executing MCP tool fix with pre-approval")
+	result, toolErr := chatService.ExecuteMCPTool(ctx, toolName, args)
+	if toolErr != nil {
+		return result, 1, toolErr
+	}
+	return result, 0, nil
+}
+
+// agentCommandAdapter implements aicontracts.AgentCommandExecutor.
+type agentCommandAdapter struct {
+	handler *AISettingsHandler
+}
+
+var _ aicontracts.AgentCommandExecutor = (*agentCommandAdapter)(nil)
+
+func (a *agentCommandAdapter) ExecuteCommand(ctx context.Context, agentID, command string) (stdout, stderr string, exitCode int, err error) {
+	if a.handler.agentServer == nil {
+		return "", "", -1, fmt.Errorf("agent server not available")
+	}
+	result, execErr := a.handler.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
+		Command:    command,
+		TargetType: "host",
+	})
+	if execErr != nil {
+		return "", "", -1, execErr
+	}
+	return result.Stdout, result.Stderr, result.ExitCode, nil
+}
+
+func (a *agentCommandAdapter) FindAgentForTarget(targetHost string) string {
+	if a.handler.agentServer == nil {
+		return ""
+	}
+	agents := a.handler.agentServer.GetConnectedAgents()
+	if len(agents) == 0 {
+		return ""
+	}
+	if targetHost != "" {
+		for _, agent := range agents {
+			if agent.Hostname == targetHost || agent.AgentID == targetHost {
+				return agent.AgentID
+			}
+		}
+	}
+	if len(agents) == 1 {
+		return agents[0].AgentID
+	}
+	return ""
+}
+
+// findingOutcomeAdapter implements aicontracts.FindingOutcomeUpdater.
+type findingOutcomeAdapter struct {
+	handler *AISettingsHandler
+}
+
+var _ aicontracts.FindingOutcomeUpdater = (*findingOutcomeAdapter)(nil)
+
+func (f *findingOutcomeAdapter) UpdateFindingOutcome(ctx context.Context, orgID, findingID, outcome string) {
+	f.handler.updateFindingOutcome(ctx, orgID, findingID, outcome)
+}
+
+// fixVerificationAdapter implements aicontracts.FixVerificationLauncher.
+type fixVerificationAdapter struct {
+	handler *AISettingsHandler
+}
+
+var _ aicontracts.FixVerificationLauncher = (*fixVerificationAdapter)(nil)
+
+func (v *fixVerificationAdapter) LaunchVerification(ctx context.Context, orgID, findingID, sessionID string, proposedFix *aicontracts.Fix, store aicontracts.InvestigationStore) {
+	aiSvc := v.handler.GetAIService(ctx)
+	go func() {
+		time.Sleep(30 * time.Second)
+
+		patrol := aiSvc.GetPatrolService()
+		if patrol == nil {
+			log.Warn().Str("findingID", findingID).Msg("Post-fix verification skipped: no patrol service")
+			return
+		}
+		finding := patrol.GetFindings().Get(findingID)
+		if finding == nil {
+			log.Warn().Str("findingID", findingID).Msg("Post-fix verification skipped: finding not found")
+			return
+		}
+		bgCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		verified, verifyErr := patrol.VerifyFixResolved(bgCtx, finding.ResourceID, finding.ResourceType, finding.Key, finding.ID)
+		if verifyErr != nil {
+			log.Error().Err(verifyErr).Str("findingID", findingID).Msg("Post-fix verification failed with error")
+			store.Complete(sessionID, aicontracts.OutcomeFixVerificationFailed, fmt.Sprintf("Fix executed but verification error: %v", verifyErr), proposedFix)
+		} else if !verified {
+			log.Warn().Str("findingID", findingID).Msg("Post-fix verification: issue persists")
+			store.Complete(sessionID, aicontracts.OutcomeFixVerificationFailed, "Fix executed but issue persists after verification.", proposedFix)
+		} else {
+			log.Info().Str("findingID", findingID).Msg("Post-fix verification: issue resolved")
+			store.Complete(sessionID, aicontracts.OutcomeFixVerified, "Fix executed and verified - issue resolved.", proposedFix)
+		}
+		latestSession := store.GetLatestByFinding(findingID)
+		if latestSession != nil {
+			v.handler.updateFindingOutcome(bgCtx, orgID, findingID, string(latestSession.Outcome))
+		}
+	}()
+}
+
+// patrolConfigAdapter implements aicontracts.PatrolConfigAccessor by wrapping an AI service.
+type patrolConfigAdapter struct {
+	svc *ai.Service
+}
+
+var _ aicontracts.PatrolConfigAccessor = (*patrolConfigAdapter)(nil)
+
+func (p *patrolConfigAdapter) GetEffectiveAutonomyLevel() string {
+	if p.svc == nil {
+		return ""
+	}
+	return p.svc.GetEffectivePatrolAutonomyLevel()
+}
+
+func (p *patrolConfigAdapter) HasLicenseFeature(feature string) bool {
+	if p.svc == nil {
+		return false
+	}
+	return p.svc.HasLicenseFeature(feature)
+}
+
+func (p *patrolConfigAdapter) GetPatrolInvestigationBudget() int {
+	if p.svc == nil {
+		return 0
+	}
+	cfg := p.svc.GetConfig()
+	if cfg == nil {
+		return 0
+	}
+	return cfg.GetPatrolInvestigationBudget()
+}
+
+func (p *patrolConfigAdapter) GetPatrolInvestigationTimeout() time.Duration {
+	if p.svc == nil {
+		return 0
+	}
+	cfg := p.svc.GetConfig()
+	if cfg == nil {
+		return 0
+	}
+	return cfg.GetPatrolInvestigationTimeout()
+}
+
+func (p *patrolConfigAdapter) GetPatrolFullModeUnlocked() bool {
+	if p.svc == nil {
+		return false
+	}
+	cfg := p.svc.GetConfig()
+	if cfg == nil {
+		return false
+	}
+	return cfg.PatrolFullModeUnlocked
+}
+
+func (p *patrolConfigAdapter) GetPatrolAutonomyLevel() string {
+	if p.svc == nil {
+		return ""
+	}
+	cfg := p.svc.GetConfig()
+	if cfg == nil {
+		return ""
+	}
+	return cfg.GetPatrolAutonomyLevel()
+}
+
+func (p *patrolConfigAdapter) IsValidPatrolAutonomyLevel(level string) bool {
+	return config.IsValidPatrolAutonomyLevel(level)
+}
+
+// patrolConfigUpdateAdapter implements aicontracts.PatrolConfigUpdater.
+type patrolConfigUpdateAdapter struct {
+	handler *AISettingsHandler
+	ctx     context.Context
+}
+
+var _ aicontracts.PatrolConfigUpdater = (*patrolConfigUpdateAdapter)(nil)
+
+func (u *patrolConfigUpdateAdapter) SaveAutonomySettings(ctx context.Context, level string, unlocked bool, budget, timeoutSec int) error {
+	svc := u.handler.GetAIService(ctx)
+	if svc == nil {
+		return fmt.Errorf("AI service not available")
+	}
+	cfg := svc.GetConfig()
+	if cfg == nil {
+		return fmt.Errorf("AI config not available")
+	}
+	cfg.PatrolFullModeUnlocked = unlocked
+	cfg.PatrolAutonomyLevel = level
+	cfg.PatrolInvestigationBudget = budget
+	cfg.PatrolInvestigationTimeoutSec = timeoutSec
+	return u.handler.getPersistence(ctx).SaveAIConfig(*cfg)
+}
+
+func (u *patrolConfigUpdateAdapter) ReloadConfig(ctx context.Context) error {
+	svc := u.handler.GetAIService(ctx)
+	if svc == nil {
+		return fmt.Errorf("AI service not available")
+	}
+	return svc.LoadConfig()
+}
+
+// ---------------------------------------------------------------------------
+// Pure helper functions (used by adapters)
+// ---------------------------------------------------------------------------
+
+// isMCPToolCall checks if a command is an MCP tool call (vs a shell command).
+func isMCPToolCall(command string) bool {
+	return strings.HasPrefix(command, "pulse_") ||
+		strings.HasPrefix(command, "default_api:") ||
+		strings.Contains(command, "pulse_control_guest") ||
+		strings.Contains(command, "pulse_run_command") ||
+		strings.Contains(command, "pulse_get_resource")
+}
+
+// cleanTargetHost extracts just the hostname from a target host string.
+// Handles cases like "delly (The container's host is 'delly')" → "delly".
+func cleanTargetHost(targetHost string) string {
+	if targetHost == "" {
+		return ""
+	}
+	if idx := strings.Index(targetHost, " ("); idx > 0 {
+		return strings.TrimSpace(targetHost[:idx])
+	}
+	if idx := strings.Index(targetHost, " "); idx > 0 {
+		return strings.TrimSpace(targetHost[:idx])
+	}
+	return strings.TrimSpace(targetHost)
+}
+
+// parseMCPToolCall parses an MCP tool call string into tool name and arguments.
+func parseMCPToolCall(command string) (string, map[string]interface{}, error) {
+	command = strings.TrimPrefix(command, "default_api:")
+	openParen := strings.Index(command, "(")
+	if openParen == -1 {
+		return "", nil, fmt.Errorf("no opening parenthesis in tool call")
+	}
+	toolName := strings.TrimSpace(command[:openParen])
+	closeParen := strings.LastIndex(command, ")")
+	if closeParen == -1 || closeParen <= openParen {
+		return "", nil, fmt.Errorf("no closing parenthesis in tool call")
+	}
+	argsStr := command[openParen+1 : closeParen]
+	args := make(map[string]interface{})
+	if strings.TrimSpace(argsStr) == "" {
+		return toolName, args, nil
+	}
+	pairs := splitToolArgs(argsStr)
+	for _, pair := range pairs {
+		parts := strings.SplitN(pair, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		value = strings.Trim(value, "'\"")
+		args[key] = value
+	}
+	return toolName, args, nil
+}
+
+// splitToolArgs splits tool arguments respecting quoted strings.
+func splitToolArgs(argsStr string) []string {
+	var result []string
+	var current strings.Builder
+	var inQuote rune
+	var escaped bool
+	for _, r := range argsStr {
+		if escaped {
+			current.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if r == '\\' {
+			escaped = true
+			current.WriteRune(r)
+			continue
+		}
+		if inQuote != 0 {
+			current.WriteRune(r)
+			if r == inQuote {
+				inQuote = 0
+			}
+			continue
+		}
+		if r == '\'' || r == '"' {
+			inQuote = r
+			current.WriteRune(r)
+			continue
+		}
+		if r == ',' {
+			if s := strings.TrimSpace(current.String()); s != "" {
+				result = append(result, s)
+			}
+			current.Reset()
+			continue
+		}
+		current.WriteRune(r)
+	}
+	if s := strings.TrimSpace(current.String()); s != "" {
+		result = append(result, s)
+	}
+	return result
 }
 
 func newAIAlertAnalysisRuntime(r *Router) extensions.AIAlertAnalysisRuntime {

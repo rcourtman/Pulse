@@ -15,7 +15,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
@@ -439,104 +438,11 @@ func TestHandleClearAllFindings(t *testing.T) {
 	}
 }
 
-func TestHandleListApprovals(t *testing.T) {
-	tmp := t.TempDir()
-	cfg := &config.Config{DataPath: tmp}
-	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, nil)
+// TestHandleListApprovals, TestHandleListApprovals_IsolatesByOrg,
+// TestHandlePatrolAutonomyGetAndUpdate have been moved to enterprise.
+// The GET handler test (HandleGetPatrolAutonomy) remains below.
 
-	prevStore := approval.GetStore()
-	t.Cleanup(func() { approval.SetStore(prevStore) })
-
-	store, err := approval.NewStore(approval.StoreConfig{
-		DataDir:            tmp,
-		DisablePersistence: true,
-	})
-	if err != nil {
-		t.Fatalf("failed to create approval store: %v", err)
-	}
-	approval.SetStore(store)
-
-	if err := store.CreateApproval(&approval.ApprovalRequest{Command: "echo ok"}); err != nil {
-		t.Fatalf("failed to create approval: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/approvals", nil)
-	rec := httptest.NewRecorder()
-	handler.HandleListApprovals(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status OK, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var resp struct {
-		Approvals []approval.ApprovalRequest `json:"approvals"`
-		Stats     map[string]int             `json:"stats"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if len(resp.Approvals) != 1 {
-		t.Fatalf("expected 1 approval, got %d", len(resp.Approvals))
-	}
-	if resp.Stats["pending"] != 1 {
-		t.Fatalf("expected pending approvals to be 1, got %d", resp.Stats["pending"])
-	}
-}
-
-func TestHandleListApprovals_IsolatesByOrg(t *testing.T) {
-	tmp := t.TempDir()
-	cfg := &config.Config{DataPath: tmp}
-	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, nil)
-
-	prevStore := approval.GetStore()
-	t.Cleanup(func() { approval.SetStore(prevStore) })
-
-	store, err := approval.NewStore(approval.StoreConfig{
-		DataDir:            tmp,
-		DisablePersistence: true,
-	})
-	if err != nil {
-		t.Fatalf("failed to create approval store: %v", err)
-	}
-	approval.SetStore(store)
-
-	if err := store.CreateApproval(&approval.ApprovalRequest{OrgID: "org-a", Command: "echo org-a"}); err != nil {
-		t.Fatalf("failed to create org-a approval: %v", err)
-	}
-	if err := store.CreateApproval(&approval.ApprovalRequest{OrgID: "org-b", Command: "echo org-b"}); err != nil {
-		t.Fatalf("failed to create org-b approval: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/approvals", nil)
-	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-a"))
-	rec := httptest.NewRecorder()
-	handler.HandleListApprovals(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status OK, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var resp struct {
-		Approvals []approval.ApprovalRequest `json:"approvals"`
-		Stats     map[string]int             `json:"stats"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if len(resp.Approvals) != 1 {
-		t.Fatalf("expected 1 approval for org-a, got %d", len(resp.Approvals))
-	}
-	if resp.Approvals[0].OrgID != "org-a" {
-		t.Fatalf("expected org-a approval, got %q", resp.Approvals[0].OrgID)
-	}
-	if resp.Stats["pending"] != 1 {
-		t.Fatalf("expected pending approvals to be 1 for org-a, got %d", resp.Stats["pending"])
-	}
-}
-
-func TestHandlePatrolAutonomyGetAndUpdate(t *testing.T) {
+func TestHandlePatrolAutonomyGet(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
@@ -565,47 +471,6 @@ func TestHandlePatrolAutonomyGetAndUpdate(t *testing.T) {
 	}
 	if getResp.AutonomyLevel != config.PatrolAutonomyApproval || getResp.InvestigationBudget != 8 || getResp.InvestigationTimeoutSec != 120 {
 		t.Fatalf("unexpected autonomy settings: %+v", getResp)
-	}
-
-	update := PatrolAutonomySettings{
-		AutonomyLevel:           config.PatrolAutonomyFull,
-		FullModeUnlocked:        func() *bool { v := true; return &v }(),
-		InvestigationBudget:     3,
-		InvestigationTimeoutSec: 10,
-	}
-	body, _ := json.Marshal(update)
-	updateReq := httptest.NewRequest(http.MethodPut, "/api/ai/patrol/autonomy", strings.NewReader(string(body)))
-	updateRec := httptest.NewRecorder()
-	handler.HandleUpdatePatrolAutonomy(updateRec, updateReq)
-
-	if updateRec.Code != http.StatusOK {
-		t.Fatalf("expected status OK, got %d: %s", updateRec.Code, updateRec.Body.String())
-	}
-
-	var updateResp map[string]interface{}
-	if err := json.Unmarshal(updateRec.Body.Bytes(), &updateResp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	settings := updateResp["settings"].(map[string]interface{})
-	if settings["autonomy_level"] != config.PatrolAutonomyFull {
-		t.Fatalf("unexpected autonomy level %v", settings["autonomy_level"])
-	}
-	if settings["full_mode_unlocked"] != true {
-		t.Fatalf("expected full_mode_unlocked true, got %v", settings["full_mode_unlocked"])
-	}
-	if settings["investigation_budget"].(float64) != 5 {
-		t.Fatalf("expected clamped budget to 5, got %v", settings["investigation_budget"])
-	}
-	if settings["investigation_timeout_sec"].(float64) != 60 {
-		t.Fatalf("expected clamped timeout to 60, got %v", settings["investigation_timeout_sec"])
-	}
-
-	loaded, err := persistence.LoadAIConfig()
-	if err != nil {
-		t.Fatalf("LoadAIConfig: %v", err)
-	}
-	if loaded.PatrolAutonomyLevel != config.PatrolAutonomyFull || !loaded.PatrolFullModeUnlocked || loaded.PatrolInvestigationBudget != 5 || loaded.PatrolInvestigationTimeoutSec != 60 {
-		t.Fatalf("unexpected persisted settings: %+v", loaded)
 	}
 }
 
@@ -649,137 +514,8 @@ func TestHandleGetInvestigation(t *testing.T) {
 	}
 }
 
-func TestHandleReapproveInvestigationFix(t *testing.T) {
-	tmp := t.TempDir()
-	cfg := &config.Config{DataPath: tmp}
-	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, nil)
-
-	prevStore := approval.GetStore()
-	t.Cleanup(func() { approval.SetStore(prevStore) })
-
-	store, err := approval.NewStore(approval.StoreConfig{
-		DataDir:            tmp,
-		DisablePersistence: true,
-	})
-	if err != nil {
-		t.Fatalf("failed to create approval store: %v", err)
-	}
-	approval.SetStore(store)
-
-	svc := handler.GetAIService(context.Background())
-	svc.SetStateProvider(&MockStateProvider{})
-	patrol := svc.GetPatrolService()
-	if patrol == nil {
-		t.Fatalf("expected patrol service")
-	}
-
-	session := &ai.InvestigationSession{
-		ID:        "inv-1",
-		FindingID: "finding-1",
-		SessionID: "session-1",
-		Status:    "completed",
-		StartedAt: time.Now(),
-		ProposedFix: &ai.InvestigationFix{
-			ID:          "fix-1",
-			Description: "Restart service",
-			Commands:    []string{"systemctl restart foo"},
-		},
-	}
-	orchestrator := &stubInvestigationOrchestrator{session: session}
-	patrol.SetInvestigationOrchestrator(orchestrator)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/findings/finding-1/reapprove", nil)
-	rec := httptest.NewRecorder()
-	handler.HandleReapproveInvestigationFix(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status OK, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var resp map[string]string
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	approvalID := resp["approval_id"]
-	if approvalID == "" {
-		t.Fatalf("expected approval_id in response")
-	}
-	appr, ok := store.GetApproval(approvalID)
-	if !ok {
-		t.Fatalf("expected approval %s to exist", approvalID)
-	}
-	if appr.OrgID != "default" {
-		t.Fatalf("expected approval OrgID to be default, got %q", appr.OrgID)
-	}
-}
-
-func TestHandleReapproveInvestigationFix_SetsOrgIDFromContext(t *testing.T) {
-	tmp := t.TempDir()
-	cfg := &config.Config{DataPath: tmp}
-	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, nil)
-
-	prevStore := approval.GetStore()
-	t.Cleanup(func() { approval.SetStore(prevStore) })
-
-	store, err := approval.NewStore(approval.StoreConfig{
-		DataDir:            tmp,
-		DisablePersistence: true,
-	})
-	if err != nil {
-		t.Fatalf("failed to create approval store: %v", err)
-	}
-	approval.SetStore(store)
-
-	ctx := context.WithValue(context.Background(), OrgIDContextKey, "org-a")
-	svc := handler.GetAIService(ctx)
-	svc.SetStateProvider(&MockStateProvider{})
-	patrol := svc.GetPatrolService()
-	if patrol == nil {
-		t.Fatalf("expected patrol service")
-	}
-
-	session := &ai.InvestigationSession{
-		ID:        "inv-1",
-		FindingID: "finding-1",
-		SessionID: "session-1",
-		Status:    "completed",
-		StartedAt: time.Now(),
-		ProposedFix: &ai.InvestigationFix{
-			ID:          "fix-1",
-			Description: "Restart service",
-			Commands:    []string{"systemctl restart foo"},
-		},
-	}
-	orchestrator := &stubInvestigationOrchestrator{session: session}
-	patrol.SetInvestigationOrchestrator(orchestrator)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/findings/finding-1/reapprove", nil)
-	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-a"))
-	rec := httptest.NewRecorder()
-	handler.HandleReapproveInvestigationFix(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status OK, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var resp map[string]string
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	approvalID := resp["approval_id"]
-	if approvalID == "" {
-		t.Fatalf("expected approval_id in response")
-	}
-	appr, ok := store.GetApproval(approvalID)
-	if !ok {
-		t.Fatalf("expected approval %s to exist", approvalID)
-	}
-	if appr.OrgID != "org-a" {
-		t.Fatalf("expected approval OrgID org-a, got %q", appr.OrgID)
-	}
-}
+// TestHandleReapproveInvestigationFix and TestHandleReapproveInvestigationFix_SetsOrgIDFromContext
+// have been moved to enterprise.
 
 func TestHandleGetInvestigationMessages(t *testing.T) {
 	tmp := t.TempDir()
@@ -830,187 +566,8 @@ func TestHandleGetInvestigationMessages(t *testing.T) {
 	}
 }
 
-func TestHandleReinvestigateFinding(t *testing.T) {
-	tmp := t.TempDir()
-	cfg := &config.Config{DataPath: tmp}
-	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, nil)
-
-	svc := handler.GetAIService(context.Background())
-	aiCfg := config.NewDefaultAIConfig()
-	aiCfg.PatrolAutonomyLevel = config.PatrolAutonomyApproval
-	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
-		t.Fatalf("SaveAIConfig: %v", err)
-	}
-	if err := svc.LoadConfig(); err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	svc.SetStateProvider(&MockStateProvider{})
-
-	patrol := svc.GetPatrolService()
-	if patrol == nil {
-		t.Fatalf("expected patrol service")
-	}
-
-	callCh := make(chan reinvestigateCall, 1)
-	orchestrator := &stubInvestigationOrchestrator{reinvestigateCh: callCh}
-	patrol.SetInvestigationOrchestrator(orchestrator)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/findings/finding-1/reinvestigate", nil)
-	rec := httptest.NewRecorder()
-	handler.HandleReinvestigateFinding(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status OK, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	select {
-	case call := <-callCh:
-		if call.findingID != "finding-1" || call.autonomy != config.PatrolAutonomyApproval {
-			t.Fatalf("unexpected reinvestigation call: %+v", call)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatalf("expected reinvestigation to be triggered")
-	}
-}
-
-func TestExecuteInvestigationFix_MCPTool(t *testing.T) {
-	tmp := t.TempDir()
-	cfg := &config.Config{DataPath: tmp}
-	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, nil)
-
-	svc := handler.GetAIService(context.Background())
-	svc.SetStateProvider(&MockStateProvider{})
-	patrol := svc.GetPatrolService()
-	if patrol == nil {
-		t.Fatalf("expected patrol service")
-	}
-
-	findingID := "finding-1"
-	findings := patrol.GetFindings()
-	findings.Add(&ai.Finding{
-		ID:           findingID,
-		Severity:     ai.FindingSeverityWarning,
-		Category:     ai.FindingCategoryPerformance,
-		ResourceID:   "res-1",
-		ResourceName: "res-1",
-		ResourceType: "host",
-		Title:        "title",
-		Description:  "desc",
-	})
-
-	store := newTestInvestigationStore()
-	session := store.Create(findingID, "session-1")
-	session.ProposedFix = &aicontracts.Fix{
-		ID:          "fix-1",
-		Description: "Get capabilities",
-		Commands:    []string{"pulse_get_capabilities()"},
-	}
-	if !store.Update(session) {
-		t.Fatalf("failed to update investigation session")
-	}
-	handler.investigationStores = map[string]aicontracts.InvestigationStore{"default": store}
-
-	chatSvc := chat.NewService(chat.Config{AIConfig: config.NewDefaultAIConfig()})
-	handler.chatHandler = &AIHandler{legacyService: chatSvc}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/approvals/exec", nil)
-	rec := httptest.NewRecorder()
-	handler.executeInvestigationFix(rec, req, &approval.ApprovalRequest{
-		ID:       "approval-1",
-		ToolID:   "investigation_fix",
-		Command:  "pulse_get_capabilities()",
-		TargetID: findingID,
-	})
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status OK, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var resp map[string]interface{}
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	// The tool pulse_get_capabilities doesn't exist in the registry, so execution
-	// fails gracefully. The handler still returns 200 OK with success=false and
-	// records the outcome as fix_failed.
-	if resp["success"] != false {
-		t.Fatalf("expected success=false for unknown tool, got %v", resp["success"])
-	}
-
-	updatedFinding := findings.Get(findingID)
-	if updatedFinding == nil || updatedFinding.InvestigationOutcome != string(aicontracts.OutcomeFixFailed) {
-		t.Fatalf("unexpected finding outcome: %+v", updatedFinding)
-	}
-
-	updatedSession := store.Get(session.ID)
-	if updatedSession == nil || updatedSession.Outcome != aicontracts.OutcomeFixFailed {
-		t.Fatalf("unexpected investigation outcome: %+v", updatedSession)
-	}
-}
-
-func TestExecuteInvestigationFix_TargetDriftBlocked(t *testing.T) {
-	tmp := t.TempDir()
-	cfg := &config.Config{DataPath: tmp}
-	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, nil)
-
-	svc := handler.GetAIService(context.Background())
-	svc.SetStateProvider(&MockStateProvider{})
-	patrol := svc.GetPatrolService()
-	if patrol == nil {
-		t.Fatalf("expected patrol service")
-	}
-
-	findingID := "finding-drift"
-	findings := patrol.GetFindings()
-	findings.Add(&ai.Finding{
-		ID:           findingID,
-		Severity:     ai.FindingSeverityWarning,
-		Category:     ai.FindingCategoryPerformance,
-		ResourceID:   "res-1",
-		ResourceName: "res-1",
-		ResourceType: "host",
-		Title:        "title",
-		Description:  "desc",
-	})
-
-	store := newTestInvestigationStore()
-	session := store.Create(findingID, "session-1")
-	session.ProposedFix = &aicontracts.Fix{
-		ID:          "fix-1",
-		Description: "Restart service",
-		Commands:    []string{"echo ok"},
-		TargetHost:  "node-b",
-	}
-	if !store.Update(session) {
-		t.Fatalf("failed to update investigation session")
-	}
-	handler.investigationStores = map[string]aicontracts.InvestigationStore{"default": store}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/approvals/exec", nil)
-	rec := httptest.NewRecorder()
-	handler.executeInvestigationFix(rec, req, &approval.ApprovalRequest{
-		ID:         "approval-1",
-		ToolID:     "investigation_fix",
-		Command:    "echo ok",
-		TargetID:   findingID,
-		TargetName: "node-a",
-	})
-
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("expected status conflict, got %d: %s", rec.Code, rec.Body.String())
-	}
-	var resp map[string]interface{}
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if resp["code"] != "target_mismatch" {
-		t.Fatalf("expected target_mismatch code, got %v", resp["code"])
-	}
-}
+// TestHandleReinvestigateFinding, TestExecuteInvestigationFix_MCPTool, and
+// TestExecuteInvestigationFix_TargetDriftBlocked have been moved to enterprise.
 
 func wsURLForHTTP(url string) string {
 	if strings.HasPrefix(url, "https://") {
@@ -1067,7 +624,7 @@ func registerAgent(t *testing.T, url, agentID, hostname string) *websocket.Conn 
 	return conn
 }
 
-func TestFindAgentForTarget(t *testing.T) {
+func TestAgentCommandAdapter_FindAgentForTarget(t *testing.T) {
 	server := agentexec.NewServer(func(string, string) bool { return true })
 	ts := newIPv4HTTPServer(t, http.HandlerFunc(server.HandleWebSocket))
 	defer ts.Close()
@@ -1077,15 +634,15 @@ func TestFindAgentForTarget(t *testing.T) {
 	conn2 := registerAgent(t, ts.URL, "agent-2", "host-b")
 	defer conn2.Close()
 
-	handler := &AISettingsHandler{agentServer: server}
+	adapter := &agentCommandAdapter{handler: &AISettingsHandler{agentServer: server}}
 
-	if got := handler.findAgentForTarget("host-a"); got != "agent-1" {
+	if got := adapter.FindAgentForTarget("host-a"); got != "agent-1" {
 		t.Fatalf("expected agent-1, got %q", got)
 	}
-	if got := handler.findAgentForTarget("agent-2"); got != "agent-2" {
+	if got := adapter.FindAgentForTarget("agent-2"); got != "agent-2" {
 		t.Fatalf("expected agent-2, got %q", got)
 	}
-	if got := handler.findAgentForTarget(""); got != "" {
+	if got := adapter.FindAgentForTarget(""); got != "" {
 		t.Fatalf("expected empty agent when multiple connected, got %q", got)
 	}
 }

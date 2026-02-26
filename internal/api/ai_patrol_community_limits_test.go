@@ -77,11 +77,12 @@ func TestPatrolCommunityAutonomyLockedToMonitor(t *testing.T) {
 		t.Fatalf("expected autonomy %q for Community, got %q", config.PatrolAutonomyMonitor, getResp.AutonomyLevel)
 	}
 
-	// PUT should reject any autonomy above monitor for Community.
+	// PUT via free adapter should return 402 for Community.
+	freeAdapter := aiAutoFixFreeAdapter{}
 	body := `{"autonomy_level":"approval","investigation_budget":10,"investigation_timeout_sec":120}`
 	putReq := httptest.NewRequest(http.MethodPut, "/api/ai/patrol/autonomy", strings.NewReader(body))
 	putRec := httptest.NewRecorder()
-	handler.HandleUpdatePatrolAutonomy(putRec, putReq)
+	freeAdapter.HandleUpdatePatrolAutonomy(putRec, putReq)
 	if putRec.Code != http.StatusPaymentRequired {
 		t.Fatalf("expected 402 for Community autonomy update, got %d: %s", putRec.Code, putRec.Body.String())
 	}

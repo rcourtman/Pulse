@@ -13,6 +13,7 @@ type testAIAutoFixEndpoints struct {
 	reapproveCalls     int
 	autonomyCalls      int
 	approveFixCalls    int
+	listApprovalsCalls int
 }
 
 func (t *testAIAutoFixEndpoints) HandleReinvestigateFinding(http.ResponseWriter, *http.Request) {
@@ -38,6 +39,10 @@ func (t *testAIAutoFixEndpoints) HandleRollbackRemediationPlan(http.ResponseWrit
 
 func (t *testAIAutoFixEndpoints) HandleApproveInvestigationFix(http.ResponseWriter, *http.Request) {
 	t.approveFixCalls++
+}
+
+func (t *testAIAutoFixEndpoints) HandleListApprovals(http.ResponseWriter, *http.Request) {
+	t.listApprovalsCalls++
 }
 
 func TestResolveAIAutoFixEndpoints_DefaultWhenBinderNil(t *testing.T) {
