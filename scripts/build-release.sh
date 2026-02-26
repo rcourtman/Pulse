@@ -164,7 +164,11 @@ for i in "${!build_order[@]}"; do
     git_commit=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')
 
     # Build backend binary with version info
+    # -tags release disables dev-mode env-var bypasses (PULSE_DEV, PULSE_MOCK_MODE,
+    # PULSE_LICENSE_DEV_MODE) so they cannot be used to skip feature gating or
+    # license signature validation in production binaries.
     env $build_env go build \
+        -tags release \
         -ldflags="-s -w -X main.Version=v${VERSION} -X main.BuildTime=${build_time} -X main.GitCommit=${git_commit} -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=v${VERSION} ${LICENSE_LDFLAGS}" \
         -trimpath \
         -o "$BUILD_DIR/pulse-$build_name" \

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -156,7 +155,7 @@ func (s *Service) Activate(licenseKey string) (*License, error) {
 	// Keep legacy mutability in explicit dev-mode to avoid breaking existing
 	// test fixtures that patch claims after activation. In production mode,
 	// callers receive an immutable snapshot to prevent state tampering.
-	if os.Getenv("PULSE_LICENSE_DEV_MODE") == "true" {
+	if isLicenseValidationDevMode() {
 		return s.license, nil
 	}
 	return snapshot, nil
@@ -247,19 +246,10 @@ func (s *Service) HasFeature(feature string) bool {
 	return s.license.HasFeature(feature)
 }
 
-// isDemoMode returns true if the demo/mock mode is enabled
-func isDemoMode() bool {
-	return strings.EqualFold(os.Getenv("PULSE_MOCK_MODE"), "true")
-}
-
-// isDevMode returns true if running in development mode
-func isDevMode() bool {
-	return strings.EqualFold(os.Getenv("PULSE_DEV"), "true")
-}
-
-func isLicenseValidationDevMode() bool {
-	return strings.EqualFold(strings.TrimSpace(os.Getenv("PULSE_LICENSE_DEV_MODE")), "true")
-}
+// isDemoMode, isDevMode, and isLicenseValidationDevMode are defined in
+// dev_mode_dev.go (default builds) and dev_mode_release.go (release builds).
+// In release builds these always return false, preventing env-var bypass of
+// feature gating and license signature validation.
 
 const (
 	maxLicenseKeyLength     = 16 << 10 // 16 KiB

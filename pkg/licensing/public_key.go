@@ -35,33 +35,42 @@ func InitEmbeddedPublicKey() {
 }
 
 // InitPublicKey initializes the runtime license public key.
-// Priority:
-// 1. PULSE_LICENSE_PUBLIC_KEY environment variable (base64 encoded)
-// 2. embeddedPublicKey parameter (set at compile time via -ldflags)
-// 3. If devMode=true, skip validation (development only)
+//
+// In release builds (allowEnvOverride=false):
+//
+//	Only the compile-time embedded key is used. The PULSE_LICENSE_PUBLIC_KEY
+//	env var is ignored to prevent users from substituting their own key and
+//	self-signing license JWTs.
+//
+// In dev builds (allowEnvOverride=true):
+//  1. PULSE_LICENSE_PUBLIC_KEY environment variable (base64 encoded)
+//  2. embeddedPublicKey parameter (set at compile time via -ldflags)
+//  3. If devMode=true, skip validation (development only)
 func InitPublicKey(embeddedPublicKey string, devMode bool, setPublicKey func(ed25519.PublicKey)) {
 	if setPublicKey == nil {
 		log.Error().Msg("license public key init skipped: setPublicKey callback is nil")
 		return
 	}
 
-	// Priority 1: Environment variable
-	if envKey := os.Getenv("PULSE_LICENSE_PUBLIC_KEY"); envKey != "" {
-		key, err := DecodePublicKey(envKey)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to decode PULSE_LICENSE_PUBLIC_KEY, trying embedded key")
-			// Fall through to try embedded key instead of returning
-		} else {
-			setPublicKey(key)
-			log.Info().
-				Str("source", "environment").
-				Str("fingerprint", PublicKeyFingerprint(key)).
-				Msg("license public key loaded")
-			return
+	// Environment override is only allowed in non-release builds.
+	if allowPublicKeyEnvOverride() {
+		if envKey := os.Getenv("PULSE_LICENSE_PUBLIC_KEY"); envKey != "" {
+			key, err := DecodePublicKey(envKey)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to decode PULSE_LICENSE_PUBLIC_KEY, trying embedded key")
+				// Fall through to try embedded key instead of returning
+			} else {
+				setPublicKey(key)
+				log.Info().
+					Str("source", "environment").
+					Str("fingerprint", PublicKeyFingerprint(key)).
+					Msg("license public key loaded")
+				return
+			}
 		}
 	}
 
-	// Priority 2: Embedded key (set at compile time)
+	// Embedded key (set at compile time via -ldflags)
 	if embeddedPublicKey != "" {
 		key, err := DecodePublicKey(embeddedPublicKey)
 		if err != nil {
