@@ -5662,6 +5662,23 @@ func (m *Manager) CheckBackups(
 		return
 	}
 
+	// Check whether the guest inventory contains any live entries (non-empty
+	// ResourceID). If every entry is persisted metadata for deleted guests,
+	// the inventory hasn't been populated yet (startup race, auth failure, etc.)
+	// and orphaned detection would produce false positives for every backup.
+	hasLiveInventory := false
+	for _, guests := range guestsByVMID {
+		for _, g := range guests {
+			if g.ResourceID != "" {
+				hasLiveInventory = true
+				break
+			}
+		}
+		if hasLiveInventory {
+			break
+		}
+	}
+
 	validAlerts := make(map[string]struct{})
 
 	for key, record := range records {
@@ -5696,7 +5713,12 @@ func (m *Manager) CheckBackups(
 		if backupIgnoreVMID(record.vmid, currentBackupCfg.IgnoreVMIDs) {
 			continue
 		}
-		if record.vmid != "" && record.lookup.ResourceID == "" {
+		if record.vmid != "" && record.lookup.ResourceID == "" && hasLiveInventory {
+			// Backup has a VMID but no matching live guest in its lookup.
+			// Only run orphan detection when live inventory exists — if no
+			// live guests have been polled yet (startup race, auth failure,
+			// transient outage), every backup would look orphaned.
+			//
 			// Check whether the VMID exists anywhere in live inventory.
 			// If it does, the backup is ambiguous (VMID collision) but not orphaned.
 			// Entries with empty ResourceID are persisted metadata for deleted guests
@@ -6027,6 +6049,11 @@ func (m *Manager) CheckBackups(
 			continue
 		}
 		if _, ok := validAlerts[alertID]; ok {
+			continue
+		}
+		// When inventory has no live guests, preserve existing orphan alerts
+		// rather than clearing them — we can't confirm they're resolved.
+		if !hasLiveInventory && alert.Type == "backup-orphaned" {
 			continue
 		}
 		m.clearAlertNoLock(alertID)

@@ -1128,7 +1128,16 @@ func TestCheckBackupsHandlesPbsOnlyGuests(t *testing.T) {
 		},
 	}
 
-	m.CheckBackups(nil, pbsBackups, nil, map[string]GuestLookup{}, map[string][]GuestLookup{})
+	// Include a live sentinel guest so hasLiveInventory is true and orphan detection runs.
+	sentinelKey := BuildGuestKey("sentinel", "snode", 9999)
+	guestsByKey := map[string]GuestLookup{
+		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "sentinel", Node: "snode", Type: "qemu", VMID: 9999},
+	}
+	guestsByVMID := map[string][]GuestLookup{
+		"9999": {guestsByKey[sentinelKey]},
+	}
+
+	m.CheckBackups(nil, pbsBackups, nil, guestsByKey, guestsByVMID)
 
 	m.mu.RLock()
 	found := false
@@ -1464,7 +1473,16 @@ func TestCheckBackupsSkipsOrphanedWhenDisabled(t *testing.T) {
 		},
 	}
 
-	m.CheckBackups(storageBackups, nil, nil, map[string]GuestLookup{}, map[string][]GuestLookup{})
+	// Include a live sentinel guest so hasLiveInventory is true and orphan detection runs.
+	sentinelKey := BuildGuestKey("sentinel", "snode", 9999)
+	guestsByKey := map[string]GuestLookup{
+		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "sentinel", Node: "snode", Type: "qemu", VMID: 9999},
+	}
+	guestsByVMID := map[string][]GuestLookup{
+		"9999": {guestsByKey[sentinelKey]},
+	}
+
+	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -1508,8 +1526,17 @@ func TestCheckBackupsCreatesOrphanedAlert(t *testing.T) {
 		},
 	}
 
-	// Empty guest maps → VMID 200 is orphaned (not in inventory).
-	m.CheckBackups(storageBackups, nil, nil, map[string]GuestLookup{}, map[string][]GuestLookup{})
+	// Include a live sentinel guest so hasLiveInventory is true and orphan detection runs.
+	// VMID 200 is still orphaned because it's not in the inventory.
+	sentinelKey := BuildGuestKey("sentinel", "snode", 9999)
+	guestsByKey := map[string]GuestLookup{
+		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "sentinel", Node: "snode", Type: "qemu", VMID: 9999},
+	}
+	guestsByVMID := map[string][]GuestLookup{
+		"9999": {guestsByKey[sentinelKey]},
+	}
+
+	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -1571,8 +1598,17 @@ func TestCheckBackupsOrphanedAlertClearsWhenGuestReappears(t *testing.T) {
 		},
 	}
 
-	// First cycle: guest absent → orphaned alert fires.
-	m.CheckBackups(storageBackups, nil, nil, map[string]GuestLookup{}, map[string][]GuestLookup{})
+	// Include a live sentinel guest so hasLiveInventory is true and orphan detection runs.
+	sentinelKey := BuildGuestKey("sentinel", "snode", 9999)
+	sentinelByKey := map[string]GuestLookup{
+		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "sentinel", Node: "snode", Type: "qemu", VMID: 9999},
+	}
+	sentinelByVMID := map[string][]GuestLookup{
+		"9999": {sentinelByKey[sentinelKey]},
+	}
+
+	// First cycle: guest 300 absent (only sentinel present) → orphaned alert fires.
+	m.CheckBackups(storageBackups, nil, nil, sentinelByKey, sentinelByVMID)
 
 	m.mu.RLock()
 	orphanedFound := false
@@ -1643,8 +1679,17 @@ func TestCheckBackupsOrphanedIgnoresVMIDs(t *testing.T) {
 		},
 	}
 
+	// Include a live sentinel guest so hasLiveInventory is true and orphan detection runs.
+	sentinelKey := BuildGuestKey("sentinel", "snode", 9999)
+	guestsByKey := map[string]GuestLookup{
+		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "sentinel", Node: "snode", Type: "qemu", VMID: 9999},
+	}
+	guestsByVMID := map[string][]GuestLookup{
+		"9999": {guestsByKey[sentinelKey]},
+	}
+
 	// Both are orphaned (not in inventory), but VMID 200 matches ignore pattern "20*".
-	m.CheckBackups(storageBackups, nil, nil, map[string]GuestLookup{}, map[string][]GuestLookup{})
+	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -1693,8 +1738,17 @@ func TestCheckBackupsOrphanedWithZeroAgeThresholds(t *testing.T) {
 		},
 	}
 
+	// Include a live sentinel guest so hasLiveInventory is true and orphan detection runs.
+	sentinelKey := BuildGuestKey("sentinel", "snode", 9999)
+	guestsByKey := map[string]GuestLookup{
+		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "sentinel", Node: "snode", Type: "qemu", VMID: 9999},
+	}
+	guestsByVMID := map[string][]GuestLookup{
+		"9999": {guestsByKey[sentinelKey]},
+	}
+
 	// Orphaned guest with zero age thresholds — should still fire orphaned alert.
-	m.CheckBackups(storageBackups, nil, nil, map[string]GuestLookup{}, map[string][]GuestLookup{})
+	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -1750,11 +1804,17 @@ func TestCheckBackupsOrphanedWithPersistedMetadata(t *testing.T) {
 
 	// Simulate persisted metadata for deleted guest: entry exists in
 	// guestsByVMID but with empty ResourceID (no live guest).
+	// Include a live sentinel guest so hasLiveInventory is true and orphan detection runs.
+	sentinelKey := BuildGuestKey("sentinel", "snode", 9999)
+	guestsByKey := map[string]GuestLookup{
+		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "sentinel", Node: "snode", Type: "qemu", VMID: 9999},
+	}
 	guestsByVMID := map[string][]GuestLookup{
-		"500": {{Name: "deleted-vm", Instance: "inst", Node: "node", Type: "qemu", VMID: 500}},
+		"500":  {{Name: "deleted-vm", Instance: "inst", Node: "node", Type: "qemu", VMID: 500}},
+		"9999": {guestsByKey[sentinelKey]},
 	}
 
-	m.CheckBackups(storageBackups, nil, nil, map[string]GuestLookup{}, guestsByVMID)
+	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -1766,6 +1826,120 @@ func TestCheckBackupsOrphanedWithPersistedMetadata(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected backup-orphaned alert even when guestsByVMID has metadata-only entry (no ResourceID)")
+	}
+}
+
+func TestCheckBackupsOrphanedSkippedWhenNoLiveInventory(t *testing.T) {
+	// When no live guests exist (empty maps or only persisted metadata),
+	// orphan detection is skipped entirely to avoid false positives during
+	// startup race / auth failure / inventory outage.
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	alertOrphaned := true
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:       true,
+		WarningDays:   7,
+		CriticalDays:  14,
+		AlertOrphaned: &alertOrphaned,
+		IgnoreVMIDs:   []string{},
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+	storageBackups := []models.StorageBackup{
+		{
+			ID:       "inst-node-600-backup",
+			Storage:  "local",
+			Node:     "node",
+			Instance: "inst",
+			Type:     "qemu",
+			VMID:     600,
+			Time:     now.Add(-1 * 24 * time.Hour),
+		},
+	}
+
+	// Completely empty guest maps — no live inventory.
+	m.CheckBackups(storageBackups, nil, nil, map[string]GuestLookup{}, map[string][]GuestLookup{})
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for id := range m.activeAlerts {
+		if strings.HasPrefix(id, "backup-orphaned-") {
+			t.Fatalf("expected no orphaned alerts when guest inventory is empty (startup race guard), found %s", id)
+		}
+	}
+}
+
+func TestCheckBackupsOrphanedPreservedWhenNoLiveInventory(t *testing.T) {
+	// When a legitimate orphan alert already exists and inventory becomes
+	// unavailable (auth failure, restart), the alert should be preserved
+	// rather than cleared — we can't confirm it's resolved.
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	alertOrphaned := true
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:       true,
+		WarningDays:   7,
+		CriticalDays:  14,
+		AlertOrphaned: &alertOrphaned,
+		IgnoreVMIDs:   []string{},
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+	storageBackups := []models.StorageBackup{
+		{
+			ID:       "inst-node-700-backup",
+			Storage:  "local",
+			Node:     "node",
+			Instance: "inst",
+			Type:     "qemu",
+			VMID:     700,
+			Time:     now.Add(-1 * 24 * time.Hour),
+		},
+	}
+
+	// First cycle: with live inventory → orphan alert fires.
+	sentinelKey := BuildGuestKey("sentinel", "snode", 9999)
+	guestsByKey := map[string]GuestLookup{
+		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "sentinel", Node: "snode", Type: "qemu", VMID: 9999},
+	}
+	guestsByVMID := map[string][]GuestLookup{
+		"9999": {guestsByKey[sentinelKey]},
+	}
+	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
+
+	m.mu.RLock()
+	orphanFound := false
+	for id := range m.activeAlerts {
+		if strings.HasPrefix(id, "backup-orphaned-") {
+			orphanFound = true
+		}
+	}
+	m.mu.RUnlock()
+	if !orphanFound {
+		t.Fatalf("expected orphan alert after first cycle with live inventory")
+	}
+
+	// Second cycle: inventory disappears (empty maps) — orphan alert must be preserved.
+	m.CheckBackups(storageBackups, nil, nil, map[string]GuestLookup{}, map[string][]GuestLookup{})
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	preserved := false
+	for id := range m.activeAlerts {
+		if strings.HasPrefix(id, "backup-orphaned-") {
+			preserved = true
+		}
+	}
+	if !preserved {
+		t.Fatalf("expected orphan alert to be preserved when inventory is unavailable, but it was cleared")
 	}
 }
 
