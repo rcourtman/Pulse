@@ -98,10 +98,11 @@ func (s *stubChatService) ReloadConfig(ctx context.Context, cfg *config.AIConfig
 
 func TestSetupInvestigationOrchestrator_WiresTenantBudgetChecker(t *testing.T) {
 	// Register factory so setupInvestigationOrchestrator can create a store.
+	prevFactory := getCreateInvestigationStore()
 	SetCreateInvestigationStore(func(dataDir string) aicontracts.InvestigationStore {
 		return investigation.NewStore(dataDir)
 	})
-	t.Cleanup(func() { SetCreateInvestigationStore(nil) })
+	t.Cleanup(func() { SetCreateInvestigationStore(prevFactory) })
 
 	handler := &AISettingsHandler{
 		investigationStores: make(map[string]aicontracts.InvestigationStore),

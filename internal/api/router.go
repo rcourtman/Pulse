@@ -1628,6 +1628,8 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, orgID, da
 			r.aiSettingsHandler.SetRemediationEngineForOrg(orgID, remediationEngine)
 			log.Info().Msg("AI Intelligence: Remediation engine initialized (command execution disabled)")
 		} else {
+			// Clear any stale engine from a prior init cycle.
+			r.aiSettingsHandler.SetRemediationEngineForOrg(orgID, nil)
 			log.Info().Msg("AI Intelligence: Remediation engine factory not registered")
 		}
 	} else {
