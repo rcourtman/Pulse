@@ -406,6 +406,13 @@ func TestParseModelString(t *testing.T) {
 		{"o1-preview", AIProviderOpenAI, "o1-preview"},
 		{"deepseek-chat", AIProviderDeepSeek, "deepseek-chat"},
 		{"gemini-1.5-pro", AIProviderGemini, "gemini-1.5-pro"},
+		// Vendor-prefixed names (OpenRouter style) route to OpenAI
+		{"google/gemini-2.5-flash-lite-preview-09-2025", AIProviderOpenAI, "google/gemini-2.5-flash-lite-preview-09-2025"},
+		{"meta-llama/llama-3-70b-instruct", AIProviderOpenAI, "meta-llama/llama-3-70b-instruct"},
+		{"anthropic/claude-3-opus", AIProviderOpenAI, "anthropic/claude-3-opus"},
+		{"google/gemini-2.0-flash:free", AIProviderOpenAI, "google/gemini-2.0-flash:free"},
+		// Explicit prefix wins over slash detection
+		{"ollama:hf.co/some/model", AIProviderOllama, "hf.co/some/model"},
 		// Unknown models default to Ollama
 		{"llama3", AIProviderOllama, "llama3"},
 		{"mistral", AIProviderOllama, "mistral"},

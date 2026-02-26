@@ -1,6 +1,9 @@
 package config
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // AuthMethod represents how Anthropic authentication is performed
 type AuthMethod string
@@ -304,6 +307,14 @@ func ParseModelString(model string) (provider, modelName string) {
 	}
 
 	// No prefix - try to detect from model name patterns
+	//
+	// Vendor-prefixed names containing "/" (e.g. "google/gemini-*",
+	// "meta-llama/llama-*") are OpenRouter model IDs routed through the
+	// OpenAI-compatible provider.
+	if strings.Contains(model, "/") {
+		return AIProviderOpenAI, model
+	}
+
 	switch {
 	case len(model) >= 6 && model[:6] == "claude":
 		return AIProviderAnthropic, model

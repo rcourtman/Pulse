@@ -11,23 +11,38 @@ export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   ollama: 'Ollama',
 };
 
+// Known provider prefixes — only these are treated as explicit "provider:model" delimiters.
+// This avoids misinterpreting colons in model names like "llama3.2:latest" or "model:free".
+const KNOWN_PROVIDERS = ['anthropic', 'openai', 'deepseek', 'gemini', 'ollama'];
+
 // Parse provider from model ID (format: "provider:model-name")
 export function getProviderFromModelId(modelId: string): string {
+  // Check for explicit known provider prefix (e.g. "openai:gpt-4o")
   const colonIndex = modelId.indexOf(':');
   if (colonIndex > 0) {
-    return modelId.substring(0, colonIndex);
+    const prefix = modelId.substring(0, colonIndex);
+    if (KNOWN_PROVIDERS.includes(prefix)) {
+      return prefix;
+    }
   }
-  // Default detection for models without prefix
-  if (modelId.includes('claude') || modelId.includes('opus') || modelId.includes('sonnet') || modelId.includes('haiku')) {
-    return 'anthropic';
-  }
-  if (modelId.includes('gpt') || modelId.includes('o1') || modelId.includes('o3') || modelId.includes('o4')) {
+  // Vendor-prefixed names like "google/gemini-*" or "meta-llama/llama-*" are
+  // OpenRouter model IDs routed through the OpenAI-compatible provider.
+  if (modelId.includes('/')) {
     return 'openai';
   }
-  if (modelId.includes('deepseek')) {
+  // Strip colon suffix for detection (e.g. "llama3.2:latest" → "llama3.2")
+  const name = colonIndex > 0 ? modelId.substring(0, colonIndex) : modelId;
+  // Default detection for models without prefix
+  if (name.startsWith('claude') || name.startsWith('opus') || name.startsWith('sonnet') || name.startsWith('haiku')) {
+    return 'anthropic';
+  }
+  if (name.startsWith('gpt') || name.startsWith('o1') || name.startsWith('o3') || name.startsWith('o4')) {
+    return 'openai';
+  }
+  if (name.startsWith('deepseek')) {
     return 'deepseek';
   }
-  if (modelId.includes('gemini')) {
+  if (name.startsWith('gemini')) {
     return 'gemini';
   }
   return 'ollama';

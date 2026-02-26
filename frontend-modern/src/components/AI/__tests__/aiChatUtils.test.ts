@@ -18,10 +18,22 @@ describe('aiChatUtils', () => {
       expect(utils.getProviderFromModelId('llama3.1')).toBe('ollama');
     });
 
-    it('handles odd strings without a provider prefix', () => {
-      // colon at index 0 should not be treated as a provider prefix
-      expect(utils.getProviderFromModelId(':gpt-4o')).toBe('openai');
-      expect(utils.getProviderFromModelId(':unknown-model')).toBe('ollama');
+    it('routes vendor-prefixed OpenRouter model names to openai', () => {
+      expect(utils.getProviderFromModelId('google/gemini-2.5-flash-lite-preview-09-2025')).toBe('openai');
+      expect(utils.getProviderFromModelId('meta-llama/llama-3-70b-instruct')).toBe('openai');
+      expect(utils.getProviderFromModelId('anthropic/claude-3-opus')).toBe('openai');
+      // OpenRouter free-tier suffix with colon
+      expect(utils.getProviderFromModelId('google/gemini-2.0-flash:free')).toBe('openai');
+    });
+
+    it('does not misinterpret colons in model names as provider prefix', () => {
+      // Ollama convention: "model:tag"
+      expect(utils.getProviderFromModelId('llama3.2:latest')).toBe('ollama');
+      expect(utils.getProviderFromModelId('deepseek:latest')).toBe('deepseek');
+    });
+
+    it('explicit provider prefix wins over slash detection', () => {
+      expect(utils.getProviderFromModelId('ollama:hf.co/some/model')).toBe('ollama');
     });
   });
 
