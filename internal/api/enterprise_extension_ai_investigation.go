@@ -11,9 +11,10 @@ var (
 	aiInvestigationEnabledFunc func() bool
 
 	// Factory hooks for premium component creation.
-	aiFactoryMu                  sync.RWMutex
-	createRemediationEngineFunc  func(cfg aicontracts.EngineConfig) aicontracts.RemediationEngine
-	createInvestigationStoreFunc func(dataDir string) aicontracts.InvestigationStore
+	aiFactoryMu                         sync.RWMutex
+	createRemediationEngineFunc         func(cfg aicontracts.EngineConfig) aicontracts.RemediationEngine
+	createInvestigationStoreFunc        func(dataDir string) aicontracts.InvestigationStore
+	createInvestigationOrchestratorFunc func(deps aicontracts.OrchestratorDeps) aicontracts.InvestigationOrchestrator
 )
 
 // SetAIInvestigationEnabled registers the enterprise hook that controls
@@ -62,4 +63,20 @@ func getCreateInvestigationStore() func(dataDir string) aicontracts.Investigatio
 	aiFactoryMu.RLock()
 	defer aiFactoryMu.RUnlock()
 	return createInvestigationStoreFunc
+}
+
+// SetCreateInvestigationOrchestrator registers the enterprise factory for creating
+// investigation orchestrators. When set, ai_handlers.go uses this instead of
+// directly constructing investigation.NewOrchestrator.
+func SetCreateInvestigationOrchestrator(fn func(deps aicontracts.OrchestratorDeps) aicontracts.InvestigationOrchestrator) {
+	aiFactoryMu.Lock()
+	defer aiFactoryMu.Unlock()
+	createInvestigationOrchestratorFunc = fn
+}
+
+// getCreateInvestigationOrchestrator returns the registered factory, or nil.
+func getCreateInvestigationOrchestrator() func(deps aicontracts.OrchestratorDeps) aicontracts.InvestigationOrchestrator {
+	aiFactoryMu.RLock()
+	defer aiFactoryMu.RUnlock()
+	return createInvestigationOrchestratorFunc
 }

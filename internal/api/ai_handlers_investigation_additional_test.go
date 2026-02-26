@@ -97,12 +97,38 @@ func (s *stubChatService) ReloadConfig(ctx context.Context, cfg *config.AIConfig
 }
 
 func TestSetupInvestigationOrchestrator_WiresTenantBudgetChecker(t *testing.T) {
-	// Register factory so setupInvestigationOrchestrator can create a store.
-	prevFactory := getCreateInvestigationStore()
+	// Register factories so setupInvestigationOrchestrator can create a store and orchestrator.
+	prevStoreFactory := getCreateInvestigationStore()
 	SetCreateInvestigationStore(func(dataDir string) aicontracts.InvestigationStore {
 		return investigation.NewStore(dataDir)
 	})
-	t.Cleanup(func() { SetCreateInvestigationStore(prevFactory) })
+	t.Cleanup(func() { SetCreateInvestigationStore(prevStoreFactory) })
+
+	prevOrchestratorFactory := getCreateInvestigationOrchestrator()
+	SetCreateInvestigationOrchestrator(func(deps aicontracts.OrchestratorDeps) aicontracts.InvestigationOrchestrator {
+		invConfig := deps.Config
+		o := investigation.NewOrchestrator(deps.ChatService, deps.Store, deps.FindingsStore, deps.ApprovalStore, invConfig)
+		if deps.CmdExecutor != nil {
+			o.SetCommandExecutor(deps.CmdExecutor)
+		}
+		if deps.Autonomy != nil {
+			o.SetAutonomyLevelProvider(deps.Autonomy)
+		}
+		if deps.InfraContext != nil {
+			o.SetInfrastructureContextProvider(deps.InfraContext)
+		}
+		if deps.FixVerifier != nil {
+			o.SetFixVerifier(deps.FixVerifier)
+		}
+		if deps.License != nil {
+			o.SetLicenseChecker(deps.License)
+		}
+		if deps.Metrics != nil {
+			o.SetMetricsCallback(deps.Metrics)
+		}
+		return o
+	})
+	t.Cleanup(func() { SetCreateInvestigationOrchestrator(prevOrchestratorFactory) })
 
 	handler := &AISettingsHandler{
 		investigationStores: make(map[string]aicontracts.InvestigationStore),

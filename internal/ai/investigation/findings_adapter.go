@@ -1,39 +1,15 @@
 package investigation
 
 import (
-	"time"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
-// AIFinding represents the interface for an AI finding from the ai package
-// This avoids importing the ai package directly
-type AIFinding interface {
-	GetID() string
-	GetSeverity() string
-	GetCategory() string
-	GetResourceID() string
-	GetResourceName() string
-	GetResourceType() string
-	GetTitle() string
-	GetDescription() string
-	GetRecommendation() string
-	GetEvidence() string
-	GetInvestigationSessionID() string
-	GetInvestigationStatus() string
-	GetInvestigationOutcome() string
-	GetLastInvestigatedAt() *time.Time
-	GetInvestigationAttempts() int
-	SetInvestigationSessionID(string)
-	SetInvestigationStatus(string)
-	SetInvestigationOutcome(string)
-	SetLastInvestigatedAt(*time.Time)
-	SetInvestigationAttempts(int)
-}
+// AIFinding represents the interface for an AI finding from the ai package.
+// This avoids importing the ai package directly.
+type AIFinding = aicontracts.OrchestratorAIFinding
 
-// AIFindingsStore represents the interface for the AI findings store
-type AIFindingsStore interface {
-	Get(id string) AIFinding
-	UpdateInvestigation(id, sessionID, status, outcome string, lastInvestigatedAt *time.Time, attempts int) bool
-}
+// AIFindingsStore represents the interface for the AI findings store.
+type AIFindingsStore = aicontracts.OrchestratorAIFindingsStore
 
 // FindingsStoreAdapter adapts an AIFindingsStore to the FindingsStore interface
 type FindingsStoreAdapter struct {

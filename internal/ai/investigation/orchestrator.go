@@ -11,124 +11,41 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
-// ChatService interface for interacting with the AI chat system
-type ChatService interface {
-	CreateSession(ctx context.Context) (*Session, error)
-	ExecuteStream(ctx context.Context, req ExecuteRequest, callback StreamCallback) error
-	GetMessages(ctx context.Context, sessionID string) ([]Message, error)
-	DeleteSession(ctx context.Context, sessionID string) error
-	ListAvailableTools(ctx context.Context, prompt string) []string
-	SetAutonomousMode(enabled bool)
-}
+// ---------------------------------------------------------------------------
+// Interface aliases — re-export from pkg/aicontracts so existing code that
+// references investigation.ChatService etc. continues to compile unchanged.
+// ---------------------------------------------------------------------------
 
-// CommandExecutor interface for executing commands directly (bypasses LLM)
-type CommandExecutor interface {
-	ExecuteCommand(ctx context.Context, command, targetHost string) (output string, exitCode int, err error)
-}
+type ChatService = aicontracts.OrchestratorChatService
+type CommandExecutor = aicontracts.OrchestratorCommandExecutor
+type FindingsStore = aicontracts.OrchestratorFindingsStore
+type ApprovalStore = aicontracts.OrchestratorApprovalStore
+type InfrastructureContextProvider = aicontracts.OrchestratorInfraContextProvider
+type AutonomyLevelProvider = aicontracts.OrchestratorAutonomyProvider
+type FixVerifier = aicontracts.OrchestratorFixVerifier
+type LicenseChecker = aicontracts.OrchestratorLicenseChecker
+type MetricsCallback = aicontracts.OrchestratorMetricsCallback
 
-// CommandResult represents the result of a command execution
+// Type aliases for supporting types.
+type Session = aicontracts.OrchestratorChatSession
+type ExecuteRequest = aicontracts.OrchestratorExecuteRequest
+type StreamCallback = aicontracts.OrchestratorStreamCallback
+type StreamEvent = aicontracts.OrchestratorStreamEvent
+type Message = aicontracts.OrchestratorMessage
+type ToolCallInfo = aicontracts.OrchestratorToolCallInfo
+type ToolResultInfo = aicontracts.OrchestratorToolResultInfo
+type Approval = aicontracts.OrchestratorApproval
+
+// CommandResult represents the result of a command execution.
 type CommandResult struct {
 	Output   string `json:"output"`
 	ExitCode int    `json:"exit_code"`
 	Error    string `json:"error,omitempty"`
-}
-
-// Session represents a chat session
-type Session struct {
-	ID string `json:"id"`
-}
-
-// ExecuteRequest represents a chat execution request
-type ExecuteRequest struct {
-	Prompt         string `json:"prompt"`
-	SessionID      string `json:"session_id,omitempty"`
-	MaxTurns       int    `json:"max_turns,omitempty"`       // Override max agentic turns (0 = use default)
-	AutonomousMode *bool  `json:"autonomous_mode,omitempty"` // Per-request autonomous override (nil = use service default)
-}
-
-// StreamCallback is called for each streaming event
-type StreamCallback func(event StreamEvent)
-
-// StreamEvent represents a streaming event
-type StreamEvent struct {
-	Type string          `json:"type"`
-	Data json.RawMessage `json:"data,omitempty"`
-}
-
-// Message represents a chat message
-type Message struct {
-	ID               string          `json:"id"`
-	Role             string          `json:"role"`
-	Content          string          `json:"content"`
-	ReasoningContent string          `json:"reasoning_content,omitempty"`
-	ToolCalls        []ToolCallInfo  `json:"tool_calls,omitempty"`
-	ToolResult       *ToolResultInfo `json:"tool_result,omitempty"`
-	Timestamp        time.Time       `json:"timestamp"`
-}
-
-// ToolCallInfo represents a tool invocation in an investigation message
-type ToolCallInfo struct {
-	ID    string                 `json:"id"`
-	Name  string                 `json:"name"`
-	Input map[string]interface{} `json:"input"`
-}
-
-// ToolResultInfo represents the result of a tool invocation
-type ToolResultInfo struct {
-	ToolUseID string `json:"tool_use_id"`
-	Content   string `json:"content"`
-	IsError   bool   `json:"is_error,omitempty"`
-}
-
-// FindingsStore interface for updating findings
-type FindingsStore interface {
-	Get(id string) *Finding
-	Update(f *Finding) bool
-}
-
-// ApprovalStore interface for queuing fixes for approval
-type ApprovalStore interface {
-	Create(approval *Approval) error
-}
-
-// Approval represents a queued approval request
-type Approval struct {
-	ID          string    `json:"id"`
-	Type        string    `json:"type"` // "investigation_fix"
-	FindingID   string    `json:"finding_id"`
-	SessionID   string    `json:"session_id"`
-	Description string    `json:"description"`
-	TargetHost  string    `json:"target_host,omitempty"`
-	Command     string    `json:"command"`
-	RiskLevel   string    `json:"risk_level"`
-	CreatedAt   time.Time `json:"created_at"`
-}
-
-// InfrastructureContextProvider provides discovered infrastructure context for investigations
-type InfrastructureContextProvider interface {
-	GetInfrastructureContext() string
-}
-
-// AutonomyLevelProvider provides the current autonomy level (for re-checking before fix execution)
-type AutonomyLevelProvider interface {
-	GetCurrentAutonomyLevel() string
-	IsFullModeUnlocked() bool
-}
-
-// FixVerifier verifies that a fix actually resolved the issue it was intended to fix.
-type FixVerifier interface {
-	VerifyFixResolved(ctx context.Context, finding *Finding) (bool, error)
-}
-
-// MetricsCallback allows the parent package to receive metrics events
-// without creating circular imports.
-type MetricsCallback interface {
-	RecordInvestigationOutcome(outcome string)
-	RecordFixVerification(result string)
 }
 
 // Orchestrator manages the investigation lifecycle
@@ -244,11 +161,6 @@ func (o *Orchestrator) SetFixVerifier(fv FixVerifier) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.fixVerifier = fv
-}
-
-// LicenseChecker provides license feature checking for defense-in-depth validation
-type LicenseChecker interface {
-	HasFeature(feature string) bool
 }
 
 // SetLicenseChecker sets the license checker for defense-in-depth autonomy clamping

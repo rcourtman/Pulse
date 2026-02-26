@@ -88,6 +88,11 @@ type BusinessHooks struct {
 	// CreateInvestigationStore creates the premium investigation session store.
 	// Returns nil in OSS. Enterprise provides the concrete *investigation.Store.
 	CreateInvestigationStore func(dataDir string) aicontracts.InvestigationStore
+
+	// CreateInvestigationOrchestrator creates the premium investigation orchestrator.
+	// Returns nil in OSS. Enterprise provides the concrete investigation.Orchestrator
+	// wrapped behind the InvestigationOrchestrator interface.
+	CreateInvestigationOrchestrator func(deps aicontracts.OrchestratorDeps) aicontracts.InvestigationOrchestrator
 }
 
 var (
@@ -289,11 +294,13 @@ func Run(ctx context.Context, version string) error {
 	aiInvestigationEnabled := globalHooks.AIInvestigationEnabled
 	createRemediationEngine := globalHooks.CreateRemediationEngine
 	createInvestigationStore := globalHooks.CreateInvestigationStore
+	createInvestigationOrchestrator := globalHooks.CreateInvestigationOrchestrator
 	globalHooksMu.Unlock()
 
 	api.SetAIInvestigationEnabled(aiInvestigationEnabled)
 	api.SetCreateRemediationEngine(createRemediationEngine)
 	api.SetCreateInvestigationStore(createInvestigationStore)
+	api.SetCreateInvestigationOrchestrator(createInvestigationOrchestrator)
 	api.SetRBACAdminEndpointsBinder(bindRBACAdminEndpoints)
 	api.SetAuditAdminEndpointsBinder(bindAuditAdminEndpoints)
 	api.SetSSOAdminEndpointsBinder(bindSSOAdminEndpoints)

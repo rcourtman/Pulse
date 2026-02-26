@@ -147,9 +147,6 @@ func newE2ESetup(t *testing.T, autonomyLevel string, invChatExecute func(investi
 	orchestrator.SetCommandExecutor(cmdExec)
 	orchestrator.SetFixVerifier(verifier)
 
-	// Wire via adapter
-	adapter := NewInvestigationOrchestratorAdapter(orchestrator)
-
 	// State
 	state := models.StateSnapshot{
 		VMs: []models.VM{
@@ -169,7 +166,7 @@ func newE2ESetup(t *testing.T, autonomyLevel string, invChatExecute func(investi
 		AnalyzeNodes:  true,
 		AnalyzeGuests: true,
 	})
-	ps.SetInvestigationOrchestrator(adapter)
+	ps.SetInvestigationOrchestrator(orchestrator)
 
 	return &e2eSetup{
 		patrolService:   ps,

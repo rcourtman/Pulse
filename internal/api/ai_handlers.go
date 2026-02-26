@@ -1723,6 +1723,18 @@ func (h *AISettingsHandler) WireOrchestratorAfterChatStart() {
 
 // setupInvestigationOrchestrator creates and wires the investigation orchestrator for an AI service
 func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai.Service) {
+	// Check factory exists first — if nil, this is OSS (no orchestrator available).
+	// Clear any stale orchestrator from a prior setup so the patrol service
+	// doesn't keep using a removed enterprise component.
+	factory := getCreateInvestigationOrchestrator()
+	if factory == nil {
+		if patrol := svc.GetPatrolService(); patrol != nil {
+			patrol.SetInvestigationOrchestrator(nil)
+		}
+		log.Debug().Str("orgID", orgID).Msg("Investigation orchestrator factory not registered (requires Pulse Pro)")
+		return
+	}
+
 	h.stateMu.RLock()
 	chatHandler := h.chatHandler
 	h.stateMu.RUnlock()
@@ -1751,8 +1763,8 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 				dataDir = p.DataDir()
 			}
 		}
-		if factory := getCreateInvestigationStore(); factory != nil {
-			store = factory(dataDir)
+		if storeFactory := getCreateInvestigationStore(); storeFactory != nil {
+			store = storeFactory(dataDir)
 		}
 		if store == nil {
 			log.Warn().Str("orgID", orgID).Msg("Investigation store not available (requires Pulse Pro)")
@@ -1788,7 +1800,8 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 		return svc.CheckBudget("patrol")
 	})
 
-	chatAdapter := investigation.NewChatServiceAdapter(chatService)
+	// Build local adapters that implement aicontracts.Orchestrator* interfaces
+	chatAdapter := &orchestratorChatAdapter{svc: chatService}
 
 	// Create findings store adapter
 	findingsStore := patrol.GetFindings()
@@ -1796,46 +1809,25 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 		log.Warn().Str("orgID", orgID).Msg("Findings store not available for orchestrator")
 		return
 	}
-	findingsStoreWrapper := &findingsStoreWrapper{store: findingsStore}
-	findingsAdapter := investigation.NewFindingsStoreAdapter(findingsStoreWrapper)
+	findingsAdapter := &orchestratorFindingsAdapter{store: &findingsStoreWrapper{store: findingsStore}}
 
 	// Create approval adapter from the global approval store
-	var approvalAdapter *investigation.ApprovalAdapter
-	if approvalStore := approval.GetStore(); approvalStore != nil {
-		approvalAdapter = investigation.NewApprovalAdapter(approvalStore, orgID)
+	var approvalAdapter aicontracts.OrchestratorApprovalStore
+	if approvalStoreInst := approval.GetStore(); approvalStoreInst != nil {
+		approvalAdapter = &orchestratorApprovalAdapter{store: approvalStoreInst, orgID: approval.NormalizeOrgID(orgID)}
 	}
 
 	// Get config for investigation settings
 	cfg := svc.GetConfig()
-	invConfig := investigation.DefaultConfig()
+	invConfig := aicontracts.DefaultInvestigationConfig()
 	if cfg != nil {
 		invConfig.MaxTurns = cfg.GetPatrolInvestigationBudget()
 		invConfig.Timeout = cfg.GetPatrolInvestigationTimeout()
 	}
 
-	// Create orchestrator
-	orchestrator := investigation.NewOrchestrator(
-		chatAdapter,
-		store,
-		findingsAdapter,
-		approvalAdapter,
-		invConfig,
-	)
-
-	// Set command executor for auto-executing fixes in full autonomy mode
-	// The chatAdapter implements both ChatService and CommandExecutor interfaces
-	orchestrator.SetCommandExecutor(chatAdapter)
-
-	// Set autonomy level provider for re-checking before fix execution
-	// This handles cases where user changes autonomy level during an investigation
-	orchestrator.SetAutonomyLevelProvider(&autonomyLevelProviderAdapter{svc: svc})
-
-	// Set infrastructure context provider for CLI access information
-	// This enables investigations to know where services run (Docker, systemd, native)
-	// and propose correct commands (e.g., 'docker exec pbs proxmox-backup-manager ...')
+	// Wire up discovery context to the knowledge store for infrastructure context
+	var infraContext aicontracts.OrchestratorInfraContextProvider
 	if knowledgeStore := svc.GetKnowledgeStore(); knowledgeStore != nil {
-		// Wire up discovery context to the knowledge store
-		// This unifies deep-scanned discovery data with legacy knowledge notes
 		if discoveryService := svc.GetDiscoveryService(); discoveryService != nil {
 			knowledgeStore.SetDiscoveryContextProvider(func() string {
 				discoveries, err := discoveryService.ListDiscoveries()
@@ -1856,29 +1848,240 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 				return servicediscovery.FormatForAIContext(filtered)
 			})
 		}
-		orchestrator.SetInfrastructureContextProvider(knowledgeStore)
+		infraContext = knowledgeStore
 	}
 
-	// Create adapter to bridge investigation.Orchestrator to ai.InvestigationOrchestrator interface
-	adapter := ai.NewInvestigationOrchestratorAdapter(orchestrator)
+	// Build deps struct and call factory
+	deps := aicontracts.OrchestratorDeps{
+		ChatService:   chatAdapter,
+		CmdExecutor:   chatAdapter, // ChatServiceAdapter implements both interfaces
+		Store:         store,
+		FindingsStore: findingsAdapter,
+		ApprovalStore: approvalAdapter,
+		Config:        invConfig,
+		InfraContext:  infraContext,
+		Autonomy:      &autonomyLevelProviderAdapter{svc: svc},
+		FixVerifier:   &patrolFixVerifierAdapter{patrol: patrol},
+		License:       &licenseCheckerForOrchestrator{svc: svc},
+		Metrics:       &patrolMetricsCallbackAdapter{},
+	}
 
-	// Set on patrol service
-	patrol.SetInvestigationOrchestrator(adapter)
+	orchestrator := factory(deps)
+	if orchestrator == nil {
+		log.Warn().Str("orgID", orgID).Msg("Investigation orchestrator factory returned nil")
+		patrol.SetInvestigationOrchestrator(nil)
+		return
+	}
 
-	// Wire up fix verification: patrol re-checks resources after fixes are executed
-	adapter.SetFixVerifier(patrol)
-
-	// Wire up Prometheus metrics for investigation outcomes and fix verification
-	adapter.SetMetricsCallback()
-
-	// Wire up license checker for defense-in-depth autonomy clamping
-	// This prevents auto-fix execution even if autonomy level was somehow set to assisted/full without Pro
-	adapter.SetLicenseChecker(&licenseCheckerForOrchestrator{svc: svc})
+	// Set directly on patrol service — factory returns the interface
+	patrol.SetInvestigationOrchestrator(orchestrator)
 
 	log.Info().Str("orgID", orgID).Msg("Investigation orchestrator configured for patrol service")
 }
 
-// licenseCheckerForOrchestrator adapts *ai.Service to investigation.LicenseChecker
+// ---------------------------------------------------------------------------
+// Local adapters — bridge between OSS singletons and aicontracts interfaces
+// ---------------------------------------------------------------------------
+
+// orchestratorChatAdapter wraps *chat.Service to implement
+// aicontracts.OrchestratorChatService and OrchestratorCommandExecutor.
+type orchestratorChatAdapter struct {
+	svc *chat.Service
+}
+
+func (a *orchestratorChatAdapter) CreateSession(ctx context.Context) (*aicontracts.OrchestratorChatSession, error) {
+	session, err := a.svc.CreateSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &aicontracts.OrchestratorChatSession{ID: session.ID}, nil
+}
+
+func (a *orchestratorChatAdapter) ExecuteStream(ctx context.Context, req aicontracts.OrchestratorExecuteRequest, callback aicontracts.OrchestratorStreamCallback) error {
+	if a.svc == nil {
+		return fmt.Errorf("chat service is nil")
+	}
+	if !a.svc.IsRunning() {
+		return fmt.Errorf("chat service is not running")
+	}
+	chatReq := chat.ExecuteRequest{
+		Prompt:         req.Prompt,
+		SessionID:      req.SessionID,
+		MaxTurns:       req.MaxTurns,
+		AutonomousMode: req.AutonomousMode,
+	}
+	return a.svc.ExecuteStream(ctx, chatReq, func(event chat.StreamEvent) {
+		callback(aicontracts.OrchestratorStreamEvent{
+			Type: event.Type,
+			Data: event.Data,
+		})
+	})
+}
+
+func (a *orchestratorChatAdapter) GetMessages(ctx context.Context, sessionID string) ([]aicontracts.OrchestratorMessage, error) {
+	chatMessages, err := a.svc.GetMessages(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	messages := make([]aicontracts.OrchestratorMessage, len(chatMessages))
+	for i, msg := range chatMessages {
+		m := aicontracts.OrchestratorMessage{
+			ID:               msg.ID,
+			Role:             msg.Role,
+			Content:          msg.Content,
+			ReasoningContent: msg.ReasoningContent,
+			Timestamp:        msg.Timestamp,
+		}
+		for _, tc := range msg.ToolCalls {
+			m.ToolCalls = append(m.ToolCalls, aicontracts.OrchestratorToolCallInfo{
+				ID:    tc.ID,
+				Name:  tc.Name,
+				Input: tc.Input,
+			})
+		}
+		if msg.ToolResult != nil {
+			m.ToolResult = &aicontracts.OrchestratorToolResultInfo{
+				ToolUseID: msg.ToolResult.ToolUseID,
+				Content:   msg.ToolResult.Content,
+				IsError:   msg.ToolResult.IsError,
+			}
+		}
+		messages[i] = m
+	}
+	return messages, nil
+}
+
+func (a *orchestratorChatAdapter) DeleteSession(ctx context.Context, sessionID string) error {
+	return a.svc.DeleteSession(ctx, sessionID)
+}
+
+func (a *orchestratorChatAdapter) ListAvailableTools(ctx context.Context, prompt string) []string {
+	if a.svc == nil {
+		return nil
+	}
+	return a.svc.ListAvailableTools(ctx, prompt)
+}
+
+func (a *orchestratorChatAdapter) SetAutonomousMode(enabled bool) {
+	if a.svc != nil {
+		a.svc.SetAutonomousMode(enabled)
+	}
+}
+
+func (a *orchestratorChatAdapter) ExecuteCommand(ctx context.Context, command, targetHost string) (string, int, error) {
+	if a.svc == nil {
+		return "", -1, fmt.Errorf("chat service not available")
+	}
+	return a.svc.ExecuteCommand(ctx, command, targetHost)
+}
+
+// orchestratorFindingsAdapter wraps findingsStoreWrapper to implement
+// aicontracts.OrchestratorFindingsStore.
+type orchestratorFindingsAdapter struct {
+	store *findingsStoreWrapper
+}
+
+func (a *orchestratorFindingsAdapter) Get(id string) *aicontracts.Finding {
+	if a.store == nil {
+		return nil
+	}
+	f := a.store.Get(id)
+	if f == nil {
+		return nil
+	}
+	return &aicontracts.Finding{
+		ID:                     f.GetID(),
+		Severity:               f.GetSeverity(),
+		Category:               f.GetCategory(),
+		ResourceID:             f.GetResourceID(),
+		ResourceName:           f.GetResourceName(),
+		ResourceType:           f.GetResourceType(),
+		Title:                  f.GetTitle(),
+		Description:            f.GetDescription(),
+		Recommendation:         f.GetRecommendation(),
+		Evidence:               f.GetEvidence(),
+		InvestigationSessionID: f.GetInvestigationSessionID(),
+		InvestigationStatus:    f.GetInvestigationStatus(),
+		InvestigationOutcome:   f.GetInvestigationOutcome(),
+		LastInvestigatedAt:     f.GetLastInvestigatedAt(),
+		InvestigationAttempts:  f.GetInvestigationAttempts(),
+	}
+}
+
+func (a *orchestratorFindingsAdapter) Update(f *aicontracts.Finding) bool {
+	if a.store == nil || f == nil {
+		return false
+	}
+	return a.store.UpdateInvestigation(
+		f.ID,
+		f.InvestigationSessionID,
+		f.InvestigationStatus,
+		f.InvestigationOutcome,
+		f.LastInvestigatedAt,
+		f.InvestigationAttempts,
+	)
+}
+
+// orchestratorApprovalAdapter wraps *approval.Store to implement
+// aicontracts.OrchestratorApprovalStore.
+type orchestratorApprovalAdapter struct {
+	store *approval.Store
+	orgID string
+}
+
+func (a *orchestratorApprovalAdapter) Create(appr *aicontracts.OrchestratorApproval) error {
+	if a.store == nil {
+		return nil
+	}
+	riskLevel := approval.RiskLow
+	switch appr.RiskLevel {
+	case "low":
+		riskLevel = approval.RiskLow
+	case "medium":
+		riskLevel = approval.RiskMedium
+	case "high", "critical":
+		riskLevel = approval.RiskHigh
+	}
+	req := &approval.ApprovalRequest{
+		OrgID:      a.orgID,
+		ID:         appr.ID,
+		ToolID:     "investigation_fix",
+		Command:    appr.Command,
+		TargetType: "investigation",
+		TargetID:   appr.FindingID,
+		TargetName: strings.TrimSpace(appr.TargetHost),
+		Context:    "Automated fix from patrol investigation: " + appr.Description,
+		RiskLevel:  riskLevel,
+	}
+	if req.TargetName == "" {
+		req.TargetName = appr.Description
+	}
+	return a.store.CreateApproval(req)
+}
+
+// patrolFixVerifierAdapter wraps *ai.PatrolService to implement
+// aicontracts.OrchestratorFixVerifier.
+type patrolFixVerifierAdapter struct {
+	patrol *ai.PatrolService
+}
+
+func (v *patrolFixVerifierAdapter) VerifyFixResolved(ctx context.Context, finding *aicontracts.Finding) (bool, error) {
+	return v.patrol.VerifyFixResolved(ctx, finding.ResourceID, finding.ResourceType, finding.Key, finding.ID)
+}
+
+// patrolMetricsCallbackAdapter implements aicontracts.OrchestratorMetricsCallback
+// by delegating to the global PatrolMetrics singleton.
+type patrolMetricsCallbackAdapter struct{}
+
+func (c *patrolMetricsCallbackAdapter) RecordInvestigationOutcome(outcome string) {
+	ai.GetPatrolMetrics().RecordInvestigationOutcome(outcome)
+}
+
+func (c *patrolMetricsCallbackAdapter) RecordFixVerification(result string) {
+	ai.GetPatrolMetrics().RecordFixVerification(result)
+}
+
+// licenseCheckerForOrchestrator adapts *ai.Service to aicontracts.OrchestratorLicenseChecker
 type licenseCheckerForOrchestrator struct {
 	svc *ai.Service
 }
@@ -1887,7 +2090,7 @@ func (l *licenseCheckerForOrchestrator) HasFeature(feature string) bool {
 	return l.svc.HasLicenseFeature(feature)
 }
 
-// findingsStoreWrapper wraps *ai.FindingsStore to implement investigation.AIFindingsStore
+// findingsStoreWrapper wraps *ai.FindingsStore to implement aicontracts.OrchestratorAIFindingsStore
 type findingsStoreWrapper struct {
 	store *ai.FindingsStore
 }

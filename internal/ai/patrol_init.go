@@ -231,7 +231,11 @@ func (p *PatrolService) SetInvestigationOrchestrator(orchestrator InvestigationO
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.investigationOrchestrator = orchestrator
-	log.Info().Msg("investigation orchestrator configured for patrol")
+	if orchestrator != nil {
+		log.Info().Msg("investigation orchestrator configured for patrol")
+	} else {
+		log.Info().Msg("investigation orchestrator cleared from patrol")
+	}
 }
 
 // GetInvestigationOrchestrator returns the investigation orchestrator
