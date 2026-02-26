@@ -92,6 +92,10 @@ type BusinessHooks struct {
 	// CreateInvestigationOrchestrator creates the premium investigation orchestrator.
 	// Returns nil in OSS. Enterprise provides a concrete implementation.
 	CreateInvestigationOrchestrator func(deps aicontracts.OrchestratorDeps) aicontracts.InvestigationOrchestrator
+
+	// CreateAlertAnalyzer creates the premium alert-triggered analyzer.
+	// Returns nil in OSS. Enterprise provides a concrete implementation.
+	CreateAlertAnalyzer func(deps aicontracts.AlertAnalyzerDeps) aicontracts.AlertAnalyzer
 }
 
 var (
@@ -294,12 +298,14 @@ func Run(ctx context.Context, version string) error {
 	createRemediationEngine := globalHooks.CreateRemediationEngine
 	createInvestigationStore := globalHooks.CreateInvestigationStore
 	createInvestigationOrchestrator := globalHooks.CreateInvestigationOrchestrator
+	createAlertAnalyzer := globalHooks.CreateAlertAnalyzer
 	globalHooksMu.Unlock()
 
 	api.SetAIInvestigationEnabled(aiInvestigationEnabled)
 	api.SetCreateRemediationEngine(createRemediationEngine)
 	api.SetCreateInvestigationStore(createInvestigationStore)
 	api.SetCreateInvestigationOrchestrator(createInvestigationOrchestrator)
+	api.SetCreateAlertAnalyzer(createAlertAnalyzer)
 	api.SetRBACAdminEndpointsBinder(bindRBACAdminEndpoints)
 	api.SetAuditAdminEndpointsBinder(bindAuditAdminEndpoints)
 	api.SetSSOAdminEndpointsBinder(bindSSOAdminEndpoints)

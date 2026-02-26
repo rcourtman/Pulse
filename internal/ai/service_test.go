@@ -11,7 +11,26 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
+
+// mockStateProvider implements StateProvider for testing.
+type mockStateProvider struct {
+	state models.StateSnapshot
+}
+
+func (m *mockStateProvider) GetState() models.StateSnapshot {
+	return m.state
+}
+
+// mockAlertAnalyzer satisfies aicontracts.AlertAnalyzer for testing.
+type mockAlertAnalyzer struct{ enabled bool }
+
+func (m *mockAlertAnalyzer) OnAlertFired(aicontracts.AlertPayload) {}
+func (m *mockAlertAnalyzer) SetEnabled(e bool)                     { m.enabled = e }
+func (m *mockAlertAnalyzer) IsEnabled() bool                       { return m.enabled }
+func (m *mockAlertAnalyzer) Start()                                {}
+func (m *mockAlertAnalyzer) Stop()                                 {}
 
 func TestNewService(t *testing.T) {
 	svc := NewService(nil, nil)
@@ -80,7 +99,9 @@ func TestService_GetAlertTriggeredAnalyzer_Initial(t *testing.T) {
 
 func TestService_SetStateProvider(t *testing.T) {
 	svc := NewService(nil, nil)
-	svc.SetAlertAnalysisAllowed(true)
+	svc.SetAlertAnalyzerFactory(func(deps aicontracts.AlertAnalyzerDeps) aicontracts.AlertAnalyzer {
+		return &mockAlertAnalyzer{}
+	})
 
 	stateProvider := &mockStateProvider{
 		state: models.StateSnapshot{
@@ -98,7 +119,7 @@ func TestService_SetStateProvider(t *testing.T) {
 		t.Error("Expected patrol service to be initialized after setting state provider")
 	}
 
-	// Alert triggered analyzer should now be initialized (allowed via SetAlertAnalysisAllowed)
+	// Alert triggered analyzer should now be initialized (factory was set)
 	analyzer := svc.GetAlertTriggeredAnalyzer()
 	if analyzer == nil {
 		t.Error("Expected alert analyzer to be initialized after setting state provider")

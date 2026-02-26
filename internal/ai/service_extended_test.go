@@ -744,7 +744,7 @@ func TestService_PatrolManagement(t *testing.T) {
 	patrol := NewPatrolService(svc, nil)
 	svc.patrolService = patrol
 
-	alertAnalyzer := NewAlertTriggeredAnalyzer(patrol, nil)
+	alertAnalyzer := &mockAlertAnalyzer{}
 	svc.alertTriggeredAnalyzer = alertAnalyzer
 
 	mockLicense := &mockLicenseStore{

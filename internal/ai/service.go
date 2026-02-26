@@ -29,6 +29,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
@@ -170,10 +171,10 @@ type Service struct {
 	discoveryService *servicediscovery.Service
 
 	// Alert-triggered analysis - token-efficient real-time AI insights
-	alertTriggeredAnalyzer *AlertTriggeredAnalyzer
-	// alertAnalysisAllowed gates construction of the AlertTriggeredAnalyzer.
-	// When false (OSS binary), the analyzer is never created regardless of config.
-	alertAnalysisAllowed bool
+	alertTriggeredAnalyzer aicontracts.AlertAnalyzer
+	// alertAnalyzerFactory gates construction of the AlertAnalyzer.
+	// When nil (OSS binary), the analyzer is never created regardless of config.
+	alertAnalyzerFactory func(aicontracts.AlertAnalyzerDeps) aicontracts.AlertAnalyzer
 
 	limits executionLimits
 
@@ -203,6 +204,34 @@ type modelsCache struct {
 	key       string
 	providers map[string]providerModelsEntry
 	ttl       time.Duration
+}
+
+// alertFindingRecorderAdapter adapts PatrolService.recordFinding for the
+// aicontracts.FindingRecorder interface used by the enterprise alert analyzer.
+type alertFindingRecorderAdapter struct {
+	ps *PatrolService
+}
+
+func (a *alertFindingRecorderAdapter) RecordAlertFinding(f *aicontracts.AlertAnalyzerFinding) {
+	if a.ps == nil || f == nil {
+		return
+	}
+	a.ps.recordFinding(&Finding{
+		ID:             f.ID,
+		Key:            f.Key,
+		Severity:       FindingSeverity(f.Severity),
+		Category:       FindingCategory(f.Category),
+		ResourceID:     f.ResourceID,
+		ResourceName:   f.ResourceName,
+		ResourceType:   f.ResourceType,
+		Title:          f.Title,
+		Description:    f.Description,
+		Recommendation: f.Recommendation,
+		Evidence:       f.Evidence,
+		AlertID:        f.AlertID,
+		DetectedAt:     f.DetectedAt,
+		LastSeenAt:     f.LastSeenAt,
+	})
 }
 
 // NewService creates a new AI service
@@ -440,9 +469,13 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 		}
 	}
 
-	// Initialize alert-triggered analyzer if not already done (requires enterprise)
-	if s.alertTriggeredAnalyzer == nil && s.alertAnalysisAllowed && sp != nil && s.patrolService != nil {
-		s.alertTriggeredAnalyzer = NewAlertTriggeredAnalyzer(s.patrolService, sp)
+	// Initialize alert-triggered analyzer if not already done (requires enterprise factory)
+	if s.alertTriggeredAnalyzer == nil && s.alertAnalyzerFactory != nil && s.patrolService != nil {
+		deps := aicontracts.AlertAnalyzerDeps{
+			FindingRecorder:  &alertFindingRecorderAdapter{ps: s.patrolService},
+			IncidentRecorder: s,
+		}
+		s.alertTriggeredAnalyzer = s.alertAnalyzerFactory(deps)
 	}
 }
 
@@ -486,7 +519,7 @@ func (s *Service) GetRemediationLog() *RemediationLog {
 }
 
 // GetAlertTriggeredAnalyzer returns the alert-triggered analyzer for token-efficient real-time analysis
-func (s *Service) GetAlertTriggeredAnalyzer() *AlertTriggeredAnalyzer {
+func (s *Service) GetAlertTriggeredAnalyzer() aicontracts.AlertAnalyzer {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.alertTriggeredAnalyzer
@@ -716,13 +749,12 @@ func (s *Service) SetLicenseChecker(checker LicenseChecker) {
 	s.licenseChecker = checker
 }
 
-// SetAlertAnalysisAllowed controls whether the AlertTriggeredAnalyzer may be
-// constructed. Enterprise sets this to true; the OSS binary leaves it false
-// so the analyzer is never created.
-func (s *Service) SetAlertAnalysisAllowed(allowed bool) {
+// SetAlertAnalyzerFactory registers the factory that creates the enterprise
+// AlertTriggeredAnalyzer. When nil (OSS binary), no analyzer is created.
+func (s *Service) SetAlertAnalyzerFactory(fn func(aicontracts.AlertAnalyzerDeps) aicontracts.AlertAnalyzer) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.alertAnalysisAllowed = allowed
+	s.alertAnalyzerFactory = fn
 }
 
 // HasLicenseFeature checks if a Pro feature is licensed (returns true if no license checker is set)

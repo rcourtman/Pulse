@@ -2876,7 +2876,7 @@ func (r *Router) SetTelemetryToggleFunc(fn func(enabled bool)) {
 	}
 }
 
-func (r *Router) GetAlertTriggeredAnalyzer() *ai.AlertTriggeredAnalyzer {
+func (r *Router) GetAlertTriggeredAnalyzer() aicontracts.AlertAnalyzer {
 	if r.aiSettingsHandler != nil {
 		return r.aiSettingsHandler.GetAlertTriggeredAnalyzer(context.Background())
 	}

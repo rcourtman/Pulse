@@ -13,9 +13,19 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// mockAlertAnalyzerForTest satisfies aicontracts.AlertAnalyzer for test assertions.
+type mockAlertAnalyzerForTest struct{ enabled bool }
+
+func (m *mockAlertAnalyzerForTest) OnAlertFired(aicontracts.AlertPayload) {}
+func (m *mockAlertAnalyzerForTest) SetEnabled(e bool)                     { m.enabled = e }
+func (m *mockAlertAnalyzerForTest) IsEnabled() bool                       { return m.enabled }
+func (m *mockAlertAnalyzerForTest) Start()                                {}
+func (m *mockAlertAnalyzerForTest) Stop()                                 {}
 
 func newTestAISettingsHandler(cfg *config.Config, persistence *config.ConfigPersistence, agentServer *agentexec.Server) *AISettingsHandler {
 	handler := NewAISettingsHandler(nil, nil, agentServer)
@@ -1162,15 +1172,18 @@ func TestAISettingsHandler_SetConfig(t *testing.T) {
 }
 
 func TestAISettingsHandler_GetAlertTriggeredAnalyzer(t *testing.T) {
-	// Not parallel: mutates package-global aiInvestigationEnabledFunc
-	SetAIInvestigationEnabled(func() bool { return true })
-	t.Cleanup(func() { SetAIInvestigationEnabled(nil) })
+	// Not parallel: mutates package-global createAlertAnalyzerFunc
+	mock := &mockAlertAnalyzerForTest{}
+	SetCreateAlertAnalyzer(func(_ aicontracts.AlertAnalyzerDeps) aicontracts.AlertAnalyzer {
+		return mock
+	})
+	t.Cleanup(func() { SetCreateAlertAnalyzer(nil) })
 
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
-	handler.legacyAIService.SetAlertAnalysisAllowed(true)
+	handler.legacyAIService.SetAlertAnalyzerFactory(getCreateAlertAnalyzer())
 
 	handler.SetStateProvider(&MockStateProvider{})
 
@@ -1178,7 +1191,7 @@ func TestAISettingsHandler_GetAlertTriggeredAnalyzer(t *testing.T) {
 	require.NotNil(t, analyzer)
 
 	again := handler.GetAlertTriggeredAnalyzer(context.Background())
-	require.Same(t, analyzer, again)
+	require.Same(t, mock, again)
 }
 
 func TestAISettingsHandler_StartPatrol(t *testing.T) {

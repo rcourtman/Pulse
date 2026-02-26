@@ -196,7 +196,7 @@ func (h *AISettingsHandler) providerSnapshot() aiSettingsProviderSnapshot {
 func (h *AISettingsHandler) newFailClosedTenantService(orgID string) *ai.Service {
 	svc := ai.NewService(nil, h.agentServer)
 	svc.SetOrgID(orgID)
-	svc.SetAlertAnalysisAllowed(isAIInvestigationEnabled())
+	svc.SetAlertAnalyzerFactory(getCreateAlertAnalyzer())
 	svc.SetLicenseChecker(failClosedLicenseChecker{})
 	return svc
 }
@@ -220,7 +220,7 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 
 	defaultAIService = ai.NewService(defaultPersistence, agentServer)
 	defaultAIService.SetOrgID("default")
-	defaultAIService.SetAlertAnalysisAllowed(isAIInvestigationEnabled())
+	defaultAIService.SetAlertAnalyzerFactory(getCreateAlertAnalyzer())
 	// Wire quickstart credit manager before LoadConfig so the quickstart
 	// provider path is available during initial configuration.
 	if defaultPersistence != nil {
@@ -312,7 +312,7 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 
 	svc = ai.NewService(persistence, h.agentServer)
 	svc.SetOrgID(orgID)
-	svc.SetAlertAnalysisAllowed(isAIInvestigationEnabled())
+	svc.SetAlertAnalyzerFactory(getCreateAlertAnalyzer())
 	// Wire quickstart credit manager before LoadConfig so the quickstart
 	// provider path is available during initial configuration.
 	// Use the base data dir (not tenant-scoped dir) because FileBillingStore
@@ -1624,7 +1624,7 @@ func (h *AISettingsHandler) RemoveTenantIntelligence(orgID string) {
 }
 
 // GetAlertTriggeredAnalyzer returns the alert-triggered analyzer for wiring into alert callbacks
-func (h *AISettingsHandler) GetAlertTriggeredAnalyzer(ctx context.Context) *ai.AlertTriggeredAnalyzer {
+func (h *AISettingsHandler) GetAlertTriggeredAnalyzer(ctx context.Context) aicontracts.AlertAnalyzer {
 	return h.GetAIService(ctx).GetAlertTriggeredAnalyzer()
 }
 
