@@ -111,6 +111,10 @@ func newLicensePersistenceFromLicensing(configDir string) (*licensePersistence, 
 	return pkglicensing.NewPersistence(configDir)
 }
 
+func newLicenseServerClientFromLicensing(baseURL string) *pkglicensing.LicenseServerClient {
+	return pkglicensing.NewLicenseServerClient(baseURL)
+}
+
 func newLicenseEvaluatorForBillingStoreFromLicensing(store billingStoreModel, orgID string, cacheTTL time.Duration) *licenseEvaluator {
 	return pkglicensing.NewEvaluator(pkglicensing.NewDatabaseSource(store, orgID, cacheTTL))
 }

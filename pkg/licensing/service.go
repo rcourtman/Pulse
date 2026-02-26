@@ -1,12 +1,15 @@
 package licensing
 
 import (
+	"context"
 	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -80,6 +83,14 @@ type Service struct {
 	// Optional subscription state machine hook.
 	// Only tracks whether a hook is configured; current derivation remains claim/license based.
 	stateMachineConfigured bool
+
+	// Activation-key license server fields.
+	serverClient    *LicenseServerClient // HTTP client for license server
+	activationState *ActivationState     // Current activation state (nil if using legacy JWT)
+	grantRefresh    *grantRefreshLoop    // Background refresh loop (nil until started)
+
+	// Persistence reference for activation state save/load. Set via SetPersistence.
+	persistence *Persistence
 }
 
 // DefaultGracePeriod is the duration after license expiration during which
@@ -134,19 +145,37 @@ func (s *Service) Evaluator() *Evaluator {
 }
 
 // Activate validates and activates a license key.
+// It auto-detects activation keys (ppk_live_...) and routes them to ActivateWithKey.
+// Everything else is treated as a legacy JWT.
 func (s *Service) Activate(licenseKey string) (*License, error) {
+	licenseKey = strings.TrimSpace(licenseKey)
+	if strings.HasPrefix(licenseKey, ActivationKeyPrefix) {
+		return s.ActivateWithKey(licenseKey)
+	}
+
 	license, err := ValidateLicense(licenseKey)
 	if err != nil {
 		return nil, fmt.Errorf("validate license: %w", err)
 	}
 
+	// JWT validated successfully — now safe to tear down any existing activation.
+	s.StopGrantRefresh()
+
 	s.mu.Lock()
 	s.license = cloneLicense(license)
 	source := NewTokenSource(&s.license.Claims)
 	s.evaluator = NewEvaluator(source)
+	// Clear any activation state — this is now a legacy JWT license.
+	s.activationState = nil
 	cb := s.onLicenseChange
 	snapshot := cloneLicense(s.license)
+	persistence := s.persistence
 	s.mu.Unlock()
+
+	// Remove persisted activation state if present.
+	if persistence != nil {
+		_ = persistence.ClearActivationState()
+	}
 
 	if cb != nil {
 		cb(snapshot)
@@ -161,13 +190,176 @@ func (s *Service) Activate(licenseKey string) (*License, error) {
 	return snapshot, nil
 }
 
+// ActivateWithKey activates a license using an activation key from the license server.
+// It creates an installation, receives a relay grant, parses it, and sets the
+// resulting license as active. The activation state is persisted for background refresh.
+func (s *Service) ActivateWithKey(activationKey string) (*License, error) {
+	s.mu.RLock()
+	client := s.serverClient
+	persistence := s.persistence
+	s.mu.RUnlock()
+
+	if client == nil {
+		return nil, fmt.Errorf("activation unavailable: license server client not configured")
+	}
+
+	// Generate a stable fingerprint for this installation.
+	fingerprint, err := generateFingerprint()
+	if err != nil {
+		return nil, fmt.Errorf("generate instance fingerprint: %w", err)
+	}
+
+	hostname, _ := os.Hostname()
+	req := ActivateInstallationRequest{
+		ActivationKey:       activationKey,
+		InstanceFingerprint: fingerprint,
+		Hostname:            hostname,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	resp, err := client.Activate(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("activation failed: %w", err)
+	}
+
+	// Parse the grant JWT to extract claims.
+	gc, err := parseGrantJWT(resp.Grant.JWT)
+	if err != nil {
+		return nil, fmt.Errorf("parse grant from activation: %w", err)
+	}
+
+	// Build the license from grant claims.
+	lic := grantClaimsToLicense(gc, resp.Grant.JWT)
+
+	// Build activation state for persistence and refresh.
+	now := time.Now().Unix()
+	state := &ActivationState{
+		InstallationID:      resp.InstallationID,
+		InstallationToken:   resp.InstallationToken,
+		LicenseID:           resp.LicenseID,
+		GrantJWT:            resp.Grant.JWT,
+		GrantJTI:            resp.Grant.JTI,
+		GrantExpiresAt:      resp.Grant.ExpiresAt,
+		InstanceFingerprint: fingerprint,
+		LicenseServerURL:    client.BaseURL(),
+		ActivatedAt:         now,
+		LastRefreshedAt:     now,
+	}
+
+	s.mu.Lock()
+	s.license = cloneLicense(lic)
+	source := NewTokenSource(&s.license.Claims)
+	s.evaluator = NewEvaluator(source)
+	s.activationState = state
+	cb := s.onLicenseChange
+	snapshot := cloneLicense(s.license)
+	s.mu.Unlock()
+
+	// Apply refresh hints from the server.
+	s.SetRefreshHints(resp.Grant.Refresh)
+
+	// Persist activation state.
+	if persistence != nil {
+		if err := persistence.SaveActivationState(state); err != nil {
+			// Log but don't fail — the activation succeeded.
+			// The grant won't survive restarts without persistence, but that's a degraded mode.
+			fmt.Fprintf(os.Stderr, "warning: failed to persist activation state: %v\n", err)
+		}
+	}
+
+	if cb != nil {
+		cb(snapshot)
+	}
+
+	return snapshot, nil
+}
+
+// IsActivated returns true if the service has an active activation-key license.
+func (s *Service) IsActivated() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.activationState != nil
+}
+
+// GetActivationState returns a copy of the current activation state, or nil.
+func (s *Service) GetActivationState() *ActivationState {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.activationState == nil {
+		return nil
+	}
+	stateCopy := *s.activationState
+	return &stateCopy
+}
+
+// SetLicenseServerClient sets the HTTP client for license server communication.
+func (s *Service) SetLicenseServerClient(client *LicenseServerClient) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.serverClient = client
+}
+
+// SetPersistence sets the persistence reference for activation state save/load.
+func (s *Service) SetPersistence(p *Persistence) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.persistence = p
+}
+
+// RestoreActivation restores the license from persisted activation state.
+// Called during startup to resume an activation without re-activating.
+// Even if the grant is expired, the refresh loop will renew it.
+func (s *Service) RestoreActivation(state *ActivationState) error {
+	if state == nil {
+		return nil
+	}
+
+	gc, err := parseGrantJWT(state.GrantJWT)
+	if err != nil {
+		return fmt.Errorf("parse persisted grant: %w", err)
+	}
+
+	lic := grantClaimsToLicense(gc, state.GrantJWT)
+
+	s.mu.Lock()
+	s.license = cloneLicense(lic)
+	source := NewTokenSource(&s.license.Claims)
+	s.evaluator = NewEvaluator(source)
+	s.activationState = state
+	cb := s.onLicenseChange
+	snapshot := cloneLicense(s.license)
+	s.mu.Unlock()
+
+	if cb != nil {
+		cb(snapshot)
+	}
+
+	return nil
+}
+
 // Clear removes the current license.
+// If an activation-key license is present, it also stops the refresh loop and clears the state.
 func (s *Service) Clear() {
+	// Stop the grant refresh loop first (outside the lock to avoid deadlock).
+	s.StopGrantRefresh()
+
 	s.mu.Lock()
 	s.license = nil
 	s.evaluator = nil
+	persistence := s.persistence
+	hadActivation := s.activationState != nil
+	s.activationState = nil
 	cb := s.onLicenseChange
 	s.mu.Unlock()
+
+	// Clear persisted activation state if it existed.
+	if hadActivation && persistence != nil {
+		if err := persistence.ClearActivationState(); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to clear activation state: %v\n", err)
+		}
+	}
 
 	if cb != nil {
 		cb(nil)
@@ -665,6 +857,20 @@ func ValidateLicense(licenseKey string) (*License, error) {
 	}
 
 	return license, nil
+}
+
+// generateFingerprint creates a random UUID v4 for identifying this installation.
+func generateFingerprint() (string, error) {
+	var uuid [16]byte
+	if _, err := rand.Read(uuid[:]); err != nil {
+		return "", err
+	}
+	// Set version 4 bits.
+	uuid[6] = (uuid[6] & 0x0f) | 0x40
+	// Set variant bits.
+	uuid[8] = (uuid[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:16]), nil
 }
 
 // GenerateLicenseForTesting creates a test license (DO NOT USE IN PRODUCTION).

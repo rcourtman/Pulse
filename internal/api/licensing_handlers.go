@@ -69,6 +69,20 @@ func (h *LicenseHandlers) SetConfig(cfg *config.Config) {
 	h.cfg = cfg
 }
 
+// StopAllGrantRefresh stops grant refresh loops for all tenant services.
+// Called during server shutdown to ensure clean goroutine termination.
+func (h *LicenseHandlers) StopAllGrantRefresh() {
+	if h == nil {
+		return
+	}
+	h.services.Range(func(_, value any) bool {
+		if svc, ok := value.(*licenseService); ok {
+			svc.StopGrantRefresh()
+		}
+		return true
+	})
+}
+
 func trialCallbackURLForRequest(r *http.Request, cfg *config.Config) string {
 	baseURL := ""
 	if cfg != nil {
@@ -142,12 +156,37 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 
 	service := newLicenseService()
 
+	// Wire license server client and persistence so activation / refresh can use them.
+	lsClient := newLicenseServerClientFromLicensing("")
+	service.SetLicenseServerClient(lsClient)
+	if persistence != nil {
+		service.SetPersistence(persistence)
+	}
+
 	if err := h.ensureEvaluatorForOrg(orgID, service); err != nil {
 		log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to initialize license evaluator for org")
 	}
 
-	// Try to load existing license
+	// Try to restore activation state first (takes priority over legacy JWT).
+	activationRestored := false
 	if persistence != nil {
+		activationState, loadErr := persistence.LoadActivationState()
+		if loadErr != nil {
+			log.Warn().Str("org_id", orgID).Err(loadErr).Msg("Failed to load activation state")
+		} else if activationState != nil {
+			if err := service.RestoreActivation(activationState); err != nil {
+				log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to restore activation")
+			} else {
+				activationRestored = true
+				// Start the background refresh loop for the restored grant.
+				service.StartGrantRefresh(context.Background())
+				log.Info().Str("org_id", orgID).Str("license_id", activationState.LicenseID).Msg("Restored license activation")
+			}
+		}
+	}
+
+	// Fall back to legacy JWT if no activation state was restored.
+	if !activationRestored && persistence != nil {
 		persisted, err := persistence.LoadWithMetadata()
 		if err == nil && persisted.LicenseKey != "" {
 			lic, err := service.Activate(persisted.LicenseKey)
@@ -163,7 +202,15 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 		}
 	}
 
-	h.services.Store(orgID, service)
+	// Use LoadOrStore to avoid racing with concurrent first requests for the same org.
+	// If another goroutine stored first, use its service and let ours be GC'd.
+	actual, loaded := h.services.LoadOrStore(orgID, service)
+	if loaded {
+		service.StopGrantRefresh() // stop our orphaned refresh loop if started
+		svc := actual.(*licenseService)
+		p, pErr := h.getPersistenceForOrg(orgID)
+		return svc, p, pErr
+	}
 	return service, persistence, nil
 }
 
@@ -533,23 +580,35 @@ func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Persist the license with grace period if applicable
-	if persistence != nil {
-		var gracePeriodEnd *int64
-		if lic.GracePeriodEnd != nil {
-			ts := lic.GracePeriodEnd.Unix()
-			gracePeriodEnd = &ts
+	// Persist based on activation type.
+	if service.IsActivated() {
+		// Activation state is already persisted by ActivateWithKey, but start the refresh loop.
+		service.StartGrantRefresh(context.Background())
+		// Remove stale legacy JWT persistence to prevent fallback to old license on restart.
+		if persistence != nil {
+			_ = persistence.Delete()
 		}
-		if err := persistence.SaveWithGracePeriod(req.LicenseKey, gracePeriodEnd); err != nil {
-			log.Warn().Err(err).Msg("Failed to persist license, it won't survive restarts")
+		log.Info().
+			Str("tier", string(lic.Claims.Tier)).
+			Msg("Pulse license activated via activation key")
+	} else {
+		// Legacy JWT: persist the license with grace period if applicable.
+		if persistence != nil {
+			var gracePeriodEnd *int64
+			if lic.GracePeriodEnd != nil {
+				ts := lic.GracePeriodEnd.Unix()
+				gracePeriodEnd = &ts
+			}
+			if err := persistence.SaveWithGracePeriod(req.LicenseKey, gracePeriodEnd); err != nil {
+				log.Warn().Err(err).Msg("Failed to persist license, it won't survive restarts")
+			}
 		}
+		log.Info().
+			Str("email", lic.Claims.Email).
+			Str("tier", string(lic.Claims.Tier)).
+			Bool("lifetime", lic.IsLifetime()).
+			Msg("Pulse Pro license activated")
 	}
-
-	log.Info().
-		Str("email", lic.Claims.Email).
-		Str("tier", string(lic.Claims.Tier)).
-		Bool("lifetime", lic.IsLifetime()).
-		Msg("Pulse Pro license activated")
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(ActivateLicenseResponse{
@@ -577,10 +636,13 @@ func (h *LicenseHandlers) HandleClearLicense(w http.ResponseWriter, r *http.Requ
 
 	service.Clear()
 
-	// Clear from persistence
+	// Clear from persistence (both legacy JWT and activation state).
 	if persistence != nil {
 		if err := persistence.Delete(); err != nil {
 			log.Warn().Err(err).Msg("Failed to delete persisted license")
+		}
+		if err := persistence.ClearActivationState(); err != nil {
+			log.Warn().Err(err).Msg("Failed to delete persisted activation state")
 		}
 	}
 
