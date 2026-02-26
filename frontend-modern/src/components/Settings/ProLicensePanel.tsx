@@ -221,7 +221,7 @@ export const ProLicensePanel: Component = () => {
   const handleActivate = async () => {
     const trimmedKey = licenseKey().trim();
     if (!trimmedKey) {
-      notificationStore.error('License key is required');
+      notificationStore.error('A license key or activation key is required');
       return;
     }
     setActivating(true);
@@ -276,18 +276,18 @@ export const ProLicensePanel: Component = () => {
       >
         <div class={formField}>
           <label class={labelClass()} for="pulse-pro-license-key">
-            License Key
+            License / Activation Key
           </label>
           <textarea
             id="pulse-pro-license-key"
             class={controlClass('min-h-[120px] font-mono')}
-            placeholder="Paste your Pro license key"
+            placeholder="Paste your license key or activation key"
             value={licenseKey()}
             onInput={(event) => setLicenseKey(event.currentTarget.value)}
           />
           <p class={formHelpText}>
-            Keys are validated locally and never sent to a license server. By activating a license,
-            you agree to the{' '}
+            Paste a license key or activation key. Activation keys are validated with the Pulse
+            license server. By activating a license, you agree to the{' '}
             <a
               href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md"
               target="_blank"

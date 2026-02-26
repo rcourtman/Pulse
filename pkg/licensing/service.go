@@ -88,6 +88,7 @@ type Service struct {
 	serverClient    *LicenseServerClient // HTTP client for license server
 	activationState *ActivationState     // Current activation state (nil if using legacy JWT)
 	grantRefresh    *grantRefreshLoop    // Background refresh loop (nil until started)
+	revocationPoll  *revocationPollLoop  // Background revocation feed poller (nil until started)
 
 	// Persistence reference for activation state save/load. Set via SetPersistence.
 	persistence *Persistence
@@ -160,6 +161,7 @@ func (s *Service) Activate(licenseKey string) (*License, error) {
 
 	// JWT validated successfully — now safe to tear down any existing activation.
 	s.StopGrantRefresh()
+	s.StopRevocationPoll()
 
 	s.mu.Lock()
 	s.license = cloneLicense(license)
@@ -276,6 +278,88 @@ func (s *Service) ActivateWithKey(activationKey string) (*License, error) {
 	return snapshot, nil
 }
 
+// ExchangeLegacyLicense exchanges a legacy JWT for a v6 license via the license server.
+// The legacy JWT is sent to the exchange endpoint which creates a v6 license, installation,
+// and relay grant. The result is treated identically to ActivateWithKey.
+func (s *Service) ExchangeLegacyLicense(legacyJWT string) (*License, error) {
+	s.mu.RLock()
+	client := s.serverClient
+	persistence := s.persistence
+	s.mu.RUnlock()
+
+	if client == nil {
+		return nil, fmt.Errorf("exchange unavailable: license server client not configured")
+	}
+
+	fingerprint, err := generateFingerprint()
+	if err != nil {
+		return nil, fmt.Errorf("generate instance fingerprint: %w", err)
+	}
+
+	req := ExchangeLegacyRequest{
+		LegacyLicenseToken:  legacyJWT,
+		InstanceFingerprint: fingerprint,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	resp, err := client.ExchangeLegacy(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("exchange failed: %w", err)
+	}
+
+	gc, err := parseGrantJWT(resp.Grant.JWT)
+	if err != nil {
+		return nil, fmt.Errorf("parse grant from exchange: %w", err)
+	}
+
+	lic := grantClaimsToLicense(gc, resp.Grant.JWT)
+
+	now := time.Now().Unix()
+	state := &ActivationState{
+		InstallationID:      resp.Installation.InstallationID,
+		InstallationToken:   resp.Installation.InstallationToken,
+		LicenseID:           gc.LicenseID, // Use JWT claim as canonical source
+		GrantJWT:            resp.Grant.JWT,
+		GrantJTI:            resp.Grant.JTI,
+		GrantExpiresAt:      resp.Grant.ExpiresAt,
+		InstanceFingerprint: fingerprint,
+		LicenseServerURL:    client.BaseURL(),
+		ActivatedAt:         now,
+		LastRefreshedAt:     now,
+	}
+
+	// Stop any existing refresh and switch to new state.
+	s.StopGrantRefresh()
+
+	s.mu.Lock()
+	s.license = cloneLicense(lic)
+	source := NewTokenSource(&s.license.Claims)
+	s.evaluator = NewEvaluator(source)
+	s.activationState = state
+	cb := s.onLicenseChange
+	snapshot := cloneLicense(s.license)
+	s.mu.Unlock()
+
+	// Use grant envelope refresh hints (same source as ActivateWithKey).
+	s.SetRefreshHints(resp.Grant.Refresh)
+
+	if persistence != nil {
+		if err := persistence.SaveActivationState(state); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to persist activation state after exchange: %v\n", err)
+		}
+		// Remove legacy JWT file since we've migrated.
+		_ = persistence.Delete()
+	}
+
+	if cb != nil {
+		cb(snapshot)
+	}
+
+	return snapshot, nil
+}
+
 // IsActivated returns true if the service has an active activation-key license.
 func (s *Service) IsActivated() bool {
 	s.mu.RLock()
@@ -342,8 +426,9 @@ func (s *Service) RestoreActivation(state *ActivationState) error {
 // Clear removes the current license.
 // If an activation-key license is present, it also stops the refresh loop and clears the state.
 func (s *Service) Clear() {
-	// Stop the grant refresh loop first (outside the lock to avoid deadlock).
+	// Stop background loops first (outside the lock to avoid deadlock).
 	s.StopGrantRefresh()
+	s.StopRevocationPoll()
 
 	s.mu.Lock()
 	s.license = nil

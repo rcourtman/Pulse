@@ -2853,10 +2853,10 @@ func (r *Router) GetLicenseHandlers() *LicenseHandlers {
 	return r.licenseHandlers
 }
 
-// StopGrantRefresh stops all grant refresh loops across all tenants.
+// StopGrantRefresh stops all grant refresh and revocation poll loops across all tenants.
 func (r *Router) StopGrantRefresh() {
 	if r.licenseHandlers != nil {
-		r.licenseHandlers.StopAllGrantRefresh()
+		r.licenseHandlers.StopAllBackgroundLoops()
 	}
 }
 

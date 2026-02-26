@@ -134,6 +134,57 @@ type RefreshGrantResponse struct {
 	Grant GrantEnvelope `json:"grant"`
 }
 
+// ExchangeLegacyRequest is the payload sent to POST /v1/licenses/exchange.
+type ExchangeLegacyRequest struct {
+	LegacyLicenseToken  string `json:"legacy_license_token"`
+	InstanceFingerprint string `json:"instance_fingerprint"`
+	ClientVersion       string `json:"client_version,omitempty"`
+}
+
+// ExchangeLegacyResponse is the payload returned from the exchange endpoint.
+type ExchangeLegacyResponse struct {
+	Migration     ExchangeMigrationInfo `json:"migration"`
+	Installation  ExchangeInstallation  `json:"installation"`
+	Grant         GrantEnvelope         `json:"grant"`
+	RefreshPolicy RefreshHints          `json:"refresh_policy"`
+}
+
+// ExchangeMigrationInfo describes the legacy→v6 migration result.
+type ExchangeMigrationInfo struct {
+	Source              string `json:"source"`                 // e.g. "legacy_jwt"
+	LegacyLID           string `json:"legacy_lid"`             // original legacy license ID
+	ResolvedV6LicenseID string `json:"resolved_v6_license_id"` // new v6 license ID (lic_*)
+	AlreadyMigrated     bool   `json:"already_migrated"`       // true if this was a repeat call
+}
+
+// ExchangeInstallation describes the installation created by the exchange.
+type ExchangeInstallation struct {
+	InstallationID    string `json:"installation_id"`    // inst_*
+	InstallationToken string `json:"installation_token"` // pit_live_* (secret)
+	Status            string `json:"status"`             // active|revoked
+}
+
+// RevocationEvent is a single event from the revocation feed.
+type RevocationEvent struct {
+	Seq               int64  `json:"seq"`
+	Action            string `json:"action"` // revoke_license|revoke_installation|bump_license_version
+	LicenseID         string `json:"license_id"`
+	InstallationID    string `json:"installation_id"`
+	MinLicenseVersion int64  `json:"min_license_version"`
+	ReasonCode        string `json:"reason_code"`
+	Reason            string `json:"reason"`
+	EffectiveAt       string `json:"effective_at"` // ISO8601
+}
+
+// RevocationFeedResponse is the payload returned from GET /v1/revocations.
+type RevocationFeedResponse struct {
+	FromSeq   int64             `json:"from_seq"`
+	NextSeq   int64             `json:"next_seq"`
+	LatestSeq int64             `json:"latest_seq"`
+	HasMore   bool              `json:"has_more"`
+	Events    []RevocationEvent `json:"events"`
+}
+
 // LicenseServerError is a structured error from the license server.
 type LicenseServerError struct {
 	StatusCode int    `json:"-"`

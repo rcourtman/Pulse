@@ -200,6 +200,15 @@ func (s *Service) refreshGrantOnce(ctx context.Context) error {
 	lic := grantClaimsToLicense(gc, resp.Grant.JWT)
 
 	s.mu.Lock()
+
+	// If activation state was cleared concurrently (e.g. by a revocation event),
+	// do not re-install a license. This prevents a race where a bump_license_version
+	// refresh overwrites a revocation clear.
+	if s.activationState == nil {
+		s.mu.Unlock()
+		return nil
+	}
+
 	s.license = cloneLicense(lic)
 	source := NewTokenSource(&s.license.Claims)
 	s.evaluator = NewEvaluator(source)

@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +18,12 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rs/zerolog/log"
 )
+
+// revocationFeedToken returns the relay feed token for revocation polling.
+// Empty string means revocation polling is disabled.
+func revocationFeedToken() string {
+	return os.Getenv("PULSE_REVOCATION_FEED_TOKEN")
+}
 
 // LicenseHandlers handles license management API endpoints.
 // LicenseHandlers handles license management API endpoints.
@@ -69,15 +76,16 @@ func (h *LicenseHandlers) SetConfig(cfg *config.Config) {
 	h.cfg = cfg
 }
 
-// StopAllGrantRefresh stops grant refresh loops for all tenant services.
+// StopAllBackgroundLoops stops grant refresh and revocation poll loops for all tenant services.
 // Called during server shutdown to ensure clean goroutine termination.
-func (h *LicenseHandlers) StopAllGrantRefresh() {
+func (h *LicenseHandlers) StopAllBackgroundLoops() {
 	if h == nil {
 		return
 	}
 	h.services.Range(func(_, value any) bool {
 		if svc, ok := value.(*licenseService); ok {
 			svc.StopGrantRefresh()
+			svc.StopRevocationPoll()
 		}
 		return true
 	})
@@ -180,6 +188,10 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 				activationRestored = true
 				// Start the background refresh loop for the restored grant.
 				service.StartGrantRefresh(context.Background())
+				// Start revocation polling if a feed token is configured.
+				if feedToken := revocationFeedToken(); feedToken != "" {
+					service.StartRevocationPoll(context.Background(), feedToken)
+				}
 				log.Info().Str("org_id", orgID).Str("license_id", activationState.LicenseID).Msg("Restored license activation")
 			}
 		}
@@ -206,7 +218,8 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 	// If another goroutine stored first, use its service and let ours be GC'd.
 	actual, loaded := h.services.LoadOrStore(orgID, service)
 	if loaded {
-		service.StopGrantRefresh() // stop our orphaned refresh loop if started
+		service.StopGrantRefresh()   // stop our orphaned refresh loop if started
+		service.StopRevocationPoll() // stop our orphaned revocation poller if started
 		svc := actual.(*licenseService)
 		p, pErr := h.getPersistenceForOrg(orgID)
 		return svc, p, pErr
@@ -584,6 +597,9 @@ func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.R
 	if service.IsActivated() {
 		// Activation state is already persisted by ActivateWithKey, but start the refresh loop.
 		service.StartGrantRefresh(context.Background())
+		if feedToken := revocationFeedToken(); feedToken != "" {
+			service.StartRevocationPoll(context.Background(), feedToken)
+		}
 		// Remove stale legacy JWT persistence to prevent fallback to old license on restart.
 		if persistence != nil {
 			_ = persistence.Delete()
@@ -614,6 +630,59 @@ func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.R
 	json.NewEncoder(w).Encode(ActivateLicenseResponse{
 		Success: true,
 		Message: "License activated successfully",
+		Status:  service.Status(),
+	})
+}
+
+// HandleExchangeLicense handles POST /api/license/exchange
+// Exchanges a legacy JWT for a v6 activation-key license via the license server.
+func (h *LicenseHandlers) HandleExchangeLicense(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		LegacyJWT string `json:"legacy_jwt"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.LegacyJWT == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "legacy_jwt is required", nil)
+		return
+	}
+
+	service, persistence, err := h.getTenantComponents(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get license components for exchange")
+		writeErrorResponse(w, http.StatusInternalServerError, "tenant_error", "Failed to resolve tenant", nil)
+		return
+	}
+
+	lic, err := service.ExchangeLegacyLicense(req.LegacyJWT)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to exchange legacy license")
+		writeErrorResponse(w, http.StatusBadRequest, "exchange_failed", err.Error(), nil)
+		return
+	}
+
+	// Start background loops for the new grant.
+	service.StartGrantRefresh(context.Background())
+	if feedToken := revocationFeedToken(); feedToken != "" {
+		service.StartRevocationPoll(context.Background(), feedToken)
+	}
+
+	// Remove stale legacy JWT persistence.
+	if persistence != nil {
+		_ = persistence.Delete()
+	}
+
+	log.Info().
+		Str("tier", string(lic.Claims.Tier)).
+		Msg("Legacy license exchanged for activation-key license")
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(ActivateLicenseResponse{
+		Success: true,
+		Message: "License exchanged successfully",
 		Status:  service.Status(),
 	})
 }

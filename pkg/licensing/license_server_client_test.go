@@ -1,0 +1,249 @@
+package licensing
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestNewLicenseServerClient(t *testing.T) {
+	t.Run("explicit URL", func(t *testing.T) {
+		c := NewLicenseServerClient("https://custom.example.com/")
+		if c.BaseURL() != "https://custom.example.com" {
+			t.Errorf("BaseURL = %q, want trailing slash stripped", c.BaseURL())
+		}
+	})
+
+	t.Run("default URL when empty", func(t *testing.T) {
+		// Clear env to test default.
+		t.Setenv("PULSE_LICENSE_SERVER_URL", "")
+		c := NewLicenseServerClient("")
+		if c.BaseURL() != DefaultLicenseServerURL {
+			t.Errorf("BaseURL = %q, want %q", c.BaseURL(), DefaultLicenseServerURL)
+		}
+	})
+
+	t.Run("env override", func(t *testing.T) {
+		t.Setenv("PULSE_LICENSE_SERVER_URL", "https://env.example.com")
+		c := NewLicenseServerClient("")
+		if c.BaseURL() != "https://env.example.com" {
+			t.Errorf("BaseURL = %q, want env override", c.BaseURL())
+		}
+	})
+}
+
+func TestClientActivate(t *testing.T) {
+	t.Run("successful activation", func(t *testing.T) {
+		grantJWT := makeTestGrantJWT(t, &GrantClaims{
+			LicenseID: "lic_test",
+			Tier:      "pro",
+			State:     "active",
+			IssuedAt:  1000,
+			ExpiresAt: 2000,
+		})
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				t.Errorf("Method = %q, want POST", r.Method)
+			}
+			if r.URL.Path != "/v1/installations" {
+				t.Errorf("Path = %q, want /v1/installations", r.URL.Path)
+			}
+			if r.Header.Get("Content-Type") != "application/json" {
+				t.Errorf("Content-Type = %q, want application/json", r.Header.Get("Content-Type"))
+			}
+
+			var req ActivateInstallationRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Errorf("decode request: %v", err)
+			}
+			if req.ActivationKey != "ppk_live_test123" {
+				t.Errorf("ActivationKey = %q, want ppk_live_test123", req.ActivationKey)
+			}
+
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(ActivateInstallationResponse{
+				InstallationID:    "inst_abc",
+				InstallationToken: "pit_live_token",
+				LicenseID:         "lic_test",
+				Grant: GrantEnvelope{
+					JWT:       grantJWT,
+					JTI:       "grant_123",
+					ExpiresAt: 2000,
+					Refresh: RefreshHints{
+						IntervalSeconds: 21600,
+						JitterPercent:   0.2,
+					},
+				},
+			})
+		}))
+		defer server.Close()
+
+		client := NewLicenseServerClient(server.URL)
+		resp, err := client.Activate(context.Background(), ActivateInstallationRequest{
+			ActivationKey:       "ppk_live_test123",
+			InstanceFingerprint: "fp-123",
+		})
+		if err != nil {
+			t.Fatalf("Activate failed: %v", err)
+		}
+		if resp.InstallationID != "inst_abc" {
+			t.Errorf("InstallationID = %q, want inst_abc", resp.InstallationID)
+		}
+		if resp.InstallationToken != "pit_live_token" {
+			t.Errorf("InstallationToken = %q, want pit_live_token", resp.InstallationToken)
+		}
+		if resp.Grant.JTI != "grant_123" {
+			t.Errorf("Grant.JTI = %q, want grant_123", resp.Grant.JTI)
+		}
+	})
+
+	t.Run("server returns structured error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]any{
+				"code":      "invalid_key",
+				"message":   "Activation key not found",
+				"retryable": false,
+			})
+		}))
+		defer server.Close()
+
+		client := NewLicenseServerClient(server.URL)
+		_, err := client.Activate(context.Background(), ActivateInstallationRequest{
+			ActivationKey: "ppk_live_bad",
+		})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+
+		apiErr, ok := err.(*LicenseServerError)
+		if !ok {
+			t.Fatalf("expected *LicenseServerError, got %T", err)
+		}
+		if apiErr.StatusCode != 400 {
+			t.Errorf("StatusCode = %d, want 400", apiErr.StatusCode)
+		}
+		if apiErr.Code != "invalid_key" {
+			t.Errorf("Code = %q, want invalid_key", apiErr.Code)
+		}
+		if apiErr.Retryable {
+			t.Error("expected Retryable=false for 400")
+		}
+	})
+
+	t.Run("server error is retryable", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer server.Close()
+
+		client := NewLicenseServerClient(server.URL)
+		_, err := client.Activate(context.Background(), ActivateInstallationRequest{
+			ActivationKey: "ppk_live_test",
+		})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+
+		apiErr, ok := err.(*LicenseServerError)
+		if !ok {
+			t.Fatalf("expected *LicenseServerError, got %T", err)
+		}
+		if !apiErr.Retryable {
+			t.Error("expected 500 errors to be retryable")
+		}
+	})
+
+	t.Run("context cancellation", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Slow response — never completes
+			<-r.Context().Done()
+		}))
+		defer server.Close()
+
+		client := NewLicenseServerClient(server.URL)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Cancel immediately
+
+		_, err := client.Activate(ctx, ActivateInstallationRequest{
+			ActivationKey: "ppk_live_test",
+		})
+		if err == nil {
+			t.Fatal("expected error from canceled context")
+		}
+	})
+}
+
+func TestClientRefreshGrant(t *testing.T) {
+	t.Run("successful refresh", func(t *testing.T) {
+		newGrantJWT := makeTestGrantJWT(t, &GrantClaims{
+			LicenseID: "lic_test",
+			Tier:      "pro",
+			State:     "active",
+			IssuedAt:  3000,
+			ExpiresAt: 4000,
+		})
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				t.Errorf("Method = %q, want POST", r.Method)
+			}
+			if r.URL.Path != "/v1/installations/inst_abc/grant/refresh" {
+				t.Errorf("Path = %q, want /v1/installations/inst_abc/grant/refresh", r.URL.Path)
+			}
+			if got := r.Header.Get("Authorization"); got != "Bearer pit_live_token" {
+				t.Errorf("Authorization = %q, want Bearer pit_live_token", got)
+			}
+
+			json.NewEncoder(w).Encode(RefreshGrantResponse{
+				Grant: GrantEnvelope{
+					JWT:       newGrantJWT,
+					JTI:       "grant_456",
+					ExpiresAt: 4000,
+				},
+			})
+		}))
+		defer server.Close()
+
+		client := NewLicenseServerClient(server.URL)
+		resp, err := client.RefreshGrant(context.Background(), "inst_abc", "pit_live_token", RefreshGrantRequest{
+			InstanceFingerprint: "fp-123",
+			CurrentJTI:          "grant_123",
+		})
+		if err != nil {
+			t.Fatalf("RefreshGrant failed: %v", err)
+		}
+		if resp.Grant.JTI != "grant_456" {
+			t.Errorf("Grant.JTI = %q, want grant_456", resp.Grant.JTI)
+		}
+	})
+
+	t.Run("401 returns structured error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]any{
+				"code":    "token_revoked",
+				"message": "Installation token has been revoked",
+			})
+		}))
+		defer server.Close()
+
+		client := NewLicenseServerClient(server.URL)
+		_, err := client.RefreshGrant(context.Background(), "inst_abc", "bad_token", RefreshGrantRequest{})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+
+		apiErr, ok := err.(*LicenseServerError)
+		if !ok {
+			t.Fatalf("expected *LicenseServerError, got %T", err)
+		}
+		if apiErr.StatusCode != 401 {
+			t.Errorf("StatusCode = %d, want 401", apiErr.StatusCode)
+		}
+		if apiErr.Code != "token_revoked" {
+			t.Errorf("Code = %q, want token_revoked", apiErr.Code)
+		}
+	})
+}
