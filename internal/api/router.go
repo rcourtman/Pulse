@@ -37,7 +37,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/proxmox"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -1617,18 +1616,20 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, orgID, da
 	// 7. Initialize remediation engine for AI-guided fixes (requires Pulse Pro)
 	var remediationEngine aicontracts.RemediationEngine
 	if isAIInvestigationEnabled() {
-		remediationCfg := remediation.DefaultEngineConfig()
+		remediationCfg := aicontracts.DefaultEngineConfig()
 		remediationCfg.DataDir = dataDir
 		if factory := getCreateRemediationEngine(); factory != nil {
 			remediationEngine = factory(remediationCfg)
-		} else {
-			remediationEngine = remediation.NewEngine(remediationCfg)
 		}
-		// Wire up command executor (disabled by default for safety)
-		cmdExecutor := adapters.NewCommandExecutorAdapter()
-		remediationEngine.SetCommandExecutor(cmdExecutor)
-		r.aiSettingsHandler.SetRemediationEngineForOrg(orgID, remediationEngine)
-		log.Info().Msg("AI Intelligence: Remediation engine initialized (command execution disabled)")
+		if remediationEngine != nil {
+			// Wire up command executor (disabled by default for safety)
+			cmdExecutor := adapters.NewCommandExecutorAdapter()
+			remediationEngine.SetCommandExecutor(cmdExecutor)
+			r.aiSettingsHandler.SetRemediationEngineForOrg(orgID, remediationEngine)
+			log.Info().Msg("AI Intelligence: Remediation engine initialized (command execution disabled)")
+		} else {
+			log.Info().Msg("AI Intelligence: Remediation engine factory not registered")
+		}
 	} else {
 		log.Info().Msg("AI Intelligence: Remediation engine skipped (requires Pulse Pro)")
 	}

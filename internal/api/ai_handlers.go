@@ -1753,11 +1753,9 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 		}
 		if factory := getCreateInvestigationStore(); factory != nil {
 			store = factory(dataDir)
-		} else {
-			store = investigation.NewStore(dataDir)
 		}
 		if store == nil {
-			log.Error().Str("orgID", orgID).Msg("Investigation store factory returned nil")
+			log.Warn().Str("orgID", orgID).Msg("Investigation store not available (requires Pulse Pro)")
 			h.investigationMu.Unlock()
 			return
 		}
