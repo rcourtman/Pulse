@@ -80,6 +80,7 @@ func TestService_GetAlertTriggeredAnalyzer_Initial(t *testing.T) {
 
 func TestService_SetStateProvider(t *testing.T) {
 	svc := NewService(nil, nil)
+	svc.SetAlertAnalysisAllowed(true)
 
 	stateProvider := &mockStateProvider{
 		state: models.StateSnapshot{
@@ -97,7 +98,7 @@ func TestService_SetStateProvider(t *testing.T) {
 		t.Error("Expected patrol service to be initialized after setting state provider")
 	}
 
-	// Alert triggered analyzer should now be initialized
+	// Alert triggered analyzer should now be initialized (allowed via SetAlertAnalysisAllowed)
 	analyzer := svc.GetAlertTriggeredAnalyzer()
 	if analyzer == nil {
 		t.Error("Expected alert analyzer to be initialized after setting state provider")

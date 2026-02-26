@@ -1162,12 +1162,15 @@ func TestAISettingsHandler_SetConfig(t *testing.T) {
 }
 
 func TestAISettingsHandler_GetAlertTriggeredAnalyzer(t *testing.T) {
-	t.Parallel()
+	// Not parallel: mutates package-global aiInvestigationEnabledFunc
+	SetAIInvestigationEnabled(func() bool { return true })
+	t.Cleanup(func() { SetAIInvestigationEnabled(nil) })
 
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
+	handler.legacyAIService.SetAlertAnalysisAllowed(true)
 
 	handler.SetStateProvider(&MockStateProvider{})
 

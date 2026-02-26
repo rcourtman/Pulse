@@ -171,6 +171,9 @@ type Service struct {
 
 	// Alert-triggered analysis - token-efficient real-time AI insights
 	alertTriggeredAnalyzer *AlertTriggeredAnalyzer
+	// alertAnalysisAllowed gates construction of the AlertTriggeredAnalyzer.
+	// When false (OSS binary), the analyzer is never created regardless of config.
+	alertAnalysisAllowed bool
 
 	limits executionLimits
 
@@ -437,8 +440,8 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 		}
 	}
 
-	// Initialize alert-triggered analyzer if not already done
-	if s.alertTriggeredAnalyzer == nil && sp != nil && s.patrolService != nil {
+	// Initialize alert-triggered analyzer if not already done (requires enterprise)
+	if s.alertTriggeredAnalyzer == nil && s.alertAnalysisAllowed && sp != nil && s.patrolService != nil {
 		s.alertTriggeredAnalyzer = NewAlertTriggeredAnalyzer(s.patrolService, sp)
 	}
 }
@@ -711,6 +714,15 @@ func (s *Service) SetLicenseChecker(checker LicenseChecker) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.licenseChecker = checker
+}
+
+// SetAlertAnalysisAllowed controls whether the AlertTriggeredAnalyzer may be
+// constructed. Enterprise sets this to true; the OSS binary leaves it false
+// so the analyzer is never created.
+func (s *Service) SetAlertAnalysisAllowed(allowed bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.alertAnalysisAllowed = allowed
 }
 
 // HasLicenseFeature checks if a Pro feature is licensed (returns true if no license checker is set)
