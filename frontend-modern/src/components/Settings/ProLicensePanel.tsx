@@ -387,8 +387,8 @@ export const ProLicensePanel: Component = () => {
                 <p class="text-sm font-medium text-base-content">{displayedDaysRemaining()}</p>
               </div>
               <div>
-                <p class="text-xs uppercase tracking-wide text-muted">Max Nodes</p>
-                <p class="text-sm font-medium text-base-content">{maxLimit('max_nodes')}</p>
+                <p class="text-xs uppercase tracking-wide text-muted">Max Agents</p>
+                <p class="text-sm font-medium text-base-content">{maxLimit('max_agents')}</p>
               </div>
               <div>
                 <p class="text-xs uppercase tracking-wide text-muted">Max Guests</p>

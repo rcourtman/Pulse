@@ -7,75 +7,34 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
 )
 
+const MaxAgentsLicenseGateKey = "max_agents"
+
+// MaxNodesLicenseGateKey is the legacy key used in billing.json and license JWTs
+// before the node→agent rename. Kept for backwards-compat deserialization only.
 const MaxNodesLicenseGateKey = "max_nodes"
 
-func ExceedsNodeLimit(current, additions, limit int) bool {
+func ExceedsAgentLimit(current, additions, limit int) bool {
 	if limit <= 0 || additions <= 0 {
 		return false
 	}
 	return current+additions > limit
 }
 
-func NodeLimitExceededMessage(current, limit int) string {
-	return fmt.Sprintf("Node limit reached (%d/%d). Remove a node or upgrade your license.", current, limit)
+func AgentLimitExceededMessage(current, limit int) string {
+	return fmt.Sprintf("Agent limit reached (%d/%d). Remove an agent or upgrade your plan.", current, limit)
 }
 
-// ConfiguredNodeCount returns the number of host slots occupied by configured
-// Proxmox infrastructure. For PVE, the count is the number of *actual nodes*
-// discovered at runtime (a single PVE connection may represent a multi-node
-// cluster). PBS and PMG are always 1:1 (one connection = one host).
-func ConfiguredNodeCount(pveNodes, pbsInstances, pmgInstances int) int {
-	return pveNodes + pbsInstances + pmgInstances
-}
-
-func RegisteredNodeSlotCount(configuredCount int, state models.StateSnapshot) int {
-	count := configuredCount
-	count += len(state.Hosts)
-	count += len(state.DockerHosts)
-	// K8s: count individual nodes across all clusters, not the cluster count.
-	for _, cluster := range state.KubernetesClusters {
-		n := len(cluster.Nodes)
-		if n == 0 {
-			// Cluster registered but node list not yet populated — count as 1.
-			n = 1
-		}
-		count += n
-	}
-	return count
-}
-
-// DeduplicatedHostCount returns the number of unique physical/virtual hosts
-// after cross-connector deduplication. A machine seen via multiple connectors
-// (e.g. Proxmox + host agent + Docker) counts once.
-func DeduplicatedHostCount(
-	state models.StateSnapshot,
-	configPVE []unifiedresources.ConfigEntry,
-	configPBS []unifiedresources.ConfigEntry,
-	configPMG []unifiedresources.ConfigEntry,
-	configTrueNAS []unifiedresources.ConfigEntry,
-) int {
-	candidates := unifiedresources.CollectHostCandidates(state, configPVE, configPBS, configPMG, configTrueNAS)
-	resolved := unifiedresources.ResolveHosts(candidates)
-	return len(resolved.Hosts)
-}
-
-// DeduplicatedHosts returns the full resolved host set after cross-connector
-// deduplication. Used by the host ledger API.
-func DeduplicatedHosts(
-	state models.StateSnapshot,
-	configPVE []unifiedresources.ConfigEntry,
-	configPBS []unifiedresources.ConfigEntry,
-	configPMG []unifiedresources.ConfigEntry,
-	configTrueNAS []unifiedresources.ConfigEntry,
-) *unifiedresources.ResolvedHostSet {
-	candidates := unifiedresources.CollectHostCandidates(state, configPVE, configPBS, configPMG, configTrueNAS)
-	return unifiedresources.ResolveHosts(candidates)
+// AgentCount returns the number of installed Pulse Unified Agents.
+// This is the only thing that counts toward the host/agent limit.
+// One installed agent = one host. Resources discovered by the agent
+// (VMs, containers, cluster nodes, pods, PVE/PBS/PMG) don't count separately.
+func AgentCount(state models.StateSnapshot) int {
+	return len(state.Hosts)
 }
 
 func HostReportTargetsExistingHost(

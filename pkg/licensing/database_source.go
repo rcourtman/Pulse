@@ -42,8 +42,22 @@ func (d *DatabaseSource) Capabilities() []string {
 }
 
 // Limits returns the current plan limits.
+// Applies backwards-compat migration: if "max_agents" is absent but legacy
+// "max_nodes" is present, returns the value under "max_agents".
 func (d *DatabaseSource) Limits() map[string]int64 {
-	return d.currentState().Limits
+	limits := d.currentState().Limits
+	if _, hasNew := limits["max_agents"]; !hasNew {
+		if v, hasOld := limits["max_nodes"]; hasOld {
+			out := make(map[string]int64, len(limits))
+			for k, val := range limits {
+				out[k] = val
+			}
+			out["max_agents"] = v
+			delete(out, "max_nodes")
+			return out
+		}
+	}
+	return limits
 }
 
 // MetersEnabled returns the enabled metering dimensions.

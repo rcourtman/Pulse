@@ -8,10 +8,10 @@ import (
 
 func TestBuildEntitlementPayload_ActiveLicense(t *testing.T) {
 	status := &LicenseStatus{
-		Valid:    true,
-		Tier:     TierPro,
-		Features: append([]string(nil), TierFeatures[TierPro]...),
-		MaxNodes: 50,
+		Valid:     true,
+		Tier:      TierPro,
+		Features:  append([]string(nil), TierFeatures[TierPro]...),
+		MaxAgents: 50,
 	}
 
 	payload := BuildEntitlementPayload(status, "")
@@ -23,18 +23,18 @@ func TestBuildEntitlementPayload_ActiveLicense(t *testing.T) {
 		t.Fatalf("expected capabilities to match status features")
 	}
 
-	var nodeLimit *LimitStatus
+	var agentLimit *LimitStatus
 	for i := range payload.Limits {
-		if payload.Limits[i].Key == MaxNodesLicenseGateKey {
-			nodeLimit = &payload.Limits[i]
+		if payload.Limits[i].Key == MaxAgentsLicenseGateKey {
+			agentLimit = &payload.Limits[i]
 			break
 		}
 	}
-	if nodeLimit == nil {
-		t.Fatalf("expected max_nodes limit in payload")
+	if agentLimit == nil {
+		t.Fatalf("expected max_agents limit in payload")
 	}
-	if nodeLimit.Limit != 50 {
-		t.Fatalf("expected max_nodes limit 50, got %d", nodeLimit.Limit)
+	if agentLimit.Limit != 50 {
+		t.Fatalf("expected max_agents limit 50, got %d", agentLimit.Limit)
 	}
 	if len(payload.UpgradeReasons) != 0 {
 		t.Fatalf("expected no upgrade reasons for pro tier, got %d", len(payload.UpgradeReasons))
@@ -64,7 +64,7 @@ func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 		Valid:     true,
 		Tier:      TierPro,
 		Features:  append([]string(nil), TierFeatures[TierPro]...),
-		MaxNodes:  50,
+		MaxAgents: 50,
 		MaxGuests: 100,
 	}
 
@@ -73,25 +73,25 @@ func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 		Guests: 44,
 	}, nil)
 
-	var nodeLimit *LimitStatus
+	var agentLimit *LimitStatus
 	var guestLimit *LimitStatus
 	for i := range payload.Limits {
-		if payload.Limits[i].Key == MaxNodesLicenseGateKey {
-			nodeLimit = &payload.Limits[i]
+		if payload.Limits[i].Key == MaxAgentsLicenseGateKey {
+			agentLimit = &payload.Limits[i]
 		}
 		if payload.Limits[i].Key == "max_guests" {
 			guestLimit = &payload.Limits[i]
 		}
 	}
 
-	if nodeLimit == nil {
-		t.Fatalf("expected max_nodes limit")
+	if agentLimit == nil {
+		t.Fatalf("expected max_agents limit")
 	}
 	if guestLimit == nil {
 		t.Fatalf("expected max_guests limit")
 	}
-	if nodeLimit.Current != 12 {
-		t.Fatalf("expected node current 12, got %d", nodeLimit.Current)
+	if agentLimit.Current != 12 {
+		t.Fatalf("expected agent current 12, got %d", agentLimit.Current)
 	}
 	if guestLimit.Current != 44 {
 		t.Fatalf("expected guest current 44, got %d", guestLimit.Current)

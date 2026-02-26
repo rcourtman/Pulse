@@ -113,7 +113,7 @@ func TestStatusHostedEvaluatorClampsNegativeLimits(t *testing.T) {
 	svc := NewService()
 	svc.SetEvaluator(entitlements.NewEvaluator(staticEntitlementSource{
 		capabilities:      []string{FeatureAIPatrol},
-		limits:            map[string]int64{"max_nodes": -5, "max_guests": -10},
+		limits:            map[string]int64{"max_agents": -5, "max_guests": -10},
 		subscriptionState: entitlements.SubStateActive,
 	}))
 
@@ -121,8 +121,8 @@ func TestStatusHostedEvaluatorClampsNegativeLimits(t *testing.T) {
 	if !status.Valid {
 		t.Fatalf("Status().Valid = %v, want true", status.Valid)
 	}
-	if status.MaxNodes != 0 {
-		t.Fatalf("Status().MaxNodes = %d, want 0", status.MaxNodes)
+	if status.MaxAgents != 0 {
+		t.Fatalf("Status().MaxAgents = %d, want 0", status.MaxAgents)
 	}
 	if status.MaxGuests != 0 {
 		t.Fatalf("Status().MaxGuests = %d, want 0", status.MaxGuests)

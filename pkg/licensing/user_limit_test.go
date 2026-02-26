@@ -9,7 +9,7 @@ func TestMaxUsersLimitFromLimits(t *testing.T) {
 		want   int
 	}{
 		{name: "nil map", limits: nil, want: 0},
-		{name: "missing key", limits: map[string]int64{"max_nodes": 10}, want: 0},
+		{name: "missing key", limits: map[string]int64{"max_agents": 10}, want: 0},
 		{name: "non-positive value", limits: map[string]int64{MaxUsersLicenseGateKey: 0}, want: 0},
 		{name: "positive value", limits: map[string]int64{MaxUsersLicenseGateKey: 25}, want: 25},
 	}
@@ -34,7 +34,7 @@ func TestMaxUsersLimitFromLicense(t *testing.T) {
 			name: "missing limit",
 			lic: &License{
 				Claims: Claims{
-					Limits: map[string]int64{"max_nodes": 10},
+					Limits: map[string]int64{"max_agents": 10},
 				},
 			},
 			want: 0,

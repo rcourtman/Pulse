@@ -365,8 +365,8 @@ func (s *Service) Status() *LicenseStatus {
 				}
 				status.Features = unionFeatures(TierFeatures[TierFree], evaluatorFeatures(s.evaluator))
 
-				if maxNodes, ok := s.evaluator.GetLimit("max_nodes"); ok {
-					status.MaxNodes = safeIntFromInt64(maxNodes)
+				if maxNodes, ok := s.evaluator.GetLimit("max_agents"); ok {
+					status.MaxAgents = safeIntFromInt64(maxNodes)
 				}
 				if maxGuests, ok := s.evaluator.GetLimit("max_guests"); ok {
 					status.MaxGuests = safeIntFromInt64(maxGuests)
@@ -377,9 +377,9 @@ func (s *Service) Status() *LicenseStatus {
 				status.Features = append([]string(nil), TierFeatures[TierFree]...)
 			}
 		} else {
-			// No license, no evaluator — apply free tier host limit default.
-			if defaultNodes := TierHostLimits[TierFree]; defaultNodes > 0 {
-				status.MaxNodes = defaultNodes
+			// No license, no evaluator — apply free tier agent limit default.
+			if defaultNodes := TierAgentLimits[TierFree]; defaultNodes > 0 {
+				status.MaxAgents = defaultNodes
 			}
 		}
 		return status
@@ -391,21 +391,21 @@ func (s *Service) Status() *LicenseStatus {
 	status.DaysRemaining = s.license.DaysRemaining()
 	status.Features = s.license.AllFeatures()
 
-	if maxNodes, ok := s.license.Claims.EffectiveLimits()["max_nodes"]; ok {
-		status.MaxNodes = safeIntFromInt64(maxNodes)
+	if maxAgents, ok := s.license.Claims.EffectiveLimits()["max_agents"]; ok {
+		status.MaxAgents = safeIntFromInt64(maxAgents)
 	}
 	if maxGuests, ok := s.license.Claims.EffectiveLimits()["max_guests"]; ok {
 		status.MaxGuests = safeIntFromInt64(maxGuests)
 	}
 
-	// Apply tier default host limit when license claims don't specify max_nodes.
+	// Apply tier default agent limit when license claims don't specify max_agents.
 	// For recognized tiers, use their defined limit (0 = unlimited for Cloud/MSP/Enterprise).
 	// For unrecognized tiers, fall back to free tier limit to prevent unlimited access.
-	if status.MaxNodes == 0 {
-		if defaultNodes, ok := TierHostLimits[status.Tier]; ok {
-			status.MaxNodes = defaultNodes
+	if status.MaxAgents == 0 {
+		if defaultAgents, ok := TierAgentLimits[status.Tier]; ok {
+			status.MaxAgents = defaultAgents
 		} else {
-			status.MaxNodes = TierHostLimits[TierFree]
+			status.MaxAgents = TierAgentLimits[TierFree]
 		}
 	}
 
@@ -428,10 +428,10 @@ func (s *Service) Status() *LicenseStatus {
 		status.Valid = false
 		status.Features = append([]string(nil), TierFeatures[TierFree]...)
 		// Downgrade limits to free tier when subscription is not entitled.
-		if defaultNodes := TierHostLimits[TierFree]; defaultNodes > 0 {
-			status.MaxNodes = defaultNodes
+		if defaultAgents := TierAgentLimits[TierFree]; defaultAgents > 0 {
+			status.MaxAgents = defaultAgents
 		} else {
-			status.MaxNodes = 0
+			status.MaxAgents = 0
 		}
 		status.MaxGuests = 0
 	}

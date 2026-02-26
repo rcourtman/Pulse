@@ -274,7 +274,7 @@ func TestBillingState_AllFieldsSurviveRoundTrip(t *testing.T) {
 
 	state := &entitlements.BillingState{
 		Capabilities:         []string{"relay", "ai_autofix"},
-		Limits:               map[string]int64{"max_nodes": 50, "max_hosts": 100},
+		Limits:               map[string]int64{"max_agents": 50, "max_hosts": 100},
 		MetersEnabled:        []string{"active_agents", "api_calls"},
 		PlanVersion:          "pro-v2",
 		SubscriptionState:    entitlements.SubStateActive,
@@ -295,7 +295,7 @@ func TestBillingState_AllFieldsSurviveRoundTrip(t *testing.T) {
 
 	// Every field must survive save → reload → HMAC verify.
 	assert.ElementsMatch(t, []string{"relay", "ai_autofix"}, loaded.Capabilities)
-	assert.Equal(t, map[string]int64{"max_nodes": 50, "max_hosts": 100}, loaded.Limits)
+	assert.Equal(t, map[string]int64{"max_agents": 50, "max_hosts": 100}, loaded.Limits)
 	assert.ElementsMatch(t, []string{"active_agents", "api_calls"}, loaded.MetersEnabled)
 	assert.Equal(t, "pro-v2", loaded.PlanVersion)
 	assert.Equal(t, entitlements.SubStateActive, loaded.SubscriptionState)
@@ -320,7 +320,7 @@ func TestBillingState_LegacyHMACMigration(t *testing.T) {
 
 	state := &entitlements.BillingState{
 		Capabilities:      []string{"relay"},
-		Limits:            map[string]int64{"max_nodes": 10},
+		Limits:            map[string]int64{"max_agents": 10},
 		PlanVersion:       "trial",
 		SubscriptionState: entitlements.SubStateTrial,
 		TrialStartedAt:    &now,
@@ -418,7 +418,7 @@ func TestBillingState_LimitsIncludedInHMAC(t *testing.T) {
 
 	state := &entitlements.BillingState{
 		Capabilities:      []string{"relay"},
-		Limits:            map[string]int64{"max_nodes": 10},
+		Limits:            map[string]int64{"max_agents": 10},
 		PlanVersion:       "trial",
 		SubscriptionState: entitlements.SubStateTrial,
 		TrialStartedAt:    &now,
@@ -434,7 +434,7 @@ func TestBillingState_LimitsIncludedInHMAC(t *testing.T) {
 
 	var raw map[string]interface{}
 	require.NoError(t, json.Unmarshal(fileData, &raw))
-	raw["limits"] = map[string]interface{}{"max_nodes": float64(9999)}
+	raw["limits"] = map[string]interface{}{"max_agents": float64(9999)}
 	tampered, err := json.Marshal(raw)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(billingPath, tampered, 0o600))

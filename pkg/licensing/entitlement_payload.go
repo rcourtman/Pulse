@@ -73,7 +73,7 @@ type EntitlementPayload struct {
 
 // LimitStatus represents a quantitative limit with current usage state.
 type LimitStatus struct {
-	// Key is the limit identifier (e.g., "max_nodes").
+	// Key is the limit identifier (e.g., "max_agents").
 	Key string `json:"key"`
 
 	// Limit is the maximum allowed value (0 = unlimited).
@@ -173,12 +173,12 @@ func BuildEntitlementPayloadWithUsage(
 	}
 
 	// Build limits.
-	if status.MaxNodes > 0 {
+	if status.MaxAgents > 0 {
 		payload.Limits = append(payload.Limits, LimitStatus{
-			Key:     MaxNodesLicenseGateKey,
-			Limit:   int64(status.MaxNodes),
+			Key:     MaxAgentsLicenseGateKey,
+			Limit:   int64(status.MaxAgents),
 			Current: usage.Nodes,
-			State:   LimitState(usage.Nodes, int64(status.MaxNodes)),
+			State:   LimitState(usage.Nodes, int64(status.MaxAgents)),
 		})
 	}
 	if status.MaxGuests > 0 {

@@ -1,6 +1,7 @@
 package licensing
 
 import (
+	"encoding/json"
 	"sort"
 	"time"
 )
@@ -25,8 +26,8 @@ type Claims struct {
 	// Features explicitly granted (optional, tier implies features)
 	Features []string `json:"features,omitempty"`
 
-	// Max nodes (0 = unlimited)
-	MaxNodes int `json:"max_nodes,omitempty"`
+	// Max agents (0 = unlimited)
+	MaxAgents int `json:"max_agents,omitempty"`
 
 	// Max guests (0 = unlimited)
 	MaxGuests int `json:"max_guests,omitempty"`
@@ -38,6 +39,35 @@ type Claims struct {
 	MetersEnabled []string          `json:"meters_enabled,omitempty"`
 	PlanVersion   string            `json:"plan_version,omitempty"`
 	SubState      SubscriptionState `json:"subscription_state,omitempty"`
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for Claims to handle the
+// migration from "max_nodes" to "max_agents". Existing JWTs and billing.json
+// files may still contain "max_nodes"; this shim reads both and prefers
+// "max_agents" when both are present.
+func (c *Claims) UnmarshalJSON(data []byte) error {
+	// Unmarshal into the base type (avoids infinite recursion).
+	type Alias Claims
+	if err := json.Unmarshal(data, (*Alias)(c)); err != nil {
+		return err
+	}
+
+	// Migration shim: if "max_agents" was absent but legacy "max_nodes" was
+	// present, adopt the legacy value. We probe the raw JSON to distinguish
+	// "absent" from "explicitly set to 0".
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil // base unmarshal succeeded, proceed with what we have
+	}
+	if _, hasNew := raw["max_agents"]; !hasNew {
+		if legacy, hasOld := raw["max_nodes"]; hasOld {
+			var v int
+			if json.Unmarshal(legacy, &v) == nil {
+				c.MaxAgents = v
+			}
+		}
+	}
+	return nil
 }
 
 // EffectiveCapabilities returns explicit capabilities when present; otherwise tier-derived capabilities.
@@ -55,8 +85,8 @@ func (c Claims) EffectiveLimits() map[string]int64 {
 	}
 
 	limits := make(map[string]int64)
-	if c.MaxNodes > 0 {
-		limits["max_nodes"] = int64(c.MaxNodes)
+	if c.MaxAgents > 0 {
+		limits["max_agents"] = int64(c.MaxAgents)
 	}
 	if c.MaxGuests > 0 {
 		limits["max_guests"] = int64(c.MaxGuests)
@@ -174,7 +204,7 @@ type LicenseStatus struct {
 	IsLifetime     bool     `json:"is_lifetime"`
 	DaysRemaining  int      `json:"days_remaining"`
 	Features       []string `json:"features"`
-	MaxNodes       int      `json:"max_nodes,omitempty"`
+	MaxAgents      int      `json:"max_agents,omitempty"`
 	MaxGuests      int      `json:"max_guests,omitempty"`
 	InGracePeriod  bool     `json:"in_grace_period,omitempty"`
 	GracePeriodEnd *string  `json:"grace_period_end,omitempty"`

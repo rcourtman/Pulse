@@ -1,6 +1,7 @@
 package licensing
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -66,26 +67,26 @@ func TestClaims_EffectiveLimits(t *testing.T) {
 		{
 			name: "explicit_limits_returns_them",
 			claims: Claims{
-				Limits:    map[string]int64{"max_nodes": 100, "max_guests": 500},
-				MaxNodes:  50,
+				Limits:    map[string]int64{"max_agents": 100, "max_guests": 500},
+				MaxAgents: 50,
 				MaxGuests: 200,
 			},
-			expected: map[string]int64{"max_nodes": 100, "max_guests": 500},
+			expected: map[string]int64{"max_agents": 100, "max_guests": 500},
 		},
 		{
 			name: "nil_limits_derives_from_legacy_fields",
 			claims: Claims{
 				Limits:    nil,
-				MaxNodes:  25,
+				MaxAgents: 25,
 				MaxGuests: 100,
 			},
-			expected: map[string]int64{"max_nodes": 25, "max_guests": 100},
+			expected: map[string]int64{"max_agents": 25, "max_guests": 100},
 		},
 		{
-			name: "zero_max_nodes_ignored",
+			name: "zero_max_agents_ignored",
 			claims: Claims{
 				Limits:    nil,
-				MaxNodes:  0,
+				MaxAgents: 0,
 				MaxGuests: 100,
 			},
 			expected: map[string]int64{"max_guests": 100},
@@ -467,5 +468,50 @@ func TestLicense_AllFeatures(t *testing.T) {
 
 	if got[0] != "alpha" || got[1] != "middle" || got[2] != "zebra" {
 		t.Fatalf("AllFeatures() not sorted: %v", got)
+	}
+}
+
+func TestClaims_UnmarshalJSON_Migration(t *testing.T) {
+	tests := []struct {
+		name    string
+		json    string
+		wantMax int
+	}{
+		{
+			name:    "new_key_only",
+			json:    `{"lid":"x","email":"a@b","tier":"pro","iat":1,"max_agents":10}`,
+			wantMax: 10,
+		},
+		{
+			name:    "legacy_key_only",
+			json:    `{"lid":"x","email":"a@b","tier":"pro","iat":1,"max_nodes":5}`,
+			wantMax: 5,
+		},
+		{
+			name:    "both_keys_prefer_new",
+			json:    `{"lid":"x","email":"a@b","tier":"pro","iat":1,"max_agents":15,"max_nodes":5}`,
+			wantMax: 15,
+		},
+		{
+			name:    "new_key_zero_ignores_legacy",
+			json:    `{"lid":"x","email":"a@b","tier":"pro","iat":1,"max_agents":0,"max_nodes":5}`,
+			wantMax: 0,
+		},
+		{
+			name:    "neither_key",
+			json:    `{"lid":"x","email":"a@b","tier":"pro","iat":1}`,
+			wantMax: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var c Claims
+			if err := json.Unmarshal([]byte(tt.json), &c); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if c.MaxAgents != tt.wantMax {
+				t.Fatalf("MaxAgents = %d, want %d", c.MaxAgents, tt.wantMax)
+			}
+		})
 	}
 }

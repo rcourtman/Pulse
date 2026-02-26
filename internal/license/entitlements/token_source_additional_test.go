@@ -39,7 +39,7 @@ func (s stubTokenClaims) EntitlementSubscriptionState() license.SubscriptionStat
 func TestTokenSourcePlanVersionAndTrialAccessors(t *testing.T) {
 	source := NewTokenSource(stubTokenClaims{
 		capabilities:      []string{"relay"},
-		limits:            map[string]int64{"max_nodes": 10},
+		limits:            map[string]int64{"max_agents": 10},
 		metersEnabled:     []string{"active_agents"},
 		planVersion:       "pro-v3",
 		subscriptionState: license.SubStateGrace,
@@ -105,7 +105,7 @@ func TestTokenSourceNilReceiverAndNilClaimsDefaults(t *testing.T) {
 func TestTokenSourcePassThroughClaimsData(t *testing.T) {
 	claims := stubTokenClaims{
 		capabilities:      []string{"relay", "rbac"},
-		limits:            map[string]int64{"max_nodes": 25},
+		limits:            map[string]int64{"max_agents": 25},
 		metersEnabled:     []string{"active_agents"},
 		planVersion:       "pro-v2",
 		subscriptionState: license.SubStateActive,

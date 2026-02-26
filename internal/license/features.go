@@ -45,8 +45,8 @@ const (
 // TierFeatures maps each tier to its included features.
 var TierFeatures = licensing.TierFeatures
 
-// TierHostLimits defines the maximum host count per tier.
-var TierHostLimits = licensing.TierHostLimits
+// TierAgentLimits defines the maximum agent count per tier.
+var TierAgentLimits = licensing.TierAgentLimits
 
 // TierHistoryDays defines the maximum metrics history retention per tier.
 var TierHistoryDays = licensing.TierHistoryDays
@@ -57,8 +57,8 @@ func DeriveCapabilitiesFromTier(tier Tier, explicitFeatures []string) []string {
 }
 
 // DeriveEntitlements derives capabilities and limits from tier and legacy claim fields.
-func DeriveEntitlements(tier Tier, features []string, maxNodes int, maxGuests int) (capabilities []string, limits map[string]int64) {
-	return licensing.DeriveEntitlements(tier, features, maxNodes, maxGuests)
+func DeriveEntitlements(tier Tier, features []string, maxAgents int, maxGuests int) (capabilities []string, limits map[string]int64) {
+	return licensing.DeriveEntitlements(tier, features, maxAgents, maxGuests)
 }
 
 // TierHasFeature checks if a tier includes a specific feature.

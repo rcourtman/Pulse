@@ -1776,7 +1776,7 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 				ClusterEndpoints:  clusterEndpoints,
 				Source:            req.Source, // Track how this node was registered
 			}
-			if enforceNodeLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context())) {
+			if enforceAgentLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context())) {
 				return
 			}
 			h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances, newInstance)
@@ -1830,7 +1830,7 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 				MonitorGarbageJobs: monitorGarbageJobs,
 				Source:             req.Source, // Track how this node was registered
 			}
-			if enforceNodeLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context())) {
+			if enforceAgentLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context())) {
 				return
 			}
 			h.getConfig(r.Context()).PBSInstances = append(h.getConfig(r.Context()).PBSInstances, newInstance)
@@ -2061,7 +2061,7 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 			MonitorStorage:    true,
 			MonitorBackups:    true,
 		}
-		if enforceNodeLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context())) {
+		if enforceAgentLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context())) {
 			return
 		}
 		h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances, pveNode)
@@ -2079,7 +2079,7 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 			MonitorVerifyJobs: true,
 			MonitorPruneJobs:  true,
 		}
-		if enforceNodeLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context())) {
+		if enforceAgentLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context())) {
 			return
 		}
 		h.getConfig(r.Context()).PBSInstances = append(h.getConfig(r.Context()).PBSInstances, pbsNode)

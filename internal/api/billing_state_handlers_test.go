@@ -51,7 +51,7 @@ func TestBillingStatePutGetRoundTrip(t *testing.T) {
 
 	putBody := `{
 		"capabilities":["feature_x","feature_y"],
-		"limits":{"max_nodes":25,"max_guests":100},
+		"limits":{"max_agents":25,"max_guests":100},
 		"meters_enabled":["api_requests"],
 		"plan_version":"pro-v2",
 		"subscription_state":"active"
@@ -139,7 +139,7 @@ func TestBillingStatePutRejectsInvalidSubscriptionState(t *testing.T) {
 
 	rec := doBillingStateRequest(router, http.MethodPut, "/api/admin/orgs/acme/billing-state", `{
 		"capabilities":["feature_x"],
-		"limits":{"max_nodes":10},
+		"limits":{"max_agents":10},
 		"meters_enabled":["api_requests"],
 		"plan_version":"pro-v1",
 		"subscription_state":"not-a-real-state"
@@ -172,7 +172,7 @@ func TestBillingStateHostedModeGate(t *testing.T) {
 			method: http.MethodPut,
 			body: `{
 				"capabilities":["feature_x"],
-				"limits":{"max_nodes":10},
+				"limits":{"max_agents":10},
 				"meters_enabled":["api_requests"],
 				"plan_version":"pro-v1",
 				"subscription_state":"active"

@@ -185,15 +185,15 @@ func TestIsDeprecated(t *testing.T) {
 
 func TestEvaluatorGetLimit(t *testing.T) {
 	t.Run("exists", func(t *testing.T) {
-		e := NewEvaluator(mockSource{limits: map[string]int64{"max_nodes": 50}})
-		limit, ok := e.GetLimit("max_nodes")
+		e := NewEvaluator(mockSource{limits: map[string]int64{"max_agents": 50}})
+		limit, ok := e.GetLimit("max_agents")
 		if !ok || limit != 50 {
 			t.Fatalf("expected (50, true), got (%d, %t)", limit, ok)
 		}
 	})
 
 	t.Run("not exists", func(t *testing.T) {
-		e := NewEvaluator(mockSource{limits: map[string]int64{"max_nodes": 50}})
+		e := NewEvaluator(mockSource{limits: map[string]int64{"max_agents": 50}})
 		limit, ok := e.GetLimit("max_guests")
 		if ok || limit != 0 {
 			t.Fatalf("expected (0, false), got (%d, %t)", limit, ok)
@@ -202,7 +202,7 @@ func TestEvaluatorGetLimit(t *testing.T) {
 
 	t.Run("nil limits", func(t *testing.T) {
 		e := NewEvaluator(mockSource{limits: map[string]int64{}})
-		limit, ok := e.GetLimit("max_nodes")
+		limit, ok := e.GetLimit("max_agents")
 		if ok || limit != 0 {
 			t.Fatalf("expected (0, false), got (%d, %t)", limit, ok)
 		}
@@ -211,50 +211,50 @@ func TestEvaluatorGetLimit(t *testing.T) {
 
 func TestEvaluatorCheckLimit(t *testing.T) {
 	t.Run("well under limit", func(t *testing.T) {
-		e := NewEvaluator(mockSource{limits: map[string]int64{"max_nodes": 100}})
-		if got := e.CheckLimit("max_nodes", 50); got != license.LimitAllowed {
+		e := NewEvaluator(mockSource{limits: map[string]int64{"max_agents": 100}})
+		if got := e.CheckLimit("max_agents", 50); got != license.LimitAllowed {
 			t.Fatalf("expected %q, got %q", license.LimitAllowed, got)
 		}
 	})
 
 	t.Run("at soft threshold", func(t *testing.T) {
-		e := NewEvaluator(mockSource{limits: map[string]int64{"max_nodes": 100}})
-		if got := e.CheckLimit("max_nodes", 90); got != license.LimitSoftBlock {
+		e := NewEvaluator(mockSource{limits: map[string]int64{"max_agents": 100}})
+		if got := e.CheckLimit("max_agents", 90); got != license.LimitSoftBlock {
 			t.Fatalf("expected %q, got %q", license.LimitSoftBlock, got)
 		}
 	})
 
 	t.Run("above soft below hard", func(t *testing.T) {
-		e := NewEvaluator(mockSource{limits: map[string]int64{"max_nodes": 100}})
-		if got := e.CheckLimit("max_nodes", 95); got != license.LimitSoftBlock {
+		e := NewEvaluator(mockSource{limits: map[string]int64{"max_agents": 100}})
+		if got := e.CheckLimit("max_agents", 95); got != license.LimitSoftBlock {
 			t.Fatalf("expected %q, got %q", license.LimitSoftBlock, got)
 		}
 	})
 
 	t.Run("at hard limit", func(t *testing.T) {
-		e := NewEvaluator(mockSource{limits: map[string]int64{"max_nodes": 100}})
-		if got := e.CheckLimit("max_nodes", 100); got != license.LimitHardBlock {
+		e := NewEvaluator(mockSource{limits: map[string]int64{"max_agents": 100}})
+		if got := e.CheckLimit("max_agents", 100); got != license.LimitHardBlock {
 			t.Fatalf("expected %q, got %q", license.LimitHardBlock, got)
 		}
 	})
 
 	t.Run("over hard limit", func(t *testing.T) {
-		e := NewEvaluator(mockSource{limits: map[string]int64{"max_nodes": 100}})
-		if got := e.CheckLimit("max_nodes", 110); got != license.LimitHardBlock {
+		e := NewEvaluator(mockSource{limits: map[string]int64{"max_agents": 100}})
+		if got := e.CheckLimit("max_agents", 110); got != license.LimitHardBlock {
 			t.Fatalf("expected %q, got %q", license.LimitHardBlock, got)
 		}
 	})
 
 	t.Run("no limit defined", func(t *testing.T) {
 		e := NewEvaluator(mockSource{limits: map[string]int64{}})
-		if got := e.CheckLimit("max_nodes", 1000); got != license.LimitAllowed {
+		if got := e.CheckLimit("max_agents", 1000); got != license.LimitAllowed {
 			t.Fatalf("expected %q, got %q", license.LimitAllowed, got)
 		}
 	})
 
 	t.Run("zero limit means unlimited", func(t *testing.T) {
-		e := NewEvaluator(mockSource{limits: map[string]int64{"max_nodes": 0}})
-		if got := e.CheckLimit("max_nodes", 10_000); got != license.LimitAllowed {
+		e := NewEvaluator(mockSource{limits: map[string]int64{"max_agents": 0}})
+		if got := e.CheckLimit("max_agents", 10_000); got != license.LimitAllowed {
 			t.Fatalf("expected %q, got %q", license.LimitAllowed, got)
 		}
 	})
@@ -279,8 +279,8 @@ func TestEvaluatorMeterEnabled(t *testing.T) {
 func TestTokenSourceLegacyDerivation(t *testing.T) {
 	t.Run("legacy claims", func(t *testing.T) {
 		claims := &license.Claims{
-			Tier:     license.TierPro,
-			MaxNodes: 25,
+			Tier:      license.TierPro,
+			MaxAgents: 25,
 		}
 		source := NewTokenSource(claims)
 
@@ -291,8 +291,8 @@ func TestTokenSourceLegacyDerivation(t *testing.T) {
 		}
 
 		limits := source.Limits()
-		if got, ok := limits["max_nodes"]; !ok || got != 25 {
-			t.Fatalf("expected max_nodes limit 25, got (%d, %t)", got, ok)
+		if got, ok := limits["max_agents"]; !ok || got != 25 {
+			t.Fatalf("expected max_agents limit 25, got (%d, %t)", got, ok)
 		}
 	})
 

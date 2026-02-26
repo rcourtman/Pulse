@@ -45,7 +45,7 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
   const [orgCount, setOrgCount] = createSignal(0);
   const [memberCount, setMemberCount] = createSignal(0);
   const nodeLimit = () => {
-    const value = status()?.max_nodes;
+    const value = status()?.max_agents ?? status()?.max_nodes;
     return typeof value === 'number' && value > 0 ? value : undefined;
   };
   const guestLimit = () => {
@@ -176,7 +176,7 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
 
               <div class="space-y-1">
                 <div class="flex items-center justify-between text-xs text-muted">
-                  <span>Nodes</span>
+                  <span>Agents</span>
                   <span>
                     {props.nodeUsage}
                     {typeof nodeLimit() === 'number' ? ` / ${nodeLimit()}` : ' / Unlimited'}

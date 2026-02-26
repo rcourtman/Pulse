@@ -133,8 +133,8 @@ func TestDeriveEntitlements(t *testing.T) {
 		t.Error("DeriveEntitlements() returned no capabilities")
 	}
 
-	if limits["max_nodes"] != 50 {
-		t.Errorf("max_nodes limit = %d, want 50", limits["max_nodes"])
+	if limits["max_agents"] != 50 {
+		t.Errorf("max_agents limit = %d, want 50", limits["max_agents"])
 	}
 	if limits["max_guests"] != 100 {
 		t.Errorf("max_guests limit = %d, want 100", limits["max_guests"])
@@ -144,8 +144,8 @@ func TestDeriveEntitlements(t *testing.T) {
 func TestDeriveEntitlements_ZeroLimitsNotIncluded(t *testing.T) {
 	_, limits := DeriveEntitlements(TierPro, nil, 0, 0)
 
-	if _, ok := limits["max_nodes"]; ok {
-		t.Error("max_nodes should not be in limits when 0")
+	if _, ok := limits["max_agents"]; ok {
+		t.Error("max_agents should not be in limits when 0")
 	}
 	if _, ok := limits["max_guests"]; ok {
 		t.Error("max_guests should not be in limits when 0")
@@ -254,7 +254,7 @@ func TestGetFeatureDisplayName(t *testing.T) {
 	}
 }
 
-func TestTierHostLimits(t *testing.T) {
+func TestTierAgentLimits(t *testing.T) {
 	tests := []struct {
 		tier Tier
 		want int
@@ -270,12 +270,12 @@ func TestTierHostLimits(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(string(tt.tier), func(t *testing.T) {
-			got, ok := TierHostLimits[tt.tier]
+			got, ok := TierAgentLimits[tt.tier]
 			if !ok {
-				t.Fatalf("TierHostLimits missing entry for tier %q", tt.tier)
+				t.Fatalf("TierAgentLimits missing entry for tier %q", tt.tier)
 			}
 			if got != tt.want {
-				t.Errorf("TierHostLimits[%q] = %d, want %d", tt.tier, got, tt.want)
+				t.Errorf("TierAgentLimits[%q] = %d, want %d", tt.tier, got, tt.want)
 			}
 		})
 	}
@@ -352,11 +352,11 @@ func TestTierFeatureInheritance(t *testing.T) {
 }
 
 // TestAllTiersHaveHostLimitsAndHistoryDays ensures every tier in TierFeatures
-// also has entries in TierHostLimits and TierHistoryDays.
+// also has entries in TierAgentLimits and TierHistoryDays.
 func TestAllTiersHaveHostLimitsAndHistoryDays(t *testing.T) {
 	for tier := range TierFeatures {
-		if _, ok := TierHostLimits[tier]; !ok {
-			t.Errorf("TierHostLimits missing entry for tier %q", tier)
+		if _, ok := TierAgentLimits[tier]; !ok {
+			t.Errorf("TierAgentLimits missing entry for tier %q", tier)
 		}
 		if _, ok := TierHistoryDays[tier]; !ok {
 			t.Errorf("TierHistoryDays missing entry for tier %q", tier)

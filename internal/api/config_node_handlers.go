@@ -424,7 +424,7 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 			pve.PhysicalDiskPollingMinutes = *req.PhysicalDiskPollingMinutes
 		}
 
-		if enforceNodeLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context())) {
+		if enforceAgentLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context())) {
 			return
 		}
 		h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances, pve)
@@ -555,7 +555,7 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 			MonitorGarbageJobs:           monitorGarbageJobs,
 			TemperatureMonitoringEnabled: req.TemperatureMonitoringEnabled,
 		}
-		if enforceNodeLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context())) {
+		if enforceAgentLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context())) {
 			return
 		}
 		h.getConfig(r.Context()).PBSInstances = append(h.getConfig(r.Context()).PBSInstances, pbs)
@@ -640,7 +640,7 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 			MonitorDomainStats:           monitorDomainStats,
 			TemperatureMonitoringEnabled: req.TemperatureMonitoringEnabled,
 		}
-		if enforceNodeLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context())) {
+		if enforceAgentLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context())) {
 			return
 		}
 		h.getConfig(r.Context()).PMGInstances = append(h.getConfig(r.Context()).PMGInstances, pmgInstance)

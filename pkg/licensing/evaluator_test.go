@@ -85,28 +85,28 @@ func TestEvaluator_GetLimit(t *testing.T) {
 		{
 			name:       "nil_evaluator_returns_false",
 			source:     mockSource{},
-			key:        "max_nodes",
+			key:        "max_agents",
 			wantValue:  0,
 			wantExists: false,
 		},
 		{
 			name:       "finds_limit",
-			source:     mockSource{limits: map[string]int64{"max_nodes": 100}},
-			key:        "max_nodes",
+			source:     mockSource{limits: map[string]int64{"max_agents": 100}},
+			key:        "max_agents",
 			wantValue:  100,
 			wantExists: true,
 		},
 		{
 			name:       "missing_limit_returns_false",
-			source:     mockSource{limits: map[string]int64{"max_nodes": 100}},
+			source:     mockSource{limits: map[string]int64{"max_agents": 100}},
 			key:        "max_guests",
 			wantValue:  0,
 			wantExists: false,
 		},
 		{
 			name:       "zero_limit_exists",
-			source:     mockSource{limits: map[string]int64{"max_nodes": 0}},
-			key:        "max_nodes",
+			source:     mockSource{limits: map[string]int64{"max_agents": 0}},
+			key:        "max_agents",
 			wantValue:  0,
 			wantExists: true,
 		},
@@ -128,7 +128,7 @@ func TestEvaluator_GetLimit(t *testing.T) {
 }
 
 func TestEvaluator_CheckLimit(t *testing.T) {
-	source := mockSource{limits: map[string]int64{"max_nodes": 100}}
+	source := mockSource{limits: map[string]int64{"max_agents": 100}}
 	e := NewEvaluator(source)
 
 	tests := []struct {
@@ -139,25 +139,25 @@ func TestEvaluator_CheckLimit(t *testing.T) {
 	}{
 		{
 			name:     "well_under_limit",
-			key:      "max_nodes",
+			key:      "max_agents",
 			observed: 50,
 			want:     LimitAllowed,
 		},
 		{
 			name:     "at_90_percent",
-			key:      "max_nodes",
+			key:      "max_agents",
 			observed: 90,
 			want:     LimitSoftBlock,
 		},
 		{
 			name:     "at_limit",
-			key:      "max_nodes",
+			key:      "max_agents",
 			observed: 100,
 			want:     LimitHardBlock,
 		},
 		{
 			name:     "over_limit",
-			key:      "max_nodes",
+			key:      "max_agents",
 			observed: 150,
 			want:     LimitHardBlock,
 		},
@@ -169,7 +169,7 @@ func TestEvaluator_CheckLimit(t *testing.T) {
 		},
 		{
 			name:     "zero_limit_allows",
-			key:      "max_nodes",
+			key:      "max_agents",
 			observed: 0,
 			want:     LimitAllowed,
 		},
@@ -290,10 +290,10 @@ func TestEvaluator_NilSource_ReturnsDefaults(t *testing.T) {
 	if got := e.HasCapability("feature"); got != false {
 		t.Errorf("HasCapability() on nil = %v, want false", got)
 	}
-	if got, _ := e.GetLimit("max_nodes"); got != 0 {
+	if got, _ := e.GetLimit("max_agents"); got != 0 {
 		t.Errorf("GetLimit() on nil = %v, want 0", got)
 	}
-	if got := e.CheckLimit("max_nodes", 50); got != LimitAllowed {
+	if got := e.CheckLimit("max_agents", 50); got != LimitAllowed {
 		t.Errorf("CheckLimit() on nil = %v, want LimitAllowed", got)
 	}
 	if got := e.MeterEnabled("meter"); got != false {

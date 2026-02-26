@@ -114,10 +114,10 @@ func TestServiceStatus_UsesEffectiveClaimsEntitlements(t *testing.T) {
 			Tier:         TierPro,
 			Capabilities: []string{FeatureAIAutoFix},
 			Limits: map[string]int64{
-				"max_nodes":  99,
+				"max_agents": 99,
 				"max_guests": 7,
 			},
-			MaxNodes:  1,
+			MaxAgents: 1,
 			MaxGuests: 2,
 		},
 	})
@@ -133,8 +133,8 @@ func TestServiceStatus_UsesEffectiveClaimsEntitlements(t *testing.T) {
 	if !reflect.DeepEqual(status.Features, []string{FeatureAIAutoFix}) {
 		t.Fatalf("Status().Features=%v, want %v", status.Features, []string{FeatureAIAutoFix})
 	}
-	if status.MaxNodes != 99 {
-		t.Fatalf("Status().MaxNodes=%d, want 99", status.MaxNodes)
+	if status.MaxAgents != 99 {
+		t.Fatalf("Status().MaxAgents=%d, want 99", status.MaxAgents)
 	}
 	if status.MaxGuests != 7 {
 		t.Fatalf("Status().MaxGuests=%d, want 7", status.MaxGuests)
@@ -934,14 +934,14 @@ func TestClaimsEffectiveCapabilities(t *testing.T) {
 func TestClaimsEffectiveLimits(t *testing.T) {
 	t.Run("explicit limits", func(t *testing.T) {
 		claims := Claims{
-			MaxNodes: 25,
+			MaxAgents: 25,
 			Limits: map[string]int64{
-				"max_nodes": 50,
+				"max_agents": 50,
 			},
 		}
 
 		got := claims.EffectiveLimits()
-		want := map[string]int64{"max_nodes": 50}
+		want := map[string]int64{"max_agents": 50}
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("EffectiveLimits() = %v, want %v", got, want)
 		}
@@ -949,13 +949,13 @@ func TestClaimsEffectiveLimits(t *testing.T) {
 
 	t.Run("derived from fields", func(t *testing.T) {
 		claims := Claims{
-			MaxNodes:  25,
+			MaxAgents: 25,
 			MaxGuests: 100,
 		}
 
 		got := claims.EffectiveLimits()
 		want := map[string]int64{
-			"max_nodes":  25,
+			"max_agents": 25,
 			"max_guests": 100,
 		}
 		if !reflect.DeepEqual(got, want) {
@@ -965,8 +965,8 @@ func TestClaimsEffectiveLimits(t *testing.T) {
 
 	t.Run("zero fields omitted", func(t *testing.T) {
 		claims := Claims{
-			MaxNodes: 0,
-			Limits:   nil,
+			MaxAgents: 0,
+			Limits:    nil,
 		}
 
 		got := claims.EffectiveLimits()
@@ -985,11 +985,11 @@ func TestClaimsJSONRoundtrip(t *testing.T) {
 			IssuedAt:     1700000000,
 			ExpiresAt:    1800000000,
 			Features:     []string{"legacy_feature"},
-			MaxNodes:     10,
+			MaxAgents:    10,
 			MaxGuests:    20,
 			Capabilities: []string{"cap_a", "cap_b"},
 			Limits: map[string]int64{
-				"max_nodes":  50,
+				"max_agents": 50,
 				"max_guests": 100,
 			},
 			MetersEnabled: []string{"meter_a"},
@@ -1082,7 +1082,7 @@ func TestDeriveEntitlements(t *testing.T) {
 		sort.Strings(wantCapabilities)
 
 		wantLimits := map[string]int64{
-			"max_nodes":  25,
+			"max_agents": 25,
 			"max_guests": 100,
 		}
 
@@ -1345,7 +1345,7 @@ func TestEvaluatorMatrix(t *testing.T) {
 				FeatureAIAutoFix,
 			},
 			limits: map[string]int64{
-				"max_nodes":  42,
+				"max_agents": 42,
 				"max_guests": 13,
 			},
 			subscriptionState: entitlements.SubStateActive,
@@ -1371,8 +1371,8 @@ func TestEvaluatorMatrix(t *testing.T) {
 		}
 		// Hosted path unions free-tier baseline capabilities with evaluator-provided capabilities.
 		assertFeatureSetEq(t, status.Features, []string{FeatureUpdateAlerts, FeatureSSO, FeatureAIPatrol, FeatureAIAutoFix})
-		if status.MaxNodes != 42 {
-			t.Fatalf("Status().MaxNodes=%d, want %d", status.MaxNodes, 42)
+		if status.MaxAgents != 42 {
+			t.Fatalf("Status().MaxAgents=%d, want %d", status.MaxAgents, 42)
 		}
 		if status.MaxGuests != 13 {
 			t.Fatalf("Status().MaxGuests=%d, want %d", status.MaxGuests, 13)
@@ -1448,8 +1448,8 @@ func TestEvaluatorMatrix(t *testing.T) {
 		if !reflect.DeepEqual(status.Features, TierFeatures[TierFree]) {
 			t.Fatalf("Status().Features=%v, want %v", status.Features, TierFeatures[TierFree])
 		}
-		if status.MaxNodes != 0 || status.MaxGuests != 0 {
-			t.Fatalf("expected limits to be omitted for expired subscription, got MaxNodes=%d MaxGuests=%d", status.MaxNodes, status.MaxGuests)
+		if status.MaxAgents != 0 || status.MaxGuests != 0 {
+			t.Fatalf("expected limits to be omitted for expired subscription, got MaxAgents=%d MaxGuests=%d", status.MaxAgents, status.MaxGuests)
 		}
 	})
 

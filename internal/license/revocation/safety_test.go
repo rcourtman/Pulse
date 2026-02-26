@@ -124,7 +124,7 @@ func TestSafeEvaluatorCheckLimit_Panic(t *testing.T) {
 	})
 	safe := NewSafeEvaluator(inner)
 
-	if got := safe.CheckLimit("max_nodes", 999); got != license.LimitAllowed {
+	if got := safe.CheckLimit("max_agents", 999); got != license.LimitAllowed {
 		t.Fatalf("expected %q, got %q", license.LimitAllowed, got)
 	}
 }
@@ -132,11 +132,11 @@ func TestSafeEvaluatorCheckLimit_Panic(t *testing.T) {
 func TestSafeEvaluatorGetLimit_NormalAndPanic(t *testing.T) {
 	t.Run("normal", func(t *testing.T) {
 		inner := entitlements.NewEvaluator(staticSource{
-			limits: map[string]int64{"max_nodes": 42},
+			limits: map[string]int64{"max_agents": 42},
 		})
 		safe := NewSafeEvaluator(inner)
 
-		limit, ok := safe.GetLimit("max_nodes")
+		limit, ok := safe.GetLimit("max_agents")
 		if !ok || limit != 42 {
 			t.Fatalf("expected (42, true), got (%d, %t)", limit, ok)
 		}
@@ -148,7 +148,7 @@ func TestSafeEvaluatorGetLimit_NormalAndPanic(t *testing.T) {
 		})
 		safe := NewSafeEvaluator(inner)
 
-		limit, ok := safe.GetLimit("max_nodes")
+		limit, ok := safe.GetLimit("max_agents")
 		if ok || limit != 0 {
 			t.Fatalf("expected (0, false), got (%d, %t)", limit, ok)
 		}

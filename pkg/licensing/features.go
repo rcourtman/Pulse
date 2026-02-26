@@ -55,9 +55,9 @@ const (
 	TierEnterprise Tier = "enterprise"
 )
 
-// TierHostLimits defines the maximum host count per tier.
+// TierAgentLimits defines the maximum agent count per tier.
 // A value of 0 means unlimited (enforced at the MSP/Enterprise level).
-var TierHostLimits = map[Tier]int{
+var TierAgentLimits = map[Tier]int{
 	TierFree:       5,
 	TierRelay:      8,
 	TierPro:        15,
@@ -160,12 +160,12 @@ func DeriveCapabilitiesFromTier(tier Tier, explicitFeatures []string) []string {
 }
 
 // DeriveEntitlements derives capabilities and limits from tier and legacy claim fields.
-func DeriveEntitlements(tier Tier, features []string, maxNodes int, maxGuests int) (capabilities []string, limits map[string]int64) {
+func DeriveEntitlements(tier Tier, features []string, maxAgents int, maxGuests int) (capabilities []string, limits map[string]int64) {
 	capabilities = DeriveCapabilitiesFromTier(tier, features)
 
 	limits = make(map[string]int64)
-	if maxNodes > 0 {
-		limits["max_nodes"] = int64(maxNodes)
+	if maxAgents > 0 {
+		limits["max_agents"] = int64(maxAgents)
 	}
 	if maxGuests > 0 {
 		limits["max_guests"] = int64(maxGuests)

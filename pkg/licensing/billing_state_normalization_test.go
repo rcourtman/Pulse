@@ -29,7 +29,7 @@ func TestNormalizeBillingState(t *testing.T) {
 	trialEnds := int64(200)
 	input := &BillingState{
 		Capabilities:      []string{" a ", "b"},
-		Limits:            map[string]int64{"max_nodes": 10},
+		Limits:            map[string]int64{"max_agents": 10},
 		MetersEnabled:     []string{"meter_a"},
 		PlanVersion:       "  ",
 		SubscriptionState: SubscriptionState(" ACTIVE "),
@@ -48,20 +48,20 @@ func TestNormalizeBillingState(t *testing.T) {
 	if normalized.StripeCustomerID != "cus_123" {
 		t.Fatalf("stripe_customer_id=%q, want %q", normalized.StripeCustomerID, "cus_123")
 	}
-	if normalized.Limits["max_nodes"] != 10 {
-		t.Fatalf("limits[max_nodes]=%d, want 10", normalized.Limits["max_nodes"])
+	if normalized.Limits["max_agents"] != 10 {
+		t.Fatalf("limits[max_nodes]=%d, want 10", normalized.Limits["max_agents"])
 	}
 
 	input.Capabilities[0] = "changed"
 	input.MetersEnabled[0] = "changed"
-	input.Limits["max_nodes"] = 99
+	input.Limits["max_agents"] = 99
 	if normalized.Capabilities[0] != " a " {
 		t.Fatalf("expected capabilities to be copied")
 	}
 	if normalized.MetersEnabled[0] != "meter_a" {
 		t.Fatalf("expected meters_enabled to be copied")
 	}
-	if normalized.Limits["max_nodes"] != 10 {
+	if normalized.Limits["max_agents"] != 10 {
 		t.Fatalf("expected limits map to be copied")
 	}
 }
@@ -80,7 +80,7 @@ func TestNormalizeBillingState_PreservesAllFields(t *testing.T) {
 
 	input := &BillingState{
 		Capabilities:         []string{"relay", "ai"},
-		Limits:               map[string]int64{"max_nodes": 50},
+		Limits:               map[string]int64{"max_agents": 50},
 		MetersEnabled:        []string{"active_agents"},
 		PlanVersion:          "pro-v2",
 		SubscriptionState:    SubStateActive,
@@ -99,8 +99,8 @@ func TestNormalizeBillingState_PreservesAllFields(t *testing.T) {
 	if len(normalized.Capabilities) != 2 {
 		t.Fatalf("capabilities: got %v", normalized.Capabilities)
 	}
-	if normalized.Limits["max_nodes"] != 50 {
-		t.Fatalf("limits[max_nodes]: got %d", normalized.Limits["max_nodes"])
+	if normalized.Limits["max_agents"] != 50 {
+		t.Fatalf("limits[max_nodes]: got %d", normalized.Limits["max_agents"])
 	}
 	if normalized.MetersEnabled[0] != "active_agents" {
 		t.Fatalf("meters_enabled: got %v", normalized.MetersEnabled)
@@ -151,7 +151,7 @@ func TestCloneBillingState_PreservesAllFields(t *testing.T) {
 
 	input := BillingState{
 		Capabilities:         []string{"relay", "ai"},
-		Limits:               map[string]int64{"max_nodes": 50},
+		Limits:               map[string]int64{"max_agents": 50},
 		MetersEnabled:        []string{"active_agents"},
 		PlanVersion:          "pro-v2",
 		SubscriptionState:    SubStateActive,
@@ -200,7 +200,7 @@ func TestNormalizeThenClone_RoundTrip(t *testing.T) {
 
 	original := &BillingState{
 		Capabilities:         []string{"relay"},
-		Limits:               map[string]int64{"max_nodes": 50},
+		Limits:               map[string]int64{"max_agents": 50},
 		MetersEnabled:        []string{"active_agents"},
 		PlanVersion:          "pro-v2",
 		SubscriptionState:    SubStateActive,
@@ -245,4 +245,42 @@ func TestIsValidBillingSubscriptionState(t *testing.T) {
 	if IsValidBillingSubscriptionState(SubscriptionState("invalid")) {
 		t.Fatal("expected invalid state to be rejected")
 	}
+}
+
+func TestNormalizeBillingState_MaxNodesToMaxAgentsMigration(t *testing.T) {
+	t.Run("legacy_key_migrated", func(t *testing.T) {
+		state := &BillingState{
+			Limits: map[string]int64{"max_nodes": 10},
+		}
+		normalized := NormalizeBillingState(state)
+		if normalized.Limits["max_agents"] != 10 {
+			t.Fatalf("expected max_agents=10, got %d", normalized.Limits["max_agents"])
+		}
+		if _, hasOld := normalized.Limits["max_nodes"]; hasOld {
+			t.Fatal("expected max_nodes to be deleted after migration")
+		}
+	})
+
+	t.Run("new_key_preserved_legacy_deleted", func(t *testing.T) {
+		state := &BillingState{
+			Limits: map[string]int64{"max_agents": 15, "max_nodes": 5},
+		}
+		normalized := NormalizeBillingState(state)
+		if normalized.Limits["max_agents"] != 15 {
+			t.Fatalf("expected max_agents=15, got %d", normalized.Limits["max_agents"])
+		}
+		if _, hasOld := normalized.Limits["max_nodes"]; hasOld {
+			t.Fatal("expected max_nodes to be deleted when max_agents exists")
+		}
+	})
+
+	t.Run("no_legacy_key_no_change", func(t *testing.T) {
+		state := &BillingState{
+			Limits: map[string]int64{"max_agents": 20},
+		}
+		normalized := NormalizeBillingState(state)
+		if normalized.Limits["max_agents"] != 20 {
+			t.Fatalf("expected max_agents=20, got %d", normalized.Limits["max_agents"])
+		}
+	})
 }

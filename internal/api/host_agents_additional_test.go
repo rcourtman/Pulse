@@ -98,8 +98,8 @@ func TestHostAgentHandlers_HandleReport(t *testing.T) {
 	}
 }
 
-func TestHostAgentHandlers_HandleReport_EnforcesMaxNodesForNewHostsOnly(t *testing.T) {
-	setMaxNodesLicenseForTests(t, 1)
+func TestHostAgentHandlers_HandleReport_EnforcesMaxAgentsForNewHostsOnly(t *testing.T) {
+	setMaxAgentsLicenseForTests(t, 1)
 
 	handler, monitor := newHostAgentHandlers(t, nil)
 	existingHostID := seedHostAgent(t, monitor)

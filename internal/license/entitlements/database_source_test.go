@@ -53,7 +53,7 @@ func TestDatabaseSourceHappyPath(t *testing.T) {
 	store := &mockBillingStore{
 		state: &BillingState{
 			Capabilities:      []string{"rbac", "relay"},
-			Limits:            map[string]int64{"max_nodes": 50},
+			Limits:            map[string]int64{"max_agents": 50},
 			MetersEnabled:     []string{"active_agents"},
 			PlanVersion:       "pro-v2",
 			SubscriptionState: SubStateActive,
@@ -65,8 +65,8 @@ func TestDatabaseSourceHappyPath(t *testing.T) {
 	if got := source.Capabilities(); !reflect.DeepEqual(got, []string{"rbac", "relay"}) {
 		t.Fatalf("expected capabilities %v, got %v", []string{"rbac", "relay"}, got)
 	}
-	if got := source.Limits(); !reflect.DeepEqual(got, map[string]int64{"max_nodes": 50}) {
-		t.Fatalf("expected limits %v, got %v", map[string]int64{"max_nodes": 50}, got)
+	if got := source.Limits(); !reflect.DeepEqual(got, map[string]int64{"max_agents": 50}) {
+		t.Fatalf("expected limits %v, got %v", map[string]int64{"max_agents": 50}, got)
 	}
 	if got := source.MetersEnabled(); !reflect.DeepEqual(got, []string{"active_agents"}) {
 		t.Fatalf("expected meters %v, got %v", []string{"active_agents"}, got)
@@ -193,7 +193,7 @@ func TestDatabaseSourceTrialExpiryMarksExpiredAndStripsCapabilities(t *testing.T
 	store := &mockBillingStore{
 		state: &BillingState{
 			Capabilities:      []string{"ai_autofix", "relay"},
-			Limits:            map[string]int64{"max_nodes": 50},
+			Limits:            map[string]int64{"max_agents": 50},
 			MetersEnabled:     []string{"active_agents"},
 			PlanVersion:       "trial",
 			SubscriptionState: SubStateTrial,

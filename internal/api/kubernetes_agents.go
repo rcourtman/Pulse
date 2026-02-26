@@ -55,7 +55,7 @@ func (h *KubernetesAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Re
 	}
 
 	tokenRecord := getAPITokenRecordFromRequest(r)
-	if enforceNodeLimitForKubernetesReport(w, r.Context(), h.getMonitor(r.Context()), report, tokenRecord) {
+	if enforceAgentLimitForKubernetesReport(w, r.Context(), h.getMonitor(r.Context()), report, tokenRecord) {
 		return
 	}
 

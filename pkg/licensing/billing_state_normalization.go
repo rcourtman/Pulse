@@ -45,11 +45,11 @@ func NormalizeBillingState(state *BillingState) *BillingState {
 
 	// Migration shim: rename legacy "max_nodes" key to "max_agents".
 	// Existing billing.json files may still use the old key name.
-	if _, hasNew := normalized.Limits["max_agents"]; !hasNew {
-		if v, hasOld := normalized.Limits["max_nodes"]; hasOld {
+	if v, hasOld := normalized.Limits["max_nodes"]; hasOld {
+		if _, hasNew := normalized.Limits["max_agents"]; !hasNew {
 			normalized.Limits["max_agents"] = v
-			delete(normalized.Limits, "max_nodes")
 		}
+		delete(normalized.Limits, "max_nodes")
 	}
 
 	// Ensure slices/maps are never nil (JSON marshals as [] / {} instead of null).

@@ -53,7 +53,7 @@ func TestDatabaseSourceHappyPath(t *testing.T) {
 	store := &mockBillingStore{
 		state: &BillingState{
 			Capabilities:      []string{"rbac", "relay"},
-			Limits:            map[string]int64{"max_nodes": 50},
+			Limits:            map[string]int64{"max_agents": 50},
 			MetersEnabled:     []string{"active_agents"},
 			PlanVersion:       "pro-v2",
 			SubscriptionState: SubStateActive,
@@ -65,8 +65,8 @@ func TestDatabaseSourceHappyPath(t *testing.T) {
 	if got := source.Capabilities(); !reflect.DeepEqual(got, []string{"rbac", "relay"}) {
 		t.Fatalf("expected capabilities %v, got %v", []string{"rbac", "relay"}, got)
 	}
-	if got := source.Limits(); !reflect.DeepEqual(got, map[string]int64{"max_nodes": 50}) {
-		t.Fatalf("expected limits %v, got %v", map[string]int64{"max_nodes": 50}, got)
+	if got := source.Limits(); !reflect.DeepEqual(got, map[string]int64{"max_agents": 50}) {
+		t.Fatalf("expected limits %v, got %v", map[string]int64{"max_agents": 50}, got)
 	}
 	if got := source.MetersEnabled(); !reflect.DeepEqual(got, []string{"active_agents"}) {
 		t.Fatalf("expected meters %v, got %v", []string{"active_agents"}, got)
@@ -80,6 +80,23 @@ func TestDatabaseSourceHappyPath(t *testing.T) {
 
 	if store.callCount() != 1 {
 		t.Fatalf("expected store to be called once, got %d", store.callCount())
+	}
+}
+
+func TestDatabaseSourceLimits_MaxNodesMigration(t *testing.T) {
+	store := &mockBillingStore{
+		state: &BillingState{
+			Limits:            map[string]int64{"max_nodes": 25},
+			SubscriptionState: SubStateActive,
+		},
+	}
+	source := NewDatabaseSource(store, "org-1", time.Hour)
+	got := source.Limits()
+	if got["max_agents"] != 25 {
+		t.Fatalf("expected max_agents=25, got %d", got["max_agents"])
+	}
+	if _, hasOld := got["max_nodes"]; hasOld {
+		t.Fatal("expected max_nodes to be absent after migration")
 	}
 }
 
@@ -197,7 +214,7 @@ func TestDatabaseSourceTrialExpiryMarksExpiredAndStripsCapabilities(t *testing.T
 	store := &mockBillingStore{
 		state: &BillingState{
 			Capabilities:      []string{"ai_autofix", "relay"},
-			Limits:            map[string]int64{"max_nodes": 50},
+			Limits:            map[string]int64{"max_agents": 50},
 			MetersEnabled:     []string{"active_agents"},
 			PlanVersion:       "trial",
 			SubscriptionState: SubStateTrial,
