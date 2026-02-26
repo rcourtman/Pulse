@@ -12,17 +12,19 @@ func TestGrantClaimsToClaims(t *testing.T) {
 		wantTier      Tier
 		wantSubState  SubscriptionState
 		wantLicenseID string
+		wantEmail     string
 		wantFeatures  []string
 		wantMaxAgents int
 		wantMaxGuests int
 	}{
 		{
-			name: "active state",
+			name: "active state with email",
 			gc: &GrantClaims{
 				LicenseID:      "lic_123",
 				InstallationID: "inst_abc",
 				State:          "active",
 				Tier:           "pro",
+				Email:          "user@example.com",
 				Features:       []string{"ai_patrol", "relay"},
 				MaxAgents:      10,
 				MaxGuests:      5,
@@ -32,6 +34,7 @@ func TestGrantClaimsToClaims(t *testing.T) {
 			wantTier:      TierPro,
 			wantSubState:  SubStateActive,
 			wantLicenseID: "lic_123",
+			wantEmail:     "user@example.com",
 			wantFeatures:  []string{"ai_patrol", "relay"},
 			wantMaxAgents: 10,
 			wantMaxGuests: 5,
@@ -101,6 +104,9 @@ func TestGrantClaimsToClaims(t *testing.T) {
 			}
 			if c.LicenseID != tt.wantLicenseID {
 				t.Errorf("LicenseID = %q, want %q", c.LicenseID, tt.wantLicenseID)
+			}
+			if c.Email != tt.wantEmail {
+				t.Errorf("Email = %q, want %q", c.Email, tt.wantEmail)
 			}
 			if len(c.Features) != len(tt.wantFeatures) {
 				t.Errorf("Features length = %d, want %d", len(c.Features), len(tt.wantFeatures))

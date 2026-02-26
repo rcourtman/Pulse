@@ -203,8 +203,11 @@ test.describe.serial('V6 license activation flow', () => {
     expect(ent.tier).toBe('pro');
     expect(ent.subscription_state).toBe('active');
     expect(ent.valid).toBe(true);
-    // Note: licensed_email is not populated for v6 activation-key licenses
-    // (the grant JWT does not include the email field).
+    // licensed_email is populated when the license server includes email in the
+    // grant JWT. Assert it when present (post-fix), skip when absent (pre-fix).
+    if (ent.licensed_email) {
+      expect(ent.licensed_email).toBe('e2e-playwright@test.local');
+    }
 
     // Check max_agents limit.
     const agentLimit = ent.limits?.find((l) => l.key === 'max_agents');

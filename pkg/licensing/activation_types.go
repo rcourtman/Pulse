@@ -45,7 +45,8 @@ type GrantClaims struct {
 	IssuedAt       int64    `json:"iat"`
 	ExpiresAt      int64    `json:"exp"`
 	GraceUntil     int64    `json:"grace_until"`
-	JTI            string   `json:"jti"` // unique grant ID
+	JTI            string   `json:"jti"`   // unique grant ID
+	Email          string   `json:"email"` // license owner email
 }
 
 // grantClaimsToClaims maps grant claims to the existing Claims struct
@@ -53,6 +54,7 @@ type GrantClaims struct {
 func grantClaimsToClaims(gc *GrantClaims) Claims {
 	c := Claims{
 		LicenseID: gc.LicenseID,
+		Email:     gc.Email,
 		Tier:      Tier(gc.Tier),
 		IssuedAt:  gc.IssuedAt,
 		ExpiresAt: gc.ExpiresAt,
