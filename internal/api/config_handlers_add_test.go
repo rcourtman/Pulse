@@ -175,8 +175,10 @@ func TestHandleAddNode(t *testing.T) {
 	}
 }
 
-func TestHandleAddNode_EnforcesMaxNodesLimit(t *testing.T) {
-	setMaxNodesLicenseForTests(t, 1)
+// TestHandleAddNode_NoLimitForConfigRegistration verifies that PVE/PBS/PMG
+// config registrations are never blocked by the agent limit (agents-only model).
+func TestHandleAddNode_NoLimitForConfigRegistration(t *testing.T) {
+	setMaxAgentsLicenseForTests(t, 1)
 
 	tempDir, err := os.MkdirTemp("", "pulse-add-node-limit-test")
 	if err != nil {
@@ -204,10 +206,8 @@ func TestHandleAddNode_EnforcesMaxNodesLimit(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.HandleAddNode(rec, req)
 
-	if rec.Code != http.StatusPaymentRequired {
-		t.Fatalf("expected status 402, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if len(cfg.PVEInstances) != 1 {
-		t.Fatalf("expected node to be rejected at limit, got %d PVE instances", len(cfg.PVEInstances))
+	// Under agents-only model, config registrations are not limited.
+	if rec.Code == http.StatusPaymentRequired {
+		t.Fatalf("PVE config registration should not be blocked by agent limit, got 402")
 	}
 }

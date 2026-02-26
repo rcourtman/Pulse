@@ -65,7 +65,7 @@ func (h *TrueNASHandlers) HandleAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.enforceNodeLimit(w, r, persistence, 1) {
+	if h.enforceAgentLimit(w, r, persistence, 1) {
 		return
 	}
 
@@ -239,42 +239,16 @@ func (h *TrueNASHandlers) persistenceForRequest(w http.ResponseWriter, ctx conte
 	return persistence
 }
 
-func (h *TrueNASHandlers) enforceNodeLimit(
-	w http.ResponseWriter,
-	r *http.Request,
-	persistence *config.ConfigPersistence,
-	additionalCount int,
+// enforceAgentLimit is a no-op under the agents-only counting model.
+// TrueNAS API connections don't count toward the agent limit.
+// Only machines with a Pulse Unified Agent installed count.
+func (h *TrueNASHandlers) enforceAgentLimit(
+	_ http.ResponseWriter,
+	_ *http.Request,
+	_ *config.ConfigPersistence,
+	_ int,
 ) bool {
-	limit := maxNodesLimitForContext(r.Context())
-	if limit <= 0 {
-		return false
-	}
-
-	var cfg *config.Config
-	if h != nil && h.getConfig != nil {
-		cfg = h.getConfig(r.Context())
-	}
-
-	var mon *monitoring.Monitor
-	if h != nil && h.getMonitor != nil {
-		mon = h.getMonitor(r.Context())
-	}
-
-	baseCount := registeredNodeSlotCount(cfg, mon)
-
-	trueNASInstances, err := persistence.LoadTrueNASConfig()
-	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "truenas_load_failed", "Failed to load TrueNAS configuration", map[string]string{"error": err.Error()})
-		return true
-	}
-
-	current := baseCount + len(trueNASInstances)
-	if current+additionalCount <= limit {
-		return false
-	}
-
-	writeMaxNodesLimitExceeded(w, current, limit)
-	return true
+	return false
 }
 
 func trueNASConnectionIDFromPath(path string) (string, bool) {

@@ -16,10 +16,10 @@ import (
 
 func TestBuildEntitlementPayload_ActiveLicense(t *testing.T) {
 	status := &license.LicenseStatus{
-		Valid:    true,
-		Tier:     license.TierPro,
-		Features: append([]string(nil), license.TierFeatures[license.TierPro]...),
-		MaxNodes: 50,
+		Valid:     true,
+		Tier:      license.TierPro,
+		Features:  append([]string(nil), license.TierFeatures[license.TierPro]...),
+		MaxAgents: 50,
 	}
 
 	payload := buildEntitlementPayload(status, "")
@@ -31,18 +31,18 @@ func TestBuildEntitlementPayload_ActiveLicense(t *testing.T) {
 		t.Fatalf("expected capabilities to match status features")
 	}
 
-	var nodeLimit *LimitStatus
+	var agentLimit *LimitStatus
 	for i := range payload.Limits {
-		if payload.Limits[i].Key == "max_nodes" {
-			nodeLimit = &payload.Limits[i]
+		if payload.Limits[i].Key == "max_agents" {
+			agentLimit = &payload.Limits[i]
 			break
 		}
 	}
-	if nodeLimit == nil {
-		t.Fatalf("expected max_nodes limit in payload")
+	if agentLimit == nil {
+		t.Fatalf("expected max_agents limit in payload")
 	}
-	if nodeLimit.Limit != 50 {
-		t.Fatalf("expected max_nodes limit 50, got %d", nodeLimit.Limit)
+	if agentLimit.Limit != 50 {
+		t.Fatalf("expected max_agents limit 50, got %d", agentLimit.Limit)
 	}
 	if len(payload.UpgradeReasons) != 0 {
 		t.Fatalf("expected no upgrade reasons for pro tier, got %d", len(payload.UpgradeReasons))
@@ -75,7 +75,7 @@ func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 		Valid:     true,
 		Tier:      license.TierPro,
 		Features:  append([]string(nil), license.TierFeatures[license.TierPro]...),
-		MaxNodes:  50,
+		MaxAgents: 50,
 		MaxGuests: 100,
 	}
 
@@ -84,25 +84,25 @@ func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 		Guests: 44,
 	}, nil)
 
-	var nodeLimit *LimitStatus
+	var agentLimit *LimitStatus
 	var guestLimit *LimitStatus
 	for i := range payload.Limits {
-		if payload.Limits[i].Key == "max_nodes" {
-			nodeLimit = &payload.Limits[i]
+		if payload.Limits[i].Key == "max_agents" {
+			agentLimit = &payload.Limits[i]
 		}
 		if payload.Limits[i].Key == "max_guests" {
 			guestLimit = &payload.Limits[i]
 		}
 	}
 
-	if nodeLimit == nil {
-		t.Fatalf("expected max_nodes limit")
+	if agentLimit == nil {
+		t.Fatalf("expected max_agents limit")
 	}
 	if guestLimit == nil {
 		t.Fatalf("expected max_guests limit")
 	}
-	if nodeLimit.Current != 12 {
-		t.Fatalf("expected node current 12, got %d", nodeLimit.Current)
+	if agentLimit.Current != 12 {
+		t.Fatalf("expected agent current 12, got %d", agentLimit.Current)
 	}
 	if guestLimit.Current != 44 {
 		t.Fatalf("expected guest current 44, got %d", guestLimit.Current)
@@ -213,7 +213,7 @@ func TestEntitlementHandler_UsesEvaluatorWhenNoLicense(t *testing.T) {
 			license.FeatureAIAutoFix,
 		},
 		Limits: map[string]int64{
-			"max_nodes": 5,
+			"max_agents": 5,
 		},
 		PlanVersion:       "pro",
 		SubscriptionState: entitlements.SubStateActive,
@@ -260,18 +260,18 @@ func TestEntitlementHandler_UsesEvaluatorWhenNoLicense(t *testing.T) {
 		t.Fatalf("expected capabilities to include %q, got %v", license.FeatureAIPatrol, payload.Capabilities)
 	}
 
-	var maxNodes *LimitStatus
+	var maxAgents *LimitStatus
 	for i := range payload.Limits {
-		if payload.Limits[i].Key == "max_nodes" {
-			maxNodes = &payload.Limits[i]
+		if payload.Limits[i].Key == "max_agents" {
+			maxAgents = &payload.Limits[i]
 			break
 		}
 	}
-	if maxNodes == nil {
-		t.Fatalf("expected max_nodes limit in payload, got %v", payload.Limits)
+	if maxAgents == nil {
+		t.Fatalf("expected max_agents limit in payload, got %v", payload.Limits)
 	}
-	if maxNodes.Limit != 5 {
-		t.Fatalf("max_nodes.limit=%d, want %d", maxNodes.Limit, 5)
+	if maxAgents.Limit != 5 {
+		t.Fatalf("max_agents.limit=%d, want %d", maxAgents.Limit, 5)
 	}
 
 	// Parity: every advertised capability must be enforced by HasFeature.

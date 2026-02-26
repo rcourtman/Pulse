@@ -6,9 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
-	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/licensing/metering"
 )
@@ -50,7 +48,7 @@ const (
 	featureRBACValue               = pkglicensing.FeatureRBAC
 	featureAdvancedReportingValue  = pkglicensing.FeatureAdvancedReporting
 	featureLongTermMetricsValue    = pkglicensing.FeatureLongTermMetrics
-	maxNodesLicenseGateKey         = pkglicensing.MaxNodesLicenseGateKey
+	maxAgentsLicenseGateKey        = pkglicensing.MaxAgentsLicenseGateKey
 	maxUsersLicenseGateKey         = pkglicensing.MaxUsersLicenseGateKey
 	subscriptionStateActiveValue   = pkglicensing.SubStateActive
 	subscriptionStateGraceValue    = pkglicensing.SubStateGrace
@@ -129,40 +127,12 @@ func userLimitExceededMessageFromLicensing(current, limit int) string {
 	return pkglicensing.UserLimitExceededMessage(current, limit)
 }
 
-func configuredNodeCountFromLicensing(pveInstances, pbsInstances, pmgInstances int) int {
-	return pkglicensing.ConfiguredNodeCount(pveInstances, pbsInstances, pmgInstances)
-}
-
-func registeredNodeSlotCountFromLicensing(configuredCount int, state models.StateSnapshot) int {
-	return pkglicensing.RegisteredNodeSlotCount(configuredCount, state)
-}
-
-func exceedsNodeLimitFromLicensing(current, additions, limit int) bool {
-	return pkglicensing.ExceedsNodeLimit(current, additions, limit)
-}
-
-func nodeLimitExceededMessageFromLicensing(current, limit int) string {
-	return pkglicensing.NodeLimitExceededMessage(current, limit)
+func agentLimitExceededMessageFromLicensing(current, limit int) string {
+	return pkglicensing.AgentLimitExceededMessage(current, limit)
 }
 
 func hostReportTargetsExistingHostFromLicensing(snapshot models.StateSnapshot, report agentshost.Report, tokenID string) bool {
 	return pkglicensing.HostReportTargetsExistingHost(snapshot, report, tokenID)
-}
-
-func dockerReportTargetsExistingHostFromLicensing(snapshot models.StateSnapshot, report agentsdocker.Report, tokenID string) bool {
-	return pkglicensing.DockerReportTargetsExistingHost(snapshot, report, tokenID)
-}
-
-func kubernetesReportTargetsExistingClusterFromLicensing(snapshot models.StateSnapshot, report agentsk8s.Report, tokenID string) bool {
-	return pkglicensing.KubernetesReportTargetsExistingCluster(snapshot, report, tokenID)
-}
-
-func kubernetesReportIdentifierFromLicensing(report agentsk8s.Report) string {
-	return pkglicensing.KubernetesReportIdentifier(report)
-}
-
-func collectNonEmptyStringsFromLicensing(values ...string) []string {
-	return pkglicensing.CollectNonEmptyStrings(values...)
 }
 
 func mapStripeSubscriptionStatusToStateFromLicensing(status string) subscriptionState {

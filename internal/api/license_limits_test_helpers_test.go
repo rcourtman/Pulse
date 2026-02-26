@@ -16,7 +16,7 @@ func (p *staticLicenseProvider) Service(context.Context) *pkglicensing.Service {
 	return p.service
 }
 
-func setMaxNodesLicenseForTests(t *testing.T, maxNodes int) {
+func setMaxAgentsLicenseForTests(t *testing.T, maxAgents int) {
 	t.Helper()
 
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
@@ -31,7 +31,7 @@ func setMaxNodesLicenseForTests(t *testing.T, maxNodes int) {
 	if err != nil {
 		t.Fatalf("failed to activate test license: %v", err)
 	}
-	lic.Claims.MaxNodes = maxNodes
+	lic.Claims.MaxAgents = maxAgents
 
 	SetLicenseServiceProvider(&staticLicenseProvider{service: service})
 	t.Cleanup(func() {

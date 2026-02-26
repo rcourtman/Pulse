@@ -116,8 +116,10 @@ func TestKubernetesAgentHandlers_HandleReport(t *testing.T) {
 	}
 }
 
-func TestKubernetesAgentHandlers_HandleReport_EnforcesMaxNodesForNewClustersOnly(t *testing.T) {
-	setMaxNodesLicenseForTests(t, 1)
+// TestKubernetesAgentHandlers_HandleReport_NoLimitForK8sReports verifies that
+// Kubernetes agent reports are never blocked by the agent limit (agents-only model).
+func TestKubernetesAgentHandlers_HandleReport_NoLimitForK8sReports(t *testing.T) {
+	setMaxAgentsLicenseForTests(t, 1)
 
 	handler, monitor := newKubernetesAgentHandlers(t, nil)
 	existingClusterID := seedKubernetesCluster(t, monitor)
@@ -125,29 +127,7 @@ func TestKubernetesAgentHandlers_HandleReport_EnforcesMaxNodesForNewClustersOnly
 		t.Fatalf("expected seeded cluster ID")
 	}
 
-	// Existing cluster should continue to report at the limit.
-	existingReport := agentsk8s.Report{
-		Agent: agentsk8s.AgentInfo{
-			ID:              "agent-1",
-			Version:         "1.0.1",
-			IntervalSeconds: 30,
-		},
-		Cluster: agentsk8s.ClusterInfo{
-			ID:      "cluster-1",
-			Name:    "cluster-1",
-			Version: "1.28.0",
-		},
-		Timestamp: time.Now().UTC(),
-	}
-	existingBody, _ := json.Marshal(existingReport)
-	existingReq := httptest.NewRequest(http.MethodPost, "/api/agents/kubernetes/report", bytes.NewReader(existingBody))
-	existingRec := httptest.NewRecorder()
-	handler.HandleReport(existingRec, existingReq)
-	if existingRec.Code != http.StatusOK {
-		t.Fatalf("existing cluster report should pass at limit, got %d: %s", existingRec.Code, existingRec.Body.String())
-	}
-
-	// New cluster should be blocked.
+	// New cluster should NOT be blocked — K8s doesn't count.
 	newReport := agentsk8s.Report{
 		Agent: agentsk8s.AgentInfo{
 			ID:              "agent-2",
@@ -165,8 +145,8 @@ func TestKubernetesAgentHandlers_HandleReport_EnforcesMaxNodesForNewClustersOnly
 	newReq := httptest.NewRequest(http.MethodPost, "/api/agents/kubernetes/report", bytes.NewReader(newBody))
 	newRec := httptest.NewRecorder()
 	handler.HandleReport(newRec, newReq)
-	if newRec.Code != http.StatusPaymentRequired {
-		t.Fatalf("new cluster should be blocked at limit, got %d: %s", newRec.Code, newRec.Body.String())
+	if newRec.Code == http.StatusPaymentRequired {
+		t.Fatalf("K8s reports should not be blocked by agent limit, got 402")
 	}
 }
 

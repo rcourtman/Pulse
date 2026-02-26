@@ -112,8 +112,10 @@ func TestHandleAutoRegisterAcceptsWithSetupToken(t *testing.T) {
 	}
 }
 
-func TestHandleAutoRegister_EnforcesMaxNodesLimit(t *testing.T) {
-	setMaxNodesLicenseForTests(t, 1)
+// TestHandleAutoRegister_NoLimitForConfigRegistration verifies that auto-register
+// for PVE/PBS/PMG is never blocked by the agent limit (agents-only model).
+func TestHandleAutoRegister_NoLimitForConfigRegistration(t *testing.T) {
+	setMaxAgentsLicenseForTests(t, 1)
 
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
@@ -157,11 +159,9 @@ func TestHandleAutoRegister_EnforcesMaxNodesLimit(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.HandleAutoRegister(rec, req)
 
-	if rec.Code != http.StatusPaymentRequired {
-		t.Fatalf("expected status 402, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if len(cfg.PVEInstances) != 1 {
-		t.Fatalf("expected auto-register to be rejected at limit, got %d PVE instances", len(cfg.PVEInstances))
+	// Under agents-only model, auto-register is not limited.
+	if rec.Code == http.StatusPaymentRequired {
+		t.Fatalf("auto-register should not be blocked by agent limit, got 402")
 	}
 }
 

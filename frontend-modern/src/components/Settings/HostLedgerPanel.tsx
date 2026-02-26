@@ -9,7 +9,6 @@ import {
   TableHead,
   TableCell,
 } from '@/components/shared/Table';
-import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
 import { formatRelativeTime } from '@/utils/format';
 import { HostLedgerAPI } from '@/api/hostLedger';
 import type { HostLedgerEntry } from '@/api/hostLedger';
@@ -31,15 +30,6 @@ function usagePercent(total: number, limit: number): number {
   return Math.min(100, Math.round((total / limit) * 100));
 }
 
-function TypeBadge(props: { type: string }) {
-  const badge = () => getSourcePlatformBadge(props.type);
-  return (
-    <Show when={badge()} fallback={<span class="text-xs text-muted">{props.type}</span>}>
-      {(b) => <span class={b().classes}>{b().label}</span>}
-    </Show>
-  );
-}
-
 export function HostLedgerPanel() {
   const [ledger] = createResource(() => HostLedgerAPI.getLedger());
 
@@ -55,7 +45,7 @@ export function HostLedgerPanel() {
       <div class="space-y-4">
         {/* Summary */}
         <div class="flex items-center justify-between">
-          <h3 class="text-sm font-semibold text-base-content">Registered Hosts</h3>
+          <h3 class="text-sm font-semibold text-base-content">Installed Agents</h3>
           <Show when={ledger()}>
             <span
               class="text-sm font-medium"
@@ -72,13 +62,13 @@ export function HostLedgerPanel() {
 
         {/* Loading state */}
         <Show when={ledger.loading}>
-          <p class="text-sm text-muted py-4 text-center">Loading host ledger...</p>
+          <p class="text-sm text-muted py-4 text-center">Loading agent ledger...</p>
         </Show>
 
         {/* Error state */}
         <Show when={ledger.error}>
           <p class="text-sm text-red-600 dark:text-red-400 py-4 text-center">
-            Failed to load host ledger.
+            Failed to load agent ledger.
           </p>
         </Show>
 
@@ -101,16 +91,13 @@ export function HostLedgerPanel() {
           {/* Table */}
           <Show
             when={hosts().length > 0}
-            fallback={<p class="text-sm text-muted py-4 text-center">No hosts registered.</p>}
+            fallback={<p class="text-sm text-muted py-4 text-center">No agents installed.</p>}
           >
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Source</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>First Seen</TableHead>
                   <TableHead>Last Seen</TableHead>
                 </TableRow>
               </TableHeader>
@@ -122,22 +109,9 @@ export function HostLedgerPanel() {
                         <span class="text-sm font-medium text-base-content">{host.name}</span>
                       </TableCell>
                       <TableCell>
-                        <TypeBadge type={host.type} />
-                      </TableCell>
-                      <TableCell>
-                        <span class="text-xs text-muted">{host.source || '—'}</span>
-                      </TableCell>
-                      <TableCell>
                         <span class="inline-flex items-center gap-1.5">
                           <StatusDot variant={statusVariant(host.status)} size="sm" />
                           <span class="text-xs text-muted capitalize">{host.status}</span>
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span class="text-xs text-muted">
-                          {host.first_seen
-                            ? formatRelativeTime(host.first_seen, { compact: true })
-                            : '—'}
                         </span>
                       </TableCell>
                       <TableCell>

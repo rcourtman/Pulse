@@ -18,7 +18,7 @@ import {
 } from '@/components/shared/Form';
 import { logger } from '@/utils/logger';
 import { TogglePrimitive } from '@/components/shared/Toggle';
-import { getLimit, licenseStatus, startProTrial } from '@/stores/license';
+import { licenseStatus, startProTrial } from '@/stores/license';
 
 interface NodeModalProps {
   isOpen: boolean;
@@ -98,14 +98,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     typeof props.temperatureMonitoringEnabled === 'boolean';
   const temperatureMonitoringEnabledValue = () => props.temperatureMonitoringEnabled ?? true;
 
-  // Host limit detection for trial prompt
+  // Under agents-only counting, PVE/PBS/PMG connections don't count toward
+  // the agent limit, so the node modal never shows a limit warning.
   const [startingTrial, setStartingTrial] = createSignal(false);
-  const hostLimitReached = createMemo(() => {
-    if (props.editingNode) return false;
-    const limit = getLimit('max_nodes');
-    if (!limit || limit.limit <= 0) return false;
-    return limit.current >= limit.limit;
-  });
+  const hostLimitReached = createMemo(() => false);
   const canStartTrial = createMemo(() => {
     const ent = licenseStatus();
     if (!ent) return false;
@@ -2427,11 +2423,11 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                 <Show when={hostLimitReached()}>
                   <div class="mx-6 mb-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-900/30 px-4 py-3">
                     <p class="text-sm font-medium text-amber-800 dark:text-amber-200">
-                      Host limit reached — this node may not be added.
+                      Agent limit reached — you'll need to remove an agent or upgrade to add more.
                     </p>
                     <div class="mt-2 flex items-center gap-3">
                       <span class="text-xs text-amber-700 dark:text-amber-300">
-                        Need more hosts?
+                        Need more agents?
                       </span>
                       <Show when={canStartTrial()}>
                         <button

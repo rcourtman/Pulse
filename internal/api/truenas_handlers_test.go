@@ -108,10 +108,12 @@ func TestTrueNASHandlers_HandleAdd_ValidationAndFeatureGate(t *testing.T) {
 	})
 }
 
-func TestTrueNASHandlers_HandleAdd_EnforcesNodeLimitIncludingTrueNAS(t *testing.T) {
+// TestTrueNASHandlers_HandleAdd_NoLimitForTrueNAS verifies that TrueNAS
+// connection additions are never blocked by the agent limit (agents-only model).
+func TestTrueNASHandlers_HandleAdd_NoLimitForTrueNAS(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
 	setMockModeForTrueNASTest(t, false)
-	setMaxNodesLicenseForTests(t, 1)
+	setMaxAgentsLicenseForTests(t, 1)
 
 	handler, persistence, _ := newTrueNASHandlersForTest(t, nil)
 	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{
@@ -129,16 +131,17 @@ func TestTrueNASHandlers_HandleAdd_EnforcesNodeLimitIncludingTrueNAS(t *testing.
 	rec := httptest.NewRecorder()
 	handler.HandleAdd(rec, req)
 
-	if rec.Code != http.StatusPaymentRequired {
-		t.Fatalf("expected 402, got %d: %s", rec.Code, rec.Body.String())
+	// Under agents-only model, TrueNAS connections are not limited.
+	if rec.Code == http.StatusPaymentRequired {
+		t.Fatalf("TrueNAS add should not be blocked by agent limit, got 402")
 	}
 
 	stored, err := persistence.LoadTrueNASConfig()
 	if err != nil {
 		t.Fatalf("load persisted config: %v", err)
 	}
-	if len(stored) != 1 {
-		t.Fatalf("expected save to be rejected at license limit, got %d instances", len(stored))
+	if len(stored) != 2 {
+		t.Fatalf("expected both TrueNAS instances to be saved, got %d", len(stored))
 	}
 }
 

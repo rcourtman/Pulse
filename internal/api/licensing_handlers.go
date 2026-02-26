@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rs/zerolog/log"
 )
 
@@ -26,6 +27,8 @@ type LicenseHandlers struct {
 	services      sync.Map // map[string]*licenseService
 	trialLimiter  *RateLimiter
 	trialReplay   *jtiReplayStore
+	monitor       *monitoring.Monitor
+	mtMonitor     *monitoring.MultiTenantMonitor
 }
 
 // NewLicenseHandlers creates a new license handlers instance.
@@ -48,6 +51,15 @@ func NewLicenseHandlers(mtp *config.MultiTenantPersistence, hostedMode bool, cfg
 		trialLimiter:  NewRateLimiter(1, 24*time.Hour), // 1 trial start attempt per org per 24h
 		trialReplay:   trialReplay,
 	}
+}
+
+// SetMonitors wires the monitors used for agent counting in entitlement usage.
+func (h *LicenseHandlers) SetMonitors(monitor *monitoring.Monitor, mtMonitor *monitoring.MultiTenantMonitor) {
+	if h == nil {
+		return
+	}
+	h.monitor = monitor
+	h.mtMonitor = mtMonitor
 }
 
 func (h *LicenseHandlers) SetConfig(cfg *config.Config) {

@@ -79,7 +79,7 @@ func TestMaxUsersLimitForContext_NoLicense(t *testing.T) {
 
 func TestMaxUsersLimitForContext_NoLimit(t *testing.T) {
 	setMaxUsersLimitForTests(t, map[string]int64{
-		maxNodesLicenseGateKey: 10,
+		maxAgentsLicenseGateKey: 10,
 	})
 
 	limit := maxUsersLimitForContext(context.Background())

@@ -2,11 +2,10 @@ import { apiFetchJSON } from '@/utils/apiClient';
 
 export interface HostLedgerEntry {
   name: string;
-  type: string; // "proxmox-pve" | "proxmox-pbs" | "proxmox-pmg" | "host-agent" | "docker" | "kubernetes" | "truenas"
+  type: string; // "agent"
   status: string; // "online" | "offline" | "unknown"
   last_seen: string; // RFC3339 or empty
-  source: string; // how discovered — "proxmox" | "agent" | "docker" | "kubernetes" | "truenas"
-  first_seen: string; // RFC3339 or empty
+  source: string; // "agent"
 }
 
 export interface HostLedgerResponse {

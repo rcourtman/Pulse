@@ -40,11 +40,11 @@ func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Requ
 	usage := h.entitlementUsageSnapshot(r.Context())
 	trialEndsAtUnix := trialEndsAtUnixFromService(svc)
 
-	// Onboarding overflow: +1 host for 14 days on free tier.
+	// Onboarding overflow: +1 agent for 14 days on free tier.
 	overflowGrantedAt := h.ensureOnboardingOverflow(r.Context(), status.Tier)
 	now := time.Now()
 	if bonus := pkglicensing.OverflowBonus(status.Tier, overflowGrantedAt, now); bonus > 0 {
-		status.MaxNodes += bonus
+		status.MaxAgents += bonus
 	}
 
 	payload := buildEntitlementPayloadWithUsage(status, svc.SubscriptionState(), usage, trialEndsAtUnix)
@@ -80,9 +80,11 @@ func trialEndsAtUnixFromService(svc *licenseService) *int64 {
 type entitlementUsageSnapshot = entitlementUsageSnapshotModel
 
 // entitlementUsageSnapshot returns best-effort runtime usage counts for limits.
+// Under the agents-only model, only installed Pulse Unified Agents count toward
+// the node/agent limit. PVE/PBS/PMG API connections don't count.
 func (h *LicenseHandlers) entitlementUsageSnapshot(ctx context.Context) entitlementUsageSnapshot {
 	usage := entitlementUsageSnapshot{}
-	if h == nil || h.mtPersistence == nil {
+	if h == nil {
 		return usage
 	}
 
@@ -91,18 +93,25 @@ func (h *LicenseHandlers) entitlementUsageSnapshot(ctx context.Context) entitlem
 		orgID = "default"
 	}
 
-	persistence, err := h.mtPersistence.GetPersistence(orgID)
-	if err != nil || persistence == nil {
-		return usage
+	// Count installed agents from monitor state.
+	var monitorResolved bool
+	if h.mtMonitor != nil {
+		if monitor, err := h.mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
+			usage.Nodes = int64(agentCount(monitor))
+			monitorResolved = true
+		}
+	}
+	if !monitorResolved && orgID == "default" && h.monitor != nil {
+		usage.Nodes = int64(agentCount(h.monitor))
 	}
 
-	if nodesConfig, err := persistence.LoadNodesConfig(); err == nil && nodesConfig != nil {
-		usage.Nodes = int64(len(nodesConfig.PVEInstances) + len(nodesConfig.PBSInstances) + len(nodesConfig.PMGInstances))
-	}
-
-	// Guest metadata is currently the most broadly available tenant-level guest index.
-	if guestStore := persistence.GetGuestMetadataStore(); guestStore != nil {
-		usage.Guests = int64(len(guestStore.GetAll()))
+	// Guest metadata for guest limit tracking.
+	if h.mtPersistence != nil {
+		if persistence, err := h.mtPersistence.GetPersistence(orgID); err == nil && persistence != nil {
+			if guestStore := persistence.GetGuestMetadataStore(); guestStore != nil {
+				usage.Guests = int64(len(guestStore.GetAll()))
+			}
+		}
 	}
 
 	return usage

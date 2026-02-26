@@ -38,7 +38,7 @@ const TIERS = {
   community: {
     name: 'Community',
     price: 'Free forever',
-    subline: '5 hosts included',
+    subline: '5 agents included',
     highlights: [
       'Real-time monitoring',
       '7-day metric history',
@@ -58,7 +58,7 @@ const TIERS = {
       'Mobile app access',
       'Push notifications',
       'Custom URL (yourlab.pulserelay.pro)',
-      '8 hosts · 14-day history',
+      '8 agents · 14-day history',
     ],
   },
   pro: {
@@ -73,14 +73,14 @@ const TIERS = {
       '90-day metric history',
       'RBAC, audit logging, SAML SSO',
       'Agent profiles · PDF/CSV reports',
-      '15 hosts',
+      '15 agents',
     ],
   },
   proPlus: {
     name: 'Pro+',
     price: '$18/month',
     subline: 'or $149/year (save 31%)',
-    highlights: ['Everything in Pro', '50 hosts'],
+    highlights: ['Everything in Pro', '50 agents'],
   },
 } as const;
 
@@ -100,7 +100,7 @@ const FEATURE_ROWS: FeatureRow[] = [
     pro: true,
     proPlus: true,
   },
-  { key: 'hosts', name: 'Host Limit', community: '5', relay: '8', pro: '15', proPlus: '50' },
+  { key: 'hosts', name: 'Agent Limit', community: '5', relay: '8', pro: '15', proPlus: '50' },
   {
     key: 'history',
     name: 'Metric History',
@@ -555,7 +555,7 @@ export default function PricingV6() {
           </a>
         </span>
         <span>
-          Need 50+ hosts?{' '}
+          Need 50+ agents?{' '}
           <a
             href="mailto:hello@pulserelay.pro?subject=Pulse%20Enterprise%20Inquiry"
             class="text-blue-600 hover:underline dark:text-blue-400"

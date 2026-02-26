@@ -4,7 +4,7 @@ import { entitlements, getLimit, getUpgradeActionUrlOrFallback } from '@/stores/
 export const HostLimitWarningBanner: Component = () => {
   // No onMount load — TrialBanner (mounted above) already calls loadLicenseStatus().
 
-  const nodeLimit = createMemo(() => getLimit('max_nodes'));
+  const nodeLimit = createMemo(() => getLimit('max_agents'));
 
   const isUrgent = createMemo(() => {
     const state = nodeLimit()?.state;
@@ -26,12 +26,12 @@ export const HostLimitWarningBanner: Component = () => {
       >
         <div class="flex flex-wrap items-center justify-between gap-2">
           <span class={isUrgent() ? 'font-medium' : ''}>
-            Hosts: {nodeLimit()!.current}/{nodeLimit()!.limit}
+            Agents: {nodeLimit()!.current}/{nodeLimit()!.limit}
           </span>
           <div class="flex items-center gap-3">
             <Show when={overflowDaysRemaining()}>
               <span class="text-xs text-muted">
-                Includes 1 bonus host ({overflowDaysRemaining()}d remaining)
+                Includes 1 bonus agent ({overflowDaysRemaining()}d remaining)
               </span>
             </Show>
             <a
@@ -43,7 +43,7 @@ export const HostLimitWarningBanner: Component = () => {
             <Show when={isUrgent()}>
               <a
                 class="text-xs font-semibold underline underline-offset-2 hover:opacity-90"
-                href={getUpgradeActionUrlOrFallback('max_nodes')}
+                href={getUpgradeActionUrlOrFallback('max_agents')}
                 target="_blank"
                 rel="noreferrer"
               >
