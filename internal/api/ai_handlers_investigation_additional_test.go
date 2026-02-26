@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/investigation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 type stubInvestigationOrchestrator struct {
@@ -97,7 +98,7 @@ func (s *stubChatService) ReloadConfig(ctx context.Context, cfg *config.AIConfig
 
 func TestSetupInvestigationOrchestrator_WiresTenantBudgetChecker(t *testing.T) {
 	handler := &AISettingsHandler{
-		investigationStores: make(map[string]*investigation.Store),
+		investigationStores: make(map[string]aicontracts.InvestigationStore),
 	}
 
 	tenantSvc := ai.NewService(nil, nil)
@@ -694,7 +695,7 @@ func TestExecuteInvestigationFix_MCPTool(t *testing.T) {
 	if !store.Update(session) {
 		t.Fatalf("failed to update investigation session")
 	}
-	handler.investigationStores = map[string]*investigation.Store{"default": store}
+	handler.investigationStores = map[string]aicontracts.InvestigationStore{"default": store}
 
 	chatSvc := chat.NewService(chat.Config{AIConfig: config.NewDefaultAIConfig()})
 	handler.chatHandler = &AIHandler{legacyService: chatSvc}
@@ -772,7 +773,7 @@ func TestExecuteInvestigationFix_TargetDriftBlocked(t *testing.T) {
 	if !store.Update(session) {
 		t.Fatalf("failed to update investigation session")
 	}
-	handler.investigationStores = map[string]*investigation.Store{"default": store}
+	handler.investigationStores = map[string]aicontracts.InvestigationStore{"default": store}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/approvals/exec", nil)
 	rec := httptest.NewRecorder()

@@ -6,7 +6,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/forecast"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/investigation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/proxmox"
@@ -16,6 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 func TestAISettingsHandler_SettersAndGetters(t *testing.T) {
@@ -203,7 +203,7 @@ func TestAISettingsHandler_IntelligenceServicesAreOrgScoped(t *testing.T) {
 func TestAISettingsHandler_RemoveTenantService_TrimsOrgID(t *testing.T) {
 	handler := &AISettingsHandler{
 		aiServices:           map[string]*ai.Service{"acme": nil},
-		investigationStores:  map[string]*investigation.Store{"acme": nil},
+		investigationStores:  map[string]aicontracts.InvestigationStore{"acme": nil},
 		proxmoxCorrelators:   map[string]*proxmox.EventCorrelator{"acme": nil},
 		alertBridges:         map[string]*unified.AlertBridge{"acme": nil},
 		triggerManagers:      map[string]*ai.TriggerManager{"acme": nil},

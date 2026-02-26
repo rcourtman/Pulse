@@ -137,7 +137,7 @@ type Orchestrator struct {
 
 	chatService     ChatService
 	commandExecutor CommandExecutor
-	store           *Store
+	store           InvestigationStore
 	findingsStore   FindingsStore
 	approvalStore   ApprovalStore
 	guardrails      *Guardrails
@@ -171,7 +171,7 @@ type Orchestrator struct {
 // NewOrchestrator creates a new investigation orchestrator
 func NewOrchestrator(
 	chatService ChatService,
-	store *Store,
+	store InvestigationStore,
 	findingsStore FindingsStore,
 	approvalStore ApprovalStore,
 	config InvestigationConfig,
@@ -190,7 +190,7 @@ func NewOrchestrator(
 }
 
 // GetStore returns the investigation store for external cleanup/maintenance.
-func (o *Orchestrator) GetStore() *Store {
+func (o *Orchestrator) GetStore() InvestigationStore {
 	return o.store
 }
 

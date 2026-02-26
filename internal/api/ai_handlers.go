@@ -99,8 +99,8 @@ type AISettingsHandler struct {
 	incidentRecorders    map[string]*metrics.IncidentRecorder
 
 	// Investigation orchestration (Patrol Autonomy)
-	chatHandler         *AIHandler                      // Chat service handler for investigations
-	investigationStores map[string]*investigation.Store // Investigation stores per org
+	chatHandler         *AIHandler                                // Chat service handler for investigations
+	investigationStores map[string]aicontracts.InvestigationStore // Investigation stores per org
 	investigationMu     sync.RWMutex
 
 	// Extension endpoints for enterprise feature gating
@@ -1669,7 +1669,7 @@ func (h *AISettingsHandler) SetChatHandler(chatHandler *AIHandler) {
 	h.stateMu.Unlock()
 	h.investigationMu.Lock()
 	if h.investigationStores == nil {
-		h.investigationStores = make(map[string]*investigation.Store)
+		h.investigationStores = make(map[string]aicontracts.InvestigationStore)
 	}
 	h.investigationMu.Unlock()
 
@@ -1751,7 +1751,11 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 				dataDir = p.DataDir()
 			}
 		}
-		store = investigation.NewStore(dataDir)
+		if factory := getCreateInvestigationStore(); factory != nil {
+			store = factory(dataDir)
+		} else {
+			store = investigation.NewStore(dataDir)
+		}
 		if err := store.LoadFromDisk(); err != nil {
 			log.Warn().Err(err).Str("orgID", orgID).Msg("Failed to load investigation store")
 		}

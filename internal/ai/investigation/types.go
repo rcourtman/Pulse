@@ -24,6 +24,9 @@ type Fix = aicontracts.Fix
 // InvestigationConfig holds configuration for investigations.
 type InvestigationConfig = aicontracts.InvestigationConfig
 
+// InvestigationStore is the interface for investigation session persistence.
+type InvestigationStore = aicontracts.InvestigationStore
+
 // Status represents the current state of an investigation.
 type Status = aicontracts.InvestigationStatus
 
