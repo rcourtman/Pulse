@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockmode"
 )
 
 // Pre-compiled regexes for performance (avoid recompilation on each call)
@@ -331,7 +333,7 @@ func fileExists(path string) bool {
 
 // GetDeploymentType determines how Pulse was deployed
 func GetDeploymentType() string {
-	if envBool("PULSE_MOCK_MODE") {
+	if mockmode.IsEnabled() {
 		return "mock"
 	}
 
@@ -383,7 +385,7 @@ func dockerUpdatesAllowed() bool {
 	if envBool("PULSE_ALLOW_DOCKER_UPDATES") {
 		return true
 	}
-	return envBool("PULSE_MOCK_MODE")
+	return mockmode.IsEnabled()
 }
 
 func envBool(key string) bool {

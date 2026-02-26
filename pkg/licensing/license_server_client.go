@@ -21,9 +21,10 @@ type LicenseServerClient struct {
 }
 
 // NewLicenseServerClient creates a client for the license server.
-// The base URL defaults to DefaultLicenseServerURL unless PULSE_LICENSE_SERVER_URL is set.
+// The base URL defaults to DefaultLicenseServerURL. The PULSE_LICENSE_SERVER_URL
+// env var override is only allowed in non-release builds.
 func NewLicenseServerClient(baseURL string) *LicenseServerClient {
-	if baseURL == "" {
+	if baseURL == "" && allowLicenseServerURLEnvOverride() {
 		baseURL = os.Getenv("PULSE_LICENSE_SERVER_URL")
 	}
 	if baseURL == "" {

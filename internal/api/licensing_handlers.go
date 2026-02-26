@@ -456,9 +456,25 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	expectedHost := normalizeHostForTrial(r.Host)
+	// Prefer configured PublicURL for host binding validation.
+	// Fall back to request Host only if no PublicURL is configured, to avoid
+	// an attacker-controlled Host header weakening instance binding.
+	// If PublicURL is set but normalizes to empty (malformed), fail closed.
+	expectedHost := ""
+	if h.cfg != nil && strings.TrimSpace(h.cfg.PublicURL) != "" {
+		expectedHost = normalizeHostForTrial(h.cfg.PublicURL)
+		if expectedHost == "" {
+			log.Error().Msg("PublicURL configured but could not extract host for trial activation binding")
+			http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+			return
+		}
+	} else {
+		expectedHost = normalizeHostForTrial(r.Host)
+	}
 	if expectedHost == "" {
-		expectedHost = normalizeHostForTrial(trialCallbackURLForRequest(r, h.cfg))
+		log.Error().Msg("Could not determine host for trial activation binding")
+		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+		return
 	}
 	claims, err := verifyTrialActivationTokenFromLicensing(token, publicKey, expectedHost, time.Now().UTC())
 	if err != nil {

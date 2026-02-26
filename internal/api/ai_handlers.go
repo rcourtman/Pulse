@@ -30,6 +30,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockmode"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
@@ -2285,7 +2286,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 	}
 
 	// Determine if running in demo mode
-	isDemo := strings.EqualFold(os.Getenv("PULSE_MOCK_MODE"), "true")
+	isDemo := mockmode.IsEnabled()
 
 	response := AISettingsResponse{
 		Enabled:        settings.Enabled || isDemo,

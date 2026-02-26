@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockmode"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rs/zerolog/log"
 )
@@ -55,7 +56,7 @@ func NewUpdateHandlersWithContext(manager UpdateManager, history *updates.Update
 	registry.Register("proxmoxve", updates.NewInstallShAdapter(history))
 	registry.Register("docker", updates.NewDockerUpdater())
 	registry.Register("aur", updates.NewAURUpdater())
-	if strings.EqualFold(os.Getenv("PULSE_MOCK_MODE"), "true") || strings.EqualFold(os.Getenv("PULSE_ALLOW_DOCKER_UPDATES"), "true") {
+	if mockmode.IsEnabled() || strings.EqualFold(os.Getenv("PULSE_ALLOW_DOCKER_UPDATES"), "true") {
 		registry.Register("mock", updates.NewMockUpdater())
 	}
 

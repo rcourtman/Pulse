@@ -28,7 +28,7 @@ func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers
 	)
 	r.mux.HandleFunc(
 		"PUT /api/admin/orgs/{id}/billing-state",
-		RequireOrgOwnerOrPlatformAdmin(routerConfig, r.multiTenant, RequireScope(config.ScopeSettingsWrite, billingHandlers.HandlePutBillingState)),
+		RequirePlatformAdmin(routerConfig, RequireScope(config.ScopeSettingsWrite, billingHandlers.HandlePutBillingState)),
 	)
 	r.mux.HandleFunc(
 		"POST /api/admin/orgs/{id}/suspend",

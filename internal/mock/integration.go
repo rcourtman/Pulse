@@ -30,7 +30,7 @@ var (
 const updateInterval = 2 * time.Second
 
 func init() {
-	initialEnabled := os.Getenv("PULSE_MOCK_MODE") == "true"
+	initialEnabled := mockModeFromEnv()
 	if initialEnabled {
 		log.Info().Msg("mock mode enabled at startup")
 	}

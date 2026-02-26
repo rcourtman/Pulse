@@ -28,3 +28,7 @@ func isLicenseValidationDevMode() bool {
 // allowPublicKeyEnvOverride returns true in dev builds, allowing
 // PULSE_LICENSE_PUBLIC_KEY to override the embedded key.
 func allowPublicKeyEnvOverride() bool { return true }
+
+// allowLicenseServerURLEnvOverride returns true in dev builds, allowing
+// PULSE_LICENSE_SERVER_URL to override the default license server URL.
+func allowLicenseServerURLEnvOverride() bool { return true }

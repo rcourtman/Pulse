@@ -2,17 +2,17 @@ package ai
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockmode"
 	"github.com/rs/zerolog/log"
 )
 
-// IsDemoMode returns true if mock/demo mode is enabled
-// This checks the PULSE_MOCK_MODE env var used by the mock data system
+// IsDemoMode returns true if mock/demo mode is enabled.
+// Delegates to the build-tag-gated mockmode package (always false in release).
 func IsDemoMode() bool {
-	return strings.EqualFold(os.Getenv("PULSE_MOCK_MODE"), "true")
+	return mockmode.IsEnabled()
 }
 
 // InjectDemoFindings populates the patrol service with realistic mock findings

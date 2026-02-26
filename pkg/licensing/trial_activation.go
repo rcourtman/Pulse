@@ -72,14 +72,17 @@ func DecodeEd25519PrivateKey(encoded string) (ed25519.PrivateKey, error) {
 }
 
 // TrialActivationPublicKey resolves the verification key for hosted trial
-// activation tokens. Environment override takes precedence over embedded key.
+// activation tokens. Environment override is only allowed in non-release builds
+// (gated by allowPublicKeyEnvOverride) to prevent self-signed trial activation.
 func TrialActivationPublicKey() (ed25519.PublicKey, error) {
-	if env := strings.TrimSpace(os.Getenv(TrialActivationPublicKeyEnvVar)); env != "" {
-		key, err := DecodePublicKey(env)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrTrialActivationPublicKeyInvalid, err)
+	if allowPublicKeyEnvOverride() {
+		if env := strings.TrimSpace(os.Getenv(TrialActivationPublicKeyEnvVar)); env != "" {
+			key, err := DecodePublicKey(env)
+			if err != nil {
+				return nil, fmt.Errorf("%w: %v", ErrTrialActivationPublicKeyInvalid, err)
+			}
+			return key, nil
 		}
-		return key, nil
 	}
 
 	embedded := strings.TrimSpace(EmbeddedPublicKey)
