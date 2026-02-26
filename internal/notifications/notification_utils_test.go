@@ -292,6 +292,24 @@ func TestNormalizeQueueType(t *testing.T) {
 			expectedType:  "",
 			expectedEvent: eventResolved,
 		},
+		{
+			name:          "email_escalation type",
+			notifType:     "email_escalation",
+			expectedType:  "email",
+			expectedEvent: eventEscalation,
+		},
+		{
+			name:          "webhook_escalation type",
+			notifType:     "webhook_escalation",
+			expectedType:  "webhook",
+			expectedEvent: eventEscalation,
+		},
+		{
+			name:          "apprise_escalation type",
+			notifType:     "apprise_escalation",
+			expectedType:  "apprise",
+			expectedEvent: eventEscalation,
+		},
 	}
 
 	for _, tc := range tests {

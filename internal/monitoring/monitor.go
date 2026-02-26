@@ -4621,25 +4621,8 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 
 		escalationLevel := config.Schedule.Escalation.Levels[level-1]
 
-		// Send notifications based on escalation level
-		switch escalationLevel.Notify {
-		case "email":
-			// Only send email
-			if emailConfig := m.notificationMgr.GetEmailConfig(); emailConfig.Enabled {
-				m.notificationMgr.SendAlert(alert)
-			}
-		case "webhook":
-			// Only send webhooks
-			for _, webhook := range m.notificationMgr.GetWebhooks() {
-				if webhook.Enabled {
-					m.notificationMgr.SendAlert(alert)
-					break
-				}
-			}
-		case "all":
-			// Send all notifications
-			m.notificationMgr.SendAlert(alert)
-		}
+		// Send notifications only to the channels specified in the escalation level
+		m.notificationMgr.SendAlertToChannels(alert, escalationLevel.Notify)
 
 		// Update WebSocket with escalation
 		wsHub.BroadcastAlert(alert)
