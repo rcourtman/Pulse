@@ -198,6 +198,10 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 	}
 
 	// Fall back to legacy JWT if no activation state was restored.
+	// Load the legacy JWT synchronously (fast, local I/O only) so the user
+	// has Pro features immediately. The v5→v6 exchange is deferred to a
+	// background goroutine after the service is stored (see below).
+	legacyJWTKey := ""
 	if !activationRestored && persistence != nil {
 		persisted, err := persistence.LoadWithMetadata()
 		if err == nil && persisted.LicenseKey != "" {
@@ -209,6 +213,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 					gracePeriodEnd := time.Unix(*persisted.GracePeriodEnd, 0)
 					lic.GracePeriodEnd = &gracePeriodEnd
 				}
+				legacyJWTKey = strings.TrimSpace(persisted.LicenseKey)
 				log.Info().Str("org_id", orgID).Msg("Loaded saved Pulse Pro license")
 			}
 		}
@@ -224,7 +229,63 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 		p, pErr := h.getPersistenceForOrg(orgID)
 		return svc, p, pErr
 	}
+
+	// We won the LoadOrStore race — this service is the canonical one for this org.
+	// If a legacy JWT was loaded, try to auto-migrate it to a v6 activation-key
+	// license in the background. This avoids blocking startup (the exchange endpoint
+	// has a 15s timeout if the server is unreachable) and eliminates race conditions
+	// since only the winning service instance performs the exchange.
+	if legacyJWTKey != "" && lsClient != nil {
+		go h.tryAutoMigrateLegacy(orgID, service, legacyJWTKey)
+	}
+
 	return service, persistence, nil
+}
+
+// tryAutoMigrateLegacy attempts to exchange a legacy JWT for a v6 activation-key
+// license in the background. If it succeeds, the service seamlessly upgrades to
+// grant-based licensing with background refresh. If it fails, the legacy JWT
+// continues to work — the exchange will be retried on the next restart.
+//
+// Safety: if the user activates a different license or clears the license while
+// the exchange is in-flight, the result is discarded to avoid overwriting the
+// user's intent.
+func (h *LicenseHandlers) tryAutoMigrateLegacy(orgID string, service *licenseService, legacyJWT string) {
+	// Check: if the service was already changed (e.g., user activated a key
+	// via the API between getTenantComponents and this goroutine starting),
+	// skip the exchange.
+	currentLic := service.Current()
+	if currentLic == nil || currentLic.Raw != legacyJWT {
+		return
+	}
+
+	lic, err := service.ExchangeLegacyLicenseIfCurrent(legacyJWT)
+	if err != nil {
+		log.Warn().
+			Str("org_id", orgID).
+			Err(err).
+			Msg("Background legacy license exchange failed, will retry on next restart")
+		return
+	}
+	if lic == nil {
+		// License was changed by the user while exchange was in-flight — silently skip.
+		log.Info().
+			Str("org_id", orgID).
+			Msg("Legacy exchange completed but license was changed concurrently, discarding result")
+		return
+	}
+
+	// Exchange succeeded — start background loops.
+	service.StartGrantRefresh(context.Background())
+	if feedToken := revocationFeedToken(); feedToken != "" {
+		service.StartRevocationPoll(context.Background(), feedToken)
+	}
+
+	log.Info().
+		Str("org_id", orgID).
+		Str("tier", string(lic.Claims.Tier)).
+		Str("license_id", lic.Claims.LicenseID).
+		Msg("Auto-migrated legacy license to activation-key license")
 }
 
 func (h *LicenseHandlers) ensureEvaluatorForOrg(orgID string, service *licenseService) error {

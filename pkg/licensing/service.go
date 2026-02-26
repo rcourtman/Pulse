@@ -360,6 +360,92 @@ func (s *Service) ExchangeLegacyLicense(legacyJWT string) (*License, error) {
 	return snapshot, nil
 }
 
+// ExchangeLegacyLicenseIfCurrent is like ExchangeLegacyLicense but only applies
+// the result if the service's current license raw JWT still matches expectedRawJWT.
+// This is used for background auto-migration to avoid overwriting a license that
+// the user changed while the exchange was in-flight.
+// Returns (nil, nil) if the license was changed concurrently (not an error).
+func (s *Service) ExchangeLegacyLicenseIfCurrent(expectedRawJWT string) (*License, error) {
+	s.mu.RLock()
+	client := s.serverClient
+	persistence := s.persistence
+	s.mu.RUnlock()
+
+	if client == nil {
+		return nil, fmt.Errorf("exchange unavailable: license server client not configured")
+	}
+
+	fingerprint, err := generateFingerprint()
+	if err != nil {
+		return nil, fmt.Errorf("generate instance fingerprint: %w", err)
+	}
+
+	req := ExchangeLegacyRequest{
+		LegacyLicenseToken:  expectedRawJWT,
+		InstanceFingerprint: fingerprint,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	resp, err := client.ExchangeLegacy(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("exchange failed: %w", err)
+	}
+
+	gc, err := parseGrantJWT(resp.Grant.JWT)
+	if err != nil {
+		return nil, fmt.Errorf("parse grant from exchange: %w", err)
+	}
+
+	lic := grantClaimsToLicense(gc, resp.Grant.JWT)
+
+	now := time.Now().Unix()
+	state := &ActivationState{
+		InstallationID:      resp.Installation.InstallationID,
+		InstallationToken:   resp.Installation.InstallationToken,
+		LicenseID:           gc.LicenseID,
+		GrantJWT:            resp.Grant.JWT,
+		GrantJTI:            resp.Grant.JTI,
+		GrantExpiresAt:      resp.Grant.ParseExpiresAt(),
+		InstanceFingerprint: fingerprint,
+		LicenseServerURL:    client.BaseURL(),
+		ActivatedAt:         now,
+		LastRefreshedAt:     now,
+	}
+
+	// Compare-and-swap: only apply the exchange result if the license hasn't
+	// been changed by the user (Clear, Activate, or another ActivateWithKey).
+	s.mu.Lock()
+	if s.license == nil || s.license.Raw != expectedRawJWT {
+		s.mu.Unlock()
+		// License changed while exchange was in-flight — discard.
+		return nil, nil
+	}
+	s.license = cloneLicense(lic)
+	source := NewTokenSource(&s.license.Claims)
+	s.evaluator = NewEvaluator(source)
+	s.activationState = state
+	cb := s.onLicenseChange
+	snapshot := cloneLicense(s.license)
+	s.mu.Unlock()
+
+	s.SetRefreshHints(resp.RefreshPolicy)
+
+	if persistence != nil {
+		if err := persistence.SaveActivationState(state); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to persist activation state after exchange: %v\n", err)
+		}
+		_ = persistence.Delete()
+	}
+
+	if cb != nil {
+		cb(snapshot)
+	}
+
+	return snapshot, nil
+}
+
 // IsActivated returns true if the service has an active activation-key license.
 func (s *Service) IsActivated() bool {
 	s.mu.RLock()
