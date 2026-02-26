@@ -28,7 +28,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/proxmox"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
@@ -37,6 +36,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
@@ -72,13 +72,13 @@ type AISettingsHandler struct {
 	licenseHandlers         *LicenseHandlers
 
 	// New AI intelligence services (Phase 6)
-	circuitBreaker    *circuit.Breaker         // Circuit breaker for resilient patrol
-	learningStore     *learning.LearningStore  // Feedback learning
-	forecastService   *forecast.Service        // Trend forecasting
-	proxmoxCorrelator *proxmox.EventCorrelator // Proxmox event correlation
-	remediationEngine *remediation.Engine      // AI-guided remediation
-	unifiedStore      *unified.UnifiedStore    // Unified alert/finding store
-	alertBridge       *unified.AlertBridge     // Bridge between alerts and unified store
+	circuitBreaker    *circuit.Breaker              // Circuit breaker for resilient patrol
+	learningStore     *learning.LearningStore       // Feedback learning
+	forecastService   *forecast.Service             // Trend forecasting
+	proxmoxCorrelator *proxmox.EventCorrelator      // Proxmox event correlation
+	remediationEngine aicontracts.RemediationEngine // AI-guided remediation
+	unifiedStore      *unified.UnifiedStore         // Unified alert/finding store
+	alertBridge       *unified.AlertBridge          // Bridge between alerts and unified store
 
 	// Event-driven patrol (Phase 7)
 	triggerManager       *ai.TriggerManager        // Event-driven patrol trigger manager
@@ -88,7 +88,7 @@ type AISettingsHandler struct {
 	proxmoxCorrelators   map[string]*proxmox.EventCorrelator
 	learningStores       map[string]*learning.LearningStore
 	forecastServices     map[string]*forecast.Service
-	remediationEngines   map[string]*remediation.Engine
+	remediationEngines   map[string]aicontracts.RemediationEngine
 	incidentStores       map[string]*memory.IncidentStore
 	circuitBreakers      map[string]*circuit.Breaker
 	discoveryStores      map[string]*servicediscovery.Store
@@ -254,7 +254,7 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 		proxmoxCorrelators:   make(map[string]*proxmox.EventCorrelator),
 		learningStores:       make(map[string]*learning.LearningStore),
 		forecastServices:     make(map[string]*forecast.Service),
-		remediationEngines:   make(map[string]*remediation.Engine),
+		remediationEngines:   make(map[string]aicontracts.RemediationEngine),
 		incidentStores:       make(map[string]*memory.IncidentStore),
 		circuitBreakers:      make(map[string]*circuit.Breaker),
 		discoveryStores:      make(map[string]*servicediscovery.Store),
@@ -1025,7 +1025,7 @@ func (h *AISettingsHandler) ensureIntelligenceMapsLocked() {
 		h.forecastServices = make(map[string]*forecast.Service)
 	}
 	if h.remediationEngines == nil {
-		h.remediationEngines = make(map[string]*remediation.Engine)
+		h.remediationEngines = make(map[string]aicontracts.RemediationEngine)
 	}
 	if h.incidentStores == nil {
 		h.incidentStores = make(map[string]*memory.IncidentStore)
@@ -1101,12 +1101,12 @@ func (h *AISettingsHandler) GetProxmoxCorrelator() *proxmox.EventCorrelator {
 }
 
 // SetRemediationEngine sets the remediation engine for the default org.
-func (h *AISettingsHandler) SetRemediationEngine(engine *remediation.Engine) {
+func (h *AISettingsHandler) SetRemediationEngine(engine aicontracts.RemediationEngine) {
 	h.SetRemediationEngineForOrg("default", engine)
 }
 
 // SetRemediationEngineForOrg sets the remediation engine for an org.
-func (h *AISettingsHandler) SetRemediationEngineForOrg(orgID string, engine *remediation.Engine) {
+func (h *AISettingsHandler) SetRemediationEngineForOrg(orgID string, engine aicontracts.RemediationEngine) {
 	if h == nil {
 		return
 	}
@@ -1125,12 +1125,12 @@ func (h *AISettingsHandler) SetRemediationEngineForOrg(orgID string, engine *rem
 }
 
 // GetRemediationEngine returns the remediation engine for the default org.
-func (h *AISettingsHandler) GetRemediationEngine() *remediation.Engine {
+func (h *AISettingsHandler) GetRemediationEngine() aicontracts.RemediationEngine {
 	return h.GetRemediationEngineForOrg("default")
 }
 
 // GetRemediationEngineForOrg returns the remediation engine for an org.
-func (h *AISettingsHandler) GetRemediationEngineForOrg(orgID string) *remediation.Engine {
+func (h *AISettingsHandler) GetRemediationEngineForOrg(orgID string) aicontracts.RemediationEngine {
 	if h == nil {
 		return nil
 	}

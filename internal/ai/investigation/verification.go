@@ -1,8 +1,5 @@
 package investigation
 
-import "errors"
-
-// ErrVerificationUnknown indicates the verifier could not conclusively determine
-// whether a fix resolved the underlying issue. Callers may treat this as a
-// distinct outcome from "verification failed" (issue persists).
-var ErrVerificationUnknown = errors.New("verification inconclusive")
+// ErrVerificationUnknown is re-exported from aicontracts via types.go.
+// This file is kept for backwards compatibility but the canonical definition
+// is now in pkg/aicontracts/investigation.go.

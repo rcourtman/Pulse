@@ -2,116 +2,69 @@
 package investigation
 
 import (
-	"time"
-
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
-// Finding represents a patrol finding with investigation metadata.
-// This is the canonical finding shape shared between patrol and investigation.
-type Finding struct {
-	ID                     string     `json:"id"`
-	Key                    string     `json:"key,omitempty"`
-	Severity               string     `json:"severity"`
-	Category               string     `json:"category"`
-	ResourceID             string     `json:"resource_id"`
-	ResourceName           string     `json:"resource_name"`
-	ResourceType           string     `json:"resource_type"`
-	Title                  string     `json:"title"`
-	Description            string     `json:"description"`
-	Recommendation         string     `json:"recommendation,omitempty"`
-	Evidence               string     `json:"evidence,omitempty"`
-	InvestigationSessionID string     `json:"investigation_session_id,omitempty"`
-	InvestigationStatus    string     `json:"investigation_status,omitempty"`
-	InvestigationOutcome   string     `json:"investigation_outcome,omitempty"`
-	LastInvestigatedAt     *time.Time `json:"last_investigated_at,omitempty"`
-	InvestigationAttempts  int        `json:"investigation_attempts"`
-}
+// ---------------------------------------------------------------------------
+// Type aliases — these re-export types from pkg/aicontracts so that existing
+// code importing "internal/ai/investigation" continues to compile unchanged.
+// New code should import pkg/aicontracts directly.
+// ---------------------------------------------------------------------------
 
-// InvestigationSession represents an AI investigation of a finding
-type InvestigationSession struct {
-	ID             string     `json:"id"`
-	FindingID      string     `json:"finding_id"`
-	SessionID      string     `json:"session_id"` // Chat session ID
-	Status         Status     `json:"status"`
-	StartedAt      time.Time  `json:"started_at"`
-	CompletedAt    *time.Time `json:"completed_at,omitempty"`
-	TurnCount      int        `json:"turn_count"`        // Number of agentic turns used
-	Outcome        Outcome    `json:"outcome,omitempty"` // Result of investigation
-	ProposedFix    *Fix       `json:"proposed_fix,omitempty"`
-	ApprovalID     string     `json:"approval_id,omitempty"` // If fix is queued for approval
-	ToolsAvailable []string   `json:"tools_available,omitempty"`
-	ToolsUsed      []string   `json:"tools_used,omitempty"`
-	EvidenceIDs    []string   `json:"evidence_ids,omitempty"`
-	Summary        string     `json:"summary,omitempty"` // AI-generated summary
-	Error          string     `json:"error,omitempty"`   // Error message if failed
-}
+// Finding is the canonical patrol finding shape.
+type Finding = aicontracts.Finding
 
-// Status represents the current state of an investigation
-type Status string
+// InvestigationSession represents an AI investigation of a finding.
+type InvestigationSession = aicontracts.InvestigationSession
 
+// Fix represents a proposed remediation action.
+type Fix = aicontracts.Fix
+
+// InvestigationConfig holds configuration for investigations.
+type InvestigationConfig = aicontracts.InvestigationConfig
+
+// Status represents the current state of an investigation.
+type Status = aicontracts.InvestigationStatus
+
+// Outcome represents the result of an investigation.
+type Outcome = aicontracts.InvestigationOutcome
+
+// Status constants.
 const (
-	StatusPending        Status = "pending"
-	StatusRunning        Status = "running"
-	StatusCompleted      Status = "completed"
-	StatusFailed         Status = "failed"
-	StatusNeedsAttention Status = "needs_attention"
+	StatusPending        = aicontracts.InvestigationStatusPending
+	StatusRunning        = aicontracts.InvestigationStatusRunning
+	StatusCompleted      = aicontracts.InvestigationStatusCompleted
+	StatusFailed         = aicontracts.InvestigationStatusFailed
+	StatusNeedsAttention = aicontracts.InvestigationStatusNeedsAttention
 )
 
-// Outcome represents the result of an investigation
-type Outcome string
-
+// Outcome constants.
 const (
-	OutcomeResolved               Outcome = "resolved"
-	OutcomeFixQueued              Outcome = "fix_queued"
-	OutcomeFixExecuted            Outcome = "fix_executed"             // Fix was auto-executed successfully
-	OutcomeFixFailed              Outcome = "fix_failed"               // Fix was attempted but failed
-	OutcomeFixVerified            Outcome = "fix_verified"             // Fix worked, issue resolved
-	OutcomeFixVerificationFailed  Outcome = "fix_verification_failed"  // Fix ran but issue persists
-	OutcomeFixVerificationUnknown Outcome = "fix_verification_unknown" // Fix ran but verification was inconclusive
-	OutcomeNeedsAttention         Outcome = "needs_attention"
-	OutcomeCannotFix              Outcome = "cannot_fix"
-	OutcomeTimedOut               Outcome = "timed_out" // Transient timeout, will retry sooner
+	OutcomeResolved               = aicontracts.OutcomeResolved
+	OutcomeFixQueued              = aicontracts.OutcomeFixQueued
+	OutcomeFixExecuted            = aicontracts.OutcomeFixExecuted
+	OutcomeFixFailed              = aicontracts.OutcomeFixFailed
+	OutcomeFixVerified            = aicontracts.OutcomeFixVerified
+	OutcomeFixVerificationFailed  = aicontracts.OutcomeFixVerificationFailed
+	OutcomeFixVerificationUnknown = aicontracts.OutcomeFixVerificationUnknown
+	OutcomeNeedsAttention         = aicontracts.OutcomeNeedsAttention
+	OutcomeCannotFix              = aicontracts.OutcomeCannotFix
+	OutcomeTimedOut               = aicontracts.OutcomeTimedOut
 )
 
-// Fix represents a proposed remediation action
-type Fix struct {
-	ID          string   `json:"id"`
-	Description string   `json:"description"`
-	Commands    []string `json:"commands,omitempty"`    // Shell commands to execute
-	RiskLevel   string   `json:"risk_level,omitempty"`  // "low", "medium", "high", "critical"
-	Destructive bool     `json:"destructive"`           // Whether this is a destructive action
-	TargetHost  string   `json:"target_host,omitempty"` // Host where commands should run
-	Rationale   string   `json:"rationale,omitempty"`   // Why this fix was suggested
+// ErrVerificationUnknown indicates the verifier could not conclusively determine
+// whether a fix resolved the underlying issue.
+var ErrVerificationUnknown = aicontracts.ErrVerificationUnknown
+
+// DefaultConfig returns the default investigation configuration.
+func DefaultConfig() InvestigationConfig {
+	return aicontracts.DefaultInvestigationConfig()
 }
 
 // DestructivePatterns delegates to the shared safety package for the canonical
 // list of destructive command patterns. All subsystems use the same list.
 var DestructivePatterns = safety.DestructivePatterns
-
-// InvestigationConfig holds configuration for investigations
-type InvestigationConfig struct {
-	MaxTurns                int           // Maximum agentic turns per investigation
-	Timeout                 time.Duration // Maximum duration per investigation
-	MaxConcurrent           int           // Maximum concurrent investigations
-	MaxAttemptsPerFinding   int           // Maximum investigation attempts per finding
-	CooldownDuration        time.Duration // Cooldown before re-investigating
-	TimeoutCooldownDuration time.Duration // Shorter cooldown for timeout failures (default: 10min)
-	VerificationDelay       time.Duration // Wait before verifying fix (default: 30s)
-}
-
-// DefaultConfig returns the default investigation configuration
-func DefaultConfig() InvestigationConfig {
-	return InvestigationConfig{
-		MaxTurns:                15,
-		Timeout:                 10 * time.Minute,
-		MaxConcurrent:           3,
-		MaxAttemptsPerFinding:   3,
-		CooldownDuration:        1 * time.Hour,
-		TimeoutCooldownDuration: 10 * time.Minute,
-		VerificationDelay:       30 * time.Second,
-	}
-}
 
 // IsDestructive checks if a command matches known destructive patterns.
 // Delegates to the shared safety package.
@@ -121,8 +74,6 @@ func IsDestructive(command string) bool {
 
 // containsPattern checks if a command contains a pattern (case-insensitive partial match)
 func containsPattern(command, pattern string) bool {
-	// Simple substring match for now
-	// Could be enhanced with regex for more precise matching
 	return len(command) >= len(pattern) && contains(command, pattern)
 }
 

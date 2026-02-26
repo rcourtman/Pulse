@@ -11,9 +11,9 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
 )
 
@@ -211,16 +211,16 @@ func (p *PatrolService) SetCircuitBreaker(breaker *circuit.Breaker) {
 	log.Info().Msg("circuit breaker configured for patrol")
 }
 
-// SetRemediationEngine sets the remediation engine for generating fix plans from findings
-func (p *PatrolService) SetRemediationEngine(engine *remediation.Engine) {
+// SetRemediationEngine sets the remediation engine for generating fix plans from findings.
+func (p *PatrolService) SetRemediationEngine(engine aicontracts.RemediationEngine) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.remediationEngine = engine
 	log.Info().Msg("remediation engine configured for patrol")
 }
 
-// GetRemediationEngine returns the remediation engine
-func (p *PatrolService) GetRemediationEngine() *remediation.Engine {
+// GetRemediationEngine returns the remediation engine.
+func (p *PatrolService) GetRemediationEngine() aicontracts.RemediationEngine {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.remediationEngine

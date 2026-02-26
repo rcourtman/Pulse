@@ -38,21 +38,19 @@
 package ai
 
 import (
-	"context"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/investigation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 // ThresholdProvider provides user-configured alert thresholds for patrol to use
@@ -177,63 +175,25 @@ type UnifiedFindingCallback func(f *Finding) bool
 // PushNotifyCallback is called to send a push notification through the relay.
 type PushNotifyCallback func(notification relay.PushNotificationPayload)
 
-// InvestigationOrchestrator defines the interface for autonomous investigation of findings
-type InvestigationOrchestrator interface {
-	// InvestigateFinding starts an investigation for a finding
-	InvestigateFinding(ctx context.Context, finding *InvestigationFinding, autonomyLevel string) error
-	// GetInvestigationByFinding returns the latest investigation for a finding
-	GetInvestigationByFinding(findingID string) *InvestigationSession
-	// GetRunningCount returns the number of running investigations
-	GetRunningCount() int
-	// GetFixedCount returns the number of issues auto-fixed by Patrol
-	GetFixedCount() int
-	// CanStartInvestigation returns true if a new investigation can be started
-	CanStartInvestigation() bool
-	// ReinvestigateFinding triggers a re-investigation of a finding
-	ReinvestigateFinding(ctx context.Context, findingID, autonomyLevel string) error
-	// Shutdown signals all running investigations to stop, persists state,
-	// and waits for them to finish (up to the context deadline).
-	Shutdown(ctx context.Context) error
-}
+// InvestigationOrchestrator is the interface for autonomous investigation of findings.
+// Re-exported from pkg/aicontracts for backwards compatibility.
+type InvestigationOrchestrator = aicontracts.InvestigationOrchestrator
 
 // InvestigationStoreMaintainer is an optional interface for orchestrators that
 // expose their investigation store for periodic maintenance.
-type InvestigationStoreMaintainer interface {
-	CleanupInvestigationStore(maxAge time.Duration, maxSessions int)
-}
+// Re-exported from pkg/aicontracts for backwards compatibility.
+type InvestigationStoreMaintainer = aicontracts.InvestigationStoreMaintainer
 
 // InvestigationFinding is the shared type used by patrol and investigation orchestration.
-type InvestigationFinding = investigation.Finding
+type InvestigationFinding = aicontracts.Finding
 
-// InvestigationSession represents the result of an investigation (minimal interface)
-type InvestigationSession struct {
-	ID             string            `json:"id"`
-	FindingID      string            `json:"finding_id"`
-	SessionID      string            `json:"session_id"`
-	Status         string            `json:"status"`
-	StartedAt      time.Time         `json:"started_at"`
-	CompletedAt    *time.Time        `json:"completed_at,omitempty"`
-	TurnCount      int               `json:"turn_count"`
-	Outcome        string            `json:"outcome,omitempty"`
-	ToolsAvailable []string          `json:"tools_available,omitempty"`
-	ToolsUsed      []string          `json:"tools_used,omitempty"`
-	EvidenceIDs    []string          `json:"evidence_ids,omitempty"`
-	Summary        string            `json:"summary,omitempty"`
-	Error          string            `json:"error,omitempty"`
-	ProposedFix    *InvestigationFix `json:"proposed_fix,omitempty"`
-	ApprovalID     string            `json:"approval_id,omitempty"`
-}
+// InvestigationSession represents the result of an investigation.
+// Re-exported from pkg/aicontracts for backwards compatibility.
+type InvestigationSession = aicontracts.InvestigationSession
 
-// InvestigationFix represents a proposed remediation action
-type InvestigationFix struct {
-	ID          string   `json:"id"`
-	Description string   `json:"description"`
-	Commands    []string `json:"commands,omitempty"`
-	RiskLevel   string   `json:"risk_level,omitempty"`
-	Destructive bool     `json:"destructive"`
-	TargetHost  string   `json:"target_host,omitempty"`
-	Rationale   string   `json:"rationale,omitempty"`
-}
+// InvestigationFix represents a proposed remediation action.
+// Re-exported from pkg/aicontracts for backwards compatibility.
+type InvestigationFix = aicontracts.Fix
 
 // PatrolService runs background AI analysis of infrastructure
 type PatrolService struct {
@@ -279,7 +239,7 @@ type PatrolService struct {
 	circuitBreaker *circuit.Breaker
 
 	// Remediation engine for generating fix plans from findings
-	remediationEngine *remediation.Engine
+	remediationEngine aicontracts.RemediationEngine
 
 	// Investigation orchestrator for autonomous investigation of findings
 	investigationOrchestrator InvestigationOrchestrator

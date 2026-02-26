@@ -61,10 +61,10 @@ func TestInvestigationOrchestratorAdapter_GetInvestigationByFinding(t *testing.T
 	if got.ID != updated.ID {
 		t.Fatalf("id = %q, want %q", got.ID, updated.ID)
 	}
-	if got.Status != string(investigation.StatusCompleted) {
+	if got.Status != investigation.StatusCompleted {
 		t.Fatalf("status = %q, want %q", got.Status, investigation.StatusCompleted)
 	}
-	if got.Outcome != string(investigation.OutcomeFixExecuted) {
+	if got.Outcome != investigation.OutcomeFixExecuted {
 		t.Fatalf("outcome = %q, want %q", got.Outcome, investigation.OutcomeFixExecuted)
 	}
 	if got.CompletedAt == nil || !got.CompletedAt.Equal(completedAt) {
