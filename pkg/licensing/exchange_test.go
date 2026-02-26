@@ -25,6 +25,9 @@ func TestClientExchangeLegacy(t *testing.T) {
 			if r.URL.Path != "/v1/licenses/exchange" {
 				t.Errorf("Path = %q, want /v1/licenses/exchange", r.URL.Path)
 			}
+			if r.Header.Get("Idempotency-Key") == "" {
+				t.Error("missing Idempotency-Key header")
+			}
 
 			var req ExchangeLegacyRequest
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -49,11 +52,11 @@ func TestClientExchangeLegacy(t *testing.T) {
 				Grant: GrantEnvelope{
 					JWT:       grantJWT,
 					JTI:       "grant_exch",
-					ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
-					Refresh: RefreshHints{
-						IntervalSeconds: 21600,
-						JitterPercent:   0.2,
-					},
+					ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+				},
+				RefreshPolicy: RefreshHints{
+					IntervalSeconds: 21600,
+					JitterPercent:   0.2,
 				},
 			})
 		}))
@@ -129,11 +132,11 @@ func TestServiceExchangeLegacyLicense(t *testing.T) {
 			Grant: GrantEnvelope{
 				JWT:       grantJWT,
 				JTI:       "grant_v6",
-				ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
-				Refresh: RefreshHints{
-					IntervalSeconds: 21600,
-					JitterPercent:   0.2,
-				},
+				ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+			},
+			RefreshPolicy: RefreshHints{
+				IntervalSeconds: 21600,
+				JitterPercent:   0.2,
 			},
 		})
 	}))

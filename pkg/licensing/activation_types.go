@@ -1,6 +1,10 @@
 package licensing
 
-import "time"
+import (
+	"time"
+
+	"github.com/rs/zerolog/log"
+)
 
 // ActivationKeyPrefix is the prefix for activation keys issued by the license server.
 // Used to auto-detect activation keys vs legacy JWTs in the Activate endpoint.
@@ -92,46 +96,66 @@ func grantClaimsToLicense(gc *GrantClaims, rawJWT string) *License {
 	return lic
 }
 
-// ActivateInstallationRequest is the payload sent to POST /v1/installations.
+// ActivateInstallationRequest is the payload sent to POST /v1/activate.
 type ActivateInstallationRequest struct {
 	ActivationKey       string `json:"activation_key"`
+	InstanceName        string `json:"instance_name,omitempty"`
 	InstanceFingerprint string `json:"instance_fingerprint"`
-	Hostname            string `json:"hostname,omitempty"`
-	Version             string `json:"version,omitempty"`
+	ClientVersion       string `json:"client_version,omitempty"`
 }
 
 // ActivateInstallationResponse is the payload returned from the activation endpoint.
+// The response is nested: license, installation, grant, refresh_policy are top-level keys.
 type ActivateInstallationResponse struct {
-	InstallationID    string        `json:"installation_id"`
-	InstallationToken string        `json:"installation_token"`
-	LicenseID         string        `json:"license_id"`
-	Grant             GrantEnvelope `json:"grant"`
+	License       ActivateResponseLicense      `json:"license"`
+	Installation  ActivateResponseInstallation `json:"installation"`
+	Grant         GrantEnvelope                `json:"grant"`
+	RefreshPolicy RefreshHints                 `json:"refresh_policy"`
+}
+
+// ActivateResponseLicense is the license portion of the activation response.
+type ActivateResponseLicense struct {
+	LicenseID      string   `json:"license_id"`
+	State          string   `json:"state"`
+	Tier           string   `json:"tier"`
+	MaxAgents      int      `json:"max_agents"`
+	MaxGuests      int      `json:"max_guests"`
+	Features       []string `json:"features"`
+	LicenseVersion int64    `json:"license_version"`
+}
+
+// ActivateResponseInstallation is the installation portion of the activation response.
+type ActivateResponseInstallation struct {
+	InstallationID    string `json:"installation_id"`
+	InstallationToken string `json:"installation_token"`
+	Status            string `json:"status"`
 }
 
 // GrantEnvelope wraps a relay grant JWT with metadata.
 type GrantEnvelope struct {
-	JWT       string       `json:"jwt"`
-	JTI       string       `json:"jti"`
-	ExpiresAt int64        `json:"expires_at"`
-	Refresh   RefreshHints `json:"refresh_policy"`
+	JWT       string `json:"jwt"`
+	JTI       string `json:"jti"`
+	ExpiresAt string `json:"expires_at"` // RFC3339 timestamp from the server
 }
 
 // RefreshHints contains the server's recommended grant refresh schedule.
 type RefreshHints struct {
-	IntervalSeconds int     `json:"interval_seconds"` // e.g. 21600 (6h)
-	JitterPercent   float64 `json:"jitter_percent"`   // e.g. 0.2 (20%)
+	IntervalSeconds int     `json:"recommended_refresh_after_sec"` // e.g. 21600 (6h)
+	JitterPercent   float64 `json:"jitter_percent"`                // e.g. 0.2 (20%)
 }
 
-// RefreshGrantRequest is the payload sent to POST /v1/installations/{id}/grant/refresh.
+// RefreshGrantRequest is the payload sent to POST /v1/grants/refresh.
 type RefreshGrantRequest struct {
+	InstallationID      string `json:"installation_id"`
 	InstanceFingerprint string `json:"instance_fingerprint"`
-	CurrentJTI          string `json:"current_jti,omitempty"`
-	Version             string `json:"version,omitempty"`
+	CurrentGrantJTI     string `json:"current_grant_jti,omitempty"`
+	ClientVersion       string `json:"client_version,omitempty"`
 }
 
 // RefreshGrantResponse is the payload returned from the grant refresh endpoint.
 type RefreshGrantResponse struct {
-	Grant GrantEnvelope `json:"grant"`
+	Grant         GrantEnvelope `json:"grant"`
+	RefreshPolicy RefreshHints  `json:"refresh_policy"`
 }
 
 // ExchangeLegacyRequest is the payload sent to POST /v1/licenses/exchange.
@@ -183,6 +207,22 @@ type RevocationFeedResponse struct {
 	LatestSeq int64             `json:"latest_seq"`
 	HasMore   bool              `json:"has_more"`
 	Events    []RevocationEvent `json:"events"`
+}
+
+// ParseExpiresAt parses the RFC3339 expires_at string from a GrantEnvelope
+// into a Unix timestamp. Returns 0 if the string is empty or unparseable.
+// The grant JWT's own exp claim is the authoritative expiry; this envelope
+// field is advisory for logging/display only.
+func (g GrantEnvelope) ParseExpiresAt() int64 {
+	if g.ExpiresAt == "" {
+		return 0
+	}
+	t, err := time.Parse(time.RFC3339, g.ExpiresAt)
+	if err != nil {
+		log.Warn().Str("expires_at", g.ExpiresAt).Msg("Failed to parse grant envelope expires_at as RFC3339")
+		return 0
+	}
+	return t.Unix()
 }
 
 // LicenseServerError is a structured error from the license server.

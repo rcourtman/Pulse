@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestNewLicenseServerClient(t *testing.T) {
@@ -47,11 +48,14 @@ func TestClientActivate(t *testing.T) {
 			if r.Method != http.MethodPost {
 				t.Errorf("Method = %q, want POST", r.Method)
 			}
-			if r.URL.Path != "/v1/installations" {
-				t.Errorf("Path = %q, want /v1/installations", r.URL.Path)
+			if r.URL.Path != "/v1/activate" {
+				t.Errorf("Path = %q, want /v1/activate", r.URL.Path)
 			}
 			if r.Header.Get("Content-Type") != "application/json" {
 				t.Errorf("Content-Type = %q, want application/json", r.Header.Get("Content-Type"))
+			}
+			if r.Header.Get("Idempotency-Key") == "" {
+				t.Error("missing Idempotency-Key header")
 			}
 
 			var req ActivateInstallationRequest
@@ -64,17 +68,24 @@ func TestClientActivate(t *testing.T) {
 
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(ActivateInstallationResponse{
-				InstallationID:    "inst_abc",
-				InstallationToken: "pit_live_token",
-				LicenseID:         "lic_test",
+				License: ActivateResponseLicense{
+					LicenseID: "lic_test",
+					State:     "active",
+					Tier:      "pro",
+				},
+				Installation: ActivateResponseInstallation{
+					InstallationID:    "inst_abc",
+					InstallationToken: "pit_live_token",
+					Status:            "active",
+				},
 				Grant: GrantEnvelope{
 					JWT:       grantJWT,
 					JTI:       "grant_123",
-					ExpiresAt: 2000,
-					Refresh: RefreshHints{
-						IntervalSeconds: 21600,
-						JitterPercent:   0.2,
-					},
+					ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+				},
+				RefreshPolicy: RefreshHints{
+					IntervalSeconds: 21600,
+					JitterPercent:   0.2,
 				},
 			})
 		}))
@@ -88,11 +99,11 @@ func TestClientActivate(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Activate failed: %v", err)
 		}
-		if resp.InstallationID != "inst_abc" {
-			t.Errorf("InstallationID = %q, want inst_abc", resp.InstallationID)
+		if resp.Installation.InstallationID != "inst_abc" {
+			t.Errorf("InstallationID = %q, want inst_abc", resp.Installation.InstallationID)
 		}
-		if resp.InstallationToken != "pit_live_token" {
-			t.Errorf("InstallationToken = %q, want pit_live_token", resp.InstallationToken)
+		if resp.Installation.InstallationToken != "pit_live_token" {
+			t.Errorf("InstallationToken = %q, want pit_live_token", resp.Installation.InstallationToken)
 		}
 		if resp.Grant.JTI != "grant_123" {
 			t.Errorf("Grant.JTI = %q, want grant_123", resp.Grant.JTI)
@@ -189,8 +200,8 @@ func TestClientRefreshGrant(t *testing.T) {
 			if r.Method != http.MethodPost {
 				t.Errorf("Method = %q, want POST", r.Method)
 			}
-			if r.URL.Path != "/v1/installations/inst_abc/grant/refresh" {
-				t.Errorf("Path = %q, want /v1/installations/inst_abc/grant/refresh", r.URL.Path)
+			if r.URL.Path != "/v1/grants/refresh" {
+				t.Errorf("Path = %q, want /v1/grants/refresh", r.URL.Path)
 			}
 			if got := r.Header.Get("Authorization"); got != "Bearer pit_live_token" {
 				t.Errorf("Authorization = %q, want Bearer pit_live_token", got)
@@ -200,7 +211,7 @@ func TestClientRefreshGrant(t *testing.T) {
 				Grant: GrantEnvelope{
 					JWT:       newGrantJWT,
 					JTI:       "grant_456",
-					ExpiresAt: 4000,
+					ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
 				},
 			})
 		}))
@@ -208,8 +219,9 @@ func TestClientRefreshGrant(t *testing.T) {
 
 		client := NewLicenseServerClient(server.URL)
 		resp, err := client.RefreshGrant(context.Background(), "inst_abc", "pit_live_token", RefreshGrantRequest{
+			InstallationID:      "inst_abc",
 			InstanceFingerprint: "fp-123",
-			CurrentJTI:          "grant_123",
+			CurrentGrantJTI:     "grant_123",
 		})
 		if err != nil {
 			t.Fatalf("RefreshGrant failed: %v", err)

@@ -173,7 +173,7 @@ func TestHandleRevocationEvent_BumpLicenseVersion(t *testing.T) {
 			Grant: GrantEnvelope{
 				JWT:       newJWT,
 				JTI:       "grant_bumped",
-				ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+				ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
 			},
 		})
 	}))

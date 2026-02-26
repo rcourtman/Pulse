@@ -3,6 +3,8 @@ package licensing
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -44,11 +46,12 @@ func (c *LicenseServerClient) Activate(ctx context.Context, req ActivateInstalla
 		return nil, fmt.Errorf("marshal activate request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/installations", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/activate", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create activate request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Idempotency-Key", generateIdempotencyKey())
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -75,8 +78,7 @@ func (c *LicenseServerClient) RefreshGrant(ctx context.Context, installationID, 
 		return nil, fmt.Errorf("marshal refresh request: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/v1/installations/%s/grant/refresh", c.baseURL, installationID)
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/grants/refresh", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create refresh request: %w", err)
 	}
@@ -117,6 +119,7 @@ func (c *LicenseServerClient) ExchangeLegacy(ctx context.Context, req ExchangeLe
 		return nil, fmt.Errorf("create exchange request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Idempotency-Key", generateIdempotencyKey())
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -173,6 +176,13 @@ func (c *LicenseServerClient) FetchRevocations(ctx context.Context, feedToken st
 // BaseURL returns the configured license server base URL.
 func (c *LicenseServerClient) BaseURL() string {
 	return c.baseURL
+}
+
+// generateIdempotencyKey creates a unique key for idempotent requests.
+func generateIdempotencyKey() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 // parseError reads an error response from the license server and returns a structured LicenseServerError.

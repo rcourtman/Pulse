@@ -215,7 +215,7 @@ func (s *Service) ActivateWithKey(activationKey string) (*License, error) {
 	req := ActivateInstallationRequest{
 		ActivationKey:       activationKey,
 		InstanceFingerprint: fingerprint,
-		Hostname:            hostname,
+		InstanceName:        hostname,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -238,12 +238,12 @@ func (s *Service) ActivateWithKey(activationKey string) (*License, error) {
 	// Build activation state for persistence and refresh.
 	now := time.Now().Unix()
 	state := &ActivationState{
-		InstallationID:      resp.InstallationID,
-		InstallationToken:   resp.InstallationToken,
-		LicenseID:           resp.LicenseID,
+		InstallationID:      resp.Installation.InstallationID,
+		InstallationToken:   resp.Installation.InstallationToken,
+		LicenseID:           resp.License.LicenseID,
 		GrantJWT:            resp.Grant.JWT,
 		GrantJTI:            resp.Grant.JTI,
-		GrantExpiresAt:      resp.Grant.ExpiresAt,
+		GrantExpiresAt:      resp.Grant.ParseExpiresAt(),
 		InstanceFingerprint: fingerprint,
 		LicenseServerURL:    client.BaseURL(),
 		ActivatedAt:         now,
@@ -260,7 +260,7 @@ func (s *Service) ActivateWithKey(activationKey string) (*License, error) {
 	s.mu.Unlock()
 
 	// Apply refresh hints from the server.
-	s.SetRefreshHints(resp.Grant.Refresh)
+	s.SetRefreshHints(resp.RefreshPolicy)
 
 	// Persist activation state.
 	if persistence != nil {
@@ -323,7 +323,7 @@ func (s *Service) ExchangeLegacyLicense(legacyJWT string) (*License, error) {
 		LicenseID:           gc.LicenseID, // Use JWT claim as canonical source
 		GrantJWT:            resp.Grant.JWT,
 		GrantJTI:            resp.Grant.JTI,
-		GrantExpiresAt:      resp.Grant.ExpiresAt,
+		GrantExpiresAt:      resp.Grant.ParseExpiresAt(),
 		InstanceFingerprint: fingerprint,
 		LicenseServerURL:    client.BaseURL(),
 		ActivatedAt:         now,
@@ -342,8 +342,8 @@ func (s *Service) ExchangeLegacyLicense(legacyJWT string) (*License, error) {
 	snapshot := cloneLicense(s.license)
 	s.mu.Unlock()
 
-	// Use grant envelope refresh hints (same source as ActivateWithKey).
-	s.SetRefreshHints(resp.Grant.Refresh)
+	// Use top-level refresh hints (same source as ActivateWithKey).
+	s.SetRefreshHints(resp.RefreshPolicy)
 
 	if persistence != nil {
 		if err := persistence.SaveActivationState(state); err != nil {

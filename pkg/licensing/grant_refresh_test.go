@@ -42,7 +42,7 @@ func TestGrantRefreshLoop_RefreshesGrant(t *testing.T) {
 			Grant: GrantEnvelope{
 				JWT:       newGrantJWT,
 				JTI:       "grant_new",
-				ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+				ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
 			},
 		})
 	}))
@@ -373,7 +373,7 @@ func TestRefreshGrantOnce_PersistsState(t *testing.T) {
 			Grant: GrantEnvelope{
 				JWT:       newGrantJWT,
 				JTI:       "grant_persisted",
-				ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+				ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
 			},
 		})
 	}))
@@ -452,7 +452,7 @@ func TestRefreshGrantOnce_CallsLicenseChangeCallback(t *testing.T) {
 			Grant: GrantEnvelope{
 				JWT:       newGrantJWT,
 				JTI:       "grant_cb",
-				ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+				ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
 			},
 		})
 	}))

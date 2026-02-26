@@ -124,8 +124,18 @@ func (s *Service) SetRefreshHints(hints RefreshHints) {
 		}
 		loop.refreshInterval = interval
 	}
-	if hints.JitterPercent > 0 && hints.JitterPercent <= 0.5 {
-		loop.jitterPercent = hints.JitterPercent
+	// Accept jitter=0 to disable jitter, but only when the hint is from a real
+	// server response (IntervalSeconds > 0 guards against zero-value structs).
+	if hints.JitterPercent > 0 || (hints.JitterPercent == 0 && hints.IntervalSeconds > 0) {
+		jitter := hints.JitterPercent
+		// The server sends jitter as a whole number (e.g. 20 for 20%).
+		// Convert to fraction if >= 1 (no valid use case for >=100% jitter).
+		if jitter >= 1 {
+			jitter = jitter / 100
+		}
+		if jitter <= 0.5 {
+			loop.jitterPercent = jitter
+		}
 	}
 }
 
@@ -181,8 +191,9 @@ func (s *Service) refreshGrantOnce(ctx context.Context) error {
 	}
 
 	req := RefreshGrantRequest{
+		InstallationID:      state.InstallationID,
 		InstanceFingerprint: state.InstanceFingerprint,
-		CurrentJTI:          state.GrantJTI,
+		CurrentGrantJTI:     state.GrantJTI,
 	}
 
 	resp, err := client.RefreshGrant(ctx, state.InstallationID, state.InstallationToken, req)
@@ -217,7 +228,7 @@ func (s *Service) refreshGrantOnce(ctx context.Context) error {
 	if s.activationState != nil {
 		s.activationState.GrantJWT = resp.Grant.JWT
 		s.activationState.GrantJTI = resp.Grant.JTI
-		s.activationState.GrantExpiresAt = resp.Grant.ExpiresAt
+		s.activationState.GrantExpiresAt = resp.Grant.ParseExpiresAt()
 		s.activationState.LastRefreshedAt = time.Now().Unix()
 	}
 
@@ -225,6 +236,9 @@ func (s *Service) refreshGrantOnce(ctx context.Context) error {
 	snapshot := cloneLicense(s.license)
 	stateCopy := s.activationState
 	s.mu.Unlock()
+
+	// Apply updated refresh hints from the server (policy may change between refreshes).
+	s.SetRefreshHints(resp.RefreshPolicy)
 
 	// Persist the updated activation state.
 	if persistence != nil && stateCopy != nil {
@@ -239,7 +253,7 @@ func (s *Service) refreshGrantOnce(ctx context.Context) error {
 
 	log.Info().
 		Str("grant_jti", resp.Grant.JTI).
-		Int64("expires_at", resp.Grant.ExpiresAt).
+		Str("expires_at", resp.Grant.ExpiresAt).
 		Msg("Grant refreshed successfully")
 
 	return nil
