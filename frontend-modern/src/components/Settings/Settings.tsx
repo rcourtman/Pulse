@@ -998,6 +998,7 @@ const Settings: Component<SettingsProps> = (props) => {
             icon: FileText,
             iconProps: { strokeWidth: 2 },
             features: ['advanced_reporting'],
+            badge: 'Pro',
           },
           {
             id: 'system-logs',

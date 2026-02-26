@@ -1544,7 +1544,7 @@ func (p *PatrolService) TriggerPatrolForAlert(alert *alerts.Alert) {
 		if triggerManager.TriggerPatrol(scope) {
 			log.Debug().Str("alert_id", alert.ID).Msg("Queued alert-triggered patrol via trigger manager")
 		} else {
-			log.Warn().Str("alert_id", alert.ID).Msg("Alert-triggered patrol rejected by trigger manager")
+			log.Debug().Str("alert_id", alert.ID).Msg("Alert-triggered patrol rejected by trigger manager")
 		}
 		return
 	}
@@ -1554,7 +1554,7 @@ func (p *PatrolService) TriggerPatrolForAlert(alert *alerts.Alert) {
 	case p.adHocTrigger <- alert:
 		log.Debug().Str("alert_id", alert.ID).Msg("Queued ad-hoc patrol trigger")
 	default:
-		log.Warn().Str("alert_id", alert.ID).Msg("Patrol trigger queue full, dropping trigger")
+		log.Debug().Str("alert_id", alert.ID).Msg("Patrol trigger queue full, dropping trigger")
 	}
 }
 
