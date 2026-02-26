@@ -37,6 +37,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
@@ -102,8 +103,17 @@ type AISettingsHandler struct {
 	investigationStores map[string]*investigation.Store // Investigation stores per org
 	investigationMu     sync.RWMutex
 
+	// Extension endpoints for enterprise feature gating
+	aiAutoFixEndpoints extensions.AIAutoFixEndpoints
+
 	// Discovery store for deep infrastructure discovery
 	discoveryStore *servicediscovery.Store
+}
+
+// SetAIAutoFixEndpoints sets the resolved AI auto-fix extension endpoints.
+// Called during route registration so the approval handler can delegate investigation fix approvals.
+func (h *AISettingsHandler) SetAIAutoFixEndpoints(ep extensions.AIAutoFixEndpoints) {
+	h.aiAutoFixEndpoints = ep
 }
 
 func (h *AISettingsHandler) stateRefs() (
@@ -6089,18 +6099,84 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Check license
-	if !h.GetAIService(r.Context()).HasLicenseFeature(featureAIAutoFixValue) {
-		WriteLicenseRequired(w, featureAIAutoFixValue, "Pulse Patrol Auto-Fix feature requires Pro license")
-		return
-	}
-
 	// SECURITY: Validating command execution scope
 	if !ensureScope(w, r, config.ScopeAIExecute) {
 		return
 	}
 
 	// Extract ID from path: /api/ai/approvals/{id}/approve
+	path := strings.TrimPrefix(r.URL.Path, "/api/ai/approvals/")
+	path = strings.TrimSuffix(path, "/approve")
+	approvalID := strings.TrimSuffix(path, "/")
+
+	if approvalID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Approval ID is required", nil)
+		return
+	}
+
+	store := approval.GetStore()
+	if store == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Approval store not initialized", nil)
+		return
+	}
+	orgID := approval.NormalizeOrgID(GetOrgID(r.Context()))
+	existingReq, ok := store.GetApproval(approvalID)
+	if !ok || !approval.BelongsToOrg(existingReq, orgID) {
+		writeErrorResponse(w, http.StatusNotFound, "not_found", "Approval request not found", nil)
+		return
+	}
+
+	// Investigation fix approvals are gated by the AI auto-fix extension point.
+	// The free adapter returns 402; the enterprise adapter executes the fix.
+	if existingReq.ToolID == "investigation_fix" {
+		if h.aiAutoFixEndpoints != nil {
+			h.aiAutoFixEndpoints.HandleApproveInvestigationFix(w, r)
+		} else {
+			WriteLicenseRequired(w, featureAIAutoFixValue, "Pulse Patrol Auto-Fix feature requires Pulse Pro")
+		}
+		return
+	}
+
+	username := getAuthUsername(h.getConfig(r.Context()), r)
+	if username == "" {
+		username = "anonymous"
+	}
+
+	req, err := store.Approve(approvalID, username)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "approval_failed", err.Error(), nil)
+		return
+	}
+
+	// Log audit event
+	LogAuditEvent("ai_command_approved", username, GetClientIP(r), r.URL.Path, true,
+		fmt.Sprintf("Approved command: %s", truncateForLog(req.Command, 100)))
+
+	// For chat sidebar approvals, the agentic loop will detect approval and execute
+	response := map[string]interface{}{
+		"approved":    true,
+		"request":     req,
+		"approval_id": req.ID,
+		"message":     "Command approved. Pulse Assistant will now execute it.",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// HandleApproveAndExecuteInvestigationFix handles the full approve+execute flow
+// for investigation fix approvals. This is the "core handler" that enterprise binders
+// delegate to — it must NOT call through the extension point (to avoid recursion).
+func (h *AISettingsHandler) HandleApproveAndExecuteInvestigationFix(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !ensureScope(w, r, config.ScopeAIExecute) {
+		return
+	}
+
 	path := strings.TrimPrefix(r.URL.Path, "/api/ai/approvals/")
 	path = strings.TrimSuffix(path, "/approve")
 	approvalID := strings.TrimSuffix(path, "/")
@@ -6133,26 +6209,10 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Log audit event
 	LogAuditEvent("ai_command_approved", username, GetClientIP(r), r.URL.Path, true,
 		fmt.Sprintf("Approved command: %s", truncateForLog(req.Command, 100)))
 
-	// For investigation fixes, execute the command directly since there's no active agentic loop
-	if req.ToolID == "investigation_fix" {
-		h.executeInvestigationFix(w, r, req)
-		return
-	}
-
-	// For chat sidebar approvals, the agentic loop will detect approval and execute
-	response := map[string]interface{}{
-		"approved":    true,
-		"request":     req,
-		"approval_id": req.ID,
-		"message":     "Command approved. Pulse Assistant will now execute it.",
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	h.executeInvestigationFix(w, r, req)
 }
 
 // executeInvestigationFix executes an approved investigation fix directly.

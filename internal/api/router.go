@@ -56,6 +56,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	"github.com/rs/zerolog/log"
 )
 
@@ -112,25 +113,27 @@ type Router struct {
 	serverVersion              string
 	projectRoot                string
 	// Cached system settings to avoid loading from disk on every request
-	settingsMu           sync.RWMutex
-	cachedAllowEmbedding bool
-	cachedAllowedOrigins string
-	publicURLMu          sync.Mutex
-	publicURLDetected    bool
-	bootstrapTokenHash   string
-	bootstrapTokenPath   string
-	checksumMu           sync.RWMutex
-	checksumCache        map[string]checksumCacheEntry
-	installScriptClient  *http.Client
-	relayMu              sync.RWMutex
-	relayClient          *relay.Client
-	relayCancel          context.CancelFunc
-	lifecycleCtx         context.Context
-	lifecycleCancel      context.CancelFunc
-	hostedMode           bool
-	conversionStore      *conversionStore
-	patrolLifecycleMu    sync.Mutex
-	startedPatrolOrgs    map[string]bool
+	settingsMu               sync.RWMutex
+	cachedAllowEmbedding     bool
+	cachedAllowedOrigins     string
+	publicURLMu              sync.Mutex
+	publicURLDetected        bool
+	bootstrapTokenHash       string
+	bootstrapTokenPath       string
+	checksumMu               sync.RWMutex
+	checksumCache            map[string]checksumCacheEntry
+	installScriptClient      *http.Client
+	relayMu                  sync.RWMutex
+	relayClient              *relay.Client
+	relayCancel              context.CancelFunc
+	lifecycleCtx             context.Context
+	lifecycleCancel          context.CancelFunc
+	hostedMode               bool
+	conversionStore          *conversionStore
+	patrolLifecycleMu        sync.Mutex
+	startedPatrolOrgs        map[string]bool
+	aiAutoFixEndpoints       extensions.AIAutoFixEndpoints
+	aiAlertAnalysisEndpoints extensions.AIAlertAnalysisEndpoints
 }
 
 func pulseBinDir() string {
@@ -2843,6 +2846,13 @@ func (r *Router) learnBaselines(store *ai.BaselineStore, metricsHistory *monitor
 // GetLicenseHandlers returns the license handlers for external callers (e.g. telemetry).
 func (r *Router) GetLicenseHandlers() *LicenseHandlers {
 	return r.licenseHandlers
+}
+
+// StopGrantRefresh stops all grant refresh loops across all tenants.
+func (r *Router) StopGrantRefresh() {
+	if r.licenseHandlers != nil {
+		r.licenseHandlers.StopAllGrantRefresh()
+	}
 }
 
 // SetTelemetryToggleFunc wires a callback that is invoked when the user

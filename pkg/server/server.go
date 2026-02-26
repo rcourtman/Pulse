@@ -64,6 +64,14 @@ type BusinessHooks struct {
 	// BindReportingAdminEndpoints allows enterprise modules to replace or decorate
 	// reporting admin endpoints without importing internal API packages.
 	BindReportingAdminEndpoints extensions.BindReportingAdminEndpointsFunc
+
+	// BindAIAutoFixEndpoints allows enterprise modules to replace or decorate
+	// AI auto-fix endpoints (investigation, remediation, autonomy, fix execution).
+	BindAIAutoFixEndpoints extensions.BindAIAutoFixEndpointsFunc
+
+	// BindAIAlertAnalysisEndpoints allows enterprise modules to replace or decorate
+	// AI alert analysis endpoints (alert investigation, Kubernetes analysis).
+	BindAIAlertAnalysisEndpoints extensions.BindAIAlertAnalysisEndpointsFunc
 }
 
 var (
@@ -260,12 +268,16 @@ func Run(ctx context.Context, version string) error {
 	bindAuditAdminEndpoints := globalHooks.BindAuditAdminEndpoints
 	bindSSOAdminEndpoints := globalHooks.BindSSOAdminEndpoints
 	bindReportingAdminEndpoints := globalHooks.BindReportingAdminEndpoints
+	bindAIAutoFixEndpoints := globalHooks.BindAIAutoFixEndpoints
+	bindAIAlertAnalysisEndpoints := globalHooks.BindAIAlertAnalysisEndpoints
 	globalHooksMu.Unlock()
 
 	api.SetRBACAdminEndpointsBinder(bindRBACAdminEndpoints)
 	api.SetAuditAdminEndpointsBinder(bindAuditAdminEndpoints)
 	api.SetSSOAdminEndpointsBinder(bindSSOAdminEndpoints)
 	api.SetReportingAdminEndpointsBinder(bindReportingAdminEndpoints)
+	api.SetAIAutoFixEndpointsBinder(bindAIAutoFixEndpoints)
+	api.SetAIAlertAnalysisEndpointsBinder(bindAIAlertAnalysisEndpoints)
 
 	if onMetricsStoreReady != nil {
 		func() {
@@ -632,6 +644,9 @@ shutdown:
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error().Err(err).Msg("Server shutdown error")
 	}
+
+	// Stop license grant refresh loops
+	router.StopGrantRefresh()
 
 	// Gracefully stop AI intelligence services (patrol, investigations, triggers)
 	router.ShutdownAIIntelligence()

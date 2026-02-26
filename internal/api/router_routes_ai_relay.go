@@ -6,6 +6,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 )
 
 const (
@@ -16,6 +17,17 @@ const (
 )
 
 func (r *Router) registerAIRelayRoutesGroup() {
+	// Resolve AI extension endpoints. In the open-source build (no enterprise binder),
+	// the free adapters return 402 for all premium operations. Enterprise binders
+	// replace these with real handler implementations.
+	r.aiAutoFixEndpoints = resolveAIAutoFixEndpoints(
+		aiAutoFixFreeAdapter{},
+		newAIAutoFixRuntime(r),
+	)
+	r.aiAlertAnalysisEndpoints = resolveAIAlertAnalysisEndpoints(
+		aiAlertAnalysisFreeAdapter{},
+		newAIAlertAnalysisRuntime(r),
+	)
 	r.mux.HandleFunc("/api/settings/ai", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceSettings, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetAISettings)))
 	r.mux.HandleFunc("/api/settings/ai/update", RequirePermission(r.config, r.authorizer, auth.ActionWrite, auth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleUpdateAISettings)))
 	r.mux.HandleFunc("/api/ai/test", RequirePermission(r.config, r.authorizer, auth.ActionWrite, auth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestAIConnection)))
@@ -24,8 +36,8 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.mux.HandleFunc("/api/ai/models", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiSettingsHandler.HandleListModels)))
 	r.mux.HandleFunc("/api/ai/execute", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleExecute)))
 	r.mux.HandleFunc("/api/ai/execute/stream", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleExecuteStream)))
-	r.mux.HandleFunc("/api/ai/kubernetes/analyze", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, RequireLicenseFeature(r.licenseHandlers, featureKubernetesAIKey, r.aiSettingsHandler.HandleAnalyzeKubernetesCluster))))
-	r.mux.HandleFunc("/api/ai/investigate-alert", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, RequireLicenseFeature(r.licenseHandlers, featureAIAlertsKey, r.aiSettingsHandler.HandleInvestigateAlert))))
+	r.mux.HandleFunc("/api/ai/kubernetes/analyze", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiAlertAnalysisEndpoints.HandleAnalyzeKubernetesCluster)))
+	r.mux.HandleFunc("/api/ai/investigate-alert", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiAlertAnalysisEndpoints.HandleInvestigateAlert)))
 
 	r.mux.HandleFunc("/api/ai/run-command", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleRunCommand)))
 	// SECURITY: AI Knowledge endpoints require ai:chat scope to prevent arbitrary guest data access
@@ -124,19 +136,19 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.mux.HandleFunc("/api/ai/patrol/suppressions/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleDeleteSuppressionRule)))
 	r.mux.HandleFunc("/api/ai/patrol/dismissed", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetDismissedFindings)))
 
-	// Patrol Autonomy - Community is locked to "monitor"; approval/assisted/full require Pro (enforced in handlers)
+	// Patrol Autonomy - GET stays in core (always returns current level); PUT is gated via extension
 	r.mux.HandleFunc("/api/ai/patrol/autonomy", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
 			r.aiSettingsHandler.HandleGetPatrolAutonomy(w, req)
 		case http.MethodPut:
-			r.aiSettingsHandler.HandleUpdatePatrolAutonomy(w, req)
+			r.aiAutoFixEndpoints.HandleUpdatePatrolAutonomy(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})))
 
-	// Investigation endpoints - viewing is free; reinvestigation and fix execution require Pro
+	// Investigation endpoints - viewing is free; reinvestigation and fix execution gated via extension
 	// SECURITY: Require ai:execute scope to prevent low-privilege tokens from reading investigation details
 	r.mux.HandleFunc("/api/ai/findings/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, func(w http.ResponseWriter, req *http.Request) {
 		path := req.URL.Path
@@ -146,11 +158,9 @@ func (r *Router) registerAIRelayRoutesGroup() {
 		case strings.HasSuffix(path, "/investigation"):
 			r.aiSettingsHandler.HandleGetInvestigation(w, req)
 		case strings.HasSuffix(path, "/reinvestigate"):
-			// Reinvestigation is investigation and requires Pro license
-			RequireLicenseFeature(r.licenseHandlers, featureAIAutoFixKey, r.aiSettingsHandler.HandleReinvestigateFinding)(w, req)
+			r.aiAutoFixEndpoints.HandleReinvestigateFinding(w, req)
 		case strings.HasSuffix(path, "/reapprove"):
-			// Fix execution requires Pro license
-			RequireLicenseFeature(r.licenseHandlers, featureAIAutoFixKey, r.aiSettingsHandler.HandleReapproveInvestigationFix)(w, req)
+			r.aiAutoFixEndpoints.HandleReapproveInvestigationFix(w, req)
 		default:
 			http.Error(w, "Not found", http.StatusNotFound)
 		}
@@ -178,20 +188,19 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.mux.HandleFunc("/api/ai/learning/preferences", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetLearningPreferences)))
 	r.mux.HandleFunc("/api/ai/proxmox/events", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetProxmoxEvents)))
 	r.mux.HandleFunc("/api/ai/proxmox/correlations", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetProxmoxCorrelations)))
-	// SECURITY: Remediation endpoints require ai:execute scope and Pro license (ai_autofix)
-	r.mux.HandleFunc("/api/ai/remediation/plans", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, RequireLicenseFeature(r.licenseHandlers, featureAIAutoFixKey, func(w http.ResponseWriter, req *http.Request) {
+	// SECURITY: Remediation endpoints require ai:execute scope; license gating via extension
+	r.mux.HandleFunc("/api/ai/remediation/plans", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
-			r.aiSettingsHandler.HandleGetRemediationPlans(w, req)
+			r.aiAutoFixEndpoints.HandleGetRemediationPlans(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	}))))
-	r.mux.HandleFunc("/api/ai/remediation/plan", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, RequireLicenseFeature(r.licenseHandlers, featureAIAutoFixKey, r.aiSettingsHandler.HandleGetRemediationPlan))))
-	// Approving a remediation plan is a mutation - keep with ai:execute scope
-	r.mux.HandleFunc("/api/ai/remediation/approve", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, RequireLicenseFeature(r.licenseHandlers, featureAIAutoFixKey, r.aiSettingsHandler.HandleApproveRemediationPlan))))
-	r.mux.HandleFunc("/api/ai/remediation/execute", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, RequireLicenseFeature(r.licenseHandlers, featureAIAutoFixKey, r.aiSettingsHandler.HandleExecuteRemediationPlan))))
-	r.mux.HandleFunc("/api/ai/remediation/rollback", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, RequireLicenseFeature(r.licenseHandlers, featureAIAutoFixKey, r.aiSettingsHandler.HandleRollbackRemediationPlan))))
+	})))
+	r.mux.HandleFunc("/api/ai/remediation/plan", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiAutoFixEndpoints.HandleGetRemediationPlan)))
+	r.mux.HandleFunc("/api/ai/remediation/approve", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiAutoFixEndpoints.HandleApproveRemediationPlan)))
+	r.mux.HandleFunc("/api/ai/remediation/execute", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiAutoFixEndpoints.HandleExecuteRemediationPlan)))
+	r.mux.HandleFunc("/api/ai/remediation/rollback", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiAutoFixEndpoints.HandleRollbackRemediationPlan)))
 	// SECURITY: Circuit breaker status could reveal operational state - require ai:execute scope
 	r.mux.HandleFunc("/api/ai/circuit/status", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetCircuitBreakerStatus)))
 
@@ -237,4 +246,114 @@ func (r *Router) registerAIRelayRoutesGroup() {
 
 	// AI question endpoints - require ai:chat scope for interactive AI features
 	r.mux.HandleFunc("/api/ai/question/", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.routeQuestions)))
+
+	// Provide extension endpoints to the approval handler for investigation fix gating
+	r.aiSettingsHandler.SetAIAutoFixEndpoints(r.aiAutoFixEndpoints)
+}
+
+// --- AI Auto-Fix free-tier adapter ---
+// All methods return 402 "requires Pulse Pro". Enterprise binders replace this
+// with real handler implementations.
+
+type aiAutoFixFreeAdapter struct{}
+
+var _ extensions.AIAutoFixEndpoints = aiAutoFixFreeAdapter{}
+
+func (aiAutoFixFreeAdapter) HandleReinvestigateFinding(w http.ResponseWriter, _ *http.Request) {
+	WriteLicenseRequired(w, featureAIAutoFixKey, "Investigation requires Pulse Pro")
+}
+
+func (aiAutoFixFreeAdapter) HandleReapproveInvestigationFix(w http.ResponseWriter, _ *http.Request) {
+	WriteLicenseRequired(w, featureAIAutoFixKey, "Fix execution requires Pulse Pro")
+}
+
+func (aiAutoFixFreeAdapter) HandleUpdatePatrolAutonomy(w http.ResponseWriter, _ *http.Request) {
+	WriteLicenseRequired(w, featureAIAutoFixKey, "Patrol autonomy settings require Pulse Pro")
+}
+
+func (aiAutoFixFreeAdapter) HandleGetRemediationPlans(w http.ResponseWriter, _ *http.Request) {
+	WriteLicenseRequired(w, featureAIAutoFixKey, "Remediation requires Pulse Pro")
+}
+
+func (aiAutoFixFreeAdapter) HandleGetRemediationPlan(w http.ResponseWriter, _ *http.Request) {
+	WriteLicenseRequired(w, featureAIAutoFixKey, "Remediation requires Pulse Pro")
+}
+
+func (aiAutoFixFreeAdapter) HandleApproveRemediationPlan(w http.ResponseWriter, _ *http.Request) {
+	WriteLicenseRequired(w, featureAIAutoFixKey, "Remediation requires Pulse Pro")
+}
+
+func (aiAutoFixFreeAdapter) HandleExecuteRemediationPlan(w http.ResponseWriter, _ *http.Request) {
+	WriteLicenseRequired(w, featureAIAutoFixKey, "Remediation requires Pulse Pro")
+}
+
+func (aiAutoFixFreeAdapter) HandleRollbackRemediationPlan(w http.ResponseWriter, _ *http.Request) {
+	WriteLicenseRequired(w, featureAIAutoFixKey, "Remediation requires Pulse Pro")
+}
+
+func (aiAutoFixFreeAdapter) HandleApproveInvestigationFix(w http.ResponseWriter, _ *http.Request) {
+	WriteLicenseRequired(w, featureAIAutoFixKey, "Auto-Fix requires Pulse Pro")
+}
+
+func newAIAutoFixRuntime(r *Router) extensions.AIAutoFixRuntime {
+	return extensions.AIAutoFixRuntime{
+		HasLicenseFeature: func(req *http.Request, feature string) bool {
+			if r.licenseHandlers == nil {
+				return false
+			}
+			svc := r.licenseHandlers.FeatureService(req.Context())
+			if svc == nil {
+				return false
+			}
+			return svc.RequireFeature(feature) == nil
+		},
+		WriteLicenseRequired: WriteLicenseRequired,
+		WriteError:           writeErrorResponse,
+		CoreHandlers: extensions.AIAutoFixCoreHandlers{
+			HandleReinvestigateFinding:      r.aiSettingsHandler.HandleReinvestigateFinding,
+			HandleReapproveInvestigationFix: r.aiSettingsHandler.HandleReapproveInvestigationFix,
+			HandleUpdatePatrolAutonomy:      r.aiSettingsHandler.HandleUpdatePatrolAutonomy,
+			HandleGetRemediationPlans:       r.aiSettingsHandler.HandleGetRemediationPlans,
+			HandleGetRemediationPlan:        r.aiSettingsHandler.HandleGetRemediationPlan,
+			HandleApproveRemediationPlan:    r.aiSettingsHandler.HandleApproveRemediationPlan,
+			HandleExecuteRemediationPlan:    r.aiSettingsHandler.HandleExecuteRemediationPlan,
+			HandleRollbackRemediationPlan:   r.aiSettingsHandler.HandleRollbackRemediationPlan,
+			HandleApproveInvestigationFix:   r.aiSettingsHandler.HandleApproveAndExecuteInvestigationFix,
+		},
+	}
+}
+
+// --- AI Alert Analysis free-tier adapter ---
+
+type aiAlertAnalysisFreeAdapter struct{}
+
+var _ extensions.AIAlertAnalysisEndpoints = aiAlertAnalysisFreeAdapter{}
+
+func (aiAlertAnalysisFreeAdapter) HandleInvestigateAlert(w http.ResponseWriter, _ *http.Request) {
+	WriteLicenseRequired(w, featureAIAlertsKey, "Alert investigation requires Pulse Pro")
+}
+
+func (aiAlertAnalysisFreeAdapter) HandleAnalyzeKubernetesCluster(w http.ResponseWriter, _ *http.Request) {
+	WriteLicenseRequired(w, featureKubernetesAIKey, "Kubernetes AI analysis requires Pulse Pro")
+}
+
+func newAIAlertAnalysisRuntime(r *Router) extensions.AIAlertAnalysisRuntime {
+	return extensions.AIAlertAnalysisRuntime{
+		HasLicenseFeature: func(req *http.Request, feature string) bool {
+			if r.licenseHandlers == nil {
+				return false
+			}
+			svc := r.licenseHandlers.FeatureService(req.Context())
+			if svc == nil {
+				return false
+			}
+			return svc.RequireFeature(feature) == nil
+		},
+		WriteLicenseRequired: WriteLicenseRequired,
+		WriteError:           writeErrorResponse,
+		CoreHandlers: extensions.AIAlertAnalysisCoreHandlers{
+			HandleInvestigateAlert:         r.aiSettingsHandler.HandleInvestigateAlert,
+			HandleAnalyzeKubernetesCluster: r.aiSettingsHandler.HandleAnalyzeKubernetesCluster,
+		},
+	}
 }
