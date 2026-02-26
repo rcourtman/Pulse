@@ -592,6 +592,23 @@ func (p *PatrolService) SetEventTriggersEnabled(enabled bool) {
 	}
 }
 
+// SetQuickstartCredits sets the quickstart credit manager for free hosted patrol runs.
+func (p *PatrolService) SetQuickstartCredits(mgr QuickstartCreditManager) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.quickstartCredits = mgr
+	if mgr != nil {
+		log.Info().Int("remaining", mgr.CreditsRemaining()).Msg("AI Patrol: Quickstart credit manager configured")
+	}
+}
+
+// GetQuickstartCredits returns the quickstart credit manager.
+func (p *PatrolService) GetQuickstartCredits() QuickstartCreditManager {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.quickstartCredits
+}
+
 // TriggerScopedPatrol runs a targeted patrol for specific resources.
 // This is called by the TriggerManager for event-driven patrols.
 // When ResourceIDs or ResourceTypes are specified in the scope, only those resources

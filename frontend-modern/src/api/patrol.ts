@@ -156,6 +156,10 @@ export interface PatrolStatus {
   license_status?: LicenseStatus;
   upgrade_url?: string;
   summary: FindingsSummary;
+  // Quickstart credits
+  quickstart_credits_remaining?: number;
+  quickstart_credits_total?: number;
+  using_quickstart?: boolean;
 }
 
 /**

@@ -94,6 +94,7 @@ const (
 	AIProviderOllama     = "ollama"
 	AIProviderDeepSeek   = "deepseek"
 	AIProviderGemini     = "gemini"
+	AIProviderQuickstart = "quickstart" // Pulse-hosted proxy for free quickstart credits
 )
 
 // AI Control Level constants
@@ -322,7 +323,7 @@ func (c *AIConfig) IsUsingOAuth() bool {
 // Returns the provider and model name. If no provider prefix, attempts to detect.
 func ParseModelString(model string) (provider, modelName string) {
 	// Check for explicit provider prefix
-	for _, p := range []string{AIProviderAnthropic, AIProviderOpenAI, AIProviderOpenRouter, AIProviderDeepSeek, AIProviderGemini, AIProviderOllama} {
+	for _, p := range []string{AIProviderAnthropic, AIProviderOpenAI, AIProviderOpenRouter, AIProviderDeepSeek, AIProviderGemini, AIProviderOllama, AIProviderQuickstart} {
 		prefix := p + ":"
 		if len(model) > len(prefix) && model[:len(prefix)] == prefix {
 			return p, model[len(prefix):]

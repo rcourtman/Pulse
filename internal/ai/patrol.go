@@ -91,6 +91,10 @@ type PatrolStatus struct {
 	IntervalMs       int64         `json:"interval_ms"` // Patrol interval in milliseconds
 	BlockedReason    string        `json:"blocked_reason,omitempty"`
 	BlockedAt        *time.Time    `json:"blocked_at,omitempty"`
+	// Quickstart credit info for the frontend
+	QuickstartCreditsRemaining int  `json:"quickstart_credits_remaining"`
+	QuickstartCreditsTotal     int  `json:"quickstart_credits_total"`
+	UsingQuickstart            bool `json:"using_quickstart"`
 }
 
 // PatrolRunRecord represents a single patrol check run
@@ -309,6 +313,9 @@ type PatrolService struct {
 
 	// Patrol run history with persistence support
 	runHistoryStore *PatrolRunHistoryStore
+
+	// Quickstart credit manager for free hosted patrol runs
+	quickstartCredits QuickstartCreditManager
 
 	// Ad-hoc trigger channel for event-driven patrols (alert driven)
 	adHocTrigger chan *alerts.Alert

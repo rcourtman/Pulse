@@ -56,6 +56,13 @@ export interface AISettings {
   // AI Discovery settings
   discovery_enabled?: boolean;
   discovery_interval_hours?: number;
+
+  // Quickstart credits
+  quickstart_credits_total?: number;
+  quickstart_credits_used?: number;
+  quickstart_credits_remaining?: number;
+  quickstart_credits_available?: boolean;
+  using_quickstart?: boolean;
 }
 
 export interface AISettingsUpdateRequest {

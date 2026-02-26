@@ -43,6 +43,15 @@ func NormalizeBillingState(state *BillingState) *BillingState {
 	normalized.StripeSubscriptionID = strings.TrimSpace(normalized.StripeSubscriptionID)
 	normalized.StripePriceID = strings.TrimSpace(normalized.StripePriceID)
 
+	// Migration shim: rename legacy "max_nodes" key to "max_agents".
+	// Existing billing.json files may still use the old key name.
+	if _, hasNew := normalized.Limits["max_agents"]; !hasNew {
+		if v, hasOld := normalized.Limits["max_nodes"]; hasOld {
+			normalized.Limits["max_agents"] = v
+			delete(normalized.Limits, "max_nodes")
+		}
+	}
+
 	// Ensure slices/maps are never nil (JSON marshals as [] / {} instead of null).
 	if normalized.Capabilities == nil {
 		normalized.Capabilities = []string{}

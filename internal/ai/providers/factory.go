@@ -143,6 +143,14 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 		baseURL := cfg.GetBaseURLForProvider(config.AIProviderGemini)
 		return NewGeminiClient(apiKey, model, baseURL, timeout), nil
 
+	case config.AIProviderQuickstart:
+		// Quickstart uses the hosted proxy — no API key needed.
+		// Note: license_id is empty here; the primary quickstart paths
+		// (chat/service.go and quickstart.go) inject the real org ID.
+		// This factory fallback is used by ListModels/TestConnection where
+		// workspace attribution is not critical.
+		return NewQuickstartClient(""), nil
+
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", provider)
 	}

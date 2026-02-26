@@ -37,6 +37,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -209,6 +210,21 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 
 	defaultAIService = ai.NewService(defaultPersistence, agentServer)
 	defaultAIService.SetOrgID("default")
+	// Wire quickstart credit manager before LoadConfig so the quickstart
+	// provider path is available during initial configuration.
+	if defaultPersistence != nil {
+		billingStore := config.NewFileBillingStore(defaultPersistence.DataDir())
+		qsMgr := ai.NewFileQuickstartCreditManager(
+			billingStore,
+			"default",
+			func() *config.AIConfig {
+				cfg, _ := defaultPersistence.LoadAIConfig()
+				return cfg
+			},
+			"default",
+		)
+		defaultAIService.SetQuickstartCredits(qsMgr)
+	}
 	if defaultPersistence != nil {
 		if err := defaultAIService.LoadConfig(); err != nil {
 			log.Warn().Err(err).Msg("Failed to load AI config on startup")
@@ -285,6 +301,22 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 
 	svc = ai.NewService(persistence, h.agentServer)
 	svc.SetOrgID(orgID)
+	// Wire quickstart credit manager before LoadConfig so the quickstart
+	// provider path is available during initial configuration.
+	// Use the base data dir (not tenant-scoped dir) because FileBillingStore
+	// internally resolves org paths: base/orgs/<org>/billing.json.
+	billingBaseDir := mtPersistence.BaseDataDir()
+	billingStore := config.NewFileBillingStore(billingBaseDir)
+	qsMgr := ai.NewFileQuickstartCreditManager(
+		billingStore,
+		orgID,
+		func() *config.AIConfig {
+			cfg, _ := persistence.LoadAIConfig()
+			return cfg
+		},
+		orgID,
+	)
+	svc.SetQuickstartCredits(qsMgr)
 	if err := svc.LoadConfig(); err != nil {
 		log.Warn().Str("orgID", orgID).Err(err).Msg("Failed to load AI config for tenant")
 	}
@@ -1920,6 +1952,12 @@ type AISettingsResponse struct {
 	// Discovery settings
 	DiscoveryEnabled       bool `json:"discovery_enabled"`                  // true if discovery is enabled
 	DiscoveryIntervalHours int  `json:"discovery_interval_hours,omitempty"` // Hours between auto-scans (0 = manual only)
+	// Quickstart credits
+	QuickstartCreditsTotal     int  `json:"quickstart_credits_total"`     // Total credits granted (25)
+	QuickstartCreditsUsed      int  `json:"quickstart_credits_used"`      // Credits consumed
+	QuickstartCreditsRemaining int  `json:"quickstart_credits_remaining"` // Credits remaining
+	QuickstartCreditsAvailable bool `json:"quickstart_credits_available"` // true if quickstart credits are usable
+	UsingQuickstart            bool `json:"using_quickstart"`             // true if currently using quickstart provider
 }
 
 // AISettingsUpdateRequest is the request body for PUT /api/settings/ai
@@ -1968,6 +2006,24 @@ type AISettingsUpdateRequest struct {
 	// Discovery settings
 	DiscoveryEnabled       *bool `json:"discovery_enabled,omitempty"`        // Enable discovery
 	DiscoveryIntervalHours *int  `json:"discovery_interval_hours,omitempty"` // Hours between auto-scans (0 = manual only)
+}
+
+// populateQuickstartFields fills quickstart credit info on an AISettingsResponse.
+func (h *AISettingsHandler) populateQuickstartFields(ctx context.Context, resp *AISettingsResponse) {
+	aiSvc := h.GetAIService(ctx)
+	if aiSvc == nil {
+		return
+	}
+	qsMgr := aiSvc.GetQuickstartCredits()
+	if qsMgr == nil {
+		return
+	}
+	resp.QuickstartCreditsTotal = pkglicensing.QuickstartCreditsTotal
+	remaining := qsMgr.CreditsRemaining()
+	resp.QuickstartCreditsRemaining = remaining
+	resp.QuickstartCreditsUsed = pkglicensing.QuickstartCreditsTotal - remaining
+	resp.QuickstartCreditsAvailable = qsMgr.HasCredits()
+	resp.UsingQuickstart = aiSvc.IsUsingQuickstart()
 }
 
 // HandleGetAISettings returns the current AI settings (GET /api/settings/ai)
@@ -2041,6 +2097,14 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		ProtectedGuests:        settings.GetProtectedGuests(),
 		DiscoveryEnabled:       settings.IsDiscoveryEnabled(),
 		DiscoveryIntervalHours: settings.DiscoveryIntervalHours,
+	}
+
+	// Populate quickstart credit info
+	h.populateQuickstartFields(ctx, &response)
+
+	// If quickstart credits are available, mark as configured even without BYOK
+	if response.QuickstartCreditsAvailable && !response.Configured {
+		response.Configured = true
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -2206,16 +2270,48 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.OpenAIBaseURL = strings.TrimSpace(*req.OpenAIBaseURL)
 	}
 
+	// Track whether we need to grant quickstart credits (deferred until after all validation).
+	grantQuickstartCredits := false
 	if req.Enabled != nil {
-		// Only allow enabling if at least one provider is configured
+		// Only allow enabling if at least one provider is configured OR quickstart credits are available
 		if *req.Enabled {
 			configuredProviders := settings.GetConfiguredProviders()
-			if len(configuredProviders) == 0 {
-				// No providers configured - give a helpful error
-				http.Error(w, "Please configure a provider (API key or Ollama URL) before enabling Pulse Assistant", http.StatusBadRequest)
-				return
+			// Also check legacy single-provider credentials (Provider + APIKey fields).
+			hasLegacyBYOK := (settings.Provider != "" && settings.APIKey != "") || settings.Provider == config.AIProviderOllama
+			if len(configuredProviders) == 0 && !hasLegacyBYOK {
+				// Check if quickstart credits can bridge the gap
+				aiSvc := h.GetAIService(r.Context())
+				hasQuickstart := false
+				if aiSvc != nil {
+					if qsMgr := aiSvc.GetQuickstartCredits(); qsMgr != nil {
+						hasQuickstart = qsMgr.HasCredits()
+						// First-time enable: grant credits to check availability.
+						// This is safe even if later validation fails — grants are
+						// idempotent and every workspace is entitled to 25 credits.
+						if !hasQuickstart {
+							if err := qsMgr.GrantCredits(); err == nil {
+								hasQuickstart = qsMgr.HasCredits()
+							}
+						}
+					}
+				}
+				if !hasQuickstart {
+					http.Error(w, "Please configure a provider (API key or Ollama URL) before enabling Pulse Assistant", http.StatusBadRequest)
+					return
+				}
+				// Quickstart credits available — allow enabling without BYOK.
+				// Persist all model strings so chat.Service restart picks them
+				// up from disk. All three must point to quickstart — any stale
+				// BYOK model reference would cause the chat service to fail.
+				quickstartModelStr := config.AIProviderQuickstart + ":minimax-2.5m"
+				settings.Model = quickstartModelStr
+				settings.PatrolModel = quickstartModelStr
+				settings.ChatModel = quickstartModelStr
+			} else {
+				// BYOK is configured — still grant quickstart credits (idempotent)
+				// so every workspace gets the 25 free runs.
+				grantQuickstartCredits = true
 			}
-			// If we have configured providers, we're good to enable
 		}
 		settings.Enabled = *req.Enabled
 	}
@@ -2356,6 +2452,17 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.DiscoveryIntervalHours = 24
 	}
 
+	// Grant quickstart credits now that all validation has passed (idempotent).
+	if grantQuickstartCredits {
+		if aiSvc := h.GetAIService(r.Context()); aiSvc != nil {
+			if qsMgr := aiSvc.GetQuickstartCredits(); qsMgr != nil {
+				if err := qsMgr.GrantCredits(); err != nil {
+					log.Warn().Err(err).Msg("Failed to grant quickstart credits")
+				}
+			}
+		}
+	}
+
 	// Save settings
 	if err := h.getPersistence(r.Context()).SaveAIConfig(*settings); err != nil {
 		log.Error().Err(err).Msg("Failed to save AI settings")
@@ -2448,6 +2555,14 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		ProtectedGuests:        settings.GetProtectedGuests(),
 		DiscoveryEnabled:       settings.DiscoveryEnabled,
 		DiscoveryIntervalHours: settings.DiscoveryIntervalHours,
+	}
+
+	// Populate quickstart credit info
+	h.populateQuickstartFields(r.Context(), &response)
+
+	// If quickstart credits are available, mark as configured even without BYOK
+	if response.QuickstartCreditsAvailable && !response.Configured {
+		response.Configured = true
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {

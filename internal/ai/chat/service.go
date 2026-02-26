@@ -815,6 +815,10 @@ func (s *Service) createProviderForModel(modelStr string) (providers.StreamingPr
 			baseURL = "http://localhost:11434"
 		}
 		return providers.NewOllamaClient(modelName, baseURL, timeout), nil
+	case config.AIProviderQuickstart:
+		// Quickstart uses the hosted proxy — no API key needed.
+		// The licenseID is embedded in the client via orgID.
+		return providers.NewQuickstartClient(s.orgID), nil
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", providerName)
 	}

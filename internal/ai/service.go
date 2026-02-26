@@ -178,6 +178,11 @@ type Service struct {
 
 	// License checker for Pro feature gating
 	licenseChecker LicenseChecker
+
+	// Quickstart credit manager for free hosted patrol runs
+	quickstartCredits QuickstartCreditManager
+	// usingQuickstart tracks whether the current provider was set via quickstart credits
+	usingQuickstart bool
 }
 
 type executionLimits struct {
@@ -358,6 +363,10 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 		// Connect discovery store for deep infrastructure context
 		if s.discoveryStore != nil {
 			s.patrolService.SetDiscoveryStore(s.discoveryStore)
+		}
+		// Forward quickstart credit manager if already configured.
+		if s.quickstartCredits != nil {
+			s.patrolService.SetQuickstartCredits(s.quickstartCredits)
 		}
 		// Forward unified ReadState if already configured.
 		if s.readState != nil {
@@ -1291,14 +1300,57 @@ func (s *Service) LoadConfig() error {
 
 	s.cfg = cfg
 
+	s.usingQuickstart = false
+
 	// Don't initialize provider if AI is not enabled or not configured
 	if cfg == nil || !cfg.Enabled || !cfg.IsConfigured() {
+		// Check if quickstart credits can fill the gap (enabled but no BYOK)
+		if cfg != nil && cfg.Enabled && s.quickstartCredits != nil && s.quickstartCredits.HasCredits() {
+			qp := s.quickstartCredits.GetProvider()
+			if qp != nil {
+				s.provider = qp
+				s.usingQuickstart = true
+				// Force all model strings to quickstart so chat.Service creates the right provider.
+				quickstartModelStr := config.AIProviderQuickstart + ":minimax-2.5m"
+				cfg.Model = quickstartModelStr
+				cfg.PatrolModel = quickstartModelStr
+				cfg.ChatModel = quickstartModelStr
+				log.Info().
+					Int("credits_remaining", s.quickstartCredits.CreditsRemaining()).
+					Msg("AI service initialized via quickstart credits (no BYOK)")
+				return nil
+			}
+		}
 		s.provider = nil
 		return nil
 	}
 
 	selectedModel := cfg.GetModel()
 	selectedProvider, _ := config.ParseModelString(selectedModel)
+
+	// BYOK transition: if the user added their own API key while the model
+	// was still set to quickstart, switch to the BYOK provider's default.
+	if selectedProvider == config.AIProviderQuickstart && cfg.IsConfigured() {
+		var byokDefault string
+		configuredProviders := cfg.GetConfiguredProviders()
+		if len(configuredProviders) > 0 {
+			byokDefault = config.DefaultModelForProvider(configuredProviders[0])
+		} else if cfg.Provider != "" {
+			// Legacy single-provider credentials
+			byokDefault = config.DefaultModelForProvider(cfg.Provider)
+		}
+		if byokDefault != "" {
+			log.Info().
+				Str("from", selectedModel).
+				Str("to", byokDefault).
+				Msg("AI service: BYOK configured, switching from quickstart model")
+			selectedModel = byokDefault
+			selectedProvider, _ = config.ParseModelString(selectedModel)
+			cfg.Model = selectedModel
+			cfg.PatrolModel = "" // Let it inherit from Model
+			cfg.ChatModel = ""   // Let it inherit from Model
+		}
+	}
 
 	providerClient, err := providers.NewForModel(cfg, selectedModel)
 	if err != nil {
@@ -1395,7 +1447,43 @@ func (s *Service) IsEnabled() bool {
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.cfg != nil && s.cfg.Enabled && s.provider != nil
+	if s.cfg != nil && s.cfg.Enabled && s.provider != nil {
+		// When running on quickstart credits, verify credits still remain.
+		if s.usingQuickstart && s.quickstartCredits != nil && !s.quickstartCredits.HasCredits() {
+			return false
+		}
+		return true
+	}
+	// Also enabled if quickstart credits are available (even without BYOK)
+	if s.cfg != nil && s.cfg.Enabled && s.quickstartCredits != nil && s.quickstartCredits.HasCredits() {
+		return true
+	}
+	return false
+}
+
+// IsUsingQuickstart returns true if the current provider is the quickstart proxy.
+func (s *Service) IsUsingQuickstart() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.usingQuickstart
+}
+
+// SetQuickstartCredits sets the quickstart credit manager on both the
+// service and its patrol sub-service so credit checks work at runtime.
+func (s *Service) SetQuickstartCredits(mgr QuickstartCreditManager) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.quickstartCredits = mgr
+	if s.patrolService != nil {
+		s.patrolService.SetQuickstartCredits(mgr)
+	}
+}
+
+// GetQuickstartCredits returns the quickstart credit manager.
+func (s *Service) GetQuickstartCredits() QuickstartCreditManager {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.quickstartCredits
 }
 
 // QuickAnalysis performs a lightweight AI analysis for simple decisions.
@@ -3990,6 +4078,7 @@ func (s *Service) TestConnection(ctx context.Context) error {
 	cfg := s.cfg
 	defaultProvider := s.provider
 	persistence := s.persistence
+	isQuickstart := s.usingQuickstart
 	s.mu.RUnlock()
 
 	// Load config if not available
@@ -4005,6 +4094,10 @@ func (s *Service) TestConnection(ctx context.Context) error {
 	}
 
 	if cfg == nil || !cfg.IsConfigured() {
+		// If using quickstart credits, test the quickstart proxy instead.
+		if isQuickstart && defaultProvider != nil {
+			return defaultProvider.TestConnection(ctx)
+		}
 		return fmt.Errorf("no provider configured")
 	}
 
