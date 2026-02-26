@@ -12,7 +12,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/forecast"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/proxmox"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
@@ -246,7 +245,7 @@ func TestHandleGetProxmoxCorrelations_WithCorrelator(t *testing.T) {
 }
 
 func TestHandleGetRemediationPlans_WithEngine(t *testing.T) {
-	handler := &AISettingsHandler{remediationEngine: remediation.NewEngine(remediation.EngineConfig{})}
+	handler := &AISettingsHandler{remediationEngine: newTestRemediationEngine()}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/remediation/plans", nil)
 	rec := httptest.NewRecorder()
 
@@ -258,7 +257,7 @@ func TestHandleGetRemediationPlans_WithEngine(t *testing.T) {
 }
 
 func TestHandleGetRemediationPlan_MissingID(t *testing.T) {
-	handler := &AISettingsHandler{remediationEngine: remediation.NewEngine(remediation.EngineConfig{})}
+	handler := &AISettingsHandler{remediationEngine: newTestRemediationEngine()}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/remediation/plans/plan-1", nil)
 	rec := httptest.NewRecorder()
 
@@ -270,7 +269,7 @@ func TestHandleGetRemediationPlan_MissingID(t *testing.T) {
 }
 
 func TestHandleApproveRemediationPlan_InvalidBody(t *testing.T) {
-	handler := &AISettingsHandler{remediationEngine: remediation.NewEngine(remediation.EngineConfig{})}
+	handler := &AISettingsHandler{remediationEngine: newTestRemediationEngine()}
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/approve", strings.NewReader("bad-json"))
 	rec := httptest.NewRecorder()
 
@@ -282,7 +281,7 @@ func TestHandleApproveRemediationPlan_InvalidBody(t *testing.T) {
 }
 
 func TestHandleApproveRemediationPlan_MissingID(t *testing.T) {
-	handler := &AISettingsHandler{remediationEngine: remediation.NewEngine(remediation.EngineConfig{})}
+	handler := &AISettingsHandler{remediationEngine: newTestRemediationEngine()}
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/approve", strings.NewReader(`{\"plan_id\":\"\"}`))
 	rec := httptest.NewRecorder()
 

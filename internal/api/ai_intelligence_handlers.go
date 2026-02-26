@@ -12,10 +12,10 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
 )
 
@@ -1404,22 +1404,22 @@ func (h *AISettingsHandler) HandleGetRemediationPlans(w http.ResponseWriter, r *
 		}
 
 		riskLevel := string(plan.RiskLevel)
-		if plan.RiskLevel == remediation.RiskCritical {
-			riskLevel = string(remediation.RiskHigh)
+		if plan.RiskLevel == aicontracts.RiskCritical {
+			riskLevel = string(aicontracts.RiskHigh)
 		}
 
 		status := "pending"
 		if exec := engine.GetLatestExecutionForPlan(plan.ID); exec != nil {
 			switch exec.Status {
-			case remediation.StatusApproved:
+			case aicontracts.ExecStatusApproved:
 				status = "approved"
-			case remediation.StatusRunning:
+			case aicontracts.ExecStatusRunning:
 				status = "executing"
-			case remediation.StatusCompleted:
+			case aicontracts.ExecStatusCompleted:
 				status = "completed"
-			case remediation.StatusFailed:
+			case aicontracts.ExecStatusFailed:
 				status = "failed"
-			case remediation.StatusRolledBack:
+			case aicontracts.ExecStatusRolledBack:
 				status = "rolled_back"
 			default:
 				status = "pending"
@@ -1586,7 +1586,7 @@ func (h *AISettingsHandler) HandleExecuteRemediationPlan(w http.ResponseWriter, 
 	execution := engine.GetExecution(req.ExecutionID)
 
 	// Launch background verification if execution completed successfully
-	if execution != nil && execution.Status == remediation.StatusCompleted {
+	if execution != nil && execution.Status == aicontracts.ExecStatusCompleted {
 		plan := engine.GetPlan(execution.PlanID)
 		aiSvc := h.GetAIService(r.Context())
 		if plan != nil && plan.FindingID != "" && aiSvc != nil {

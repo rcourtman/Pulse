@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 func TestHandleGetRemediations_WithLog(t *testing.T) {
@@ -113,13 +113,13 @@ func TestHandleGetRemediations_LicenseHeader(t *testing.T) {
 }
 
 func TestHandleGetRemediationPlans_StatusMapping(t *testing.T) {
-	engine := remediation.NewEngine(remediation.EngineConfig{})
-	plan := &remediation.RemediationPlan{
+	engine := newTestRemediationEngine()
+	plan := &aicontracts.RemediationPlan{
 		ID:          "plan-1",
 		Title:       "Critical fix",
 		Description: "fix it",
-		RiskLevel:   remediation.RiskCritical,
-		Steps: []remediation.RemediationStep{
+		RiskLevel:   aicontracts.RiskCritical,
+		Steps: []aicontracts.RemediationStep{
 			{Order: 0, Command: "echo ok"},
 		},
 	}
@@ -150,7 +150,7 @@ func TestHandleGetRemediationPlans_StatusMapping(t *testing.T) {
 		t.Fatalf("expected 1 plan, got %d", len(plans))
 	}
 	planView := plans[0].(map[string]interface{})
-	if planView["risk_level"] != string(remediation.RiskHigh) {
+	if planView["risk_level"] != string(aicontracts.RiskHigh) {
 		t.Fatalf("expected risk_level high, got %#v", planView["risk_level"])
 	}
 	if planView["status"] != "approved" {
@@ -159,11 +159,11 @@ func TestHandleGetRemediationPlans_StatusMapping(t *testing.T) {
 }
 
 func TestHandleGetRemediationPlan_Success(t *testing.T) {
-	engine := remediation.NewEngine(remediation.EngineConfig{})
-	plan := &remediation.RemediationPlan{
+	engine := newTestRemediationEngine()
+	plan := &aicontracts.RemediationPlan{
 		ID:    "plan-2",
 		Title: "Fix",
-		Steps: []remediation.RemediationStep{{Order: 0, Command: "echo ok"}},
+		Steps: []aicontracts.RemediationStep{{Order: 0, Command: "echo ok"}},
 	}
 	if err := engine.CreatePlan(plan); err != nil {
 		t.Fatalf("CreatePlan: %v", err)
@@ -179,7 +179,7 @@ func TestHandleGetRemediationPlan_Success(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
-	var got remediation.RemediationPlan
+	var got aicontracts.RemediationPlan
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -189,11 +189,11 @@ func TestHandleGetRemediationPlan_Success(t *testing.T) {
 }
 
 func TestHandleApproveRemediationPlan_Success(t *testing.T) {
-	engine := remediation.NewEngine(remediation.EngineConfig{})
-	plan := &remediation.RemediationPlan{
+	engine := newTestRemediationEngine()
+	plan := &aicontracts.RemediationPlan{
 		ID:    "plan-3",
 		Title: "Approve",
-		Steps: []remediation.RemediationStep{{Order: 0, Command: "echo ok"}},
+		Steps: []aicontracts.RemediationStep{{Order: 0, Command: "echo ok"}},
 	}
 	if err := engine.CreatePlan(plan); err != nil {
 		t.Fatalf("CreatePlan: %v", err)

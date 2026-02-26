@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -528,7 +527,7 @@ func TestPatrolService_GenerateRemediationSteps(t *testing.T) {
 }
 
 func TestPatrolService_GenerateRemediationPlan(t *testing.T) {
-	engine := remediation.NewEngine(remediation.DefaultEngineConfig())
+	engine := newTestRemediationEngine()
 	ps := NewPatrolService(nil, nil)
 	ps.SetRemediationEngine(engine)
 

@@ -13,8 +13,8 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/forecast"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
 )
 
@@ -450,5 +450,5 @@ func (s *KnowledgeStore) loadFromDisk() error {
 // Verify interfaces are implemented
 var (
 	_ forecast.DataProvider       = (*ForecastDataAdapter)(nil)
-	_ remediation.CommandExecutor = (*CommandExecutorAdapter)(nil)
+	_ aicontracts.CommandExecutor = (*CommandExecutorAdapter)(nil)
 )

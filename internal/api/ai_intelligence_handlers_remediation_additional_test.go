@@ -14,9 +14,9 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 type stubRemediationExecutor struct {
@@ -51,17 +51,17 @@ func TestHandleExecuteRemediationPlan(t *testing.T) {
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	executor := &stubRemediationExecutor{}
-	engine := remediation.NewEngine(remediation.EngineConfig{DataDir: ""})
+	engine := newTestRemediationEngine()
 	engine.SetCommandExecutor(executor)
 	handler.SetRemediationEngine(engine)
 
-	plan := &remediation.RemediationPlan{
+	plan := &aicontracts.RemediationPlan{
 		ID:          "plan-1",
 		FindingID:   "finding-1",
 		ResourceID:  "res-1",
 		Title:       "Restart service",
 		Description: "Restart to recover",
-		Steps: []remediation.RemediationStep{
+		Steps: []aicontracts.RemediationStep{
 			{
 				Order:       0,
 				Description: "Restart",
@@ -83,11 +83,11 @@ func TestHandleExecuteRemediationPlan(t *testing.T) {
 		t.Fatalf("expected status OK, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var execution remediation.RemediationExecution
+	var execution aicontracts.RemediationExecution
 	if err := json.Unmarshal(rec.Body.Bytes(), &execution); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if execution.PlanID != plan.ID || execution.Status != remediation.StatusCompleted {
+	if execution.PlanID != plan.ID || execution.Status != aicontracts.ExecStatusCompleted {
 		t.Fatalf("unexpected execution: %+v", execution)
 	}
 	if len(executor.Calls()) != 1 {
@@ -102,17 +102,17 @@ func TestHandleRollbackRemediationPlan(t *testing.T) {
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	executor := &stubRemediationExecutor{}
-	engine := remediation.NewEngine(remediation.EngineConfig{DataDir: ""})
+	engine := newTestRemediationEngine()
 	engine.SetCommandExecutor(executor)
 	handler.SetRemediationEngine(engine)
 
-	plan := &remediation.RemediationPlan{
+	plan := &aicontracts.RemediationPlan{
 		ID:          "plan-rollback",
 		FindingID:   "finding-1",
 		ResourceID:  "res-1",
 		Title:       "Restart service",
 		Description: "Restart to recover",
-		Steps: []remediation.RemediationStep{
+		Steps: []aicontracts.RemediationStep{
 			{
 				Order:       0,
 				Description: "Restart",

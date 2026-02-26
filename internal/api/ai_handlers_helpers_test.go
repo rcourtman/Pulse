@@ -11,7 +11,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/forecast"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/proxmox"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -160,7 +159,7 @@ func TestAISettingsHandler_Setters(t *testing.T) {
 		t.Fatalf("expected correlator to be set")
 	}
 
-	engine := &remediation.Engine{}
+	engine := newTestRemediationEngine()
 	handler.SetRemediationEngine(engine)
 	if handler.GetRemediationEngine() != engine {
 		t.Fatalf("expected remediation engine to be set")

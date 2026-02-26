@@ -8,7 +8,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 )
 
@@ -129,7 +128,7 @@ func TestPatrolService_AdditionalSetters(t *testing.T) {
 		t.Fatalf("expected circuit breaker to be set")
 	}
 
-	engine := remediation.NewEngine(remediation.DefaultEngineConfig())
+	engine := newTestRemediationEngine()
 	ps.SetRemediationEngine(engine)
 	if ps.GetRemediationEngine() != engine {
 		t.Fatalf("expected remediation engine to be set")

@@ -82,16 +82,15 @@ type BusinessHooks struct {
 
 	// CreateRemediationEngine creates the premium remediation engine.
 	// Returns nil in OSS (no implementation available). Enterprise provides
-	// the concrete *remediation.Engine wrapped behind the interface.
+	// the concrete engine implementation wrapped behind the interface.
 	CreateRemediationEngine func(cfg aicontracts.EngineConfig) aicontracts.RemediationEngine
 
 	// CreateInvestigationStore creates the premium investigation session store.
-	// Returns nil in OSS. Enterprise provides the concrete *investigation.Store.
+	// Returns nil in OSS. Enterprise provides a concrete implementation.
 	CreateInvestigationStore func(dataDir string) aicontracts.InvestigationStore
 
 	// CreateInvestigationOrchestrator creates the premium investigation orchestrator.
-	// Returns nil in OSS. Enterprise provides the concrete investigation.Orchestrator
-	// wrapped behind the InvestigationOrchestrator interface.
+	// Returns nil in OSS. Enterprise provides a concrete implementation.
 	CreateInvestigationOrchestrator func(deps aicontracts.OrchestratorDeps) aicontracts.InvestigationOrchestrator
 }
 

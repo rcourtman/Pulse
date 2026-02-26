@@ -9,7 +9,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/proxmox"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
@@ -116,8 +115,8 @@ func TestAISettingsHandler_IntelligenceServicesAreOrgScoped(t *testing.T) {
 		t.Fatalf("expected tenant forecast service, got %#v", got)
 	}
 
-	defaultRemediationEngine := remediation.NewEngine(remediation.DefaultEngineConfig())
-	tenantRemediationEngine := remediation.NewEngine(remediation.DefaultEngineConfig())
+	defaultRemediationEngine := newTestRemediationEngine()
+	tenantRemediationEngine := newTestRemediationEngine()
 	handler.SetRemediationEngineForOrg("default", defaultRemediationEngine)
 	handler.SetRemediationEngineForOrg("acme", tenantRemediationEngine)
 	if got := handler.GetRemediationEngine(); got != defaultRemediationEngine {

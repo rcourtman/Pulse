@@ -13,9 +13,9 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/forecast"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/proxmox"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 type stubForecastProvider struct {
@@ -486,7 +486,7 @@ func TestHandleExecuteRemediationPlan_Errors(t *testing.T) {
 	})
 
 	t.Run("invalid_body", func(t *testing.T) {
-		handler := &AISettingsHandler{remediationEngine: remediation.NewEngine(remediation.EngineConfig{})}
+		handler := &AISettingsHandler{remediationEngine: newTestRemediationEngine()}
 		req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/execute", bytes.NewBufferString("bad-json"))
 		rec := httptest.NewRecorder()
 		handler.HandleExecuteRemediationPlan(rec, req)
@@ -496,7 +496,7 @@ func TestHandleExecuteRemediationPlan_Errors(t *testing.T) {
 	})
 
 	t.Run("missing_ids", func(t *testing.T) {
-		handler := &AISettingsHandler{remediationEngine: remediation.NewEngine(remediation.EngineConfig{})}
+		handler := &AISettingsHandler{remediationEngine: newTestRemediationEngine()}
 		req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/execute", bytes.NewBufferString("{}"))
 		rec := httptest.NewRecorder()
 		handler.HandleExecuteRemediationPlan(rec, req)
@@ -506,14 +506,14 @@ func TestHandleExecuteRemediationPlan_Errors(t *testing.T) {
 	})
 
 	t.Run("execution_error", func(t *testing.T) {
-		engine := remediation.NewEngine(remediation.EngineConfig{})
-		plan := &remediation.RemediationPlan{
+		engine := newTestRemediationEngine()
+		plan := &aicontracts.RemediationPlan{
 			ID:          "plan-no-exec",
 			FindingID:   "finding-1",
 			ResourceID:  "res-1",
 			Title:       "Restart",
 			Description: "Restart service",
-			Steps: []remediation.RemediationStep{
+			Steps: []aicontracts.RemediationStep{
 				{
 					Order:       0,
 					Description: "Restart",
@@ -548,7 +548,7 @@ func TestHandleRollbackRemediationPlan_Errors(t *testing.T) {
 	})
 
 	t.Run("invalid_body", func(t *testing.T) {
-		handler := &AISettingsHandler{remediationEngine: remediation.NewEngine(remediation.EngineConfig{})}
+		handler := &AISettingsHandler{remediationEngine: newTestRemediationEngine()}
 		req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/rollback", bytes.NewBufferString("bad-json"))
 		rec := httptest.NewRecorder()
 		handler.HandleRollbackRemediationPlan(rec, req)
@@ -558,7 +558,7 @@ func TestHandleRollbackRemediationPlan_Errors(t *testing.T) {
 	})
 
 	t.Run("missing_execution_id", func(t *testing.T) {
-		handler := &AISettingsHandler{remediationEngine: remediation.NewEngine(remediation.EngineConfig{})}
+		handler := &AISettingsHandler{remediationEngine: newTestRemediationEngine()}
 		req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/rollback", bytes.NewBufferString("{}"))
 		rec := httptest.NewRecorder()
 		handler.HandleRollbackRemediationPlan(rec, req)

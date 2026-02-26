@@ -34,8 +34,7 @@ func isAIInvestigationEnabled() bool {
 }
 
 // SetCreateRemediationEngine registers the enterprise factory for creating
-// remediation engines. When set, router.go uses this instead of directly
-// constructing remediation.NewEngine.
+// remediation engines. When set, router.go uses this factory.
 func SetCreateRemediationEngine(fn func(cfg aicontracts.EngineConfig) aicontracts.RemediationEngine) {
 	aiFactoryMu.Lock()
 	defer aiFactoryMu.Unlock()
