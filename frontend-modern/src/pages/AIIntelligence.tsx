@@ -1088,7 +1088,6 @@ export function AIIntelligence() {
                         }
                       />
                     </div>
-
                   </div>
 
                   {/* Save Footer */}

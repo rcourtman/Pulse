@@ -139,6 +139,7 @@ const AIIntelligencePage = lazy(() =>
 const MigrationGuidePage = lazy(() => import('./pages/MigrationGuide'));
 const NotFoundPage = lazy(() => import('./pages/NotFound'));
 const PricingPage = lazy(() => import('./pages/PricingV6'));
+const CloudPricingPage = lazy(() => import('./pages/CloudPricing'));
 const HostedSignupPage = lazy(() => import('./pages/HostedSignup'));
 const Operations = lazy(() => import('./pages/Operations'));
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
@@ -1177,7 +1178,7 @@ function App() {
       <Route path="/pricing" component={PricingPage} />
       <Route
         path="/cloud"
-        component={() => <Navigate href={IS_V6_PUBLIC_RELEASE ? '/cloud/signup' : '/pricing'} />}
+        component={IS_V6_PUBLIC_RELEASE ? CloudPricingPage : () => <Navigate href="/pricing" />}
       />
       <Route
         path="/cloud/signup"
