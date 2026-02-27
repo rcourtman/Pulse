@@ -107,9 +107,9 @@ Auto-detection behavior:
 
 To disable auto-detection, explicitly set the relevant flags or env vars, for example:
 
-- `--enable-docker=false` or `PULSE_ENABLE_DOCKER=false`
-- `--enable-kubernetes=false` or `PULSE_ENABLE_KUBERNETES=false`
-- `--enable-proxmox=false` or `PULSE_ENABLE_PROXMOX=false`
+- `--disable-docker` or `PULSE_ENABLE_DOCKER=false`
+- `--disable-kubernetes` or `PULSE_ENABLE_KUBERNETES=false`
+- `--disable-proxmox` or `PULSE_ENABLE_PROXMOX=false`
 
 ## Installation Options
 
@@ -128,7 +128,7 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 ### Disable Docker (even if detected)
 ```bash
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-docker=false
+  bash -s -- --url http://<pulse-ip>:7655 --token <token> --disable-docker
 ```
 
 ### Host + Kubernetes Monitoring
