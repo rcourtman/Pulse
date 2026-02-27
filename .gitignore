@@ -192,6 +192,8 @@ tmp_*.sh
 scripts/agent/
 docs/internal/
 docs/architecture/
+docs/release-control/
+scripts/release_control/
 .agent/
 
 # Pulse Pro landing page (private)
