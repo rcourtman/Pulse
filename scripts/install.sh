@@ -330,10 +330,13 @@ build_exec_args_array() {
 save_connection_info() {
     local state_dir="$1"
     mkdir -p "$state_dir"
-    # Save connection details so uninstall can deregister without --url/--token
+    # Save connection details so uninstall can deregister without --url/--token.
+    # Single-quote values to prevent shell interpretation on read-back.
+    # PULSE_URL is validated as ^https?:// and PULSE_TOKEN as ^[a-fA-F0-9]+$,
+    # so neither can contain single quotes — no inner escaping needed.
     cat > "${state_dir}/connection.env" <<CONNEOF
-PULSE_URL=${PULSE_URL}
-PULSE_TOKEN=${PULSE_TOKEN}
+PULSE_URL='${PULSE_URL}'
+PULSE_TOKEN='${PULSE_TOKEN}'
 CONNEOF
     chmod 600 "${state_dir}/connection.env"
     # Save a copy of this install script for offline uninstall.
@@ -354,6 +357,9 @@ CONNEOF
     fi
     if [[ -f "${state_dir}/install.sh" ]]; then
         chmod +x "${state_dir}/install.sh"
+        SAVED_INSTALL_SCRIPT="${state_dir}/install.sh"
+    else
+        SAVED_INSTALL_SCRIPT=""
     fi
 }
 
@@ -478,18 +484,27 @@ fi
 if [[ "$UNINSTALL" == "true" ]]; then
     log_info "Uninstalling ${AGENT_NAME} and cleaning up legacy agents..."
 
-    # Recover connection details from saved config if not provided on command line
+    # Recover connection details from saved config if not provided on command line.
+    # Parse key=value safely with grep+sed instead of source to avoid shell injection.
     if [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" ]]; then
         local conn_env=""
         if [[ -f /var/lib/pulse-agent/connection.env ]]; then
             conn_env="/var/lib/pulse-agent/connection.env"
+        elif [[ -f /boot/config/plugins/pulse-agent/connection.env ]]; then
+            conn_env="/boot/config/plugins/pulse-agent/connection.env"
         elif [[ -f "$TRUENAS_STATE_DIR/connection.env" ]]; then
             conn_env="$TRUENAS_STATE_DIR/connection.env"
         fi
         if [[ -n "$conn_env" ]]; then
             log_info "Recovering connection details from ${conn_env}..."
-            # shellcheck disable=SC1090
-            source "$conn_env"
+            # Strip surrounding single quotes from values written by save_connection_info.
+            # Use || true to prevent set -e from aborting if keys are missing.
+            if [[ -z "$PULSE_URL" ]]; then
+                PULSE_URL=$(grep '^PULSE_URL=' "$conn_env" 2>/dev/null | head -1 | sed "s/^PULSE_URL=//; s/^'//; s/'$//" || true)
+            fi
+            if [[ -z "$PULSE_TOKEN" ]]; then
+                PULSE_TOKEN=$(grep '^PULSE_TOKEN=' "$conn_env" 2>/dev/null | head -1 | sed "s/^PULSE_TOKEN=//; s/^'//; s/'$//" || true)
+            fi
         fi
     fi
 
@@ -1013,7 +1028,7 @@ EOF
     else
         log_info "Installation complete! Agent service started."
     fi
-    log_info "To uninstall later: sudo bash /var/lib/pulse-agent/install.sh --uninstall"
+    if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
     exit 0
 fi
 
@@ -1087,7 +1102,7 @@ EOF
     else
         log_info "Installation complete! Agent service started."
     fi
-    log_info "To uninstall later: sudo bash /var/lib/pulse-agent/install.sh --uninstall"
+    if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
     exit 0
 fi
 
@@ -1202,12 +1217,12 @@ EOF
     bash "${WRAPPER_SCRIPT}" >> "/var/log/${AGENT_NAME}.log" 2>&1 &
     disown 2>/dev/null || true  # Disown if available to prevent SIGHUP
 
-    save_connection_info "/var/lib/pulse-agent"
+    save_connection_info "$UNRAID_STORAGE_DIR"
     log_info "Installation complete!"
     log_info "The agent will start automatically on boot."
     log_info "To check status: pgrep -a pulse-agent"
     log_info "To view logs: tail -f /var/log/${AGENT_NAME}.log"
-    log_info "To uninstall later: sudo bash /var/lib/pulse-agent/install.sh --uninstall"
+    if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
     exit 0
 fi
 
@@ -1578,7 +1593,7 @@ BOOTSTRAP
     fi
     log_info ""
     log_info "The Init/Shutdown task ensures the agent survives TrueNAS upgrades."
-    log_info "To uninstall later: sudo bash ${TRUENAS_STATE_DIR}/install.sh --uninstall"
+    if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
     exit 0
 fi
 
@@ -1641,7 +1656,7 @@ INITEOF
     else
         log_info "Installation complete! Agent service started."
     fi
-    log_info "To uninstall later: sudo bash /var/lib/pulse-agent/install.sh --uninstall"
+    if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
     exit 0
 fi
 
@@ -1762,7 +1777,7 @@ BOOTEOF
     fi
     log_info "To check status: $RCSCRIPT status"
     log_info "To view logs: tail -f /var/log/messages"
-    log_info "To uninstall later: sudo bash /var/lib/pulse-agent/install.sh --uninstall"
+    if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
     exit 0
 fi
 
@@ -1844,7 +1859,7 @@ EOF
         log_info "Installation complete! Agent service started."
         log_info "Token file: $TOKEN_FILE (mode 600, root only)"
     fi
-    log_info "To uninstall later: sudo bash /var/lib/pulse-agent/install.sh --uninstall"
+    if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
     exit 0
 fi
 
@@ -2025,7 +2040,7 @@ INITEOF
     fi
     log_info "To check status: $INITSCRIPT status"
     log_info "To view logs: tail -f /var/log/${AGENT_NAME}.log"
-    log_info "To uninstall later: sudo bash /var/lib/pulse-agent/install.sh --uninstall"
+    if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
     exit 0
 fi
 

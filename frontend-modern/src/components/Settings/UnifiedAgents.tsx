@@ -1752,7 +1752,16 @@ export const UnifiedAgents: Component = () => {
                 If the agent can't reach this server, run directly on the host:{' '}
                 <code class="bg-surface-hover px-1 rounded not-italic">
                   sudo bash /var/lib/pulse-agent/install.sh --uninstall
+                </code>{' '}
+                (TrueNAS:{' '}
+                <code class="bg-surface-hover px-1 rounded not-italic">
+                  /data/pulse-agent/install.sh
                 </code>
+                , Unraid:{' '}
+                <code class="bg-surface-hover px-1 rounded not-italic">
+                  /boot/config/plugins/pulse-agent/install.sh
+                </code>
+                )
               </p>
               {/* Windows uninstall */}
               <div class="space-y-1">
