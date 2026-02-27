@@ -10,6 +10,8 @@ import {
   hasFeature,
   loadLicenseStatus,
   licenseLoaded,
+  startProTrial,
+  entitlements,
 } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import Plus from 'lucide-solid/icons/plus';
@@ -204,6 +206,30 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   const [loadingPreview, setLoadingPreview] = createSignal(false);
 
   const hasAdvancedSSO = createMemo(() => hasFeature('advanced_sso'));
+  const [startingTrial, setStartingTrial] = createSignal(false);
+  const canStartTrial = () => entitlements()?.trial_eligible === true;
+
+  const handleStartTrial = async () => {
+    if (startingTrial()) return;
+    setStartingTrial(true);
+    try {
+      const result = await startProTrial();
+      if (result?.outcome === 'redirect') {
+        window.location.href = result.actionUrl;
+        return;
+      }
+      notificationStore.success('Pro trial started');
+    } catch (err) {
+      const statusCode = (err as { status?: number } | null)?.status;
+      if (statusCode === 409) {
+        notificationStore.error('Trial already used');
+      } else {
+        notificationStore.error(err instanceof Error ? err.message : 'Failed to start trial');
+      }
+    } finally {
+      setStartingTrial(false);
+    }
+  };
 
   createEffect((wasBannerVisible) => {
     const isBannerVisible = licenseLoaded() && !hasAdvancedSSO() && !loading();
@@ -572,6 +598,16 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   Upgrade to Pro
                   <ExternalLink class="w-4 h-4" />
                 </a>
+                <Show when={canStartTrial()}>
+                  <button
+                    type="button"
+                    onClick={handleStartTrial}
+                    disabled={startingTrial()}
+                    class="text-sm text-indigo-500 hover:underline disabled:opacity-50"
+                  >
+                    Start free trial
+                  </button>
+                </Show>
               </div>
             </div>
           </div>
@@ -589,16 +625,28 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 tier.
               </p>
             </div>
-            <a
-              href={getUpgradeActionUrlOrFallback('advanced_sso')}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
-              onClick={() => trackUpgradeClicked('settings_sso_providers_banner', 'advanced_sso')}
-            >
-              Upgrade to Pro
-              <ExternalLink class="w-4 h-4" />
-            </a>
+            <div class="flex flex-col sm:flex-row items-center gap-2">
+              <a
+                href={getUpgradeActionUrlOrFallback('advanced_sso')}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                onClick={() => trackUpgradeClicked('settings_sso_providers_banner', 'advanced_sso')}
+              >
+                Upgrade to Pro
+                <ExternalLink class="w-4 h-4" />
+              </a>
+              <Show when={canStartTrial()}>
+                <button
+                  type="button"
+                  onClick={handleStartTrial}
+                  disabled={startingTrial()}
+                  class="text-sm text-indigo-500 hover:underline disabled:opacity-50"
+                >
+                  Start free trial
+                </button>
+              </Show>
+            </div>
           </div>
         </div>
       </Show>

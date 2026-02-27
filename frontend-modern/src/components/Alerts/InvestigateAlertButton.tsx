@@ -2,7 +2,8 @@ import { Show, createSignal } from 'solid-js';
 import { aiChatStore } from '@/stores/aiChat';
 import type { Alert } from '@/types/api';
 import { formatAlertValue } from '@/utils/alertFormatters';
-import { notificationStore } from '@/stores/notifications';
+import { getUpgradeActionUrlOrFallback } from '@/stores/license';
+import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 
 interface InvestigateAlertButtonProps {
   alert: Alert;
@@ -32,7 +33,8 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
     e.stopPropagation();
     e.preventDefault();
     if (isLocked()) {
-      notificationStore.warning('Pro required to investigate alerts with Pulse Assistant.');
+      trackUpgradeClicked('investigate_alert_button', 'ai_alerts');
+      window.open(getUpgradeActionUrlOrFallback('ai_alerts'), '_blank');
       return;
     }
 

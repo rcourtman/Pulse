@@ -9,17 +9,58 @@ import SettingsPanel from '@/components/shared/SettingsPanel';
 import { formControl } from '@/components/shared/Form';
 import { showSuccess, showWarning } from '@/utils/toast';
 import { apiFetchJSON } from '@/utils/apiClient';
-import { hasFeature, loadLicenseStatus } from '@/stores/license';
+import {
+  hasFeature,
+  licenseLoaded,
+  loadLicenseStatus,
+  getUpgradeActionUrlOrFallback,
+  startProTrial,
+  entitlements,
+} from '@/stores/license';
+import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 
 export function AuditWebhookPanel() {
   const [webhookUrls, setWebhookUrls] = createSignal<string[]>([]);
   const [newUrl, setNewUrl] = createSignal('');
   const [saving, setSaving] = createSignal(false);
   const [loading, setLoading] = createSignal(true);
+  const [startingTrial, setStartingTrial] = createSignal(false);
+
+  const canStartTrial = () => entitlements()?.trial_eligible === true;
+
+  const handleStartTrial = async () => {
+    if (startingTrial()) return;
+    setStartingTrial(true);
+    try {
+      const result = await startProTrial();
+      if (result?.outcome === 'redirect') {
+        window.location.href = result.actionUrl;
+        return;
+      }
+      showSuccess('Pro trial started');
+    } catch (err) {
+      const statusCode = (err as { status?: number } | null)?.status;
+      if (statusCode === 409) {
+        showWarning('Trial already used');
+      } else {
+        showWarning(err instanceof Error ? err.message : 'Failed to start trial');
+      }
+    } finally {
+      setStartingTrial(false);
+    }
+  };
 
   onMount(() => {
     loadLicenseStatus();
   });
+
+  createEffect((wasPaywallVisible: boolean) => {
+    const isPaywallVisible = licenseLoaded() && !hasFeature('audit_logging');
+    if (isPaywallVisible && !wasPaywallVisible) {
+      trackPaywallViewed('audit_logging', 'settings_audit_webhook_panel');
+    }
+    return isPaywallVisible;
+  }, false);
 
   createEffect(() => {
     if (hasFeature('audit_logging')) {
@@ -92,11 +133,36 @@ export function AuditWebhookPanel() {
       >
         <Show when={!loading()} fallback={<div class="text-sm text-muted">Loading...</div>}>
           <Card tone="info" padding="md">
-            <div class="text-sm">
-              <p class="font-semibold text-base-content">Pro Required</p>
-              <p class="mt-1 text-muted">
-                Audit webhooks are part of the audit logging feature set and require Pro.
-              </p>
+            <div class="flex flex-col sm:flex-row items-center gap-4">
+              <div class="flex-1 text-center sm:text-left">
+                <p class="font-semibold text-base-content">Audit Webhooks (Pro)</p>
+                <p class="mt-1 text-sm text-muted">
+                  Audit webhooks are part of the audit logging feature set and require Pro.
+                </p>
+              </div>
+              <div class="flex flex-col sm:flex-row items-center gap-2">
+                <a
+                  href={getUpgradeActionUrlOrFallback('audit_logging')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="w-full sm:w-auto min-h-10 text-center sm:min-h-9 px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  onClick={() =>
+                    trackUpgradeClicked('settings_audit_webhook_panel', 'audit_logging')
+                  }
+                >
+                  Upgrade to Pro
+                </a>
+                <Show when={canStartTrial()}>
+                  <button
+                    type="button"
+                    onClick={handleStartTrial}
+                    disabled={startingTrial()}
+                    class="text-sm text-indigo-500 hover:underline disabled:opacity-50"
+                  >
+                    Start free trial
+                  </button>
+                </Show>
+              </div>
             </div>
           </Card>
         </Show>

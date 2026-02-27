@@ -19,6 +19,8 @@ import {
   licenseLoaded,
   loadLicenseStatus,
   licenseLoading,
+  startProTrial,
+  entitlements,
 } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import { SuggestProfileModal } from './SuggestProfileModal';
@@ -53,6 +55,30 @@ export const AgentProfilesPanel: Component = () => {
 
   const checkingLicense = () => !licenseLoaded() || licenseLoading();
   const hasAgentProfiles = () => hasEntitlement('agent_profiles');
+  const [startingTrial, setStartingTrial] = createSignal(false);
+  const canStartTrial = () => entitlements()?.trial_eligible === true;
+
+  const handleStartTrial = async () => {
+    if (startingTrial()) return;
+    setStartingTrial(true);
+    try {
+      const result = await startProTrial();
+      if (result?.outcome === 'redirect') {
+        window.location.href = result.actionUrl;
+        return;
+      }
+      notificationStore.success('Pro trial started');
+    } catch (err) {
+      const statusCode = (err as { status?: number } | null)?.status;
+      if (statusCode === 409) {
+        notificationStore.error('Trial already used');
+      } else {
+        notificationStore.error(err instanceof Error ? err.message : 'Failed to start trial');
+      }
+    } finally {
+      setStartingTrial(false);
+    }
+  };
 
   createEffect((wasPaywallVisible) => {
     const isPaywallVisible = !checkingLicense() && !hasAgentProfiles();
@@ -306,16 +332,30 @@ export const AgentProfilesPanel: Component = () => {
               Create reusable configuration profiles for your agents. Manage settings like Docker
               monitoring, logging levels, and reporting intervals from a central location.
             </p>
-            <a
-              href={getUpgradeActionUrlOrFallback('agent_profiles')}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex items-center gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900 px-4 py-2 text-sm font-medium text-amber-800 dark:text-amber-100 transition-colors hover:bg-amber-200 dark:hover:bg-amber-800"
-              onClick={() => trackUpgradeClicked('settings_agent_profiles_panel', 'agent_profiles')}
-            >
-              <Crown class="w-4 h-4" />
-              Upgrade to Pro
-            </a>
+            <div class="flex flex-wrap items-center gap-3">
+              <a
+                href={getUpgradeActionUrlOrFallback('agent_profiles')}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900 px-4 py-2 text-sm font-medium text-amber-800 dark:text-amber-100 transition-colors hover:bg-amber-200 dark:hover:bg-amber-800"
+                onClick={() =>
+                  trackUpgradeClicked('settings_agent_profiles_panel', 'agent_profiles')
+                }
+              >
+                <Crown class="w-4 h-4" />
+                Upgrade to Pro
+              </a>
+              <Show when={canStartTrial()}>
+                <button
+                  type="button"
+                  onClick={handleStartTrial}
+                  disabled={startingTrial()}
+                  class="text-sm text-indigo-500 hover:underline disabled:opacity-50"
+                >
+                  Start free trial
+                </button>
+              </Show>
+            </div>
           </Card>
         }
       >

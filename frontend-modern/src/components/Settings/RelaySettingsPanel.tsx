@@ -1,11 +1,19 @@
-import { Component, createSignal, onMount, onCleanup, Show } from 'solid-js';
+import { Component, createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import RadioTower from 'lucide-solid/icons/radio-tower';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { Toggle } from '@/components/shared/Toggle';
 import { Card } from '@/components/shared/Card';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
-import { hasFeature, loadLicenseStatus } from '@/stores/license';
+import {
+  hasFeature,
+  licenseLoaded,
+  loadLicenseStatus,
+  getUpgradeActionUrlOrFallback,
+  startProTrial,
+  entitlements,
+} from '@/stores/license';
+import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import { showSuccess, showError } from '@/utils/toast';
 import { RelayAPI, type RelayConfig, type RelayStatus } from '@/api/relay';
 import { OnboardingAPI, type OnboardingQRResponse } from '@/api/onboarding';
@@ -22,6 +30,39 @@ export const RelaySettingsPanel: Component = () => {
   const [pairingLoading, setPairingLoading] = createSignal(false);
   const [pairingPayload, setPairingPayload] = createSignal<OnboardingQRResponse | null>(null);
   const [pairingQRCode, setPairingQRCode] = createSignal<string | null>(null);
+  const [startingTrial, setStartingTrial] = createSignal(false);
+
+  const canStartTrial = () => entitlements()?.trial_eligible === true;
+
+  const handleStartTrial = async () => {
+    if (startingTrial()) return;
+    setStartingTrial(true);
+    try {
+      const result = await startProTrial();
+      if (result?.outcome === 'redirect') {
+        window.location.href = result.actionUrl;
+        return;
+      }
+      showSuccess('Remote access trial started');
+    } catch (err) {
+      const statusCode = (err as { status?: number } | null)?.status;
+      if (statusCode === 409) {
+        showError('Trial already used');
+      } else {
+        showError(err instanceof Error ? err.message : 'Failed to start trial');
+      }
+    } finally {
+      setStartingTrial(false);
+    }
+  };
+
+  createEffect((wasPaywallVisible: boolean) => {
+    const isPaywallVisible = licenseLoaded() && !hasFeature('relay');
+    if (isPaywallVisible && !wasPaywallVisible) {
+      trackPaywallViewed('relay', 'settings_relay_panel');
+    }
+    return isPaywallVisible;
+  }, false);
 
   let statusInterval: ReturnType<typeof setInterval> | undefined;
 
@@ -182,14 +223,37 @@ export const RelaySettingsPanel: Component = () => {
       >
         <Show when={!loading()} fallback={<div class="text-sm ">Loading...</div>}>
           <Card tone="info" padding="md">
-            <div class="flex items-start gap-3">
-              <RadioTower size={20} class="text-blue-500 mt-0.5 flex-shrink-0" strokeWidth={2} />
-              <div>
-                <p class="text-sm font-medium text-base-content">Pro Required</p>
-                <p class="text-sm text-muted mt-1">
-                  Remote access via Pulse Relay requires a Pro license. Mobile app public rollout is
-                  coming soon.
-                </p>
+            <div class="flex flex-col sm:flex-row items-center gap-4">
+              <div class="flex items-start gap-3 flex-1">
+                <RadioTower size={20} class="text-blue-500 mt-0.5 flex-shrink-0" strokeWidth={2} />
+                <div>
+                  <p class="text-sm font-medium text-base-content">Remote Access (Relay)</p>
+                  <p class="text-sm text-muted mt-1">
+                    Remote access via Pulse Relay requires a Relay license or above. Mobile app
+                    public rollout is coming soon.
+                  </p>
+                </div>
+              </div>
+              <div class="flex flex-col sm:flex-row items-center gap-2">
+                <a
+                  href={getUpgradeActionUrlOrFallback('relay')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="w-full sm:w-auto min-h-10 text-center sm:min-h-9 px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  onClick={() => trackUpgradeClicked('settings_relay_panel', 'relay')}
+                >
+                  Upgrade
+                </a>
+                <Show when={canStartTrial()}>
+                  <button
+                    type="button"
+                    onClick={handleStartTrial}
+                    disabled={startingTrial()}
+                    class="text-sm text-indigo-500 hover:underline disabled:opacity-50"
+                  >
+                    Start free trial
+                  </button>
+                </Show>
               </div>
             </div>
           </Card>

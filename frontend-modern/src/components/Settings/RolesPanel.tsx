@@ -9,6 +9,8 @@ import {
   hasFeature,
   loadLicenseStatus,
   licenseLoaded,
+  startProTrial,
+  entitlements,
 } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import Plus from 'lucide-solid/icons/plus';
@@ -28,6 +30,31 @@ export const RolesPanel: Component = () => {
   const [showModal, setShowModal] = createSignal(false);
   const [editingRole, setEditingRole] = createSignal<Role | null>(null);
   const [saving, setSaving] = createSignal(false);
+  const [startingTrial, setStartingTrial] = createSignal(false);
+
+  const canStartTrial = () => entitlements()?.trial_eligible === true;
+
+  const handleStartTrial = async () => {
+    if (startingTrial()) return;
+    setStartingTrial(true);
+    try {
+      const result = await startProTrial();
+      if (result?.outcome === 'redirect') {
+        window.location.href = result.actionUrl;
+        return;
+      }
+      notificationStore.success('Pro trial started');
+    } catch (err) {
+      const statusCode = (err as { status?: number } | null)?.status;
+      if (statusCode === 409) {
+        notificationStore.error('Trial already used');
+      } else {
+        notificationStore.error(err instanceof Error ? err.message : 'Failed to start trial');
+      }
+    } finally {
+      setStartingTrial(false);
+    }
+  };
 
   // Form state
   const [formId, setFormId] = createSignal('');
@@ -191,15 +218,27 @@ export const RolesPanel: Component = () => {
                   Define granular permissions and custom access tiers for your team.
                 </p>
               </div>
-              <a
-                href={getUpgradeActionUrlOrFallback('rbac')}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="w-full sm:w-auto min-h-10 text-center sm:min-h-9 px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                onClick={() => trackUpgradeClicked('settings_roles_panel', 'rbac')}
-              >
-                Upgrade to Pro
-              </a>
+              <div class="flex flex-col sm:flex-row items-center gap-2">
+                <a
+                  href={getUpgradeActionUrlOrFallback('rbac')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="w-full sm:w-auto min-h-10 text-center sm:min-h-9 px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  onClick={() => trackUpgradeClicked('settings_roles_panel', 'rbac')}
+                >
+                  Upgrade to Pro
+                </a>
+                <Show when={canStartTrial()}>
+                  <button
+                    type="button"
+                    onClick={handleStartTrial}
+                    disabled={startingTrial()}
+                    class="text-sm text-indigo-500 hover:underline disabled:opacity-50"
+                  >
+                    Start free trial
+                  </button>
+                </Show>
+              </div>
             </div>
           </div>
         </Show>
