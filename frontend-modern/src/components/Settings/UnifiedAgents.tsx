@@ -1748,6 +1748,12 @@ export const UnifiedAgents: Component = () => {
                   </pre>
                 </div>
               </div>
+              <p class="text-xs text-muted italic">
+                If the agent can't reach this server, run directly on the host:{' '}
+                <code class="bg-surface-hover px-1 rounded not-italic">
+                  sudo bash /var/lib/pulse-agent/install.sh --uninstall
+                </code>
+              </p>
               {/* Windows uninstall */}
               <div class="space-y-1">
                 <span class="text-xs font-medium text-muted">

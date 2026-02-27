@@ -326,6 +326,24 @@ build_exec_args_array() {
     done
 }
 
+# Save install script and connection details for offline uninstall
+save_connection_info() {
+    local state_dir="$1"
+    mkdir -p "$state_dir"
+    # Save connection details so uninstall can deregister without --url/--token
+    cat > "${state_dir}/connection.env" <<CONNEOF
+PULSE_URL=${PULSE_URL}
+PULSE_TOKEN=${PULSE_TOKEN}
+CONNEOF
+    chmod 600 "${state_dir}/connection.env"
+    # Save a copy of this install script for offline uninstall
+    # $0 may be /dev/stdin when piped through curl, so only copy if it's a real file
+    if [[ -f "$0" ]]; then
+        cp "$0" "${state_dir}/install.sh" 2>/dev/null || true
+        chmod +x "${state_dir}/install.sh" 2>/dev/null || true
+    fi
+}
+
 # --- Parse Arguments ---
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -446,6 +464,21 @@ fi
 # --- Uninstall Logic ---
 if [[ "$UNINSTALL" == "true" ]]; then
     log_info "Uninstalling ${AGENT_NAME} and cleaning up legacy agents..."
+
+    # Recover connection details from saved config if not provided on command line
+    if [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" ]]; then
+        local conn_env=""
+        if [[ -f /var/lib/pulse-agent/connection.env ]]; then
+            conn_env="/var/lib/pulse-agent/connection.env"
+        elif [[ -f "$TRUENAS_STATE_DIR/connection.env" ]]; then
+            conn_env="$TRUENAS_STATE_DIR/connection.env"
+        fi
+        if [[ -n "$conn_env" ]]; then
+            log_info "Recovering connection details from ${conn_env}..."
+            # shellcheck disable=SC1090
+            source "$conn_env"
+        fi
+    fi
 
     # Try to notify the Pulse server about uninstallation if we have connection details
     # This ensures the host record is removed and any linked PVE nodes are updated immediately.
@@ -961,11 +994,13 @@ EOF
     chmod 644 "$PLIST"
     launchctl unload "$PLIST" 2>/dev/null || true
     launchctl load -w "$PLIST"
+    save_connection_info "/var/lib/pulse-agent"
     if [[ "$UPGRADE_MODE" == "true" ]]; then
         log_info "Upgrade complete! Agent restarted with new configuration."
     else
         log_info "Installation complete! Agent service started."
     fi
+    log_info "To uninstall later: sudo bash /var/lib/pulse-agent/install.sh --uninstall"
     exit 0
 fi
 
@@ -1033,11 +1068,13 @@ EOF
         initctl start "${AGENT_NAME}"
     fi
 
+    save_connection_info "/var/lib/pulse-agent"
     if [[ "$UPGRADE_MODE" == "true" ]]; then
         log_info "Upgrade complete! Agent restarted with new configuration."
     else
         log_info "Installation complete! Agent service started."
     fi
+    log_info "To uninstall later: sudo bash /var/lib/pulse-agent/install.sh --uninstall"
     exit 0
 fi
 
@@ -1152,10 +1189,12 @@ EOF
     bash "${WRAPPER_SCRIPT}" >> "/var/log/${AGENT_NAME}.log" 2>&1 &
     disown 2>/dev/null || true  # Disown if available to prevent SIGHUP
 
+    save_connection_info "/var/lib/pulse-agent"
     log_info "Installation complete!"
     log_info "The agent will start automatically on boot."
     log_info "To check status: pgrep -a pulse-agent"
     log_info "To view logs: tail -f /var/log/${AGENT_NAME}.log"
+    log_info "To uninstall later: sudo bash /var/lib/pulse-agent/install.sh --uninstall"
     exit 0
 fi
 
@@ -1513,6 +1552,7 @@ BOOTSTRAP
         service "${AGENT_NAME}" start 2>/dev/null || true
     fi
 
+    save_connection_info "$TRUENAS_STATE_DIR"
     log_info "Installation complete!"
     log_info "Binary: $TRUENAS_STORED_BINARY (persistent)"
     log_info "Runtime: $TRUENAS_RUNTIME_BINARY (for execution)"
@@ -1525,6 +1565,7 @@ BOOTSTRAP
     fi
     log_info ""
     log_info "The Init/Shutdown task ensures the agent survives TrueNAS upgrades."
+    log_info "To uninstall later: sudo bash ${TRUENAS_STATE_DIR}/install.sh --uninstall"
     exit 0
 fi
 
@@ -1581,11 +1622,13 @@ INITEOF
     rc-service "${AGENT_NAME}" stop 2>/dev/null || true
     rc-update add "${AGENT_NAME}" default 2>/dev/null || true
     rc-service "${AGENT_NAME}" start
+    save_connection_info "/var/lib/pulse-agent"
     if [[ "$UPGRADE_MODE" == "true" ]]; then
         log_info "Upgrade complete! Agent restarted with new configuration."
     else
         log_info "Installation complete! Agent service started."
     fi
+    log_info "To uninstall later: sudo bash /var/lib/pulse-agent/install.sh --uninstall"
     exit 0
 fi
 
@@ -1698,6 +1741,7 @@ BOOTEOF
 
     # Start the agent
     "$RCSCRIPT" start
+    save_connection_info "/var/lib/pulse-agent"
     if [[ "$UPGRADE_MODE" == "true" ]]; then
         log_info "Upgrade complete! Agent restarted with new configuration."
     else
@@ -1705,6 +1749,7 @@ BOOTEOF
     fi
     log_info "To check status: $RCSCRIPT status"
     log_info "To view logs: tail -f /var/log/messages"
+    log_info "To uninstall later: sudo bash /var/lib/pulse-agent/install.sh --uninstall"
     exit 0
 fi
 
@@ -1779,12 +1824,14 @@ EOF
     systemctl daemon-reload
     systemctl enable "${AGENT_NAME}"
     systemctl restart "${AGENT_NAME}"
+    save_connection_info "/var/lib/pulse-agent"
     if [[ "$UPGRADE_MODE" == "true" ]]; then
         log_info "Upgrade complete! Agent restarted with new configuration."
     else
         log_info "Installation complete! Agent service started."
         log_info "Token file: $TOKEN_FILE (mode 600, root only)"
     fi
+    log_info "To uninstall later: sudo bash /var/lib/pulse-agent/install.sh --uninstall"
     exit 0
 fi
 
@@ -1957,6 +2004,7 @@ INITEOF
 
     # Start the agent
     "$INITSCRIPT" start
+    save_connection_info "/var/lib/pulse-agent"
     if [[ "$UPGRADE_MODE" == "true" ]]; then
         log_info "Upgrade complete! Agent restarted with new configuration."
     else
@@ -1964,6 +2012,7 @@ INITEOF
     fi
     log_info "To check status: $INITSCRIPT status"
     log_info "To view logs: tail -f /var/log/${AGENT_NAME}.log"
+    log_info "To uninstall later: sudo bash /var/lib/pulse-agent/install.sh --uninstall"
     exit 0
 fi
 
