@@ -83,8 +83,11 @@ func agentCount(monitor *monitoring.Monitor) int {
 	if monitor == nil {
 		return 0
 	}
-	state := monitor.GetLiveStateSnapshot()
-	return len(state.Hosts)
+	if rs := monitor.GetUnifiedReadState(); rs != nil {
+		return len(rs.Hosts())
+	}
+	snap := monitor.GetLiveStateSnapshot()
+	return len(snap.Hosts)
 }
 
 func writeMaxAgentsLimitExceeded(w http.ResponseWriter, current, limit int) {

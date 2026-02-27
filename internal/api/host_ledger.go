@@ -7,7 +7,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // HostLedgerEntry represents a single installed Pulse Unified Agent
@@ -30,8 +30,8 @@ type HostLedgerResponse struct {
 func (r *Router) handleHostLedger(w http.ResponseWriter, req *http.Request) {
 	orgID := GetOrgID(req.Context())
 
-	// Get runtime state — only Pulse Unified Agents (state.Hosts) count.
-	var state models.StateSnapshot
+	// Get host agents from the unified ReadState surface.
+	var hosts []*unifiedresources.HostView
 	var monitorResolved bool
 	if r.mtMonitor != nil {
 		monitor, monErr := r.mtMonitor.GetMonitor(orgID)
@@ -39,23 +39,27 @@ func (r *Router) handleHostLedger(w http.ResponseWriter, req *http.Request) {
 			log.Warn().Err(monErr).Str("org", orgID).Msg("host-ledger: failed to resolve tenant monitor")
 		}
 		if monitor != nil {
-			state = monitor.GetState()
+			if rs := monitor.GetUnifiedReadState(); rs != nil {
+				hosts = rs.Hosts()
+			}
 			monitorResolved = true
 		}
 	}
 	// Fallback to the default monitor only for the default org to avoid cross-tenant data leaks.
 	if !monitorResolved && orgID == "default" && r.monitor != nil {
-		state = r.monitor.GetState()
+		if rs := r.monitor.GetUnifiedReadState(); rs != nil {
+			hosts = rs.Hosts()
+		}
 	}
 
 	// Build ledger entries from installed agents only.
-	entries := make([]HostLedgerEntry, 0, len(state.Hosts))
-	for _, h := range state.Hosts {
+	entries := make([]HostLedgerEntry, 0, len(hosts))
+	for _, h := range hosts {
 		entries = append(entries, HostLedgerEntry{
-			Name:     hostDisplayName(h.DisplayName, h.Hostname, h.ID),
+			Name:     hostDisplayName(h.Name(), h.Hostname(), h.ID()),
 			Type:     "agent",
-			Status:   normalizeStatus(h.Status),
-			LastSeen: formatLastSeen(h.LastSeen),
+			Status:   normalizeStatus(string(h.Status())),
+			LastSeen: formatLastSeen(h.LastSeen()),
 			Source:   "agent",
 		})
 	}

@@ -170,13 +170,13 @@ type legacyStateRatchet struct {
 var legacyStateRatchets = []legacyStateRatchet{
 	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 53, "ReadState.VMs()"},
 	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 53, "ReadState.Containers()"},
-	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 50, "ReadState.Nodes()"},
+	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 48, "ReadState.Nodes()"},
 	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 35, "ReadState.DockerHosts()"},
 	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 23, "ReadState.Hosts()"},
 	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 24, "ReadState.StoragePools()"},
 	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 12, "ReadState.K8sClusters()"},
-	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 11, "ReadState.PBSInstances()"},
-	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 10, "ReadState.PMGInstances()"},
+	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 10, "ReadState.PBSInstances()"},
+	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 9, "ReadState.PMGInstances()"},
 }
 
 // TestLegacyStateAccessRatchet is a monotonic ratchet that prevents new
