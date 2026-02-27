@@ -1,5 +1,5 @@
 import { Component, For, Show, createMemo } from 'solid-js';
-import { createVirtualizer } from '@tanstack/solid-virtual';
+
 import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
 import type { PBSInstance, PMGInstance } from '@/types/api';
 import type { Resource } from '@/types/resource';
@@ -108,24 +108,9 @@ const resolvePveStatusMeta = (
 };
 
 export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
-  let scrollElement!: HTMLDivElement;
-
-  const virtualizer = createMemo(() =>
-    createVirtualizer({
-      count: props.nodes.length,
-      getScrollElement: () => scrollElement,
-      estimateSize: () => 64, // Estimated row height
-      overscan: 5,
-    }),
-  );
-
   return (
     <Card padding="none" tone="card" class="rounded-md">
-      <div
-        ref={scrollElement}
-        class="overflow-auto max-h-[600px] w-full"
-        style={{ contain: 'layout paint' }}
-      >
+      <div class="overflow-auto max-h-[600px]">
         <Table class="min-w-[max-content] w-full divide-y divide-border text-sm">
           <TableHeader class="bg-surface-alt">
             <TableRow>
@@ -146,13 +131,9 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
               </TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody
-            class="divide-y divide-border bg-surface relative"
-            style={{ height: `${virtualizer().getTotalSize()}px` }}
-          >
-            <For each={virtualizer().getVirtualItems()}>
-              {(virtualRow) => {
-                const node = props.nodes[virtualRow.index];
+          <TableBody class="divide-y divide-border bg-surface">
+            <For each={props.nodes}>
+              {(node) => {
                 const statusMeta = createMemo(() => resolvePveStatusMeta(node, props.stateNodes));
                 const clusterEndpoints = createMemo(() =>
                   'clusterEndpoints' in node && node.clusterEndpoints ? node.clusterEndpoints : [],
@@ -161,15 +142,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                   'clusterName' in node && node.clusterName ? node.clusterName : 'Unknown',
                 );
                 return (
-                  <TableRow
-                    class="absolute top-0 left-0 w-full even:bg-surface-alt hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors"
-                    style={{
-                      height: `${virtualRow.size}px`,
-                      transform: `translateY(${virtualRow.start}px)`,
-                    }}
-                    data-index={virtualRow.index}
-                    ref={(el) => virtualizer().measureElement(el)}
-                  >
+                  <TableRow class="even:bg-surface-alt hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
                     <TableCell class="align-top py-3 pl-4 pr-3">
                       <div class="min-w-0 space-y-1">
                         <div class="flex items-start gap-3">
