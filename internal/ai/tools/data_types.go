@@ -1106,10 +1106,10 @@ type PhysicalDiskSummary struct {
 	WWN         string    `json:"wwn,omitempty"`
 	Type        string    `json:"type"` // nvme, sata, sas
 	SizeBytes   int64     `json:"size_bytes"`
-	Health      string    `json:"health"`                // PASSED, FAILED, UNKNOWN
-	Wearout     *int      `json:"wearout,omitempty"`     // SSD life remaining percentage (100=new/healthy, 0=end of life), nil when unavailable
-	Temperature *int      `json:"temperature,omitempty"` // Celsius, nil when unavailable
-	RPM         *int      `json:"rpm,omitempty"`         // 0 for SSDs, nil when unavailable
+	Health      string    `json:"health"`                           // PASSED, FAILED, UNKNOWN
+	Wearout     *int      `json:"ssd_life_remaining_pct,omitempty"` // 100=new/healthy, 0=end of life; nil when unavailable
+	Temperature *int      `json:"temperature,omitempty"`            // Celsius, nil when unavailable
+	RPM         *int      `json:"rpm,omitempty"`                    // 0 for SSDs, nil when unavailable
 	Used        string    `json:"used,omitempty"`
 	LastChecked time.Time `json:"last_checked,omitempty"`
 }

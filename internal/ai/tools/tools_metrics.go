@@ -21,7 +21,7 @@ Types:
 - temperatures: CPU, disk, and sensor temperatures from hosts
 - network: Network interface statistics (rx/tx bytes, speed)
 - diskio: Disk I/O statistics (read/write bytes, ops)
-- disks: Physical disk health (SMART, wearout, temperatures)
+- disks: Physical disk health (SMART, SSD life remaining, temperatures)
 - baselines: Learned normal behavior baselines for resources
 - patterns: Detected operational patterns and predictions
 
