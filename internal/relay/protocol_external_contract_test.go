@@ -212,3 +212,115 @@ func sortedFieldNames(fields map[string]protocolField) []string {
 	sort.Strings(names)
 	return names
 }
+
+// protocolContractConstants lists constants whose values must be identical
+// across pulse/internal/relay/protocol.go and pulse-pro/relay-server/protocol.go.
+// Frame type bytes and error code strings are the wire contract — any drift
+// breaks cross-repo communication.
+var protocolContractConstants = []string{
+	// Protocol parameters
+	"ProtocolVersion",
+	"MaxPayloadSize",
+	"HeaderSize",
+	// Frame type bytes
+	"FrameRegister",
+	"FrameRegisterAck",
+	"FrameConnect",
+	"FrameConnectAck",
+	"FrameChannelOpen",
+	"FrameChannelClose",
+	"FrameData",
+	"FramePing",
+	"FramePong",
+	"FrameError",
+	"FrameDrain",
+	"FrameKeyExchange",
+	"FramePushNotification",
+	// Error code strings
+	"ErrCodeInternal",
+	"ErrCodeNotFound",
+	"ErrCodeAuthFailed",
+	"ErrCodeLicenseInvalid",
+	"ErrCodeLicenseExpired",
+	"ErrCodeRateLimited",
+	"ErrCodeDuplicate",
+	"ErrCodeChannelFull",
+	"ErrCodeDraining",
+}
+
+// TestProtocolConstantsMatchRelayServer validates that frame type bytes,
+// error code strings, and protocol parameters have identical literal values
+// in both the local relay client and the relay-server reference copy.
+// This catches wire-level drift that the struct schema test cannot detect.
+//
+// Values are compared as source-text expressions. Since protocol.go is kept
+// as a verbatim copy across repos, identical text implies identical semantics.
+// If the files ever diverge in expression style (e.g. 64*1024 vs 65536),
+// this test intentionally fails to force manual review.
+func TestProtocolConstantsMatchRelayServer(t *testing.T) {
+	localPath, referencePath := protocolPathsForComparison(t)
+
+	localConsts := extractConstants(t, localPath)
+	referenceConsts := extractConstants(t, referencePath)
+
+	for _, name := range protocolContractConstants {
+		localVal, lok := localConsts[name]
+		refVal, rok := referenceConsts[name]
+
+		if !lok {
+			t.Errorf("constant %s missing in local protocol (%s)", name, localPath)
+			continue
+		}
+		if !rok {
+			t.Errorf("constant %s missing in reference protocol (%s)", name, referencePath)
+			continue
+		}
+		if localVal != refVal {
+			t.Errorf("constant %s drift: local=%s reference=%s", name, localVal, refVal)
+		}
+	}
+}
+
+// extractConstants parses a Go source file and returns a map of constant
+// name → literal value (as source text) for all top-level const declarations.
+//
+// Each const spec is expected to have exactly one name and one value (the
+// standard pattern in protocol.go). Multi-name specs (e.g. "A, B = 1, 2")
+// and iota blocks are not used in the protocol contract and are skipped to
+// avoid incorrect inheritance logic.
+func extractConstants(t *testing.T, path string) map[string]string {
+	t.Helper()
+
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)
+	if err != nil {
+		t.Fatalf("parse protocol file %s: %v", path, err)
+	}
+
+	out := make(map[string]string)
+
+	for _, decl := range file.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok || gen.Tok != token.CONST {
+			continue
+		}
+
+		for _, spec := range gen.Specs {
+			vs, ok := spec.(*ast.ValueSpec)
+			if !ok {
+				continue
+			}
+
+			// Only handle simple single-name, single-value const declarations.
+			// Skip multi-name or value-less (iota-inherited) specs since the
+			// protocol contract constants don't use those patterns.
+			if len(vs.Names) != 1 || len(vs.Values) != 1 {
+				continue
+			}
+
+			out[vs.Names[0].Name] = astExprString(fset, vs.Values[0])
+		}
+	}
+
+	return out
+}
