@@ -1700,15 +1700,17 @@ func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
 	}
 	m.updateQueueDepthMetric()
 
-	// Update performance metrics
-	m.state.Performance.LastPollDuration = time.Since(startTime).Seconds()
-	m.state.Stats.PollingCycles++
-	m.state.Stats.Uptime = int64(time.Since(m.startTime).Seconds())
+	// Update performance metrics atomically to prevent data races when
+	// multiple poll() goroutines run concurrently (e.g. mock mode transitions).
+	wsClients := 0
 	if wsHub != nil {
-		m.state.Stats.WebSocketClients = wsHub.GetClientCount()
-	} else {
-		m.state.Stats.WebSocketClients = 0
+		wsClients = wsHub.GetClientCount()
 	}
+	m.state.UpdatePollStats(
+		time.Since(startTime).Seconds(),
+		int64(time.Since(m.startTime).Seconds()),
+		wsClients,
+	)
 
 	// Sync alert state so broadcasts include the latest acknowledgement data
 	m.syncAlertsToState()

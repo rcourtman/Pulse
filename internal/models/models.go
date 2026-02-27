@@ -3079,3 +3079,16 @@ func (s *State) UpdateContainerDockerStatus(containerID string, hasDocker bool, 
 	}
 	return false
 }
+
+// UpdatePollStats atomically updates performance and stats fields that are
+// written at the end of each polling cycle. This prevents data races when
+// multiple poll() goroutines run concurrently (e.g. during mock mode transitions).
+func (s *State) UpdatePollStats(pollDuration float64, uptime int64, wsClients int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.Performance.LastPollDuration = pollDuration
+	s.Stats.PollingCycles++
+	s.Stats.Uptime = uptime
+	s.Stats.WebSocketClients = wsClients
+}
