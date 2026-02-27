@@ -124,7 +124,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
       <div
         ref={scrollElement}
         class="overflow-auto max-h-[600px] w-full"
-        style={{ contain: 'strict' }}
+        style={{ contain: 'layout paint' }}
       >
         <Table class="min-w-[max-content] w-full divide-y divide-border text-sm">
           <TableHeader class="bg-surface-alt">
