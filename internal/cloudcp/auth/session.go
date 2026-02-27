@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 )
@@ -142,4 +143,18 @@ func (s *Service) ValidateSessionToken(token string) (*SessionClaims, error) {
 		IssuedAt:       time.Unix(payload.IssuedAt, 0).UTC(),
 		ExpiresAt:      time.Unix(payload.Expiry, 0).UTC(),
 	}, nil
+}
+
+// SessionTokenFromRequest extracts the session token from an HTTP request,
+// checking the Authorization Bearer header first, then the session cookie.
+func SessionTokenFromRequest(r *http.Request) string {
+	auth := strings.TrimSpace(r.Header.Get("Authorization"))
+	if strings.HasPrefix(auth, "Bearer ") {
+		return strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
+	}
+	cookie, err := r.Cookie(SessionCookieName)
+	if err == nil {
+		return strings.TrimSpace(cookie.Value)
+	}
+	return ""
 }

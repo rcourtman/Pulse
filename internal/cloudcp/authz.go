@@ -115,15 +115,7 @@ func requireAnyAccountRole(allowed ...registry.MemberRole) func(http.Handler) ht
 }
 
 func sessionTokenFromRequest(r *http.Request) string {
-	auth := strings.TrimSpace(r.Header.Get("Authorization"))
-	if strings.HasPrefix(auth, "Bearer ") {
-		return strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
-	}
-	cookie, err := r.Cookie(cpauth.SessionCookieName)
-	if err == nil {
-		return strings.TrimSpace(cookie.Value)
-	}
-	return ""
+	return cpauth.SessionTokenFromRequest(r)
 }
 
 func writeAuthzError(w http.ResponseWriter, status int, code string) {

@@ -194,4 +194,8 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	// MSP portal API (session + account-membership authenticated)
 	mux.Handle("/api/portal/dashboard", portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalDashboard(deps.Registry))))
 	mux.Handle("/api/portal/workspaces/{tenant_id}", portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalWorkspaceDetail(deps.Registry))))
+
+	// MSP/Cloud portal HTML page — self-authenticating (shows login form if no session)
+	portalPageLimiter := NewCPRateLimiter(60, time.Minute)
+	mux.Handle("/portal", portalPageLimiter.Middleware(http.HandlerFunc(portal.HandlePortalPage(deps.MagicLinks, deps.Registry))))
 }
