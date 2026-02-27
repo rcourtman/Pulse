@@ -120,11 +120,15 @@ Options:
   --enable-host           Enable host metrics (default: true)
   --disable-host          Disable host metrics
   --enable-docker         Force enable Docker monitoring
+  --disable-docker        Disable Docker monitoring even if detected
   --enable-kubernetes     Force enable Kubernetes monitoring
+  --disable-kubernetes    Disable Kubernetes monitoring even if detected
   --kubeconfig <path>     Path to kubeconfig file
   --kube-include-all-pods Include all non-succeeded pods
   --kube-include-all-deployments Include all deployments
   --enable-proxmox        Force enable Proxmox integration
+  --disable-proxmox       Disable Proxmox integration even if detected
+  --proxmox-type <type>   Proxmox type: pve or pbs (default: auto-detect)
   --agent-id <id>         Custom agent identifier
   --hostname <name>       Override hostname reported to Pulse
   --disk-exclude <path>   Exclude mount point (repeatable)

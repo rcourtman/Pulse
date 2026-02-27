@@ -33,7 +33,7 @@ The following settings can be controlled remotely via profiles:
 
 Notes:
 - `interval` accepts a duration string. If you send a JSON number, it is interpreted as seconds.
-- Docker auto-detection can still enable Docker monitoring if the agent is not explicitly configured. To force-disable Docker, set `PULSE_ENABLE_DOCKER=false` or install with `--enable-docker=false` on the host.
+- Docker auto-detection can still enable Docker monitoring if the agent is not explicitly configured. To force-disable Docker, set `PULSE_ENABLE_DOCKER=false` or install with `--disable-docker`.
 - `commandsEnabled` (AI command execution) is controlled separately per agent in **Settings → Agents → Unified Agents** and is applied live on report. It is not part of profile settings.
 
 ## API Usage

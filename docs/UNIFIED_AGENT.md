@@ -56,33 +56,50 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 
 ## Configuration
 
+### Installer flags (`install.sh`)
+
+These flags are accepted by the install script (i.e. `curl ... | bash -s -- <flags>`). The installer passes the relevant options through to the agent's service definition.
+
 | Flag | Env Var | Description | Default |
 |------|---------|-------------|---------|
 | `--url` | `PULSE_URL` | Pulse server URL | `http://localhost:7655` |
 | `--token` | `PULSE_TOKEN` | API token | *(required)* |
-| `--token-file` | - | Read API token from file | *(unset)* |
 | `--interval` | `PULSE_INTERVAL` | Reporting interval | `30s` |
 | `--enable-host` | `PULSE_ENABLE_HOST` | Enable host metrics | `true` |
-| `--enable-docker` | `PULSE_ENABLE_DOCKER` | Enable Docker metrics | `false` (auto-detect if not configured) |
-| `--docker-runtime` | `PULSE_DOCKER_RUNTIME` | Force container runtime: `auto`, `docker`, or `podman` | `auto` |
-| `--enable-kubernetes` | `PULSE_ENABLE_KUBERNETES` | Enable Kubernetes metrics | `false` (installer auto-detect if not configured) |
-| `--enable-proxmox` | `PULSE_ENABLE_PROXMOX` | Enable Proxmox integration | `false` |
-| `--proxmox-type` | `PULSE_PROXMOX_TYPE` | Proxmox type: `pve` or `pbs` | *(auto-detect)* |
-| `--enable-commands` | `PULSE_ENABLE_COMMANDS` | Enable AI command execution (disabled by default) | `false` |
-| `--disable-commands` | `PULSE_DISABLE_COMMANDS` | **Deprecated** (commands are disabled by default) | - |
-| `--disk-exclude` | `PULSE_DISK_EXCLUDE` | Mount point patterns to exclude from disk monitoring (repeatable or CSV) | *(none)* |
-| `--kubeconfig` | `PULSE_KUBECONFIG` | Kubeconfig path (optional) | *(auto)* |
-| `--kube-context` | `PULSE_KUBE_CONTEXT` | Kubeconfig context (optional) | *(auto)* |
-| `--kube-include-namespace` | `PULSE_KUBE_INCLUDE_NAMESPACES` | Limit namespaces (repeatable or CSV, wildcards supported) | *(all)* |
-| `--kube-exclude-namespace` | `PULSE_KUBE_EXCLUDE_NAMESPACES` | Exclude namespaces (repeatable or CSV, wildcards supported) | *(none)* |
+| `--disable-host` | - | Disable host metrics | - |
+| `--enable-docker` | `PULSE_ENABLE_DOCKER` | Enable Docker metrics | auto-detect |
+| `--disable-docker` | - | Disable Docker monitoring even if detected | - |
+| `--enable-kubernetes` | `PULSE_ENABLE_KUBERNETES` | Enable Kubernetes metrics | auto-detect |
+| `--disable-kubernetes` | - | Disable Kubernetes monitoring even if detected | - |
+| `--kubeconfig` | `PULSE_KUBECONFIG` | Kubeconfig path (also enables Kubernetes) | *(auto)* |
 | `--kube-include-all-pods` | `PULSE_KUBE_INCLUDE_ALL_PODS` | Include all non-succeeded pods | `false` |
 | `--kube-include-all-deployments` | `PULSE_KUBE_INCLUDE_ALL_DEPLOYMENTS` | Include all deployments, not just problems | `false` |
+| `--enable-proxmox` | `PULSE_ENABLE_PROXMOX` | Enable Proxmox integration | auto-detect |
+| `--disable-proxmox` | - | Disable Proxmox integration even if detected | - |
+| `--proxmox-type` | `PULSE_PROXMOX_TYPE` | Proxmox type: `pve` or `pbs` | *(auto-detect)* |
+| `--enable-commands` | `PULSE_ENABLE_COMMANDS` | Enable AI command execution | `false` |
+| `--disk-exclude` | `PULSE_DISK_EXCLUDE` | Mount point patterns to exclude (repeatable) | *(none)* |
+| `--insecure` | `PULSE_INSECURE_SKIP_VERIFY` | Skip TLS verification | `false` |
+| `--cacert` | - | Custom CA certificate path for TLS | *(none)* |
+| `--hostname` | `PULSE_HOSTNAME` | Override hostname | *(OS hostname)* |
+| `--agent-id` | `PULSE_AGENT_ID` | Unique agent identifier | *(machine-id)* |
+| `--env` | - | Set custom env var in the service file (repeatable) | *(none)* |
+| `--uninstall` | - | Remove the agent | - |
+
+### Agent-only flags
+
+These flags are accepted by the `pulse-agent` binary directly but are **not** available via the install script. Set them via environment variables in the service file, or pass them when running the agent manually.
+
+| Flag | Env Var | Description | Default |
+|------|---------|-------------|---------|
+| `--token-file` | - | Read API token from file | *(unset)* |
+| `--docker-runtime` | `PULSE_DOCKER_RUNTIME` | Force container runtime: `auto`, `docker`, or `podman` | `auto` |
+| `--kube-context` | `PULSE_KUBE_CONTEXT` | Kubeconfig context | *(auto)* |
+| `--kube-include-namespace` | `PULSE_KUBE_INCLUDE_NAMESPACES` | Limit namespaces (repeatable or CSV, wildcards) | *(all)* |
+| `--kube-exclude-namespace` | `PULSE_KUBE_EXCLUDE_NAMESPACES` | Exclude namespaces (repeatable or CSV, wildcards) | *(none)* |
 | `--kube-max-pods` | `PULSE_KUBE_MAX_PODS` | Max pods per report | `200` |
 | `--disable-auto-update` | `PULSE_DISABLE_AUTO_UPDATE` | Disable auto-updates | `false` |
 | `--disable-docker-update-checks` | `PULSE_DISABLE_DOCKER_UPDATE_CHECKS` | Disable Docker image update detection | `false` |
-| `--insecure` | `PULSE_INSECURE_SKIP_VERIFY` | Skip TLS verification | `false` |
-| `--hostname` | `PULSE_HOSTNAME` | Override hostname | *(OS hostname)* |
-| `--agent-id` | `PULSE_AGENT_ID` | Unique agent identifier | *(machine-id)* |
 | `--report-ip` | `PULSE_REPORT_IP` | Override reported IP (multi-NIC) | *(auto)* |
 | `--disable-ceph` | `PULSE_DISABLE_CEPH` | Disable local Ceph status polling | `false` |
 | `--tag` | `PULSE_TAGS` | Apply tags (repeatable or CSV) | *(none)* |
@@ -199,12 +216,12 @@ The unified agent automatically checks for updates every hour. When a new versio
 
 To disable auto-updates:
 ```bash
-# During installation
+# During installation (inject the env var into the service file)
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --disable-auto-update
+  bash -s -- --url http://<pulse-ip>:7655 --token <token> --env PULSE_DISABLE_AUTO_UPDATE=true
 
-# Or set environment variable
-PULSE_DISABLE_AUTO_UPDATE=true
+# Or when running the agent directly
+pulse-agent --disable-auto-update
 ```
 
 ## Remote Configuration (Agent Profiles, Pro)
