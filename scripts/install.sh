@@ -79,6 +79,7 @@ KUBECONFIG_PATH=""  # Path to kubeconfig file for Kubernetes monitoring
 KUBE_INCLUDE_ALL_PODS="false"
 KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
 DISK_EXCLUDES=()  # Array for multiple --disk-exclude values
+STATE_DIR="/var/lib/pulse-agent"  # Persistent state directory (overridden per platform)
 CURL_CA_BUNDLE="" # Path to CA bundle for curl and agent TLS (sets SSL_CERT_FILE)
 
 # Track if flags were explicitly set (to override auto-detection)
@@ -291,6 +292,7 @@ build_exec_args() {
     if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-deployments"; fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi
     if [[ -n "$HOSTNAME_OVERRIDE" ]]; then EXEC_ARGS="$EXEC_ARGS --hostname ${HOSTNAME_OVERRIDE}"; fi
+    if [[ -n "$STATE_DIR" ]]; then EXEC_ARGS="$EXEC_ARGS --state-dir ${STATE_DIR}"; fi
     # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
     for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
         EXEC_ARGS="$EXEC_ARGS --disk-exclude '${pattern}'"
@@ -320,6 +322,7 @@ build_exec_args_array() {
     if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--kube-include-all-deployments); fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS_ARRAY+=(--agent-id "$AGENT_ID"); fi
     if [[ -n "$HOSTNAME_OVERRIDE" ]]; then EXEC_ARGS_ARRAY+=(--hostname "$HOSTNAME_OVERRIDE"); fi
+    if [[ -n "$STATE_DIR" ]]; then EXEC_ARGS_ARRAY+=(--state-dir "$STATE_DIR"); fi
     # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
     for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
         EXEC_ARGS_ARRAY+=(--disk-exclude "$pattern")
@@ -511,12 +514,43 @@ if [[ "$UNINSTALL" == "true" ]]; then
     # Try to notify the Pulse server about uninstallation if we have connection details
     # This ensures the host record is removed and any linked PVE nodes are updated immediately.
     if [[ -n "$PULSE_URL" && -n "$PULSE_TOKEN" ]]; then
-        # Try to recover agent ID if not provided
+        # Try to recover agent ID if not provided.
+        # Priority: host-id file (new) > agent-id file (legacy) > hostname API lookup (fallback)
         if [[ -z "$AGENT_ID" ]]; then
-            if [[ -f /var/lib/pulse-agent/agent-id ]]; then
-                AGENT_ID=$(cat /var/lib/pulse-agent/agent-id)
-            elif [[ -f "$TRUENAS_STATE_DIR/agent-id" ]]; then
-                AGENT_ID=$(cat "$TRUENAS_STATE_DIR/agent-id")
+            # Primary: host-id file (written by agent from server-assigned hostId)
+            for hid_path in /var/lib/pulse-agent/host-id /boot/config/plugins/pulse-agent/host-id "$TRUENAS_STATE_DIR/host-id"; do
+                if [[ -f "$hid_path" ]]; then
+                    AGENT_ID=$(cat "$hid_path")
+                    log_info "Recovered host ID from ${hid_path}"
+                    break
+                fi
+            done
+        fi
+        if [[ -z "$AGENT_ID" ]]; then
+            # Legacy fallback: agent-id file
+            for aid_path in /var/lib/pulse-agent/agent-id /boot/config/plugins/pulse-agent/agent-id "$TRUENAS_STATE_DIR/agent-id"; do
+                if [[ -f "$aid_path" ]]; then
+                    AGENT_ID=$(cat "$aid_path")
+                    log_info "Recovered host ID from legacy ${aid_path}"
+                    break
+                fi
+            done
+        fi
+        if [[ -z "$AGENT_ID" ]]; then
+            # API fallback: look up by hostname
+            LOOKUP_HOSTNAME=$(hostname 2>/dev/null || true)
+            if [[ -n "$LOOKUP_HOSTNAME" ]]; then
+                LOOKUP_ARGS=(-fsSL --connect-timeout 5 -H "X-API-Token: ${PULSE_TOKEN}")
+                if [[ "$INSECURE" == "true" ]]; then LOOKUP_ARGS+=(-k); fi
+                if [[ -n "$CURL_CA_BUNDLE" ]]; then LOOKUP_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
+                LOOKUP_RESP=$(curl "${LOOKUP_ARGS[@]}" "${PULSE_URL}/api/agents/host/lookup?hostname=${LOOKUP_HOSTNAME}" 2>/dev/null || true)
+                if [[ -n "$LOOKUP_RESP" ]]; then
+                    # Extract .host.id from JSON (portable, no jq dependency)
+                    AGENT_ID=$(echo "$LOOKUP_RESP" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"id"[[:space:]]*:[[:space:]]*"//; s/"$//' || true)
+                    if [[ -n "$AGENT_ID" ]]; then
+                        log_info "Recovered host ID via server lookup: ${AGENT_ID}"
+                    fi
+                fi
             fi
         fi
 
@@ -525,7 +559,7 @@ if [[ "$UNINSTALL" == "true" ]]; then
             CURL_ARGS=(-fsSL --connect-timeout 5 -X POST -H "Content-Type: application/json" -H "X-API-Token: ${PULSE_TOKEN}")
             if [[ "$INSECURE" == "true" ]]; then CURL_ARGS+=(-k); fi
             if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
-            
+
             # Send unregistration request (ignore errors as we are uninstalling anyway)
             curl "${CURL_ARGS[@]}" -d "{\"hostId\": \"${AGENT_ID}\"}" "${PULSE_URL}/api/agents/host/uninstall" >/dev/null 2>&1 || true
         fi
@@ -980,6 +1014,11 @@ if [[ "$OS" == "darwin" ]]; then
         <string>--agent-id</string>
         <string>${AGENT_ID}</string>"
     fi
+    if [[ -n "$STATE_DIR" ]]; then
+        PLIST_ARGS="${PLIST_ARGS}
+        <string>--state-dir</string>
+        <string>${STATE_DIR}</string>"
+    fi
     # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
     for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
         PLIST_ARGS="${PLIST_ARGS}
@@ -1118,6 +1157,7 @@ if [[ -f /etc/unraid-version ]]; then
     RUNTIME_BINARY="${INSTALL_DIR}/${BINARY_NAME}"
     GO_SCRIPT="/boot/config/go"
 
+    STATE_DIR="$UNRAID_STORAGE_DIR"
     mkdir -p "$UNRAID_STORAGE_DIR"
 
     # Copy binary to persistent storage (for survival across reboots)
@@ -1232,6 +1272,7 @@ fi
 # Note: /data may have exec=off on some TrueNAS systems. We try multiple runtime locations.
 if [[ "$TRUENAS" == true ]]; then
     log_info "Configuring TrueNAS SCALE/CORE installation..."
+    STATE_DIR="$TRUENAS_STATE_DIR"
 
     # Stop any existing agent before we modify binaries
     # The runtime binary may be in /root/bin or /var/tmp, not just INSTALL_DIR
@@ -1816,6 +1857,7 @@ if command -v systemctl >/dev/null 2>&1; then
     if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-deployments"; fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi
     if [[ -n "$HOSTNAME_OVERRIDE" ]]; then EXEC_ARGS="$EXEC_ARGS --hostname ${HOSTNAME_OVERRIDE}"; fi
+    if [[ -n "$STATE_DIR" ]]; then EXEC_ARGS="$EXEC_ARGS --state-dir ${STATE_DIR}"; fi
     # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
     for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
         EXEC_ARGS="$EXEC_ARGS --disk-exclude '${pattern}'"

@@ -199,14 +199,14 @@ func TestScoreIPv4(t *testing.T) {
 }
 
 func TestStateFileForType(t *testing.T) {
-	setup := &ProxmoxSetup{}
-	if setup.stateFileForType("pve") != stateFilePVE {
+	setup := &ProxmoxSetup{stateDir: "/var/lib/pulse-agent"}
+	if setup.stateFileForType("pve") != "/var/lib/pulse-agent/proxmox-pve-registered" {
 		t.Error("wrong PVE state file")
 	}
-	if setup.stateFileForType("pbs") != stateFilePBS {
+	if setup.stateFileForType("pbs") != "/var/lib/pulse-agent/proxmox-pbs-registered" {
 		t.Error("wrong PBS state file")
 	}
-	if setup.stateFileForType("unknown") != stateFilePath {
+	if setup.stateFileForType("unknown") != "/var/lib/pulse-agent/proxmox-registered" {
 		t.Error("wrong unknown state file")
 	}
 }
@@ -325,7 +325,7 @@ func TestProxmoxSetup_RunForType(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "token", "pve", "host", "", false)
+	p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "token", "pve", "host", "", "", false)
 
 	t.Run("skips if already registered", func(t *testing.T) {
 		mc.statFn = func(name string) (os.FileInfo, error) { return nil, nil } // exists
@@ -489,7 +489,7 @@ func TestProxmoxSetup_RunAll(t *testing.T) {
 	mc := &mockCollector{}
 
 	t.Run("detects both and runs both", func(t *testing.T) {
-		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "https://pulse", "token", "", "host", "", false)
+		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "https://pulse", "token", "", "host", "", "", false)
 		mc.lookPathFn = func(file string) (string, error) { return "/bin/" + file, nil }
 		mc.statFn = func(name string) (os.FileInfo, error) { return nil, os.ErrNotExist }
 		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
@@ -519,7 +519,7 @@ func TestProxmoxSetup_RunAll(t *testing.T) {
 	})
 
 	t.Run("forced type", func(t *testing.T) {
-		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "https://pulse", "token", "pbs", "host", "", false)
+		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "https://pulse", "token", "pbs", "host", "", "", false)
 		p.retryBackoffs = []time.Duration{} // disable retries so registration fails immediately in test
 		mc.statFn = func(name string) (os.FileInfo, error) { return nil, os.ErrNotExist }
 		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
@@ -536,7 +536,7 @@ func TestProxmoxSetup_RunAll(t *testing.T) {
 	})
 
 	t.Run("invalid forced type returns error", func(t *testing.T) {
-		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "https://pulse", "token", "invalid", "host", "", false)
+		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "https://pulse", "token", "invalid", "host", "", "", false)
 		if _, err := p.RunAll(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid proxmox type") {
 			t.Fatalf("expected proxmox type validation error, got %v", err)
 		}
@@ -545,11 +545,11 @@ func TestProxmoxSetup_RunAll(t *testing.T) {
 
 func TestIsTypeRegistered_Legacy(t *testing.T) {
 	mc := &mockCollector{}
-	p := &ProxmoxSetup{collector: mc}
+	p := &ProxmoxSetup{collector: mc, stateDir: "/var/lib/pulse-agent"}
 
 	t.Run("legacy state file exists and pve installed", func(t *testing.T) {
 		mc.statFn = func(name string) (os.FileInfo, error) {
-			if name == stateFilePath {
+			if name == "/var/lib/pulse-agent/proxmox-registered" {
 				return nil, nil
 			}
 			return nil, os.ErrNotExist
@@ -567,7 +567,7 @@ func TestIsTypeRegistered_Legacy(t *testing.T) {
 
 	t.Run("legacy state file exists and pbs only", func(t *testing.T) {
 		mc.statFn = func(name string) (os.FileInfo, error) {
-			if name == stateFilePath {
+			if name == "/var/lib/pulse-agent/proxmox-registered" {
 				return nil, nil
 			}
 			return nil, os.ErrNotExist
@@ -585,7 +585,7 @@ func TestIsTypeRegistered_Legacy(t *testing.T) {
 
 	t.Run("legacy exists but no products found", func(t *testing.T) {
 		mc.statFn = func(name string) (os.FileInfo, error) {
-			if name == stateFilePath {
+			if name == "/var/lib/pulse-agent/proxmox-registered" {
 				return nil, nil
 			}
 			return nil, os.ErrNotExist
@@ -606,7 +606,7 @@ func TestIsTypeRegistered_Legacy(t *testing.T) {
 
 func TestProxmoxSetup_MarkAsRegistered_Errors(t *testing.T) {
 	mc := &mockCollector{}
-	p := &ProxmoxSetup{collector: mc, logger: zerolog.Nop()}
+	p := &ProxmoxSetup{collector: mc, logger: zerolog.Nop(), stateDir: "/var/lib/pulse-agent"}
 
 	t.Run("mkdir error", func(t *testing.T) {
 		mc.mkdirAllFn = func(p string, m os.FileMode) error { return fmt.Errorf("fail") }
@@ -622,7 +622,7 @@ func TestProxmoxSetup_MarkAsRegistered_Errors(t *testing.T) {
 
 func TestProxmoxSetup_MarkAsRegistered_EnforcesPrivatePermissions(t *testing.T) {
 	mc := &mockCollector{}
-	p := &ProxmoxSetup{collector: mc, logger: zerolog.Nop()}
+	p := &ProxmoxSetup{collector: mc, logger: zerolog.Nop(), stateDir: "/var/lib/pulse-agent"}
 
 	var gotDirPerm os.FileMode
 	var gotFilePerm os.FileMode
@@ -649,17 +649,17 @@ func TestProxmoxSetup_MarkAsRegistered_EnforcesPrivatePermissions(t *testing.T) 
 	if gotFilePerm != proxmoxStateFilePerm {
 		t.Fatalf("WriteFile perm = %o, want %o", gotFilePerm, proxmoxStateFilePerm)
 	}
-	if chmodPerms[stateFileDir] != proxmoxStateDirPerm {
-		t.Fatalf("Chmod(%q) = %o, want %o", stateFileDir, chmodPerms[stateFileDir], proxmoxStateDirPerm)
+	if chmodPerms["/var/lib/pulse-agent"] != proxmoxStateDirPerm {
+		t.Fatalf("Chmod state dir = %o, want %o", chmodPerms["/var/lib/pulse-agent"], proxmoxStateDirPerm)
 	}
-	if chmodPerms[stateFilePath] != proxmoxStateFilePerm {
-		t.Fatalf("Chmod(%q) = %o, want %o", stateFilePath, chmodPerms[stateFilePath], proxmoxStateFilePerm)
+	if chmodPerms["/var/lib/pulse-agent/proxmox-registered"] != proxmoxStateFilePerm {
+		t.Fatalf("Chmod state file = %o, want %o", chmodPerms["/var/lib/pulse-agent/proxmox-registered"], proxmoxStateFilePerm)
 	}
 }
 
 func TestProxmoxSetup_MarkTypeAsRegistered_Errors(t *testing.T) {
 	mc := &mockCollector{}
-	p := &ProxmoxSetup{collector: mc, logger: zerolog.Nop()}
+	p := &ProxmoxSetup{collector: mc, logger: zerolog.Nop(), stateDir: "/var/lib/pulse-agent"}
 
 	t.Run("mkdir error", func(t *testing.T) {
 		mc.mkdirAllFn = func(p string, m os.FileMode) error { return fmt.Errorf("fail") }
@@ -675,7 +675,7 @@ func TestProxmoxSetup_MarkTypeAsRegistered_Errors(t *testing.T) {
 
 func TestProxmoxSetup_MarkTypeAsRegistered_EnforcesPrivatePermissions(t *testing.T) {
 	mc := &mockCollector{}
-	p := &ProxmoxSetup{collector: mc, logger: zerolog.Nop()}
+	p := &ProxmoxSetup{collector: mc, logger: zerolog.Nop(), stateDir: "/var/lib/pulse-agent"}
 
 	var gotDirPerm os.FileMode
 	var gotFilePerm os.FileMode
@@ -706,8 +706,8 @@ func TestProxmoxSetup_MarkTypeAsRegistered_EnforcesPrivatePermissions(t *testing
 	if gotFilePerm != proxmoxStateFilePerm {
 		t.Fatalf("WriteFile perm = %o, want %o", gotFilePerm, proxmoxStateFilePerm)
 	}
-	if chmodPerms[stateFileDir] != proxmoxStateDirPerm {
-		t.Fatalf("Chmod(%q) = %o, want %o", stateFileDir, chmodPerms[stateFileDir], proxmoxStateDirPerm)
+	if chmodPerms["/var/lib/pulse-agent"] != proxmoxStateDirPerm {
+		t.Fatalf("Chmod state dir = %o, want %o", chmodPerms["/var/lib/pulse-agent"], proxmoxStateDirPerm)
 	}
 	if chmodPerms[targetFile] != proxmoxStateFilePerm {
 		t.Fatalf("Chmod(%q) = %o, want %o", targetFile, chmodPerms[targetFile], proxmoxStateFilePerm)
@@ -722,7 +722,7 @@ func TestProxmoxSetup_Run_TopLevel(t *testing.T) {
 	defer server.Close()
 
 	t.Run("auto-detects and runs", func(t *testing.T) {
-		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "token", "", "host", "", false)
+		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "token", "", "host", "", "", false)
 		mc.lookPathFn = func(file string) (string, error) {
 			if file == "pvesh" {
 				return "/bin/pvesh", nil
@@ -749,21 +749,21 @@ func TestProxmoxSetup_Run_TopLevel(t *testing.T) {
 	})
 
 	t.Run("invalid pulse URL fails fast", func(t *testing.T) {
-		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, "not-a-url", "token", "", "host", "", false)
+		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, "not-a-url", "token", "", "host", "", "", false)
 		if _, err := p.Run(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid pulse URL") {
 			t.Fatalf("expected pulse URL validation error, got %v", err)
 		}
 	})
 
 	t.Run("missing token fails fast", func(t *testing.T) {
-		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, " ", "", "host", "", false)
+		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, " ", "", "host", "", "", false)
 		if _, err := p.Run(context.Background()); err == nil || !strings.Contains(err.Error(), "api token is required") {
 			t.Fatalf("expected missing token error, got %v", err)
 		}
 	})
 
 	t.Run("invalid proxmox type fails fast", func(t *testing.T) {
-		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "token", "bad", "host", "", false)
+		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "token", "bad", "host", "", "", false)
 		if _, err := p.Run(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid proxmox type") {
 			t.Fatalf("expected proxmox type validation error, got %v", err)
 		}

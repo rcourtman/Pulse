@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -28,6 +29,7 @@ type ProxmoxSetup struct {
 	reportIP           string
 	insecureSkipVerify bool
 	collector          SystemCollector
+	stateDir           string          // directory for registration state files
 	retryBackoffs      []time.Duration // overridable for testing; nil uses defaults
 }
 
@@ -138,18 +140,23 @@ func (p *ProxmoxSetup) configurePVEPermissions(ctx context.Context) {
 	}
 }
 
-var (
-	stateFilePath = "/var/lib/pulse-agent/proxmox-registered" // Legacy, kept for backward compat
-	stateFileDir  = "/var/lib/pulse-agent"
-	// Per-type state files for multi-product support (PVE+PBS on same host)
-	stateFilePVE = "/var/lib/pulse-agent/proxmox-pve-registered"
-	stateFilePBS = "/var/lib/pulse-agent/proxmox-pbs-registered"
-)
-
 const (
 	proxmoxStateDirPerm  = 0700
 	proxmoxStateFilePerm = 0600
 )
+
+// State file path methods — derive from the configurable stateDir.
+func (p *ProxmoxSetup) legacyStateFilePath() string {
+	return filepath.Join(p.stateDir, "proxmox-registered")
+}
+
+func (p *ProxmoxSetup) pveStateFilePath() string {
+	return filepath.Join(p.stateDir, "proxmox-pve-registered")
+}
+
+func (p *ProxmoxSetup) pbsStateFilePath() string {
+	return filepath.Join(p.stateDir, "proxmox-pbs-registered")
+}
 
 func parseProxmoxProductType(rawType string) proxmoxProductType {
 	switch strings.ToLower(strings.TrimSpace(rawType)) {
@@ -176,7 +183,10 @@ func proxmoxProductTypesToStrings(types []proxmoxProductType) []string {
 }
 
 // NewProxmoxSetup creates a new ProxmoxSetup instance.
-func NewProxmoxSetup(logger zerolog.Logger, httpClient *http.Client, collector SystemCollector, pulseURL, apiToken, proxmoxType, hostname, reportIP string, insecure bool) *ProxmoxSetup {
+func NewProxmoxSetup(logger zerolog.Logger, httpClient *http.Client, collector SystemCollector, pulseURL, apiToken, proxmoxType, hostname, reportIP, stateDir string, insecure bool) *ProxmoxSetup {
+	if stateDir == "" {
+		stateDir = defaultStateDir
+	}
 	return &ProxmoxSetup{
 		logger:             logger,
 		httpClient:         httpClient,
@@ -186,6 +196,7 @@ func NewProxmoxSetup(logger zerolog.Logger, httpClient *http.Client, collector S
 		proxmoxType:        proxmoxProductType(proxmoxType),
 		hostname:           hostname,
 		reportIP:           reportIP,
+		stateDir:           stateDir,
 		insecureSkipVerify: insecure,
 	}
 }
@@ -902,7 +913,7 @@ func isAlreadyExistsOutput(output string) bool {
 // isAlreadyRegistered checks if we've already done Proxmox setup.
 // This uses the legacy single state file for backward compatibility.
 func (p *ProxmoxSetup) isAlreadyRegistered() bool {
-	_, err := p.collector.Stat(stateFilePath)
+	_, err := p.collector.Stat(p.legacyStateFilePath())
 	return err == nil
 }
 
@@ -915,7 +926,7 @@ func (p *ProxmoxSetup) isTypeRegistered(ptype proxmoxProductType) bool {
 	}
 
 	// Check legacy state file for backward compat
-	if _, err := p.collector.Stat(stateFilePath); err == nil {
+	if _, err := p.collector.Stat(p.legacyStateFilePath()); err == nil {
 		// Legacy file exists. The old detection logic was:
 		// 1. If pvesh exists → registered "pve"
 		// 2. Else if proxmox-backup-manager exists → registered "pbs"
@@ -962,40 +973,41 @@ func (p *ProxmoxSetup) isTypeRegistered(ptype proxmoxProductType) bool {
 func (p *ProxmoxSetup) stateFileForType(ptype proxmoxProductType) string {
 	switch ptype {
 	case proxmoxProductPVE:
-		return stateFilePVE
+		return p.pveStateFilePath()
 	case proxmoxProductPBS:
-		return stateFilePBS
+		return p.pbsStateFilePath()
 	default:
-		return stateFilePath
+		return p.legacyStateFilePath()
 	}
 }
 
 // markAsRegistered creates a state file to indicate setup is complete.
 func (p *ProxmoxSetup) markAsRegistered() {
-	if err := p.collector.MkdirAll(stateFileDir, proxmoxStateDirPerm); err != nil {
+	if err := p.collector.MkdirAll(p.stateDir, proxmoxStateDirPerm); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to create state directory")
 		return
 	}
-	if err := p.collector.Chmod(stateFileDir, proxmoxStateDirPerm); err != nil {
+	if err := p.collector.Chmod(p.stateDir, proxmoxStateDirPerm); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to enforce state directory permissions")
 	}
 
-	if err := p.collector.WriteFile(stateFilePath, []byte(time.Now().Format(time.RFC3339)), proxmoxStateFilePerm); err != nil {
+	legacyPath := p.legacyStateFilePath()
+	if err := p.collector.WriteFile(legacyPath, []byte(time.Now().Format(time.RFC3339)), proxmoxStateFilePerm); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to write state file")
 		return
 	}
-	if err := p.collector.Chmod(stateFilePath, proxmoxStateFilePerm); err != nil {
+	if err := p.collector.Chmod(legacyPath, proxmoxStateFilePerm); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to enforce state file permissions")
 	}
 }
 
 // markTypeAsRegistered creates a state file for a specific Proxmox type.
 func (p *ProxmoxSetup) markTypeAsRegistered(ptype proxmoxProductType) {
-	if err := p.collector.MkdirAll(stateFileDir, proxmoxStateDirPerm); err != nil {
+	if err := p.collector.MkdirAll(p.stateDir, proxmoxStateDirPerm); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to create state directory")
 		return
 	}
-	if err := p.collector.Chmod(stateFileDir, proxmoxStateDirPerm); err != nil {
+	if err := p.collector.Chmod(p.stateDir, proxmoxStateDirPerm); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to enforce state directory permissions")
 	}
 

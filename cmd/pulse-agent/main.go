@@ -276,6 +276,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			ProxmoxType:        cfg.ProxmoxType,
 			EnableCommands:     cfg.EnableCommands,
 			DiskExclude:        cfg.DiskExclude,
+			StateDir:           cfg.StateDir,
 			ReportIP:           cfg.ReportIP,
 			DisableCeph:        cfg.DisableCeph,
 		}
@@ -526,6 +527,9 @@ type Config struct {
 	// Security
 	EnableCommands bool // Enable command execution for AI auto-fix (disabled by default)
 
+	// State directory
+	StateDir string // Persistent state directory for host-id, proxmox registration, etc.
+
 	// Disk filtering
 	DiskExclude []string // Mount points or patterns to exclude from disk monitoring
 
@@ -579,6 +583,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	}
 	envKubeIncludeAllDeployments := strings.TrimSpace(getenv("PULSE_KUBE_INCLUDE_ALL_DEPLOYMENTS"))
 	envKubeMaxPods := strings.TrimSpace(getenv("PULSE_KUBE_MAX_PODS"))
+	envStateDir := strings.TrimSpace(getenv("PULSE_STATE_DIR"))
 	envDiskExclude := strings.TrimSpace(getenv("PULSE_DISK_EXCLUDE"))
 	envReportIP := strings.TrimSpace(getenv("PULSE_REPORT_IP"))
 	envDisableCeph := strings.TrimSpace(getenv("PULSE_DISABLE_CEPH"))
@@ -643,6 +648,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	kubeIncludeAllPodsFlag := fs.Bool("kube-include-all-pods", utils.ParseBool(envKubeIncludeAllPods), "Include all non-succeeded pods (may be large)")
 	kubeIncludeAllDeploymentsFlag := fs.Bool("kube-include-all-deployments", utils.ParseBool(envKubeIncludeAllDeployments), "Include all deployments, not just problem ones")
 	kubeMaxPodsFlag := fs.Int("kube-max-pods", defaultInt(envKubeMaxPods, 200), "Max pods included in report")
+	stateDirFlag := fs.String("state-dir", envStateDir, "Persistent state directory (default: /var/lib/pulse-agent)")
 	reportIPFlag := fs.String("report-ip", envReportIP, "IP address to report (for multi-NIC systems)")
 	disableCephFlag := fs.Bool("disable-ceph", utils.ParseBool(envDisableCeph), "Disable local Ceph status polling")
 	showVersion := fs.Bool("version", false, "Print the agent version and exit")
@@ -737,6 +743,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		KubeIncludeAllPods:        *kubeIncludeAllPodsFlag,
 		KubeIncludeAllDeployments: *kubeIncludeAllDeploymentsFlag,
 		KubeMaxPods:               kubeMaxPods,
+		StateDir:                  strings.TrimSpace(*stateDirFlag),
 		DiskExclude:               diskExclude,
 		ReportIP:                  strings.TrimSpace(*reportIPFlag),
 		DisableCeph:               *disableCephFlag,

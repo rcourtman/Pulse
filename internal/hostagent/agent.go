@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
@@ -52,6 +53,9 @@ type Config struct {
 	// Disk filtering
 	DiskExclude []string // Mount points or path prefixes to exclude from disk monitoring
 
+	// State directory for persistent files (host-id, proxmox registration, etc.)
+	StateDir string // Default: /var/lib/pulse-agent
+
 	// Network configuration
 	ReportIP    string // IP address to report instead of auto-detected (for multi-NIC systems)
 	DisableCeph bool   // If true, disables local Ceph status polling
@@ -79,6 +83,7 @@ type Agent struct {
 	updatedFrom            string // Previous version if recently auto-updated (reported once)
 	reportIP               string // User-specified IP to report (for multi-NIC systems)
 	interval               time.Duration
+	stateDir               string
 	trimmedPulseURL        string
 	reportBuffer           *utils.Queue[agentshost.Report]
 	commandClient          *CommandClient
@@ -89,6 +94,7 @@ type Agent struct {
 }
 
 const defaultInterval = 30 * time.Second
+const defaultStateDir = "/var/lib/pulse-agent"
 const hostReportEndpoint = "/api/agents/host/report"
 
 type reportHTTPStatusError struct {
@@ -110,6 +116,10 @@ var runCommandClient = func(client *CommandClient, ctx context.Context) error {
 func New(cfg Config) (*Agent, error) {
 	if cfg.Interval <= 0 {
 		cfg.Interval = defaultInterval
+	}
+
+	if strings.TrimSpace(cfg.StateDir) == "" {
+		cfg.StateDir = defaultStateDir
 	}
 
 	if zerolog.GlobalLevel() == zerolog.DebugLevel && cfg.LogLevel != zerolog.DebugLevel {
@@ -267,6 +277,7 @@ func New(cfg Config) (*Agent, error) {
 		agentVersion:    agentVersion,
 		updatedFrom:     updatedFrom,
 		reportIP:        cfg.ReportIP,
+		stateDir:        cfg.StateDir,
 		interval:        cfg.Interval,
 		trimmedPulseURL: pulseURL,
 		reportBuffer:    utils.New[agentshost.Report](bufferCapacity),
@@ -615,12 +626,38 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 		return nil
 	}
 
+	// Persist the server-acknowledged host ID so uninstall can deregister.
+	if reportResp.HostID != "" {
+		a.persistHostID(reportResp.HostID)
+	}
+
 	// Apply server config overrides
 	if reportResp.Config != nil && reportResp.Config.CommandsEnabled != nil {
 		a.applyRemoteConfig(*reportResp.Config.CommandsEnabled)
 	}
 
 	return nil
+}
+
+// persistHostID writes the server-assigned host ID to the state directory.
+// This file is read by the uninstall script to deregister the agent from the server.
+// Errors are debug-logged, never fatal — same resilience pattern as proxmox_setup.go.
+func (a *Agent) persistHostID(hostID string) {
+	if a.stateDir == "" {
+		return
+	}
+	if err := a.collector.MkdirAll(a.stateDir, 0700); err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to create state directory for host-id")
+		return
+	}
+	hostIDPath := filepath.Join(a.stateDir, "host-id")
+	if err := a.collector.WriteFile(hostIDPath, []byte(hostID), 0600); err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to persist host-id")
+		return
+	}
+	if err := a.collector.Chmod(hostIDPath, 0600); err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to enforce host-id file permissions")
+	}
 }
 
 // applyRemoteConfig applies server-side configuration overrides.
@@ -1094,6 +1131,7 @@ func (a *Agent) runProxmoxSetup(ctx context.Context) {
 		a.cfg.ProxmoxType,
 		a.hostname,
 		a.reportIP,
+		a.stateDir,
 		a.cfg.InsecureSkipVerify,
 	)
 
