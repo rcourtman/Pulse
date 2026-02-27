@@ -4392,7 +4392,7 @@ if [ -n "$SSH_SENSORS_PUBLIC_KEY" ]; then
             TMP_AUTH_KEYS="$(mktemp /tmp/.pulse-authorized-keys.XXXXXX 2>/dev/null)" || TMP_AUTH_KEYS=""
             if [ -n "$TMP_AUTH_KEYS" ] && [ -f "$TMP_AUTH_KEYS" ]; then
                 grep -vF "# pulse-" "$AUTH_KEYS" > "$TMP_AUTH_KEYS" 2>/dev/null || true
-                printf '%s\n' "$SSH_SENSORS_KEY_ENTRY" >> "$TMP_AUTH_KEYS"
+                printf '%%s\n' "$SSH_SENSORS_KEY_ENTRY" >> "$TMP_AUTH_KEYS"
                 chmod 600 "$TMP_AUTH_KEYS"
                 if mv -f "$TMP_AUTH_KEYS" "$AUTH_KEYS" 2>/dev/null || cp -f "$TMP_AUTH_KEYS" "$AUTH_KEYS" 2>/dev/null; then
                     rm -f "$TMP_AUTH_KEYS" 2>/dev/null
@@ -4405,7 +4405,7 @@ if [ -n "$SSH_SENSORS_PUBLIC_KEY" ]; then
                 echo "  ⚠️  Failed to create temp file — cannot update authorized_keys"
             fi
         else
-            if printf '%s\n' "$SSH_SENSORS_KEY_ENTRY" >> "$AUTH_KEYS" 2>/dev/null; then
+            if printf '%%s\n' "$SSH_SENSORS_KEY_ENTRY" >> "$AUTH_KEYS" 2>/dev/null; then
                 chmod 600 "$AUTH_KEYS"
                 SENSORS_KEY_OK=true
             else
