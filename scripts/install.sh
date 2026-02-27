@@ -54,6 +54,10 @@ BINARY_NAME="pulse-agent"
 INSTALL_DIR="/usr/local/bin"
 LOG_FILE="/var/log/${AGENT_NAME}.log"
 
+# QNAP QTS/QuTS hero configuration (RAM-backed /usr/local/bin — limited space)
+QNAP=false
+QNAP_VOL=""
+
 # TrueNAS SCALE configuration (immutable root filesystem)
 TRUENAS=false
 TRUENAS_STATE_DIR="/data/pulse-agent"
@@ -671,6 +675,8 @@ if [[ "$UNINSTALL" == "true" ]]; then
         done
 
         rm -f "${INSTALL_DIR}/${BINARY_NAME}"
+        # Also clean the runtime copy the wrapper puts in /usr/local/bin at boot
+        rm -f "/usr/local/bin/${BINARY_NAME}"
         rm -f "/etc/init.d/${AGENT_NAME}"
         rm -f "/var/run/${AGENT_NAME}.pid"
     fi
@@ -758,7 +764,28 @@ is_install_dir_writable() {
     return 1
 }
 
-if [[ "$(uname -s)" == "Linux" ]] && is_truenas; then
+# QNAP QTS/QuTS hero: /usr/local/bin is on a tiny RAM disk that may not have room
+# for the agent binary. Detect early and redirect INSTALL_DIR to the persistent
+# data volume so the download/mv step never touches the RAM disk.
+if [[ -f /sbin/getcfg ]] || [[ -f /etc/config/qpkg.conf ]]; then
+    QNAP=true
+    if command -v getcfg >/dev/null 2>&1; then
+        QNAP_VOL=$(getcfg SHARE_DEF defVolMP -f /etc/config/def_share.info 2>/dev/null || echo "")
+    fi
+    if [[ -z "$QNAP_VOL" ]]; then
+        for candidate in /share/CACHEDEV1_DATA /share/CACHEDEV2_DATA /share/MD0_DATA; do
+            if [[ -d "$candidate" ]] && [[ -w "$candidate" ]]; then
+                QNAP_VOL="$candidate"
+                break
+            fi
+        done
+    fi
+    if [[ -z "$QNAP_VOL" ]]; then
+        fail "Could not find a writable QNAP data volume. Is a storage volume configured?"
+    fi
+    INSTALL_DIR="${QNAP_VOL}/.pulse-agent"
+    log_info "Detected QNAP QTS/QuTS hero. Using ${INSTALL_DIR} for installation."
+elif [[ "$(uname -s)" == "Linux" ]] && is_truenas; then
     TRUENAS=true
     INSTALL_DIR="$TRUENAS_STATE_DIR"
     TRUENAS_LOG_FILE="$TRUENAS_LOG_DIR/${AGENT_NAME}.log"
@@ -835,8 +862,15 @@ chmod +x "$TMP_BIN"
 EXISTING_VERSION=""
 UPGRADE_MODE=false
 
-if [[ -x "${INSTALL_DIR}/${BINARY_NAME}" ]]; then
-    EXISTING_VERSION=$("${INSTALL_DIR}/${BINARY_NAME}" --version 2>/dev/null | head -1 || echo "unknown")
+# On QNAP, previous installs may have the binary in /usr/local/bin (old path)
+# while INSTALL_DIR now points to the persistent data volume.
+UPGRADE_CHECK_BIN="${INSTALL_DIR}/${BINARY_NAME}"
+if [[ "$QNAP" == true ]] && [[ ! -x "$UPGRADE_CHECK_BIN" ]] && [[ -x "/usr/local/bin/${BINARY_NAME}" ]]; then
+    UPGRADE_CHECK_BIN="/usr/local/bin/${BINARY_NAME}"
+fi
+
+if [[ -x "$UPGRADE_CHECK_BIN" ]]; then
+    EXISTING_VERSION=$("$UPGRADE_CHECK_BIN" --version 2>/dev/null | head -1 || echo "unknown")
     NEW_VERSION=$("$TMP_BIN" --version 2>/dev/null | head -1 || echo "unknown")
     
     if [[ -n "$EXISTING_VERSION" && "$EXISTING_VERSION" != "unknown" ]]; then
@@ -1216,64 +1250,49 @@ EOF
 fi
 
 # 3b. QNAP QTS/QuTS hero (ephemeral /etc/init.d — wiped on every reboot)
-# Detect via /sbin/getcfg (QNAP config tool) or /etc/config/qpkg.conf.
-# Binary + wrapper stored on persistent volume; autorun.sh used for boot persistence.
-if [[ -f /sbin/getcfg ]] || [[ -f /etc/config/qpkg.conf ]]; then
-    log_info "Detected QNAP QTS/QuTS hero system..."
+# QNAP detection and INSTALL_DIR redirect happens early (before download) so the
+# binary is written directly to the persistent data volume, avoiding the tiny RAM-
+# backed /usr/local/bin which can trigger "No space left on device".
+if [[ "$QNAP" == true ]]; then
+    QNAP_STATE_DIR="${INSTALL_DIR}"          # already set to ${QNAP_VOL}/.pulse-agent
+    STORED_BINARY="${QNAP_STATE_DIR}/${BINARY_NAME}"
 
-    # Find the default data volume (typically /share/CACHEDEV1_DATA)
-    QNAP_VOL=""
-    if command -v getcfg >/dev/null 2>&1; then
-        QNAP_VOL=$(getcfg SHARE_DEF defVolMP -f /etc/config/def_share.info 2>/dev/null || echo "")
-    fi
-    if [[ -z "$QNAP_VOL" ]]; then
-        # Fallback: probe common data volume mount points
-        for candidate in /share/CACHEDEV1_DATA /share/CACHEDEV2_DATA /share/MD0_DATA; do
-            if [[ -d "$candidate" ]] && [[ -w "$candidate" ]]; then
-                QNAP_VOL="$candidate"
-                break
-            fi
-        done
-    fi
-    if [[ -z "$QNAP_VOL" ]]; then
-        fail "Could not find a writable QNAP data volume. Is a storage volume configured?"
-    fi
-
-    QNAP_STATE_DIR="${QNAP_VOL}/.pulse-agent"
-    QNAP_STORED_BINARY="${QNAP_STATE_DIR}/${BINARY_NAME}"
-    RUNTIME_BINARY="${INSTALL_DIR}/${BINARY_NAME}"
-
-    mkdir -p "$QNAP_STATE_DIR"
-
-    # Copy binary to persistent storage and keep in /usr/local/bin for runtime
-    cp "${RUNTIME_BINARY}" "$QNAP_STORED_BINARY"
-    chmod +x "${RUNTIME_BINARY}"
-
-    log_info "Installed binary to ${QNAP_STORED_BINARY} (persistent) and ${RUNTIME_BINARY} (runtime)..."
+    log_info "Binary installed to ${STORED_BINARY} (persistent storage)."
 
     # Build command line args
     build_exec_args
     build_exec_args_array
 
-    # Kill any existing pulse agents
+    # Kill any existing pulse agents (use -x for exact process name match to
+    # avoid killing the wrapper script whose path also contains "pulse-agent")
     log_info "Stopping any existing pulse agents..."
-    pkill -f "^${RUNTIME_BINARY}" 2>/dev/null || true
+    pkill -x "${BINARY_NAME}" 2>/dev/null || true
     sleep 2
 
     # Create a wrapper script (stored persistently)
+    # At boot the RAM disk is empty, so the wrapper copies the binary there for
+    # runtime, then enters a watchdog loop.
+    RUNTIME_BINARY="/usr/local/bin/${BINARY_NAME}"
     WRAPPER_SCRIPT="${QNAP_STATE_DIR}/start-pulse-agent.sh"
     cat > "$WRAPPER_SCRIPT" <<EOF
 #!/bin/sh
 # Pulse Agent startup script for QNAP
 # Auto-generated by Pulse installer
 
-# Kill any existing pulse-agent processes
-pkill -f "^${RUNTIME_BINARY}" 2>/dev/null || true
+# Kill any existing pulse-agent processes (-x = exact process name match,
+# avoids killing this wrapper whose path also contains "pulse-agent")
+pkill -x "${BINARY_NAME}" 2>/dev/null || true
 sleep 2
 
-# Copy binary from persistent storage to /usr/local/bin (RAM disk, wiped on reboot)
-cp "${QNAP_STORED_BINARY}" "${RUNTIME_BINARY}"
-chmod +x "${RUNTIME_BINARY}"${SHELL_EXPORT_LINES}
+# Copy binary from persistent storage to /usr/local/bin (RAM disk, wiped on reboot).
+# If the copy fails (e.g. no space), run directly from persistent storage instead.
+AGENT_BIN="${RUNTIME_BINARY}"
+if cp "${STORED_BINARY}" "${RUNTIME_BINARY}" 2>/dev/null; then
+    chmod +x "${RUNTIME_BINARY}"
+else
+    AGENT_BIN="${STORED_BINARY}"
+fi
+${SHELL_EXPORT_LINES}
 
 # Watchdog loop: restart agent if it exits
 RESTART_DELAY=5
@@ -1281,7 +1300,7 @@ MAX_RESTART_DELAY=60
 
 while true; do
     echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] Starting pulse-agent..." >> /var/log/${AGENT_NAME}.log
-    ${RUNTIME_BINARY} ${EXEC_ARGS} >> /var/log/${AGENT_NAME}.log 2>&1
+    \${AGENT_BIN} ${EXEC_ARGS} >> /var/log/${AGENT_NAME}.log 2>&1
     EXIT_CODE=\$?
 
     echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] pulse-agent exited with code \$EXIT_CODE, restarting in \${RESTART_DELAY}s..." >> /var/log/${AGENT_NAME}.log
