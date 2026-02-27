@@ -1129,9 +1129,9 @@ func TestCheckBackupsHandlesPbsOnlyGuests(t *testing.T) {
 	}
 
 	// Include a live sentinel guest so hasLiveInventory is true and orphan detection runs.
-	sentinelKey := BuildGuestKey("sentinel", "snode", 9999)
+	sentinelKey := BuildGuestKey("inst", "snode", 9999)
 	guestsByKey := map[string]GuestLookup{
-		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "sentinel", Node: "snode", Type: "qemu", VMID: 9999},
+		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "inst", Node: "snode", Type: "qemu", VMID: 9999},
 	}
 	guestsByVMID := map[string][]GuestLookup{
 		"9999": {guestsByKey[sentinelKey]},
@@ -1474,9 +1474,9 @@ func TestCheckBackupsSkipsOrphanedWhenDisabled(t *testing.T) {
 	}
 
 	// Include a live sentinel guest so hasLiveInventory is true and orphan detection runs.
-	sentinelKey := BuildGuestKey("sentinel", "snode", 9999)
+	sentinelKey := BuildGuestKey("inst", "snode", 9999)
 	guestsByKey := map[string]GuestLookup{
-		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "sentinel", Node: "snode", Type: "qemu", VMID: 9999},
+		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "inst", Node: "snode", Type: "qemu", VMID: 9999},
 	}
 	guestsByVMID := map[string][]GuestLookup{
 		"9999": {guestsByKey[sentinelKey]},
@@ -1528,9 +1528,9 @@ func TestCheckBackupsCreatesOrphanedAlert(t *testing.T) {
 
 	// Include a live sentinel guest so hasLiveInventory is true and orphan detection runs.
 	// VMID 200 is still orphaned because it's not in the inventory.
-	sentinelKey := BuildGuestKey("sentinel", "snode", 9999)
+	sentinelKey := BuildGuestKey("inst", "snode", 9999)
 	guestsByKey := map[string]GuestLookup{
-		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "sentinel", Node: "snode", Type: "qemu", VMID: 9999},
+		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "inst", Node: "snode", Type: "qemu", VMID: 9999},
 	}
 	guestsByVMID := map[string][]GuestLookup{
 		"9999": {guestsByKey[sentinelKey]},
@@ -1598,10 +1598,10 @@ func TestCheckBackupsOrphanedAlertClearsWhenGuestReappears(t *testing.T) {
 		},
 	}
 
-	// Include a live sentinel guest so hasLiveInventory is true and orphan detection runs.
-	sentinelKey := BuildGuestKey("sentinel", "snode", 9999)
+	// Include a live sentinel guest on the same instance so orphan detection runs.
+	sentinelKey := BuildGuestKey("inst", "snode", 9999)
 	sentinelByKey := map[string]GuestLookup{
-		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "sentinel", Node: "snode", Type: "qemu", VMID: 9999},
+		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "inst", Node: "snode", Type: "qemu", VMID: 9999},
 	}
 	sentinelByVMID := map[string][]GuestLookup{
 		"9999": {sentinelByKey[sentinelKey]},
@@ -1680,9 +1680,9 @@ func TestCheckBackupsOrphanedIgnoresVMIDs(t *testing.T) {
 	}
 
 	// Include a live sentinel guest so hasLiveInventory is true and orphan detection runs.
-	sentinelKey := BuildGuestKey("sentinel", "snode", 9999)
+	sentinelKey := BuildGuestKey("inst", "snode", 9999)
 	guestsByKey := map[string]GuestLookup{
-		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "sentinel", Node: "snode", Type: "qemu", VMID: 9999},
+		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "inst", Node: "snode", Type: "qemu", VMID: 9999},
 	}
 	guestsByVMID := map[string][]GuestLookup{
 		"9999": {guestsByKey[sentinelKey]},
@@ -1739,9 +1739,9 @@ func TestCheckBackupsOrphanedWithZeroAgeThresholds(t *testing.T) {
 	}
 
 	// Include a live sentinel guest so hasLiveInventory is true and orphan detection runs.
-	sentinelKey := BuildGuestKey("sentinel", "snode", 9999)
+	sentinelKey := BuildGuestKey("inst", "snode", 9999)
 	guestsByKey := map[string]GuestLookup{
-		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "sentinel", Node: "snode", Type: "qemu", VMID: 9999},
+		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "inst", Node: "snode", Type: "qemu", VMID: 9999},
 	}
 	guestsByVMID := map[string][]GuestLookup{
 		"9999": {guestsByKey[sentinelKey]},
@@ -1804,10 +1804,10 @@ func TestCheckBackupsOrphanedWithPersistedMetadata(t *testing.T) {
 
 	// Simulate persisted metadata for deleted guest: entry exists in
 	// guestsByVMID but with empty ResourceID (no live guest).
-	// Include a live sentinel guest so hasLiveInventory is true and orphan detection runs.
-	sentinelKey := BuildGuestKey("sentinel", "snode", 9999)
+	// Include a live sentinel guest on the same instance so orphan detection runs.
+	sentinelKey := BuildGuestKey("inst", "snode", 9999)
 	guestsByKey := map[string]GuestLookup{
-		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "sentinel", Node: "snode", Type: "qemu", VMID: 9999},
+		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "inst", Node: "snode", Type: "qemu", VMID: 9999},
 	}
 	guestsByVMID := map[string][]GuestLookup{
 		"500":  {{Name: "deleted-vm", Instance: "inst", Node: "node", Type: "qemu", VMID: 500}},
@@ -1906,9 +1906,9 @@ func TestCheckBackupsOrphanedPreservedWhenNoLiveInventory(t *testing.T) {
 	}
 
 	// First cycle: with live inventory → orphan alert fires.
-	sentinelKey := BuildGuestKey("sentinel", "snode", 9999)
+	sentinelKey := BuildGuestKey("inst", "snode", 9999)
 	guestsByKey := map[string]GuestLookup{
-		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "sentinel", Node: "snode", Type: "qemu", VMID: 9999},
+		sentinelKey: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "inst", Node: "snode", Type: "qemu", VMID: 9999},
 	}
 	guestsByVMID := map[string][]GuestLookup{
 		"9999": {guestsByKey[sentinelKey]},
@@ -1977,12 +1977,16 @@ func TestCheckBackupsOrphanedCrossInstanceVMID(t *testing.T) {
 	}
 
 	// Instance B has a live guest with the same VMID.
+	// Instance A also has a sentinel guest so its inventory is considered populated.
 	keyB := BuildGuestKey("instB", "nodeB", 600)
+	sentinelA := BuildGuestKey("instA", "nodeA", 9999)
 	guestsByKey := map[string]GuestLookup{
-		keyB: {ResourceID: "qemu/600", Name: "vm-instB", Instance: "instB", Node: "nodeB", Type: "qemu", VMID: 600},
+		keyB:      {ResourceID: "qemu/600", Name: "vm-instB", Instance: "instB", Node: "nodeB", Type: "qemu", VMID: 600},
+		sentinelA: {ResourceID: "qemu/9999", Name: "sentinel-vm", Instance: "instA", Node: "nodeA", Type: "qemu", VMID: 9999},
 	}
 	guestsByVMID := map[string][]GuestLookup{
-		"600": {guestsByKey[keyB]},
+		"600":  {guestsByKey[keyB]},
+		"9999": {guestsByKey[sentinelA]},
 	}
 
 	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)

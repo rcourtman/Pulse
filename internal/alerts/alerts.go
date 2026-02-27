@@ -5662,20 +5662,17 @@ func (m *Manager) CheckBackups(
 		return
 	}
 
-	// Check whether the guest inventory contains any live entries (non-empty
-	// ResourceID). If every entry is persisted metadata for deleted guests,
-	// the inventory hasn't been populated yet (startup race, auth failure, etc.)
-	// and orphaned detection would produce false positives for every backup.
-	hasLiveInventory := false
+	// Build a set of instances that have at least one live guest (non-empty
+	// ResourceID). Orphan detection is only safe for instances whose guest
+	// list has been populated — if an instance hasn't been polled yet
+	// (startup race, auth failure, staggered polling), every backup from
+	// that instance would look orphaned.
+	instancesWithLiveGuests := make(map[string]bool)
 	for _, guests := range guestsByVMID {
 		for _, g := range guests {
-			if g.ResourceID != "" {
-				hasLiveInventory = true
-				break
+			if g.ResourceID != "" && g.Instance != "" {
+				instancesWithLiveGuests[g.Instance] = true
 			}
-		}
-		if hasLiveInventory {
-			break
 		}
 	}
 
@@ -5713,11 +5710,19 @@ func (m *Manager) CheckBackups(
 		if backupIgnoreVMID(record.vmid, currentBackupCfg.IgnoreVMIDs) {
 			continue
 		}
-		if record.vmid != "" && record.lookup.ResourceID == "" && hasLiveInventory {
+		// Determine whether we have enough inventory to safely run orphan
+		// detection for this backup.  For PVE storage backups the instance
+		// guard is strict: only check when that specific PVE instance has
+		// been polled.  For PBS/PMG backups (which span instances) it's
+		// enough that *any* instance has live guests.
+		inventoryReady := false
+		if record.source == "PVE storage" {
+			inventoryReady = instancesWithLiveGuests[record.instance]
+		} else {
+			inventoryReady = len(instancesWithLiveGuests) > 0
+		}
+		if record.vmid != "" && record.lookup.ResourceID == "" && inventoryReady {
 			// Backup has a VMID but no matching live guest in its lookup.
-			// Only run orphan detection when live inventory exists — if no
-			// live guests have been polled yet (startup race, auth failure,
-			// transient outage), every backup would look orphaned.
 			//
 			// Check whether the VMID exists anywhere in live inventory.
 			// If it does, the backup is ambiguous (VMID collision) but not orphaned.
@@ -6051,9 +6056,9 @@ func (m *Manager) CheckBackups(
 		if _, ok := validAlerts[alertID]; ok {
 			continue
 		}
-		// When inventory has no live guests, preserve existing orphan alerts
-		// rather than clearing them — we can't confirm they're resolved.
-		if !hasLiveInventory && alert.Type == "backup-orphaned" {
+		// When no instances have live inventory, preserve existing orphan
+		// alerts rather than clearing them — we can't confirm they're resolved.
+		if len(instancesWithLiveGuests) == 0 && alert.Type == "backup-orphaned" {
 			continue
 		}
 		m.clearAlertNoLock(alertID)
