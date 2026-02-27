@@ -336,11 +336,24 @@ PULSE_URL=${PULSE_URL}
 PULSE_TOKEN=${PULSE_TOKEN}
 CONNEOF
     chmod 600 "${state_dir}/connection.env"
-    # Save a copy of this install script for offline uninstall
-    # $0 may be /dev/stdin when piped through curl, so only copy if it's a real file
-    if [[ -f "$0" ]]; then
-        cp "$0" "${state_dir}/install.sh" 2>/dev/null || true
-        chmod +x "${state_dir}/install.sh" 2>/dev/null || true
+    # Save a copy of this install script for offline uninstall.
+    # When run via "curl | bash", $0 is /dev/stdin — not a usable file.
+    # Try local copy first, then download a fresh copy from the server.
+    local saved=false
+    if [[ -f "$0" && "$0" != "/dev/stdin" && "$0" != "bash" && "$0" != "-bash" ]]; then
+        if cp "$0" "${state_dir}/install.sh" 2>/dev/null; then
+            saved=true
+        fi
+    fi
+    if [[ "$saved" != "true" ]]; then
+        # Download from the server (we know it's reachable — we just installed from it)
+        local dl_args=(-fsSL --connect-timeout 10 --max-time 30)
+        if [[ "$INSECURE" == "true" ]]; then dl_args+=(-k); fi
+        if [[ -n "$CURL_CA_BUNDLE" ]]; then dl_args+=(--cacert "$CURL_CA_BUNDLE"); fi
+        curl "${dl_args[@]}" -o "${state_dir}/install.sh" "${PULSE_URL}/install.sh" 2>/dev/null || true
+    fi
+    if [[ -f "${state_dir}/install.sh" ]]; then
+        chmod +x "${state_dir}/install.sh"
     fi
 }
 
