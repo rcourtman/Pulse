@@ -123,13 +123,11 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 	attachMetricsTargets(paged, registry)
 	pruneResourcesForListResponse(paged)
 
-	// Build aggregations: use registry.Stats() for ByStatus/BySource (no conversion
-	// needed), but compute ByType from all filtered resources after type conversion
-	// so the keys match frontend expectations (e.g. "node" instead of "host").
-	// Compute ByType BEFORE applyFrontendTypes(paged), because paged is a sub-slice
-	// of resources and mutating it would double-convert those elements.
+	// Build aggregations: use registry.Stats() for Total/ByStatus/BySource (unfiltered,
+	// no conversion needed), but recompute ByType from the full registry list so keys
+	// match frontend expectations (e.g. "node" instead of "host").
 	stats := registry.Stats()
-	stats.ByType = computeFrontendByType(resources)
+	stats.ByType = computeFrontendByType(registry.List())
 
 	applyFrontendTypes(paged)
 
@@ -303,9 +301,7 @@ func (h *ResourceHandlers) HandleStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stats := registry.Stats()
-	resources := registry.List()
-	applyFrontendTypes(resources)
-	stats.ByType = computeFrontendByType(resources)
+	stats.ByType = computeFrontendByType(registry.List())
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
