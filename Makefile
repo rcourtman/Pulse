@@ -1,6 +1,6 @@
 # Pulse Makefile for development
 
-.PHONY: build run dev frontend backend all clean distclean dev-hot lint lint-backend lint-frontend format format-backend format-frontend build-agents control-plane
+.PHONY: build run dev frontend backend all clean distclean dev-hot lint lint-backend lint-frontend format format-backend format-frontend build-agents control-plane handoff
 
 FRONTEND_DIR := frontend-modern
 FRONTEND_DIST := $(FRONTEND_DIR)/dist
@@ -109,3 +109,10 @@ build-agents:
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.Version=v$$VERSION" -trimpath -o bin/pulse-agent-windows-amd64.exe ./cmd/pulse-agent
 	@ln -sf pulse-host-agent-windows-amd64.exe bin/pulse-host-agent-windows-amd64
 	@echo "✓ All agent binaries built in bin/"
+
+# Session handoff — merge a Claude session's handoff entry into MEMORY.md (flock-safe)
+# Usage: make handoff SESSION_ID=<id>
+# Expects handoff content at /tmp/handoff-$(SESSION_ID).md
+handoff:
+	@if [ -z "$(SESSION_ID)" ]; then echo "Error: SESSION_ID required (make handoff SESSION_ID=xxx)" >&2; exit 1; fi
+	@./scripts/session-handoff.sh "$(SESSION_ID)" "/tmp/handoff-$(SESSION_ID).md"
