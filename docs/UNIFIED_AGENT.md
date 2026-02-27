@@ -140,7 +140,7 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 ### Docker Monitoring Only
 ```bash
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-host=false --enable-docker
+  bash -s -- --url http://<pulse-ip>:7655 --token <token> --disable-host --enable-docker
 ```
 
 ### Exclude Specific Disks from Monitoring
