@@ -495,6 +495,7 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 		SwapUsed:   vm.Memory.SwapUsed,
 		SwapTotal:  vm.Memory.SwapTotal,
 		Balloon:    vm.Memory.Balloon,
+		Lock:       vm.Lock,
 	}
 	resource := Resource{
 		Type:       ResourceTypeVM,
@@ -529,6 +530,7 @@ func resourceFromContainer(ct models.Container) (Resource, ResourceIdentity) {
 		SwapUsed:   ct.Memory.SwapUsed,
 		SwapTotal:  ct.Memory.SwapTotal,
 		Balloon:    ct.Memory.Balloon,
+		Lock:       ct.Lock,
 	}
 	resource := Resource{
 		Type:       ResourceTypeSystemContainer,
@@ -584,6 +586,8 @@ func resourceFromStorage(storage models.Storage) (Resource, ResourceIdentity) {
 			Shared:            storage.Shared,
 			IsCeph:            isCephStorageType(storageType),
 			IsZFS:             isZFSStorageType(storageType) || storage.ZFSPool != nil,
+			Nodes:             append([]string(nil), storage.Nodes...),
+			Path:              storage.Path,
 			ZFSPoolState:      zfsPoolState,
 			ZFSReadErrors:     zfsReadErrors,
 			ZFSWriteErrors:    zfsWriteErrors,

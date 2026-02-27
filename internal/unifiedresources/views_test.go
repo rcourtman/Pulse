@@ -72,13 +72,16 @@ func TestView_VMViewAccessors(t *testing.T) {
 			Template:   false,
 			LastBackup: lastBackup,
 			Disks:      []DiskInfo{{Device: "vda", Filesystem: "ext4", Total: 100, Used: 60, Free: 40, Mountpoint: "/"}},
+			Lock:       "backup",
 		},
 		Metrics: &ResourceMetrics{
-			CPU:    &MetricValue{Percent: 12.5},
-			Memory: &MetricValue{Used: ptrInt64(2 * 1024), Total: ptrInt64(8 * 1024), Percent: 25},
-			Disk:   &MetricValue{Used: ptrInt64(40 * 1024), Total: ptrInt64(100 * 1024), Percent: 40},
-			NetIn:  &MetricValue{Value: 123.4},
-			NetOut: &MetricValue{Value: 567.8},
+			CPU:       &MetricValue{Percent: 12.5},
+			Memory:    &MetricValue{Used: ptrInt64(2 * 1024), Total: ptrInt64(8 * 1024), Percent: 25},
+			Disk:      &MetricValue{Used: ptrInt64(40 * 1024), Total: ptrInt64(100 * 1024), Percent: 40},
+			NetIn:     &MetricValue{Value: 123.4},
+			NetOut:    &MetricValue{Value: 567.8},
+			DiskRead:  &MetricValue{Value: 99.1},
+			DiskWrite: &MetricValue{Value: 88.2},
 		},
 	}
 
@@ -157,6 +160,15 @@ func TestView_VMViewAccessors(t *testing.T) {
 	if v.NetOut() != 567.8 {
 		t.Fatalf("expected NetOut %v, got %v", 567.8, v.NetOut())
 	}
+	if v.DiskRead() != 99.1 {
+		t.Fatalf("expected DiskRead %v, got %v", 99.1, v.DiskRead())
+	}
+	if v.DiskWrite() != 88.2 {
+		t.Fatalf("expected DiskWrite %v, got %v", 88.2, v.DiskWrite())
+	}
+	if v.Lock() != "backup" {
+		t.Fatalf("expected Lock %q, got %q", "backup", v.Lock())
+	}
 	assertStringSlice(t, v.IPAddresses(), []string{"10.0.0.10", "fd00::10"})
 
 	t.Run("NilResourceIsSafe", func(t *testing.T) {
@@ -184,6 +196,9 @@ func TestView_VMViewAccessors(t *testing.T) {
 			zero.DiskPercent() != 0 ||
 			zero.NetIn() != 0 ||
 			zero.NetOut() != 0 ||
+			zero.DiskRead() != 0 ||
+			zero.DiskWrite() != 0 ||
+			zero.Lock() != "" ||
 			zero.IPAddresses() != nil {
 			t.Fatalf("expected zero values for nil resource, got %+v", zero)
 		}
@@ -197,17 +212,29 @@ func TestView_VMViewAccessors(t *testing.T) {
 		r.Identity = ResourceIdentity{}
 		v := NewVMView(r)
 
-		if v.VMID() != 0 || v.Node() != "" || v.Instance() != "" || v.Template() != false || v.CPUs() != 0 || v.Uptime() != 0 || !v.LastBackup().IsZero() {
+		if v.VMID() != 0 || v.Node() != "" || v.Instance() != "" || v.Template() != false || v.CPUs() != 0 || v.Uptime() != 0 || !v.LastBackup().IsZero() || v.Lock() != "" {
 			t.Fatalf("expected proxmox accessors to return zero values when Proxmox is nil")
 		}
 		if v.Disks() != nil {
 			t.Fatalf("expected nil disks when Proxmox is nil, got %+v", v.Disks())
 		}
-		if v.CPUPercent() != 0 || v.MemoryUsed() != 0 || v.MemoryTotal() != 0 || v.MemoryPercent() != 0 || v.DiskUsed() != 0 || v.DiskTotal() != 0 || v.DiskPercent() != 0 || v.NetIn() != 0 || v.NetOut() != 0 {
+		if v.CPUPercent() != 0 || v.MemoryUsed() != 0 || v.MemoryTotal() != 0 || v.MemoryPercent() != 0 || v.DiskUsed() != 0 || v.DiskTotal() != 0 || v.DiskPercent() != 0 || v.NetIn() != 0 || v.NetOut() != 0 || v.DiskRead() != 0 || v.DiskWrite() != 0 {
 			t.Fatalf("expected metric accessors to return zero values when Metrics is nil")
 		}
 		if v.Tags() != nil || v.IPAddresses() != nil {
 			t.Fatalf("expected nil slices when fields are unset, got tags=%v ips=%v", v.Tags(), v.IPAddresses())
+		}
+	})
+
+	t.Run("NilDiskReadWriteFieldsInMetrics", func(t *testing.T) {
+		r := testResource(ResourceTypeVM)
+		r.Metrics = &ResourceMetrics{
+			CPU:    &MetricValue{Percent: 1},
+			Memory: &MetricValue{Percent: 2},
+		}
+		v := NewVMView(r)
+		if v.DiskRead() != 0 || v.DiskWrite() != 0 {
+			t.Fatalf("expected DiskRead/DiskWrite=0 when metric fields are nil, got %v/%v", v.DiskRead(), v.DiskWrite())
 		}
 	})
 }
@@ -236,13 +263,16 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 			Template:   true,
 			LastBackup: lastBackup,
 			Disks:      []DiskInfo{{Device: "mp0", Filesystem: "xfs", Total: 200, Used: 25, Free: 175, Mountpoint: "/data"}},
+			Lock:       "migrate",
 		},
 		Metrics: &ResourceMetrics{
-			CPU:    &MetricValue{Percent: 3},
-			Memory: &MetricValue{Used: ptrInt64(512), Total: ptrInt64(1024), Percent: 50},
-			Disk:   &MetricValue{Used: ptrInt64(10), Total: ptrInt64(100), Percent: 10},
-			NetIn:  &MetricValue{Value: 1.5},
-			NetOut: &MetricValue{Value: 2.5},
+			CPU:       &MetricValue{Percent: 3},
+			Memory:    &MetricValue{Used: ptrInt64(512), Total: ptrInt64(1024), Percent: 50},
+			Disk:      &MetricValue{Used: ptrInt64(10), Total: ptrInt64(100), Percent: 10},
+			NetIn:     &MetricValue{Value: 1.5},
+			NetOut:    &MetricValue{Value: 2.5},
+			DiskRead:  &MetricValue{Value: 44.4},
+			DiskWrite: &MetricValue{Value: 55.5},
 		},
 	}
 
@@ -274,6 +304,15 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 		t.Fatalf("expected metric accessors to match, got cpu=%v memUsed=%d memTotal=%d memPct=%v diskUsed=%d diskTotal=%d diskPct=%v netIn=%v netOut=%v",
 			v.CPUPercent(), v.MemoryUsed(), v.MemoryTotal(), v.MemoryPercent(), v.DiskUsed(), v.DiskTotal(), v.DiskPercent(), v.NetIn(), v.NetOut())
 	}
+	if v.DiskRead() != 44.4 {
+		t.Fatalf("expected DiskRead %v, got %v", 44.4, v.DiskRead())
+	}
+	if v.DiskWrite() != 55.5 {
+		t.Fatalf("expected DiskWrite %v, got %v", 55.5, v.DiskWrite())
+	}
+	if v.Lock() != "migrate" {
+		t.Fatalf("expected Lock %q, got %q", "migrate", v.Lock())
+	}
 	assertStringSlice(t, v.IPAddresses(), []string{"10.0.0.20"})
 
 	t.Run("NilResourceIsSafe", func(t *testing.T) {
@@ -302,6 +341,9 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 			zero.DiskPercent() != 0 ||
 			zero.NetIn() != 0 ||
 			zero.NetOut() != 0 ||
+			zero.DiskRead() != 0 ||
+			zero.DiskWrite() != 0 ||
+			zero.Lock() != "" ||
 			zero.IPAddresses() != nil {
 			t.Fatalf("expected zero values for nil resource, got %+v", zero)
 		}
@@ -315,17 +357,29 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 		r.Identity = ResourceIdentity{}
 		v := NewContainerView(r)
 
-		if v.VMID() != 0 || v.Node() != "" || v.Instance() != "" || v.Template() != false || v.CPUs() != 0 || v.Uptime() != 0 || !v.LastBackup().IsZero() {
+		if v.VMID() != 0 || v.Node() != "" || v.Instance() != "" || v.Template() != false || v.CPUs() != 0 || v.Uptime() != 0 || !v.LastBackup().IsZero() || v.Lock() != "" {
 			t.Fatalf("expected proxmox accessors to return zero values when Proxmox is nil")
 		}
 		if v.Disks() != nil {
 			t.Fatalf("expected nil disks when Proxmox is nil, got %+v", v.Disks())
 		}
-		if v.CPUPercent() != 0 || v.MemoryUsed() != 0 || v.MemoryTotal() != 0 || v.MemoryPercent() != 0 || v.DiskUsed() != 0 || v.DiskTotal() != 0 || v.DiskPercent() != 0 || v.NetIn() != 0 || v.NetOut() != 0 {
+		if v.CPUPercent() != 0 || v.MemoryUsed() != 0 || v.MemoryTotal() != 0 || v.MemoryPercent() != 0 || v.DiskUsed() != 0 || v.DiskTotal() != 0 || v.DiskPercent() != 0 || v.NetIn() != 0 || v.NetOut() != 0 || v.DiskRead() != 0 || v.DiskWrite() != 0 {
 			t.Fatalf("expected metric accessors to return zero values when Metrics is nil")
 		}
 		if v.Tags() != nil || v.IPAddresses() != nil {
 			t.Fatalf("expected nil slices when fields are unset, got tags=%v ips=%v", v.Tags(), v.IPAddresses())
+		}
+	})
+
+	t.Run("NilDiskReadWriteFieldsInMetrics", func(t *testing.T) {
+		r := testResource(ResourceTypeSystemContainer)
+		r.Metrics = &ResourceMetrics{
+			CPU:    &MetricValue{Percent: 1},
+			Memory: &MetricValue{Percent: 2},
+		}
+		v := NewContainerView(r)
+		if v.DiskRead() != 0 || v.DiskWrite() != 0 {
+			t.Fatalf("expected DiskRead/DiskWrite=0 when metric fields are nil, got %v/%v", v.DiskRead(), v.DiskWrite())
 		}
 	})
 }
@@ -582,6 +636,8 @@ func TestView_StoragePoolViewAccessors(t *testing.T) {
 			Shared:            false,
 			IsCeph:            false,
 			IsZFS:             true,
+			Nodes:             []string{"pve-a", "pve-b"},
+			Path:              "/mnt/pve/local-zfs",
 			ZFSPoolState:      "ONLINE",
 			ZFSReadErrors:     1,
 			ZFSWriteErrors:    2,
@@ -607,6 +663,10 @@ func TestView_StoragePoolViewAccessors(t *testing.T) {
 	}
 	if v.ZFSPoolState() != "ONLINE" || v.ZFSReadErrors() != 1 || v.ZFSWriteErrors() != 2 || v.ZFSChecksumErrors() != 3 {
 		t.Fatalf("expected ZFS fields to match, got state=%q read=%d write=%d cksum=%d", v.ZFSPoolState(), v.ZFSReadErrors(), v.ZFSWriteErrors(), v.ZFSChecksumErrors())
+	}
+	assertStringSlice(t, v.AccessibleNodes(), []string{"pve-a", "pve-b"})
+	if v.Path() != "/mnt/pve/local-zfs" {
+		t.Fatalf("expected Path %q, got %q", "/mnt/pve/local-zfs", v.Path())
 	}
 	if v.DiskUsed() != 10 || v.DiskTotal() != 100 || v.DiskPercent() != 10 {
 		t.Fatalf("expected disk metrics used/total/percent 10/100/10, got %d/%d/%v", v.DiskUsed(), v.DiskTotal(), v.DiskPercent())
@@ -692,6 +752,7 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 				UptimeSeconds:    200,
 				QueueActive:      10,
 				QueueDeferred:    20,
+				QueueHold:        15,
 				QueueTotal:       30,
 				MailCountTotal:   1000,
 				SpamIn:           11,
@@ -711,8 +772,8 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 		if v.Hostname() != "pmg.example" || v.Version() != "8.0" || v.NodeCount() != 2 || v.UptimeSeconds() != 200 {
 			t.Fatalf("expected pmg fields to match, got host=%q ver=%q nodes=%d uptime=%d", v.Hostname(), v.Version(), v.NodeCount(), v.UptimeSeconds())
 		}
-		if v.QueueActive() != 10 || v.QueueDeferred() != 20 || v.QueueTotal() != 30 {
-			t.Fatalf("expected queue active/deferred/total 10/20/30, got %d/%d/%d", v.QueueActive(), v.QueueDeferred(), v.QueueTotal())
+		if v.QueueActive() != 10 || v.QueueDeferred() != 20 || v.QueueHold() != 15 || v.QueueTotal() != 30 {
+			t.Fatalf("expected queue active/deferred/hold/total 10/20/15/30, got %d/%d/%d/%d", v.QueueActive(), v.QueueDeferred(), v.QueueHold(), v.QueueTotal())
 		}
 		if v.MailCountTotal() != 1000 || v.SpamIn() != 11 || v.VirusIn() != 22 {
 			t.Fatalf("expected mail stats total/spam/virus 1000/11/22, got %v/%v/%v", v.MailCountTotal(), v.SpamIn(), v.VirusIn())
@@ -730,6 +791,22 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 		if v.CustomURL() != "https://pmg.example/ui" {
 			t.Fatalf("expected CustomURL %q, got %q", "https://pmg.example/ui", v.CustomURL())
 		}
+
+		t.Run("NilResourceAndNilPMGAreSafe", func(t *testing.T) {
+			var zero PMGInstanceView
+			if zero.QueueActive() != 0 || zero.QueueDeferred() != 0 || zero.QueueHold() != 0 || zero.QueueTotal() != 0 {
+				t.Fatalf("expected zero queue values for nil resource, got active=%d deferred=%d hold=%d total=%d",
+					zero.QueueActive(), zero.QueueDeferred(), zero.QueueHold(), zero.QueueTotal())
+			}
+
+			rNoPMG := testResource(ResourceTypePMG)
+			rNoPMG.PMG = nil
+			vNoPMG := NewPMGInstanceView(rNoPMG)
+			if vNoPMG.QueueActive() != 0 || vNoPMG.QueueDeferred() != 0 || vNoPMG.QueueHold() != 0 || vNoPMG.QueueTotal() != 0 {
+				t.Fatalf("expected zero queue values when PMG is nil, got active=%d deferred=%d hold=%d total=%d",
+					vNoPMG.QueueActive(), vNoPMG.QueueDeferred(), vNoPMG.QueueHold(), vNoPMG.QueueTotal())
+			}
+		})
 	})
 }
 

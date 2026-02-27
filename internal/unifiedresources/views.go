@@ -57,11 +57,13 @@ func viewMetricValue(m *ResourceMetrics, pick func(*ResourceMetrics) *MetricValu
 }
 
 var (
-	selectMetricsCPU    = func(m *ResourceMetrics) *MetricValue { return m.CPU }
-	selectMetricsMemory = func(m *ResourceMetrics) *MetricValue { return m.Memory }
-	selectMetricsDisk   = func(m *ResourceMetrics) *MetricValue { return m.Disk }
-	selectMetricsNetIn  = func(m *ResourceMetrics) *MetricValue { return m.NetIn }
-	selectMetricsNetOut = func(m *ResourceMetrics) *MetricValue { return m.NetOut }
+	selectMetricsCPU       = func(m *ResourceMetrics) *MetricValue { return m.CPU }
+	selectMetricsMemory    = func(m *ResourceMetrics) *MetricValue { return m.Memory }
+	selectMetricsDisk      = func(m *ResourceMetrics) *MetricValue { return m.Disk }
+	selectMetricsNetIn     = func(m *ResourceMetrics) *MetricValue { return m.NetIn }
+	selectMetricsNetOut    = func(m *ResourceMetrics) *MetricValue { return m.NetOut }
+	selectMetricsDiskRead  = func(m *ResourceMetrics) *MetricValue { return m.DiskRead }
+	selectMetricsDiskWrite = func(m *ResourceMetrics) *MetricValue { return m.DiskWrite }
 )
 
 // VMView wraps a VM resource (ResourceTypeVM).
@@ -244,6 +246,27 @@ func (v VMView) NetOut() float64 {
 		return 0
 	}
 	return viewMetricValue(v.r.Metrics, selectMetricsNetOut)
+}
+
+func (v VMView) DiskRead() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsDiskRead)
+}
+
+func (v VMView) DiskWrite() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsDiskWrite)
+}
+
+func (v VMView) Lock() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.Lock
 }
 
 func (v VMView) IPAddresses() []string {
@@ -434,6 +457,27 @@ func (v ContainerView) NetOut() float64 {
 		return 0
 	}
 	return viewMetricValue(v.r.Metrics, selectMetricsNetOut)
+}
+
+func (v ContainerView) DiskRead() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsDiskRead)
+}
+
+func (v ContainerView) DiskWrite() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsDiskWrite)
+}
+
+func (v ContainerView) Lock() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.Lock
 }
 
 func (v ContainerView) IPAddresses() []string {
@@ -1129,6 +1173,20 @@ func (v StoragePoolView) ZFSChecksumErrors() int64 {
 	return v.r.Storage.ZFSChecksumErrors
 }
 
+func (v StoragePoolView) AccessibleNodes() []string {
+	if v.r == nil || v.r.Storage == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Storage.Nodes)
+}
+
+func (v StoragePoolView) Path() string {
+	if v.r == nil || v.r.Storage == nil {
+		return ""
+	}
+	return v.r.Storage.Path
+}
+
 func (v StoragePoolView) DiskUsed() int64 {
 	if v.r == nil {
 		return 0
@@ -1404,6 +1462,13 @@ func (v PMGInstanceView) QueueDeferred() int {
 		return 0
 	}
 	return v.r.PMG.QueueDeferred
+}
+
+func (v PMGInstanceView) QueueHold() int {
+	if v.r == nil || v.r.PMG == nil {
+		return 0
+	}
+	return v.r.PMG.QueueHold
 }
 
 func (v PMGInstanceView) QueueTotal() int {

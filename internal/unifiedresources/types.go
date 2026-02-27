@@ -179,6 +179,7 @@ type ProxmoxData struct {
 	SwapUsed       int64      `json:"swapUsed,omitempty"`
 	SwapTotal      int64      `json:"swapTotal,omitempty"`
 	Balloon        int64      `json:"balloon,omitempty"`
+	Lock           string     `json:"lock,omitempty"` // Proxmox lock state (e.g. "backup", "migrate", "snapshot")
 	// Internal link hint to a host agent resource.
 	LinkedHostAgentID string `json:"-"`
 }
@@ -191,6 +192,10 @@ type StorageMeta struct {
 	Shared       bool     `json:"shared"`
 	IsCeph       bool     `json:"isCeph"`
 	IsZFS        bool     `json:"isZfs"`
+
+	// Accessibility metadata.
+	Nodes []string `json:"nodes,omitempty"` // PVE nodes where this storage is accessible
+	Path  string   `json:"path,omitempty"`  // local mount path on the node
 
 	// ZFS metadata (when IsZFS is true and the source provides details).
 	ZFSPoolState      string `json:"zfsPoolState,omitempty"`

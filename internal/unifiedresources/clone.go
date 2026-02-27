@@ -100,6 +100,7 @@ func cloneStorageMeta(in *StorageMeta) *StorageMeta {
 	}
 	out := *in
 	out.ContentTypes = cloneStringSlice(in.ContentTypes)
+	out.Nodes = cloneStringSlice(in.Nodes)
 	return &out
 }
 
