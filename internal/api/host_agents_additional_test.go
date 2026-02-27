@@ -241,6 +241,106 @@ func TestHostAgentHandlers_HandleUninstallRejectsTokenMismatch(t *testing.T) {
 	}
 }
 
+func TestHostAgentHandlers_HandleUninstall_ResponseBody(t *testing.T) {
+	handler, monitor := newHostAgentHandlers(t, nil)
+	hostID := seedHostAgent(t, monitor)
+
+	body := []byte(`{"hostId":"` + hostID + `"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/uninstall", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleUninstall(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Success bool   `json:"success"`
+		HostID  string `json:"hostId"`
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !resp.Success {
+		t.Errorf("expected success=true, got false")
+	}
+	if resp.HostID != hostID {
+		t.Errorf("expected hostId=%q, got %q", hostID, resp.HostID)
+	}
+	if resp.Message == "" {
+		t.Errorf("expected non-empty message")
+	}
+}
+
+func TestHostAgentHandlers_HandleUninstall_FullLifecycle(t *testing.T) {
+	handler, monitor := newHostAgentHandlers(t, nil)
+	state := monitorState(t, monitor)
+
+	// Seed a host via report
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-lifecycle",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:       "machine-lifecycle",
+			Hostname: "lifecycle.local",
+			Platform: "linux",
+		},
+		Timestamp: time.Now().UTC(),
+	}
+	token := &config.APITokenRecord{ID: "token-lifecycle", Name: "Lifecycle Token"}
+
+	host, err := monitor.ApplyHostReport(report, token)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	hostID := host.ID
+
+	// Set connection health (as evaluateHostAgents would)
+	state.SetConnectionHealth("host-"+hostID, true)
+
+	// Verify host exists in state
+	snap := state.GetSnapshot()
+	found := false
+	for _, h := range snap.Hosts {
+		if h.ID == hostID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected host %q in state before uninstall", hostID)
+	}
+	if _, ok := snap.ConnectionHealth["host-"+hostID]; !ok {
+		t.Fatalf("expected connection health entry before uninstall")
+	}
+
+	// Uninstall
+	body := []byte(`{"hostId":"` + hostID + `"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/uninstall", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUninstall(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("uninstall status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify host is gone from state
+	snap = state.GetSnapshot()
+	for _, h := range snap.Hosts {
+		if h.ID == hostID {
+			t.Fatalf("host %q should not exist in state after uninstall", hostID)
+		}
+	}
+
+	// Verify connection health is cleared
+	if _, ok := snap.ConnectionHealth["host-"+hostID]; ok {
+		t.Fatalf("connection health for %q should be cleared after uninstall", hostID)
+	}
+}
+
 func TestHostAgentHandlers_HandleLinkUnlink(t *testing.T) {
 	handler, monitor := newHostAgentHandlers(t, nil)
 	hostID := seedHostAgent(t, monitor)

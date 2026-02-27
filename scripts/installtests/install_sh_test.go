@@ -1,0 +1,349 @@
+package installtests
+
+import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+)
+
+// TestConnectionEnvRecovery verifies the grep/sed logic that parses connection.env
+// without using shell source (to prevent injection).
+func TestConnectionEnvRecovery(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		wantURL string
+		wantTok string
+	}{
+		{
+			name:    "single-quoted values",
+			content: "PULSE_URL='http://192.168.0.98:7655'\nPULSE_TOKEN='abc123def'\n",
+			wantURL: "http://192.168.0.98:7655",
+			wantTok: "abc123def",
+		},
+		{
+			name:    "unquoted values",
+			content: "PULSE_URL=http://10.0.0.1:7655\nPULSE_TOKEN=deadbeef\n",
+			wantURL: "http://10.0.0.1:7655",
+			wantTok: "deadbeef",
+		},
+		{
+			name:    "https URL",
+			content: "PULSE_URL='https://pulse.example.com'\nPULSE_TOKEN='aabbccdd'\n",
+			wantURL: "https://pulse.example.com",
+			wantTok: "aabbccdd",
+		},
+		{
+			name:    "extra whitespace lines",
+			content: "\nPULSE_URL='http://host:7655'\n\nPULSE_TOKEN='tok123'\n\n",
+			wantURL: "http://host:7655",
+			wantTok: "tok123",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			connFile := filepath.Join(dir, "connection.env")
+			if err := os.WriteFile(connFile, []byte(tc.content), 0600); err != nil {
+				t.Fatal(err)
+			}
+
+			// Run the same grep+sed recovery logic used by install.sh
+			script := `
+				CONN_ENV="` + connFile + `"
+				PULSE_URL=$(grep '^PULSE_URL=' "$CONN_ENV" 2>/dev/null | head -1 | sed "s/^PULSE_URL=//; s/^'//; s/'$//" || true)
+				PULSE_TOKEN=$(grep '^PULSE_TOKEN=' "$CONN_ENV" 2>/dev/null | head -1 | sed "s/^PULSE_TOKEN=//; s/^'//; s/'$//" || true)
+				echo "URL=${PULSE_URL}"
+				echo "TOKEN=${PULSE_TOKEN}"
+			`
+			out, err := exec.Command("bash", "-c", script).CombinedOutput()
+			if err != nil {
+				t.Fatalf("bash: %v\n%s", err, out)
+			}
+
+			lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+			gotURL, gotTok := "", ""
+			for _, line := range lines {
+				if strings.HasPrefix(line, "URL=") {
+					gotURL = strings.TrimPrefix(line, "URL=")
+				}
+				if strings.HasPrefix(line, "TOKEN=") {
+					gotTok = strings.TrimPrefix(line, "TOKEN=")
+				}
+			}
+
+			if gotURL != tc.wantURL {
+				t.Errorf("URL = %q, want %q", gotURL, tc.wantURL)
+			}
+			if gotTok != tc.wantTok {
+				t.Errorf("TOKEN = %q, want %q", gotTok, tc.wantTok)
+			}
+		})
+	}
+}
+
+// TestHostIDFileRecovery verifies the host-id file lookup priority:
+// /var/lib/pulse-agent/host-id > /boot/config/plugins/pulse-agent/host-id
+func TestHostIDFileRecovery(t *testing.T) {
+	cases := []struct {
+		name   string
+		files  map[string]string // relative path -> content
+		wantID string
+	}{
+		{
+			name: "primary location",
+			files: map[string]string{
+				"var/lib/pulse-agent/host-id": "uuid-primary",
+			},
+			wantID: "uuid-primary",
+		},
+		{
+			name: "secondary location (Unraid)",
+			files: map[string]string{
+				"boot/config/plugins/pulse-agent/host-id": "uuid-unraid",
+			},
+			wantID: "uuid-unraid",
+		},
+		{
+			name: "primary takes precedence",
+			files: map[string]string{
+				"var/lib/pulse-agent/host-id":             "uuid-primary",
+				"boot/config/plugins/pulse-agent/host-id": "uuid-unraid",
+			},
+			wantID: "uuid-primary",
+		},
+		{
+			name:   "no file found",
+			files:  map[string]string{},
+			wantID: "",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+
+			for relPath, content := range tc.files {
+				fullPath := filepath.Join(root, relPath)
+				if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			// Replicate the install.sh host-id recovery loop
+			script := `
+				AGENT_ID=""
+				for hid_path in "` + root + `/var/lib/pulse-agent/host-id" "` + root + `/boot/config/plugins/pulse-agent/host-id"; do
+					if [[ -f "$hid_path" ]]; then
+						AGENT_ID=$(cat "$hid_path")
+						break
+					fi
+				done
+				echo "$AGENT_ID"
+			`
+			out, err := exec.Command("bash", "-c", script).CombinedOutput()
+			if err != nil {
+				t.Fatalf("bash: %v\n%s", err, out)
+			}
+
+			got := strings.TrimSpace(string(out))
+			if got != tc.wantID {
+				t.Errorf("host-id = %q, want %q", got, tc.wantID)
+			}
+		})
+	}
+}
+
+// TestUnraidGoScriptCleanup verifies the sed commands that remove pulse entries
+// from /boot/config/go without disturbing other entries.
+func TestUnraidGoScriptCleanup(t *testing.T) {
+	cases := []struct {
+		name   string
+		before string
+		after  string
+	}{
+		{
+			name: "pulse entry with trailing blank line",
+			before: `#!/bin/bash
+/boot/config/pulse/telegraf/start_telegraf.sh
+
+# Pulse Agent
+bash /boot/config/plugins/pulse-agent/start-pulse-agent.sh
+
+# Other stuff
+echo hello
+`,
+			// The comment and command lines are removed; the trailing blank line remains.
+			// This is harmless in /boot/config/go.
+			after: `#!/bin/bash
+/boot/config/pulse/telegraf/start_telegraf.sh
+
+
+# Other stuff
+echo hello
+`,
+		},
+		{
+			name: "pulse entry without trailing blank line",
+			before: `#!/bin/bash
+# Pulse Agent
+bash /boot/config/plugins/pulse-agent/start-pulse-agent.sh
+# Other stuff
+echo hello
+`,
+			after: `#!/bin/bash
+# Other stuff
+echo hello
+`,
+		},
+		{
+			name: "legacy agents too",
+			before: `#!/bin/bash
+# Pulse Host Agent
+bash /boot/config/plugins/pulse-host-agent/start.sh
+
+# Pulse Docker Agent
+bash /boot/config/plugins/pulse-docker-agent/start.sh
+
+echo other
+`,
+			// Comment and command lines removed; blank separator lines remain (harmless in /boot/config/go).
+			after: "#!/bin/bash\n\n\necho other\n",
+		},
+		{
+			name: "no pulse entries - unchanged",
+			before: `#!/bin/bash
+echo hello
+echo world
+`,
+			after: `#!/bin/bash
+echo hello
+echo world
+`,
+		},
+		{
+			name: "telegraf line containing pulse is kept",
+			before: `#!/bin/bash
+/boot/config/pulse/telegraf/start_telegraf.sh
+# Pulse Agent
+bash /boot/config/plugins/pulse-agent/start-pulse-agent.sh
+
+echo done
+`,
+			// The telegraf line is NOT removed (no "pulse-agent" in it).
+			// Comment and command lines are deleted individually.
+			after: `#!/bin/bash
+/boot/config/pulse/telegraf/start_telegraf.sh
+
+echo done
+`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			goScript := filepath.Join(dir, "go")
+			if err := os.WriteFile(goScript, []byte(tc.before), 0755); err != nil {
+				t.Fatal(err)
+			}
+
+			// Run the exact same sed commands from install.sh (line-by-line, not range-based)
+			script := `
+				GO_SCRIPT="` + goScript + `"
+				# Remove unified agent entries
+				sed -i '' '/^# Pulse Agent$/d' "$GO_SCRIPT" 2>/dev/null || sed -i '/^# Pulse Agent$/d' "$GO_SCRIPT" 2>/dev/null || true
+				sed -i '' '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || sed -i '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || true
+				# Remove legacy agent entries
+				sed -i '' '/^# Pulse Host Agent$/d' "$GO_SCRIPT" 2>/dev/null || sed -i '/^# Pulse Host Agent$/d' "$GO_SCRIPT" 2>/dev/null || true
+				sed -i '' '/^# Pulse Docker Agent$/d' "$GO_SCRIPT" 2>/dev/null || sed -i '/^# Pulse Docker Agent$/d' "$GO_SCRIPT" 2>/dev/null || true
+				sed -i '' '/pulse-host-agent/d' "$GO_SCRIPT" 2>/dev/null || sed -i '/pulse-host-agent/d' "$GO_SCRIPT" 2>/dev/null || true
+				sed -i '' '/pulse-docker-agent/d' "$GO_SCRIPT" 2>/dev/null || sed -i '/pulse-docker-agent/d' "$GO_SCRIPT" 2>/dev/null || true
+			`
+			out, err := exec.Command("bash", "-c", script).CombinedOutput()
+			if err != nil {
+				t.Fatalf("bash: %v\n%s", err, out)
+			}
+
+			got, err := os.ReadFile(goScript)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if string(got) != tc.after {
+				t.Errorf("go script mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, tc.after)
+			}
+		})
+	}
+}
+
+// TestAPIDeregistrationCurl verifies the curl command sends the correct
+// JSON payload and headers to the uninstall endpoint.
+func TestAPIDeregistrationCurl(t *testing.T) {
+	var (
+		mu         sync.Mutex
+		gotMethod  string
+		gotPath    string
+		gotBody    map[string]string
+		gotHeaders http.Header
+	)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		gotHeaders = r.Header.Clone()
+		body, _ := io.ReadAll(r.Body)
+		json.Unmarshal(body, &gotBody)
+		w.WriteHeader(200)
+		w.Write([]byte(`{"success":true}`))
+	}))
+	defer srv.Close()
+
+	agentID := "test-uuid-1234"
+	token := "deadbeef0123456789"
+
+	script := `
+		PULSE_URL="` + srv.URL + `"
+		PULSE_TOKEN="` + token + `"
+		AGENT_ID="` + agentID + `"
+		CURL_ARGS=(-fsSL --connect-timeout 5 -X POST -H "Content-Type: application/json" -H "X-API-Token: ${PULSE_TOKEN}")
+		curl "${CURL_ARGS[@]}" -d "{\"hostId\": \"${AGENT_ID}\"}" "${PULSE_URL}/api/agents/host/uninstall" >/dev/null 2>&1 || true
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if gotMethod != "POST" {
+		t.Errorf("method = %q, want POST", gotMethod)
+	}
+	if gotPath != "/api/agents/host/uninstall" {
+		t.Errorf("path = %q, want /api/agents/host/uninstall", gotPath)
+	}
+	if gotBody["hostId"] != agentID {
+		t.Errorf("body hostId = %q, want %q", gotBody["hostId"], agentID)
+	}
+	if got := gotHeaders.Get("X-API-Token"); got != token {
+		t.Errorf("X-API-Token = %q, want %q", got, token)
+	}
+	if got := gotHeaders.Get("Content-Type"); got != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", got)
+	}
+}

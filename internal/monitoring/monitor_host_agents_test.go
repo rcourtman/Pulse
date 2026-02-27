@@ -616,6 +616,45 @@ func TestEvaluateHostAgentsNilAlertManagerOffline(t *testing.T) {
 	}
 }
 
+func TestRemoveHostAgent_ClearsConnectionHealth(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	hostID := "host-connhealth"
+	monitor.state.UpsertHost(models.Host{
+		ID:              hostID,
+		Hostname:        "connhealth.local",
+		Status:          "online",
+		IntervalSeconds: 30,
+		LastSeen:        time.Now(),
+	})
+
+	// Seed connection health for this host (as evaluateHostAgents would)
+	monitor.state.SetConnectionHealth(hostConnectionPrefix+hostID, true)
+
+	// Verify it's present before removal
+	snapshot := monitor.state.GetSnapshot()
+	if _, ok := snapshot.ConnectionHealth[hostConnectionPrefix+hostID]; !ok {
+		t.Fatalf("expected connection health entry to exist before removal")
+	}
+
+	// Remove the host
+	if _, err := monitor.RemoveHostAgent(hostID); err != nil {
+		t.Fatalf("RemoveHostAgent: %v", err)
+	}
+
+	// Verify connection health entry is gone
+	snapshot = monitor.state.GetSnapshot()
+	if _, ok := snapshot.ConnectionHealth[hostConnectionPrefix+hostID]; ok {
+		t.Fatalf("expected connection health entry to be removed after RemoveHostAgent")
+	}
+}
+
 func TestRemoveHostAgent_EmptyHostID(t *testing.T) {
 	monitor := &Monitor{
 		state:        models.NewState(),

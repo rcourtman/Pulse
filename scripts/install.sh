@@ -565,10 +565,17 @@ if [[ "$UNINSTALL" == "true" ]]; then
         fi
     fi
 
-    # Kill any running agent processes first
-    pkill -f "pulse-agent" 2>/dev/null || true
-    pkill -f "pulse-host-agent" 2>/dev/null || true
-    pkill -f "pulse-docker-agent" 2>/dev/null || true
+    # Kill any running agent processes first.
+    # Use -x (exact process name match) to avoid killing THIS uninstall script,
+    # whose command line path contains "pulse-agent" (e.g. /boot/config/plugins/pulse-agent/install.sh).
+    pkill -x "pulse-agent" 2>/dev/null || true
+    pkill -x "pulse-host-agent" 2>/dev/null || true
+    pkill -x "pulse-docker-agent" 2>/dev/null || true
+    # Kill Unraid wrapper scripts — both current (start-pulse-agent.sh) and
+    # legacy (plugins/pulse-host-agent/start.sh) naming conventions.
+    pkill -f "start-pulse-agent.sh" 2>/dev/null || true
+    pkill -f "plugins/pulse-host-agent/" 2>/dev/null || true
+    pkill -f "plugins/pulse-docker-agent/" 2>/dev/null || true
     sleep 1
 
     # Systemd - unified agent
@@ -634,21 +641,26 @@ if [[ "$UNINSTALL" == "true" ]]; then
     # Unraid
     if [[ -f /etc/unraid-version ]] || [[ -d /boot/config/plugins/pulse-agent ]]; then
         log_info "Removing Unraid installation (including legacy agents)..."
-        # Stop running agents (unified + legacy)
-        pkill -f "pulse-agent" 2>/dev/null || true
-        pkill -f "pulse-host-agent" 2>/dev/null || true
-        pkill -f "pulse-docker-agent" 2>/dev/null || true
+        # Stop running agents and their wrapper scripts (unified + legacy)
+        pkill -x "pulse-agent" 2>/dev/null || true
+        pkill -x "pulse-host-agent" 2>/dev/null || true
+        pkill -x "pulse-docker-agent" 2>/dev/null || true
+        pkill -f "start-pulse-agent.sh" 2>/dev/null || true
+        pkill -f "plugins/pulse-host-agent/" 2>/dev/null || true
+        pkill -f "plugins/pulse-docker-agent/" 2>/dev/null || true
         sleep 1
         
         # Remove from /boot/config/go - all pulse-related entries
         GO_SCRIPT="/boot/config/go"
         if [[ -f "$GO_SCRIPT" ]]; then
-            # Remove unified agent entries
-            sed -i '/# Pulse Agent/,/^$/d' "$GO_SCRIPT" 2>/dev/null || true
+            # Remove unified agent entries (line-by-line, not range-based,
+            # to avoid consuming adjacent non-pulse entries when no trailing
+            # blank line separates them).
+            sed -i '/^# Pulse Agent$/d' "$GO_SCRIPT" 2>/dev/null || true
             sed -i '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || true
             # Remove legacy agent entries
-            sed -i '/# Pulse Host Agent/,/^$/d' "$GO_SCRIPT" 2>/dev/null || true
-            sed -i '/# Pulse Docker Agent/,/^$/d' "$GO_SCRIPT" 2>/dev/null || true
+            sed -i '/^# Pulse Host Agent$/d' "$GO_SCRIPT" 2>/dev/null || true
+            sed -i '/^# Pulse Docker Agent$/d' "$GO_SCRIPT" 2>/dev/null || true
             sed -i '/pulse-host-agent/d' "$GO_SCRIPT" 2>/dev/null || true
             sed -i '/pulse-docker-agent/d' "$GO_SCRIPT" 2>/dev/null || true
         fi
@@ -1232,8 +1244,8 @@ EOF
     # Add to /boot/config/go if not already present
     GO_MARKER="# Pulse Agent"
     if [[ -f "$GO_SCRIPT" ]]; then
-        # Remove any existing Pulse agent entries
-        sed -i "/${GO_MARKER}/,/^$/d" "$GO_SCRIPT" 2>/dev/null || true
+        # Remove any existing Pulse agent entries (line-by-line, not range-based)
+        sed -i "/^${GO_MARKER}$/d" "$GO_SCRIPT" 2>/dev/null || true
         sed -i '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || true
     else
         # Create go script if it doesn't exist
