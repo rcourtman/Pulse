@@ -123,10 +123,20 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 	attachMetricsTargets(paged, registry)
 	pruneResourcesForListResponse(paged)
 
+	// Build aggregations: use registry.Stats() for ByStatus/BySource (no conversion
+	// needed), but compute ByType from all filtered resources after type conversion
+	// so the keys match frontend expectations (e.g. "node" instead of "host").
+	// Compute ByType BEFORE applyFrontendTypes(paged), because paged is a sub-slice
+	// of resources and mutating it would double-convert those elements.
+	stats := registry.Stats()
+	stats.ByType = computeFrontendByType(resources)
+
+	applyFrontendTypes(paged)
+
 	response := ResourcesResponse{
 		Data:         paged,
 		Meta:         meta,
-		Aggregations: registry.Stats(),
+		Aggregations: stats,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -184,6 +194,7 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 	resourceCopy := *resource
 	attachDiscoveryTarget(&resourceCopy)
 	attachMetricsTarget(&resourceCopy, registry)
+	resourceCopy.Type = frontendResourceType(resourceCopy)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resourceCopy)
@@ -237,6 +248,7 @@ func (h *ResourceHandlers) HandleGetChildren(w http.ResponseWriter, r *http.Requ
 	}
 
 	children := registry.GetChildren(path)
+	applyFrontendTypes(children)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"data":  children,
@@ -290,8 +302,13 @@ func (h *ResourceHandlers) HandleStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	stats := registry.Stats()
+	resources := registry.List()
+	applyFrontendTypes(resources)
+	stats.ByType = computeFrontendByType(resources)
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(registry.Stats())
+	json.NewEncoder(w).Encode(stats)
 }
 
 // HandleLink handles POST /api/resources/{id}/link.
@@ -869,13 +886,18 @@ func parseResourceTypes(raw string) map[unified.ResourceType]struct{} {
 	result := make(map[unified.ResourceType]struct{})
 	for _, part := range splitCSV(raw) {
 		switch part {
-		case "host", "hosts":
+		case "host", "hosts", "node", "nodes", "docker-host":
+			// "node" and "docker-host" are frontend aliases that both resolve to
+			// ResourceTypeHost. Filtering by the frontend type is supported because
+			// applyFrontendTypes() runs after filtering, so we match on the backend
+			// type and let the type conversion produce the expected frontend names.
 			result[unified.ResourceTypeHost] = struct{}{}
 		case "vm", "vms", "qemu":
 			result[unified.ResourceTypeVM] = struct{}{}
-		case "lxc", "lxcs", "system-container", "system_container":
+		case "lxc", "lxcs", "system-container", "system_container", "container", "containers":
+			// "container" is the frontend name for system containers (LXC)
 			result[unified.ResourceTypeSystemContainer] = struct{}{}
-		case "container", "containers", "docker_container", "docker-container", "app-container", "app_container":
+		case "docker_container", "docker-container", "app-container", "app_container":
 			result[unified.ResourceTypeAppContainer] = struct{}{}
 		case "docker_service", "docker-service", "swarm_service", "swarm-service", "service", "services":
 			result[unified.ResourceTypeDockerService] = struct{}{}
@@ -898,7 +920,8 @@ func parseResourceTypes(raw string) map[unified.ResourceType]struct{} {
 			result[unified.ResourceTypePBS] = struct{}{}
 		case "pmg":
 			result[unified.ResourceTypePMG] = struct{}{}
-		case "ceph":
+		case "ceph", "pool":
+			// "pool" is the frontend name for Ceph resources
 			result[unified.ResourceTypeCeph] = struct{}{}
 		case "physical_disk", "physical-disk", "physicaldisk", "disk":
 			result[unified.ResourceTypePhysicalDisk] = struct{}{}
@@ -982,6 +1005,49 @@ func attachMetricsTarget(resource *unified.Resource, registry *unified.ResourceR
 		return
 	}
 	resource.MetricsTarget = buildMetricsTarget(*resource, registry)
+}
+
+// frontendResourceType maps backend ResourceType values to the type strings
+// the frontend expects. This mirrors the monitorLegacyResourceType() logic in
+// monitor.go so that both the WebSocket and REST API paths agree on type names.
+func frontendResourceType(r unified.Resource) unified.ResourceType {
+	switch r.Type {
+	case unified.ResourceTypeHost:
+		if r.Proxmox != nil {
+			return "node"
+		}
+		if r.Docker != nil {
+			return "docker-host"
+		}
+		return "host"
+	case unified.ResourceTypeSystemContainer:
+		return "container"
+	case unified.ResourceTypeAppContainer:
+		return "docker-container"
+	case unified.ResourceTypeCeph:
+		return "pool"
+	default:
+		// VM, Pod, K8s types, Storage, PBS, PMG, DockerService already match frontend expectations.
+		return r.Type
+	}
+}
+
+// applyFrontendTypes rewrites Type fields on the response slice so the REST API
+// returns the same type strings that the WebSocket path produces.
+func applyFrontendTypes(resources []unified.Resource) {
+	for i := range resources {
+		resources[i].Type = frontendResourceType(resources[i])
+	}
+}
+
+// computeFrontendByType builds the ByType aggregation using frontendResourceType()
+// so the keys match frontend expectations. Does not mutate the input slice.
+func computeFrontendByType(resources []unified.Resource) map[unified.ResourceType]int {
+	m := make(map[unified.ResourceType]int, 8)
+	for _, r := range resources {
+		m[frontendResourceType(r)]++
+	}
+	return m
 }
 
 func buildMetricsTarget(resource unified.Resource, registry *unified.ResourceRegistry) *unified.MetricsTarget {
