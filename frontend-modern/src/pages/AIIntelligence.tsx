@@ -559,7 +559,14 @@ export function AIIntelligence() {
     try {
       const settings = await getPatrolAutonomySettings();
       if (!settings) return;
-      setAutonomyLevel(settings.autonomy_level);
+      // Clamp locally in case license state resolves before or after this load.
+      // The GET endpoint also clamps, but this prevents a confusing active+disabled
+      // visual state if the response is stale or the feature flag flips mid-session.
+      const effectiveLevel =
+        autoFixLocked() && settings.autonomy_level !== 'monitor'
+          ? 'monitor'
+          : settings.autonomy_level;
+      setAutonomyLevel(effectiveLevel);
       setFullModeUnlocked(settings.full_mode_unlocked);
       setInvestigationBudget(settings.investigation_budget);
       setInvestigationTimeout(settings.investigation_timeout_sec);
@@ -573,6 +580,7 @@ export function AIIntelligence() {
   // the "auto-fix critical issues" toggle is on — if so, we send 'full', otherwise 'assisted'.
   async function handleAutonomyChange(level: PatrolAutonomyLevel) {
     if (isUpdatingAutonomy()) return;
+    if (autoFixLocked() && (level === 'approval' || level === 'assisted')) return;
 
     const previousLevel = autonomyLevel();
     const effectiveLevel = level === 'assisted' && fullModeUnlocked() ? 'full' : level;
@@ -947,7 +955,8 @@ export function AIIntelligence() {
                     <div class="flex items-center bg-base rounded-md p-1 border shadow-inner">
                       <For each={['monitor', 'approval', 'assisted'] as PatrolAutonomyLevel[]}>
                         {(level) => {
-                          const isProLocked = () => autoFixLocked() && level === 'assisted';
+                          const isProLocked = () =>
+                            autoFixLocked() && (level === 'approval' || level === 'assisted');
                           const isDisabled = () => !patrolEnabledLocal() || isProLocked();
                           const isActive = () =>
                             level === 'assisted'
@@ -959,7 +968,11 @@ export function AIIntelligence() {
                               onClick={() => handleAutonomyChange(level)}
                               disabled={isDisabled()}
                               title={
-                                isProLocked() ? 'Upgrade to Pro for automatic fixes' : undefined
+                                isProLocked()
+                                  ? level === 'approval'
+                                    ? 'Upgrade to Pro to investigate findings'
+                                    : 'Upgrade to Pro for automatic fixes'
+                                  : undefined
                               }
                               class={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-200 ${isActive() ? ' text-blue-600 dark:text-blue-400 shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : isDisabled() ? ' ' : 'text-muted hover:text-base-content hover:bg-surface-hover'} ${isDisabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
@@ -973,6 +986,29 @@ export function AIIntelligence() {
                         }}
                       </For>
                     </div>
+                    <Show when={autoFixLocked()}>
+                      <div class="pl-1 text-[11px] text-slate-500">
+                        <a
+                          href={getUpgradeActionUrlOrFallback('ai_autofix')}
+                          target="_blank"
+                          class="text-indigo-500 font-medium hover:underline"
+                        >
+                          Upgrade to Pro
+                        </a>{' '}
+                        to unlock investigation and auto-fix.
+                        <Show when={canStartTrial()}>
+                          {' '}
+                          <button
+                            type="button"
+                            onClick={handleStartTrial}
+                            disabled={startingTrial()}
+                            class="text-indigo-500 hover:underline"
+                          >
+                            Start free trial
+                          </button>
+                        </Show>
+                      </div>
+                    </Show>
                   </div>
 
                   {/* Toggles */}
@@ -1053,28 +1089,6 @@ export function AIIntelligence() {
                       />
                     </div>
 
-                    <Show when={autoFixLocked()}>
-                      <div class="-mt-1 pl-1 text-[11px] text-slate-500">
-                        <a
-                          href={getUpgradeActionUrlOrFallback('ai_autofix')}
-                          target="_blank"
-                          class="text-indigo-500 font-medium hover:underline"
-                        >
-                          Upgrade
-                        </a>{' '}
-                        to unlock auto-fix.
-                        <Show when={canStartTrial()}>
-                          <button
-                            type="button"
-                            onClick={handleStartTrial}
-                            disabled={startingTrial()}
-                            class="ml-1 text-indigo-500 hover:underline"
-                          >
-                            Start free trial
-                          </button>
-                        </Show>
-                      </div>
-                    </Show>
                   </div>
 
                   {/* Save Footer */}
