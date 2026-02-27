@@ -1860,8 +1860,8 @@ func (p *PatrolService) seedHealthAndAlerts(state models.StateSnapshot, scopedSe
 		if !hasIssues {
 			sb.WriteString(fmt.Sprintf("All %d disks healthy (SMART PASSED).\n", len(state.PhysicalDisks)))
 		} else {
-			sb.WriteString("| Node | Device | Model | Health | Wearout | Temp |\n")
-			sb.WriteString("|------|--------|-------|--------|---------|------|\n")
+			sb.WriteString("| Node | Device | Model | Health | SSD Life Remaining (100%=new) | Temp |\n")
+			sb.WriteString("|------|--------|-------|--------|-------------------------------|------|\n")
 			for _, d := range state.PhysicalDisks {
 				wearout := "—"
 				if d.Wearout >= 0 {
