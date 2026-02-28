@@ -433,3 +433,57 @@ func TestAllTiersHaveHostLimitsAndHistoryDays(t *testing.T) {
 		}
 	}
 }
+
+func TestWorkspaceLimitForPlan_KnownPlans(t *testing.T) {
+	tests := []struct {
+		plan      string
+		wantLimit int
+	}{
+		{"cloud_starter", 1},
+		{"cloud_power", 1},
+		{"cloud_max", 1},
+		{"cloud_founding", 1},
+		{"msp_hosted_v1", 10},
+		{"msp_starter", 10},
+		{"msp_growth", 25},
+		{"msp_scale", 50},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.plan, func(t *testing.T) {
+			limit, known := WorkspaceLimitForPlan(tt.plan)
+			if !known {
+				t.Errorf("WorkspaceLimitForPlan(%q): known = false, want true", tt.plan)
+			}
+			if limit != tt.wantLimit {
+				t.Errorf("WorkspaceLimitForPlan(%q) = %d, want %d", tt.plan, limit, tt.wantLimit)
+			}
+		})
+	}
+}
+
+func TestWorkspaceLimitForPlan_UnknownPlanFailsClosed(t *testing.T) {
+	unknownPlans := []string{"stripe", "", "unknown_plan", "cloud_unknown"}
+
+	for _, plan := range unknownPlans {
+		t.Run(plan, func(t *testing.T) {
+			limit, known := WorkspaceLimitForPlan(plan)
+			if known {
+				t.Errorf("WorkspaceLimitForPlan(%q): known = true, want false", plan)
+			}
+			if limit != UnknownPlanDefaultWorkspaceLimit {
+				t.Errorf("WorkspaceLimitForPlan(%q) = %d, want default %d", plan, limit, UnknownPlanDefaultWorkspaceLimit)
+			}
+		})
+	}
+}
+
+// TestCloudPlanWorkspaceLimitsConsistentWithAgentLimits ensures every plan in
+// CloudPlanAgentLimits also has a workspace limit entry.
+func TestCloudPlanWorkspaceLimitsConsistentWithAgentLimits(t *testing.T) {
+	for plan := range CloudPlanAgentLimits {
+		if _, ok := CloudPlanWorkspaceLimits[plan]; !ok {
+			t.Errorf("CloudPlanWorkspaceLimits missing entry for plan %q (present in CloudPlanAgentLimits)", plan)
+		}
+	}
+}

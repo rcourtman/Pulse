@@ -389,6 +389,23 @@ func (r *TenantRegistry) ListByAccountID(accountID string) ([]*Tenant, error) {
 	return scanTenants(rows)
 }
 
+// CountActiveByAccountID returns the number of non-deleted tenants belonging to
+// the given account. States counted: provisioning, active, suspended, failed.
+// States excluded: deleting, deleted, canceled.
+func (r *TenantRegistry) CountActiveByAccountID(accountID string) (int, error) {
+	var count int
+	err := r.db.QueryRow(`
+		SELECT COUNT(*) FROM tenants
+		WHERE account_id = ?
+		  AND state NOT IN ('deleting', 'deleted', 'canceled')`,
+		accountID,
+	).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("count active tenants for account %q: %w", accountID, err)
+	}
+	return count, nil
+}
+
 // GetTenantForAccount retrieves a tenant by ID and verifies it belongs to the
 // given account. Returns (nil, nil) if the tenant does not exist or belongs to
 // a different account.

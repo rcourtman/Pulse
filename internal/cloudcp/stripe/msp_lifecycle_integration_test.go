@@ -58,6 +58,16 @@ func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 		t.Fatalf("account.DisplayName = %q, want %q", got.DisplayName, "Acme MSP")
 	}
 
+	// Wire Stripe account mapping early so HandleCreateTenant workspace
+	// limit enforcement can look up the billing record (Phase 2b needs it).
+	if err := reg.CreateStripeAccount(&registry.StripeAccount{
+		AccountID:        accountID,
+		StripeCustomerID: "cus_msp_lifecycle_test",
+		PlanVersion:      "msp_hosted_v1",
+	}); err != nil {
+		t.Fatalf("CreateStripeAccount: %v", err)
+	}
+
 	// ── Phase 2: Workspace provisioning ────────────────────────────────
 
 	ws1, err := provisioner.ProvisionWorkspace(context.Background(), accountID, "Client One")
@@ -278,15 +288,7 @@ func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 	}
 
 	// ── Phase 5: Billing state propagation (subscription update) ───────
-
-	// Wire Stripe account mapping so HandleMSPSubscriptionUpdated can find it.
-	if err := reg.CreateStripeAccount(&registry.StripeAccount{
-		AccountID:        accountID,
-		StripeCustomerID: "cus_msp_lifecycle_test",
-		PlanVersion:      "msp_hosted_v1",
-	}); err != nil {
-		t.Fatalf("CreateStripeAccount: %v", err)
-	}
+	// (StripeAccount already created before Phase 2.)
 
 	// Simulate subscription update to past_due (grace period).
 	sub := Subscription{

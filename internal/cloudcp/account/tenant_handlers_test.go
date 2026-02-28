@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -52,6 +53,21 @@ func newTestTenantMux(t *testing.T, reg *registry.TenantRegistry, tenantsDir str
 	return mux, provisioner
 }
 
+// createTestStripeAccount is a helper that creates a StripeAccount for the
+// given account ID and plan version so that workspace limit enforcement can
+// look up the billing record.
+func createTestStripeAccount(t *testing.T, reg *registry.TenantRegistry, accountID, planVersion string) {
+	t.Helper()
+	if err := reg.CreateStripeAccount(&registry.StripeAccount{
+		AccountID:         accountID,
+		StripeCustomerID:  "cus_test_" + accountID,
+		PlanVersion:       planVersion,
+		SubscriptionState: "active",
+	}); err != nil {
+		t.Fatalf("create stripe account: %v", err)
+	}
+}
+
 func TestCreateWorkspace(t *testing.T) {
 	reg := newTestRegistry(t)
 	tenantsDir := t.TempDir()
@@ -64,6 +80,7 @@ func TestCreateWorkspace(t *testing.T) {
 	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Test MSP"}); err != nil {
 		t.Fatal(err)
 	}
+	createTestStripeAccount(t, reg, accountID, "msp_starter")
 
 	body := `{"display_name":"Acme Dental"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/tenants", bytes.NewBufferString(body))
@@ -113,6 +130,7 @@ func TestListWorkspaces(t *testing.T) {
 	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Test MSP"}); err != nil {
 		t.Fatal(err)
 	}
+	createTestStripeAccount(t, reg, accountID, "msp_starter")
 
 	t1, err := provisioner.ProvisionWorkspace(context.Background(), accountID, "Client One")
 	if err != nil {
@@ -162,6 +180,7 @@ func TestDeleteWorkspace(t *testing.T) {
 	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Test MSP"}); err != nil {
 		t.Fatal(err)
 	}
+	createTestStripeAccount(t, reg, accountID, "msp_starter")
 
 	tenant, err := provisioner.ProvisionWorkspace(context.Background(), accountID, "Client")
 	if err != nil {
@@ -206,6 +225,8 @@ func TestTenantBelongsToAccount(t *testing.T) {
 	if err := reg.CreateAccount(&registry.Account{ID: account2, Kind: registry.AccountKindMSP, DisplayName: "A2"}); err != nil {
 		t.Fatal(err)
 	}
+	createTestStripeAccount(t, reg, account1, "msp_starter")
+	createTestStripeAccount(t, reg, account2, "msp_starter")
 
 	tenant, err := provisioner.ProvisionWorkspace(context.Background(), account1, "Client")
 	if err != nil {
@@ -218,5 +239,186 @@ func TestTenantBelongsToAccount(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound && rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 404/403 (body=%q)", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateWorkspace_BlockedWhenNoBillingRecord(t *testing.T) {
+	reg := newTestRegistry(t)
+	tenantsDir := t.TempDir()
+	mux, _ := newTestTenantMux(t, reg, tenantsDir)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "No Billing MSP"}); err != nil {
+		t.Fatal(err)
+	}
+	// Deliberately NOT creating a StripeAccount.
+
+	body := `{"display_name":"Should Fail"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/tenants", bytes.NewBufferString(body))
+	rec := doRequest(t, mux, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+}
+
+func TestCreateWorkspace_MSPStarterLimitEnforced(t *testing.T) {
+	reg := newTestRegistry(t)
+	tenantsDir := t.TempDir()
+	mux, provisioner := newTestTenantMux(t, reg, tenantsDir)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "MSP Starter"}); err != nil {
+		t.Fatal(err)
+	}
+	createTestStripeAccount(t, reg, accountID, "msp_starter") // limit = 10
+
+	// Create 10 workspaces (the limit for msp_starter).
+	for i := 0; i < 10; i++ {
+		if _, err := provisioner.ProvisionWorkspace(context.Background(), accountID, fmt.Sprintf("Client %d", i+1)); err != nil {
+			t.Fatalf("provision workspace %d: %v", i+1, err)
+		}
+	}
+
+	// The 11th should be blocked.
+	body := `{"display_name":"Client 11"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/tenants", bytes.NewBufferString(body))
+	rec := doRequest(t, mux, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+}
+
+func TestCreateWorkspace_DeletedWorkspacesDoNotCount(t *testing.T) {
+	reg := newTestRegistry(t)
+	tenantsDir := t.TempDir()
+	mux, provisioner := newTestTenantMux(t, reg, tenantsDir)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindIndividual, DisplayName: "Cloud User"}); err != nil {
+		t.Fatal(err)
+	}
+	createTestStripeAccount(t, reg, accountID, "cloud_starter") // limit = 1
+
+	// Create 1 workspace (the limit for cloud_starter).
+	tenant, err := provisioner.ProvisionWorkspace(context.Background(), accountID, "My Workspace")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Mark it as deleted.
+	tenant.State = registry.TenantStateDeleted
+	if err := reg.Update(tenant); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should now be able to create another (deleted ones don't count).
+	body := `{"display_name":"New Workspace"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/tenants", bytes.NewBufferString(body))
+	rec := doRequest(t, mux, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+}
+
+func TestCreateWorkspace_IndividualCloudLimitedToOne(t *testing.T) {
+	reg := newTestRegistry(t)
+	tenantsDir := t.TempDir()
+	mux, provisioner := newTestTenantMux(t, reg, tenantsDir)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindIndividual, DisplayName: "Cloud User"}); err != nil {
+		t.Fatal(err)
+	}
+	createTestStripeAccount(t, reg, accountID, "cloud_power") // limit = 1
+
+	// Create the first workspace.
+	if _, err := provisioner.ProvisionWorkspace(context.Background(), accountID, "My Workspace"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Second should be blocked.
+	body := `{"display_name":"Extra Workspace"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/tenants", bytes.NewBufferString(body))
+	rec := doRequest(t, mux, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+}
+
+func TestCreateWorkspace_MSPGrowthHigherLimit(t *testing.T) {
+	reg := newTestRegistry(t)
+	tenantsDir := t.TempDir()
+	mux, provisioner := newTestTenantMux(t, reg, tenantsDir)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "MSP Growth"}); err != nil {
+		t.Fatal(err)
+	}
+	createTestStripeAccount(t, reg, accountID, "msp_growth") // limit = 25
+
+	// Create 10 workspaces — well under the 25 limit.
+	for i := 0; i < 10; i++ {
+		if _, err := provisioner.ProvisionWorkspace(context.Background(), accountID, fmt.Sprintf("Client %d", i+1)); err != nil {
+			t.Fatalf("provision workspace %d: %v", i+1, err)
+		}
+	}
+
+	// 11th should succeed (limit is 25).
+	body := `{"display_name":"Client 11"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/tenants", bytes.NewBufferString(body))
+	rec := doRequest(t, mux, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+}
+
+func TestCreateWorkspace_BlockedWhenSubscriptionCanceled(t *testing.T) {
+	reg := newTestRegistry(t)
+	tenantsDir := t.TempDir()
+	mux, _ := newTestTenantMux(t, reg, tenantsDir)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Canceled MSP"}); err != nil {
+		t.Fatal(err)
+	}
+	// Create a StripeAccount with canceled subscription state.
+	if err := reg.CreateStripeAccount(&registry.StripeAccount{
+		AccountID:         accountID,
+		StripeCustomerID:  "cus_test_canceled_" + accountID,
+		PlanVersion:       "msp_starter",
+		SubscriptionState: "canceled",
+	}); err != nil {
+		t.Fatalf("create stripe account: %v", err)
+	}
+
+	body := `{"display_name":"Should Fail"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/tenants", bytes.NewBufferString(body))
+	rec := doRequest(t, mux, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusForbidden, rec.Body.String())
 	}
 }

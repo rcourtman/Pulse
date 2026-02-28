@@ -5,9 +5,23 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
+
+// workspaceCreateLocks provides per-account serialization for workspace
+// creation to prevent check-then-create race conditions. Each account gets
+// its own mutex so that slow provisioning for one account does not block
+// other accounts. For multi-instance deployments, this should be replaced
+// with a DB-level constraint.
+var workspaceCreateLocks sync.Map // map[string]*sync.Mutex
+
+func accountCreateLock(accountID string) *sync.Mutex {
+	val, _ := workspaceCreateLocks.LoadOrStore(accountID, &sync.Mutex{})
+	return val.(*sync.Mutex)
+}
 
 // WorkspaceProvisioner is the minimal interface needed by the MSP portal tenant handlers.
 // Implemented by internal/cloudcp/stripe.Provisioner.
@@ -123,10 +137,31 @@ func HandleCreateTenant(reg *registry.TenantRegistry, provisioner WorkspaceProvi
 			return
 		}
 
-		tenant, err := provisioner.ProvisionWorkspace(r.Context(), accountID, displayName)
-		if err != nil {
+		// Serialize workspace creation per account to prevent check-then-create races.
+		mu := accountCreateLock(accountID)
+		mu.Lock()
+		limitErr, tenant, provisionErr := func() (*workspaceLimitError, *registry.Tenant, error) {
+			defer mu.Unlock()
+			if le := enforceWorkspaceLimit(reg, a, accountID); le != nil {
+				return le, nil, nil
+			}
+			t, pErr := provisioner.ProvisionWorkspace(r.Context(), accountID, displayName)
+			return nil, t, pErr
+		}()
+		if limitErr != nil {
 			auditEvent(r, "cp_tenant_create", "failure").
-				Err(err).
+				Str("account_id", accountID).
+				Str("display_name", displayName).
+				Str("reason", limitErr.reason).
+				Int("current_count", limitErr.current).
+				Int("limit", limitErr.limit).
+				Msg("Tenant creation blocked by workspace limit")
+			http.Error(w, limitErr.message, limitErr.statusCode)
+			return
+		}
+		if provisionErr != nil {
+			auditEvent(r, "cp_tenant_create", "failure").
+				Err(provisionErr).
 				Str("account_id", accountID).
 				Str("display_name", displayName).
 				Str("reason", "provision_failed").
@@ -146,6 +181,79 @@ func HandleCreateTenant(reg *registry.TenantRegistry, provisioner WorkspaceProvi
 		w.WriteHeader(http.StatusCreated)
 		encodeJSON(w, tenant)
 	}
+}
+
+// workspaceLimitError describes why workspace creation was blocked.
+type workspaceLimitError struct {
+	reason     string
+	message    string
+	statusCode int
+	current    int
+	limit      int
+}
+
+// enforceWorkspaceLimit checks whether the account is allowed to create
+// another workspace. Returns nil if creation is allowed, or a
+// workspaceLimitError if blocked.
+func enforceWorkspaceLimit(reg *registry.TenantRegistry, account *registry.Account, accountID string) *workspaceLimitError {
+	// Look up the account's Stripe billing record to determine plan version.
+	sa, err := reg.GetStripeAccount(accountID)
+	if err != nil {
+		// No billing record → fail-closed (cannot determine plan).
+		return &workspaceLimitError{
+			reason:     "billing_lookup_failed",
+			message:    "internal error",
+			statusCode: http.StatusInternalServerError,
+		}
+	}
+	if sa == nil {
+		// No Stripe account → no subscription → cannot create workspaces.
+		return &workspaceLimitError{
+			reason:     "no_billing_record",
+			message:    "account has no active subscription",
+			statusCode: http.StatusForbidden,
+		}
+	}
+
+	// Reject workspace creation for canceled subscriptions.
+	if strings.EqualFold(sa.SubscriptionState, "canceled") {
+		return &workspaceLimitError{
+			reason:     "subscription_canceled",
+			message:    "cannot create workspaces on a canceled subscription",
+			statusCode: http.StatusForbidden,
+		}
+	}
+
+	// Determine workspace limit from plan version.
+	planVersion := sa.PlanVersion
+	limit, known := pkglicensing.WorkspaceLimitForPlan(planVersion)
+	if !known {
+		// Unknown plan → fail-closed with safe default.
+		limit = pkglicensing.UnknownPlanDefaultWorkspaceLimit
+	}
+
+	// Count current active (non-deleted, non-canceled) workspaces.
+	// Caller must hold the per-account lock to prevent check-then-create races.
+	current, err := reg.CountActiveByAccountID(accountID)
+	if err != nil {
+		return &workspaceLimitError{
+			reason:     "count_failed",
+			message:    "internal error",
+			statusCode: http.StatusInternalServerError,
+		}
+	}
+
+	if current >= limit {
+		return &workspaceLimitError{
+			reason:     "workspace_limit_reached",
+			message:    fmt.Sprintf("workspace limit reached: %d of %d allowed for plan %q", current, limit, planVersion),
+			statusCode: http.StatusForbidden,
+			current:    current,
+			limit:      limit,
+		}
+	}
+
+	return nil
 }
 
 type updateTenantRequest struct {

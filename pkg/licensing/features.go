@@ -91,6 +91,39 @@ var CloudPlanAgentLimits = map[string]int{
 // tier limit rather than unlimited access.
 const UnknownPlanDefaultAgentLimit = 10
 
+// CloudPlanWorkspaceLimits maps cloud plan version strings to the maximum
+// number of active workspaces (tenants) the account may create. Individual
+// Cloud accounts get exactly 1 workspace; MSP tiers get the client caps from
+// the pricing spec.
+var CloudPlanWorkspaceLimits = map[string]int{
+	// Individual Cloud tiers — one workspace per account
+	"cloud_starter":  1,
+	"cloud_power":    1,
+	"cloud_max":      1,
+	"cloud_founding": 1,
+
+	// MSP tiers — client caps from pricing spec
+	"msp_hosted_v1": 10, // Legacy MSP default = Starter client cap
+	"msp_starter":   10, // MSP Starter: up to 10 clients
+	"msp_growth":    25, // MSP Growth: up to 25 clients
+	"msp_scale":     50, // MSP Scale: up to 50 clients
+}
+
+// UnknownPlanDefaultWorkspaceLimit is the safe-default workspace limit applied
+// when a plan version is not recognized. Fail-closed: unknown plans get the
+// smallest MSP tier limit.
+const UnknownPlanDefaultWorkspaceLimit = 1
+
+// WorkspaceLimitForPlan returns the maximum active workspace count for a given
+// cloud plan version and whether the plan was recognized. If unrecognized,
+// returns a safe default (1) and known=false.
+func WorkspaceLimitForPlan(planVersion string) (limit int, known bool) {
+	if l, ok := CloudPlanWorkspaceLimits[planVersion]; ok {
+		return l, true
+	}
+	return UnknownPlanDefaultWorkspaceLimit, false
+}
+
 // LimitsForCloudPlan returns the agent limit map for a given cloud plan
 // version and whether the plan was recognized. If the plan is recognized, the
 // map contains "max_agents" with the per-plan limit. If unrecognized, returns
