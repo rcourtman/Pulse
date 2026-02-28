@@ -25,13 +25,13 @@ type UpgradeReason = upgradeReasonModel
 // This is the primary endpoint the frontend should use for feature gating decisions.
 func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
 		return
 	}
 
 	svc, _, err := h.getTenantComponents(r.Context())
 	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		writeErrorResponse(w, http.StatusInternalServerError, "internal_error", "Internal server error", nil)
 		return
 	}
 

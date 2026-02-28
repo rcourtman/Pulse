@@ -257,3 +257,31 @@ func TestNoRawBroadcastStateInAgentHandlers(t *testing.T) {
 		}
 	}
 }
+
+// TestNoRawHTTPErrorInSettingsHandlers ensures settings handler files use
+// writeErrorResponse() instead of http.Error(). Raw http.Error() returns
+// plain text bodies that break frontend JSON parsing during first-session
+// error states, causing console errors and broken UX.
+//
+// Settings handlers must return structured JSON via writeErrorResponse()
+// so the frontend can parse error codes and show appropriate error UI.
+func TestNoRawHTTPErrorInSettingsHandlers(t *testing.T) {
+	settingsFiles := map[string]bool{
+		"system_settings.go":           true,
+		"subscription_entitlements.go": true,
+	}
+
+	rawHTTPError := regexp.MustCompile(`http\.Error\(`)
+
+	for name, content := range readGoFiles(t) {
+		if !settingsFiles[name] {
+			continue
+		}
+		if matches := rawHTTPError.FindAllStringIndex(content, -1); len(matches) > 0 {
+			for _, m := range matches {
+				line := 1 + strings.Count(content[:m[0]], "\n")
+				t.Errorf("%s:%d: raw http.Error() call — use writeErrorResponse() for structured JSON errors", name, line)
+			}
+		}
+	}
+}

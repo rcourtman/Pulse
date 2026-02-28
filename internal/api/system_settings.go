@@ -435,7 +435,7 @@ func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]inte
 // HandleGetSystemSettings returns the current system settings
 func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
 		return
 	}
 
@@ -492,7 +492,7 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 // HandleUpdateSystemSettings updates the system settings
 func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
 		return
 	}
 
@@ -501,7 +501,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		// CheckAuth handles explicit failures (rate limits, invalid tokens)
 		// but returns false silently for missing credentials.
 		// We ensure a 401 is returned nicely even if we risk a double-write warning in rare cases.
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", "Unauthorized", nil)
 		return
 	}
 
@@ -518,9 +518,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 					Msg("Non-admin user attempted to update system settings")
 
 				// Return forbidden error
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusForbidden)
-				_ = json.NewEncoder(w).Encode(map[string]string{"error": "Admin privileges required"})
+				writeErrorResponse(w, http.StatusForbidden, "forbidden", "Admin privileges required", nil)
 				return
 			}
 		}
@@ -547,7 +545,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	// Read the request body into a map to check which fields were provided
 	var rawRequest map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&rawRequest); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
 		return
 	}
 
@@ -561,26 +559,26 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	// Convert the map back to JSON for decoding into struct
 	jsonBytes, err := json.Marshal(rawRequest)
 	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
 		return
 	}
 
 	// Decode into updates struct
 	var updates config.SystemSettings
 	if err := json.Unmarshal(jsonBytes, &updates); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
 		return
 	}
 
 	// Validate the settings
 	if err := validateSystemSettings(&updates, rawRequest); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
 		return
 	}
 
 	// Reject early if telemetryEnabled is locked by env var
 	if _, ok := rawRequest["telemetryEnabled"]; ok && h.config.EnvOverrides["PULSE_TELEMETRY"] {
-		http.Error(w, "telemetryEnabled is locked by the PULSE_TELEMETRY environment variable", http.StatusConflict)
+		writeErrorResponse(w, http.StatusConflict, "env_locked", "telemetryEnabled is locked by the PULSE_TELEMETRY environment variable", nil)
 		return
 	}
 
@@ -714,7 +712,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 
 	// Pre-save validation (may return errors before anything is persisted)
 	if settings.Theme != "" && settings.Theme != "light" && settings.Theme != "dark" {
-		http.Error(w, "Invalid theme value. Must be 'light', 'dark', or empty", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "validation_error", "Invalid theme value. Must be 'light', 'dark', or empty", nil)
 		return
 	}
 	// Validate CIDRs before persistence (parse only — do NOT mutate runtime yet).
@@ -726,7 +724,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		parsedCIDRNets, err = notifications.ParseAllowedPrivateCIDRs(settings.WebhookAllowedPrivateCIDRs)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to validate webhook allowed private CIDRs")
-			http.Error(w, fmt.Sprintf("Invalid webhook allowed private CIDRs: %v", err), http.StatusBadRequest)
+			writeErrorResponse(w, http.StatusBadRequest, "validation_error", fmt.Sprintf("Invalid webhook allowed private CIDRs: %v", err), nil)
 			return
 		}
 	}
@@ -748,7 +746,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	// This ensures runtime state never diverges from disk on save failure.
 	if err := h.persistence.SaveSystemSettings(settings); err != nil {
 		log.Error().Err(err).Msg("Failed to save system settings")
-		http.Error(w, "Failed to save settings", http.StatusInternalServerError)
+		writeErrorResponse(w, http.StatusInternalServerError, "save_failed", "Failed to save settings", nil)
 		return
 	}
 
@@ -863,7 +861,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if pveIntervalChanged && h.reloadMonitorFunc != nil {
 		if err := h.reloadMonitorFunc(); err != nil {
 			log.Error().Err(err).Msg("Failed to reload monitor after PVE polling interval change")
-			http.Error(w, "Configuration saved but failed to reload monitor", http.StatusInternalServerError)
+			writeErrorResponse(w, http.StatusInternalServerError, "reload_failed", "Configuration saved but failed to reload monitor", nil)
 			return
 		}
 	}
@@ -889,7 +887,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 // HandleSSHConfig writes SSH configuration for Pulse user
 func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
 		return
 	}
 
@@ -904,11 +902,11 @@ func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.R
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
 			log.Warn().Msg("SSH config request body too large")
-			http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+			writeErrorResponse(w, http.StatusRequestEntityTooLarge, "request_too_large", "Request body too large", nil)
 			return
 		}
 		log.Error().Err(err).Msg("Failed to read SSH config from request")
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Failed to read request body", nil)
 		return
 	}
 
@@ -916,7 +914,7 @@ func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.R
 	configStr := string(sshConfig)
 	if len(configStr) == 0 {
 		log.Error().Msg("Empty SSH config received")
-		http.Error(w, "Empty SSH config", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Empty SSH config", nil)
 		return
 	}
 
@@ -961,14 +959,14 @@ func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.R
 				Str("directive", fields[0]).
 				Int("line", lineNum).
 				Msg("Rejected SSH config with forbidden directive")
-			http.Error(w, fmt.Sprintf("SSH config contains forbidden directive: %s", fields[0]), http.StatusBadRequest)
+			writeErrorResponse(w, http.StatusBadRequest, "validation_error", fmt.Sprintf("SSH config contains forbidden directive: %s", fields[0]), nil)
 			return
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
 		log.Error().Err(err).Msg("Failed to parse SSH config")
-		http.Error(w, "Invalid SSH config format", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid SSH config format", nil)
 		return
 	}
 
@@ -982,13 +980,13 @@ func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.R
 	sshDir := filepath.Join(homeDir, ".ssh")
 	if err := os.MkdirAll(sshDir, 0700); err != nil {
 		log.Error().Err(err).Str("dir", sshDir).Msg("Failed to create .ssh directory")
-		http.Error(w, "Failed to create SSH directory", http.StatusInternalServerError)
+		writeErrorResponse(w, http.StatusInternalServerError, "internal_error", "Failed to create SSH directory", nil)
 		return
 	}
 	// Harden permissions even when the directory already existed.
 	if err := os.Chmod(sshDir, 0700); err != nil {
 		log.Error().Err(err).Str("dir", sshDir).Msg("Failed to set .ssh directory permissions")
-		http.Error(w, "Failed to secure SSH directory", http.StatusInternalServerError)
+		writeErrorResponse(w, http.StatusInternalServerError, "internal_error", "Failed to secure SSH directory", nil)
 		return
 	}
 
@@ -996,13 +994,13 @@ func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.R
 	configPath := filepath.Join(sshDir, "config")
 	if err := os.WriteFile(configPath, sshConfig, 0600); err != nil {
 		log.Error().Err(err).Str("path", configPath).Msg("Failed to write SSH config")
-		http.Error(w, "Failed to write SSH config", http.StatusInternalServerError)
+		writeErrorResponse(w, http.StatusInternalServerError, "internal_error", "Failed to write SSH config", nil)
 		return
 	}
 	// os.WriteFile does not change mode on existing files; enforce least-privilege.
 	if err := os.Chmod(configPath, 0600); err != nil {
 		log.Error().Err(err).Str("path", configPath).Msg("Failed to set SSH config file permissions")
-		http.Error(w, "Failed to secure SSH config", http.StatusInternalServerError)
+		writeErrorResponse(w, http.StatusInternalServerError, "internal_error", "Failed to secure SSH config", nil)
 		return
 	}
 
