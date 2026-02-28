@@ -9,6 +9,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // StateGetter provides access to the current infrastructure state
@@ -250,16 +251,23 @@ type MetricsSource interface {
 // MetricsHistoryMCPAdapter adapts the metrics history to MCP MetricsHistoryProvider interface
 type MetricsHistoryMCPAdapter struct {
 	stateGetter   StateGetter
+	readState     unifiedresources.ReadState
 	metricsSource MetricsSource
 }
 
-// NewMetricsHistoryMCPAdapter creates a new adapter for metrics history
-func NewMetricsHistoryMCPAdapter(stateGetter StateGetter, metricsSource MetricsSource) *MetricsHistoryMCPAdapter {
-	if stateGetter == nil || metricsSource == nil {
+// NewMetricsHistoryMCPAdapter creates a new adapter for metrics history.
+// When readState is provided, GetAllMetricsSummary uses it instead of
+// falling back to stateGetter, reducing direct state access (SRC migration).
+func NewMetricsHistoryMCPAdapter(stateGetter StateGetter, metricsSource MetricsSource, readState unifiedresources.ReadState) *MetricsHistoryMCPAdapter {
+	if metricsSource == nil {
+		return nil
+	}
+	if stateGetter == nil && readState == nil {
 		return nil
 	}
 	return &MetricsHistoryMCPAdapter{
 		stateGetter:   stateGetter,
+		readState:     readState,
 		metricsSource: metricsSource,
 	}
 }
@@ -292,39 +300,78 @@ func (a *MetricsHistoryMCPAdapter) GetResourceMetrics(resourceID string, period 
 	return mergeMetricsByTimestamp(allMetrics), nil
 }
 
-// GetAllMetricsSummary implements mcp.MetricsHistoryProvider
+// GetAllMetricsSummary implements mcp.MetricsHistoryProvider.
+// Prefers ReadState when available (SRC migration); falls back to StateGetter.
 func (a *MetricsHistoryMCPAdapter) GetAllMetricsSummary(period time.Duration) (map[string]ResourceMetricsSummary, error) {
-	if a.stateGetter == nil || a.metricsSource == nil {
+	if a.metricsSource == nil {
 		return nil, nil
 	}
 
+	if a.readState != nil {
+		return a.allMetricsSummaryFromReadState(period), nil
+	}
+	if a.stateGetter == nil {
+		return nil, nil
+	}
+	return a.allMetricsSummaryFromState(period), nil
+}
+
+func (a *MetricsHistoryMCPAdapter) allMetricsSummaryFromReadState(period time.Duration) map[string]ResourceMetricsSummary {
+	result := make(map[string]ResourceMetricsSummary)
+
+	// VMs and Containers use integer VMID which is consistent across
+	// ReadState and legacy state. Nodes are excluded because ReadState
+	// node IDs are hashed registry IDs while MetricsSource indexes by
+	// legacy node IDs (e.g., "cluster-nodeName").
+	for _, vm := range a.readState.VMs() {
+		vmID := fmt.Sprintf("%d", vm.VMID())
+		if summary := a.computeSummary(vmID, vm.Name(), "vm", period); summary != nil {
+			result[vmID] = *summary
+		}
+	}
+	for _, ct := range a.readState.Containers() {
+		ctID := fmt.Sprintf("%d", ct.VMID())
+		if summary := a.computeSummary(ctID, ct.Name(), "container", period); summary != nil {
+			result[ctID] = *summary
+		}
+	}
+
+	// Nodes: fall back to stateGetter for node IDs that match MetricsSource.
+	if a.stateGetter != nil {
+		state := a.stateGetter.GetState()
+		for _, node := range state.Nodes {
+			if summary := a.computeSummary(node.ID, node.Name, "node", period); summary != nil {
+				result[node.ID] = *summary
+			}
+		}
+	}
+
+	return result
+}
+
+func (a *MetricsHistoryMCPAdapter) allMetricsSummaryFromState(period time.Duration) map[string]ResourceMetricsSummary {
 	state := a.stateGetter.GetState()
 	result := make(map[string]ResourceMetricsSummary)
 
-	// Process VMs
 	for _, vm := range state.VMs {
 		vmID := fmt.Sprintf("%d", vm.VMID)
 		if summary := a.computeSummary(vmID, vm.Name, "vm", period); summary != nil {
 			result[vmID] = *summary
 		}
 	}
-
-	// Process containers
 	for _, ct := range state.Containers {
 		ctID := fmt.Sprintf("%d", ct.VMID)
 		if summary := a.computeSummary(ctID, ct.Name, "container", period); summary != nil {
 			result[ctID] = *summary
 		}
 	}
-
-	// Process nodes
 	for _, node := range state.Nodes {
 		if summary := a.computeSummary(node.ID, node.Name, "node", period); summary != nil {
 			result[node.ID] = *summary
 		}
 	}
 
-	return result, nil
+	return result
 }
 
 func (a *MetricsHistoryMCPAdapter) computeSummary(resourceID, resourceName, resourceType string, period time.Duration) *ResourceMetricsSummary {
@@ -543,14 +590,17 @@ type PredictionData struct {
 type PatternMCPAdapter struct {
 	source      PatternSource
 	stateGetter StateGetter
+	readState   unifiedresources.ReadState
 }
 
-// NewPatternMCPAdapter creates a new adapter for pattern data
-func NewPatternMCPAdapter(source PatternSource, stateGetter StateGetter) *PatternMCPAdapter {
+// NewPatternMCPAdapter creates a new adapter for pattern data.
+// When readState is provided, resource name lookups use it instead of
+// falling back to stateGetter, reducing direct state access (SRC migration).
+func NewPatternMCPAdapter(source PatternSource, stateGetter StateGetter, readState unifiedresources.ReadState) *PatternMCPAdapter {
 	if source == nil {
 		return nil
 	}
-	return &PatternMCPAdapter{source: source, stateGetter: stateGetter}
+	return &PatternMCPAdapter{source: source, stateGetter: stateGetter, readState: readState}
 }
 
 // GetPatterns implements mcp.PatternProvider
@@ -606,9 +656,43 @@ func (a *PatternMCPAdapter) GetPredictions() []Prediction {
 }
 
 func (a *PatternMCPAdapter) getResourceName(resourceID string) string {
+	if a.readState != nil {
+		return a.resourceNameFromReadState(resourceID)
+	}
 	if a.stateGetter == nil {
 		return resourceID
 	}
+	return a.resourceNameFromState(resourceID)
+}
+
+func (a *PatternMCPAdapter) resourceNameFromReadState(resourceID string) string {
+	// VMs and Containers use integer VMID which is consistent across
+	// ReadState and legacy state. Nodes are excluded because ReadState
+	// node IDs are hashed registry IDs while patterns store legacy
+	// node IDs (e.g., "cluster-nodeName").
+	for _, vm := range a.readState.VMs() {
+		if fmt.Sprintf("%d", vm.VMID()) == resourceID {
+			return vm.Name()
+		}
+	}
+	for _, ct := range a.readState.Containers() {
+		if fmt.Sprintf("%d", ct.VMID()) == resourceID {
+			return ct.Name()
+		}
+	}
+	// Node name resolution: fall back to stateGetter for node ID compatibility.
+	if a.stateGetter != nil {
+		state := a.stateGetter.GetState()
+		for _, node := range state.Nodes {
+			if node.ID == resourceID {
+				return node.Name
+			}
+		}
+	}
+	return resourceID
+}
+
+func (a *PatternMCPAdapter) resourceNameFromState(resourceID string) string {
 	state := a.stateGetter.GetState()
 	for _, vm := range state.VMs {
 		if fmt.Sprintf("%d", vm.VMID) == resourceID {

@@ -2112,6 +2112,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 			metricsAdapter := tools.NewMetricsHistoryMCPAdapter(
 				monitor,
 				&metricsSourceWrapper{history: metricsHistory},
+				monitor.GetUnifiedReadState(),
 			)
 			if metricsAdapter != nil {
 				service.SetMetricsHistory(metricsAdapter)
@@ -2140,6 +2141,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 				patternAdapter := tools.NewPatternMCPAdapter(
 					&patternSourceWrapper{detector: patternDetector},
 					monitor,
+					monitor.GetUnifiedReadState(),
 				)
 				if patternAdapter != nil {
 					service.SetPatternProvider(patternAdapter)

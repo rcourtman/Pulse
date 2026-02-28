@@ -236,7 +236,7 @@ func TestMetricsHistoryMCPAdapter(t *testing.T) {
 		},
 	}
 
-	adapter := NewMetricsHistoryMCPAdapter(fakeStateGetter{}, source)
+	adapter := NewMetricsHistoryMCPAdapter(fakeStateGetter{}, source, nil)
 	got, err := adapter.GetResourceMetrics("100", time.Hour)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -255,7 +255,7 @@ func TestMetricsHistoryMCPAdapter(t *testing.T) {
 			},
 		},
 	}
-	adapter = NewMetricsHistoryMCPAdapter(fakeStateGetter{}, source)
+	adapter = NewMetricsHistoryMCPAdapter(fakeStateGetter{}, source, nil)
 	got, err = adapter.GetResourceMetrics("node1", time.Hour)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -294,7 +294,7 @@ func TestMetricsSummaryAndHelpers(t *testing.T) {
 		Nodes:      []models.Node{{ID: "node1", Name: "node-1"}},
 	}
 
-	adapter := NewMetricsHistoryMCPAdapter(fakeStateGetter{state: state}, source)
+	adapter := NewMetricsHistoryMCPAdapter(fakeStateGetter{state: state}, source, nil)
 	summary, err := adapter.GetAllMetricsSummary(time.Hour)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -385,7 +385,7 @@ func TestPatternMCPAdapter(t *testing.T) {
 		},
 	}
 
-	adapter := NewPatternMCPAdapter(source, fakeStateGetter{state: state})
+	adapter := NewPatternMCPAdapter(source, fakeStateGetter{state: state}, nil)
 	patterns := adapter.GetPatterns()
 	if len(patterns) != 2 || patterns[0].ResourceName != "vm1" || patterns[1].ResourceName != "node-1" {
 		t.Fatalf("unexpected patterns: %+v", patterns)
@@ -395,7 +395,7 @@ func TestPatternMCPAdapter(t *testing.T) {
 		t.Fatalf("unexpected predictions: %+v", predictions)
 	}
 
-	adapter = NewPatternMCPAdapter(source, nil)
+	adapter = NewPatternMCPAdapter(source, nil, nil)
 	patterns = adapter.GetPatterns()
 	if patterns[0].ResourceName != "100" {
 		t.Fatal("expected resource ID when state missing")
