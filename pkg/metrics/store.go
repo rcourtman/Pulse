@@ -16,6 +16,8 @@ import (
 
 	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite"
+
+	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
 )
 
 // Tier represents the granularity of stored metrics
@@ -82,7 +84,7 @@ type WriteMetric struct {
 
 // Store provides persistent metrics storage
 type Store struct {
-	db     *sql.DB
+	db     *pdb.InstrumentedDB
 	config StoreConfig
 
 	// Write buffer
@@ -115,15 +117,17 @@ func NewStore(config StoreConfig) (*Store, error) {
 			"wal_autocheckpoint(500)",
 		},
 	}.Encode()
-	db, err := sql.Open("sqlite", dsn)
+	rawDB, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open metrics database: %w", err)
 	}
 
 	// Configure connection pool (SQLite works best with single writer)
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-	db.SetConnMaxLifetime(0)
+	rawDB.SetMaxOpenConns(1)
+	rawDB.SetMaxIdleConns(1)
+	rawDB.SetConnMaxLifetime(0)
+
+	db := pdb.Wrap(rawDB, "metrics")
 
 	store := &Store{
 		db:      db,
@@ -373,7 +377,7 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 		return
 	}
 
-	var tx *sql.Tx
+	var tx *pdb.InstrumentedTx
 	var err error
 
 	// Retry on SQLITE_BUSY with exponential backoff
@@ -818,14 +822,14 @@ func (s *Store) rollupCandidate(resourceType, resourceID, metricType string, fro
 	if startTs >= endTs {
 		return
 	}
-	tx, err := s.db.Begin()
+	itx, err := s.db.Begin()
 	if err != nil {
 		return
 	}
-	defer tx.Rollback()
+	defer itx.Rollback()
 
 	// Aggregate data into buckets
-	_, err = tx.Exec(`
+	_, err = itx.Exec(`
 		INSERT OR IGNORE INTO metrics (resource_type, resource_id, metric_type, value, min_value, max_value, timestamp, tier)
 		SELECT 
 			resource_type, 
@@ -851,7 +855,7 @@ func (s *Store) rollupCandidate(resourceType, resourceID, metricType string, fro
 		return
 	}
 
-	tx.Commit()
+	itx.Commit()
 }
 
 func (s *Store) getMetaInt(key string) (int64, bool) {
