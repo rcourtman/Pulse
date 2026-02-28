@@ -1,0 +1,432 @@
+package api
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"reflect"
+	"sort"
+	"testing"
+	"time"
+	"unsafe"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+)
+
+// suppressTestLogs disables zerolog for the duration of a test.
+func suppressTestLogs(t *testing.T) {
+	t.Helper()
+	orig := log.Logger
+	log.Logger = zerolog.Nop()
+	t.Cleanup(func() { log.Logger = orig })
+}
+
+// setTestUnexportedField sets an unexported field on a struct via reflection.
+func setTestUnexportedField(t *testing.T, target interface{}, field string, value interface{}) {
+	t.Helper()
+	v := reflect.ValueOf(target).Elem()
+	f := v.FieldByName(field)
+	if !f.IsValid() {
+		t.Fatalf("field %q not found", field)
+	}
+	ptr := unsafe.Pointer(f.UnsafeAddr())
+	reflect.NewAt(f.Type(), ptr).Elem().Set(reflect.ValueOf(value))
+}
+
+// TestSLO_MetricsHistoryStore validates that the metrics-store/history handler
+// (SQLite path) meets SLOMetricsHistoryStoreP95 under benchmark conditions.
+func TestSLO_MetricsHistoryStore(t *testing.T) {
+	skipUnderRace(t)
+	suppressTestLogs(t)
+
+	store := newTestMetricsStore(t)
+	const numPoints = 500
+	metricTypes := []string{"cpu", "memory", "disk", "netin"}
+	ids := seedTestMetrics(t, store, "vm", metricTypes, 10, numPoints)
+
+	state := models.NewState()
+	monitor := &monitoring.Monitor{}
+	setTestUnexportedField(t, monitor, "state", state)
+	setTestUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
+	setTestUnexportedField(t, monitor, "metricsStore", store)
+
+	tempDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tempDir)
+	if _, err := mtp.GetPersistence("default"); err != nil {
+		t.Fatalf("failed to init persistence: %v", err)
+	}
+
+	router := &Router{
+		monitor:         monitor,
+		licenseHandlers: NewLicenseHandlers(mtp, false),
+	}
+
+	url := "/api/metrics-store/history?resourceType=vm&resourceId=" + ids[0] + "&metric=cpu&range=1h"
+
+	// Sanity check: verify the store path is exercised and returns expected data.
+	sanityReq := httptest.NewRequest(http.MethodGet, url, nil)
+	sanityRec := httptest.NewRecorder()
+	router.handleMetricsHistory(sanityRec, sanityReq)
+	if sanityRec.Code != http.StatusOK {
+		t.Fatalf("sanity check failed: status %d, body: %s", sanityRec.Code, sanityRec.Body.String())
+	}
+	var sanityResp metricsHistoryResponse
+	if err := json.Unmarshal(sanityRec.Body.Bytes(), &sanityResp); err != nil {
+		t.Fatalf("sanity check: unmarshal failed: %v", err)
+	}
+	if sanityResp.Source != "store" {
+		t.Fatalf("sanity check: expected source=store, got %q", sanityResp.Source)
+	}
+	if len(sanityResp.Points) == 0 {
+		t.Fatal("sanity check: expected non-empty points from store path")
+	}
+
+	latencies := measureEndpointLatencies(t, func() {
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		rec := httptest.NewRecorder()
+		router.handleMetricsHistory(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("unexpected status %d", rec.Code)
+		}
+	})
+
+	p95 := percentile(latencies, 0.95)
+	t.Logf("metrics-store/history (store) p50=%v p95=%v p99=%v SLO=%v",
+		percentile(latencies, 0.50), p95, percentile(latencies, 0.99), SLOMetricsHistoryStoreP95)
+
+	if p95 > SLOMetricsHistoryStoreP95 {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLOMetricsHistoryStoreP95)
+	}
+}
+
+// TestSLO_MetricsHistoryMemory validates the in-memory fallback path.
+func TestSLO_MetricsHistoryMemory(t *testing.T) {
+	skipUnderRace(t)
+	suppressTestLogs(t)
+
+	state := models.NewState()
+	vms := make([]models.VM, 10)
+	for i := range vms {
+		vms[i] = models.VM{
+			ID:       fmt.Sprintf("pve1:node1:%d", 100+i),
+			VMID:     100 + i,
+			Name:     fmt.Sprintf("vm-%d", 100+i),
+			Node:     "node1",
+			Instance: "pve1",
+			Status:   "running",
+			Type:     "qemu",
+			CPU:      float64(i%80+10) / 100.0,
+			Memory:   models.Memory{Usage: float64(i%60 + 20)},
+			Disk:     models.Disk{Usage: float64(i%40 + 30)},
+		}
+	}
+	state.UpdateVMsForInstance("pve1", vms)
+
+	mh := monitoring.NewMetricsHistory(1000, time.Hour)
+	now := time.Now()
+	for _, vm := range vms {
+		for j := 0; j < 60; j++ {
+			ts := now.Add(time.Duration(-60+j) * time.Minute)
+			mh.AddGuestMetric(vm.ID, "cpu", vm.CPU*100+float64(j%10), ts)
+			mh.AddGuestMetric(vm.ID, "memory", vm.Memory.Usage+float64(j%5), ts)
+		}
+	}
+
+	monitor := &monitoring.Monitor{}
+	setTestUnexportedField(t, monitor, "state", state)
+	setTestUnexportedField(t, monitor, "metricsHistory", mh)
+
+	router := &Router{monitor: monitor}
+
+	url := "/api/metrics-store/history?resourceType=vm&resourceId=pve1:node1:100&metric=cpu&range=1h"
+
+	// Sanity check: verify the memory fallback path is exercised.
+	sanityReq := httptest.NewRequest(http.MethodGet, url, nil)
+	sanityRec := httptest.NewRecorder()
+	router.handleMetricsHistory(sanityRec, sanityReq)
+	if sanityRec.Code != http.StatusOK {
+		t.Fatalf("sanity check failed: status %d, body: %s", sanityRec.Code, sanityRec.Body.String())
+	}
+	var sanityResp metricsHistoryResponse
+	if err := json.Unmarshal(sanityRec.Body.Bytes(), &sanityResp); err != nil {
+		t.Fatalf("sanity check: unmarshal failed: %v", err)
+	}
+	if sanityResp.Source != "memory" {
+		t.Fatalf("sanity check: expected source=memory, got %q", sanityResp.Source)
+	}
+	if len(sanityResp.Points) == 0 {
+		t.Fatal("sanity check: expected non-empty points from memory fallback")
+	}
+
+	latencies := measureEndpointLatencies(t, func() {
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		rec := httptest.NewRecorder()
+		router.handleMetricsHistory(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("unexpected status %d", rec.Code)
+		}
+	})
+
+	p95 := percentile(latencies, 0.95)
+	t.Logf("metrics-store/history (memory) p50=%v p95=%v p99=%v SLO=%v",
+		percentile(latencies, 0.50), p95, percentile(latencies, 0.99), SLOMetricsHistoryMemoryP95)
+
+	if p95 > SLOMetricsHistoryMemoryP95 {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLOMetricsHistoryMemoryP95)
+	}
+}
+
+// TestSLO_MetricsStoreStats validates the /api/metrics-store/stats endpoint.
+func TestSLO_MetricsStoreStats(t *testing.T) {
+	skipUnderRace(t)
+	suppressTestLogs(t)
+
+	store := newTestMetricsStore(t)
+	seedTestMetrics(t, store, "node", []string{"cpu"}, 5, 100)
+
+	monitor := &monitoring.Monitor{}
+	setTestUnexportedField(t, monitor, "state", models.NewState())
+	setTestUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
+	setTestUnexportedField(t, monitor, "metricsStore", store)
+
+	router := &Router{monitor: monitor}
+
+	// Sanity check: verify stats endpoint returns valid data.
+	sanityReq := httptest.NewRequest(http.MethodGet, "/api/metrics-store/stats", nil)
+	sanityRec := httptest.NewRecorder()
+	router.handleMetricsStoreStats(sanityRec, sanityReq)
+	if sanityRec.Code != http.StatusOK {
+		t.Fatalf("sanity check failed: status %d", sanityRec.Code)
+	}
+	var statsCheck map[string]interface{}
+	if err := json.Unmarshal(sanityRec.Body.Bytes(), &statsCheck); err != nil {
+		t.Fatalf("sanity check: unmarshal failed: %v", err)
+	}
+	if enabled, _ := statsCheck["enabled"].(bool); !enabled {
+		t.Fatal("sanity check: expected enabled=true in stats response")
+	}
+
+	latencies := measureEndpointLatencies(t, func() {
+		req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/stats", nil)
+		rec := httptest.NewRecorder()
+		router.handleMetricsStoreStats(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("unexpected status %d", rec.Code)
+		}
+	})
+
+	p95 := percentile(latencies, 0.95)
+	t.Logf("metrics-store/stats p50=%v p95=%v p99=%v SLO=%v",
+		percentile(latencies, 0.50), p95, percentile(latencies, 0.99), SLOMetricsStoreStatsP95)
+
+	if p95 > SLOMetricsStoreStatsP95 {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLOMetricsStoreStatsP95)
+	}
+}
+
+// TestSLO_ResourcesList validates the GET /api/resources endpoint with ~85
+// resources in state (5 nodes + 50 VMs + 30 containers). The handler uses
+// default pagination (limit=50), so response encodes up to 50 resources.
+func TestSLO_ResourcesList(t *testing.T) {
+	skipUnderRace(t)
+	suppressTestLogs(t)
+
+	state := models.NewState()
+	nodes := make([]models.Node, 5)
+	for i := range nodes {
+		nodes[i] = models.Node{
+			ID:       fmt.Sprintf("pve1:node%d", i),
+			Name:     fmt.Sprintf("node%d", i),
+			Instance: "pve1",
+			Status:   "online",
+			CPU:      float64(i%80+10) / 100.0,
+			Memory:   models.Memory{Usage: float64(i%60 + 20), Total: 64 << 30, Used: 32 << 30},
+			Disk:     models.Disk{Usage: float64(i%40 + 30), Total: 500 << 30, Used: 250 << 30},
+		}
+	}
+	state.UpdateNodesForInstance("pve1", nodes)
+
+	vms := make([]models.VM, 50)
+	for i := range vms {
+		vms[i] = models.VM{
+			ID:       fmt.Sprintf("pve1:node%d:%d", i%5, 100+i),
+			VMID:     100 + i,
+			Name:     fmt.Sprintf("vm-%d", 100+i),
+			Node:     fmt.Sprintf("node%d", i%5),
+			Instance: "pve1",
+			Status:   "running",
+			Type:     "qemu",
+			CPU:      float64(i%80+10) / 100.0,
+			Memory:   models.Memory{Usage: float64(i%60 + 20), Total: 4 << 30, Used: 2 << 30},
+			Disk:     models.Disk{Usage: float64(i%40 + 30), Total: 50 << 30, Used: 25 << 30},
+		}
+	}
+	state.UpdateVMsForInstance("pve1", vms)
+
+	containers := make([]models.Container, 30)
+	for i := range containers {
+		containers[i] = models.Container{
+			ID:       fmt.Sprintf("pve1:node%d:%d", i%5, 200+i),
+			VMID:     200 + i,
+			Name:     fmt.Sprintf("ct-%d", 200+i),
+			Node:     fmt.Sprintf("node%d", i%5),
+			Instance: "pve1",
+			Status:   "running",
+			Type:     "lxc",
+			CPU:      float64(i%80+10) / 100.0,
+			Memory:   models.Memory{Usage: float64(i%60 + 20), Total: 2 << 30, Used: 1 << 30},
+			Disk:     models.Disk{Usage: float64(i%40 + 30), Total: 20 << 30, Used: 10 << 30},
+		}
+	}
+	state.UpdateContainersForInstance("pve1", containers)
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	handlers := NewResourceHandlers(cfg)
+	handlers.SetStateProvider(&sloTestStateProvider{state: state})
+
+	// Warm the cache — first request populates it, subsequent requests hit cache.
+	req := httptest.NewRequest(http.MethodGet, "/api/resources", nil)
+	rec := httptest.NewRecorder()
+	handlers.HandleListResources(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("warmup failed: status %d", rec.Code)
+	}
+	var checkResp map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &checkResp); err != nil {
+		t.Fatalf("warmup unmarshal: %v", err)
+	}
+	data, _ := checkResp["data"].([]interface{})
+	if len(data) == 0 {
+		t.Fatalf("warmup: expected resources, got none")
+	}
+	// Verify the workload matches expectations: 50 items per page (default limit),
+	// 85 total resources (5 nodes + 50 VMs + 30 containers).
+	if len(data) != 50 {
+		t.Fatalf("warmup: expected 50 resources in first page, got %d", len(data))
+	}
+	meta, _ := checkResp["meta"].(map[string]interface{})
+	if total, _ := meta["total"].(float64); int(total) != 85 {
+		t.Fatalf("warmup: expected total=85, got %v", total)
+	}
+
+	latencies := measureEndpointLatencies(t, func() {
+		req := httptest.NewRequest(http.MethodGet, "/api/resources", nil)
+		rec := httptest.NewRecorder()
+		handlers.HandleListResources(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("unexpected status %d", rec.Code)
+		}
+	})
+
+	p95 := percentile(latencies, 0.95)
+	t.Logf("resources/list p50=%v p95=%v p99=%v SLO=%v",
+		percentile(latencies, 0.50), p95, percentile(latencies, 0.99), SLOResourcesListP95)
+
+	if p95 > SLOResourcesListP95 {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLOResourcesListP95)
+	}
+}
+
+// --- Test helpers ---
+
+// skipUnderRace skips the test when the race detector is enabled, since the
+// 2-10x overhead makes latency measurements meaningless.
+func skipUnderRace(t *testing.T) {
+	t.Helper()
+	if raceEnabled {
+		t.Skip("skipping SLO latency test under -race (overhead makes measurements unreliable)")
+	}
+}
+
+const sloIterations = 200
+
+// measureEndpointLatencies runs fn sloIterations times with a warmup phase and
+// returns the measured latency durations.
+func measureEndpointLatencies(t *testing.T, fn func()) []time.Duration {
+	t.Helper()
+
+	// Warmup: run 20 iterations to stabilize allocations and caches.
+	for i := 0; i < 20; i++ {
+		fn()
+	}
+
+	latencies := make([]time.Duration, sloIterations)
+	for i := 0; i < sloIterations; i++ {
+		start := time.Now()
+		fn()
+		latencies[i] = time.Since(start)
+	}
+	return latencies
+}
+
+// percentile returns the value at the given percentile (0.0–1.0) from
+// a slice of durations.
+func percentile(durations []time.Duration, pct float64) time.Duration {
+	if len(durations) == 0 {
+		return 0
+	}
+	sorted := make([]time.Duration, len(durations))
+	copy(sorted, durations)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+	idx := int(float64(len(sorted)-1) * pct)
+	return sorted[idx]
+}
+
+// newTestMetricsStore creates an ephemeral metrics store for SLO tests.
+func newTestMetricsStore(t *testing.T) *metrics.Store {
+	t.Helper()
+	dir := t.TempDir()
+	cfg := metrics.DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "slo-test.db")
+	cfg.FlushInterval = time.Hour
+	cfg.WriteBufferSize = 10_000
+	store, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+	return store
+}
+
+// seedTestMetrics writes test data to the store (mirrors seedBenchMetricsMulti).
+func seedTestMetrics(t *testing.T, store *metrics.Store, resourceType string, metricTypes []string, numResources, numPoints int) []string {
+	t.Helper()
+	base := time.Now().Add(-50 * time.Minute)
+	ids := make([]string, numResources)
+
+	batch := make([]metrics.WriteMetric, 0, numResources*numPoints*len(metricTypes))
+	for r := 0; r < numResources; r++ {
+		id := fmt.Sprintf("%s-slo-%d", resourceType, r)
+		ids[r] = id
+		for _, mt := range metricTypes {
+			for p := 0; p < numPoints; p++ {
+				batch = append(batch, metrics.WriteMetric{
+					ResourceType: resourceType,
+					ResourceID:   id,
+					MetricType:   mt,
+					Value:        float64(p % 100),
+					Timestamp:    base.Add(time.Duration(p) * 6 * time.Second),
+					Tier:         metrics.TierRaw,
+				})
+			}
+		}
+	}
+	store.WriteBatchSync(batch)
+	return ids
+}
+
+// sloTestStateProvider implements StateProvider for SLO tests.
+type sloTestStateProvider struct {
+	state *models.State
+}
+
+func (p *sloTestStateProvider) GetState() models.StateSnapshot {
+	return p.state.GetSnapshot()
+}
