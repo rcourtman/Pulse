@@ -11,13 +11,26 @@ import (
 
 func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHandlers *RBACHandlers, auditHandlers *AuditHandlers) {
 	conversionConfig := newCollectionConfigFromLicensing()
+	sharedRecorder := newConversionRecorderFromLicensing(r.conversionStore)
+	sharedHealth := newConversionPipelineHealthFromLicensing()
+	disableAll := func() bool { return r != nil && r.config != nil && r.config.DisableLocalUpgradeMetrics }
 	conversionHandlers := NewConversionHandlers(
-		newConversionRecorderFromLicensing(r.conversionStore),
-		newConversionPipelineHealthFromLicensing(),
+		sharedRecorder,
+		sharedHealth,
 		conversionConfig,
 		r.conversionStore,
-		func() bool { return r != nil && r.config != nil && r.config.DisableLocalUpgradeMetrics },
+		disableAll,
 	)
+
+	// Wire the shared recorder into LicenseHandlers, StripeWebhookHandlers,
+	// and the enforcement path so backend-emitted conversion events
+	// (trial_started, license_activated, checkout_completed, limit_blocked, etc.)
+	// flow through the same pipeline as frontend events.
+	r.licenseHandlers.SetConversionRecorder(sharedRecorder, sharedHealth)
+	if r.stripeWebhookHandlers != nil {
+		r.stripeWebhookHandlers.SetConversionRecorder(sharedRecorder, sharedHealth, disableAll)
+	}
+	SetEnforcementConversionRecorder(sharedRecorder, sharedHealth, disableAll)
 
 	// License routes (Pulse Pro)
 	r.mux.HandleFunc("/api/license/status", RequireAdmin(r.config, r.licenseHandlers.HandleLicenseStatus))

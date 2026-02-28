@@ -41,7 +41,54 @@ type StripeWebhookHandlers struct {
 	deduper *stripeWebhookDeduper
 	index   *stripeCustomerOrgIndex
 
+	conversionRecorder *conversionRecorder
+	conversionHealth   *conversionPipelineHealth
+	disableMetrics     func() bool
+
 	now func() time.Time
+}
+
+// SetConversionRecorder wires the conversion event recorder for backend-emitted
+// conversion events (checkout_completed on checkout.session.completed webhook).
+func (h *StripeWebhookHandlers) SetConversionRecorder(rec *conversionRecorder, health *conversionPipelineHealth, disableAll ...func() bool) {
+	if h == nil {
+		return
+	}
+	h.conversionRecorder = rec
+	h.conversionHealth = health
+	if len(disableAll) > 0 {
+		h.disableMetrics = disableAll[0]
+	}
+}
+
+// emitConversionEvent is a fire-and-forget helper that records a backend-emitted
+// conversion event. Respects the DisableLocalUpgradeMetrics config flag.
+// Errors are logged but never propagated to callers.
+func (h *StripeWebhookHandlers) emitConversionEvent(orgID string, event conversionEvent) {
+	if h == nil || h.conversionRecorder == nil {
+		return
+	}
+	if h.disableMetrics != nil && h.disableMetrics() {
+		return
+	}
+	if orgID == "" {
+		orgID = "default"
+	}
+	event.OrgID = orgID
+	if event.Timestamp <= 0 {
+		event.Timestamp = time.Now().UnixMilli()
+	}
+	if event.IdempotencyKey == "" {
+		event.IdempotencyKey = fmt.Sprintf("backend:%s:%s:%s:%d", orgID, event.Type, event.Surface, event.Timestamp)
+	}
+	if err := h.conversionRecorder.Record(event); err != nil {
+		log.Warn().Err(err).Str("event_type", event.Type).Str("org_id", orgID).Msg("Failed to record backend conversion event")
+	} else {
+		recordConversionEventMetric(event.Type, event.Surface)
+		if h.conversionHealth != nil {
+			h.conversionHealth.RecordEvent(event.Type)
+		}
+	}
 }
 
 func NewStripeWebhookHandlers(
@@ -333,6 +380,11 @@ func (h *StripeWebhookHandlers) handleCheckoutSessionCompleted(ctx context.Conte
 			}
 		}
 	}
+
+	h.emitConversionEvent(orgID, conversionEvent{
+		Type:    conversionEventCheckoutCompleted,
+		Surface: "stripe_webhook",
+	})
 
 	log.Info().
 		Str("org_id", orgID).

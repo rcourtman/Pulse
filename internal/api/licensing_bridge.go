@@ -53,6 +53,13 @@ const (
 	subscriptionStateActiveValue   = pkglicensing.SubStateActive
 	subscriptionStateGraceValue    = pkglicensing.SubStateGrace
 	subscriptionStateCanceledValue = pkglicensing.SubStateCanceled
+
+	// Conversion event type constants for backend-emitted events.
+	conversionEventTrialStarted            = pkglicensing.EventTrialStarted
+	conversionEventLicenseActivated        = pkglicensing.EventLicenseActivated
+	conversionEventLicenseActivationFailed = pkglicensing.EventLicenseActivationFailed
+	conversionEventCheckoutCompleted       = pkglicensing.EventCheckoutCompleted
+	conversionEventLimitBlocked            = pkglicensing.EventLimitBlocked
 )
 
 func newLicenseService() *licenseService {

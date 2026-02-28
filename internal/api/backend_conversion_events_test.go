@@ -196,16 +196,16 @@ func TestStripeWebhookHandlersEmitConversionEvent_DirectEmit(t *testing.T) {
 	}
 
 	h.emitConversionEvent("org-stripe-1", conversionEvent{
-		Type:    conversionEventCheckoutStarted,
+		Type:    conversionEventCheckoutCompleted,
 		Surface: "stripe_webhook",
 	})
 
 	events := queryAllEvents(t, store, "org-stripe-1")
 	if len(events) == 0 {
-		t.Fatal("expected checkout_started event in store, got none")
+		t.Fatal("expected checkout_completed event in store, got none")
 	}
-	if events[0].EventType != pkglicensing.EventCheckoutStarted {
-		t.Fatalf("event type=%q, want %q", events[0].EventType, pkglicensing.EventCheckoutStarted)
+	if events[0].EventType != pkglicensing.EventCheckoutCompleted {
+		t.Fatalf("event type=%q, want %q", events[0].EventType, pkglicensing.EventCheckoutCompleted)
 	}
 	if events[0].Surface != "stripe_webhook" {
 		t.Fatalf("surface=%q, want stripe_webhook", events[0].Surface)
@@ -225,7 +225,7 @@ func TestStripeWebhookHandlersEmitConversionEvent_RespectsDisableMetrics(t *test
 	}
 
 	h.emitConversionEvent("org-stripe-2", conversionEvent{
-		Type:    conversionEventCheckoutStarted,
+		Type:    conversionEventCheckoutCompleted,
 		Surface: "stripe_webhook",
 	})
 
@@ -239,7 +239,7 @@ func TestStripeWebhookHandlersEmitConversionEvent_NilRecorderDoesNotPanic(t *tes
 	h := &StripeWebhookHandlers{} // no recorder
 	// Should not panic.
 	h.emitConversionEvent("org-stripe-3", conversionEvent{
-		Type:    conversionEventCheckoutStarted,
+		Type:    conversionEventCheckoutCompleted,
 		Surface: "stripe_webhook",
 	})
 }
@@ -253,7 +253,7 @@ func TestStripeWebhookHandlersEmitConversionEvent_DefaultsOrgIDToDefault(t *test
 	}
 
 	h.emitConversionEvent("", conversionEvent{
-		Type:    conversionEventCheckoutStarted,
+		Type:    conversionEventCheckoutCompleted,
 		Surface: "stripe_webhook",
 	})
 
