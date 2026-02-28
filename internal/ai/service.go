@@ -377,6 +377,52 @@ func (s *Service) SetReadState(rs unifiedresources.ReadState) {
 	if s.discoveryService != nil {
 		s.discoveryService.SetReadState(rs)
 	}
+
+	// Attempt lazy init — discovery service requires ReadState + discoveryStore,
+	// and SetReadState may be called after SetStateProvider (which sets up
+	// the discoveryStore). Try to create the service if both are now available.
+	s.initDiscoveryServiceLocked()
+}
+
+// initDiscoveryServiceLocked creates the deep discovery service if all
+// dependencies are available. Must be called while holding s.mu.
+func (s *Service) initDiscoveryServiceLocked() {
+	if s.discoveryService != nil || s.readState == nil || s.discoveryStore == nil {
+		return
+	}
+
+	// Create command executor adapter (wraps agentexec.Server)
+	var cmdExecutor servicediscovery.CommandExecutor
+	if agentSrv, ok := s.agentServer.(*agentexec.Server); ok {
+		cmdExecutor = newDiscoveryCommandAdapter(agentSrv)
+	}
+
+	// Create deep scanner
+	scanner := servicediscovery.NewDeepScanner(cmdExecutor)
+
+	// Create the discovery service with config-driven settings
+	discoveryCfg := servicediscovery.DefaultConfig()
+	if s.cfg != nil {
+		discoveryCfg.Interval = s.cfg.GetDiscoveryInterval()
+	}
+
+	s.discoveryService = servicediscovery.NewService(
+		s.discoveryStore,
+		scanner,
+		discoveryCfg,
+	)
+	s.discoveryService.SetAIAnalyzer(s)
+	s.discoveryService.SetReadState(s.readState)
+
+	// Start background discovery if enabled and interval is set
+	if s.cfg != nil && s.cfg.IsDiscoveryEnabled() && s.cfg.GetDiscoveryInterval() > 0 {
+		s.discoveryService.Start(context.Background())
+		log.Info().
+			Dur("interval", s.cfg.GetDiscoveryInterval()).
+			Msg("AI-powered deep discovery service started with automatic scanning")
+	} else {
+		log.Info().Msg("AI-powered deep discovery service initialized (manual mode)")
+	}
 }
 
 // SetStateProvider sets the state provider for infrastructure context
@@ -432,50 +478,8 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 		}
 	}
 
-	// Initialize AI-powered deep discovery service if not already done
-	// This runs read-only commands on resources and uses AI to understand services
-	if s.discoveryService == nil && sp != nil && s.discoveryStore != nil {
-		// Create command executor adapter (wraps agentexec.Server)
-		var cmdExecutor servicediscovery.CommandExecutor
-		if agentSrv, ok := s.agentServer.(*agentexec.Server); ok {
-			cmdExecutor = newDiscoveryCommandAdapter(agentSrv)
-		}
-
-		// Create state adapter
-		stateAdapter := newDiscoveryStateAdapter(sp)
-
-		// Create deep scanner
-		scanner := servicediscovery.NewDeepScanner(cmdExecutor)
-
-		// Create the discovery service with config-driven settings
-		discoveryCfg := servicediscovery.DefaultConfig()
-		if s.cfg != nil {
-			discoveryCfg.Interval = s.cfg.GetDiscoveryInterval()
-		}
-
-		s.discoveryService = servicediscovery.NewService(
-			s.discoveryStore,
-			scanner,
-			stateAdapter,
-			discoveryCfg,
-		)
-		s.discoveryService.SetAIAnalyzer(s)
-
-		// Forward unified ReadState if already configured.
-		if s.readState != nil {
-			s.discoveryService.SetReadState(s.readState)
-		}
-
-		// Start background discovery if enabled and interval is set
-		if s.cfg != nil && s.cfg.IsDiscoveryEnabled() && s.cfg.GetDiscoveryInterval() > 0 {
-			s.discoveryService.Start(context.Background())
-			log.Info().
-				Dur("interval", s.cfg.GetDiscoveryInterval()).
-				Msg("AI-powered deep discovery service started with automatic scanning")
-		} else {
-			log.Info().Msg("AI-powered deep discovery service initialized (manual mode)")
-		}
-	}
+	// Attempt lazy init — discovery service requires ReadState + discoveryStore.
+	s.initDiscoveryServiceLocked()
 
 	// Initialize alert-triggered analyzer if not already done (requires enterprise factory)
 	if s.alertTriggeredAnalyzer == nil && s.alertAnalyzerFactory != nil && s.patrolService != nil {
@@ -685,6 +689,10 @@ func (s *Service) SetDiscoveryStore(store *servicediscovery.Store) {
 		s.patrolService.SetDiscoveryStore(store)
 	}
 	log.Info().Msg("AI Service: Discovery store set for infrastructure context")
+
+	// Attempt lazy init — discovery service requires ReadState + discoveryStore,
+	// and SetDiscoveryStore may be called after SetReadState.
+	s.initDiscoveryServiceLocked()
 }
 
 // GetDiscoveryStore returns the discovery store
@@ -1067,41 +1075,40 @@ func (s *Service) lookupNodeForVMID(vmID int) (node string, guestName string, gu
 // If targetInstance is non-empty, only returns guests from that instance
 func (s *Service) lookupGuestsByVMID(vmID int, targetInstance string) []GuestInfo {
 	s.mu.RLock()
-	sp := s.stateProvider
+	rs := s.readState
 	s.mu.RUnlock()
 
-	if sp == nil {
+	if rs == nil {
 		return nil
 	}
 
-	state := sp.GetState()
 	var results []GuestInfo
 
-	// Check containers
-	for _, ct := range state.Containers {
-		if ct.VMID == vmID {
-			if targetInstance == "" || ct.Instance == targetInstance {
+	// Check containers via ReadState
+	for _, ct := range rs.Containers() {
+		if ct.VMID() == vmID {
+			if targetInstance == "" || ct.Instance() == targetInstance {
 				results = append(results, GuestInfo{
-					Node:       ct.Node,
-					Name:       ct.Name,
+					Node:       ct.Node(),
+					Name:       ct.Name(),
 					Type:       "system-container",
 					Technology: "lxc",
-					Instance:   ct.Instance,
+					Instance:   ct.Instance(),
 				})
 			}
 		}
 	}
 
-	// Check VMs
-	for _, vm := range state.VMs {
-		if vm.VMID == vmID {
-			if targetInstance == "" || vm.Instance == targetInstance {
+	// Check VMs via ReadState
+	for _, vm := range rs.VMs() {
+		if vm.VMID() == vmID {
+			if targetInstance == "" || vm.Instance() == targetInstance {
 				results = append(results, GuestInfo{
-					Node:       vm.Node,
-					Name:       vm.Name,
+					Node:       vm.Node(),
+					Name:       vm.Name(),
 					Type:       "vm",
 					Technology: "qemu",
-					Instance:   vm.Instance,
+					Instance:   vm.Instance(),
 				})
 			}
 		}
@@ -1597,30 +1604,36 @@ func (s *Service) GetConfig() *config.AIConfig {
 // GetDebugContext returns debug information about what context would be sent to the AI
 func (s *Service) GetDebugContext(req ExecuteRequest) map[string]interface{} {
 	s.mu.RLock()
-	stateProvider := s.stateProvider
+	rs := s.readState
 	agentServer := s.agentServer
 	cfg := s.cfg
 	s.mu.RUnlock()
 
 	result := make(map[string]interface{})
 
-	// State provider info
-	result["has_state_provider"] = stateProvider != nil
-	if stateProvider != nil {
-		state := stateProvider.GetState()
+	// ReadState info
+	result["has_state_provider"] = rs != nil
+	if rs != nil {
+		nodes := rs.Nodes()
+		vms := rs.VMs()
+		containers := rs.Containers()
+		dockerHosts := rs.DockerHosts()
+		hosts := rs.Hosts()
+		pbsInstances := rs.PBSInstances()
+
 		result["state_summary"] = map[string]interface{}{
-			"nodes":         len(state.Nodes),
-			"vms":           len(state.VMs),
-			"containers":    len(state.Containers),
-			"docker_hosts":  len(state.DockerHosts),
-			"hosts":         len(state.Hosts),
-			"pbs_instances": len(state.PBSInstances),
+			"nodes":         len(nodes),
+			"vms":           len(vms),
+			"containers":    len(containers),
+			"docker_hosts":  len(dockerHosts),
+			"hosts":         len(hosts),
+			"pbs_instances": len(pbsInstances),
 		}
 
 		// List some VMs/containers for verification
 		var vmNames []string
-		for _, vm := range state.VMs {
-			vmNames = append(vmNames, fmt.Sprintf("%s (VMID:%d, node:%s)", vm.Name, vm.VMID, vm.Node))
+		for _, vm := range vms {
+			vmNames = append(vmNames, fmt.Sprintf("%s (VMID:%d, node:%s)", vm.Name(), vm.VMID(), vm.Node()))
 		}
 		if len(vmNames) > 10 {
 			vmNames = vmNames[:10]
@@ -1628,8 +1641,8 @@ func (s *Service) GetDebugContext(req ExecuteRequest) map[string]interface{} {
 		result["sample_vms"] = vmNames
 
 		var ctNames []string
-		for _, ct := range state.Containers {
-			ctNames = append(ctNames, fmt.Sprintf("%s (VMID:%d, node:%s)", ct.Name, ct.VMID, ct.Node))
+		for _, ct := range containers {
+			ctNames = append(ctNames, fmt.Sprintf("%s (VMID:%d, node:%s)", ct.Name(), ct.VMID(), ct.Node()))
 		}
 		if len(ctNames) > 10 {
 			ctNames = ctNames[:10]
@@ -1637,14 +1650,14 @@ func (s *Service) GetDebugContext(req ExecuteRequest) map[string]interface{} {
 		result["sample_containers"] = ctNames
 
 		var hostNames []string
-		for _, h := range state.Hosts {
-			hostNames = append(hostNames, h.Hostname)
+		for _, h := range hosts {
+			hostNames = append(hostNames, h.Hostname())
 		}
 		result["host_names"] = hostNames
 
 		var dockerHostNames []string
-		for _, dh := range state.DockerHosts {
-			dockerHostNames = append(dockerHostNames, fmt.Sprintf("%s (%d containers)", dh.DisplayName, len(dh.Containers)))
+		for _, dh := range dockerHosts {
+			dockerHostNames = append(dockerHostNames, fmt.Sprintf("%s (%d containers)", dh.Name(), dh.ChildCount()))
 		}
 		result["docker_host_names"] = dockerHostNames
 	}

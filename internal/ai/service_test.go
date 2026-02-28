@@ -215,18 +215,21 @@ func TestService_EnforceBudget_NoBudget(t *testing.T) {
 func TestService_LookupGuestsByVMID(t *testing.T) {
 	svc := NewService(nil, nil)
 
-	stateProvider := &mockStateProvider{
-		state: models.StateSnapshot{
-			VMs: []models.VM{
-				{ID: "vm-100", VMID: 100, Name: "web-server", Node: "pve-1"},
-				{ID: "vm-101", VMID: 101, Name: "database", Node: "pve-1"},
-			},
-			Containers: []models.Container{
-				{ID: "ct-200", VMID: 200, Name: "nginx", Node: "pve-1"},
-			},
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node/pve-1", Name: "pve-1", Instance: "pve-1", Status: "online"},
+		},
+		VMs: []models.VM{
+			{ID: "vm-100", VMID: 100, Name: "web-server", Node: "pve-1", Instance: "pve-1"},
+			{ID: "vm-101", VMID: 101, Name: "database", Node: "pve-1", Instance: "pve-1"},
+		},
+		Containers: []models.Container{
+			{ID: "ct-200", VMID: 200, Name: "nginx", Node: "pve-1", Instance: "pve-1"},
 		},
 	}
-	svc.SetStateProvider(stateProvider)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	svc.SetReadState(registry)
 
 	// Test finding a VM
 	guests := svc.lookupGuestsByVMID(100, "")
@@ -253,26 +256,29 @@ func TestService_LookupGuestsByVMID(t *testing.T) {
 	}
 }
 
-func TestService_LookupGuestsByVMID_NoStateProvider(t *testing.T) {
+func TestService_LookupGuestsByVMID_NoReadState(t *testing.T) {
 	svc := NewService(nil, nil)
 
 	guests := svc.lookupGuestsByVMID(100, "")
 	if guests != nil {
-		t.Error("Expected nil guests without state provider")
+		t.Error("Expected nil guests without ReadState")
 	}
 }
 
 func TestService_LookupNodeForVMID(t *testing.T) {
 	svc := NewService(nil, nil)
 
-	stateProvider := &mockStateProvider{
-		state: models.StateSnapshot{
-			VMs: []models.VM{
-				{ID: "vm-100", VMID: 100, Name: "web-server", Node: "pve-1"},
-			},
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node/pve-1", Name: "pve-1", Instance: "pve-1", Status: "online"},
+		},
+		VMs: []models.VM{
+			{ID: "vm-100", VMID: 100, Name: "web-server", Node: "pve-1", Instance: "pve-1"},
 		},
 	}
-	svc.SetStateProvider(stateProvider)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	svc.SetReadState(registry)
 
 	node, name, guestType := svc.lookupNodeForVMID(100)
 

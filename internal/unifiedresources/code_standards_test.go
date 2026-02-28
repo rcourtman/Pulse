@@ -162,7 +162,7 @@ type legacyStateRatchet struct {
 // These represent legacy nil-fallback paths that are dead code when
 // ReadState is wired. Each number must only decrease over time.
 //
-// Last updated: 2026-02-28 (total state.*: 214, GetState: 36).
+// Last updated: 2026-02-28 (total state.*: 195, GetState: 30).
 // SRC-03f: servicediscovery/service.go migrated to ReadState with legacy fallback.
 // SRC-03g: forecast/service.go migrated from StateProvider.GetState to ResourceIterator
 // (removed 3 GetState, state.VMs -2, state.Containers -2, state.Nodes -2, state.Storage -1).
@@ -189,19 +189,25 @@ type legacyStateRatchet struct {
 // SRC-03n: Removed GetState() from NotificationMonitor interface and NotificationMonitorWrapper.
 // TestNotification handler now uses ReadState.Nodes() for node info instead of state.Nodes.
 // (GetState -2, state.Nodes -2).
+// SRC-03o: Migrated lookupGuestsByVMID and GetDebugContext in ai/service.go from
+// stateProvider.GetState() to ReadState accessors. ReadState is now the sole data source
+// for guest VMID lookups and debug context resource summaries.
+// SRC-03o delta: GetState -2, state.VMs -2, state.Containers -2, state.Nodes -1,
+// state.DockerHosts -1, state.Hosts -1, state.PBSInstances -1.
+// Ceilings also reflect in-flight SRC-03l (servicediscovery migration) reductions.
 var legacyStateRatchets = []legacyStateRatchet{
-	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 40, "ReadState.VMs()"},
-	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 40, "ReadState.Containers()"},
-	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 36, "ReadState.Nodes()"},
-	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 29, "ReadState.DockerHosts()"},
-	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 17, "ReadState.Hosts()"},
+	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 37, "ReadState.VMs()"},
+	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 37, "ReadState.Containers()"},
+	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 35, "ReadState.Nodes()"},
+	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 27, "ReadState.DockerHosts()"},
+	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 15, "ReadState.Hosts()"},
 	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 16, "ReadState.StoragePools()"},
 	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 9, "ReadState.K8sClusters()"},
-	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 6, "ReadState.PBSInstances()"},
+	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 5, "ReadState.PBSInstances()"},
 	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 2, "ReadState.PMGInstances()"},
 
 	// GetState() calls — consumer packages must use ReadState interface
-	{regexp.MustCompile(`\.GetState\(\)`), ".GetState()", 32, "ReadState interface"},
+	{regexp.MustCompile(`\.GetState\(\)`), ".GetState()", 30, "ReadState interface"},
 }
 
 // TestLegacyStateAccessRatchet is a monotonic ratchet that prevents new

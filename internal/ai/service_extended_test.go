@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestService_GetToolInputDisplay(t *testing.T) {
@@ -530,12 +531,15 @@ func TestService_GetDebugContext(t *testing.T) {
 	svc := NewService(persistence, nil)
 	svc.cfg = &config.AIConfig{Enabled: true, CustomContext: "Test context"}
 
-	stateProvider := &mockStateProvider{
-		state: models.StateSnapshot{
-			VMs: []models.VM{{Name: "vm-1", VMID: 100, Node: "node-1"}},
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node/node-1", Name: "node-1", Instance: "node-1", Status: "online"},
 		},
+		VMs: []models.VM{{Name: "vm-1", VMID: 100, Node: "node-1", Instance: "node-1"}},
 	}
-	svc.SetStateProvider(stateProvider)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	svc.SetReadState(registry)
 
 	req := ExecuteRequest{Prompt: "test"}
 	debug := svc.GetDebugContext(req)
@@ -802,17 +806,22 @@ func TestService_PatrolManagement(t *testing.T) {
 
 func TestService_LookupNodeForVMID_Extended(t *testing.T) {
 	svc := NewService(nil, nil)
-	mockState := &mockStateProvider{
-		state: models.StateSnapshot{
-			VMs: []models.VM{
-				{VMID: 101, Node: "node-1", Name: "vm-101", Instance: "pve-1"},
-			},
-			Containers: []models.Container{
-				{VMID: 201, Node: "node-2", Name: "ct-201", Instance: "pve-1"},
-			},
+
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node/node-1", Name: "node-1", Instance: "pve-1", Status: "online"},
+			{ID: "node/node-2", Name: "node-2", Instance: "pve-1", Status: "online"},
+		},
+		VMs: []models.VM{
+			{ID: "qemu/101", VMID: 101, Node: "node-1", Name: "vm-101", Instance: "pve-1"},
+		},
+		Containers: []models.Container{
+			{ID: "lxc/201", VMID: 201, Node: "node-2", Name: "ct-201", Instance: "pve-1"},
 		},
 	}
-	svc.stateProvider = mockState
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	svc.SetReadState(registry)
 
 	// 1. Find VM
 	node, name, gType := svc.lookupNodeForVMID(101)
@@ -832,10 +841,17 @@ func TestService_LookupNodeForVMID_Extended(t *testing.T) {
 		t.Error("Should not have found non-existent VMID")
 	}
 
-	// 4. Collision
-	mockState.state.VMs = append(mockState.state.VMs, models.VM{
-		VMID: 101, Node: "node-3", Name: "vm-101-dup", Instance: "pve-2",
+	// 4. Collision — re-ingest with duplicate VMID across instances
+	snapshot.Nodes = append(snapshot.Nodes, models.Node{
+		ID: "node/node-3", Name: "node-3", Instance: "pve-2", Status: "online",
 	})
+	snapshot.VMs = append(snapshot.VMs, models.VM{
+		ID: "qemu/101-dup", VMID: 101, Node: "node-3", Name: "vm-101-dup", Instance: "pve-2",
+	})
+	registry2 := unifiedresources.NewRegistry(nil)
+	registry2.IngestSnapshot(snapshot)
+	svc.SetReadState(registry2)
+
 	node, _, _ = svc.lookupNodeForVMID(101)
 	if node == "" {
 		t.Error("Should return first match on collision")
@@ -2473,16 +2489,19 @@ func TestService_GetDebugContext_Truncation(t *testing.T) {
 		CustomContext: strings.Repeat("x", 300),
 	}
 
-	stateProvider := &mockStateProvider{}
-	svc.stateProvider = stateProvider
-
-	// Add many VMs to trigger truncation
-	state := models.StateSnapshot{}
-	for i := 0; i < 15; i++ {
-		state.VMs = append(state.VMs, models.VM{VMID: i, Name: fmt.Sprintf("vm-%d", i), Node: "node"})
-		state.Containers = append(state.Containers, models.Container{VMID: i + 100, Name: fmt.Sprintf("ct-%d", i), Node: "node"})
+	// Add many VMs to trigger truncation (unique IDs required for registry)
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node/node", Name: "node", Instance: "node", Status: "online"},
+		},
 	}
-	stateProvider.state = state
+	for i := 0; i < 15; i++ {
+		snapshot.VMs = append(snapshot.VMs, models.VM{ID: fmt.Sprintf("qemu/%d", i), VMID: i, Name: fmt.Sprintf("vm-%d", i), Node: "node", Instance: "node"})
+		snapshot.Containers = append(snapshot.Containers, models.Container{ID: fmt.Sprintf("lxc/%d", i+100), VMID: i + 100, Name: fmt.Sprintf("ct-%d", i), Node: "node", Instance: "node"})
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	svc.SetReadState(registry)
 
 	result := svc.GetDebugContext(ExecuteRequest{})
 
@@ -2636,15 +2655,19 @@ func TestService_GetDebugContext_Extended(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmpDir)
 	svc := NewService(persistence, nil)
 
-	// Mock state provider
-	stateProvider := &mockStateProvider{}
-	state := models.StateSnapshot{}
-	for i := 0; i < 15; i++ {
-		state.VMs = append(state.VMs, models.VM{Name: fmt.Sprintf("VM-%d", i), VMID: i, Node: "node"})
-		state.Containers = append(state.Containers, models.Container{Name: fmt.Sprintf("CT-%d", i), VMID: i + 100, Node: "node"})
+	// Build snapshot with many VMs/containers (unique IDs required for registry)
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node/node", Name: "node", Instance: "node", Status: "online"},
+		},
 	}
-	stateProvider.state = state
-	svc.SetStateProvider(stateProvider)
+	for i := 0; i < 15; i++ {
+		snapshot.VMs = append(snapshot.VMs, models.VM{ID: fmt.Sprintf("qemu/%d", i), Name: fmt.Sprintf("VM-%d", i), VMID: i, Node: "node", Instance: "node"})
+		snapshot.Containers = append(snapshot.Containers, models.Container{ID: fmt.Sprintf("lxc/%d", i+100), Name: fmt.Sprintf("CT-%d", i), VMID: i + 100, Node: "node", Instance: "node"})
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	svc.SetReadState(registry)
 
 	svc.cfg = &config.AIConfig{
 		Enabled:       true,
