@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -59,6 +58,19 @@ func newContainerView(id string, name string, vmid int) *ur.ContainerView {
 	return &v
 }
 
+func newNodeView(id string, name string, sourceID string) *ur.NodeView {
+	r := &ur.Resource{
+		ID:   id,
+		Name: name,
+		Type: ur.ResourceTypeHost,
+		Proxmox: &ur.ProxmoxData{
+			SourceID: sourceID,
+		},
+	}
+	v := ur.NewNodeView(r)
+	return &v
+}
+
 func TestMetricsSummaryWithReadState(t *testing.T) {
 	now := time.Now()
 	source := &fakeMetricsSource{
@@ -79,15 +91,10 @@ func TestMetricsSummaryWithReadState(t *testing.T) {
 	rs := &fakeReadState{
 		vms:        []*ur.VMView{newVMView("vm-100", "vm1", 100)},
 		containers: []*ur.ContainerView{newContainerView("ct-200", "ct1", 200)},
+		nodes:      []*ur.NodeView{newNodeView("reg-node-hash", "node-1", "node1")},
 	}
 
-	// Nodes still use stateGetter for ID compatibility (ReadState node IDs
-	// are hashed and don't match MetricsSource legacy IDs).
-	state := models.StateSnapshot{
-		Nodes: []models.Node{{ID: "node1", Name: "node-1"}},
-	}
-
-	adapter := NewMetricsHistoryMCPAdapter(fakeStateGetter{state: state}, source, rs)
+	adapter := NewMetricsHistoryMCPAdapter(source, rs)
 	if adapter == nil {
 		t.Fatal("expected non-nil adapter when readState provided")
 	}
@@ -107,9 +114,8 @@ func TestMetricsSummaryWithReadState(t *testing.T) {
 	}
 }
 
-func TestMetricsSummaryReadStateWithNilStateGetter(t *testing.T) {
-	// When readState is provided and stateGetter is nil, VMs/Containers
-	// from ReadState are processed. Nodes are skipped (require stateGetter).
+func TestMetricsSummaryReadStateVMsOnly(t *testing.T) {
+	// When readState has no nodes, only VMs/Containers from ReadState are returned.
 	now := time.Now()
 	rs := &fakeReadState{
 		vms: []*ur.VMView{newVMView("vm-100", "vm1", 100)},
@@ -119,9 +125,9 @@ func TestMetricsSummaryReadStateWithNilStateGetter(t *testing.T) {
 			"100": {"cpu": {{Value: 10, Timestamp: now}}},
 		},
 	}
-	adapter := NewMetricsHistoryMCPAdapter(nil, source, rs)
+	adapter := NewMetricsHistoryMCPAdapter(source, rs)
 	if adapter == nil {
-		t.Fatal("expected non-nil adapter with readState + nil stateGetter")
+		t.Fatal("expected non-nil adapter with readState")
 	}
 	summary, err := adapter.GetAllMetricsSummary(time.Hour)
 	if err != nil {
@@ -137,16 +143,17 @@ func TestMetricsSummaryReadStateWithNilStateGetter(t *testing.T) {
 
 func TestMetricsSummaryNilMetricsSource(t *testing.T) {
 	// When metricsSource is nil, constructor returns nil
-	if adapter := NewMetricsHistoryMCPAdapter(fakeStateGetter{}, nil, nil); adapter != nil {
+	rs := &fakeReadState{}
+	if adapter := NewMetricsHistoryMCPAdapter(nil, rs); adapter != nil {
 		t.Fatal("expected nil adapter for nil metricsSource")
 	}
 }
 
-func TestMetricsSummaryNilBothProviders(t *testing.T) {
-	// When both stateGetter and readState are nil, constructor returns nil
+func TestMetricsSummaryNilReadState(t *testing.T) {
+	// When readState is nil, constructor returns nil
 	source := &fakeMetricsSource{}
-	if adapter := NewMetricsHistoryMCPAdapter(nil, source, nil); adapter != nil {
-		t.Fatal("expected nil adapter when both state providers are nil")
+	if adapter := NewMetricsHistoryMCPAdapter(source, nil); adapter != nil {
+		t.Fatal("expected nil adapter when readState is nil")
 	}
 }
 
@@ -154,11 +161,7 @@ func TestPatternAdapterWithReadState(t *testing.T) {
 	rs := &fakeReadState{
 		vms:        []*ur.VMView{newVMView("vm-100", "vm1", 100)},
 		containers: []*ur.ContainerView{newContainerView("ct-200", "ct1", 200)},
-	}
-
-	// Nodes still use stateGetter for ID compatibility.
-	state := models.StateSnapshot{
-		Nodes: []models.Node{{ID: "node1", Name: "node-1"}},
+		nodes:      []*ur.NodeView{newNodeView("reg-node-hash", "node-1", "node1")},
 	}
 
 	source := &fakePatternSource{
@@ -171,7 +174,7 @@ func TestPatternAdapterWithReadState(t *testing.T) {
 		},
 	}
 
-	adapter := NewPatternMCPAdapter(source, fakeStateGetter{state: state}, rs)
+	adapter := NewPatternMCPAdapter(source, rs)
 	patterns := adapter.GetPatterns()
 	if len(patterns) != 2 {
 		t.Fatalf("expected 2 patterns, got %d", len(patterns))
@@ -203,7 +206,7 @@ func TestPatternAdapterReadStateFallbackForUnknownID(t *testing.T) {
 		},
 	}
 
-	adapter := NewPatternMCPAdapter(source, nil, rs)
+	adapter := NewPatternMCPAdapter(source, rs)
 	patterns := adapter.GetPatterns()
 	if len(patterns) != 1 {
 		t.Fatalf("expected 1 pattern, got %d", len(patterns))
@@ -214,16 +217,16 @@ func TestPatternAdapterReadStateFallbackForUnknownID(t *testing.T) {
 	}
 }
 
-func TestPatternAdapterNilReadStateNilStateGetter(t *testing.T) {
+func TestPatternAdapterNilReadState(t *testing.T) {
 	source := &fakePatternSource{
 		patterns: []PatternData{
 			{ResourceID: "100", PatternType: "cpu"},
 		},
 	}
 
-	adapter := NewPatternMCPAdapter(source, nil, nil)
+	adapter := NewPatternMCPAdapter(source, nil)
 	patterns := adapter.GetPatterns()
-	// Both nil → resource ID returned as name
+	// nil readState → resource ID returned as name
 	if patterns[0].ResourceName != "100" {
 		t.Fatalf("expected resource ID '100' as name, got %q", patterns[0].ResourceName)
 	}
@@ -244,9 +247,61 @@ func TestPatternAdapterReadStateContainerVMIDLookup(t *testing.T) {
 		},
 	}
 
-	adapter := NewPatternMCPAdapter(source, nil, rs)
+	adapter := NewPatternMCPAdapter(source, rs)
 	patterns := adapter.GetPatterns()
 	if patterns[0].ResourceName != "my-container" {
 		t.Fatalf("expected 'my-container', got %q", patterns[0].ResourceName)
+	}
+}
+
+// TestMetricsSummaryNodeEmptySourceIDSkipped verifies that nodes with empty
+// SourceID are gracefully skipped (no panic, no phantom summaries).
+func TestMetricsSummaryNodeEmptySourceIDSkipped(t *testing.T) {
+	now := time.Now()
+	source := &fakeMetricsSource{
+		guest: map[string]map[string][]RawMetricPoint{
+			"100": {"cpu": {{Value: 10, Timestamp: now}}},
+		},
+	}
+
+	// Node with empty SourceID (e.g., ingested via IngestRecords without legacy ID).
+	emptySourceNode := newNodeView("reg-hash-only", "orphan-node", "")
+	rs := &fakeReadState{
+		vms:   []*ur.VMView{newVMView("vm-100", "vm1", 100)},
+		nodes: []*ur.NodeView{emptySourceNode},
+	}
+
+	adapter := NewMetricsHistoryMCPAdapter(source, rs)
+	summary, err := adapter.GetAllMetricsSummary(time.Hour)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Only the VM should appear — the empty-SourceID node is skipped.
+	if len(summary) != 1 {
+		t.Fatalf("expected 1 summary (vm only), got %d", len(summary))
+	}
+}
+
+// TestPatternAdapterNodeEmptySourceIDFallsBackToID verifies that when a node
+// has an empty SourceID, pattern name resolution falls through to returning
+// the raw resourceID.
+func TestPatternAdapterNodeEmptySourceIDFallsBackToID(t *testing.T) {
+	emptySourceNode := newNodeView("reg-hash-only", "orphan-node", "")
+	rs := &fakeReadState{
+		nodes: []*ur.NodeView{emptySourceNode},
+	}
+
+	source := &fakePatternSource{
+		patterns: []PatternData{
+			{ResourceID: "some-legacy-id", PatternType: "cpu"},
+		},
+	}
+
+	adapter := NewPatternMCPAdapter(source, rs)
+	patterns := adapter.GetPatterns()
+	// No node matches "some-legacy-id" (the node has empty SourceID),
+	// so the raw resource ID is returned as the name.
+	if patterns[0].ResourceName != "some-legacy-id" {
+		t.Fatalf("expected fallback to resource ID 'some-legacy-id', got %q", patterns[0].ResourceName)
 	}
 }

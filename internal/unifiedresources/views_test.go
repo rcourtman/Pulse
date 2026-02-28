@@ -396,6 +396,7 @@ func TestView_NodeViewAccessors(t *testing.T) {
 		LastSeen: now,
 		Tags:     []string{"pve", "rack:1"},
 		Proxmox: &ProxmoxData{
+			SourceID:          "node/pve1",
 			NodeName:          "pve-1",
 			ClusterName:       "cluster-a",
 			Instance:          "lab",
@@ -419,6 +420,9 @@ func TestView_NodeViewAccessors(t *testing.T) {
 	v := NewNodeView(r)
 	if v.ID() != "node-1" || v.Name() != "pve-node-1" || v.Status() != StatusOnline {
 		t.Fatalf("expected basic accessors to match, got id=%q name=%q status=%q", v.ID(), v.Name(), v.Status())
+	}
+	if v.SourceID() != "node/pve1" {
+		t.Fatalf("expected SourceID 'node/pve1', got %q", v.SourceID())
 	}
 	if v.NodeName() != "pve-1" || v.ClusterName() != "cluster-a" || v.Instance() != "lab" {
 		t.Fatalf("expected proxmox name/cluster/instance accessors to match, got nodeName=%q clusterName=%q instance=%q", v.NodeName(), v.ClusterName(), v.Instance())

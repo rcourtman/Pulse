@@ -508,6 +508,14 @@ func (v NodeView) Name() string {
 	return v.r.Name
 }
 
+// SourceID returns the original Proxmox-level node ID (e.g. "node/pve").
+func (v NodeView) SourceID() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.SourceID
+}
+
 func (v NodeView) Status() ResourceStatus {
 	if v.r == nil {
 		return ""

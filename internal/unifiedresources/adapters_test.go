@@ -23,6 +23,9 @@ func TestResourceFromProxmoxNodeIncludesTemperature(t *testing.T) {
 	if resource.Proxmox == nil {
 		t.Fatal("expected proxmox payload")
 	}
+	if resource.Proxmox.SourceID != node.ID {
+		t.Fatalf("SourceID = %q, want %q (must preserve legacy node ID for MetricsHistory)", resource.Proxmox.SourceID, node.ID)
+	}
 	if resource.Proxmox.Temperature == nil {
 		t.Fatal("expected proxmox temperature to be populated")
 	}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type fakeStateGetter struct {
@@ -236,7 +237,8 @@ func TestMetricsHistoryMCPAdapter(t *testing.T) {
 		},
 	}
 
-	adapter := NewMetricsHistoryMCPAdapter(fakeStateGetter{}, source, nil)
+	rs := &fakeReadState{}
+	adapter := NewMetricsHistoryMCPAdapter(source, rs)
 	got, err := adapter.GetResourceMetrics("100", time.Hour)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -255,7 +257,7 @@ func TestMetricsHistoryMCPAdapter(t *testing.T) {
 			},
 		},
 	}
-	adapter = NewMetricsHistoryMCPAdapter(fakeStateGetter{}, source, nil)
+	adapter = NewMetricsHistoryMCPAdapter(source, rs)
 	got, err = adapter.GetResourceMetrics("node1", time.Hour)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -288,13 +290,13 @@ func TestMetricsSummaryAndHelpers(t *testing.T) {
 		},
 	}
 
-	state := models.StateSnapshot{
-		VMs:        []models.VM{{VMID: 100, Name: "vm1"}},
-		Containers: []models.Container{{VMID: 200, Name: "ct1"}},
-		Nodes:      []models.Node{{ID: "node1", Name: "node-1"}},
+	rs := &fakeReadState{
+		vms:        []*ur.VMView{newVMView("vm-100", "vm1", 100)},
+		containers: []*ur.ContainerView{newContainerView("ct-200", "ct1", 200)},
+		nodes:      []*ur.NodeView{newNodeView("reg-node-hash", "node-1", "node1")},
 	}
 
-	adapter := NewMetricsHistoryMCPAdapter(fakeStateGetter{state: state}, source, nil)
+	adapter := NewMetricsHistoryMCPAdapter(source, rs)
 	summary, err := adapter.GetAllMetricsSummary(time.Hour)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -370,10 +372,10 @@ func TestBaselineMCPAdapter(t *testing.T) {
 }
 
 func TestPatternMCPAdapter(t *testing.T) {
-	state := models.StateSnapshot{
-		VMs:        []models.VM{{VMID: 100, Name: "vm1"}},
-		Nodes:      []models.Node{{ID: "node1", Name: "node-1"}},
-		Containers: []models.Container{{VMID: 200, Name: "ct1"}},
+	rs := &fakeReadState{
+		vms:        []*ur.VMView{newVMView("vm-100", "vm1", 100)},
+		containers: []*ur.ContainerView{newContainerView("ct-200", "ct1", 200)},
+		nodes:      []*ur.NodeView{newNodeView("reg-node-hash", "node-1", "node1")},
 	}
 	source := &fakePatternSource{
 		patterns: []PatternData{
@@ -385,7 +387,7 @@ func TestPatternMCPAdapter(t *testing.T) {
 		},
 	}
 
-	adapter := NewPatternMCPAdapter(source, fakeStateGetter{state: state}, nil)
+	adapter := NewPatternMCPAdapter(source, rs)
 	patterns := adapter.GetPatterns()
 	if len(patterns) != 2 || patterns[0].ResourceName != "vm1" || patterns[1].ResourceName != "node-1" {
 		t.Fatalf("unexpected patterns: %+v", patterns)
@@ -395,10 +397,10 @@ func TestPatternMCPAdapter(t *testing.T) {
 		t.Fatalf("unexpected predictions: %+v", predictions)
 	}
 
-	adapter = NewPatternMCPAdapter(source, nil, nil)
+	adapter = NewPatternMCPAdapter(source, nil)
 	patterns = adapter.GetPatterns()
 	if patterns[0].ResourceName != "100" {
-		t.Fatal("expected resource ID when state missing")
+		t.Fatal("expected resource ID when readState missing")
 	}
 }
 

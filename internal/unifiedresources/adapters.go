@@ -24,6 +24,7 @@ func resourceFromProxmoxNode(node models.Node) (Resource, ResourceIdentity) {
 	}
 
 	proxmox := &ProxmoxData{
+		SourceID:          node.ID,
 		NodeName:          node.Name,
 		ClusterName:       node.ClusterName,
 		Temperature:       maxNodeTemp(node.Temperature),
