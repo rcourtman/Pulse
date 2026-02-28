@@ -130,6 +130,7 @@ type Router struct {
 	lifecycleCancel          context.CancelFunc
 	hostedMode               bool
 	conversionStore          *conversionStore
+	stripeWebhookHandlers    *StripeWebhookHandlers
 	patrolLifecycleMu        sync.Mutex
 	startedPatrolOrgs        map[string]bool
 	aiAutoFixEndpoints       extensions.AIAutoFixEndpoints
@@ -397,7 +398,7 @@ func (r *Router) setupRoutes() {
 	}
 
 	hostedSignupHandlers := NewHostedSignupHandlers(r.multiTenant, rbacProvider, magicLinkService, r.resolvePublicURL, r.hostedMode)
-	stripeWebhookHandlers := NewStripeWebhookHandlers(
+	r.stripeWebhookHandlers = NewStripeWebhookHandlers(
 		config.NewFileBillingStore(r.config.DataPath),
 		r.multiTenant,
 		rbacProvider,
@@ -406,6 +407,7 @@ func (r *Router) setupRoutes() {
 		r.hostedMode,
 		r.config.DataPath,
 	)
+	stripeWebhookHandlers := r.stripeWebhookHandlers
 	infraUpdateHandlers := NewUpdateDetectionHandlers(r.monitor)
 	auditHandlers := NewAuditHandlers()
 
@@ -537,6 +539,11 @@ func (r *Router) setupRoutes() {
 	r.registerAIRelayRoutes()
 	r.registerOrgLicenseRoutes(orgHandlers, rbacHandlers, auditHandlers)
 	r.registerHostedRoutes(hostedSignupHandlers, magicLinkHandlers, stripeWebhookHandlers)
+
+	// Debug profiling endpoints (admin-only, can be disabled via PULSE_PPROF_DISABLED=true)
+	if pprofEnabled() {
+		r.registerDebugRoutes()
+	}
 
 	// Note: Frontend handler is handled manually in ServeHTTP to prevent redirect issues
 	// See issue #334 - ServeMux redirects empty path to "./" which breaks reverse proxies
@@ -3373,6 +3380,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			strings.HasPrefix(req.URL.Path, "/socket.io/") ||
 			strings.HasPrefix(req.URL.Path, "/download/") ||
 			strings.HasPrefix(req.URL.Path, "/auth/") ||
+			strings.HasPrefix(req.URL.Path, "/debug/pprof") ||
 			req.URL.Path == "/simple-stats" ||
 			req.URL.Path == "/install-docker-agent.sh" ||
 			req.URL.Path == "/install-container-agent.sh" ||
