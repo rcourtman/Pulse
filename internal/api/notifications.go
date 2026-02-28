@@ -11,9 +11,9 @@ import (
 	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
@@ -55,7 +55,6 @@ type NotificationConfigPersistence interface {
 type NotificationMonitor interface {
 	GetNotificationManager() NotificationManager
 	GetConfigPersistence() NotificationConfigPersistence
-	GetState() models.StateSnapshot
 }
 
 // NotificationHandlers handles notification-related HTTP endpoints
@@ -63,6 +62,7 @@ type NotificationHandlers struct {
 	stateMu       sync.RWMutex
 	mtMonitor     *monitoring.MultiTenantMonitor
 	legacyMonitor NotificationMonitor
+	readState     unifiedresources.ReadState
 }
 
 // NewNotificationHandlers creates new notification handlers
@@ -103,6 +103,13 @@ func (h *NotificationHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenant
 	}
 }
 
+// SetReadState updates the ReadState reference for notification handlers.
+func (h *NotificationHandlers) SetReadState(rs unifiedresources.ReadState) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.readState = rs
+}
+
 func (h *NotificationHandlers) getMonitor(ctx context.Context) NotificationMonitor {
 	h.stateMu.RLock()
 	mtMonitor := h.mtMonitor
@@ -116,6 +123,31 @@ func (h *NotificationHandlers) getMonitor(ctx context.Context) NotificationMonit
 		}
 	}
 	return legacyMonitor
+}
+
+// getReadState returns the tenant-scoped ReadState for the request context.
+// It resolves the correct monitor for the org and returns its ReadState.
+// Falls back to the handler-level readState only for default/empty org.
+// Non-default orgs fail closed (return nil) if tenant ReadState is unavailable.
+func (h *NotificationHandlers) getReadState(ctx context.Context) unifiedresources.ReadState {
+	h.stateMu.RLock()
+	mtMonitor := h.mtMonitor
+	fallback := h.readState
+	h.stateMu.RUnlock()
+
+	orgID := GetOrgID(ctx)
+	if mtMonitor != nil {
+		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+			if rs := m.GetUnifiedReadState(); rs != nil {
+				return rs
+			}
+		}
+		// Fail closed for non-default orgs: never leak default-org metadata.
+		if orgID != "" && orgID != "default" {
+			return nil
+		}
+	}
+	return fallback
 }
 
 // GetEmailConfig returns the current email configuration
@@ -502,18 +534,15 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 		req.Method = req.Type
 	}
 
-	// Get actual node info from monitor state
-	state := h.getMonitor(r.Context()).GetState()
+	// Get actual node info from ReadState (unified resources registry)
 	var nodeInfo *notifications.TestNodeInfo
 
-	// Use first available node and instance
-	if len(state.Nodes) > 0 {
-		for _, node := range state.Nodes {
+	if rs := h.getReadState(r.Context()); rs != nil {
+		if nodes := rs.Nodes(); len(nodes) > 0 {
 			nodeInfo = &notifications.TestNodeInfo{
-				NodeName:    node.Name,
-				InstanceURL: node.Instance,
+				NodeName:    nodes[0].Name(),
+				InstanceURL: nodes[0].Instance(),
 			}
-			break
 		}
 	}
 

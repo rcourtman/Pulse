@@ -186,10 +186,13 @@ type legacyStateRatchet struct {
 // MetricsAdapter. ReadState is now the sole source for both GetMonitoredResourceIDs and
 // GetCurrentMetrics. (GetState -2, state.VMs -2, state.Containers -2, state.Nodes -2,
 // state.Storage -1).
+// SRC-03n: Removed GetState() from NotificationMonitor interface and NotificationMonitorWrapper.
+// TestNotification handler now uses ReadState.Nodes() for node info instead of state.Nodes.
+// (GetState -2, state.Nodes -2).
 var legacyStateRatchets = []legacyStateRatchet{
 	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 40, "ReadState.VMs()"},
 	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 40, "ReadState.Containers()"},
-	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 38, "ReadState.Nodes()"},
+	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 36, "ReadState.Nodes()"},
 	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 29, "ReadState.DockerHosts()"},
 	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 17, "ReadState.Hosts()"},
 	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 16, "ReadState.StoragePools()"},
@@ -198,7 +201,7 @@ var legacyStateRatchets = []legacyStateRatchet{
 	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 2, "ReadState.PMGInstances()"},
 
 	// GetState() calls — consumer packages must use ReadState interface
-	{regexp.MustCompile(`\.GetState\(\)`), ".GetState()", 34, "ReadState interface"},
+	{regexp.MustCompile(`\.GetState\(\)`), ".GetState()", 32, "ReadState interface"},
 }
 
 // TestLegacyStateAccessRatchet is a monotonic ratchet that prevents new

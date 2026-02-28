@@ -64,7 +64,3 @@ func (w *NotificationMonitorWrapper) GetNotificationManager() NotificationManage
 func (w *NotificationMonitorWrapper) GetConfigPersistence() NotificationConfigPersistence {
 	return w.m.GetConfigPersistence()
 }
-
-func (w *NotificationMonitorWrapper) GetState() models.StateSnapshot {
-	return w.m.GetState()
-}

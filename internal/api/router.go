@@ -324,6 +324,7 @@ func (r *Router) setupRoutes() {
 	// Create handlers
 	r.alertHandlers = NewAlertHandlers(r.mtMonitor, NewAlertMonitorWrapper(r.monitor), r.wsHub)
 	r.notificationHandlers = NewNotificationHandlers(r.mtMonitor, NewNotificationMonitorWrapper(r.monitor))
+	r.notificationHandlers.SetReadState(r.defaultReadState())
 	r.notificationQueueHandlers = NewNotificationQueueHandlers(r.monitor)
 	guestMetadataHandler := NewGuestMetadataHandler(r.multiTenant)
 	dockerMetadataHandler := NewDockerMetadataHandler(r.multiTenant)
@@ -887,6 +888,7 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 	}
 	if r.notificationHandlers != nil {
 		r.notificationHandlers.SetMonitor(NewNotificationMonitorWrapper(m))
+		r.notificationHandlers.SetReadState(r.defaultReadState())
 	}
 	if r.dockerAgentHandlers != nil {
 		r.dockerAgentHandlers.SetMonitor(m)

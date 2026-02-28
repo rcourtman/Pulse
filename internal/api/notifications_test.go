@@ -11,7 +11,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -167,11 +166,6 @@ func (m *MockNotificationMonitor) GetNotificationManager() NotificationManager {
 func (m *MockNotificationMonitor) GetConfigPersistence() NotificationConfigPersistence {
 	args := m.Called()
 	return args.Get(0).(NotificationConfigPersistence)
-}
-
-func (m *MockNotificationMonitor) GetState() models.StateSnapshot {
-	args := m.Called()
-	return args.Get(0).(models.StateSnapshot)
 }
 
 type MockNotificationManager struct {
@@ -581,7 +575,6 @@ func TestNotificationHandlers(t *testing.T) {
 	})
 
 	t.Run("TestNotification", func(t *testing.T) {
-		mockMonitor.On("GetState").Return(models.StateSnapshot{}).Once()
 		mockManager.On("SendTestNotification", "email").Return(nil).Once()
 		body, _ := json.Marshal(map[string]string{"method": "email"})
 		req := httptest.NewRequest("POST", "/api/notifications/test", bytes.NewReader(body))
@@ -591,7 +584,6 @@ func TestNotificationHandlers(t *testing.T) {
 	})
 
 	t.Run("TestNotification_Webhook", func(t *testing.T) {
-		mockMonitor.On("GetState").Return(models.StateSnapshot{}).Once()
 		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{{ID: "wh1"}}).Once()
 		mockManager.On("SendTestWebhook", mock.Anything).Return(nil).Once()
 		body, _ := json.Marshal(map[string]string{"method": "webhook", "webhookId": "wh1"})
@@ -611,7 +603,6 @@ func TestNotificationHandlers(t *testing.T) {
 	})
 
 	t.Run("TestNotification_EmailWithConfig", func(t *testing.T) {
-		mockMonitor.On("GetState").Return(models.StateSnapshot{}).Once()
 		mockManager.On("SendTestNotificationWithConfig", "email", mock.Anything, mock.Anything).Return(nil).Once()
 		body, _ := json.Marshal(map[string]interface{}{
 			"method": "email",
@@ -624,7 +615,6 @@ func TestNotificationHandlers(t *testing.T) {
 	})
 
 	t.Run("TestNotification_AppriseWithConfig", func(t *testing.T) {
-		mockMonitor.On("GetState").Return(models.StateSnapshot{}).Once()
 		mockManager.On("SendTestAppriseWithConfig", mock.Anything).Return(nil).Once()
 		body, _ := json.Marshal(map[string]interface{}{
 			"method": "apprise",
@@ -681,7 +671,6 @@ func TestNotificationHandlers(t *testing.T) {
 	})
 
 	t.Run("TestNotification_WebhookNotFound", func(t *testing.T) {
-		mockMonitor.On("GetState").Return(models.StateSnapshot{}).Once()
 		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{}).Once()
 		body, _ := json.Marshal(map[string]string{"method": "webhook", "webhookId": "nonexistent"})
 		req := httptest.NewRequest("POST", "/api/notifications/test", bytes.NewReader(body))
