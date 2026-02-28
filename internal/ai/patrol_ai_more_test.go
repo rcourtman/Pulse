@@ -581,6 +581,20 @@ func TestSeedHealthAndAlerts_WithIssues(t *testing.T) {
 		},
 	})
 
+	// Wire ReadState for K8s clusters and Hosts (legacy fallbacks removed).
+	k8sView := unifiedresources.NewK8sClusterView(&unifiedresources.Resource{
+		ID: "k8s-1", Name: "k1", Type: unifiedresources.ResourceTypeK8sCluster,
+		ChildCount: 1,
+	})
+	hostView := unifiedresources.NewHostView(&unifiedresources.Resource{
+		ID: "host-1", Name: "host-1", Type: unifiedresources.ResourceTypeHost,
+		Agent: &unifiedresources.AgentData{Hostname: "host-1"},
+	})
+	ps.SetReadState(&mockReadState{
+		k8sClusters: []*unifiedresources.K8sClusterView{&k8sView},
+		hosts:       []*unifiedresources.HostView{&hostView},
+	})
+
 	state := models.StateSnapshot{
 		ActiveAlerts: []models.Alert{
 			{Level: "warning", Message: "CPU high", StartTime: now.Add(-time.Hour)},
@@ -593,10 +607,7 @@ func TestSeedHealthAndAlerts_WithIssues(t *testing.T) {
 			"node-2": false,
 		},
 		KubernetesClusters: []models.KubernetesCluster{
-			{Name: "k1", Nodes: []models.KubernetesNode{{Name: "n1"}}},
-		},
-		Hosts: []models.Host{
-			{ID: "host-1", Hostname: "host-1"},
+			{ID: "k8s-1", Name: "k1", Nodes: []models.KubernetesNode{{Name: "n1"}}},
 		},
 	}
 

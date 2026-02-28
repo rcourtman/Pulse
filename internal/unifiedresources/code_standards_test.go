@@ -165,20 +165,23 @@ type legacyStateRatchet struct {
 // These represent legacy nil-fallback paths that are dead code when
 // ReadState is wired. Each number must only decrease over time.
 //
-// Last updated: 2026-02-28 (total state.*: 229, GetState: 39).
+// Last updated: 2026-02-28 (total state.*: 217, GetState: 39).
 // SRC-03f: servicediscovery/service.go migrated to ReadState with legacy fallback.
 // SRC-03g: forecast/service.go migrated from StateProvider.GetState to ResourceIterator
 // (removed 3 GetState, state.VMs -2, state.Containers -2, state.Nodes -2, state.Storage -1).
 // SRC-03h: Removed learnBaselines legacy GetState fallback (router.go) and
 // patrol_run.go resource counting legacy fallbacks — ReadState is sole path.
+// SRC-03j: Removed legacy state fallbacks in patrol_ai.go seedBackupAnalysis
+// and seedHealthAndAlerts (state.VMs -4, state.Containers -4, state.Hosts -2,
+// state.KubernetesClusters -2) — ReadState is sole path for these functions.
 var legacyStateRatchets = []legacyStateRatchet{
-	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 48, "ReadState.VMs()"},
-	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 48, "ReadState.Containers()"},
+	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 44, "ReadState.VMs()"},
+	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 44, "ReadState.Containers()"},
 	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 42, "ReadState.Nodes()"},
 	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 32, "ReadState.DockerHosts()"},
-	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 22, "ReadState.Hosts()"},
+	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 20, "ReadState.Hosts()"},
 	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 17, "ReadState.StoragePools()"},
-	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 11, "ReadState.K8sClusters()"},
+	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 9, "ReadState.K8sClusters()"},
 	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 7, "ReadState.PBSInstances()"},
 	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 2, "ReadState.PMGInstances()"},
 

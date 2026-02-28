@@ -14,17 +14,19 @@ import (
 )
 
 // mockReadState is a minimal ReadState implementation for tests that need
-// seedFindingsAndContext to resolve missing resources.
+// ReadState-backed seed context functions.
 type mockReadState struct {
-	nodes      []*ur.NodeView
-	vms        []*ur.VMView
-	containers []*ur.ContainerView
+	nodes       []*ur.NodeView
+	vms         []*ur.VMView
+	containers  []*ur.ContainerView
+	hosts       []*ur.HostView
+	k8sClusters []*ur.K8sClusterView
 }
 
 func (m *mockReadState) Nodes() []*ur.NodeView             { return m.nodes }
 func (m *mockReadState) VMs() []*ur.VMView                 { return m.vms }
 func (m *mockReadState) Containers() []*ur.ContainerView   { return m.containers }
-func (m *mockReadState) Hosts() []*ur.HostView             { return nil }
+func (m *mockReadState) Hosts() []*ur.HostView             { return m.hosts }
 func (m *mockReadState) DockerHosts() []*ur.DockerHostView { return nil }
 func (m *mockReadState) DockerContainers() []*ur.DockerContainerView {
 	return nil
@@ -32,7 +34,7 @@ func (m *mockReadState) DockerContainers() []*ur.DockerContainerView {
 func (m *mockReadState) StoragePools() []*ur.StoragePoolView     { return nil }
 func (m *mockReadState) PBSInstances() []*ur.PBSInstanceView     { return nil }
 func (m *mockReadState) PMGInstances() []*ur.PMGInstanceView     { return nil }
-func (m *mockReadState) K8sClusters() []*ur.K8sClusterView       { return nil }
+func (m *mockReadState) K8sClusters() []*ur.K8sClusterView       { return m.k8sClusters }
 func (m *mockReadState) K8sNodes() []*ur.K8sNodeView             { return nil }
 func (m *mockReadState) Pods() []*ur.PodView                     { return nil }
 func (m *mockReadState) K8sDeployments() []*ur.K8sDeploymentView { return nil }
@@ -193,12 +195,27 @@ func TestSeedBackupAnalysis_StaleAndRecent(t *testing.T) {
 	now := time.Now()
 	ps := NewPatrolService(nil, nil)
 
-	state := models.StateSnapshot{
-		VMs: []models.VM{
-			{ID: "vm-1", VMID: 101, Name: "vm-1", Template: false, LastBackup: now.Add(-24 * time.Hour)},
-			{ID: "vm-2", VMID: 102, Name: "vm-2", Template: false},
+	// Wire ReadState — seedBackupAnalysis uses ReadState as sole path.
+	vm1 := newTestVMView("qemu/101", "vm-1", 101, "pve1", "", ur.StatusOnline, false, nil)
+	// Set LastBackup on vm-1's underlying resource via view construction.
+	vm1Res := &ur.Resource{
+		ID: "vm-1", Name: "vm-1", Type: ur.ResourceTypeVM, Status: ur.StatusOnline,
+		Proxmox: &ur.ProxmoxData{VMID: 101, LastBackup: now.Add(-24 * time.Hour)},
+	}
+	vm1v := ur.NewVMView(vm1Res)
+	vm1 = &vm1v
+
+	ps.SetReadState(&mockReadState{
+		vms: []*ur.VMView{
+			vm1,
+			newTestVMView("qemu/102", "vm-2", 102, "pve1", "", ur.StatusOnline, false, nil),
 		},
-		Containers: []models.Container{{ID: "ct-1", VMID: 201, Name: "ct-1", Template: false}},
+		containers: []*ur.ContainerView{
+			newTestContainerView("lxc/201", "ct-1", 201, "pve1", "", ur.StatusOnline, false, nil),
+		},
+	})
+
+	state := models.StateSnapshot{
 		PVEBackups: models.PVEBackups{
 			BackupTasks:    []models.BackupTask{{VMID: 102, Status: "OK", EndTime: now.Add(-72 * time.Hour)}},
 			StorageBackups: []models.StorageBackup{{VMID: 101, Time: now.Add(-36 * time.Hour)}},
