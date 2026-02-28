@@ -2795,65 +2795,135 @@ func (r *Router) startBaselineLearning(ctx context.Context, store *ai.BaselineSt
 	}
 }
 
-// learnBaselines updates baselines for all resources from metrics history
+// learnBaselines updates baselines for all resources from metrics history.
+// Prefers ReadState typed views; falls back to legacy GetState() when ReadState
+// is not yet wired (e.g., during early startup).
 func (r *Router) learnBaselines(store *ai.BaselineStore, metricsHistory *monitoring.MetricsHistory) {
 	if r.monitor == nil {
 		return
 	}
 
-	state := r.monitor.GetState()
 	learningWindow := 7 * 24 * time.Hour // Learn from 7 days of data
 	var learned int
 
-	// Learn baselines for nodes
-	for _, node := range state.Nodes {
-		for _, metric := range []string{"cpu", "memory"} {
-			points := metricsHistory.GetNodeMetrics(node.ID, metric, learningWindow)
-			if len(points) > 0 {
-				baselinePoints := make([]ai.BaselineMetricPoint, len(points))
-				for i, p := range points {
-					baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
-				}
-				if err := store.Learn(node.ID, "node", metric, baselinePoints); err == nil {
-					learned++
+	if readState := r.monitor.GetUnifiedReadState(); readState != nil {
+		// --- ReadState path (preferred) ---
+		// Use SourceID() for all ID lookups — metrics history is keyed by legacy
+		// source IDs (e.g. "node/pve", "qemu/100"), not unified registry IDs.
+
+		for _, node := range readState.Nodes() {
+			id := node.SourceID()
+			if id == "" {
+				continue
+			}
+			for _, metric := range []string{"cpu", "memory"} {
+				points := metricsHistory.GetNodeMetrics(id, metric, learningWindow)
+				if len(points) > 0 {
+					baselinePoints := make([]ai.BaselineMetricPoint, len(points))
+					for i, p := range points {
+						baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
+					}
+					if err := store.Learn(id, "node", metric, baselinePoints); err == nil {
+						learned++
+					}
 				}
 			}
 		}
-	}
 
-	// Learn baselines for VMs
-	for _, vm := range state.VMs {
-		if vm.Template {
-			continue
-		}
-		for _, metric := range []string{"cpu", "memory", "disk"} {
-			points := metricsHistory.GetGuestMetrics(vm.ID, metric, learningWindow)
-			if len(points) > 0 {
-				baselinePoints := make([]ai.BaselineMetricPoint, len(points))
-				for i, p := range points {
-					baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
-				}
-				if err := store.Learn(vm.ID, "vm", metric, baselinePoints); err == nil {
-					learned++
+		for _, vm := range readState.VMs() {
+			if vm.Template() {
+				continue
+			}
+			id := vm.SourceID()
+			if id == "" {
+				continue
+			}
+			for _, metric := range []string{"cpu", "memory", "disk"} {
+				points := metricsHistory.GetGuestMetrics(id, metric, learningWindow)
+				if len(points) > 0 {
+					baselinePoints := make([]ai.BaselineMetricPoint, len(points))
+					for i, p := range points {
+						baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
+					}
+					if err := store.Learn(id, "vm", metric, baselinePoints); err == nil {
+						learned++
+					}
 				}
 			}
 		}
-	}
 
-	// Learn baselines for containers
-	for _, ct := range state.Containers {
-		if ct.Template {
-			continue
-		}
-		for _, metric := range []string{"cpu", "memory", "disk"} {
-			points := metricsHistory.GetGuestMetrics(ct.ID, metric, learningWindow)
-			if len(points) > 0 {
-				baselinePoints := make([]ai.BaselineMetricPoint, len(points))
-				for i, p := range points {
-					baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
+		for _, ct := range readState.Containers() {
+			if ct.Template() {
+				continue
+			}
+			id := ct.SourceID()
+			if id == "" {
+				continue
+			}
+			for _, metric := range []string{"cpu", "memory", "disk"} {
+				points := metricsHistory.GetGuestMetrics(id, metric, learningWindow)
+				if len(points) > 0 {
+					baselinePoints := make([]ai.BaselineMetricPoint, len(points))
+					for i, p := range points {
+						baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
+					}
+					if err := store.Learn(id, "container", metric, baselinePoints); err == nil {
+						learned++
+					}
 				}
-				if err := store.Learn(ct.ID, "container", metric, baselinePoints); err == nil {
-					learned++
+			}
+		}
+	} else {
+		// --- Legacy fallback (GetState) ---
+		state := r.monitor.GetState()
+
+		for _, node := range state.Nodes {
+			for _, metric := range []string{"cpu", "memory"} {
+				points := metricsHistory.GetNodeMetrics(node.ID, metric, learningWindow)
+				if len(points) > 0 {
+					baselinePoints := make([]ai.BaselineMetricPoint, len(points))
+					for i, p := range points {
+						baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
+					}
+					if err := store.Learn(node.ID, "node", metric, baselinePoints); err == nil {
+						learned++
+					}
+				}
+			}
+		}
+
+		for _, vm := range state.VMs {
+			if vm.Template {
+				continue
+			}
+			for _, metric := range []string{"cpu", "memory", "disk"} {
+				points := metricsHistory.GetGuestMetrics(vm.ID, metric, learningWindow)
+				if len(points) > 0 {
+					baselinePoints := make([]ai.BaselineMetricPoint, len(points))
+					for i, p := range points {
+						baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
+					}
+					if err := store.Learn(vm.ID, "vm", metric, baselinePoints); err == nil {
+						learned++
+					}
+				}
+			}
+		}
+
+		for _, ct := range state.Containers {
+			if ct.Template {
+				continue
+			}
+			for _, metric := range []string{"cpu", "memory", "disk"} {
+				points := metricsHistory.GetGuestMetrics(ct.ID, metric, learningWindow)
+				if len(points) > 0 {
+					baselinePoints := make([]ai.BaselineMetricPoint, len(points))
+					for i, p := range points {
+						baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
+					}
+					if err := store.Learn(ct.ID, "container", metric, baselinePoints); err == nil {
+						learned++
+					}
 				}
 			}
 		}
@@ -4694,7 +4764,11 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "Tenant monitor is not available", http.StatusInternalServerError)
 		return
 	}
-	state := monitor.GetState()
+	readState := monitor.GetUnifiedReadState()
+	if readState == nil {
+		http.Error(w, "State unavailable", http.StatusInternalServerError)
+		return
+	}
 	metricsStoreEnabled := monitor.GetMetricsStore() != nil
 	primarySourceHint := "memory"
 	if metricsStoreEnabled && duration > inMemoryChartThreshold {
@@ -4709,26 +4783,33 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 	oldestTimestamp := currentTime
 
 	// Process VMs - get historical data
-	for _, vm := range state.VMs {
-		if chartData[vm.ID] == nil {
-			chartData[vm.ID] = make(VMChartData)
+	for _, vm := range readState.VMs() {
+		if vm == nil {
+			continue
+		}
+		vid := vm.SourceID()
+		if vid == "" {
+			continue
+		}
+		if chartData[vid] == nil {
+			chartData[vid] = make(VMChartData)
 		}
 
 		// Get historical metrics (falls back to SQLite + LTTB for long ranges)
-		metrics := monitor.GetGuestMetricsForChart(vm.ID, "vm", vm.ID, duration)
+		metrics := monitor.GetGuestMetricsForChart(vid, "vm", vid, duration)
 
 		// Convert metric points to API format (sparkline metrics only)
 		for metricType, points := range metrics {
 			if !sparklineMetrics[metricType] {
 				continue
 			}
-			chartData[vm.ID][metricType] = make([]MetricPoint, len(points))
+			chartData[vid][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
 				if ts < oldestTimestamp {
 					oldestTimestamp = ts
 				}
-				chartData[vm.ID][metricType][i] = MetricPoint{
+				chartData[vid][metricType][i] = MetricPoint{
 					Timestamp: ts,
 					Value:     point.Value,
 				}
@@ -4736,46 +4817,53 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		}
 
 		// If no historical data, add current value
-		if len(chartData[vm.ID]["cpu"]) == 0 {
-			chartData[vm.ID]["cpu"] = []MetricPoint{
-				{Timestamp: currentTime, Value: vm.CPU * 100},
+		if len(chartData[vid]["cpu"]) == 0 {
+			chartData[vid]["cpu"] = []MetricPoint{
+				{Timestamp: currentTime, Value: vm.CPUPercent()},
 			}
-			chartData[vm.ID]["memory"] = []MetricPoint{
-				{Timestamp: currentTime, Value: vm.Memory.Usage},
+			chartData[vid]["memory"] = []MetricPoint{
+				{Timestamp: currentTime, Value: vm.MemoryPercent()},
 			}
-			chartData[vm.ID]["disk"] = []MetricPoint{
-				{Timestamp: currentTime, Value: vm.Disk.Usage},
+			chartData[vid]["disk"] = []MetricPoint{
+				{Timestamp: currentTime, Value: vm.DiskPercent()},
 			}
-			chartData[vm.ID]["netin"] = []MetricPoint{
-				{Timestamp: currentTime, Value: float64(vm.NetworkIn)},
+			chartData[vid]["netin"] = []MetricPoint{
+				{Timestamp: currentTime, Value: vm.NetIn()},
 			}
-			chartData[vm.ID]["netout"] = []MetricPoint{
-				{Timestamp: currentTime, Value: float64(vm.NetworkOut)},
+			chartData[vid]["netout"] = []MetricPoint{
+				{Timestamp: currentTime, Value: vm.NetOut()},
 			}
 		}
 	}
 
 	// Process Containers - get historical data
-	for _, ct := range state.Containers {
-		if chartData[ct.ID] == nil {
-			chartData[ct.ID] = make(VMChartData)
+	for _, ct := range readState.Containers() {
+		if ct == nil {
+			continue
+		}
+		cid := ct.SourceID()
+		if cid == "" {
+			continue
+		}
+		if chartData[cid] == nil {
+			chartData[cid] = make(VMChartData)
 		}
 
 		// Get historical metrics (falls back to SQLite + LTTB for long ranges)
-		metrics := monitor.GetGuestMetricsForChart(ct.ID, "container", ct.ID, duration)
+		metrics := monitor.GetGuestMetricsForChart(cid, "container", cid, duration)
 
 		// Convert metric points to API format (sparkline metrics only)
 		for metricType, points := range metrics {
 			if !sparklineMetrics[metricType] {
 				continue
 			}
-			chartData[ct.ID][metricType] = make([]MetricPoint, len(points))
+			chartData[cid][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
 				if ts < oldestTimestamp {
 					oldestTimestamp = ts
 				}
-				chartData[ct.ID][metricType][i] = MetricPoint{
+				chartData[cid][metricType][i] = MetricPoint{
 					Timestamp: ts,
 					Value:     point.Value,
 				}
@@ -4783,100 +4871,110 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		}
 
 		// If no historical data, add current value
-		if len(chartData[ct.ID]["cpu"]) == 0 {
-			chartData[ct.ID]["cpu"] = []MetricPoint{
-				{Timestamp: currentTime, Value: ct.CPU * 100},
+		if len(chartData[cid]["cpu"]) == 0 {
+			chartData[cid]["cpu"] = []MetricPoint{
+				{Timestamp: currentTime, Value: ct.CPUPercent()},
 			}
-			chartData[ct.ID]["memory"] = []MetricPoint{
-				{Timestamp: currentTime, Value: ct.Memory.Usage},
+			chartData[cid]["memory"] = []MetricPoint{
+				{Timestamp: currentTime, Value: ct.MemoryPercent()},
 			}
-			chartData[ct.ID]["disk"] = []MetricPoint{
-				{Timestamp: currentTime, Value: ct.Disk.Usage},
+			chartData[cid]["disk"] = []MetricPoint{
+				{Timestamp: currentTime, Value: ct.DiskPercent()},
 			}
-			chartData[ct.ID]["netin"] = []MetricPoint{
-				{Timestamp: currentTime, Value: float64(ct.NetworkIn)},
+			chartData[cid]["netin"] = []MetricPoint{
+				{Timestamp: currentTime, Value: ct.NetIn()},
 			}
-			chartData[ct.ID]["netout"] = []MetricPoint{
-				{Timestamp: currentTime, Value: float64(ct.NetworkOut)},
+			chartData[cid]["netout"] = []MetricPoint{
+				{Timestamp: currentTime, Value: ct.NetOut()},
 			}
 		}
 	}
 
 	// Process Storage - get historical data
 	storageData := make(map[string]StorageChartData)
-	for _, storage := range state.Storage {
-		if storageData[storage.ID] == nil {
-			storageData[storage.ID] = make(StorageChartData)
+	for _, sp := range readState.StoragePools() {
+		if sp == nil {
+			continue
+		}
+		sid := sp.SourceID()
+		if sid == "" {
+			continue
+		}
+		if storageData[sid] == nil {
+			storageData[sid] = make(StorageChartData)
 		}
 
 		// Get historical metrics (falls back to SQLite + LTTB for long ranges)
-		metrics := monitor.GetStorageMetricsForChart(storage.ID, duration)
+		metrics := monitor.GetStorageMetricsForChart(sid, duration)
 
 		// Convert usage metrics to chart format
 		if usagePoints, ok := metrics["usage"]; ok && len(usagePoints) > 0 {
 			// Convert MetricPoint slice to chart format
-			storageData[storage.ID]["disk"] = make([]MetricPoint, len(usagePoints))
+			storageData[sid]["disk"] = make([]MetricPoint, len(usagePoints))
 			for i, point := range usagePoints {
 				ts := point.Timestamp.Unix() * 1000
 				if ts < oldestTimestamp {
 					oldestTimestamp = ts
 				}
-				storageData[storage.ID]["disk"][i] = MetricPoint{
+				storageData[sid]["disk"][i] = MetricPoint{
 					Timestamp: ts,
 					Value:     point.Value,
 				}
 			}
 		} else {
 			// Add current value if no historical data
-			usagePercent := float64(0)
-			if storage.Total > 0 {
-				usagePercent = (float64(storage.Used) / float64(storage.Total)) * 100
-			}
-			storageData[storage.ID]["disk"] = []MetricPoint{
-				{Timestamp: currentTime, Value: usagePercent},
+			storageData[sid]["disk"] = []MetricPoint{
+				{Timestamp: currentTime, Value: sp.DiskPercent()},
 			}
 		}
 	}
 
 	// Process Nodes - get historical data
-	for _, node := range state.Nodes {
-		if nodeData[node.ID] == nil {
-			nodeData[node.ID] = make(NodeChartData)
+	for _, node := range readState.Nodes() {
+		if node == nil {
+			continue
+		}
+		nid := node.SourceID()
+		if nid == "" {
+			continue
+		}
+		if nodeData[nid] == nil {
+			nodeData[nid] = make(NodeChartData)
 		}
 
 		// Get historical metrics for each type (falls back to SQLite + LTTB for long ranges)
 		for _, metricType := range []string{"cpu", "memory", "disk", "netin", "netout"} {
-			points := monitor.GetNodeMetricsForChart(node.ID, metricType, duration)
-			nodeData[node.ID][metricType] = make([]MetricPoint, len(points))
+			points := monitor.GetNodeMetricsForChart(nid, metricType, duration)
+			nodeData[nid][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
 				if ts < oldestTimestamp {
 					oldestTimestamp = ts
 				}
-				nodeData[node.ID][metricType][i] = MetricPoint{
+				nodeData[nid][metricType][i] = MetricPoint{
 					Timestamp: ts,
 					Value:     point.Value,
 				}
 			}
 
 			// If no historical data, add current value
-			if len(nodeData[node.ID][metricType]) == 0 {
+			if len(nodeData[nid][metricType]) == 0 {
 				var value float64
 				hasFallbackValue := true
 				switch metricType {
 				case "cpu":
-					value = node.CPU * 100
+					value = node.CPUPercent()
 				case "memory":
-					value = node.Memory.Usage
+					value = node.MemoryPercent()
 				case "disk":
-					value = node.Disk.Usage
+					value = node.DiskPercent()
 				default:
 					// No synthetic fallback for node netin/netout.
 					// We only emit these when actual history exists.
 					hasFallbackValue = false
 				}
 				if hasFallbackValue {
-					nodeData[node.ID][metricType] = []MetricPoint{
+					nodeData[nid][metricType] = []MetricPoint{
 						{Timestamp: currentTime, Value: value},
 					}
 				}
@@ -4886,97 +4984,105 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 
 	// Build guest types map for frontend to correctly identify VM vs Container
 	guestTypes := make(map[string]string)
-	for _, vm := range state.VMs {
-		guestTypes[vm.ID] = "vm"
+	for _, vm := range readState.VMs() {
+		if vm == nil {
+			continue
+		}
+		if sid := vm.SourceID(); sid != "" {
+			guestTypes[sid] = "vm"
+		}
 	}
-	for _, ct := range state.Containers {
-		guestTypes[ct.ID] = "container"
+	for _, ct := range readState.Containers() {
+		if ct == nil {
+			continue
+		}
+		if sid := ct.SourceID(); sid != "" {
+			guestTypes[sid] = "container"
+		}
 	}
 
 	// Process Docker containers - get historical data
 	dockerData := make(map[string]VMChartData)
-	for _, host := range state.DockerHosts {
-		for _, container := range host.Containers {
-			if container.ID == "" {
+	for _, dc := range readState.DockerContainers() {
+		if dc == nil {
+			continue
+		}
+		dcContainerID := dc.ContainerID()
+		if dcContainerID == "" {
+			continue
+		}
+
+		if dockerData[dcContainerID] == nil {
+			dockerData[dcContainerID] = make(VMChartData)
+		}
+
+		// Get historical metrics using the docker: prefix key (falls back to SQLite + LTTB for long ranges)
+		metricKey := fmt.Sprintf("docker:%s", dcContainerID)
+		metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerContainer", dcContainerID, duration)
+
+		// Convert metric points to API format (sparkline metrics only)
+		for metricType, points := range metrics {
+			if !sparklineMetrics[metricType] {
 				continue
 			}
-
-			if dockerData[container.ID] == nil {
-				dockerData[container.ID] = make(VMChartData)
-			}
-
-			// Get historical metrics using the docker: prefix key (falls back to SQLite + LTTB for long ranges)
-			metricKey := fmt.Sprintf("docker:%s", container.ID)
-			metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerContainer", container.ID, duration)
-
-			// Convert metric points to API format (sparkline metrics only)
-			for metricType, points := range metrics {
-				if !sparklineMetrics[metricType] {
-					continue
+			dockerData[dcContainerID][metricType] = make([]MetricPoint, len(points))
+			for i, point := range points {
+				ts := point.Timestamp.Unix() * 1000
+				if ts < oldestTimestamp {
+					oldestTimestamp = ts
 				}
-				dockerData[container.ID][metricType] = make([]MetricPoint, len(points))
-				for i, point := range points {
-					ts := point.Timestamp.Unix() * 1000
-					if ts < oldestTimestamp {
-						oldestTimestamp = ts
-					}
-					dockerData[container.ID][metricType][i] = MetricPoint{
-						Timestamp: ts,
-						Value:     point.Value,
-					}
+				dockerData[dcContainerID][metricType][i] = MetricPoint{
+					Timestamp: ts,
+					Value:     point.Value,
 				}
 			}
+		}
 
-			// If no historical data, add current value
-			if len(dockerData[container.ID]["cpu"]) == 0 {
-				dockerData[container.ID]["cpu"] = []MetricPoint{
-					{Timestamp: currentTime, Value: container.CPUPercent},
-				}
-				dockerData[container.ID]["memory"] = []MetricPoint{
-					{Timestamp: currentTime, Value: container.MemoryPercent},
-				}
-				// Calculate disk percentage for Docker containers
-				var diskPercent float64
-				if container.RootFilesystemBytes > 0 && container.WritableLayerBytes > 0 {
-					diskPercent = float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
-					if diskPercent > 100 {
-						diskPercent = 100
-					}
-				}
-				dockerData[container.ID]["disk"] = []MetricPoint{
-					{Timestamp: currentTime, Value: diskPercent},
-				}
+		// If no historical data, add current value
+		if len(dockerData[dcContainerID]["cpu"]) == 0 {
+			dockerData[dcContainerID]["cpu"] = []MetricPoint{
+				{Timestamp: currentTime, Value: dc.CPUPercent()},
+			}
+			dockerData[dcContainerID]["memory"] = []MetricPoint{
+				{Timestamp: currentTime, Value: dc.MemoryPercent()},
+			}
+			dockerData[dcContainerID]["disk"] = []MetricPoint{
+				{Timestamp: currentTime, Value: dc.DiskPercent()},
 			}
 		}
 	}
 
 	// Process Docker hosts - get historical data
 	dockerHostData := make(map[string]VMChartData)
-	for _, host := range state.DockerHosts {
-		if host.ID == "" {
+	for _, dh := range readState.DockerHosts() {
+		if dh == nil {
+			continue
+		}
+		dhID := dh.HostSourceID()
+		if dhID == "" {
 			continue
 		}
 
-		if dockerHostData[host.ID] == nil {
-			dockerHostData[host.ID] = make(VMChartData)
+		if dockerHostData[dhID] == nil {
+			dockerHostData[dhID] = make(VMChartData)
 		}
 
 		// Get historical metrics using the dockerHost: prefix key (falls back to SQLite + LTTB for long ranges)
-		metricKey := fmt.Sprintf("dockerHost:%s", host.ID)
-		metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerHost", host.ID, duration)
+		metricKey := fmt.Sprintf("dockerHost:%s", dhID)
+		metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerHost", dhID, duration)
 
 		// Convert metric points to API format (sparkline metrics only)
 		for metricType, points := range metrics {
 			if !sparklineMetrics[metricType] {
 				continue
 			}
-			dockerHostData[host.ID][metricType] = make([]MetricPoint, len(points))
+			dockerHostData[dhID][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
 				if ts < oldestTimestamp {
 					oldestTimestamp = ts
 				}
-				dockerHostData[host.ID][metricType][i] = MetricPoint{
+				dockerHostData[dhID][metricType][i] = MetricPoint{
 					Timestamp: ts,
 					Value:     point.Value,
 				}
@@ -4984,44 +5090,48 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		}
 
 		// If no historical data, add current value
-		if len(dockerHostData[host.ID]["cpu"]) == 0 {
-			dockerHostData[host.ID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: host.CPUUsage}}
-			dockerHostData[host.ID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: host.Memory.Usage}}
+		if len(dockerHostData[dhID]["cpu"]) == 0 {
+			dockerHostData[dhID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: dh.CPUPercent()}}
+			dockerHostData[dhID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: dh.MemoryPercent()}}
 			var diskPercent float64
-			if len(host.Disks) > 0 {
-				diskPercent = host.Disks[0].Usage
+			if disks := dh.Disks(); len(disks) > 0 {
+				diskPercent = disks[0].Usage
 			}
-			dockerHostData[host.ID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
+			dockerHostData[dhID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
 		}
 	}
 
 	// Process unified host agents - get historical data
 	hostData := make(map[string]VMChartData)
-	for _, host := range state.Hosts {
-		if host.ID == "" {
+	for _, h := range readState.Hosts() {
+		if h == nil {
+			continue
+		}
+		hID := h.AgentID()
+		if hID == "" {
 			continue
 		}
 
-		if hostData[host.ID] == nil {
-			hostData[host.ID] = make(VMChartData)
+		if hostData[hID] == nil {
+			hostData[hID] = make(VMChartData)
 		}
 
 		// Get historical metrics using the host: prefix key (falls back to SQLite + LTTB for long ranges)
-		metricKey := fmt.Sprintf("host:%s", host.ID)
-		metrics := monitor.GetGuestMetricsForChart(metricKey, "host", host.ID, duration)
+		metricKey := fmt.Sprintf("host:%s", hID)
+		metrics := monitor.GetGuestMetricsForChart(metricKey, "host", hID, duration)
 
 		// Convert metric points to API format (sparkline metrics only)
 		for metricType, points := range metrics {
 			if !sparklineMetrics[metricType] {
 				continue
 			}
-			hostData[host.ID][metricType] = make([]MetricPoint, len(points))
+			hostData[hID][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
 				if ts < oldestTimestamp {
 					oldestTimestamp = ts
 				}
-				hostData[host.ID][metricType][i] = MetricPoint{
+				hostData[hID][metricType][i] = MetricPoint{
 					Timestamp: ts,
 					Value:     point.Value,
 				}
@@ -5029,14 +5139,10 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		}
 
 		// If no historical data, add current value
-		if len(hostData[host.ID]["cpu"]) == 0 {
-			hostData[host.ID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: host.CPUUsage}}
-			hostData[host.ID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: host.Memory.Usage}}
-			var diskPercent float64
-			if len(host.Disks) > 0 {
-				diskPercent = host.Disks[0].Usage
-			}
-			hostData[host.ID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
+		if len(hostData[hID]["cpu"]) == 0 {
+			hostData[hID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: h.CPUPercent()}}
+			hostData[hID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: h.MemoryPercent()}}
+			hostData[hID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: h.DiskPercent()}}
 		}
 	}
 
@@ -5694,7 +5800,15 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 	duration := parseChartsRangeDuration(timeRange)
 
 	monitor := r.getTenantMonitor(req.Context())
-	state := monitor.GetState()
+	if monitor == nil {
+		http.Error(w, "Tenant monitor is not available", http.StatusInternalServerError)
+		return
+	}
+	readState := monitor.GetUnifiedReadState()
+	if readState == nil {
+		http.Error(w, "State unavailable", http.StatusInternalServerError)
+		return
+	}
 	metricsStoreEnabled := monitor.GetMetricsStore() != nil
 	primarySourceHint := "memory"
 	if metricsStoreEnabled && duration > inMemoryChartThreshold {
@@ -5706,35 +5820,42 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 
 	// Nodes - cpu/memory/disk/netin/netout
 	nodeData := make(map[string]NodeChartData)
-	for _, node := range state.Nodes {
-		if nodeData[node.ID] == nil {
-			nodeData[node.ID] = make(NodeChartData)
+	for _, node := range readState.Nodes() {
+		if node == nil {
+			continue
+		}
+		nid := node.SourceID()
+		if nid == "" {
+			continue
+		}
+		if nodeData[nid] == nil {
+			nodeData[nid] = make(NodeChartData)
 		}
 		for _, metricType := range []string{"cpu", "memory", "disk", "netin", "netout"} {
-			points := monitor.GetNodeMetricsForChart(node.ID, metricType, duration)
-			nodeData[node.ID][metricType] = make([]MetricPoint, len(points))
+			points := monitor.GetNodeMetricsForChart(nid, metricType, duration)
+			nodeData[nid][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
 				if ts < oldestTimestamp {
 					oldestTimestamp = ts
 				}
-				nodeData[node.ID][metricType][i] = MetricPoint{Timestamp: ts, Value: point.Value}
+				nodeData[nid][metricType][i] = MetricPoint{Timestamp: ts, Value: point.Value}
 			}
-			if len(nodeData[node.ID][metricType]) == 0 {
+			if len(nodeData[nid][metricType]) == 0 {
 				var value float64
 				hasFallbackValue := true
 				switch metricType {
 				case "cpu":
-					value = node.CPU * 100
+					value = node.CPUPercent()
 				case "memory":
-					value = node.Memory.Usage
+					value = node.MemoryPercent()
 				case "disk":
-					value = node.Disk.Usage
+					value = node.DiskPercent()
 				default:
 					hasFallbackValue = false
 				}
 				if hasFallbackValue {
-					nodeData[node.ID][metricType] = []MetricPoint{{Timestamp: currentTime, Value: value}}
+					nodeData[nid][metricType] = []MetricPoint{{Timestamp: currentTime, Value: value}}
 				}
 			}
 		}
@@ -5742,71 +5863,75 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 
 	// Docker hosts - cpu/memory/disk
 	dockerHostData := make(map[string]VMChartData)
-	for _, host := range state.DockerHosts {
-		if host.ID == "" {
+	for _, dh := range readState.DockerHosts() {
+		if dh == nil {
 			continue
 		}
-		if dockerHostData[host.ID] == nil {
-			dockerHostData[host.ID] = make(VMChartData)
+		dhID := dh.HostSourceID()
+		if dhID == "" {
+			continue
 		}
-		metricKey := fmt.Sprintf("dockerHost:%s", host.ID)
-		metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerHost", host.ID, duration)
+		if dockerHostData[dhID] == nil {
+			dockerHostData[dhID] = make(VMChartData)
+		}
+		metricKey := fmt.Sprintf("dockerHost:%s", dhID)
+		metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerHost", dhID, duration)
 		for metricType, points := range metrics {
 			if !sparklineMetrics[metricType] {
 				continue
 			}
-			dockerHostData[host.ID][metricType] = make([]MetricPoint, len(points))
+			dockerHostData[dhID][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
 				if ts < oldestTimestamp {
 					oldestTimestamp = ts
 				}
-				dockerHostData[host.ID][metricType][i] = MetricPoint{Timestamp: ts, Value: point.Value}
+				dockerHostData[dhID][metricType][i] = MetricPoint{Timestamp: ts, Value: point.Value}
 			}
 		}
-		if len(dockerHostData[host.ID]["cpu"]) == 0 {
-			dockerHostData[host.ID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: host.CPUUsage}}
-			dockerHostData[host.ID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: host.Memory.Usage}}
+		if len(dockerHostData[dhID]["cpu"]) == 0 {
+			dockerHostData[dhID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: dh.CPUPercent()}}
+			dockerHostData[dhID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: dh.MemoryPercent()}}
 			var diskPercent float64
-			if len(host.Disks) > 0 {
-				diskPercent = host.Disks[0].Usage
+			if disks := dh.Disks(); len(disks) > 0 {
+				diskPercent = disks[0].Usage
 			}
-			dockerHostData[host.ID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
+			dockerHostData[dhID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
 		}
 	}
 
 	// Unified host agents - cpu/memory/disk
 	hostData := make(map[string]VMChartData)
-	for _, host := range state.Hosts {
-		if host.ID == "" {
+	for _, h := range readState.Hosts() {
+		if h == nil {
 			continue
 		}
-		if hostData[host.ID] == nil {
-			hostData[host.ID] = make(VMChartData)
+		hID := h.AgentID()
+		if hID == "" {
+			continue
 		}
-		metricKey := fmt.Sprintf("host:%s", host.ID)
-		metrics := monitor.GetGuestMetricsForChart(metricKey, "host", host.ID, duration)
+		if hostData[hID] == nil {
+			hostData[hID] = make(VMChartData)
+		}
+		metricKey := fmt.Sprintf("host:%s", hID)
+		metrics := monitor.GetGuestMetricsForChart(metricKey, "host", hID, duration)
 		for metricType, points := range metrics {
 			if !sparklineMetrics[metricType] {
 				continue
 			}
-			hostData[host.ID][metricType] = make([]MetricPoint, len(points))
+			hostData[hID][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
 				if ts < oldestTimestamp {
 					oldestTimestamp = ts
 				}
-				hostData[host.ID][metricType][i] = MetricPoint{Timestamp: ts, Value: point.Value}
+				hostData[hID][metricType][i] = MetricPoint{Timestamp: ts, Value: point.Value}
 			}
 		}
-		if len(hostData[host.ID]["cpu"]) == 0 {
-			hostData[host.ID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: host.CPUUsage}}
-			hostData[host.ID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: host.Memory.Usage}}
-			var diskPercent float64
-			if len(host.Disks) > 0 {
-				diskPercent = host.Disks[0].Usage
-			}
-			hostData[host.ID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
+		if len(hostData[hID]["cpu"]) == 0 {
+			hostData[hID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: h.CPUPercent()}}
+			hostData[hID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: h.MemoryPercent()}}
+			hostData[hID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: h.DiskPercent()}}
 		}
 	}
 
@@ -6721,15 +6846,26 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "Monitor not available", http.StatusInternalServerError)
 		return
 	}
-	state := monitor.GetState()
+	readState := monitor.GetUnifiedReadState()
+	if readState == nil {
+		http.Error(w, "State unavailable", http.StatusInternalServerError)
+		return
+	}
 
 	// Build storage chart data
 	storageData := make(StorageChartsResponse)
 
-	for _, storage := range state.Storage {
-		metrics := monitor.GetStorageMetricsForChart(storage.ID, duration)
+	for _, sp := range readState.StoragePools() {
+		if sp == nil {
+			continue
+		}
+		sid := sp.SourceID()
+		if sid == "" {
+			continue
+		}
+		metrics := monitor.GetStorageMetricsForChart(sid, duration)
 
-		storageData[storage.ID] = StorageMetrics{
+		storageData[sid] = StorageMetrics{
 			Usage: metrics["usage"],
 			Used:  metrics["used"],
 			Total: metrics["total"],

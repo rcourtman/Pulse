@@ -165,21 +165,22 @@ type legacyStateRatchet struct {
 // These represent legacy nil-fallback paths that are dead code when
 // ReadState is wired. Each number must only decrease over time.
 //
-// Last updated: 2026-02-28 (total state.*: 271, GetState: 51).
-// SRC-03d: forecastStateProviderWrapper migrated from monitor.GetState() to ReadState.
+// Last updated: 2026-02-28 (total state.*: 249, GetState: 48).
+// SRC-03e: learnBaselines migrated to prefer ReadState with legacy fallback.
+// Ceilings lowered to lock in improvements from SRC-03c/03d migrations.
 var legacyStateRatchets = []legacyStateRatchet{
-	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 54, "ReadState.VMs()"},
-	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 54, "ReadState.Containers()"},
-	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 48, "ReadState.Nodes()"},
-	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 36, "ReadState.DockerHosts()"},
-	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 25, "ReadState.Hosts()"},
-	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 20, "ReadState.StoragePools()"},
+	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 52, "ReadState.VMs()"},
+	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 52, "ReadState.Containers()"},
+	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 46, "ReadState.Nodes()"},
+	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 33, "ReadState.DockerHosts()"},
+	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 23, "ReadState.Hosts()"},
+	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 18, "ReadState.StoragePools()"},
 	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 12, "ReadState.K8sClusters()"},
 	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 8, "ReadState.PBSInstances()"},
 	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 3, "ReadState.PMGInstances()"},
 
 	// GetState() calls — consumer packages must use ReadState interface
-	{regexp.MustCompile(`\.GetState\(\)`), ".GetState()", 51, "ReadState interface"},
+	{regexp.MustCompile(`\.GetState\(\)`), ".GetState()", 48, "ReadState interface"},
 }
 
 // TestLegacyStateAccessRatchet is a monotonic ratchet that prevents new
