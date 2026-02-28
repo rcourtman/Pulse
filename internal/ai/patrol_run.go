@@ -268,6 +268,11 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 
 	state := p.stateProvider.GetState()
 
+	// Snapshot readState under lock to avoid races with SetReadState.
+	p.mu.RLock()
+	rs := p.readState
+	p.mu.RUnlock()
+
 	// Helper to track findings
 	// Note: Only warning+ severity findings count toward newFindings since watch/info are filtered from UI
 	trackFinding := func(f *Finding) bool {
@@ -290,35 +295,31 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		return isNew
 	}
 
-	// Count resources for statistics (respect analysis configuration)
-	if cfg.AnalyzeNodes {
-		runStats.nodesChecked = len(state.Nodes)
+	// Count resources for statistics (respect analysis configuration).
+	// Uses canonical ReadState view surface — legacy state fallbacks removed.
+	if cfg.AnalyzeNodes && rs != nil {
+		runStats.nodesChecked = len(rs.Nodes())
 	}
-	if cfg.AnalyzeGuests {
-		runStats.guestsChecked = len(state.VMs) + len(state.Containers)
+	if cfg.AnalyzeGuests && rs != nil {
+		runStats.guestsChecked = len(rs.VMs()) + len(rs.Containers())
 	}
-	if cfg.AnalyzeDocker {
-		runStats.dockerChecked = len(state.DockerHosts)
+	if cfg.AnalyzeDocker && rs != nil {
+		runStats.dockerChecked = len(rs.DockerHosts())
 	}
-	if cfg.AnalyzeStorage {
-		// Prefer the canonical resource read surface.
-		if p.readState != nil {
-			runStats.storageChecked = len(p.readState.StoragePools())
-		} else {
-			runStats.storageChecked = 0
-		}
+	if cfg.AnalyzeStorage && rs != nil {
+		runStats.storageChecked = len(rs.StoragePools())
 	}
-	if cfg.AnalyzePBS {
-		runStats.pbsChecked = len(state.PBSInstances)
+	if cfg.AnalyzePBS && rs != nil {
+		runStats.pbsChecked = len(rs.PBSInstances())
 	}
-	if cfg.AnalyzePMG {
-		runStats.pmgChecked = len(state.PMGInstances)
+	if cfg.AnalyzePMG && rs != nil {
+		runStats.pmgChecked = len(rs.PMGInstances())
 	}
-	if cfg.AnalyzeHosts {
-		runStats.hostsChecked = len(state.Hosts)
+	if cfg.AnalyzeHosts && rs != nil {
+		runStats.hostsChecked = len(rs.Hosts())
 	}
-	if cfg.AnalyzeKubernetes {
-		runStats.kubernetesChecked = len(state.KubernetesClusters)
+	if cfg.AnalyzeKubernetes && rs != nil {
+		runStats.kubernetesChecked = len(rs.K8sClusters())
 	}
 	runStats.resourceCount = runStats.nodesChecked + runStats.guestsChecked +
 		runStats.dockerChecked + runStats.storageChecked + runStats.pbsChecked + runStats.pmgChecked + runStats.hostsChecked +

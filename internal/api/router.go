@@ -2795,134 +2795,82 @@ func (r *Router) startBaselineLearning(ctx context.Context, store *ai.BaselineSt
 }
 
 // learnBaselines updates baselines for all resources from metrics history.
-// Prefers ReadState typed views; falls back to legacy GetState() when ReadState
-// is not yet wired (e.g., during early startup).
+// Uses ReadState typed views — the legacy GetState fallback was removed
+// after ReadState became the sole state access mechanism (SRC-03e+).
 func (r *Router) learnBaselines(store *ai.BaselineStore, metricsHistory *monitoring.MetricsHistory) {
 	if r.monitor == nil {
+		return
+	}
+
+	readState := r.monitor.GetUnifiedReadState()
+	if readState == nil {
 		return
 	}
 
 	learningWindow := 7 * 24 * time.Hour // Learn from 7 days of data
 	var learned int
 
-	if readState := r.monitor.GetUnifiedReadState(); readState != nil {
-		// --- ReadState path (preferred) ---
-		// Use SourceID() for all ID lookups — metrics history is keyed by legacy
-		// source IDs (e.g. "node/pve", "qemu/100"), not unified registry IDs.
+	// Use SourceID() for all ID lookups — metrics history is keyed by legacy
+	// source IDs (e.g. "node/pve", "qemu/100"), not unified registry IDs.
 
-		for _, node := range readState.Nodes() {
-			id := node.SourceID()
-			if id == "" {
-				continue
-			}
-			for _, metric := range []string{"cpu", "memory"} {
-				points := metricsHistory.GetNodeMetrics(id, metric, learningWindow)
-				if len(points) > 0 {
-					baselinePoints := make([]ai.BaselineMetricPoint, len(points))
-					for i, p := range points {
-						baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
-					}
-					if err := store.Learn(id, "node", metric, baselinePoints); err == nil {
-						learned++
-					}
+	for _, node := range readState.Nodes() {
+		id := node.SourceID()
+		if id == "" {
+			continue
+		}
+		for _, metric := range []string{"cpu", "memory"} {
+			points := metricsHistory.GetNodeMetrics(id, metric, learningWindow)
+			if len(points) > 0 {
+				baselinePoints := make([]ai.BaselineMetricPoint, len(points))
+				for i, p := range points {
+					baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
+				}
+				if err := store.Learn(id, "node", metric, baselinePoints); err == nil {
+					learned++
 				}
 			}
 		}
+	}
 
-		for _, vm := range readState.VMs() {
-			if vm.Template() {
-				continue
-			}
-			id := vm.SourceID()
-			if id == "" {
-				continue
-			}
-			for _, metric := range []string{"cpu", "memory", "disk"} {
-				points := metricsHistory.GetGuestMetrics(id, metric, learningWindow)
-				if len(points) > 0 {
-					baselinePoints := make([]ai.BaselineMetricPoint, len(points))
-					for i, p := range points {
-						baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
-					}
-					if err := store.Learn(id, "vm", metric, baselinePoints); err == nil {
-						learned++
-					}
+	for _, vm := range readState.VMs() {
+		if vm.Template() {
+			continue
+		}
+		id := vm.SourceID()
+		if id == "" {
+			continue
+		}
+		for _, metric := range []string{"cpu", "memory", "disk"} {
+			points := metricsHistory.GetGuestMetrics(id, metric, learningWindow)
+			if len(points) > 0 {
+				baselinePoints := make([]ai.BaselineMetricPoint, len(points))
+				for i, p := range points {
+					baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
+				}
+				if err := store.Learn(id, "vm", metric, baselinePoints); err == nil {
+					learned++
 				}
 			}
 		}
+	}
 
-		for _, ct := range readState.Containers() {
-			if ct.Template() {
-				continue
-			}
-			id := ct.SourceID()
-			if id == "" {
-				continue
-			}
-			for _, metric := range []string{"cpu", "memory", "disk"} {
-				points := metricsHistory.GetGuestMetrics(id, metric, learningWindow)
-				if len(points) > 0 {
-					baselinePoints := make([]ai.BaselineMetricPoint, len(points))
-					for i, p := range points {
-						baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
-					}
-					if err := store.Learn(id, "container", metric, baselinePoints); err == nil {
-						learned++
-					}
-				}
-			}
+	for _, ct := range readState.Containers() {
+		if ct.Template() {
+			continue
 		}
-	} else {
-		// --- Legacy fallback (GetState) ---
-		state := r.monitor.GetState()
-
-		for _, node := range state.Nodes {
-			for _, metric := range []string{"cpu", "memory"} {
-				points := metricsHistory.GetNodeMetrics(node.ID, metric, learningWindow)
-				if len(points) > 0 {
-					baselinePoints := make([]ai.BaselineMetricPoint, len(points))
-					for i, p := range points {
-						baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
-					}
-					if err := store.Learn(node.ID, "node", metric, baselinePoints); err == nil {
-						learned++
-					}
-				}
-			}
+		id := ct.SourceID()
+		if id == "" {
+			continue
 		}
-
-		for _, vm := range state.VMs {
-			if vm.Template {
-				continue
-			}
-			for _, metric := range []string{"cpu", "memory", "disk"} {
-				points := metricsHistory.GetGuestMetrics(vm.ID, metric, learningWindow)
-				if len(points) > 0 {
-					baselinePoints := make([]ai.BaselineMetricPoint, len(points))
-					for i, p := range points {
-						baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
-					}
-					if err := store.Learn(vm.ID, "vm", metric, baselinePoints); err == nil {
-						learned++
-					}
+		for _, metric := range []string{"cpu", "memory", "disk"} {
+			points := metricsHistory.GetGuestMetrics(id, metric, learningWindow)
+			if len(points) > 0 {
+				baselinePoints := make([]ai.BaselineMetricPoint, len(points))
+				for i, p := range points {
+					baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
 				}
-			}
-		}
-
-		for _, ct := range state.Containers {
-			if ct.Template {
-				continue
-			}
-			for _, metric := range []string{"cpu", "memory", "disk"} {
-				points := metricsHistory.GetGuestMetrics(ct.ID, metric, learningWindow)
-				if len(points) > 0 {
-					baselinePoints := make([]ai.BaselineMetricPoint, len(points))
-					for i, p := range points {
-						baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
-					}
-					if err := store.Learn(ct.ID, "container", metric, baselinePoints); err == nil {
-						learned++
-					}
+				if err := store.Learn(id, "container", metric, baselinePoints); err == nil {
+					learned++
 				}
 			}
 		}

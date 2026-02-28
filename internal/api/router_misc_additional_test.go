@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func newTestMonitor(t *testing.T) (*monitoring.Monitor, *models.State, *monitoring.MetricsHistory) {
@@ -24,6 +25,16 @@ func newTestMonitor(t *testing.T) (*monitoring.Monitor, *models.State, *monitori
 	setUnexportedField(t, monitor, "metricsHistory", metricsHistory)
 
 	return monitor, state, metricsHistory
+}
+
+// syncTestResourceStore populates a MonitorAdapter (ResourceRegistry) from the
+// legacy state so that GetUnifiedReadState() returns a valid ReadState.
+// Call this after setting state.VMs, state.Nodes, etc.
+func syncTestResourceStore(t *testing.T, monitor *monitoring.Monitor, state *models.State) {
+	t.Helper()
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateFromSnapshot(state.GetSnapshot())
+	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(adapter))
 }
 
 func TestHandleSchedulerHealth_MethodNotAllowed(t *testing.T) {
@@ -238,6 +249,7 @@ func TestHandleStorage_Success(t *testing.T) {
 func TestHandleCharts_Success(t *testing.T) {
 	monitor, state, _ := newTestMonitor(t)
 	state.VMs = []models.VM{{ID: "vm-1", Name: "vm-one", CPU: 0.2}}
+	syncTestResourceStore(t, monitor, state)
 	router := &Router{monitor: monitor}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/charts?range=5m", nil)
@@ -258,6 +270,7 @@ func TestHandleCharts_StatsDebugMetadata(t *testing.T) {
 	state.VMs = []models.VM{{ID: "vm-1", Name: "vm-one", CPU: 0.2}}
 	state.Nodes = []models.Node{{ID: "node-1", Name: "node-one", CPU: 0.1}}
 	state.Storage = []models.Storage{{ID: "store-1", Name: "Store One", Used: 50, Total: 100}}
+	syncTestResourceStore(t, monitor, state)
 	router := &Router{monitor: monitor}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/charts?range=5m", nil)
@@ -373,6 +386,7 @@ func TestHandleInfrastructureSummaryCharts_Lightweight(t *testing.T) {
 		Disks:    []models.Disk{{Usage: 33.0}},
 		Status:   "online",
 	}}
+	syncTestResourceStore(t, monitor, state)
 	router := &Router{monitor: monitor}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/charts/infrastructure-summary?range=5m", nil)
@@ -895,6 +909,7 @@ func TestHandleStorageCharts_Success(t *testing.T) {
 	monitor, state, metricsHistory := newTestMonitor(t)
 	state.Storage = []models.Storage{{ID: "store-1", Name: "Store One"}}
 	metricsHistory.AddStorageMetric("store-1", "usage", 0.4, time.Now())
+	syncTestResourceStore(t, monitor, state)
 
 	router := &Router{monitor: monitor}
 	req := httptest.NewRequest(http.MethodGet, "/api/storage/charts?range=30", nil)
@@ -952,6 +967,9 @@ func TestLearnBaselines_WithData(t *testing.T) {
 	state.Nodes = []models.Node{{ID: "node-1", Name: "node"}}
 	state.VMs = []models.VM{{ID: "vm-1", Name: "vm", Status: "running"}}
 	state.Containers = []models.Container{{ID: "ct-1", Name: "ct", Status: "running"}}
+
+	// Sync ReadState from legacy state — learnBaselines uses ReadState exclusively.
+	syncTestResourceStore(t, monitor, state)
 
 	now := time.Now()
 	history.AddNodeMetric("node-1", "cpu", 0.5, now)
