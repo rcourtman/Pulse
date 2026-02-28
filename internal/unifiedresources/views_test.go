@@ -632,7 +632,7 @@ func TestView_StoragePoolViewAccessors(t *testing.T) {
 		LastSeen: now,
 		Tags:     []string{"fast"},
 		ParentID: &parentID,
-		Proxmox:  &ProxmoxData{NodeName: "pve-a", Instance: "lab"},
+		Proxmox:  &ProxmoxData{SourceID: "local-zfs", NodeName: "pve-a", Instance: "lab"},
 		Storage: &StorageMeta{
 			Type:              "zfspool",
 			Content:           "images,iso",
@@ -656,8 +656,8 @@ func TestView_StoragePoolViewAccessors(t *testing.T) {
 	if v.ID() != "storage-1" || v.Name() != "local-zfs" || v.Status() != StatusOnline {
 		t.Fatalf("expected basic accessors to match, got id=%q name=%q status=%q", v.ID(), v.Name(), v.Status())
 	}
-	if v.Node() != "pve-a" || v.Instance() != "lab" {
-		t.Fatalf("expected node/instance %q/%q, got %q/%q", "pve-a", "lab", v.Node(), v.Instance())
+	if v.Node() != "pve-a" || v.Instance() != "lab" || v.SourceID() != "local-zfs" {
+		t.Fatalf("expected node/instance/sourceID %q/%q/%q, got %q/%q/%q", "pve-a", "lab", "local-zfs", v.Node(), v.Instance(), v.SourceID())
 	}
 	if v.StorageType() != "zfspool" || v.Content() != "images,iso" || !reflect.DeepEqual(v.ContentTypes(), []string{"images", "iso"}) {
 		t.Fatalf("expected storage meta to match, got type=%q content=%q contentTypes=%v", v.StorageType(), v.Content(), v.ContentTypes())

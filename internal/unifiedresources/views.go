@@ -1111,6 +1111,14 @@ func (v StoragePoolView) Instance() string {
 	return v.r.Proxmox.Instance
 }
 
+// SourceID returns the original Proxmox-level storage ID (e.g. "local-lvm").
+func (v StoragePoolView) SourceID() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.SourceID
+}
+
 func (v StoragePoolView) StorageType() string {
 	if v.r == nil || v.r.Storage == nil {
 		return ""

@@ -577,6 +577,7 @@ func resourceFromStorage(storage models.Storage) (Resource, ResourceIdentity) {
 		UpdatedAt: now,
 		Metrics:   metricsFromStorage(storage),
 		Proxmox: &ProxmoxData{
+			SourceID: storage.ID,
 			NodeName: storage.Node,
 			Instance: storage.Instance,
 		},

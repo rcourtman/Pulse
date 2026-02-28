@@ -1605,10 +1605,14 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, orgID, da
 			}
 		}
 	}
-	// Wire up state provider for forecast context
+	// Wire up state provider for forecast context (via ReadState)
 	if monitor != nil {
-		forecastStateAdapter := &forecastStateProviderWrapper{monitor: monitor}
-		forecastService.SetStateProvider(forecastStateAdapter)
+		if rs := monitor.GetUnifiedReadState(); rs != nil {
+			forecastStateAdapter := &forecastStateProviderWrapper{readState: rs}
+			forecastService.SetStateProvider(forecastStateAdapter)
+		} else {
+			log.Warn().Msg("AI Intelligence: Forecast state provider not wired — ReadState unavailable")
+		}
 	}
 	r.aiSettingsHandler.SetForecastServiceForOrg(orgID, forecastService)
 	log.Info().Msg("AI Intelligence: Forecast service initialized")
@@ -2228,49 +2232,54 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 	log.Info().Str("org_id", orgID).Msg("AI chat MCP tool providers wired")
 }
 
-// forecastStateProviderWrapper wraps monitor to implement forecast.StateProvider
+// forecastStateProviderWrapper wraps ReadState to implement forecast.StateProvider.
+// Uses typed view accessors (ReadState) instead of legacy state access.
 type forecastStateProviderWrapper struct {
-	monitor *monitoring.Monitor
+	readState unifiedresources.ReadState
 }
 
 func (w *forecastStateProviderWrapper) GetState() forecast.StateSnapshot {
-	if w.monitor == nil {
+	if w.readState == nil {
 		return forecast.StateSnapshot{}
 	}
 
-	state := w.monitor.GetState()
+	vms := w.readState.VMs()
+	containers := w.readState.Containers()
+	nodes := w.readState.Nodes()
+	storagePools := w.readState.StoragePools()
+
 	result := forecast.StateSnapshot{
-		VMs:        make([]forecast.VMInfo, 0, len(state.VMs)),
-		Containers: make([]forecast.ContainerInfo, 0, len(state.Containers)),
-		Nodes:      make([]forecast.NodeInfo, 0, len(state.Nodes)),
-		Storage:    make([]forecast.StorageInfo, 0, len(state.Storage)),
+		VMs:        make([]forecast.VMInfo, 0, len(vms)),
+		Containers: make([]forecast.ContainerInfo, 0, len(containers)),
+		Nodes:      make([]forecast.NodeInfo, 0, len(nodes)),
+		Storage:    make([]forecast.StorageInfo, 0, len(storagePools)),
 	}
 
-	for _, vm := range state.VMs {
+	for _, vm := range vms {
 		result.VMs = append(result.VMs, forecast.VMInfo{
-			ID:   vm.ID,
-			Name: vm.Name,
+			ID:   vm.SourceID(),
+			Name: vm.Name(),
 		})
 	}
 
-	for _, ct := range state.Containers {
+	for _, ct := range containers {
 		result.Containers = append(result.Containers, forecast.ContainerInfo{
-			ID:   ct.ID,
-			Name: ct.Name,
+			ID:   ct.SourceID(),
+			Name: ct.Name(),
 		})
 	}
 
-	for _, node := range state.Nodes {
+	for _, node := range nodes {
 		result.Nodes = append(result.Nodes, forecast.NodeInfo{
-			ID:   node.ID,
-			Name: node.Name,
+			ID:   node.SourceID(),
+			Name: node.Name(),
 		})
 	}
 
-	for _, storage := range state.Storage {
+	for _, sp := range storagePools {
 		result.Storage = append(result.Storage, forecast.StorageInfo{
-			ID:   storage.ID,
-			Name: storage.Name,
+			ID:   sp.SourceID(),
+			Name: sp.Name(),
 		})
 	}
 

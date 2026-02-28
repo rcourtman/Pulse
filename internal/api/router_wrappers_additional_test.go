@@ -11,19 +11,20 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestForecastStateProviderWrapper_GetState(t *testing.T) {
-	state := models.NewState()
-	state.VMs = []models.VM{{ID: "vm-1", Name: "vm-one"}}
-	state.Containers = []models.Container{{ID: "ct-1", Name: "ct-one"}}
-	state.Nodes = []models.Node{{ID: "node-1", Name: "node-one"}}
-	state.Storage = []models.Storage{{ID: "store-1", Name: "store-one"}}
+	// Build a ResourceRegistry with known resources and use it as ReadState.
+	rr := unifiedresources.NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		VMs:        []models.VM{{ID: "vm-1", Name: "vm-one", Node: "n", Instance: "i"}},
+		Containers: []models.Container{{ID: "ct-1", Name: "ct-one", Node: "n", Instance: "i"}},
+		Nodes:      []models.Node{{ID: "node-1", Name: "node-one", Instance: "i"}},
+		Storage:    []models.Storage{{ID: "store-1", Name: "store-one", Node: "n", Instance: "i"}},
+	})
 
-	monitor := &monitoring.Monitor{}
-	setUnexportedField(t, monitor, "state", state)
-
-	wrapper := &forecastStateProviderWrapper{monitor: monitor}
+	wrapper := &forecastStateProviderWrapper{readState: rr}
 	snapshot := wrapper.GetState()
 
 	if len(snapshot.VMs) != 1 || snapshot.VMs[0].ID != "vm-1" || snapshot.VMs[0].Name != "vm-one" {
@@ -40,7 +41,7 @@ func TestForecastStateProviderWrapper_GetState(t *testing.T) {
 	}
 }
 
-func TestForecastStateProviderWrapper_NilMonitor(t *testing.T) {
+func TestForecastStateProviderWrapper_NilReadState(t *testing.T) {
 	wrapper := &forecastStateProviderWrapper{}
 	snapshot := wrapper.GetState()
 
