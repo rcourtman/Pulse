@@ -365,7 +365,7 @@ func (s *Service) CheckBudget(useCase string) error {
 }
 
 // SetReadState injects a unified read-state provider for context enrichment.
-// This is forwarded to PatrolService when available.
+// This is forwarded to PatrolService and DiscoveryService when available.
 func (s *Service) SetReadState(rs unifiedresources.ReadState) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -373,6 +373,9 @@ func (s *Service) SetReadState(rs unifiedresources.ReadState) {
 
 	if s.patrolService != nil {
 		s.patrolService.SetReadState(rs)
+	}
+	if s.discoveryService != nil {
+		s.discoveryService.SetReadState(rs)
 	}
 }
 
@@ -457,6 +460,11 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 			discoveryCfg,
 		)
 		s.discoveryService.SetAIAnalyzer(s)
+
+		// Forward unified ReadState if already configured.
+		if s.readState != nil {
+			s.discoveryService.SetReadState(s.readState)
+		}
 
 		// Start background discovery if enabled and interval is set
 		if s.cfg != nil && s.cfg.IsDiscoveryEnabled() && s.cfg.GetDiscoveryInterval() > 0 {

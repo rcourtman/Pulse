@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -223,6 +224,7 @@ type Service struct {
 	store         *Store
 	scanner       *DeepScanner
 	stateProvider StateProvider
+	readState     unifiedresources.ReadState // Preferred typed state access (SRC migration)
 	aiAnalyzer    AIAnalyzer
 	wsHub         WSBroadcaster // WebSocket hub for broadcasting progress
 
@@ -377,6 +379,14 @@ func (s *Service) SetAIAnalyzer(analyzer AIAnalyzer) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.aiAnalyzer = analyzer
+}
+
+// SetReadState sets the typed ReadState provider for the discovery service.
+// When set, getSnapshot() will prefer ReadState over the legacy stateProvider.
+func (s *Service) SetReadState(rs unifiedresources.ReadState) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.readState = rs
 }
 
 // Start begins the background discovery service.
@@ -684,6 +694,184 @@ func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
 		Msg("Automatic discovery refresh completed")
 }
 
+// getSnapshot returns the current infrastructure state, preferring ReadState
+// typed views when available, falling back to the legacy stateProvider.
+// Returns an empty snapshot and false if neither source is available.
+func (s *Service) getSnapshot() (StateSnapshot, bool) {
+	rs := s.getReadState()
+	if rs != nil {
+		return s.snapshotFromReadState(rs), true
+	}
+	if s.stateProvider != nil {
+		return s.stateProvider.GetState(), true
+	}
+	return StateSnapshot{}, false
+}
+
+// getReadState returns the ReadState provider, safely reading it under the
+// service lock to avoid races with concurrent SetReadState calls.
+func (s *Service) getReadState() unifiedresources.ReadState {
+	s.mu.RLock()
+	rs := s.readState
+	s.mu.RUnlock()
+	return rs
+}
+
+// hasStateAccess returns true when either ReadState or the legacy
+// stateProvider is available. Safe for concurrent use.
+func (s *Service) hasStateAccess() bool {
+	return s.getReadState() != nil || s.stateProvider != nil
+}
+
+// snapshotFromReadState converts ReadState typed views into the local
+// StateSnapshot type used by servicediscovery functions. Only the fields
+// that the legacy discoveryStateAdapter populated are converted (matching
+// existing behaviour).
+func (s *Service) snapshotFromReadState(rs unifiedresources.ReadState) StateSnapshot {
+	// VMs
+	vmViews := rs.VMs()
+	vms := make([]VM, 0, len(vmViews))
+	for _, v := range vmViews {
+		vms = append(vms, VM{
+			VMID:        v.VMID(),
+			Name:        v.Name(),
+			Node:        v.Node(),
+			Status:      string(v.Status()),
+			Instance:    v.Instance(),
+			IPAddresses: v.IPAddresses(),
+		})
+	}
+
+	// LXC containers
+	ctViews := rs.Containers()
+	containers := make([]Container, 0, len(ctViews))
+	for _, v := range ctViews {
+		containers = append(containers, Container{
+			VMID:        v.VMID(),
+			Name:        v.Name(),
+			Node:        v.Node(),
+			Status:      string(v.Status()),
+			Instance:    v.Instance(),
+			IPAddresses: v.IPAddresses(),
+		})
+	}
+
+	// Docker hosts — build host → children map from flat DockerContainers list
+	dcViews := rs.DockerContainers()
+	childrenByParent := make(map[string][]DockerContainer, len(dcViews))
+	for _, dc := range dcViews {
+		parentID := dc.ParentID()
+		ports := dc.Ports()
+		sdPorts := make([]DockerPort, 0, len(ports))
+		for _, p := range ports {
+			sdPorts = append(sdPorts, DockerPort{
+				PublicPort:  p.PublicPort,
+				PrivatePort: p.PrivatePort,
+				Protocol:    p.Protocol,
+			})
+		}
+		mounts := dc.Mounts()
+		sdMounts := make([]DockerMount, 0, len(mounts))
+		for _, m := range mounts {
+			sdMounts = append(sdMounts, DockerMount{
+				Source:      m.Source,
+				Destination: m.Destination,
+			})
+		}
+		childrenByParent[parentID] = append(childrenByParent[parentID], DockerContainer{
+			ID:     dc.ContainerID(),
+			Name:   dc.Name(),
+			Image:  dc.Image(),
+			Status: string(dc.Status()),
+			Ports:  sdPorts,
+			Labels: dc.Labels(),
+			Mounts: sdMounts,
+		})
+	}
+
+	dhViews := rs.DockerHosts()
+	dockerHosts := make([]DockerHost, 0, len(dhViews))
+	for _, dh := range dhViews {
+		dockerHosts = append(dockerHosts, DockerHost{
+			AgentID:    dh.AgentID(),
+			Hostname:   dh.Hostname(),
+			Containers: childrenByParent[dh.ID()],
+		})
+	}
+
+	// Hosts
+	// Note: CPUCount is not available via HostView (not mapped in unifiedresources
+	// AgentData). The legacy discoveryStateAdapter populates it from models.Host.
+	// This is a known data gap tracked as SRC-01c; it only affects the
+	// "cpu_count" metadata field in AI analysis prompts.
+	hViews := rs.Hosts()
+	hosts := make([]Host, 0, len(hViews))
+	for _, h := range hViews {
+		hosts = append(hosts, Host{
+			ID:            h.ID(),
+			Hostname:      h.Hostname(),
+			DisplayName:   h.Name(),
+			Platform:      h.Platform(),
+			OSName:        h.OSName(),
+			OSVersion:     h.OSVersion(),
+			KernelVersion: h.KernelVersion(),
+			Architecture:  h.Architecture(),
+			Status:        string(h.Status()),
+			Tags:          h.Tags(),
+		})
+	}
+
+	// Nodes
+	nViews := rs.Nodes()
+	nodes := make([]Node, 0, len(nViews))
+	for _, n := range nViews {
+		nodes = append(nodes, Node{
+			ID:                n.ID(),
+			Name:              n.Name(),
+			LinkedHostAgentID: n.LinkedHostAgentID(),
+		})
+	}
+
+	// Kubernetes clusters (ReadState provides K8sClusters + Pods separately).
+	// Note: PodView does not expose NodeName or sub-container details; these
+	// fields are zero-valued. The legacy discoveryStateAdapter also omits
+	// KubernetesClusters entirely, so the ReadState path is strictly better.
+	clusterViews := rs.K8sClusters()
+	podViews := rs.Pods()
+	podsByCluster := make(map[string][]KubernetesPod, len(podViews))
+	for _, pv := range podViews {
+		parentID := pv.ParentID()
+		podsByCluster[parentID] = append(podsByCluster[parentID], KubernetesPod{
+			UID:       pv.PodUID(),
+			Name:      pv.Name(),
+			Namespace: pv.Namespace(),
+			Phase:     pv.PodPhase(),
+			Labels:    pv.Labels(),
+			OwnerKind: pv.OwnerKind(),
+			OwnerName: pv.OwnerName(),
+		})
+	}
+	clusters := make([]KubernetesCluster, 0, len(clusterViews))
+	for _, cv := range clusterViews {
+		clusters = append(clusters, KubernetesCluster{
+			ID:      cv.ID(),
+			Name:    cv.Name(),
+			AgentID: cv.AgentID(),
+			Status:  string(cv.Status()),
+			Pods:    podsByCluster[cv.ID()],
+		})
+	}
+
+	return StateSnapshot{
+		VMs:                vms,
+		Containers:         containers,
+		DockerHosts:        dockerHosts,
+		Hosts:              hosts,
+		Nodes:              nodes,
+		KubernetesClusters: clusters,
+	}
+}
+
 // collectFingerprints collects fingerprints from all resources (Docker, LXC, VM).
 // This is metadata-only and does not invoke the AI analyzer.
 func (s *Service) collectFingerprints(ctx context.Context) {
@@ -697,11 +885,10 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 	s.lastRun = time.Now()
 	s.mu.Unlock()
 
-	if s.stateProvider == nil {
+	state, ok := s.getSnapshot()
+	if !ok {
 		return
 	}
-
-	state := s.stateProvider.GetState()
 	changedCount := 0
 	newCount := 0
 
@@ -1105,7 +1292,7 @@ func (s *Service) enhanceWithDeepScan(ctx context.Context, discovery *ResourceDi
 	}
 
 	// Add metadata if available
-	if s.stateProvider != nil {
+	if s.hasStateAccess() {
 		analysisReq.Metadata = s.getResourceMetadata(req)
 	}
 
@@ -1416,7 +1603,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	}
 
 	// Add metadata if available
-	if s.stateProvider != nil {
+	if s.hasStateAccess() {
 		analysisReq.Metadata = s.getResourceMetadata(req)
 	}
 
@@ -1536,7 +1723,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	urlSuggestionDiagnostic := ""
 	urlSuggestionSourceCode := ""
 	urlSuggestionSourceDetail := ""
-	if s.stateProvider == nil {
+	if !s.hasStateAccess() {
 		urlSuggestionDiagnostic = "state provider unavailable"
 	} else {
 		externalIP := s.getResourceExternalIP(req)
@@ -1601,10 +1788,13 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 // normalizeDiscoveryRequest resolves host discovery aliases to a canonical ID.
 // This prevents duplicate discoveries for the same physical host under different IDs.
 func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]string) DiscoveryRequest {
-	if req.ResourceType != ResourceTypeHost || s.stateProvider == nil {
+	if req.ResourceType != ResourceTypeHost {
 		return req
 	}
-	state := s.stateProvider.GetState()
+	state, ok := s.getSnapshot()
+	if !ok {
+		return req
+	}
 	addAlias := func(hostID, resourceID string) {
 		if hostID == "" || resourceID == "" {
 			return
@@ -1675,11 +1865,10 @@ func (s *Service) cleanupAliasedDiscoveries(canonicalID string, aliasIDs []strin
 
 // getResourceMetadata retrieves metadata for a resource from the state.
 func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
-	if s.stateProvider == nil {
+	state, ok := s.getSnapshot()
+	if !ok {
 		return nil
 	}
-
-	state := s.stateProvider.GetState()
 	metadata := make(map[string]any)
 
 	switch req.ResourceType {
@@ -1743,11 +1932,10 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 // For system containers/VMs, this is the first IP from the Proxmox guest agent.
 // For Docker containers, this is the Docker host's IP/hostname.
 func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
-	if s.stateProvider == nil {
+	state, ok := s.getSnapshot()
+	if !ok {
 		return ""
 	}
-
-	state := s.stateProvider.GetState()
 
 	switch req.ResourceType {
 	case ResourceTypeSystemContainer:
@@ -1932,11 +2120,10 @@ func (s *Service) suggestHostManagementURLWithReason(req DiscoveryRequest, host 
 	if host == "" {
 		return "", "no_host", "no host or IP candidate available"
 	}
-	if s.stateProvider == nil {
+	state, ok := s.getSnapshot()
+	if !ok {
 		return "", "state_provider_unavailable", "state unavailable"
 	}
-
-	state := s.stateProvider.GetState()
 
 	nodeMatchesReq := func(node Node) bool {
 		return node.ID == req.HostID ||
@@ -2378,11 +2565,10 @@ func (s *Service) ListDiscoveriesByHost(hostID string) ([]*ResourceDiscovery, er
 // is represented by both its Node Name and its Linked Host Agent ID.
 // The Host Agent ID is preferred.
 func (s *Service) deduplicateDiscoveries(discoveries []*ResourceDiscovery) []*ResourceDiscovery {
-	if s.stateProvider == nil {
+	state, ok := s.getSnapshot()
+	if !ok {
 		return discoveries
 	}
-
-	state := s.stateProvider.GetState()
 	if len(state.Nodes) == 0 {
 		return discoveries
 	}
@@ -2467,16 +2653,17 @@ func (s *Service) upgradeCLIAccessIfNeeded(d *ResourceDiscovery) {
 	}
 
 	// Fix empty hostname by looking up the resource name from state
-	if d.Hostname == "" && s.stateProvider != nil {
-		state := s.stateProvider.GetState()
-		hostname := s.lookupHostnameFromState(d.ResourceType, d.HostID, d.ResourceID, state)
-		if hostname != "" {
-			d.Hostname = hostname
-			upgraded = true
-			log.Debug().
-				Str("id", d.ID).
-				Str("hostname", hostname).
-				Msg("Populated missing hostname from state")
+	if d.Hostname == "" {
+		if state, ok := s.getSnapshot(); ok {
+			hostname := s.lookupHostnameFromState(d.ResourceType, d.HostID, d.ResourceID, state)
+			if hostname != "" {
+				d.Hostname = hostname
+				upgraded = true
+				log.Debug().
+					Str("id", d.ID).
+					Str("hostname", hostname).
+					Msg("Populated missing hostname from state")
+			}
 		}
 	}
 
