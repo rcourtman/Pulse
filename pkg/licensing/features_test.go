@@ -351,6 +351,76 @@ func TestTierFeatureInheritance(t *testing.T) {
 	}
 }
 
+func TestLimitsForCloudPlan_KnownPlans(t *testing.T) {
+	tests := []struct {
+		plan      string
+		wantLimit int64
+	}{
+		{"cloud_starter", 10},
+		{"cloud_power", 30},
+		{"cloud_max", 75},
+		{"cloud_founding", 10},
+		{"msp_hosted_v1", 50},
+		{"msp_starter", 50},
+		{"msp_growth", 150},
+		{"msp_scale", 400},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.plan, func(t *testing.T) {
+			limits, known := LimitsForCloudPlan(tt.plan)
+			if !known {
+				t.Errorf("LimitsForCloudPlan(%q): known = false, want true", tt.plan)
+			}
+			got, ok := limits["max_agents"]
+			if !ok {
+				t.Fatalf("LimitsForCloudPlan(%q): missing max_agents key", tt.plan)
+			}
+			if got != tt.wantLimit {
+				t.Errorf("LimitsForCloudPlan(%q): max_agents = %d, want %d", tt.plan, got, tt.wantLimit)
+			}
+		})
+	}
+}
+
+func TestLimitsForCloudPlan_UnknownPlanFailsClosed(t *testing.T) {
+	unknownPlans := []string{
+		"stripe",
+		"stripe_price:price_123",
+		"",
+		"unknown_plan",
+		"cloud_unknown",
+	}
+
+	for _, plan := range unknownPlans {
+		t.Run(plan, func(t *testing.T) {
+			limits, known := LimitsForCloudPlan(plan)
+			if known {
+				t.Errorf("LimitsForCloudPlan(%q): known = true, want false", plan)
+			}
+			got, ok := limits["max_agents"]
+			if !ok {
+				t.Fatalf("LimitsForCloudPlan(%q): missing max_agents key (fail-open!)", plan)
+			}
+			if got != int64(UnknownPlanDefaultAgentLimit) {
+				t.Errorf("LimitsForCloudPlan(%q): max_agents = %d, want default %d", plan, got, UnknownPlanDefaultAgentLimit)
+			}
+		})
+	}
+}
+
+func TestLimitsForCloudPlan_NeverReturnsEmptyMap(t *testing.T) {
+	// This test ensures the fail-closed invariant: LimitsForCloudPlan must
+	// ALWAYS return a map with "max_agents" set, regardless of input.
+	inputs := []string{"cloud_starter", "stripe", "", "garbage", "msp_hosted_v1"}
+	for _, plan := range inputs {
+		limits, _ := LimitsForCloudPlan(plan)
+		if _, ok := limits["max_agents"]; !ok {
+			t.Errorf("LimitsForCloudPlan(%q) returned map without max_agents — fail-open vulnerability", plan)
+		}
+	}
+}
+
 // TestAllTiersHaveHostLimitsAndHistoryDays ensures every tier in TierFeatures
 // also has entries in TierAgentLimits and TierHistoryDays.
 func TestAllTiersHaveHostLimitsAndHistoryDays(t *testing.T) {

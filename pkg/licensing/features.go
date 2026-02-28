@@ -69,6 +69,40 @@ var TierAgentLimits = map[Tier]int{
 	TierEnterprise: 0,  // Custom
 }
 
+// CloudPlanAgentLimits maps cloud plan version strings to per-plan agent
+// limits. When a tenant is provisioned or its subscription changes, the
+// provisioner uses this map to populate BillingState.Limits["max_agents"].
+var CloudPlanAgentLimits = map[string]int{
+	// Individual Cloud tiers
+	"cloud_starter":  10,
+	"cloud_power":    30,
+	"cloud_max":      75,
+	"cloud_founding": 10, // Founding rate = Starter limits
+
+	// MSP tiers — host pool limits from pricing spec
+	"msp_hosted_v1": 50,  // Legacy MSP default = Starter pool
+	"msp_starter":   50,  // MSP Starter: 10 clients, 50 host pool
+	"msp_growth":    150, // MSP Growth: 25 clients, 150 host pool
+	"msp_scale":     400, // MSP Scale: 50 clients, 400 host pool
+}
+
+// UnknownPlanDefaultAgentLimit is the safe-default agent limit applied when a
+// plan version is not recognized. Fail-closed: unknown plans get the smallest
+// tier limit rather than unlimited access.
+const UnknownPlanDefaultAgentLimit = 10
+
+// LimitsForCloudPlan returns the agent limit map for a given cloud plan
+// version and whether the plan was recognized. If the plan is recognized, the
+// map contains "max_agents" with the per-plan limit. If unrecognized, returns
+// a safe default limit (fail-closed) and known=false so callers can decide
+// whether to reject, quarantine, or proceed with restricted access.
+func LimitsForCloudPlan(planVersion string) (limits map[string]int64, known bool) {
+	if limit, ok := CloudPlanAgentLimits[planVersion]; ok {
+		return map[string]int64{"max_agents": int64(limit)}, true
+	}
+	return map[string]int64{"max_agents": int64(UnknownPlanDefaultAgentLimit)}, false
+}
+
 // TierHistoryDays defines the maximum metrics history retention per tier.
 var TierHistoryDays = map[Tier]int{
 	TierFree:       7,

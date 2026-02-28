@@ -495,9 +495,18 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 		return fmt.Errorf("write cloud handoff key for tenant %s: %w", tenantID, err)
 	}
 
+	limits, knownPlan := pkglicensing.LimitsForCloudPlan(planVersion)
+	if !knownPlan {
+		log.Warn().
+			Str("customer_id", customerID).
+			Str("plan_version", planVersion).
+			Int64("default_max_agents", limits["max_agents"]).
+			Msg("Unknown plan version during checkout; applying safe default agent limit")
+	}
+
 	state := &pkglicensing.BillingState{
 		Capabilities:         pkglicensing.DeriveCapabilitiesFromTier(pkglicensing.TierCloud, nil),
-		Limits:               map[string]int64{},
+		Limits:               limits,
 		MetersEnabled:        []string{},
 		PlanVersion:          planVersion,
 		SubscriptionState:    pkglicensing.SubStateActive,
@@ -652,9 +661,17 @@ func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, display
 	}
 
 	planVersion := "msp_hosted_v1"
+	limits, knownPlan := pkglicensing.LimitsForCloudPlan(planVersion)
+	if !knownPlan {
+		log.Warn().
+			Str("account_id", accountID).
+			Str("plan_version", planVersion).
+			Int64("default_max_agents", limits["max_agents"]).
+			Msg("Unknown plan version during workspace provisioning; applying safe default agent limit")
+	}
 	state := &pkglicensing.BillingState{
 		Capabilities:      pkglicensing.DeriveCapabilitiesFromTier(pkglicensing.TierCloud, nil),
-		Limits:            map[string]int64{},
+		Limits:            limits,
 		MetersEnabled:     []string{},
 		PlanVersion:       planVersion,
 		SubscriptionState: pkglicensing.SubStateActive,
@@ -746,10 +763,20 @@ func (p *Provisioner) HandleSubscriptionUpdated(ctx context.Context, sub Subscri
 		caps = pkglicensing.DeriveCapabilitiesFromTier(pkglicensing.TierCloud, nil)
 	}
 
+	limits, knownPlan := pkglicensing.LimitsForCloudPlan(planVersion)
+	if !knownPlan {
+		log.Warn().
+			Str("tenant_id", tenant.ID).
+			Str("customer_id", customerID).
+			Str("plan_version", planVersion).
+			Int64("default_max_agents", limits["max_agents"]).
+			Msg("Unknown plan version during subscription update; applying safe default agent limit")
+	}
+
 	tenantDataDir := p.tenantDataDir(tenant.ID)
 	state := &pkglicensing.BillingState{
 		Capabilities:         caps,
-		Limits:               map[string]int64{},
+		Limits:               limits,
 		MetersEnabled:        []string{},
 		PlanVersion:          planVersion,
 		SubscriptionState:    subState,
@@ -928,6 +955,15 @@ func (p *Provisioner) HandleMSPSubscriptionUpdated(ctx context.Context, sub Subs
 		caps = pkglicensing.DeriveCapabilitiesFromTier(pkglicensing.TierCloud, nil)
 	}
 
+	limits, knownPlan := pkglicensing.LimitsForCloudPlan(planVersion)
+	if !knownPlan {
+		log.Warn().
+			Str("account_id", sa.AccountID).
+			Str("customer_id", customerID).
+			Str("plan_version", planVersion).
+			Int64("default_max_agents", limits["max_agents"]).
+			Msg("Unknown plan version during MSP subscription update; applying safe default agent limit")
+	}
 	for _, tenant := range tenants {
 		if tenant == nil {
 			continue
@@ -935,7 +971,7 @@ func (p *Provisioner) HandleMSPSubscriptionUpdated(ctx context.Context, sub Subs
 		tenantDataDir := p.tenantDataDir(tenant.ID)
 		state := &pkglicensing.BillingState{
 			Capabilities:         caps,
-			Limits:               map[string]int64{},
+			Limits:               limits,
 			MetersEnabled:        []string{},
 			PlanVersion:          planVersion,
 			SubscriptionState:    subState,
