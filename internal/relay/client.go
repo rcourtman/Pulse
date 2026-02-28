@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"math/rand/v2"
 	"net/http"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog"
 )
 
@@ -173,6 +173,13 @@ func (c *Client) Run(ctx context.Context) error {
 			c.mu.Unlock()
 
 			delay := c.backoffDelay(consecutiveFailures)
+			if delay <= 0 {
+				c.logger.Warn().
+					Int("failures", consecutiveFailures).
+					Dur("computed_retry_in", delay).
+					Msg("computed non-positive relay retry delay; using base reconnect delay")
+				delay = baseReconnectDelay
+			}
 
 			if consecutiveFailures >= 3 {
 				c.logger.Warn().Err(err).
@@ -221,10 +228,10 @@ func nextConsecutiveFailures(current int, connected bool) int {
 
 // Close stops the client and closes the connection.
 func (c *Client) Close() {
-	c.mu.RLock()
+	c.lifecycleMu.Lock()
 	cancel := c.cancel
 	done := c.done
-	c.mu.RUnlock()
+	c.lifecycleMu.Unlock()
 
 	if cancel == nil {
 		return
@@ -836,13 +843,7 @@ func queueFrame(sendCh chan<- []byte, f Frame, logger zerolog.Logger) {
 }
 
 func (c *Client) backoffDelay(failures int) time.Duration {
-	delay := baseReconnectDelay * time.Duration(math.Pow(2, float64(failures-1)))
-	if delay > maxReconnectDelay {
-		delay = maxReconnectDelay
-	}
-	// Add jitter
-	jitter := time.Duration(float64(delay) * reconnectJitter * (rand.Float64()*2 - 1))
-	return delay + jitter
+	return utils.ExponentialBackoff(baseReconnectDelay, maxReconnectDelay, failures, reconnectJitter, rand.Float64)
 }
 
 // licenseError is returned when the relay server rejects us due to license issues.
