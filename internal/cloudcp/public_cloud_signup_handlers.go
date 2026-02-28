@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/cpsec"
 	cpemail "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 	stripe "github.com/stripe/stripe-go/v82"
 	stripesession "github.com/stripe/stripe-go/v82/checkout/session"
@@ -349,12 +350,7 @@ func (h *PublicCloudSignupHandlers) createCheckout(email, orgName string) (strin
 		SubscriptionData: &stripe.CheckoutSessionSubscriptionDataParams{
 			TrialPeriodDays: stripe.Int64(trialSignupTrialDays),
 		},
-		Metadata: map[string]string{
-			"account_kind":         string(registry.AccountKindIndividual),
-			"account_display_name": orgName,
-			"display_name":         orgName,
-			"signup_source":        "public_cloud_signup",
-		},
+		Metadata: h.buildCheckoutMetadata(priceID, orgName),
 	}
 	session, err := h.createCheckoutSession(params)
 	if err != nil {
@@ -364,6 +360,22 @@ func (h *PublicCloudSignupHandlers) createCheckout(email, orgName string) (strin
 		return "", fmt.Errorf("stripe returned empty checkout URL")
 	}
 	return strings.TrimSpace(session.URL), nil
+}
+
+func (h *PublicCloudSignupHandlers) buildCheckoutMetadata(priceID, orgName string) map[string]string {
+	meta := map[string]string{
+		"account_kind":         string(registry.AccountKindIndividual),
+		"account_display_name": orgName,
+		"display_name":         orgName,
+		"signup_source":        "public_cloud_signup",
+	}
+	// Only accept cloud_* plan versions for public individual signup.
+	// MSP plans require a different signup path; reject them here to prevent
+	// misconfiguration from granting MSP-level limits to individual accounts.
+	if plan, ok := pkglicensing.PlanVersionForPriceID(priceID); ok && strings.HasPrefix(plan, "cloud_") {
+		meta["plan_version"] = plan
+	}
+	return meta
 }
 
 func (h *PublicCloudSignupHandlers) renderSignupPage(w http.ResponseWriter, r *http.Request, status int, data publicCloudSignupPageData) {

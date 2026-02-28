@@ -487,3 +487,67 @@ func TestCloudPlanWorkspaceLimitsConsistentWithAgentLimits(t *testing.T) {
 		}
 	}
 }
+
+func TestPlanVersionForPriceID_KnownPrices(t *testing.T) {
+	tests := []struct {
+		priceID  string
+		wantPlan string
+	}{
+		// Cloud Starter (monthly, annual, founding)
+		{"price_1T5kflBrHBocJIGHUqPv1dzV", "cloud_starter"},
+		{"price_1T5kfmBrHBocJIGHTS3ymKxM", "cloud_starter"},
+		{"price_1T5kfnBrHBocJIGHATQJr79D", "cloud_founding"},
+		// Cloud Power
+		{"price_1T5kg2BrHBocJIGHmkoF0zXY", "cloud_power"},
+		{"price_1T5kg3BrHBocJIGH2EtzKofV", "cloud_power"},
+		// Cloud Max
+		{"price_1T5kg4BrHBocJIGHHa8Ecqho", "cloud_max"},
+		{"price_1T5kg5BrHBocJIGH5AIJ4nVc", "cloud_max"},
+		// MSP Starter
+		{"price_1T5kgTBrHBocJIGHjOs15LI2", "msp_starter"},
+		{"price_1T5kgUBrHBocJIGHT6PiOn6x", "msp_starter"},
+		// MSP Growth
+		{"price_1T5kgVBrHBocJIGHulNsCTb1", "msp_growth"},
+		{"price_1T5kgWBrHBocJIGHTuaNjnJ2", "msp_growth"},
+		// MSP Scale
+		{"price_1T5kgWBrHBocJIGHo40iFeRd", "msp_scale"},
+		{"price_1T5kgXBrHBocJIGHWlOgTyGV", "msp_scale"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.priceID, func(t *testing.T) {
+			plan, ok := PlanVersionForPriceID(tt.priceID)
+			if !ok {
+				t.Fatalf("PlanVersionForPriceID(%q): not found", tt.priceID)
+			}
+			if plan != tt.wantPlan {
+				t.Errorf("PlanVersionForPriceID(%q) = %q, want %q", tt.priceID, plan, tt.wantPlan)
+			}
+		})
+	}
+}
+
+func TestPlanVersionForPriceID_UnknownPrices(t *testing.T) {
+	unknowns := []string{"price_unknown", "", "not_a_price"}
+	for _, id := range unknowns {
+		t.Run(id, func(t *testing.T) {
+			_, ok := PlanVersionForPriceID(id)
+			if ok {
+				t.Errorf("PlanVersionForPriceID(%q): expected not found", id)
+			}
+		})
+	}
+}
+
+// TestPriceIDToPlanVersion_AllMapToKnownPlans ensures every plan version in the
+// price→plan map is recognized by LimitsForCloudPlan (fail-closed safety net).
+func TestPriceIDToPlanVersion_AllMapToKnownPlans(t *testing.T) {
+	for priceID, plan := range PriceIDToPlanVersion {
+		t.Run(priceID, func(t *testing.T) {
+			_, known := LimitsForCloudPlan(plan)
+			if !known {
+				t.Errorf("PriceIDToPlanVersion[%q] = %q, but LimitsForCloudPlan does not recognize it", priceID, plan)
+			}
+		})
+	}
+}

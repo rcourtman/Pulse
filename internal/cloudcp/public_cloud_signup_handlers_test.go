@@ -234,6 +234,104 @@ func TestPublicCloudSignupHandlePublicMagicLinkRequestKnownTenantSendsEmail(t *t
 	}
 }
 
+func TestPublicCloudSignupCheckoutMetadataIncludesPlanVersion(t *testing.T) {
+	// Use a real Stripe price ID from PriceIDToPlanVersion so plan_version is set.
+	h := NewPublicCloudSignupHandlers(&CPConfig{
+		BaseURL:            "https://cloud.example.com",
+		StripeAPIKey:       "sk_test_123",
+		TrialSignupPriceID: "price_1T5kflBrHBocJIGHUqPv1dzV", // cloud_starter
+	}, nil, nil, nil)
+
+	var capturedMeta map[string]string
+	h.createCheckoutSession = func(params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
+		capturedMeta = params.Metadata
+		return &stripe.CheckoutSession{URL: "https://checkout.stripe.com/c/pay/cs_test"}, nil
+	}
+
+	form := url.Values{
+		"email":    {"owner@example.com"},
+		"org_name": {"Pulse Labs"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/signup", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	h.HandleSignupPage(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusSeeOther, rec.Body.String())
+	}
+	if capturedMeta == nil {
+		t.Fatal("expected checkout session params with metadata")
+	}
+	if got := capturedMeta["plan_version"]; got != "cloud_starter" {
+		t.Fatalf("metadata plan_version=%q, want %q", got, "cloud_starter")
+	}
+	if got := capturedMeta["account_kind"]; got != "individual" {
+		t.Fatalf("metadata account_kind=%q, want %q", got, "individual")
+	}
+}
+
+func TestPublicCloudSignupCheckoutMetadataRejectsMSPPlanForPublicSignup(t *testing.T) {
+	// MSP price IDs should NOT set plan_version on public individual signup.
+	h := NewPublicCloudSignupHandlers(&CPConfig{
+		BaseURL:            "https://cloud.example.com",
+		StripeAPIKey:       "sk_test_123",
+		TrialSignupPriceID: "price_1T5kgTBrHBocJIGHjOs15LI2", // msp_starter
+	}, nil, nil, nil)
+
+	var capturedMeta map[string]string
+	h.createCheckoutSession = func(params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
+		capturedMeta = params.Metadata
+		return &stripe.CheckoutSession{URL: "https://checkout.stripe.com/c/pay/cs_test"}, nil
+	}
+
+	form := url.Values{"email": {"o@example.com"}, "org_name": {"Pulse Labs"}}
+	req := httptest.NewRequest(http.MethodPost, "/signup", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	h.HandleSignupPage(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status=%d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if _, exists := capturedMeta["plan_version"]; exists {
+		t.Fatalf("MSP price should NOT set plan_version on public signup, got %q", capturedMeta["plan_version"])
+	}
+}
+
+func TestPublicCloudSignupCheckoutMetadataOmitsPlanVersionForUnknownPrice(t *testing.T) {
+	h := NewPublicCloudSignupHandlers(&CPConfig{
+		BaseURL:            "https://cloud.example.com",
+		StripeAPIKey:       "sk_test_123",
+		TrialSignupPriceID: "price_unknown_test",
+	}, nil, nil, nil)
+
+	var capturedMeta map[string]string
+	h.createCheckoutSession = func(params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
+		capturedMeta = params.Metadata
+		return &stripe.CheckoutSession{URL: "https://checkout.stripe.com/c/pay/cs_test"}, nil
+	}
+
+	form := url.Values{
+		"email":    {"owner@example.com"},
+		"org_name": {"Pulse Labs"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/signup", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	h.HandleSignupPage(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status=%d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if _, exists := capturedMeta["plan_version"]; exists {
+		t.Fatalf("metadata should NOT contain plan_version for unknown price, got %q", capturedMeta["plan_version"])
+	}
+}
+
 func asString(v any) string {
 	s, _ := v.(string)
 	return s

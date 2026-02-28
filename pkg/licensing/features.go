@@ -86,6 +86,45 @@ var CloudPlanAgentLimits = map[string]int{
 	"msp_scale":     400, // MSP Scale: 50 clients, 400 host pool
 }
 
+// PriceIDToPlanVersion maps Stripe price IDs to canonical plan version strings.
+// This is the authoritative reverse lookup: given a price ID from a checkout
+// session, subscription, or webhook event, callers can resolve the plan version
+// without relying on metadata being set. The map covers all v6 Cloud and MSP
+// recurring prices (monthly + annual + founding).
+var PriceIDToPlanVersion = map[string]string{
+	// Cloud Starter
+	"price_1T5kflBrHBocJIGHUqPv1dzV": "cloud_starter",  // $29/mo
+	"price_1T5kfmBrHBocJIGHTS3ymKxM": "cloud_starter",  // $249/yr
+	"price_1T5kfnBrHBocJIGHATQJr79D": "cloud_founding", // $19/mo founding
+
+	// Cloud Power
+	"price_1T5kg2BrHBocJIGHmkoF0zXY": "cloud_power", // $49/mo
+	"price_1T5kg3BrHBocJIGH2EtzKofV": "cloud_power", // $449/yr
+
+	// Cloud Max
+	"price_1T5kg4BrHBocJIGHHa8Ecqho": "cloud_max", // $79/mo
+	"price_1T5kg5BrHBocJIGH5AIJ4nVc": "cloud_max", // $699/yr
+
+	// MSP Starter
+	"price_1T5kgTBrHBocJIGHjOs15LI2": "msp_starter", // $149/mo
+	"price_1T5kgUBrHBocJIGHT6PiOn6x": "msp_starter", // $1,490/yr
+
+	// MSP Growth
+	"price_1T5kgVBrHBocJIGHulNsCTb1": "msp_growth", // $249/mo
+	"price_1T5kgWBrHBocJIGHTuaNjnJ2": "msp_growth", // $2,490/yr
+
+	// MSP Scale
+	"price_1T5kgWBrHBocJIGHo40iFeRd": "msp_scale", // $399/mo
+	"price_1T5kgXBrHBocJIGHWlOgTyGV": "msp_scale", // $3,990/yr
+}
+
+// PlanVersionForPriceID returns the canonical plan version for a Stripe price
+// ID. Returns ("", false) if the price ID is not recognized.
+func PlanVersionForPriceID(priceID string) (string, bool) {
+	v, ok := PriceIDToPlanVersion[priceID]
+	return v, ok
+}
+
 // UnknownPlanDefaultAgentLimit is the safe-default agent limit applied when a
 // plan version is not recognized. Fail-closed: unknown plans get the smallest
 // tier limit rather than unlimited access.

@@ -40,8 +40,13 @@ func DeriveStripePlanVersion(metadata map[string]string, priceID string) string 
 			return v
 		}
 	}
-	if strings.TrimSpace(priceID) != "" {
-		return "stripe_price:" + strings.TrimSpace(priceID)
+	trimmedPrice := strings.TrimSpace(priceID)
+	if trimmedPrice != "" {
+		// Try canonical price→plan lookup before falling back to opaque prefix.
+		if plan, ok := PlanVersionForPriceID(trimmedPrice); ok {
+			return plan
+		}
+		return "stripe_price:" + trimmedPrice
 	}
 	return "stripe"
 }

@@ -72,10 +72,22 @@ func TestDeriveStripePlanVersion(t *testing.T) {
 			want:     "cloud_v5",
 		},
 		{
-			name:     "price fallback",
+			name:     "unknown price fallback",
 			metadata: nil,
 			priceID:  " price_123 ",
 			want:     "stripe_price:price_123",
+		},
+		{
+			name:     "known price resolves to plan",
+			metadata: nil,
+			priceID:  "price_1T5kflBrHBocJIGHUqPv1dzV",
+			want:     "cloud_starter",
+		},
+		{
+			name:     "metadata plan_version takes priority over known price",
+			metadata: map[string]string{"plan_version": "cloud_power"},
+			priceID:  "price_1T5kflBrHBocJIGHUqPv1dzV",
+			want:     "cloud_power",
 		},
 		{
 			name:     "default",

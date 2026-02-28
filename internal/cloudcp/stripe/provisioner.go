@@ -753,7 +753,13 @@ func (p *Provisioner) HandleSubscriptionUpdated(ctx context.Context, sub Subscri
 	subState := MapSubscriptionStatus(sub.Status)
 	priceID := sub.FirstPriceID()
 	planVersion := DerivePlanVersion(sub.Metadata, priceID)
-	if (planVersion == "" || planVersion == "stripe") && strings.TrimSpace(tenant.PlanVersion) != "" {
+	// Preserve existing plan version only when the price hasn't changed
+	// (same subscription metadata refresh). If the price changed to an
+	// unknown ID, keep the opaque fallback so LimitsForCloudPlan applies
+	// fail-closed defaults rather than inheriting stale higher-tier limits.
+	if (planVersion == "" || planVersion == "stripe" || strings.HasPrefix(planVersion, "stripe_price:")) &&
+		strings.TrimSpace(tenant.PlanVersion) != "" &&
+		(priceID == "" || priceID == strings.TrimSpace(tenant.StripePriceID)) {
 		planVersion = strings.TrimSpace(tenant.PlanVersion)
 	}
 
