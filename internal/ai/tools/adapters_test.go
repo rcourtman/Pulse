@@ -10,14 +10,6 @@ import (
 	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-type fakeStateGetter struct {
-	state models.StateSnapshot
-}
-
-func (f fakeStateGetter) GetState() models.StateSnapshot {
-	return f.state
-}
-
 type fakeAlertManager struct {
 	alerts   []alerts.Alert
 	resolved []models.ResolvedAlert
@@ -119,23 +111,18 @@ func (f *fakeMetadataUpdater) SetResourceURL(resourceType, resourceID, url strin
 	return f.err
 }
 
-type fakeUpdatesMonitor struct {
-	state        models.StateSnapshot
+type fakeUpdatesCommandRunner struct {
 	checkStatus  models.DockerHostCommandStatus
 	updateStatus models.DockerHostCommandStatus
 	checkErr     error
 	updateErr    error
 }
 
-func (f *fakeUpdatesMonitor) GetState() models.StateSnapshot {
-	return f.state
-}
-
-func (f *fakeUpdatesMonitor) QueueDockerCheckUpdatesCommand(_ string) (models.DockerHostCommandStatus, error) {
+func (f *fakeUpdatesCommandRunner) QueueDockerCheckUpdatesCommand(_ string) (models.DockerHostCommandStatus, error) {
 	return f.checkStatus, f.checkErr
 }
 
-func (f *fakeUpdatesMonitor) QueueDockerContainerUpdateCommand(_ string, _ string, _ string) (models.DockerHostCommandStatus, error) {
+func (f *fakeUpdatesCommandRunner) QueueDockerContainerUpdateCommand(_ string, _ string, _ string) (models.DockerHostCommandStatus, error) {
 	return f.updateStatus, f.updateErr
 }
 
@@ -180,19 +167,27 @@ func TestAlertManagerMCPAdapter(t *testing.T) {
 }
 
 func TestBackupAndDiskAdapters(t *testing.T) {
-	state := models.StateSnapshot{
-		CephClusters: []models.CephCluster{{ID: "c1"}},
-		Backups: models.Backups{PVE: models.PVEBackups{
-			BackupTasks: []models.BackupTask{{ID: "task1"}},
-		}},
-		PBSInstances:    []models.PBSInstance{{ID: "pbs1"}},
-		ReplicationJobs: []models.ReplicationJob{{ID: "rep1"}},
-		Hosts:           []models.Host{{ID: "h1"}},
+	backups := models.Backups{PVE: models.PVEBackups{
+		BackupTasks: []models.BackupTask{{ID: "task1"}},
+	}}
+	pbsInstances := []models.PBSInstance{{ID: "pbs1"}}
+	repJobs := []models.ReplicationJob{{ID: "rep1"}}
+	hosts := []models.Host{{ID: "h1"}}
+
+	if NewBackupMCPAdapter(nil, nil) != nil {
+		t.Fatal("expected nil backup adapter for nil getters")
 	}
-	if NewBackupMCPAdapter(nil) != nil {
-		t.Fatal("expected nil backup adapter for nil state")
+	// Partial-nil: one getter nil should also return nil
+	if NewBackupMCPAdapter(func() models.Backups { return models.Backups{} }, nil) != nil {
+		t.Fatal("expected nil backup adapter when getPBSInstances is nil")
 	}
-	backupAdapter := NewBackupMCPAdapter(fakeStateGetter{state: state})
+	if NewBackupMCPAdapter(nil, func() []models.PBSInstance { return nil }) != nil {
+		t.Fatal("expected nil backup adapter when getBackups is nil")
+	}
+	backupAdapter := NewBackupMCPAdapter(
+		func() models.Backups { return backups },
+		func() []models.PBSInstance { return pbsInstances },
+	)
 	if len(backupAdapter.GetBackups().PVE.BackupTasks) != 1 {
 		t.Fatal("expected backup tasks")
 	}
@@ -201,27 +196,33 @@ func TestBackupAndDiskAdapters(t *testing.T) {
 	}
 
 	if NewDiskHealthMCPAdapter(nil) != nil {
-		t.Fatal("expected nil disk health adapter for nil state")
+		t.Fatal("expected nil disk health adapter for nil getter")
 	}
-	diskAdapter := NewDiskHealthMCPAdapter(fakeStateGetter{state: state})
+	diskAdapter := NewDiskHealthMCPAdapter(
+		func() []models.Host { return hosts },
+	)
 	if len(diskAdapter.GetHosts()) != 1 {
 		t.Fatal("expected hosts")
 	}
 
 	if NewReplicationMCPAdapter(nil) != nil {
-		t.Fatal("expected nil replication adapter for nil state")
+		t.Fatal("expected nil replication adapter for nil getter")
 	}
-	replicationAdapter := NewReplicationMCPAdapter(fakeStateGetter{state: state})
+	replicationAdapter := NewReplicationMCPAdapter(
+		func() []models.ReplicationJob { return repJobs },
+	)
 	if len(replicationAdapter.GetReplicationJobs()) != 1 {
 		t.Fatal("expected replication jobs")
 	}
 
 	if NewConnectionHealthMCPAdapter(nil) != nil {
-		t.Fatal("expected nil connection health adapter for nil state")
+		t.Fatal("expected nil connection health adapter for nil getter")
 	}
-	connectionHealthAdapter := NewConnectionHealthMCPAdapter(fakeStateGetter{state: state})
-	if len(connectionHealthAdapter.GetConnectionHealth()) != 0 {
-		t.Fatal("expected empty connection health map")
+	connectionHealthAdapter := NewConnectionHealthMCPAdapter(
+		func() map[string]bool { return nil },
+	)
+	if connectionHealthAdapter.GetConnectionHealth() != nil {
+		t.Fatal("expected nil connection health map")
 	}
 }
 
@@ -437,49 +438,58 @@ func TestFindingsAndMetadataAdapters(t *testing.T) {
 }
 
 func TestUpdatesMCPAdapter(t *testing.T) {
-	if NewUpdatesMCPAdapter(nil, nil) != nil {
-		t.Fatal("expected nil updates adapter for nil monitor")
+	if NewUpdatesMCPAdapter(nil, nil, nil) != nil {
+		t.Fatal("expected nil updates adapter for nil getters")
+	}
+	// Partial-nil: either getter or commands nil should return nil
+	if NewUpdatesMCPAdapter(func() []models.DockerHost { return nil }, nil, nil) != nil {
+		t.Fatal("expected nil updates adapter when commands is nil")
+	}
+	if NewUpdatesMCPAdapter(nil, &fakeUpdatesCommandRunner{}, nil) != nil {
+		t.Fatal("expected nil updates adapter when getDockerHosts is nil")
 	}
 
 	now := time.Now()
-	state := models.StateSnapshot{
-		DockerHosts: []models.DockerHost{
-			{
-				ID:          "host1",
-				Hostname:    "h1",
-				DisplayName: "Host 1",
-				Containers: []models.DockerContainer{
-					{
-						ID:   "c1",
-						Name: "/nginx",
-						UpdateStatus: &models.DockerContainerUpdateStatus{
-							UpdateAvailable: true,
-							CurrentDigest:   "old",
-							LatestDigest:    "new",
-							LastChecked:     now,
-						},
+	dockerHosts := []models.DockerHost{
+		{
+			ID:          "host1",
+			Hostname:    "h1",
+			DisplayName: "Host 1",
+			Containers: []models.DockerContainer{
+				{
+					ID:   "c1",
+					Name: "/nginx",
+					UpdateStatus: &models.DockerContainerUpdateStatus{
+						UpdateAvailable: true,
+						CurrentDigest:   "old",
+						LatestDigest:    "new",
+						LastChecked:     now,
 					},
 				},
 			},
-			{
-				ID:          "host2",
-				Hostname:    "h2",
-				DisplayName: "Host 2",
-				Containers: []models.DockerContainer{
-					{
-						ID:   "c2",
-						Name: "redis",
-						UpdateStatus: &models.DockerContainerUpdateStatus{
-							Error: "rate limited",
-						},
+		},
+		{
+			ID:          "host2",
+			Hostname:    "h2",
+			DisplayName: "Host 2",
+			Containers: []models.DockerContainer{
+				{
+					ID:   "c2",
+					Name: "redis",
+					UpdateStatus: &models.DockerContainerUpdateStatus{
+						Error: "rate limited",
 					},
 				},
 			},
 		},
 	}
 
-	monitor := &fakeUpdatesMonitor{state: state}
-	adapter := NewUpdatesMCPAdapter(monitor, &fakeUpdatesConfig{enabled: false})
+	runner := &fakeUpdatesCommandRunner{}
+	adapter := NewUpdatesMCPAdapter(
+		func() []models.DockerHost { return dockerHosts },
+		runner,
+		&fakeUpdatesConfig{enabled: false},
+	)
 
 	updates := adapter.GetPendingUpdates("host1")
 	if len(updates) != 1 || updates[0].ContainerName != "nginx" {
@@ -493,25 +503,25 @@ func TestUpdatesMCPAdapter(t *testing.T) {
 		t.Fatal("expected updates enabled by default")
 	}
 
-	monitor.checkErr = errors.New("check")
+	runner.checkErr = errors.New("check")
 	if _, err := adapter.TriggerUpdateCheck("host1"); err == nil {
 		t.Fatal("expected check error")
 	}
 
-	monitor.checkErr = nil
-	monitor.checkStatus = models.DockerHostCommandStatus{ID: "cmd1", Type: "check", Status: "queued"}
+	runner.checkErr = nil
+	runner.checkStatus = models.DockerHostCommandStatus{ID: "cmd1", Type: "check", Status: "queued"}
 	status, err := adapter.TriggerUpdateCheck("host1")
 	if err != nil || status.ID != "cmd1" {
 		t.Fatalf("unexpected status: %+v err=%v", status, err)
 	}
 
-	monitor.updateErr = errors.New("update")
+	runner.updateErr = errors.New("update")
 	if _, err := adapter.UpdateContainer("host1", "c1", "nginx"); err == nil {
 		t.Fatal("expected update error")
 	}
 
-	monitor.updateErr = nil
-	monitor.updateStatus = models.DockerHostCommandStatus{ID: "cmd2", Type: "update", Status: "queued"}
+	runner.updateErr = nil
+	runner.updateStatus = models.DockerHostCommandStatus{ID: "cmd2", Type: "update", Status: "queued"}
 	status, err = adapter.UpdateContainer("host1", "c1", "nginx")
 	if err != nil || status.ID != "cmd2" {
 		t.Fatalf("unexpected update status: %+v err=%v", status, err)

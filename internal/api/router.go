@@ -2080,7 +2080,11 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 
 	// Wire backup provider
 	if monitor != nil {
-		backupAdapter := tools.NewBackupMCPAdapter(monitor)
+		m := monitor
+		backupAdapter := tools.NewBackupMCPAdapter(
+			func() models.Backups { return m.GetState().Backups },
+			func() []models.PBSInstance { return m.GetState().PBSInstances },
+		)
 		if backupAdapter != nil {
 			service.SetBackupProvider(backupAdapter)
 			log.Debug().Msg("AI chat: Backup provider wired")
@@ -2089,7 +2093,10 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 
 	// Wire disk health provider
 	if monitor != nil {
-		diskHealthAdapter := tools.NewDiskHealthMCPAdapter(monitor)
+		m := monitor
+		diskHealthAdapter := tools.NewDiskHealthMCPAdapter(
+			func() []models.Host { return m.GetState().Hosts },
+		)
 		if diskHealthAdapter != nil {
 			service.SetDiskHealthProvider(diskHealthAdapter)
 			log.Debug().Msg("AI chat: Disk health provider wired")
@@ -2098,11 +2105,16 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 
 	// Wire updates provider for Docker container updates
 	if monitor != nil {
+		m := monitor
 		cfg := r.config
-		if monitorCfg := monitor.GetConfig(); monitorCfg != nil {
+		if monitorCfg := m.GetConfig(); monitorCfg != nil {
 			cfg = monitorCfg
 		}
-		updatesAdapter := tools.NewUpdatesMCPAdapter(monitor, &updatesConfigWrapper{cfg: cfg})
+		updatesAdapter := tools.NewUpdatesMCPAdapter(
+			func() []models.DockerHost { return m.GetState().DockerHosts },
+			m,
+			&updatesConfigWrapper{cfg: cfg},
+		)
 		if updatesAdapter != nil {
 			service.SetUpdatesProvider(updatesAdapter)
 			log.Debug().Msg("AI chat: Updates provider wired")

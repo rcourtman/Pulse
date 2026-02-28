@@ -12,11 +12,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-// StateGetter provides access to the current infrastructure state
-type StateGetter interface {
-	GetState() models.StateSnapshot
-}
-
 // AlertManagerMCPAdapter adapts alerts.Manager to MCP AlertProvider interface
 type AlertManagerMCPAdapter struct {
 	manager AlertManager
@@ -102,79 +97,80 @@ func (a *GuestConfigMCPAdapter) GetGuestConfig(guestType, instance, node string,
 	return a.source.GetGuestConfig(ctx, guestType, instance, node, vmID)
 }
 
-// BackupMCPAdapter adapts the monitor state to MCP BackupProvider interface
+// BackupMCPAdapter adapts backup data sources to MCP BackupProvider interface.
+// Uses functional getters so callers can wire ReadState or StateSnapshot sources.
 type BackupMCPAdapter struct {
-	stateGetter StateGetter
+	getBackups      func() models.Backups
+	getPBSInstances func() []models.PBSInstance
 }
 
-// NewBackupMCPAdapter creates a new adapter for backup data
-func NewBackupMCPAdapter(stateGetter StateGetter) *BackupMCPAdapter {
-	if stateGetter == nil {
+// NewBackupMCPAdapter creates a new adapter for backup data.
+// Both getters must be non-nil; returns nil if either is nil.
+func NewBackupMCPAdapter(getBackups func() models.Backups, getPBSInstances func() []models.PBSInstance) *BackupMCPAdapter {
+	if getBackups == nil || getPBSInstances == nil {
 		return nil
 	}
-	return &BackupMCPAdapter{stateGetter: stateGetter}
+	return &BackupMCPAdapter{getBackups: getBackups, getPBSInstances: getPBSInstances}
 }
 
 // GetBackups implements mcp.BackupProvider
 func (a *BackupMCPAdapter) GetBackups() models.Backups {
-	if a.stateGetter == nil {
+	if a.getBackups == nil {
 		return models.Backups{}
 	}
-	state := a.stateGetter.GetState()
-	return state.Backups
+	return a.getBackups()
 }
 
 // GetPBSInstances implements mcp.BackupProvider
 func (a *BackupMCPAdapter) GetPBSInstances() []models.PBSInstance {
-	if a.stateGetter == nil {
+	if a.getPBSInstances == nil {
 		return nil
 	}
-	state := a.stateGetter.GetState()
-	return state.PBSInstances
+	return a.getPBSInstances()
 }
 
-// ReplicationMCPAdapter adapts monitor state to MCP ReplicationProvider.
+// ReplicationMCPAdapter adapts replication data sources to MCP ReplicationProvider.
+// Uses a functional getter so callers can wire ReadState or StateSnapshot sources.
 type ReplicationMCPAdapter struct {
-	stateGetter StateGetter
+	getJobs func() []models.ReplicationJob
 }
 
 // NewReplicationMCPAdapter creates a new adapter for replication data.
-func NewReplicationMCPAdapter(stateGetter StateGetter) *ReplicationMCPAdapter {
-	if stateGetter == nil {
+func NewReplicationMCPAdapter(getJobs func() []models.ReplicationJob) *ReplicationMCPAdapter {
+	if getJobs == nil {
 		return nil
 	}
-	return &ReplicationMCPAdapter{stateGetter: stateGetter}
+	return &ReplicationMCPAdapter{getJobs: getJobs}
 }
 
 // GetReplicationJobs implements ReplicationProvider.
 func (a *ReplicationMCPAdapter) GetReplicationJobs() []models.ReplicationJob {
-	if a.stateGetter == nil {
+	if a.getJobs == nil {
 		return nil
 	}
-	state := a.stateGetter.GetState()
-	return state.ReplicationJobs
+	return a.getJobs()
 }
 
-// ConnectionHealthMCPAdapter adapts monitor state to MCP ConnectionHealthProvider.
+// ConnectionHealthMCPAdapter adapts connection health data sources to MCP ConnectionHealthProvider.
+// Uses a functional getter so callers can wire ReadState or StateSnapshot sources.
 type ConnectionHealthMCPAdapter struct {
-	stateGetter StateGetter
+	getHealth func() map[string]bool
 }
 
 // NewConnectionHealthMCPAdapter creates a new adapter for connection health data.
-func NewConnectionHealthMCPAdapter(stateGetter StateGetter) *ConnectionHealthMCPAdapter {
-	if stateGetter == nil {
+func NewConnectionHealthMCPAdapter(getHealth func() map[string]bool) *ConnectionHealthMCPAdapter {
+	if getHealth == nil {
 		return nil
 	}
-	return &ConnectionHealthMCPAdapter{stateGetter: stateGetter}
+	return &ConnectionHealthMCPAdapter{getHealth: getHealth}
 }
 
 // GetConnectionHealth implements ConnectionHealthProvider.
 func (a *ConnectionHealthMCPAdapter) GetConnectionHealth() map[string]bool {
-	if a.stateGetter == nil {
+	if a.getHealth == nil {
 		return nil
 	}
-	state := a.stateGetter.GetState()
-	return state.ConnectionHealth
+	return a.getHealth()
 }
 
 // RecoveryPointsMCPAdapter provides MCP tools access to persisted recovery points.
@@ -213,26 +209,26 @@ func (a *RecoveryPointsMCPAdapter) ListPoints(ctx context.Context, opts recovery
 	return store.ListPoints(ctx, opts)
 }
 
-// DiskHealthMCPAdapter adapts the monitor state to MCP DiskHealthProvider interface
+// DiskHealthMCPAdapter adapts host data sources to MCP DiskHealthProvider interface.
+// Uses a functional getter so callers can wire ReadState or StateSnapshot sources.
 type DiskHealthMCPAdapter struct {
-	stateGetter StateGetter
+	getHosts func() []models.Host
 }
 
 // NewDiskHealthMCPAdapter creates a new adapter for disk health data
-func NewDiskHealthMCPAdapter(stateGetter StateGetter) *DiskHealthMCPAdapter {
-	if stateGetter == nil {
+func NewDiskHealthMCPAdapter(getHosts func() []models.Host) *DiskHealthMCPAdapter {
+	if getHosts == nil {
 		return nil
 	}
-	return &DiskHealthMCPAdapter{stateGetter: stateGetter}
+	return &DiskHealthMCPAdapter{getHosts: getHosts}
 }
 
 // GetHosts implements mcp.DiskHealthProvider
 func (a *DiskHealthMCPAdapter) GetHosts() []models.Host {
-	if a.stateGetter == nil {
+	if a.getHosts == nil {
 		return nil
 	}
-	state := a.stateGetter.GetState()
-	return state.Hosts
+	return a.getHosts()
 }
 
 // RawMetricPoint represents a single metric value at a point in time
@@ -699,9 +695,9 @@ func (a *MetadataUpdaterMCPAdapter) SetResourceURL(resourceType, resourceID, url
 
 // ========== Updates Provider Adapter ==========
 
-// UpdatesMonitor is the subset of Monitor methods needed for update operations
-type UpdatesMonitor interface {
-	GetState() models.StateSnapshot
+// UpdatesCommandRunner is the subset of Monitor methods needed for Docker update commands.
+// It does not include GetState — Docker host iteration uses a functional getter instead.
+type UpdatesCommandRunner interface {
 	QueueDockerCheckUpdatesCommand(hostID string) (models.DockerHostCommandStatus, error)
 	QueueDockerContainerUpdateCommand(hostID, containerID, containerName string) (models.DockerHostCommandStatus, error)
 }
@@ -711,30 +707,34 @@ type UpdatesConfig interface {
 	IsDockerUpdateActionsEnabled() bool
 }
 
-// UpdatesMCPAdapter adapts Monitor to MCP UpdatesProvider interface
+// UpdatesMCPAdapter adapts Monitor to MCP UpdatesProvider interface.
+// Uses a functional getter for Docker host iteration (decoupled from GetState)
+// and a command runner for Docker update operations.
 type UpdatesMCPAdapter struct {
-	monitor UpdatesMonitor
-	config  UpdatesConfig
+	getDockerHosts func() []models.DockerHost
+	commands       UpdatesCommandRunner
+	config         UpdatesConfig
 }
 
-// NewUpdatesMCPAdapter creates a new adapter for update operations
-func NewUpdatesMCPAdapter(monitor UpdatesMonitor, config UpdatesConfig) *UpdatesMCPAdapter {
-	if monitor == nil {
+// NewUpdatesMCPAdapter creates a new adapter for update operations.
+// getDockerHosts provides Docker host state; commands provides update command execution.
+func NewUpdatesMCPAdapter(getDockerHosts func() []models.DockerHost, commands UpdatesCommandRunner, config UpdatesConfig) *UpdatesMCPAdapter {
+	if getDockerHosts == nil || commands == nil {
 		return nil
 	}
-	return &UpdatesMCPAdapter{monitor: monitor, config: config}
+	return &UpdatesMCPAdapter{getDockerHosts: getDockerHosts, commands: commands, config: config}
 }
 
 // GetPendingUpdates implements mcp.UpdatesProvider
 func (a *UpdatesMCPAdapter) GetPendingUpdates(hostID string) []ContainerUpdateInfo {
-	if a.monitor == nil {
+	if a.getDockerHosts == nil {
 		return nil
 	}
 
-	state := a.monitor.GetState()
+	dockerHosts := a.getDockerHosts()
 	var updates []ContainerUpdateInfo
 
-	for _, host := range state.DockerHosts {
+	for _, host := range dockerHosts {
 		// Filter by host ID if specified
 		if hostID != "" && host.ID != hostID {
 			continue
@@ -781,11 +781,11 @@ func (a *UpdatesMCPAdapter) GetPendingUpdates(hostID string) []ContainerUpdateIn
 
 // TriggerUpdateCheck implements mcp.UpdatesProvider
 func (a *UpdatesMCPAdapter) TriggerUpdateCheck(hostID string) (DockerCommandStatus, error) {
-	if a.monitor == nil {
+	if a.commands == nil {
 		return DockerCommandStatus{}, fmt.Errorf("monitor not available")
 	}
 
-	cmdStatus, err := a.monitor.QueueDockerCheckUpdatesCommand(hostID)
+	cmdStatus, err := a.commands.QueueDockerCheckUpdatesCommand(hostID)
 	if err != nil {
 		return DockerCommandStatus{}, err
 	}
@@ -800,11 +800,11 @@ func (a *UpdatesMCPAdapter) TriggerUpdateCheck(hostID string) (DockerCommandStat
 
 // UpdateContainer implements mcp.UpdatesProvider
 func (a *UpdatesMCPAdapter) UpdateContainer(hostID, containerID, containerName string) (DockerCommandStatus, error) {
-	if a.monitor == nil {
+	if a.commands == nil {
 		return DockerCommandStatus{}, fmt.Errorf("monitor not available")
 	}
 
-	cmdStatus, err := a.monitor.QueueDockerContainerUpdateCommand(hostID, containerID, containerName)
+	cmdStatus, err := a.commands.QueueDockerContainerUpdateCommand(hostID, containerID, containerName)
 	if err != nil {
 		return DockerCommandStatus{}, err
 	}

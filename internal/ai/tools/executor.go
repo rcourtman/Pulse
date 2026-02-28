@@ -502,14 +502,28 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		registry:                 NewToolRegistry(),
 	}
 
-	if e.backupProvider == nil && e.stateProvider != nil {
-		e.backupProvider = NewBackupMCPAdapter(e.stateProvider)
-	}
-	if e.replicationProvider == nil && e.stateProvider != nil {
-		e.replicationProvider = NewReplicationMCPAdapter(e.stateProvider)
-	}
-	if e.connectionHealth == nil && e.stateProvider != nil {
-		e.connectionHealth = NewConnectionHealthMCPAdapter(e.stateProvider)
+	// Auto-wire backup, replication, and connection health adapters from
+	// stateProvider when no explicit provider was injected. Each closure
+	// captures stateProvider and fetches the specific field on demand —
+	// this avoids importing the full StateGetter interface into adapters.go.
+	if sp := e.stateProvider; sp != nil {
+		getSnapshot := func() models.StateSnapshot { return sp.GetState() }
+		if e.backupProvider == nil {
+			e.backupProvider = NewBackupMCPAdapter(
+				func() models.Backups { return getSnapshot().Backups },
+				func() []models.PBSInstance { return getSnapshot().PBSInstances },
+			)
+		}
+		if e.replicationProvider == nil {
+			e.replicationProvider = NewReplicationMCPAdapter(
+				func() []models.ReplicationJob { return getSnapshot().ReplicationJobs },
+			)
+		}
+		if e.connectionHealth == nil {
+			e.connectionHealth = NewConnectionHealthMCPAdapter(
+				func() map[string]bool { return getSnapshot().ConnectionHealth },
+			)
+		}
 	}
 
 	// Register all tools
