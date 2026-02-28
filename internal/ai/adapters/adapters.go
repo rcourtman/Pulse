@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/forecast"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -74,114 +73,98 @@ func (a *ForecastDataAdapter) GetMetricHistory(resourceID, metric string, from, 
 
 // MetricsAdapter provides current metrics for resources.
 // It implements metrics.MetricsProvider for the incident recorder.
+// Uses ReadState as the sole data source (SRC-03m migration).
 type MetricsAdapter struct {
-	stateProvider ai.StateProvider
-	readState     unifiedresources.ReadState
+	readState unifiedresources.ReadState
 }
 
 // NewMetricsAdapter creates a new adapter for current metrics.
-// When readState is provided, GetMonitoredResourceIDs uses it instead of
-// falling back to the state provider, reducing direct state access.
-func NewMetricsAdapter(stateProvider ai.StateProvider, readState unifiedresources.ReadState) *MetricsAdapter {
-	return &MetricsAdapter{stateProvider: stateProvider, readState: readState}
+// ReadState is the sole data source for both GetMonitoredResourceIDs and
+// GetCurrentMetrics. Returns nil if readState is nil.
+func NewMetricsAdapter(readState unifiedresources.ReadState) *MetricsAdapter {
+	if readState == nil {
+		return nil
+	}
+	return &MetricsAdapter{readState: readState}
 }
 
 // GetMonitoredResourceIDs returns all resource IDs currently being monitored.
 // This is used by the incident recorder to maintain pre-incident buffers for all resources.
-// Prefers ReadState when available (SRC migration); falls back to StateProvider.
+// Returns both unified IDs and Proxmox source IDs so that pre-incident buffers
+// are keyed by both (alert-triggered recordings use source IDs).
 func (a *MetricsAdapter) GetMonitoredResourceIDs() []string {
-	if a.readState != nil {
-		return a.monitoredIDsFromReadState()
-	}
-	if a.stateProvider == nil {
-		return nil
-	}
-	return a.monitoredIDsFromState()
-}
-
-func (a *MetricsAdapter) monitoredIDsFromReadState() []string {
 	var ids []string
 	for _, vm := range a.readState.VMs() {
 		ids = append(ids, vm.ID())
+		if sid := vm.SourceID(); sid != "" && sid != vm.ID() {
+			ids = append(ids, sid)
+		}
 	}
 	for _, ct := range a.readState.Containers() {
 		ids = append(ids, ct.ID())
+		if sid := ct.SourceID(); sid != "" && sid != ct.ID() {
+			ids = append(ids, sid)
+		}
 	}
 	for _, node := range a.readState.Nodes() {
 		ids = append(ids, node.ID())
-	}
-	return ids
-}
-
-func (a *MetricsAdapter) monitoredIDsFromState() []string {
-	state := a.stateProvider.GetState()
-	var ids []string
-	for _, vm := range state.VMs {
-		ids = append(ids, vm.ID)
-	}
-	for _, ct := range state.Containers {
-		ids = append(ids, ct.ID)
-	}
-	for _, node := range state.Nodes {
-		ids = append(ids, node.ID)
+		if sid := node.SourceID(); sid != "" && sid != node.ID() {
+			ids = append(ids, sid)
+		}
 	}
 	return ids
 }
 
 // GetCurrentMetrics returns current metrics for a resource.
+// Matches by unified ID, Proxmox source ID, VMID string, or name.
+// CPU/memory/disk values are normalized to 0-100 percentage scale.
 func (a *MetricsAdapter) GetCurrentMetrics(resourceID string) (map[string]float64, error) {
-	if a.stateProvider == nil {
-		return nil, nil
-	}
-
-	state := a.stateProvider.GetState()
-
 	metrics := make(map[string]float64)
 
 	// Check VMs
-	for _, vm := range state.VMs {
-		if vm.ID == resourceID || fmt.Sprintf("%d", vm.VMID) == resourceID {
-			metrics["cpu"] = vm.CPU
-			metrics["memory"] = vm.Memory.Usage
-			metrics["disk"] = vm.Disk.Usage
-			metrics["netin"] = float64(vm.NetworkIn)
-			metrics["netout"] = float64(vm.NetworkOut)
-			metrics["diskread"] = float64(vm.DiskRead)
-			metrics["diskwrite"] = float64(vm.DiskWrite)
+	for _, vm := range a.readState.VMs() {
+		if vm.ID() == resourceID || vm.SourceID() == resourceID || fmt.Sprintf("%d", vm.VMID()) == resourceID {
+			metrics["cpu"] = vm.CPUPercent()
+			metrics["memory"] = vm.MemoryPercent()
+			metrics["disk"] = vm.DiskPercent()
+			metrics["netin"] = vm.NetIn()
+			metrics["netout"] = vm.NetOut()
+			metrics["diskread"] = vm.DiskRead()
+			metrics["diskwrite"] = vm.DiskWrite()
 			return metrics, nil
 		}
 	}
 
 	// Check containers
-	for _, ct := range state.Containers {
-		if ct.ID == resourceID || fmt.Sprintf("%d", ct.VMID) == resourceID {
-			metrics["cpu"] = ct.CPU
-			metrics["memory"] = ct.Memory.Usage
-			metrics["disk"] = ct.Disk.Usage
-			metrics["netin"] = float64(ct.NetworkIn)
-			metrics["netout"] = float64(ct.NetworkOut)
-			metrics["diskread"] = float64(ct.DiskRead)
-			metrics["diskwrite"] = float64(ct.DiskWrite)
+	for _, ct := range a.readState.Containers() {
+		if ct.ID() == resourceID || ct.SourceID() == resourceID || fmt.Sprintf("%d", ct.VMID()) == resourceID {
+			metrics["cpu"] = ct.CPUPercent()
+			metrics["memory"] = ct.MemoryPercent()
+			metrics["disk"] = ct.DiskPercent()
+			metrics["netin"] = ct.NetIn()
+			metrics["netout"] = ct.NetOut()
+			metrics["diskread"] = ct.DiskRead()
+			metrics["diskwrite"] = ct.DiskWrite()
 			return metrics, nil
 		}
 	}
 
 	// Check nodes
-	for _, node := range state.Nodes {
-		if node.ID == resourceID || node.Name == resourceID {
-			metrics["cpu"] = node.CPU
-			metrics["memory"] = node.Memory.Usage
-			metrics["disk"] = node.Disk.Usage
+	for _, node := range a.readState.Nodes() {
+		if node.ID() == resourceID || node.SourceID() == resourceID || node.Name() == resourceID {
+			metrics["cpu"] = node.CPUPercent()
+			metrics["memory"] = node.MemoryPercent()
+			metrics["disk"] = node.DiskPercent()
 			return metrics, nil
 		}
 	}
 
 	// Check storage
-	for _, storage := range state.Storage {
-		if storage.ID == resourceID || storage.Name == resourceID {
-			metrics["disk"] = storage.Usage
-			metrics["used"] = float64(storage.Used)
-			metrics["total"] = float64(storage.Total)
+	for _, sp := range a.readState.StoragePools() {
+		if sp.ID() == resourceID || sp.SourceID() == resourceID || sp.Name() == resourceID {
+			metrics["disk"] = sp.DiskPercent()
+			metrics["used"] = float64(sp.DiskUsed())
+			metrics["total"] = float64(sp.DiskTotal())
 			return metrics, nil
 		}
 	}

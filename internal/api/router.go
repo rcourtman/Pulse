@@ -1804,10 +1804,10 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, orgID, da
 			incidentCoordinator.SetIncidentStore(incidentStore)
 		}
 
-		// Create metrics adapter for incident recorder
+		// Create metrics adapter for incident recorder (ReadState is sole source since SRC-03m)
 		var metricsAdapter *adapters.MetricsAdapter
-		if stateProvider := aiService.GetStateProvider(); stateProvider != nil {
-			metricsAdapter = adapters.NewMetricsAdapter(stateProvider, monitor.GetUnifiedReadState())
+		if monitor != nil {
+			metricsAdapter = adapters.NewMetricsAdapter(monitor.GetUnifiedReadState())
 		}
 
 		// Initialize and wire the incident recorder (high-frequency metrics)

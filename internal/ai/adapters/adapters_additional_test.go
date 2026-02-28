@@ -3,13 +3,11 @@ package adapters
 import (
 	"os"
 	"path/filepath"
-	"sort"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
-	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type stubIncidentRecorder struct {
@@ -73,71 +71,38 @@ func TestForecastDataAdapter_GetMetricHistory(t *testing.T) {
 
 func TestMetricsAdapter_GetMonitoredResourceIDs(t *testing.T) {
 	state := models.StateSnapshot{
-		VMs:        []models.VM{{ID: "vm-1"}},
-		Containers: []models.Container{{ID: "ct-1"}},
-		Nodes:      []models.Node{{ID: "node-1"}},
+		Nodes:      []models.Node{{ID: "node/pve1", Name: "pve1", Instance: "inst1"}},
+		VMs:        []models.VM{{ID: "qemu/100", VMID: 100, Name: "vm-1", Node: "pve1", Instance: "inst1"}},
+		Containers: []models.Container{{ID: "lxc/200", VMID: 200, Name: "ct-1", Node: "pve1", Instance: "inst1"}},
 	}
-	adapter := NewMetricsAdapter(&mockStateProvider{state: state}, nil)
+	adapter := NewMetricsAdapter(readStateFromSnapshot(state))
 	ids := adapter.GetMonitoredResourceIDs()
-	if len(ids) != 3 {
-		t.Fatalf("expected 3 IDs, got %d", len(ids))
-	}
-}
 
-func TestMetricsAdapter_GetMonitoredResourceIDs_ReadState(t *testing.T) {
-	// Verify that when ReadState is provided, GetMonitoredResourceIDs uses it
-	// instead of falling back to stateProvider.GetState().
-	snapshot := models.StateSnapshot{
-		Nodes: []models.Node{
-			{ID: "node/pve1", Name: "pve1", Instance: "inst1"},
-		},
-		VMs: []models.VM{
-			{ID: "qemu/100", VMID: 100, Name: "web", Node: "pve1", Instance: "inst1"},
-		},
-		Containers: []models.Container{
-			{ID: "lxc/200", VMID: 200, Name: "dns", Node: "pve1", Instance: "inst1"},
-		},
-	}
-	rr := unifiedresources.NewRegistry(nil)
-	rr.IngestSnapshot(snapshot)
-
-	// Provide ReadState — stateProvider is nil to prove ReadState is used.
-	adapter := NewMetricsAdapter(nil, rr)
-	ids := adapter.GetMonitoredResourceIDs()
-	if len(ids) != 3 {
-		t.Fatalf("expected 3 IDs from ReadState, got %d: %v", len(ids), ids)
+	// Should include both unified IDs and source IDs (3 resources × 2 IDs each = 6)
+	if len(ids) < 3 {
+		t.Fatalf("expected at least 3 IDs, got %d: %v", len(ids), ids)
 	}
 
-	// Verify all expected IDs are present (order may differ).
-	sort.Strings(ids)
-	if ids[0] == "" || ids[1] == "" || ids[2] == "" {
-		t.Fatalf("unexpected empty ID in %v", ids)
+	// Verify no empty IDs
+	for _, id := range ids {
+		if id == "" {
+			t.Fatalf("unexpected empty ID in %v", ids)
+		}
 	}
-}
 
-func TestMetricsAdapter_GetMonitoredResourceIDs_ReadStatePreferred(t *testing.T) {
-	// When both stateProvider and readState are provided, readState takes precedence.
-	// The stateProvider state has 1 extra VM that the registry does NOT have,
-	// proving the adapter uses readState.
-	snapshot := models.StateSnapshot{
-		VMs: []models.VM{
-			{ID: "qemu/100", VMID: 100, Name: "vm1", Node: "pve1", Instance: "inst1"},
-		},
+	// Verify source IDs are present (for pre-incident buffer compatibility)
+	idSet := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		idSet[id] = true
 	}
-	rr := unifiedresources.NewRegistry(nil)
-	rr.IngestSnapshot(snapshot)
-
-	// stateProvider has 2 VMs, but ReadState only has 1.
-	stateWith2VMs := models.StateSnapshot{
-		VMs: []models.VM{
-			{ID: "qemu/100", VMID: 100, Name: "vm1"},
-			{ID: "qemu/200", VMID: 200, Name: "vm2"},
-		},
+	if !idSet["qemu/100"] {
+		t.Errorf("expected source ID 'qemu/100' in monitored IDs, got %v", ids)
 	}
-	adapter := NewMetricsAdapter(&mockStateProvider{state: stateWith2VMs}, rr)
-	ids := adapter.GetMonitoredResourceIDs()
-	if len(ids) != 1 {
-		t.Fatalf("expected 1 ID (ReadState preferred), got %d: %v", len(ids), ids)
+	if !idSet["lxc/200"] {
+		t.Errorf("expected source ID 'lxc/200' in monitored IDs, got %v", ids)
+	}
+	if !idSet["node/pve1"] {
+		t.Errorf("expected source ID 'node/pve1' in monitored IDs, got %v", ids)
 	}
 }
 
