@@ -381,7 +381,11 @@ func TestClient_DrainTriggersReconnect(t *testing.T) {
 func TestClient_SessionTokenReuse(t *testing.T) {
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
-	sessionTokens := make(chan string, 2)
+	type regCapture struct {
+		sessionToken string
+		instanceHint string
+	}
+	captures := make(chan regCapture, 2)
 
 	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
 		_, msg, _ := conn.ReadMessage()
@@ -392,7 +396,10 @@ func TestClient_SessionTokenReuse(t *testing.T) {
 
 		var regPayload RegisterPayload
 		_ = UnmarshalControlPayload(frame.Payload, &regPayload)
-		sessionTokens <- regPayload.SessionToken
+		captures <- regCapture{
+			sessionToken: regPayload.SessionToken,
+			instanceHint: regPayload.InstanceHint,
+		}
 
 		ack, _ := NewControlFrame(FrameRegisterAck, 0, RegisterAckPayload{
 			InstanceID:   "inst_abc",
@@ -409,8 +416,9 @@ func TestClient_SessionTokenReuse(t *testing.T) {
 	defer relayServer.Close()
 
 	cfg := Config{
-		Enabled:   true,
-		ServerURL: wsURL(relayServer),
+		Enabled:        true,
+		ServerURL:      wsURL(relayServer),
+		InstanceSecret: "my-raw-secret",
 	}
 
 	deps := ClientDeps{
@@ -428,21 +436,30 @@ func TestClient_SessionTokenReuse(t *testing.T) {
 	errCh := make(chan error, 1)
 	go func() { errCh <- client.Run(ctx) }()
 
-	// First connection: no session token
+	// First connection: no session token, InstanceHint is the raw secret
 	select {
-	case token := <-sessionTokens:
-		if token != "" {
-			t.Errorf("first connection session_token: got %q, want empty", token)
+	case cap := <-captures:
+		if cap.sessionToken != "" {
+			t.Errorf("first connection session_token: got %q, want empty", cap.sessionToken)
+		}
+		if cap.instanceHint != "my-raw-secret" {
+			t.Errorf("first connection instance_hint: got %q, want %q", cap.instanceHint, "my-raw-secret")
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("timed out waiting for first REGISTER")
 	}
 
-	// Second connection: should reuse session token from first REGISTER_ACK
+	// Second connection: session token reused, InstanceHint switches to derived instance ID
 	select {
-	case token := <-sessionTokens:
-		if token != "server-issued-session-token" {
-			t.Errorf("second connection session_token: got %q, want %q", token, "server-issued-session-token")
+	case cap := <-captures:
+		if cap.sessionToken != "server-issued-session-token" {
+			t.Errorf("second connection session_token: got %q, want %q", cap.sessionToken, "server-issued-session-token")
+		}
+		// On reconnect, InstanceHint should be the derived instance_id (from
+		// REGISTER_ACK), NOT the raw secret. The relay server's session
+		// reconnect path looks up by instance_id directly.
+		if cap.instanceHint != "inst_abc" {
+			t.Errorf("second connection instance_hint: got %q, want %q (derived instance ID)", cap.instanceHint, "inst_abc")
 		}
 	case <-time.After(8 * time.Second):
 		t.Fatal("timed out waiting for second REGISTER")

@@ -389,9 +389,23 @@ func (c *Client) register(conn *websocket.Conn) error {
 		IdentityPubKey: c.deps.IdentityPubKey,
 	}
 
-	// Reuse session token if we have one from a previous connection
+	// Reuse session token if we have one from a previous connection.
+	// When reconnecting, send the derived instance_id (from the prior
+	// REGISTER_ACK) as InstanceHint instead of the raw secret. The
+	// relay server's session reconnect path looks up by instance_id
+	// directly — it needs the derived ID, not the secret used to
+	// compute it during the initial registration.
+	//
+	// Only set SessionToken when we also have the derived instanceID,
+	// because the bridge takes the session fast-path whenever both
+	// SessionToken and InstanceHint are present. If SessionToken is
+	// set without the derived ID, the bridge would query by raw secret
+	// and fail with AUTH_FAILED (no license fallback).
 	c.mu.RLock()
-	payload.SessionToken = c.sessionToken
+	if c.sessionToken != "" && c.instanceID != "" {
+		payload.SessionToken = c.sessionToken
+		payload.InstanceHint = c.instanceID
+	}
 	c.mu.RUnlock()
 
 	frame, err := NewControlFrame(FrameRegister, 0, payload)
