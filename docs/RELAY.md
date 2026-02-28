@@ -91,7 +91,7 @@ The mobile app supports connecting to multiple Pulse instances. Each connection 
 1. Confirm your Pro or Cloud license is active (**Settings → License**).
 2. Verify the Pulse server can reach the relay server:
    ```bash
-   curl -s https://relay.pulserelay.pro/health
+   curl -s https://relay.pulserelay.pro/healthz
    ```
 3. Check Pulse logs for relay errors:
    ```bash
