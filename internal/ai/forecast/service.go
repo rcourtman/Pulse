@@ -96,39 +96,21 @@ type DataProvider interface {
 	GetMetricHistory(resourceID, metric string, from, to time.Time) ([]MetricDataPoint, error)
 }
 
-// StateProvider provides access to current infrastructure state
-type StateProvider interface {
-	GetState() StateSnapshot
+// ResourceIterator provides typed access to current infrastructure resources.
+// Implementations return lightweight ID+Name pairs for each resource type
+// so the forecast service can correlate with MetricsHistory keys.
+//
+// This interface mirrors the ReadState pattern from unifiedresources without
+// importing it, keeping the forecast package dependency-light.
+type ResourceIterator interface {
+	ForecastVMs() []ResourceInfo
+	ForecastContainers() []ResourceInfo
+	ForecastNodes() []ResourceInfo
+	ForecastStoragePools() []ResourceInfo
 }
 
-// StateSnapshot contains the current infrastructure state (subset of models.StateSnapshot)
-type StateSnapshot struct {
-	VMs        []VMInfo
-	Containers []ContainerInfo
-	Nodes      []NodeInfo
-	Storage    []StorageInfo
-}
-
-// VMInfo contains VM information
-type VMInfo struct {
-	ID   string
-	Name string
-}
-
-// ContainerInfo contains container information
-type ContainerInfo struct {
-	ID   string
-	Name string
-}
-
-// NodeInfo contains node information
-type NodeInfo struct {
-	ID   string
-	Name string
-}
-
-// StorageInfo contains storage information
-type StorageInfo struct {
+// ResourceInfo contains the ID and Name for a resource being forecast.
+type ResourceInfo struct {
 	ID   string
 	Name string
 }
@@ -137,9 +119,9 @@ type StorageInfo struct {
 type Service struct {
 	mu sync.RWMutex
 
-	config        ForecastConfig
-	provider      DataProvider
-	stateProvider StateProvider
+	config    ForecastConfig
+	provider  DataProvider
+	resources ResourceIterator
 }
 
 // NewService creates a new forecast service
@@ -178,11 +160,11 @@ func (s *Service) SetDataProvider(provider DataProvider) {
 	s.provider = provider
 }
 
-// SetStateProvider sets the state provider for accessing current infrastructure state
-func (s *Service) SetStateProvider(sp StateProvider) {
+// SetResourceIterator sets the resource iterator for accessing current infrastructure resources.
+func (s *Service) SetResourceIterator(ri ResourceIterator) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.stateProvider = sp
+	s.resources = ri
 }
 
 // Forecast generates a prediction for a metric
@@ -509,34 +491,43 @@ func (s *Service) FormatForContext(forecasts []*Forecast) string {
 func (s *Service) FormatKeyForecasts() string {
 	s.mu.RLock()
 	provider := s.provider
-	stateProvider := s.stateProvider
+	ri := s.resources
 	cfg := s.config
 	s.mu.RUnlock()
 
-	if provider == nil || stateProvider == nil {
+	if provider == nil || ri == nil {
 		return ""
 	}
 
+	// Read all resource lists up-front to minimise the window for mixed
+	// registry generations between accessor calls. Not perfectly atomic
+	// (ReadState locks per accessor), but equivalent to every other
+	// multi-accessor consumer in the codebase and sufficient for ID/Name
+	// iteration where exact consistency is non-critical.
+	vms := ri.ForecastVMs()
+	containers := ri.ForecastContainers()
+	nodes := ri.ForecastNodes()
+	storagePools := ri.ForecastStoragePools()
+
 	var concerns []string
-	state := stateProvider.GetState()
 
 	// Check VMs for concerning trends
-	for _, vm := range state.VMs {
+	for _, vm := range vms {
 		s.checkResourceForecasts(vm.ID, vm.Name, "vm", cfg, provider, &concerns)
 	}
 
 	// Check containers for concerning trends
-	for _, ct := range state.Containers {
+	for _, ct := range containers {
 		s.checkResourceForecasts(ct.ID, ct.Name, "system-container", cfg, provider, &concerns)
 	}
 
 	// Check nodes for concerning trends
-	for _, node := range state.Nodes {
+	for _, node := range nodes {
 		s.checkResourceForecasts(node.ID, node.Name, "node", cfg, provider, &concerns)
 	}
 
 	// Check storage for concerning disk trends
-	for _, storage := range state.Storage {
+	for _, storage := range storagePools {
 		s.checkResourceForecasts(storage.ID, storage.Name, "storage", cfg, provider, &concerns)
 	}
 
@@ -700,18 +691,23 @@ const MinConfidenceThreshold = 0.3
 func (s *Service) ForecastAll(metric string, horizon time.Duration, threshold float64) (*ForecastOverviewResponse, error) {
 	s.mu.RLock()
 	provider := s.provider
-	stateProvider := s.stateProvider
+	ri := s.resources
 	s.mu.RUnlock()
 
 	if provider == nil {
 		return nil, fmt.Errorf("no data provider configured")
 	}
 
-	if stateProvider == nil {
-		return nil, fmt.Errorf("no state provider configured")
+	if ri == nil {
+		return nil, fmt.Errorf("no resource iterator configured")
 	}
 
-	state := stateProvider.GetState()
+	// Read all resource lists up-front to minimise the window for mixed
+	// registry generations (see comment in FormatKeyForecasts).
+	vms := ri.ForecastVMs()
+	containers := ri.ForecastContainers()
+	nodes := ri.ForecastNodes()
+
 	var items []*ForecastOverviewItem
 
 	// Helper to add forecast if it's actionable
@@ -732,7 +728,7 @@ func (s *Service) ForecastAll(metric string, horizon time.Duration, threshold fl
 	}
 
 	// Process VMs
-	for _, vm := range state.VMs {
+	for _, vm := range vms {
 		forecast, err := s.Forecast(vm.ID, vm.Name, metric, horizon, threshold)
 		if err != nil {
 			log.Debug().Str("resource", vm.ID).Str("metric", metric).Err(err).Msg("skipping VM forecast")
@@ -742,7 +738,7 @@ func (s *Service) ForecastAll(metric string, horizon time.Duration, threshold fl
 	}
 
 	// Process Containers
-	for _, ct := range state.Containers {
+	for _, ct := range containers {
 		forecast, err := s.Forecast(ct.ID, ct.Name, metric, horizon, threshold)
 		if err != nil {
 			log.Debug().Str("resource", ct.ID).Str("metric", metric).Err(err).Msg("skipping container forecast")
@@ -752,7 +748,7 @@ func (s *Service) ForecastAll(metric string, horizon time.Duration, threshold fl
 	}
 
 	// Process Nodes
-	for _, node := range state.Nodes {
+	for _, node := range nodes {
 		forecast, err := s.Forecast(node.ID, node.Name, metric, horizon, threshold)
 		if err != nil {
 			log.Debug().Str("resource", node.ID).Str("metric", metric).Err(err).Msg("skipping node forecast")

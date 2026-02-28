@@ -28,12 +28,18 @@ func (s stubForecastProvider) GetMetricHistory(_ string, _ string, _, _ time.Tim
 	return s.points, nil
 }
 
-type stubForecastStateProvider struct {
-	state forecast.StateSnapshot
+type stubForecastResourceIterator struct {
+	vms      []forecast.ResourceInfo
+	cts      []forecast.ResourceInfo
+	nodes    []forecast.ResourceInfo
+	storages []forecast.ResourceInfo
 }
 
-func (s stubForecastStateProvider) GetState() forecast.StateSnapshot {
-	return s.state
+func (s stubForecastResourceIterator) ForecastVMs() []forecast.ResourceInfo        { return s.vms }
+func (s stubForecastResourceIterator) ForecastContainers() []forecast.ResourceInfo { return s.cts }
+func (s stubForecastResourceIterator) ForecastNodes() []forecast.ResourceInfo      { return s.nodes }
+func (s stubForecastResourceIterator) ForecastStoragePools() []forecast.ResourceInfo {
+	return s.storages
 }
 
 func makeForecastPoints(count int, start time.Time, startValue, step float64) []forecast.MetricDataPoint {
@@ -381,11 +387,11 @@ func TestHandleGetForecastOverview_Success(t *testing.T) {
 	points := makeForecastPoints(60, time.Now().Add(-60*time.Hour), 50, 0.1)
 	svc := forecast.NewService(forecast.DefaultForecastConfig())
 	svc.SetDataProvider(stubForecastProvider{points: points})
-	svc.SetStateProvider(stubForecastStateProvider{state: forecast.StateSnapshot{
-		VMs:        []forecast.VMInfo{{ID: "vm-1", Name: "vm-one"}},
-		Containers: []forecast.ContainerInfo{{ID: "ct-1", Name: "ct-one"}},
-		Nodes:      []forecast.NodeInfo{{ID: "node-1", Name: "node-one"}},
-	}})
+	svc.SetResourceIterator(stubForecastResourceIterator{
+		vms:   []forecast.ResourceInfo{{ID: "vm-1", Name: "vm-one"}},
+		cts:   []forecast.ResourceInfo{{ID: "ct-1", Name: "ct-one"}},
+		nodes: []forecast.ResourceInfo{{ID: "node-1", Name: "node-one"}},
+	})
 
 	handler := &AISettingsHandler{forecastService: svc}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/forecasts/overview?metric=cpu&horizon_hours=24&threshold=60", nil)

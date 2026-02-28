@@ -1605,13 +1605,12 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, orgID, da
 			}
 		}
 	}
-	// Wire up state provider for forecast context (via ReadState)
+	// Wire up resource iterator for forecast context (via ReadState)
 	if monitor != nil {
 		if rs := monitor.GetUnifiedReadState(); rs != nil {
-			forecastStateAdapter := &forecastStateProviderWrapper{readState: rs}
-			forecastService.SetStateProvider(forecastStateAdapter)
+			forecastService.SetResourceIterator(&forecastResourceIterator{readState: rs})
 		} else {
-			log.Warn().Msg("AI Intelligence: Forecast state provider not wired — ReadState unavailable")
+			log.Warn().Msg("AI Intelligence: Forecast resource iterator not wired — ReadState unavailable")
 		}
 	}
 	r.aiSettingsHandler.SetForecastServiceForOrg(orgID, forecastService)
@@ -2232,57 +2231,57 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 	log.Info().Str("org_id", orgID).Msg("AI chat MCP tool providers wired")
 }
 
-// forecastStateProviderWrapper wraps ReadState to implement forecast.StateProvider.
-// Uses typed view accessors (ReadState) instead of legacy state access.
-type forecastStateProviderWrapper struct {
+// forecastResourceIterator wraps ReadState to implement forecast.ResourceIterator.
+// Converts typed view accessors (ReadState) to forecast.ResourceInfo slices.
+type forecastResourceIterator struct {
 	readState unifiedresources.ReadState
 }
 
-func (w *forecastStateProviderWrapper) GetState() forecast.StateSnapshot {
+func (w *forecastResourceIterator) ForecastVMs() []forecast.ResourceInfo {
 	if w.readState == nil {
-		return forecast.StateSnapshot{}
+		return nil
 	}
-
 	vms := w.readState.VMs()
-	containers := w.readState.Containers()
-	nodes := w.readState.Nodes()
-	storagePools := w.readState.StoragePools()
-
-	result := forecast.StateSnapshot{
-		VMs:        make([]forecast.VMInfo, 0, len(vms)),
-		Containers: make([]forecast.ContainerInfo, 0, len(containers)),
-		Nodes:      make([]forecast.NodeInfo, 0, len(nodes)),
-		Storage:    make([]forecast.StorageInfo, 0, len(storagePools)),
-	}
-
+	result := make([]forecast.ResourceInfo, 0, len(vms))
 	for _, vm := range vms {
-		result.VMs = append(result.VMs, forecast.VMInfo{
-			ID:   vm.SourceID(),
-			Name: vm.Name(),
-		})
+		result = append(result, forecast.ResourceInfo{ID: vm.SourceID(), Name: vm.Name()})
 	}
+	return result
+}
 
-	for _, ct := range containers {
-		result.Containers = append(result.Containers, forecast.ContainerInfo{
-			ID:   ct.SourceID(),
-			Name: ct.Name(),
-		})
+func (w *forecastResourceIterator) ForecastContainers() []forecast.ResourceInfo {
+	if w.readState == nil {
+		return nil
 	}
+	cts := w.readState.Containers()
+	result := make([]forecast.ResourceInfo, 0, len(cts))
+	for _, ct := range cts {
+		result = append(result, forecast.ResourceInfo{ID: ct.SourceID(), Name: ct.Name()})
+	}
+	return result
+}
 
+func (w *forecastResourceIterator) ForecastNodes() []forecast.ResourceInfo {
+	if w.readState == nil {
+		return nil
+	}
+	nodes := w.readState.Nodes()
+	result := make([]forecast.ResourceInfo, 0, len(nodes))
 	for _, node := range nodes {
-		result.Nodes = append(result.Nodes, forecast.NodeInfo{
-			ID:   node.SourceID(),
-			Name: node.Name(),
-		})
+		result = append(result, forecast.ResourceInfo{ID: node.SourceID(), Name: node.Name()})
 	}
+	return result
+}
 
-	for _, sp := range storagePools {
-		result.Storage = append(result.Storage, forecast.StorageInfo{
-			ID:   sp.SourceID(),
-			Name: sp.Name(),
-		})
+func (w *forecastResourceIterator) ForecastStoragePools() []forecast.ResourceInfo {
+	if w.readState == nil {
+		return nil
 	}
-
+	pools := w.readState.StoragePools()
+	result := make([]forecast.ResourceInfo, 0, len(pools))
+	for _, sp := range pools {
+		result = append(result, forecast.ResourceInfo{ID: sp.SourceID(), Name: sp.Name()})
+	}
 	return result
 }
 
