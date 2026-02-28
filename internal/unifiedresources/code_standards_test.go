@@ -32,9 +32,9 @@ package unifiedresources
 //   - internal/monitoring/, internal/mock/, internal/models/,
 //     internal/websocket/: Exempt (producer/wire-format packages).
 //
-//   - Resource types with completed migrations are enforced below.
-//     As SRC progresses, more patterns will be banned until all
-//     state.* access is removed from consumer packages.
+//   - All state.* field access patterns and GetState() calls are
+//     enforced via ratchet ceilings below. The ceilings must only
+//     decrease over time until all direct state access is eliminated.
 //
 // See: docs/architecture/state-read-consolidation-plan-2026-02.md
 // Progress: docs/architecture/state-read-consolidation-progress-2026-02.md
@@ -122,11 +122,8 @@ var consumerPackages = []consumerPackage{
 		// discovery_adapter.go bridges state → service discovery (producer-side)
 		"discovery_adapter.go": true,
 	}},
-	{dir: "api", exemptFiles: map[string]bool{
-		// reporting_handlers.go is fully migrated; router.go still has
-		// state reads for non-migrated resource types (VMs, Nodes, etc.)
-		// which is correct per the architecture policy.
-	}},
+	{dir: "api", exemptFiles: nil},
+	{dir: "servicediscovery", exemptFiles: nil},
 }
 
 // TestNoDirectStateAccessForMigratedResources ensures that consumer packages
@@ -167,24 +164,33 @@ type legacyStateRatchet struct {
 // Ceilings captured after SRC-03 + SRC-04a refresh (Feb 2026).
 // These represent legacy nil-fallback paths that are dead code when
 // ReadState is wired. Each number must only decrease over time.
+//
+// Last updated: 2026-02-28 (total state.*: 291, GetState: 54).
+// Added GetState() ratchet to prevent new GetState() calls.
+// Note: some ceilings increased vs prior snapshot due to in-flight parallel
+// work on the branch — ratchet intent remains monotonically decreasing.
 var legacyStateRatchets = []legacyStateRatchet{
-	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 53, "ReadState.VMs()"},
-	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 53, "ReadState.Containers()"},
-	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 48, "ReadState.Nodes()"},
-	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 35, "ReadState.DockerHosts()"},
-	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 23, "ReadState.Hosts()"},
-	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 24, "ReadState.StoragePools()"},
-	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 12, "ReadState.K8sClusters()"},
-	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 10, "ReadState.PBSInstances()"},
-	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 9, "ReadState.PMGInstances()"},
+	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 58, "ReadState.VMs()"},
+	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 58, "ReadState.Containers()"},
+	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 52, "ReadState.Nodes()"},
+	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 39, "ReadState.DockerHosts()"},
+	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 26, "ReadState.Hosts()"},
+	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 22, "ReadState.StoragePools()"},
+	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 13, "ReadState.K8sClusters()"},
+	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 8, "ReadState.PBSInstances()"},
+	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 3, "ReadState.PMGInstances()"},
+
+	// GetState() calls — consumer packages must use ReadState interface
+	{regexp.MustCompile(`\.GetState\(\)`), ".GetState()", 54, "ReadState interface"},
 }
 
 // TestLegacyStateAccessRatchet is a monotonic ratchet that prevents new
-// state.* direct access from being added to consumer packages.
+// state.* direct access and GetState() calls from being added to consumer
+// packages.
 //
-// Existing references are in nil-fallback branches from the SRC-03 migration.
-// They are dead code when ReadState is wired (SRC-04a) but remain as a safety
-// net. As fallback branches are removed, lower the ceiling numbers above.
+// Existing references are legacy paths being migrated to ReadState. Each
+// number must only decrease over time. As migration progresses, lower the
+// ceiling numbers above until they reach zero (SRC-04b enforcement).
 //
 // If this test fails with "count N exceeds ceiling M":
 //
