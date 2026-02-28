@@ -447,6 +447,100 @@ func TestRunLoop_NonLicenseErrorIsNotLicenseError(t *testing.T) {
 	}
 }
 
+// TestRunLoop_MidSessionLicenseErrorAfterChannelOpen verifies that when a
+// LICENSE_EXPIRED or LICENSE_INVALID error arrives after successful registration
+// AND after a channel has been opened (true mid-session), the Run loop correctly
+// detects it as a license error and applies maxReconnectDelay (5 min). This
+// covers the gap where existing tests send the error immediately after
+// REGISTER_ACK without any channel activity first.
+func TestRunLoop_MidSessionLicenseErrorAfterChannelOpen(t *testing.T) {
+	for _, code := range []string{ErrCodeLicenseExpired, ErrCodeLicenseInvalid} {
+		t.Run(code, func(t *testing.T) {
+			logger := zerolog.New(zerolog.NewTestWriter(t))
+
+			var mu sync.Mutex
+			attempts := 0
+
+			relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
+				// Read REGISTER
+				_, msg, err := conn.ReadMessage()
+				if err != nil {
+					return
+				}
+				frame, err := DecodeFrame(msg)
+				if err != nil || frame.Type != FrameRegister {
+					return
+				}
+
+				mu.Lock()
+				attempts++
+				mu.Unlock()
+
+				// Send REGISTER_ACK (registration succeeds)
+				ack, _ := NewControlFrame(FrameRegisterAck, 0, RegisterAckPayload{
+					InstanceID:   "inst_midsession",
+					SessionToken: "sess_midsession",
+					ExpiresAt:    time.Now().Add(time.Hour).Unix(),
+				})
+				ackBytes, _ := EncodeFrame(ack)
+				_ = conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+
+				// Send CHANNEL_OPEN to establish a channel (simulates app connecting)
+				chanOpen, _ := NewControlFrame(FrameChannelOpen, 1, ChannelOpenPayload{
+					ChannelID: 1,
+					AuthToken: "app_test_token",
+				})
+				chanOpenBytes, _ := EncodeFrame(chanOpen)
+				_ = conn.WriteMessage(websocket.BinaryMessage, chanOpenBytes)
+
+				// Brief delay to let readPump process the channel open
+				time.Sleep(50 * time.Millisecond)
+
+				// NOW send license error mid-session (after channel is active)
+				errFrame, _ := NewControlFrame(FrameError, 0, ErrorPayload{
+					Code:    code,
+					Message: "license revoked mid-session",
+				})
+				errBytes, _ := EncodeFrame(errFrame)
+				_ = conn.WriteMessage(websocket.BinaryMessage, errBytes)
+
+				// Keep connection alive briefly so the client processes the error
+				time.Sleep(200 * time.Millisecond)
+			})
+			defer relayServer.Close()
+
+			deps := ClientDeps{
+				LicenseTokenFunc: func() string { return "valid-jwt" },
+				TokenValidator:   func(token string) bool { return true },
+				LocalAddr:        "127.0.0.1:9999",
+				ServerVersion:    "test",
+				IdentityPubKey:   "test-pub-key",
+			}
+
+			client := NewClient(Config{Enabled: true, ServerURL: wsURL(relayServer)}, deps, logger)
+			// License error triggers maxReconnectDelay (5 min).
+			// With a 10s context, only 1 attempt should occur.
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			errCh := make(chan error, 1)
+			go func() { errCh <- client.Run(ctx) }()
+
+			select {
+			case <-errCh:
+			case <-time.After(15 * time.Second):
+				t.Fatal("Run() didn't exit after context cancellation")
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			if attempts != 1 {
+				t.Errorf("expected exactly 1 registration attempt (%s mid-session pauses for %v), got %d", code, maxReconnectDelay, attempts)
+			}
+		})
+	}
+}
+
 // TestRegister_ReceivesLicenseRejection verifies that when the relay server
 // sends a LICENSE_INVALID or LICENSE_EXPIRED error during registration (before
 // REGISTER_ACK), the error is properly returned from register().
