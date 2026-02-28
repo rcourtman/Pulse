@@ -169,7 +169,6 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 		Hosts: []models.Host{{ID: "host1", Hostname: "host1"}},
 	}
 
-	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{state: state}, nil, nil)
 	structured := []StructuredMention{
 		{ID: "docker:dock1:cid:part", Name: "homepage", Type: "docker"},
 		{ID: "host:host1", Name: "host1", Type: "host"},
@@ -184,6 +183,10 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 			Name: "homepage2",
 		}},
 	})
+
+	// Build ReadState from the full state (after appending second docker host)
+	rs := newTestReadState(state)
+	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{state: state}, rs, nil)
 
 	mentions := prefetcher.resolveStructuredMentions(structured, state)
 	if len(mentions) != 4 {

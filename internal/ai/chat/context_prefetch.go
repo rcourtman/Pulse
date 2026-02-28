@@ -225,17 +225,32 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 		}
 	}
 
-	// Check Docker containers - use ResolveResource for authoritative location
-	for _, dockerHost := range state.DockerHosts {
-		for _, container := range dockerHost.Containers {
-			nameLower := strings.ToLower(container.Name)
+	// Check Docker containers (via ReadState) - use ResolveResource for authoritative location
+	if rs != nil {
+		// Build a map from unified resource ID → source host ID so container
+		// ParentID (unified) can be resolved to the original models.DockerHost.ID
+		// that discovery and other subsystems expect.
+		dockerHostSourceIDs := make(map[string]string)
+		for _, dh := range rs.DockerHosts() {
+			if dh == nil {
+				continue
+			}
+			dockerHostSourceIDs[dh.ID()] = dh.HostSourceID()
+		}
+
+		for _, container := range rs.DockerContainers() {
+			if container == nil {
+				continue
+			}
+			name := container.Name()
+			nameLower := strings.ToLower(name)
 			if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
 				if !seen[nameLower] {
 					seen[nameLower] = true
 
 					// Capture bind mounts
 					var mounts []MountInfo
-					for _, m := range container.Mounts {
+					for _, m := range container.Mounts() {
 						if m.Source != "" && m.Destination != "" {
 							mounts = append(mounts, MountInfo{
 								Source:      m.Source,
@@ -244,15 +259,21 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 						}
 					}
 
+					// Resolve parent ID to original source host ID
+					hostID := dockerHostSourceIDs[container.ParentID()]
+					if hostID == "" {
+						hostID = container.ParentID()
+					}
+
 					// Use the authoritative ResolveResource function
-					loc := state.ResolveResource(container.Name)
+					loc := state.ResolveResource(name)
 
 					mentions = append(mentions, ResourceMention{
-						Name:           container.Name,
+						Name:           name,
 						ResourceType:   "docker",
-						ResourceID:     container.ID,
-						HostID:         dockerHost.ID,
-						MatchedText:    container.Name,
+						ResourceID:     container.ContainerID(),
+						HostID:         hostID,
+						MatchedText:    name,
 						BindMounts:     mounts,
 						DockerHostName: loc.DockerHostName,
 						DockerHostType: loc.DockerHostType,
@@ -290,75 +311,111 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 		}
 	}
 
-	// Check generic Hosts (Windows/Linux via Pulse Unified Agent)
-	for _, host := range state.Hosts {
-		nameLower := strings.ToLower(host.Hostname)
-		if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
-			if !seen[nameLower] {
-				seen[nameLower] = true
-				loc := state.ResolveResource(host.Hostname)
-				mentions = append(mentions, ResourceMention{
-					Name:         host.Hostname,
-					ResourceType: "host",
-					ResourceID:   host.ID,
-					HostID:       host.ID,
-					MatchedText:  host.Hostname,
-					TargetHost:   loc.TargetHost,
-				})
+	// Check generic Hosts (Windows/Linux via Pulse Unified Agent, via ReadState)
+	if rs != nil {
+		for _, host := range rs.Hosts() {
+			if host == nil {
+				continue
+			}
+			hostname := host.Hostname()
+			nameLower := strings.ToLower(hostname)
+			if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
+				if !seen[nameLower] {
+					seen[nameLower] = true
+					loc := state.ResolveResource(hostname)
+					// Use AgentID which maps to the original models.Host.ID
+					hostID := host.AgentID()
+					mentions = append(mentions, ResourceMention{
+						Name:         hostname,
+						ResourceType: "host",
+						ResourceID:   hostID,
+						HostID:       hostID,
+						MatchedText:  hostname,
+						TargetHost:   loc.TargetHost,
+					})
+				}
 			}
 		}
 	}
 
-	// Check Kubernetes clusters, pods, and deployments
-	for _, cluster := range state.KubernetesClusters {
-		clusterLower := strings.ToLower(cluster.Name)
-		if clusterLower != "" && len(clusterLower) >= 3 && matchesResource(messageLower, messageWords, clusterLower) {
-			if !seen[clusterLower] {
-				seen[clusterLower] = true
-				loc := state.ResolveResource(cluster.Name)
-				mentions = append(mentions, ResourceMention{
-					Name:         cluster.Name,
-					ResourceType: "k8s_cluster",
-					ResourceID:   cluster.ID,
-					HostID:       cluster.ID,
-					MatchedText:  cluster.Name,
-					TargetHost:   loc.TargetHost,
-				})
+	// Check Kubernetes clusters, pods, and deployments (via ReadState)
+	if rs != nil {
+		// Build map from unified resource ID → source cluster ID so pods/deployments
+		// can resolve HostID to the original models.KubernetesCluster.ID.
+		k8sClusterSourceIDs := make(map[string]string)
+		for _, cluster := range rs.K8sClusters() {
+			if cluster == nil {
+				continue
 			}
-		}
+			k8sClusterSourceIDs[cluster.ID()] = cluster.ClusterID()
 
-		// Check pods
-		for _, pod := range cluster.Pods {
-			podLower := strings.ToLower(pod.Name)
-			if podLower != "" && len(podLower) >= 3 && matchesResource(messageLower, messageWords, podLower) {
-				if !seen[podLower] {
-					seen[podLower] = true
-					loc := state.ResolveResource(pod.Name)
+			clusterName := cluster.Name()
+			clusterLower := strings.ToLower(clusterName)
+			if clusterLower != "" && len(clusterLower) >= 3 && matchesResource(messageLower, messageWords, clusterLower) {
+				if !seen[clusterLower] {
+					seen[clusterLower] = true
+					loc := state.ResolveResource(clusterName)
+					clusterSourceID := cluster.ClusterID()
 					mentions = append(mentions, ResourceMention{
-						Name:         pod.Name,
-						ResourceType: "k8s_pod",
-						ResourceID:   pod.Name,
-						HostID:       cluster.ID,
-						MatchedText:  pod.Name,
+						Name:         clusterName,
+						ResourceType: "k8s_cluster",
+						ResourceID:   clusterSourceID,
+						HostID:       clusterSourceID,
+						MatchedText:  clusterName,
 						TargetHost:   loc.TargetHost,
 					})
 				}
 			}
 		}
 
-		// Check deployments
-		for _, deploy := range cluster.Deployments {
-			deployLower := strings.ToLower(deploy.Name)
+		// Check pods (flat list, linked to cluster via ParentID)
+		for _, pod := range rs.Pods() {
+			if pod == nil {
+				continue
+			}
+			podName := pod.Name()
+			podLower := strings.ToLower(podName)
+			if podLower != "" && len(podLower) >= 3 && matchesResource(messageLower, messageWords, podLower) {
+				if !seen[podLower] {
+					seen[podLower] = true
+					loc := state.ResolveResource(podName)
+					hostID := k8sClusterSourceIDs[pod.ParentID()]
+					if hostID == "" {
+						hostID = pod.ParentID()
+					}
+					mentions = append(mentions, ResourceMention{
+						Name:         podName,
+						ResourceType: "k8s_pod",
+						ResourceID:   podName,
+						HostID:       hostID,
+						MatchedText:  podName,
+						TargetHost:   loc.TargetHost,
+					})
+				}
+			}
+		}
+
+		// Check deployments (flat list, linked to cluster via ParentID)
+		for _, deploy := range rs.K8sDeployments() {
+			if deploy == nil {
+				continue
+			}
+			deployName := deploy.Name()
+			deployLower := strings.ToLower(deployName)
 			if deployLower != "" && len(deployLower) >= 3 && matchesResource(messageLower, messageWords, deployLower) {
 				if !seen[deployLower] {
 					seen[deployLower] = true
-					loc := state.ResolveResource(deploy.Name)
+					loc := state.ResolveResource(deployName)
+					hostID := k8sClusterSourceIDs[deploy.ParentID()]
+					if hostID == "" {
+						hostID = deploy.ParentID()
+					}
 					mentions = append(mentions, ResourceMention{
-						Name:         deploy.Name,
+						Name:         deployName,
 						ResourceType: "k8s_deployment",
-						ResourceID:   deploy.Name,
-						HostID:       cluster.ID,
-						MatchedText:  deploy.Name,
+						ResourceID:   deployName,
+						HostID:       hostID,
+						MatchedText:  deployName,
 						TargetHost:   loc.TargetHost,
 					})
 				}
@@ -373,6 +430,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 // objects with full routing info. This is the preferred path — no fuzzy matching needed.
 func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMention, state models.StateSnapshot) []ResourceMention {
 	var mentions []ResourceMention
+	rs := p.readState
 
 	for _, sm := range structured {
 		// Parse the structured ID to extract resource details.
@@ -423,14 +481,17 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 			})
 
 		case "docker":
-			hostID, containerID := parseStructuredDockerMentionID(sm.ID, state)
+			hostID, containerID := parseStructuredDockerMentionID(sm.ID, rs, state)
 
-			// Gather bind mounts from state
+			// Gather bind mounts via ReadState
 			var mounts []MountInfo
-			for _, dockerHost := range state.DockerHosts {
-				for _, container := range dockerHost.Containers {
-					if container.Name == sm.Name || container.ID == containerID {
-						for _, m := range container.Mounts {
+			if rs != nil {
+				for _, container := range rs.DockerContainers() {
+					if container == nil {
+						continue
+					}
+					if container.Name() == sm.Name || container.ContainerID() == containerID {
+						for _, m := range container.Mounts() {
 							if m.Source != "" && m.Destination != "" {
 								mounts = append(mounts, MountInfo{
 									Source:      m.Source,
@@ -500,7 +561,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 	return mentions
 }
 
-func parseStructuredDockerMentionID(mentionID string, state models.StateSnapshot) (hostID string, containerID string) {
+func parseStructuredDockerMentionID(mentionID string, rs unifiedresources.ReadState, state models.StateSnapshot) (hostID string, containerID string) {
 	const prefix = "docker:"
 	if !strings.HasPrefix(mentionID, prefix) {
 		return "", ""
@@ -511,26 +572,31 @@ func parseStructuredDockerMentionID(mentionID string, state models.StateSnapshot
 		return "", ""
 	}
 
-	// Prefer matching known docker host IDs from state so host IDs containing
+	// Prefer matching known docker host IDs via ReadState so host IDs containing
 	// colons remain intact (V6 unified IDs can include colon separators).
 	bestHostID := ""
 	bestContainerID := ""
-	for _, dockerHost := range state.DockerHosts {
-		id := strings.TrimSpace(dockerHost.ID)
-		if id == "" {
-			continue
-		}
-		hostPrefix := id + ":"
-		if !strings.HasPrefix(raw, hostPrefix) {
-			continue
-		}
-		candidateContainerID := strings.TrimPrefix(raw, hostPrefix)
-		if candidateContainerID == "" {
-			continue
-		}
-		if len(id) > len(bestHostID) {
-			bestHostID = id
-			bestContainerID = candidateContainerID
+	if rs != nil {
+		for _, dockerHost := range rs.DockerHosts() {
+			if dockerHost == nil {
+				continue
+			}
+			id := strings.TrimSpace(dockerHost.HostSourceID())
+			if id == "" {
+				continue
+			}
+			hostPrefix := id + ":"
+			if !strings.HasPrefix(raw, hostPrefix) {
+				continue
+			}
+			candidateContainerID := strings.TrimPrefix(raw, hostPrefix)
+			if candidateContainerID == "" {
+				continue
+			}
+			if len(id) > len(bestHostID) {
+				bestHostID = id
+				bestContainerID = candidateContainerID
+			}
 		}
 	}
 	if bestHostID != "" {

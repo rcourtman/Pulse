@@ -165,7 +165,7 @@ type legacyStateRatchet struct {
 // These represent legacy nil-fallback paths that are dead code when
 // ReadState is wired. Each number must only decrease over time.
 //
-// Last updated: 2026-02-28 (total state.*: 291, GetState: 54).
+// Last updated: 2026-02-28 (total state.*: 286, GetState: 54).
 // Added GetState() ratchet to prevent new GetState() calls.
 // Note: some ceilings increased vs prior snapshot due to in-flight parallel
 // work on the branch — ratchet intent remains monotonically decreasing.
@@ -173,10 +173,10 @@ var legacyStateRatchets = []legacyStateRatchet{
 	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 58, "ReadState.VMs()"},
 	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 58, "ReadState.Containers()"},
 	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 52, "ReadState.Nodes()"},
-	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 39, "ReadState.DockerHosts()"},
-	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 26, "ReadState.Hosts()"},
+	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 36, "ReadState.DockerHosts()"},
+	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 25, "ReadState.Hosts()"},
 	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 22, "ReadState.StoragePools()"},
-	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 13, "ReadState.K8sClusters()"},
+	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 12, "ReadState.K8sClusters()"},
 	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 8, "ReadState.PBSInstances()"},
 	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 3, "ReadState.PMGInstances()"},
 
