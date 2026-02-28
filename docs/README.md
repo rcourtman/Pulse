@@ -4,6 +4,18 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 
 ---
 
+## v6 Execution Canonical Source
+
+For Pulse v6 build/release execution work, do not start from this broad docs index.
+Use:
+
+1. `docs/release-control/v6/SOURCE_OF_TRUTH.md`
+2. `docs/release-control/v6/status.json`
+
+All other documents are supporting references unless explicitly required for evidence.
+
+---
+
 ## 🚀 Getting Started
 
 - **[Installation Guide](INSTALL.md)**
@@ -16,11 +28,7 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
   Moving to a new server? Here's how to export and import your data safely.
 - **[Upgrade to v6](UPGRADE_v6.md)**  
   Practical upgrade guidance and post-upgrade checks for Pulse v6.
-- **[Upgrade to v5](UPGRADE_v5.md)**  
-  Practical upgrade guidance and post-upgrade checks.
-- **[v6 Prerelease Runbook](releases/V6_PRERELEASE_RUNBOOK.md)**  
-  Step-by-step release operations for shipping v6 RCs while `main` remains on v5.
-- **[FAQ](FAQ.md)**  
+- **[FAQ](FAQ.md)**
   Common questions and quick answers.
 
 ## 🛠️ Deployment & Operations
@@ -37,6 +45,12 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 - **[OIDC / SSO](OIDC.md)** – OIDC Single Sign-On configuration (Authentik, Keycloak, Azure AD, etc.).
 - **[Proxy Auth](PROXY_AUTH.md)** – Authentik/Authelia/Cloudflare proxy authentication configuration.
 - **[Agent Security](AGENT_SECURITY.md)** – Agent self-update verification and API security.
+
+## 📖 Advanced Topics (Pro / Cloud)
+
+- **[AI Autonomy & Safety](AI_AUTONOMY.md)** – Configure patrol autonomy levels, assistant control levels, investigation tuning, and safety guardrails.
+- **[Role-Based Access Control (RBAC)](RBAC.md)** – Define custom roles, assign permissions, and integrate with OIDC group mapping.
+- **[Audit Logging](AUDIT_LOGGING.md)** – Tamper-evident event logging for compliance, with query, export, and signature verification.
 
 ## ✨ New in 6.0
 
@@ -82,6 +96,11 @@ Pulse is available in three plans:
 - **[API Reference](API.md)** – Complete REST API documentation.
 - **[Architecture](../ARCHITECTURE.md)** – System design and component interaction.
 - **[Contributing](../CONTRIBUTING.md)** – How to contribute to Pulse.
+
+## 📁 Previous Versions
+
+- **[Upgrade to v5](UPGRADE_v5.md)** – Upgrade guidance for v4 → v5 migrations.
+- **[v6 Prerelease Runbook](releases/V6_PRERELEASE_RUNBOOK.md)** – Internal release operations used during the v6 RC period.
 
 ---
 
