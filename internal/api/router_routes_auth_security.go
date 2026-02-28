@@ -108,7 +108,8 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 	})))
 
 	// SAML login flow routes (unauthenticated - these are login/callback endpoints)
-	r.mux.HandleFunc("/api/saml/", func(w http.ResponseWriter, req *http.Request) {
+	// SAML is an advanced_sso feature requiring a Pro license.
+	r.mux.HandleFunc("/api/saml/", RequireLicenseFeature(r.licenseHandlers, featureAdvancedSSOKey, func(w http.ResponseWriter, req *http.Request) {
 		parts := strings.Split(strings.TrimPrefix(req.URL.Path, "/"), "/")
 		if len(parts) < 4 {
 			http.NotFound(w, req)
@@ -128,7 +129,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 		default:
 			http.NotFound(w, req)
 		}
-	})
+	}))
 
 	r.mux.HandleFunc("/api/security/tokens", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
