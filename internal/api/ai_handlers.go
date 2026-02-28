@@ -38,7 +38,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -2248,10 +2247,10 @@ func (h *AISettingsHandler) populateQuickstartFields(ctx context.Context, resp *
 	if qsMgr == nil {
 		return
 	}
-	resp.QuickstartCreditsTotal = pkglicensing.QuickstartCreditsTotal
+	resp.QuickstartCreditsTotal = quickstartCreditsTotalFromLicensing
 	remaining := qsMgr.CreditsRemaining()
 	resp.QuickstartCreditsRemaining = remaining
-	resp.QuickstartCreditsUsed = pkglicensing.QuickstartCreditsTotal - remaining
+	resp.QuickstartCreditsUsed = quickstartCreditsTotalFromLicensing - remaining
 	resp.QuickstartCreditsAvailable = qsMgr.HasCredits()
 	resp.UsingQuickstart = aiSvc.IsUsingQuickstart()
 }

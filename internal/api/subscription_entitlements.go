@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 // EntitlementPayload is the normalized entitlement response for frontend consumption.
@@ -43,14 +42,14 @@ func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Requ
 	// Onboarding overflow: +1 agent for 14 days on free tier.
 	overflowGrantedAt := h.ensureOnboardingOverflow(r.Context(), status.Tier)
 	now := time.Now()
-	if bonus := pkglicensing.OverflowBonus(status.Tier, overflowGrantedAt, now); bonus > 0 {
+	if bonus := overflowBonusFromLicensing(status.Tier, overflowGrantedAt, now); bonus > 0 {
 		status.MaxAgents += bonus
 	}
 
 	payload := buildEntitlementPayloadWithUsage(status, svc.SubscriptionState(), usage, trialEndsAtUnix)
 
 	// Surface overflow days remaining for frontend messaging.
-	if days := pkglicensing.OverflowDaysRemaining(status.Tier, overflowGrantedAt, now); days > 0 {
+	if days := overflowDaysRemainingFromLicensing(status.Tier, overflowGrantedAt, now); days > 0 {
 		payload.OverflowDaysRemaining = &days
 	}
 
@@ -141,8 +140,8 @@ func limitState(current, limit int64) string {
 
 // ensureOnboardingOverflow lazy-initializes the overflow grant for free-tier workspaces.
 // Returns the OverflowGrantedAt timestamp (may be nil for non-free tiers or missing billing store).
-func (h *LicenseHandlers) ensureOnboardingOverflow(ctx context.Context, tier pkglicensing.Tier) *int64 {
-	if tier != pkglicensing.TierFree || h == nil || h.mtPersistence == nil {
+func (h *LicenseHandlers) ensureOnboardingOverflow(ctx context.Context, tier licenseTier) *int64 {
+	if tier != licenseTierFreeValue || h == nil || h.mtPersistence == nil {
 		return nil
 	}
 
@@ -181,7 +180,7 @@ func (h *LicenseHandlers) ensureOnboardingOverflow(ctx context.Context, tier pkg
 		// Still nil — create minimal state with only the overflow grant.
 		// Use empty subscription state (not trial) to avoid accidentally changing
 		// the org's subscription lifecycle.
-		state := &pkglicensing.BillingState{
+		state := &billingState{
 			Capabilities:      []string{},
 			Limits:            map[string]int64{},
 			MetersEnabled:     []string{},

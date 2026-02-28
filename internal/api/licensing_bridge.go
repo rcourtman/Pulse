@@ -38,6 +38,7 @@ type conversionEvent = pkglicensing.ConversionEvent
 type conversionHealthStatus = pkglicensing.HealthStatus
 type conversionCollectionConfigSnapshot = pkglicensing.CollectionConfigSnapshot
 type trialActivationClaimsModel = pkglicensing.TrialActivationClaims
+type licenseTier = pkglicensing.Tier
 
 const (
 	featureMultiTenantKey          = pkglicensing.FeatureMultiTenant
@@ -225,6 +226,22 @@ func recordConversionSkippedMetric(reason string) {
 
 func recordConversionEventMetric(eventType, surface string) {
 	pkglicensing.GetConversionMetrics().RecordEvent(eventType, surface)
+}
+
+// licenseTierFreeValue is the canonical free-tier constant for use outside the bridge.
+const licenseTierFreeValue = pkglicensing.TierFree
+
+// quickstartCreditsTotalFromLicensing returns the total quickstart credits granted per workspace.
+const quickstartCreditsTotalFromLicensing = pkglicensing.QuickstartCreditsTotal
+
+// overflowBonusFromLicensing returns the number of bonus host slots granted by the onboarding overflow.
+func overflowBonusFromLicensing(tier licenseTier, overflowGrantedAt *int64, now time.Time) int {
+	return pkglicensing.OverflowBonus(tier, overflowGrantedAt, now)
+}
+
+// overflowDaysRemainingFromLicensing returns the number of days remaining in the overflow window.
+func overflowDaysRemainingFromLicensing(tier licenseTier, overflowGrantedAt *int64, now time.Time) int {
+	return pkglicensing.OverflowDaysRemaining(tier, overflowGrantedAt, now)
 }
 
 // freeHistoryDaysDefault is the fallback history days when no license service is available.

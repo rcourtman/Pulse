@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -12,7 +13,7 @@ import (
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	"github.com/rs/zerolog/log"
 )
 
 // overflowBaseDataDir is set during router initialization to allow the
@@ -21,6 +22,11 @@ import (
 var (
 	overflowBaseDataDirMu sync.RWMutex
 	overflowBaseDataDir   string
+
+	enforcementRecorderMu sync.RWMutex
+	enforcementRecorder   *conversionRecorder
+	enforcementHealth     *conversionPipelineHealth
+	enforcementDisableAll func() bool
 )
 
 // SetOverflowBaseDataDir configures the base data directory used by the
@@ -29,6 +35,18 @@ func SetOverflowBaseDataDir(dir string) {
 	overflowBaseDataDirMu.Lock()
 	defer overflowBaseDataDirMu.Unlock()
 	overflowBaseDataDir = dir
+}
+
+// SetEnforcementConversionRecorder wires the conversion event recorder for
+// limit_blocked events emitted from agent limit enforcement.
+func SetEnforcementConversionRecorder(rec *conversionRecorder, health *conversionPipelineHealth, disableAll ...func() bool) {
+	enforcementRecorderMu.Lock()
+	defer enforcementRecorderMu.Unlock()
+	enforcementRecorder = rec
+	enforcementHealth = health
+	if len(disableAll) > 0 {
+		enforcementDisableAll = disableAll[0]
+	}
 }
 
 func maxAgentsLimitForContext(ctx context.Context) int {
@@ -44,7 +62,7 @@ func maxAgentsLimitForContext(ctx context.Context) int {
 	limit := status.MaxAgents
 
 	// Apply onboarding overflow bonus for free-tier orgs.
-	if status.Tier == pkglicensing.TierFree {
+	if status.Tier == licenseTierFreeValue {
 		var overflowGrantedAt *int64
 
 		// Try evaluator first (covers hosted path with DatabaseSource).
@@ -70,7 +88,7 @@ func maxAgentsLimitForContext(ctx context.Context) int {
 			}
 		}
 
-		limit += pkglicensing.OverflowBonus(status.Tier, overflowGrantedAt, time.Now())
+		limit += overflowBonusFromLicensing(status.Tier, overflowGrantedAt, time.Now())
 	}
 
 	return limit
@@ -134,8 +152,49 @@ func enforceAgentLimitForHostReport(
 		return false
 	}
 
+	emitLimitBlockedEvent(ctx, current, limit)
 	writeMaxAgentsLimitExceeded(w, current, limit)
 	return true
+}
+
+// emitLimitBlockedEvent fires a limit_blocked conversion event. Fire-and-forget.
+// Respects the DisableLocalUpgradeMetrics config flag.
+func emitLimitBlockedEvent(ctx context.Context, current, limit int) {
+	enforcementRecorderMu.RLock()
+	rec := enforcementRecorder
+	health := enforcementHealth
+	disableAll := enforcementDisableAll
+	enforcementRecorderMu.RUnlock()
+	if rec == nil {
+		return
+	}
+	if disableAll != nil && disableAll() {
+		return
+	}
+
+	orgID := GetOrgID(ctx)
+	if orgID == "" {
+		orgID = "default"
+	}
+	now := time.Now().UnixMilli()
+	event := conversionEvent{
+		Type:           conversionEventLimitBlocked,
+		OrgID:          orgID,
+		Surface:        "agent_enforcement",
+		LimitKey:       "max_agents",
+		CurrentValue:   int64(current),
+		LimitValue:     int64(limit),
+		Timestamp:      now,
+		IdempotencyKey: fmt.Sprintf("backend:%s:%s:%s:%d", orgID, conversionEventLimitBlocked, "agent_enforcement", now),
+	}
+	if err := rec.Record(event); err != nil {
+		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to record limit_blocked conversion event")
+	} else {
+		recordConversionEventMetric(event.Type, event.Surface)
+		if health != nil {
+			health.RecordEvent(event.Type)
+		}
+	}
 }
 
 // enforceAgentLimitForDockerReport is a no-op under the agents-only model.

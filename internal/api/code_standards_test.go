@@ -285,3 +285,30 @@ func TestNoRawHTTPErrorInSettingsHandlers(t *testing.T) {
 		}
 	}
 }
+
+// TestPkgLicensingImportBoundary ensures that only licensing_bridge.go may
+// import pkg/licensing directly. All other files in internal/api/ must use
+// bridge wrappers (type aliases, constants, and functions defined in
+// licensing_bridge.go) instead of importing pkg/licensing directly.
+//
+// This prevents tight coupling between business logic handlers and the
+// licensing package, keeping the boundary clean and auditable.
+func TestPkgLicensingImportBoundary(t *testing.T) {
+	// Only licensing_bridge.go is allowed to import pkg/licensing.
+	allowedFiles := map[string]bool{
+		"licensing_bridge.go": true,
+	}
+
+	importPattern := regexp.MustCompile(`"github\.com/rcourtman/pulse-go-rewrite/pkg/licensing(?:/[^"]*)?"\s*$`)
+
+	for name, content := range readGoFiles(t) {
+		if allowedFiles[name] {
+			continue
+		}
+		for i, line := range strings.Split(content, "\n") {
+			if importPattern.MatchString(line) {
+				t.Errorf("%s:%d: direct pkg/licensing import — use bridge wrappers from licensing_bridge.go instead", name, i+1)
+			}
+		}
+	}
+}
