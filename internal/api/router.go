@@ -1804,7 +1804,7 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, orgID, da
 		// Create metrics adapter for incident recorder
 		var metricsAdapter *adapters.MetricsAdapter
 		if stateProvider := aiService.GetStateProvider(); stateProvider != nil {
-			metricsAdapter = adapters.NewMetricsAdapter(stateProvider)
+			metricsAdapter = adapters.NewMetricsAdapter(stateProvider, monitor.GetUnifiedReadState())
 		}
 
 		// Initialize and wire the incident recorder (high-frequency metrics)

@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/forecast"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
 )
@@ -75,38 +76,55 @@ func (a *ForecastDataAdapter) GetMetricHistory(resourceID, metric string, from, 
 // It implements metrics.MetricsProvider for the incident recorder.
 type MetricsAdapter struct {
 	stateProvider ai.StateProvider
+	readState     unifiedresources.ReadState
 }
 
 // NewMetricsAdapter creates a new adapter for current metrics.
-func NewMetricsAdapter(stateProvider ai.StateProvider) *MetricsAdapter {
-	return &MetricsAdapter{stateProvider: stateProvider}
+// When readState is provided, GetMonitoredResourceIDs uses it instead of
+// falling back to the state provider, reducing direct state access.
+func NewMetricsAdapter(stateProvider ai.StateProvider, readState unifiedresources.ReadState) *MetricsAdapter {
+	return &MetricsAdapter{stateProvider: stateProvider, readState: readState}
 }
 
 // GetMonitoredResourceIDs returns all resource IDs currently being monitored.
 // This is used by the incident recorder to maintain pre-incident buffers for all resources.
+// Prefers ReadState when available (SRC migration); falls back to StateProvider.
 func (a *MetricsAdapter) GetMonitoredResourceIDs() []string {
+	if a.readState != nil {
+		return a.monitoredIDsFromReadState()
+	}
 	if a.stateProvider == nil {
 		return nil
 	}
+	return a.monitoredIDsFromState()
+}
 
+func (a *MetricsAdapter) monitoredIDsFromReadState() []string {
+	var ids []string
+	for _, vm := range a.readState.VMs() {
+		ids = append(ids, vm.ID())
+	}
+	for _, ct := range a.readState.Containers() {
+		ids = append(ids, ct.ID())
+	}
+	for _, node := range a.readState.Nodes() {
+		ids = append(ids, node.ID())
+	}
+	return ids
+}
+
+func (a *MetricsAdapter) monitoredIDsFromState() []string {
 	state := a.stateProvider.GetState()
 	var ids []string
-
-	// Collect VM IDs
 	for _, vm := range state.VMs {
 		ids = append(ids, vm.ID)
 	}
-
-	// Collect container IDs
 	for _, ct := range state.Containers {
 		ids = append(ids, ct.ID)
 	}
-
-	// Collect node IDs
 	for _, node := range state.Nodes {
 		ids = append(ids, node.ID)
 	}
-
 	return ids
 }
 

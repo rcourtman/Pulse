@@ -47,7 +47,7 @@ func TestMetricsAdapter_GetCurrentMetrics_VM(t *testing.T) {
 	}
 
 	stateProvider := &mockStateProvider{state: state}
-	adapter := NewMetricsAdapter(stateProvider)
+	adapter := NewMetricsAdapter(stateProvider, nil)
 
 	metrics, err := adapter.GetCurrentMetrics("qemu/100")
 	if err != nil {
@@ -92,7 +92,7 @@ func TestMetricsAdapter_GetCurrentMetrics_Container(t *testing.T) {
 	}
 
 	stateProvider := &mockStateProvider{state: state}
-	adapter := NewMetricsAdapter(stateProvider)
+	adapter := NewMetricsAdapter(stateProvider, nil)
 
 	metrics, err := adapter.GetCurrentMetrics("lxc/101")
 	if err != nil {
@@ -126,7 +126,7 @@ func TestMetricsAdapter_GetCurrentMetrics_Node(t *testing.T) {
 	}
 
 	stateProvider := &mockStateProvider{state: state}
-	adapter := NewMetricsAdapter(stateProvider)
+	adapter := NewMetricsAdapter(stateProvider, nil)
 
 	metrics, err := adapter.GetCurrentMetrics("node/pve1")
 	if err != nil {
@@ -159,7 +159,7 @@ func TestMetricsAdapter_GetCurrentMetrics_Storage(t *testing.T) {
 	}
 
 	stateProvider := &mockStateProvider{state: state}
-	adapter := NewMetricsAdapter(stateProvider)
+	adapter := NewMetricsAdapter(stateProvider, nil)
 
 	metrics, err := adapter.GetCurrentMetrics("storage/local-zfs")
 	if err != nil {
@@ -182,7 +182,7 @@ func TestMetricsAdapter_GetCurrentMetrics_NotFound(t *testing.T) {
 	state := models.StateSnapshot{}
 
 	stateProvider := &mockStateProvider{state: state}
-	adapter := NewMetricsAdapter(stateProvider)
+	adapter := NewMetricsAdapter(stateProvider, nil)
 
 	metrics, err := adapter.GetCurrentMetrics("nonexistent")
 	if err != nil {
@@ -231,7 +231,7 @@ func TestCommandExecutionDisabledError_Message(t *testing.T) {
 }
 
 func TestMetricsAdapter_NilStateProvider(t *testing.T) {
-	adapter := NewMetricsAdapter(nil)
+	adapter := NewMetricsAdapter(nil, nil)
 
 	metrics, err := adapter.GetCurrentMetrics("anything")
 	if err != nil {
@@ -261,7 +261,7 @@ func TestMetricsAdapter_VMIDMatch(t *testing.T) {
 	}
 
 	stateProvider := &mockStateProvider{state: state}
-	adapter := NewMetricsAdapter(stateProvider)
+	adapter := NewMetricsAdapter(stateProvider, nil)
 
 	// Test lookup by VMID string
 	metrics, err := adapter.GetCurrentMetrics("100")
