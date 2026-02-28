@@ -10,6 +10,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -35,6 +36,19 @@ type GuestIntelligence struct {
 	Reachable   *bool  // nil = not checked (no agent/no IP), true/false = checked
 }
 
+// discoveryKey indexes service discovery records by (resourceType, hostID, resourceID).
+type discoveryKey struct {
+	resourceType servicediscovery.ResourceType
+	hostID       string
+	resourceID   string
+}
+
+// guestIPInfo pairs a guest ID with one of its IP addresses for reachability probing.
+type guestIPInfo struct {
+	guestID string
+	ip      string
+}
+
 // gatherGuestIntelligence builds a map of guest intelligence keyed by guest ID
 // (e.g. "qemu/100" or "lxc/101"). It loads discovery data for service identity
 // and probes reachability via host agents. The entire operation is best-effort
@@ -47,12 +61,6 @@ func (p *PatrolService) gatherGuestIntelligence(ctx context.Context, state model
 	ds := p.discoveryStore
 	p.mu.RUnlock()
 
-	// Build discovery index: (resourceType, hostID, resourceID) -> discovery
-	type discoveryKey struct {
-		resourceType servicediscovery.ResourceType
-		hostID       string
-		resourceID   string
-	}
 	discoveryIndex := make(map[discoveryKey]*servicediscovery.ResourceDiscovery)
 
 	if ds != nil {
@@ -73,82 +81,17 @@ func (p *PatrolService) gatherGuestIntelligence(ctx context.Context, state model
 
 	// Phase 2: Build GuestIntelligence entry for every guest
 	// Also collect running guests with IPs grouped by node for reachability probing.
-	type guestIPInfo struct {
-		guestID string
-		ip      string
-	}
 	nodeGuests := make(map[string][]guestIPInfo) // node name -> guests with IPs
 
-	for _, vm := range state.VMs {
-		if vm.Template {
-			continue
-		}
-		gi := &GuestIntelligence{
-			Name:      vm.Name,
-			GuestType: "vm",
-		}
+	// Prefer ReadState typed views; fall back to state snapshot if ReadState is not wired.
+	p.mu.RLock()
+	rs := p.readState
+	p.mu.RUnlock()
 
-		// Look up discovery
-		vmidStr := strconv.Itoa(vm.VMID)
-		if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeVM, vm.Node, vmidStr}]; ok {
-			gi.ServiceName = d.ServiceName
-			gi.ServiceType = d.ServiceType
-		}
-		// Also check Instance as hostID (some deployments use instance name)
-		if gi.ServiceName == "" && vm.Instance != "" && vm.Instance != vm.Node {
-			if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeVM, vm.Instance, vmidStr}]; ok {
-				gi.ServiceName = d.ServiceName
-				gi.ServiceType = d.ServiceType
-			}
-		}
-
-		intel[vm.ID] = gi
-
-		// Collect for reachability (only running guests with known IPs).
-		// Probe ALL IPs — the first IP may not be the primary interface (common with
-		// Windows VMs that have IPv6 or multi-adapter setups).
-		if vm.Status == "running" && len(vm.IPAddresses) > 0 {
-			for _, ip := range vm.IPAddresses {
-				nodeGuests[vm.Node] = append(nodeGuests[vm.Node], guestIPInfo{
-					guestID: vm.ID,
-					ip:      ip,
-				})
-			}
-		}
-	}
-
-	for _, ct := range state.Containers {
-		if ct.Template {
-			continue
-		}
-		gi := &GuestIntelligence{
-			Name:      ct.Name,
-			GuestType: "system-container",
-		}
-
-		// Look up discovery
-		vmidStr := strconv.Itoa(ct.VMID)
-		if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeSystemContainer, ct.Node, vmidStr}]; ok {
-			gi.ServiceName = d.ServiceName
-			gi.ServiceType = d.ServiceType
-		}
-		if gi.ServiceName == "" && ct.Instance != "" && ct.Instance != ct.Node {
-			if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeSystemContainer, ct.Instance, vmidStr}]; ok {
-				gi.ServiceName = d.ServiceName
-				gi.ServiceType = d.ServiceType
-			}
-		}
-
-		intel[ct.ID] = gi
-
-		if ct.Status == "running" && len(ct.IPAddresses) > 0 {
-			for _, ip := range ct.IPAddresses {
-				nodeGuests[ct.Node] = append(nodeGuests[ct.Node], guestIPInfo{
-					guestID: ct.ID,
-					ip:      ip,
-				})
-			}
-		}
+	if rs != nil {
+		gatherGuestsFromReadState(rs, discoveryIndex, intel, nodeGuests)
+	} else {
+		gatherGuestsFromSnapshot(state, discoveryIndex, intel, nodeGuests)
 	}
 
 	// Phase 3: Reachability probing via host agents
@@ -236,6 +179,169 @@ func (p *PatrolService) gatherGuestIntelligence(ctx context.Context, state model
 	}
 
 	return intel
+}
+
+// gatherGuestsFromReadState iterates VMs and Containers via ReadState typed views.
+// Keys are SourceID() (the legacy guest ID like "qemu/100") for compatibility with
+// downstream consumers (scope matching, triage, finding dedup). Status checks use
+// StatusOnline because the registry normalizes "running" → "online".
+func gatherGuestsFromReadState(
+	rs unifiedresources.ReadState,
+	discoveryIndex map[discoveryKey]*servicediscovery.ResourceDiscovery,
+	intel map[string]*GuestIntelligence,
+	nodeGuests map[string][]guestIPInfo,
+) {
+	for _, vm := range rs.VMs() {
+		if vm.Template() {
+			continue
+		}
+		gi := &GuestIntelligence{
+			Name:      vm.Name(),
+			GuestType: "vm",
+		}
+
+		vmidStr := strconv.Itoa(vm.VMID())
+		if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeVM, vm.Node(), vmidStr}]; ok {
+			gi.ServiceName = d.ServiceName
+			gi.ServiceType = d.ServiceType
+		}
+		if gi.ServiceName == "" && vm.Instance() != "" && vm.Instance() != vm.Node() {
+			if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeVM, vm.Instance(), vmidStr}]; ok {
+				gi.ServiceName = d.ServiceName
+				gi.ServiceType = d.ServiceType
+			}
+		}
+
+		// Use SourceID (legacy guest ID like "qemu/100") as the map key
+		// to stay compatible with downstream consumers. Fall back to
+		// unified ID() if SourceID is empty (defensive).
+		sourceID := vm.SourceID()
+		if sourceID == "" {
+			sourceID = vm.ID()
+		}
+		intel[sourceID] = gi
+
+		if vm.Status() == unifiedresources.StatusOnline && len(vm.IPAddresses()) > 0 {
+			for _, ip := range vm.IPAddresses() {
+				nodeGuests[vm.Node()] = append(nodeGuests[vm.Node()], guestIPInfo{
+					guestID: sourceID,
+					ip:      ip,
+				})
+			}
+		}
+	}
+
+	for _, ct := range rs.Containers() {
+		if ct.Template() {
+			continue
+		}
+		gi := &GuestIntelligence{
+			Name:      ct.Name(),
+			GuestType: "system-container",
+		}
+
+		vmidStr := strconv.Itoa(ct.VMID())
+		if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeSystemContainer, ct.Node(), vmidStr}]; ok {
+			gi.ServiceName = d.ServiceName
+			gi.ServiceType = d.ServiceType
+		}
+		if gi.ServiceName == "" && ct.Instance() != "" && ct.Instance() != ct.Node() {
+			if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeSystemContainer, ct.Instance(), vmidStr}]; ok {
+				gi.ServiceName = d.ServiceName
+				gi.ServiceType = d.ServiceType
+			}
+		}
+
+		sourceID := ct.SourceID()
+		if sourceID == "" {
+			sourceID = ct.ID()
+		}
+		intel[sourceID] = gi
+
+		if ct.Status() == unifiedresources.StatusOnline && len(ct.IPAddresses()) > 0 {
+			for _, ip := range ct.IPAddresses() {
+				nodeGuests[ct.Node()] = append(nodeGuests[ct.Node()], guestIPInfo{
+					guestID: sourceID,
+					ip:      ip,
+				})
+			}
+		}
+	}
+}
+
+// gatherGuestsFromSnapshot iterates VMs and Containers via legacy StateSnapshot.
+// This is the fallback path used when ReadState is not wired.
+func gatherGuestsFromSnapshot(
+	state models.StateSnapshot,
+	discoveryIndex map[discoveryKey]*servicediscovery.ResourceDiscovery,
+	intel map[string]*GuestIntelligence,
+	nodeGuests map[string][]guestIPInfo,
+) {
+	for _, vm := range state.VMs {
+		if vm.Template {
+			continue
+		}
+		gi := &GuestIntelligence{
+			Name:      vm.Name,
+			GuestType: "vm",
+		}
+
+		vmidStr := strconv.Itoa(vm.VMID)
+		if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeVM, vm.Node, vmidStr}]; ok {
+			gi.ServiceName = d.ServiceName
+			gi.ServiceType = d.ServiceType
+		}
+		if gi.ServiceName == "" && vm.Instance != "" && vm.Instance != vm.Node {
+			if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeVM, vm.Instance, vmidStr}]; ok {
+				gi.ServiceName = d.ServiceName
+				gi.ServiceType = d.ServiceType
+			}
+		}
+
+		intel[vm.ID] = gi
+
+		if vm.Status == "running" && len(vm.IPAddresses) > 0 {
+			for _, ip := range vm.IPAddresses {
+				nodeGuests[vm.Node] = append(nodeGuests[vm.Node], guestIPInfo{
+					guestID: vm.ID,
+					ip:      ip,
+				})
+			}
+		}
+	}
+
+	for _, ct := range state.Containers {
+		if ct.Template {
+			continue
+		}
+		gi := &GuestIntelligence{
+			Name:      ct.Name,
+			GuestType: "system-container",
+		}
+
+		vmidStr := strconv.Itoa(ct.VMID)
+		if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeSystemContainer, ct.Node, vmidStr}]; ok {
+			gi.ServiceName = d.ServiceName
+			gi.ServiceType = d.ServiceType
+		}
+		if gi.ServiceName == "" && ct.Instance != "" && ct.Instance != ct.Node {
+			if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeSystemContainer, ct.Instance, vmidStr}]; ok {
+				gi.ServiceName = d.ServiceName
+				gi.ServiceType = d.ServiceType
+			}
+		}
+
+		intel[ct.ID] = gi
+
+		if ct.Status == "running" && len(ct.IPAddresses) > 0 {
+			for _, ip := range ct.IPAddresses {
+				nodeGuests[ct.Node] = append(nodeGuests[ct.Node], guestIPInfo{
+					guestID: ct.ID,
+					ip:      ip,
+				})
+			}
+		}
+	}
 }
 
 // formatReachable returns the display string for the Reachable column.

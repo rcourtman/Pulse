@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -8,7 +9,37 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+// mockReadState is a minimal ReadState implementation for tests that need
+// seedFindingsAndContext to resolve missing resources.
+type mockReadState struct {
+	nodes      []*ur.NodeView
+	vms        []*ur.VMView
+	containers []*ur.ContainerView
+}
+
+func (m *mockReadState) Nodes() []*ur.NodeView             { return m.nodes }
+func (m *mockReadState) VMs() []*ur.VMView                 { return m.vms }
+func (m *mockReadState) Containers() []*ur.ContainerView   { return m.containers }
+func (m *mockReadState) Hosts() []*ur.HostView             { return nil }
+func (m *mockReadState) DockerHosts() []*ur.DockerHostView { return nil }
+func (m *mockReadState) DockerContainers() []*ur.DockerContainerView {
+	return nil
+}
+func (m *mockReadState) StoragePools() []*ur.StoragePoolView     { return nil }
+func (m *mockReadState) PBSInstances() []*ur.PBSInstanceView     { return nil }
+func (m *mockReadState) PMGInstances() []*ur.PMGInstanceView     { return nil }
+func (m *mockReadState) K8sClusters() []*ur.K8sClusterView       { return nil }
+func (m *mockReadState) K8sNodes() []*ur.K8sNodeView             { return nil }
+func (m *mockReadState) Pods() []*ur.PodView                     { return nil }
+func (m *mockReadState) K8sDeployments() []*ur.K8sDeploymentView { return nil }
+func (m *mockReadState) Workloads() []*ur.WorkloadView           { return nil }
+func (m *mockReadState) Infrastructure() []*ur.InfrastructureView {
+	return nil
+}
 
 type precomputeMetricsHistoryProvider struct {
 	metrics map[string][]models.MetricPoint
@@ -251,6 +282,11 @@ func TestSeedFindingsAndContext_ResolvesMissingAndAddsNotes(t *testing.T) {
 	}
 	ps.knowledgeStore = knowledgeStore
 
+	// Set up readState so seedFindingsAndContext can build knownResources
+	// and auto-resolve findings for resources that no longer exist.
+	nodeView := ur.NewNodeView(&ur.Resource{ID: "node-1", Name: "node-1"})
+	ps.readState = &mockReadState{nodes: []*ur.NodeView{&nodeView}}
+
 	state := models.StateSnapshot{Nodes: []models.Node{{ID: "node-1", Name: "node-1"}}}
 	output, seeded := ps.seedFindingsAndContext(&PatrolScope{ResourceIDs: []string{"node-1"}}, state)
 
@@ -274,5 +310,170 @@ func TestSeedFindingsAndContext_ResolvesMissingAndAddsNotes(t *testing.T) {
 	}
 	if !strings.Contains(output, "# User Notes") || !strings.Contains(output, "Saved Knowledge") {
 		t.Fatalf("expected knowledge context, got: %s", output)
+	}
+}
+
+// newTestVMView creates a VMView with Proxmox fields needed for gatherGuestIntelligence tests.
+// sourceID is the legacy guest ID (e.g. "qemu/100") stored in Proxmox.SourceID.
+// status should be a normalized ResourceStatus (e.g. ur.StatusOnline, ur.StatusOffline).
+func newTestVMView(sourceID, name string, vmid int, node, instance string, status ur.ResourceStatus, template bool, ips []string) *ur.VMView {
+	r := &ur.Resource{
+		ID:     "reg-" + sourceID, // unified registry ID (not used by gatherGuestIntelligence)
+		Name:   name,
+		Type:   ur.ResourceTypeVM,
+		Status: status,
+		Proxmox: &ur.ProxmoxData{
+			SourceID: sourceID,
+			VMID:     vmid,
+			NodeName: node,
+			Instance: instance,
+			Template: template,
+		},
+		Identity: ur.ResourceIdentity{
+			IPAddresses: ips,
+		},
+	}
+	v := ur.NewVMView(r)
+	return &v
+}
+
+// newTestContainerView creates a ContainerView with Proxmox fields needed for gatherGuestIntelligence tests.
+// sourceID is the legacy guest ID (e.g. "lxc/101") stored in Proxmox.SourceID.
+// status should be a normalized ResourceStatus (e.g. ur.StatusOnline, ur.StatusOffline).
+func newTestContainerView(sourceID, name string, vmid int, node, instance string, status ur.ResourceStatus, template bool, ips []string) *ur.ContainerView {
+	r := &ur.Resource{
+		ID:     "reg-" + sourceID,
+		Name:   name,
+		Type:   ur.ResourceTypeSystemContainer,
+		Status: status,
+		Proxmox: &ur.ProxmoxData{
+			SourceID: sourceID,
+			VMID:     vmid,
+			NodeName: node,
+			Instance: instance,
+			Template: template,
+		},
+		Identity: ur.ResourceIdentity{
+			IPAddresses: ips,
+		},
+	}
+	v := ur.NewContainerView(r)
+	return &v
+}
+
+func TestGatherGuestIntelligence_ReadStatePath(t *testing.T) {
+	// Set up discovery store with service info for one VM
+	store := setupTestDiscoveryStore(t, []*servicediscovery.ResourceDiscovery{
+		{
+			ID:           "vm:pve1:100",
+			ResourceType: servicediscovery.ResourceTypeVM,
+			HostID:       "pve1",
+			ResourceID:   "100",
+			ServiceName:  "PostgreSQL 15",
+			ServiceType:  "postgres",
+		},
+	})
+
+	ps := NewPatrolService(nil, nil)
+	ps.SetDiscoveryStore(store)
+
+	// Wire ReadState instead of using state snapshot.
+	// Status uses normalized StatusOnline/StatusOffline (registry normalizes "running" → "online").
+	rs := &mockReadState{
+		vms: []*ur.VMView{
+			newTestVMView("qemu/100", "db-server", 100, "pve1", "", ur.StatusOnline, false, nil),
+			newTestVMView("qemu/200", "unknown-vm", 200, "pve1", "", ur.StatusOnline, false, nil),
+			newTestVMView("qemu/9000", "template-vm", 9000, "pve1", "", ur.StatusOffline, true, nil),
+		},
+		containers: []*ur.ContainerView{
+			newTestContainerView("lxc/101", "web-proxy", 101, "pve1", "", ur.StatusOnline, false, nil),
+		},
+	}
+	ps.SetReadState(rs)
+
+	// Pass empty state — ReadState should be used instead
+	intel := ps.gatherGuestIntelligence(context.Background(), models.StateSnapshot{})
+
+	// Expect 3 entries: 2 VMs (template skipped) + 1 container
+	if len(intel) != 3 {
+		t.Fatalf("expected 3 entries from ReadState path, got %d", len(intel))
+	}
+	if gi := intel["qemu/100"]; gi == nil || gi.ServiceName != "PostgreSQL 15" {
+		t.Fatalf("expected db-server with discovery, got: %+v", gi)
+	}
+	if gi := intel["qemu/200"]; gi == nil || gi.Name != "unknown-vm" {
+		t.Fatalf("expected unknown-vm entry, got: %+v", gi)
+	}
+	if gi := intel["lxc/101"]; gi == nil || gi.GuestType != "system-container" {
+		t.Fatalf("expected web-proxy container entry, got: %+v", gi)
+	}
+	// Template should be skipped
+	if _, ok := intel["qemu/9000"]; ok {
+		t.Fatal("template VM should be skipped")
+	}
+}
+
+func TestGatherGuestIntelligence_ReadStateReachability(t *testing.T) {
+	prober := &mockGuestProber{
+		agents: map[string]string{"pve1": "agent-1"},
+		results: map[string]map[string]PingResult{
+			"agent-1": {
+				"10.0.0.1": {Reachable: true},
+				"10.0.0.2": {Reachable: false},
+			},
+		},
+	}
+
+	ps := NewPatrolService(nil, nil)
+	ps.SetGuestProber(prober)
+
+	rs := &mockReadState{
+		vms: []*ur.VMView{
+			newTestVMView("qemu/100", "vm-up", 100, "pve1", "", ur.StatusOnline, false, []string{"10.0.0.1"}),
+			newTestVMView("qemu/101", "vm-down", 101, "pve1", "", ur.StatusOnline, false, []string{"10.0.0.2"}),
+		},
+	}
+	ps.SetReadState(rs)
+
+	intel := ps.gatherGuestIntelligence(context.Background(), models.StateSnapshot{})
+
+	if len(intel) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(intel))
+	}
+	if gi := intel["qemu/100"]; gi == nil || gi.Reachable == nil || !*gi.Reachable {
+		t.Fatal("expected vm-up to be reachable")
+	}
+	if gi := intel["qemu/101"]; gi == nil || gi.Reachable == nil || *gi.Reachable {
+		t.Fatal("expected vm-down to be unreachable")
+	}
+}
+
+func TestGatherGuestIntelligence_ReadStateInstanceFallback(t *testing.T) {
+	// Test that Instance-based discovery lookup works via ReadState
+	store := setupTestDiscoveryStore(t, []*servicediscovery.ResourceDiscovery{
+		{
+			ID:           "vm:my-instance:100",
+			ResourceType: servicediscovery.ResourceTypeVM,
+			HostID:       "my-instance",
+			ResourceID:   "100",
+			ServiceName:  "Redis",
+			ServiceType:  "redis",
+		},
+	})
+
+	ps := NewPatrolService(nil, nil)
+	ps.SetDiscoveryStore(store)
+
+	rs := &mockReadState{
+		vms: []*ur.VMView{
+			newTestVMView("qemu/100", "cache", 100, "pve1", "my-instance", ur.StatusOnline, false, nil),
+		},
+	}
+	ps.SetReadState(rs)
+
+	intel := ps.gatherGuestIntelligence(context.Background(), models.StateSnapshot{})
+
+	if gi := intel["qemu/100"]; gi == nil || gi.ServiceName != "Redis" {
+		t.Fatalf("expected Redis service from instance lookup, got: %+v", gi)
 	}
 }
