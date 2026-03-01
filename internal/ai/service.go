@@ -293,6 +293,17 @@ func (s *Service) CheckBudget(useCase string) error {
 	return s.enforceBudget(useCase)
 }
 
+// RecordUsage records a token usage event in the cost store for budget tracking.
+// This should be called by any code path that consumes LLM tokens (patrol, investigations, etc.).
+func (s *Service) RecordUsage(event cost.UsageEvent) {
+	s.mu.RLock()
+	store := s.costStore
+	s.mu.RUnlock()
+	if store != nil {
+		store.Record(event)
+	}
+}
+
 // SetStateProvider sets the state provider for infrastructure context
 func (s *Service) SetStateProvider(sp StateProvider) {
 	s.mu.Lock()
@@ -1252,6 +1263,22 @@ func (s *Service) QuickAnalysis(ctx context.Context, prompt string) (string, err
 	})
 	if err != nil {
 		return "", fmt.Errorf("Pulse Assistant analysis failed: %w", err)
+	}
+
+	// Record token usage for cost tracking
+	if resp.InputTokens > 0 || resp.OutputTokens > 0 {
+		providerName, _ := config.ParseModelString(model)
+		if providerName == "" || model == "" {
+			providerName = provider.Name()
+		}
+		s.RecordUsage(cost.UsageEvent{
+			Timestamp:    time.Now(),
+			Provider:     providerName,
+			RequestModel: model,
+			UseCase:      "patrol",
+			InputTokens:  resp.InputTokens,
+			OutputTokens: resp.OutputTokens,
+		})
 	}
 
 	if resp.Content == "" {

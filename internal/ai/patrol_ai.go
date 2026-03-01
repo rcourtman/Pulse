@@ -13,8 +13,10 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
@@ -430,6 +432,11 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 	})
 
 	if chatErr != nil {
+		// Record partial token usage even on failure so budget enforcement
+		// stays accurate for tokens consumed before the error.
+		if chatResp != nil {
+			p.recordPatrolUsage("patrol", chatResp.InputTokens, chatResp.OutputTokens)
+		}
 		if !noStream {
 			p.setStreamPhase("idle")
 			p.broadcast(PatrolStreamEvent{Type: "error", Content: chatErr.Error()})
@@ -443,6 +450,9 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 	}
 	inputTokens = chatResp.InputTokens
 	outputTokens = chatResp.OutputTokens
+
+	// Record patrol token usage for cost tracking and budget enforcement
+	p.recordPatrolUsage("patrol", inputTokens, outputTokens)
 
 	// Clean thinking tokens
 	finalContent = CleanThinkingTokens(finalContent)
@@ -732,6 +742,10 @@ func (p *PatrolService) runEvaluationPass(ctx context.Context, adapter *patrolFi
 	})
 
 	if err != nil {
+		// Record partial token usage even on failure
+		if resp != nil {
+			p.recordPatrolUsage("patrol-eval", resp.InputTokens, resp.OutputTokens)
+		}
 		log.Warn().Err(err).Msg("AI Patrol: Evaluation pass failed")
 		return nil, err
 	}
@@ -741,7 +755,33 @@ func (p *PatrolService) runEvaluationPass(ctx context.Context, adapter *patrolFi
 		Int("output_tokens", resp.OutputTokens).
 		Msg("AI Patrol: Evaluation pass complete")
 
+	// Record evaluation pass token usage for cost tracking
+	p.recordPatrolUsage("patrol-eval", resp.InputTokens, resp.OutputTokens)
+
 	return resp, nil
+}
+
+// recordPatrolUsage records token usage from a patrol or evaluation pass into the cost store.
+func (p *PatrolService) recordPatrolUsage(useCase string, inputTokens, outputTokens int) {
+	if p.aiService == nil || (inputTokens == 0 && outputTokens == 0) {
+		return
+	}
+	patrolModel := ""
+	if cfg := p.aiService.GetAIConfig(); cfg != nil {
+		patrolModel = cfg.GetPatrolModel()
+		if patrolModel == "" {
+			patrolModel = cfg.GetChatModel()
+		}
+	}
+	providerName, _ := config.ParseModelString(patrolModel)
+	p.aiService.RecordUsage(cost.UsageEvent{
+		Timestamp:    time.Now(),
+		Provider:     providerName,
+		RequestModel: patrolModel,
+		UseCase:      useCase,
+		InputTokens:  inputTokens,
+		OutputTokens: outputTokens,
+	})
 }
 
 // buildEvalSystemPrompt returns the system prompt for the evaluation pass.

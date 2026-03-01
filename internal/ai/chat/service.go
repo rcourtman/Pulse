@@ -689,7 +689,12 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 				log.Warn().Err(saveErr).Msg("Failed to save patrol message after error")
 			}
 		}
-		return nil, err
+		// Return a partial response with accumulated token counts so callers
+		// can still record usage for budget tracking even on failure.
+		return &PatrolResponse{
+			InputTokens:  tempLoop.GetTotalInputTokens(),
+			OutputTokens: tempLoop.GetTotalOutputTokens(),
+		}, err
 	}
 
 	// Save result messages

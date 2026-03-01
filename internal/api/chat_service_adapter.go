@@ -42,6 +42,14 @@ func (a *chatServiceAdapter) ExecutePatrolStream(ctx context.Context, req ai.Pat
 		MaxTotalTokens: req.MaxTotalTokens,
 	}, adaptCallback(callback))
 	if err != nil {
+		// Propagate partial response (with token counts) alongside the error
+		// so callers can still record usage for budget tracking on failure.
+		if resp != nil {
+			return &ai.PatrolStreamResponse{
+				InputTokens:  resp.InputTokens,
+				OutputTokens: resp.OutputTokens,
+			}, err
+		}
 		return nil, err
 	}
 	return &ai.PatrolStreamResponse{
