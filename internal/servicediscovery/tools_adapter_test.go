@@ -20,7 +20,7 @@ func TestNewToolsAdapter(t *testing.T) {
 		store, err := NewStore(t.TempDir())
 		require.NoError(t, err)
 		store.crypto = nil // Disable crypto for testing
-		service := NewService(store, nil, nil, DefaultConfig())
+		service := NewService(store, nil, DefaultConfig())
 
 		adapter := NewToolsAdapter(service)
 		assert.NotNil(t, adapter)
@@ -32,7 +32,7 @@ func TestToolsAdapter_GetDiscovery(t *testing.T) {
 	store, err := NewStore(t.TempDir())
 	require.NoError(t, err)
 	store.crypto = nil
-	service := NewService(store, nil, nil, DefaultConfig())
+	service := NewService(store, nil, DefaultConfig())
 	adapter := NewToolsAdapter(service)
 
 	// Create a test discovery
@@ -96,7 +96,7 @@ func TestToolsAdapter_GetDiscoveryByResource(t *testing.T) {
 	store, err := NewStore(t.TempDir())
 	require.NoError(t, err)
 	store.crypto = nil
-	service := NewService(store, nil, nil, DefaultConfig())
+	service := NewService(store, nil, DefaultConfig())
 	adapter := NewToolsAdapter(service)
 
 	id := MakeResourceID(ResourceTypeVM, "node-1", "vm-1")
@@ -126,7 +126,7 @@ func TestToolsAdapter_ListDiscoveries(t *testing.T) {
 	store, err := NewStore(t.TempDir())
 	require.NoError(t, err)
 	store.crypto = nil
-	service := NewService(store, nil, nil, DefaultConfig())
+	service := NewService(store, nil, DefaultConfig())
 	adapter := NewToolsAdapter(service)
 
 	d1 := &ResourceDiscovery{ID: "d1", ResourceType: ResourceTypeDocker, HostID: "h1", ResourceID: "r1"}
@@ -191,7 +191,7 @@ func TestToolsAdapter_TriggerDiscovery(t *testing.T) {
 	store.crypto = nil
 
 	// Create a service WITHOUT a scanner. DiscoverResource should fail or return error
-	service := NewService(store, nil, nil, DefaultConfig())
+	service := NewService(store, nil, DefaultConfig())
 	adapter := NewToolsAdapter(service)
 
 	t.Run("returns error if scanner missing/fails", func(t *testing.T) {

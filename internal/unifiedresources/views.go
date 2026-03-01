@@ -2410,6 +2410,13 @@ func (v DockerContainerView) MemoryPercent() float64 {
 	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
 }
 
+func (v DockerContainerView) DiskPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsDisk)
+}
+
 func (v DockerContainerView) UptimeSeconds() int64 {
 	if v.r == nil || v.r.Docker == nil {
 		return 0

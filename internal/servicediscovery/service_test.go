@@ -8,6 +8,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type stubAnalyzer struct {
@@ -206,18 +209,110 @@ func TestFilterSensitiveLabels(t *testing.T) {
 	}
 }
 
-type stubStateProvider struct {
-	state StateSnapshot
-}
-
-func (s stubStateProvider) GetState() StateSnapshot {
-	return s.state
-}
-
-type panicStateProvider struct{}
-
-func (panicStateProvider) GetState() StateSnapshot {
-	panic("boom")
+// readStateFromSnapshot builds a ReadState backed by a ResourceRegistry
+// from a local servicediscovery StateSnapshot. This lets tests populate
+// state using the familiar local types while exercising the ReadState path.
+func readStateFromSnapshot(snap StateSnapshot) unifiedresources.ReadState {
+	ms := models.StateSnapshot{}
+	for _, vm := range snap.VMs {
+		ms.VMs = append(ms.VMs, models.VM{
+			VMID:        vm.VMID,
+			Name:        vm.Name,
+			Node:        vm.Node,
+			Status:      vm.Status,
+			Instance:    vm.Instance,
+			IPAddresses: vm.IPAddresses,
+		})
+	}
+	for _, ct := range snap.Containers {
+		ms.Containers = append(ms.Containers, models.Container{
+			VMID:        ct.VMID,
+			Name:        ct.Name,
+			Node:        ct.Node,
+			Status:      ct.Status,
+			Instance:    ct.Instance,
+			IPAddresses: ct.IPAddresses,
+		})
+	}
+	for _, dh := range snap.DockerHosts {
+		mh := models.DockerHost{
+			ID:       dh.AgentID,
+			AgentID:  dh.AgentID,
+			Hostname: dh.Hostname,
+		}
+		for _, dc := range dh.Containers {
+			mc := models.DockerContainer{
+				ID:     dc.ID,
+				Name:   dc.Name,
+				Image:  dc.Image,
+				State:  dc.Status, // servicediscovery.DockerContainer.Status maps to Docker engine state
+				Status: dc.Status,
+				Labels: dc.Labels,
+			}
+			for _, p := range dc.Ports {
+				mc.Ports = append(mc.Ports, models.DockerContainerPort{
+					PublicPort:  p.PublicPort,
+					PrivatePort: p.PrivatePort,
+					Protocol:    p.Protocol,
+				})
+			}
+			for _, m := range dc.Mounts {
+				mc.Mounts = append(mc.Mounts, models.DockerContainerMount{
+					Source:      m.Source,
+					Destination: m.Destination,
+				})
+			}
+			mh.Containers = append(mh.Containers, mc)
+		}
+		ms.DockerHosts = append(ms.DockerHosts, mh)
+	}
+	for _, h := range snap.Hosts {
+		ms.Hosts = append(ms.Hosts, models.Host{
+			ID:            h.ID,
+			Hostname:      h.Hostname,
+			DisplayName:   h.DisplayName,
+			Platform:      h.Platform,
+			OSName:        h.OSName,
+			OSVersion:     h.OSVersion,
+			KernelVersion: h.KernelVersion,
+			Architecture:  h.Architecture,
+			CPUCount:      h.CPUCount,
+			Status:        h.Status,
+			Tags:          h.Tags,
+		})
+	}
+	for _, n := range snap.Nodes {
+		ms.Nodes = append(ms.Nodes, models.Node{
+			ID:                n.ID,
+			Name:              n.Name,
+			LinkedHostAgentID: n.LinkedHostAgentID,
+		})
+	}
+	for _, kc := range snap.KubernetesClusters {
+		mk := models.KubernetesCluster{
+			ID:      kc.ID,
+			Name:    kc.Name,
+			AgentID: kc.AgentID,
+			Status:  kc.Status,
+		}
+		for _, pod := range kc.Pods {
+			mp := models.KubernetesPod{
+				UID:       pod.UID,
+				Name:      pod.Name,
+				Namespace: pod.Namespace,
+				NodeName:  pod.NodeName,
+				Phase:     pod.Phase,
+				Labels:    pod.Labels,
+				OwnerKind: pod.OwnerKind,
+				OwnerName: pod.OwnerName,
+			}
+			mk.Pods = append(mk.Pods, mp)
+		}
+		ms.KubernetesClusters = append(ms.KubernetesClusters, mk)
+	}
+	rr := unifiedresources.NewRegistry(nil)
+	rr.IngestSnapshot(ms)
+	return rr
 }
 
 func TestService_parseAIResponse_Markdown(t *testing.T) {
@@ -246,7 +341,7 @@ func TestService_analyzeDockerContainer_CacheAndPorts(t *testing.T) {
 		t.Fatalf("NewStore error: %v", err)
 	}
 	store.crypto = nil
-	service := NewService(store, nil, nil, Config{CacheExpiry: time.Hour})
+	service := NewService(store, nil, Config{CacheExpiry: time.Hour})
 
 	analyzer := &stubAnalyzer{
 		response: `{"service_type":"nginx","service_name":"Nginx","service_version":"1.2","category":"web_server","cli_access":"docker exec {container} nginx -v","facts":[],"config_paths":[],"data_paths":[],"ports":[],"confidence":0.9,"reasoning":"image"}`,
@@ -303,7 +398,7 @@ func TestService_DiscoverResource_RecentAndNoAnalyzer(t *testing.T) {
 		t.Fatalf("NewStore error: %v", err)
 	}
 	store.crypto = nil
-	service := NewService(store, nil, nil, DefaultConfig())
+	service := NewService(store, nil, DefaultConfig())
 
 	req := DiscoveryRequest{
 		ResourceType: ResourceTypeDocker,
@@ -386,7 +481,8 @@ func TestService_getResourceMetadata(t *testing.T) {
 		},
 	}
 
-	service := NewService(nil, nil, stubStateProvider{state: state}, DefaultConfig())
+	service := NewService(nil, nil, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(state))
 
 	vmMeta := service.getResourceMetadata(DiscoveryRequest{
 		ResourceType: ResourceTypeVM,
@@ -402,7 +498,7 @@ func TestService_getResourceMetadata(t *testing.T) {
 		ResourceID:   "201",
 		HostID:       "node2",
 	})
-	if lxcMeta["name"] != "lxc1" || lxcMeta["status"] != "stopped" {
+	if lxcMeta["name"] != "lxc1" || lxcMeta["status"] != "offline" {
 		t.Fatalf("unexpected lxc metadata: %#v", lxcMeta)
 	}
 
@@ -411,7 +507,7 @@ func TestService_getResourceMetadata(t *testing.T) {
 		ResourceID:   "redis",
 		HostID:       "agent1",
 	})
-	if dockerMeta["image"] != "redis:latest" || dockerMeta["status"] != "running" {
+	if dockerMeta["image"] != "redis:latest" || dockerMeta["status"] != "online" {
 		t.Fatalf("unexpected docker metadata: %#v", dockerMeta)
 	}
 
@@ -435,7 +531,8 @@ func TestService_getResourceExternalIP_Host(t *testing.T) {
 		},
 	}
 
-	service := NewService(nil, nil, stubStateProvider{state: state}, DefaultConfig())
+	service := NewService(nil, nil, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(state))
 
 	got := service.getResourceExternalIP(DiscoveryRequest{
 		ResourceType: ResourceTypeHost,
@@ -479,7 +576,7 @@ func TestService_getResourceExternalIP_Host(t *testing.T) {
 }
 
 func TestService_formatCLIAccessAndStatus(t *testing.T) {
-	service := NewService(nil, nil, nil, DefaultConfig())
+	service := NewService(nil, nil, DefaultConfig())
 	formatted := service.formatCLIAccess(ResourceTypeDocker, "redis", "")
 	// New format is instructional, should mention the container name and pulse_control
 	if !strings.Contains(formatted, "redis") || !strings.Contains(formatted, "docker exec") {
@@ -509,7 +606,7 @@ func TestService_formatCLIAccessAndStatus(t *testing.T) {
 }
 
 func TestService_DefaultsAndSetAnalyzer(t *testing.T) {
-	service := NewService(nil, nil, nil, Config{})
+	service := NewService(nil, nil, Config{})
 	if service.interval == 0 || service.cacheExpiry == 0 || service.aiAnalysisTimeout == 0 {
 		t.Fatalf("expected defaults for interval and cache expiry")
 	}
@@ -534,7 +631,7 @@ func TestService_AnalyzeDockerContainer_AITimeout(t *testing.T) {
 	}
 	store.crypto = nil
 
-	service := NewService(store, nil, nil, Config{
+	service := NewService(store, nil, Config{
 		CacheExpiry:       time.Hour,
 		AIAnalysisTimeout: 20 * time.Millisecond,
 	})
@@ -573,7 +670,8 @@ func TestService_FingerprintCollectionAndDiscoveryWrappers(t *testing.T) {
 			},
 		},
 	}
-	service := NewService(store, nil, stubStateProvider{state: state}, DefaultConfig())
+	service := NewService(store, nil, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(state))
 	service.SetAIAnalyzer(&stubAnalyzer{
 		response: `{"service_type":"nginx","service_name":"Nginx","service_version":"1.2","category":"web_server","cli_access":"docker exec {container} nginx -v","facts":[],"config_paths":[],"data_paths":[],"ports":[],"confidence":0.9,"reasoning":"image"}`,
 	})
@@ -641,12 +739,12 @@ func TestService_FingerprintCollectionAndDiscoveryWrappers(t *testing.T) {
 		t.Fatalf("DeleteDiscovery error: %v", err)
 	}
 
-	service.stateProvider = nil
+	service.SetReadState(nil)
 	service.collectFingerprints(context.Background())
 }
 
 func TestService_PromptsAndDiscoveryLoop(t *testing.T) {
-	service := NewService(nil, nil, nil, DefaultConfig())
+	service := NewService(nil, nil, DefaultConfig())
 
 	container := DockerContainer{
 		Name:   "web",
@@ -716,7 +814,8 @@ func TestService_FingerprintLoop_StopAndCancel(t *testing.T) {
 		}
 		store.crypto = nil
 
-		service := NewService(store, nil, stubStateProvider{state: state}, DefaultConfig())
+		service := NewService(store, nil, DefaultConfig())
+		service.SetReadState(readStateFromSnapshot(state))
 		// Analyzer should be called by automatic refresh for changed/new resources.
 		analyzer := &stubAnalyzer{
 			response: `{"service_type":"nginx","service_name":"Nginx","service_version":"1.2","category":"web_server","cli_access":"docker exec {container} nginx -v","facts":[],"config_paths":[],"data_paths":[],"ports":[],"confidence":0.9,"reasoning":"image"}`,
@@ -804,7 +903,8 @@ func TestService_StartDuringStopDoesNotStartNewLoop(t *testing.T) {
 		},
 	}
 
-	service := NewService(store, nil, stubStateProvider{state: state}, DefaultConfig())
+	service := NewService(store, nil, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(state))
 	service.initialDelay = time.Millisecond
 	service.interval = time.Hour
 	analyzer := &blockingAnalyzer{started: make(chan struct{})}
@@ -838,7 +938,7 @@ func TestService_DiscoverDockerContainersSkips(t *testing.T) {
 	}
 	store.crypto = nil
 
-	service := NewService(store, nil, nil, DefaultConfig())
+	service := NewService(store, nil, DefaultConfig())
 	service.discoverDockerContainers(context.Background(), []DockerHost{{AgentID: "host1"}})
 
 	service.SetAIAnalyzer(&stubAnalyzer{
@@ -888,8 +988,9 @@ func TestService_DiscoverDockerContainersSkips(t *testing.T) {
 	})
 }
 
-func TestService_CollectFingerprintsRecover(t *testing.T) {
-	service := NewService(nil, nil, panicStateProvider{}, DefaultConfig())
+func TestService_CollectFingerprintsNoReadState(t *testing.T) {
+	// Verify collectFingerprints handles a nil ReadState gracefully.
+	service := NewService(nil, nil, DefaultConfig())
 	service.collectFingerprints(context.Background())
 }
 
@@ -906,7 +1007,7 @@ func TestService_DiscoverResource_SaveError(t *testing.T) {
 	}
 	store.dataDir = badPath
 
-	service := NewService(store, nil, nil, DefaultConfig())
+	service := NewService(store, nil, DefaultConfig())
 	service.SetAIAnalyzer(&stubAnalyzer{
 		response: `{"service_type":"nginx","service_name":"Nginx","service_version":"1.2","category":"web_server","cli_access":"docker exec {container} nginx -v","facts":[],"config_paths":[],"data_paths":[],"ports":[],"confidence":0.9,"reasoning":"image"}`,
 	})
@@ -930,7 +1031,7 @@ func TestService_DiscoverResource_AITimeout(t *testing.T) {
 	}
 	store.crypto = nil
 
-	service := NewService(store, nil, nil, Config{
+	service := NewService(store, nil, Config{
 		Interval:          time.Minute,
 		CacheExpiry:       time.Hour,
 		DeepScanTimeout:   time.Minute,
@@ -965,7 +1066,7 @@ func TestService_DiscoverResource_ScanError(t *testing.T) {
 	store.crypto = nil
 
 	scanner := NewDeepScanner(nil)
-	service := NewService(store, scanner, nil, DefaultConfig())
+	service := NewService(store, scanner, DefaultConfig())
 	service.SetAIAnalyzer(&stubAnalyzer{
 		response: `{"service_type":"nginx","service_name":"Nginx","service_version":"1.2","category":"web_server","cli_access":"docker exec {container} nginx -v","facts":[],"config_paths":[],"data_paths":[],"ports":[],"confidence":0.9,"reasoning":"image"}`,
 	})
@@ -983,7 +1084,7 @@ func TestService_DiscoverResource_ScanError(t *testing.T) {
 }
 
 func TestService_DiscoveryLoop_ContextDoneAtStart(t *testing.T) {
-	service := NewService(nil, nil, nil, DefaultConfig())
+	service := NewService(nil, nil, DefaultConfig())
 	service.initialDelay = time.Hour
 	service.stopCh = make(chan struct{})
 
@@ -1018,7 +1119,8 @@ func TestService_DiscoverResource_WithScanResult(t *testing.T) {
 		},
 	}
 
-	service := NewService(store, scanner, stubStateProvider{state: state}, DefaultConfig())
+	service := NewService(store, scanner, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(state))
 	service.SetAIAnalyzer(&stubAnalyzer{
 		response: `{"service_type":"nginx","service_name":"Nginx","service_version":"1.2","category":"web_server","cli_access":"docker exec {container} nginx -v","facts":[],"config_paths":[],"data_paths":[],"ports":[{"port":80,"protocol":"tcp","process":"nginx","address":"0.0.0.0"}],"confidence":0.9,"reasoning":"image"}`,
 	})
@@ -1181,7 +1283,8 @@ func TestService_Redirection(t *testing.T) {
 	}
 
 	// Setup service
-	service := NewService(store, nil, stubStateProvider{state: state}, DefaultConfig())
+	service := NewService(store, nil, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(state))
 	service.SetAIAnalyzer(&stubAnalyzer{
 		response: `{"service_type":"proxmox","service_name":"Proxmox VE","service_version":"8.0","category":"virtualizer","cli_access":"ssh root@pve1","facts":[],"config_paths":[],"data_paths":[],"ports":[],"confidence":0.9,"reasoning":"test"}`,
 	})
@@ -1360,7 +1463,8 @@ func TestService_DiscoverResource_HostSuggestedURLFallbackForLinkedNode(t *testi
 		},
 	}
 
-	service := NewService(store, nil, stubStateProvider{state: state}, DefaultConfig())
+	service := NewService(store, nil, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(state))
 	service.SetAIAnalyzer(&stubAnalyzer{
 		response: `{"service_type":"unknown","service_name":"Linux Host","service_version":"","category":"unknown","cli_access":"ssh root@host","facts":[],"config_paths":[],"data_paths":[],"ports":[],"confidence":0.5,"reasoning":"metadata only"}`,
 	})
@@ -1398,7 +1502,8 @@ func TestService_DiscoverResource_URLSuggestionDiagnostics(t *testing.T) {
 	}
 	store.crypto = nil
 
-	service := NewService(store, nil, stubStateProvider{state: StateSnapshot{}}, DefaultConfig())
+	service := NewService(store, nil, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(StateSnapshot{}))
 	service.SetAIAnalyzer(&stubAnalyzer{
 		response: `{"service_type":"unknown","service_name":"Generic Host","service_version":"","category":"unknown","cli_access":"ssh root@host","facts":[],"config_paths":[],"data_paths":[],"ports":[],"confidence":0.6,"reasoning":"metadata-only identification"}`,
 	})
@@ -1443,7 +1548,8 @@ func TestService_DiscoverResource_URLSuggestionSource_Primary(t *testing.T) {
 		},
 	}
 
-	service := NewService(store, nil, stubStateProvider{state: state}, DefaultConfig())
+	service := NewService(store, nil, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(state))
 	service.SetAIAnalyzer(&stubAnalyzer{
 		response: `{"service_type":"nginx","service_name":"Nginx","service_version":"1.2","category":"web_server","cli_access":"docker exec web nginx -v","facts":[],"config_paths":[],"data_paths":[],"ports":[],"confidence":0.9,"reasoning":"identified from image"}`,
 	})
@@ -1517,7 +1623,7 @@ func TestService_DiscoverResource_ReturnsUpgradedCachedDiscovery(t *testing.T) {
 		t.Fatalf("save legacy discovery error: %v", err)
 	}
 
-	service := NewService(store, nil, nil, DefaultConfig())
+	service := NewService(store, nil, DefaultConfig())
 	got, err := service.DiscoverResource(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeDocker,
 		HostID:       "host1",

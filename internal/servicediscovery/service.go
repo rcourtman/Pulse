@@ -72,13 +72,9 @@ func filterSensitiveLabels(labels map[string]string) map[string]string {
 	return filtered
 }
 
-// StateProvider provides access to the current infrastructure state.
-type StateProvider interface {
-	GetState() StateSnapshot
-}
-
-// StateSnapshot represents the infrastructure state. This mirrors models.StateSnapshot
-// to avoid circular dependencies.
+// StateSnapshot holds an infrastructure snapshot used internally by the
+// discovery service. Previously a shadow StateProvider interface provided
+// this; now it is built exclusively from ReadState typed views.
 type StateSnapshot struct {
 	VMs                []VM
 	Containers         []Container
@@ -221,12 +217,11 @@ type WSBroadcaster interface {
 
 // Service manages infrastructure discovery.
 type Service struct {
-	store         *Store
-	scanner       *DeepScanner
-	stateProvider StateProvider
-	readState     unifiedresources.ReadState // Preferred typed state access (SRC migration)
-	aiAnalyzer    AIAnalyzer
-	wsHub         WSBroadcaster // WebSocket hub for broadcasting progress
+	store      *Store
+	scanner    *DeepScanner
+	readState  unifiedresources.ReadState // Typed state access (sole source since SRC-03l)
+	aiAnalyzer AIAnalyzer
+	wsHub      WSBroadcaster // WebSocket hub for broadcasting progress
 
 	mu                sync.RWMutex
 	running           bool
@@ -340,7 +335,7 @@ func normalizeDeepScanTimeout(timeout time.Duration) time.Duration {
 }
 
 // NewService creates a new discovery service.
-func NewService(store *Store, scanner *DeepScanner, stateProvider StateProvider, cfg Config) *Service {
+func NewService(store *Store, scanner *DeepScanner, cfg Config) *Service {
 	if cfg.Interval == 0 {
 		cfg.Interval = 5 * time.Minute
 	}
@@ -360,7 +355,6 @@ func NewService(store *Store, scanner *DeepScanner, stateProvider StateProvider,
 	return &Service{
 		store:             store,
 		scanner:           scanner,
-		stateProvider:     stateProvider,
 		interval:          cfg.Interval,
 		initialDelay:      30 * time.Second,
 		cacheExpiry:       cfg.CacheExpiry,
@@ -382,7 +376,7 @@ func (s *Service) SetAIAnalyzer(analyzer AIAnalyzer) {
 }
 
 // SetReadState sets the typed ReadState provider for the discovery service.
-// When set, getSnapshot() will prefer ReadState over the legacy stateProvider.
+// When set, getSnapshot() uses ReadState to build infrastructure snapshots.
 func (s *Service) SetReadState(rs unifiedresources.ReadState) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -694,16 +688,12 @@ func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
 		Msg("Automatic discovery refresh completed")
 }
 
-// getSnapshot returns the current infrastructure state, preferring ReadState
-// typed views when available, falling back to the legacy stateProvider.
-// Returns an empty snapshot and false if neither source is available.
+// getSnapshot returns the current infrastructure state from ReadState.
+// Returns an empty snapshot and false if ReadState is not yet configured.
 func (s *Service) getSnapshot() (StateSnapshot, bool) {
 	rs := s.getReadState()
 	if rs != nil {
 		return s.snapshotFromReadState(rs), true
-	}
-	if s.stateProvider != nil {
-		return s.stateProvider.GetState(), true
 	}
 	return StateSnapshot{}, false
 }
@@ -717,16 +707,14 @@ func (s *Service) getReadState() unifiedresources.ReadState {
 	return rs
 }
 
-// hasStateAccess returns true when either ReadState or the legacy
-// stateProvider is available. Safe for concurrent use.
+// hasStateAccess returns true when ReadState is configured. Safe for
+// concurrent use.
 func (s *Service) hasStateAccess() bool {
-	return s.getReadState() != nil || s.stateProvider != nil
+	return s.getReadState() != nil
 }
 
 // snapshotFromReadState converts ReadState typed views into the local
-// StateSnapshot type used by servicediscovery functions. Only the fields
-// that the legacy discoveryStateAdapter populated are converted (matching
-// existing behaviour).
+// StateSnapshot type used by servicediscovery functions.
 func (s *Service) snapshotFromReadState(rs unifiedresources.ReadState) StateSnapshot {
 	// VMs
 	vmViews := rs.VMs()
@@ -801,14 +789,20 @@ func (s *Service) snapshotFromReadState(rs unifiedresources.ReadState) StateSnap
 
 	// Hosts
 	// Note: CPUCount is not available via HostView (not mapped in unifiedresources
-	// AgentData). The legacy discoveryStateAdapter populates it from models.Host.
-	// This is a known data gap tracked as SRC-01c; it only affects the
+	// AgentData). This is a known data gap tracked as SRC-01c; it only affects the
 	// "cpu_count" metadata field in AI analysis prompts.
 	hViews := rs.Hosts()
 	hosts := make([]Host, 0, len(hViews))
 	for _, h := range hViews {
+		// Use AgentID (original host-agent ID) rather than the registry hash
+		// ID, because discovery lookup code matches against request IDs which
+		// use the source-level host agent ID.
+		hostID := h.AgentID()
+		if hostID == "" {
+			hostID = h.ID()
+		}
 		hosts = append(hosts, Host{
-			ID:            h.ID(),
+			ID:            hostID,
 			Hostname:      h.Hostname(),
 			DisplayName:   h.Name(),
 			Platform:      h.Platform(),
@@ -825,8 +819,15 @@ func (s *Service) snapshotFromReadState(rs unifiedresources.ReadState) StateSnap
 	nViews := rs.Nodes()
 	nodes := make([]Node, 0, len(nViews))
 	for _, n := range nViews {
+		// Use SourceID (original Proxmox node ID) rather than the registry
+		// hash ID, because discovery lookup code matches against request IDs
+		// which use the source-level node ID.
+		nodeID := n.SourceID()
+		if nodeID == "" {
+			nodeID = n.ID()
+		}
 		nodes = append(nodes, Node{
-			ID:                n.ID(),
+			ID:                nodeID,
 			Name:              n.Name(),
 			LinkedHostAgentID: n.LinkedHostAgentID(),
 		})
@@ -834,8 +835,7 @@ func (s *Service) snapshotFromReadState(rs unifiedresources.ReadState) StateSnap
 
 	// Kubernetes clusters (ReadState provides K8sClusters + Pods separately).
 	// Note: PodView does not expose NodeName or sub-container details; these
-	// fields are zero-valued. The legacy discoveryStateAdapter also omits
-	// KubernetesClusters entirely, so the ReadState path is strictly better.
+	// fields are zero-valued.
 	clusterViews := rs.K8sClusters()
 	podViews := rs.Pods()
 	podsByCluster := make(map[string][]KubernetesPod, len(podViews))
@@ -1724,7 +1724,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	urlSuggestionSourceCode := ""
 	urlSuggestionSourceDetail := ""
 	if !s.hasStateAccess() {
-		urlSuggestionDiagnostic = "state provider unavailable"
+		urlSuggestionDiagnostic = "ReadState unavailable"
 	} else {
 		externalIP := s.getResourceExternalIP(req)
 		if externalIP == "" {

@@ -40,16 +40,6 @@ func (m *MockCommandExecutor) IsAgentConnected(agentID string) bool {
 	return args.Bool(0)
 }
 
-// MockDiscoveryStateProvider for service
-type MockDiscoveryStateProvider struct {
-	mock.Mock
-}
-
-func (m *MockDiscoveryStateProvider) GetState() servicediscovery.StateSnapshot {
-	args := m.Called()
-	return args.Get(0).(servicediscovery.StateSnapshot)
-}
-
 func setupDiscoveryHandlers(t *testing.T) (*DiscoveryHandlers, *servicediscovery.Service, *servicediscovery.Store) {
 	// Create temp dir
 	tmpDir := t.TempDir()
@@ -62,13 +52,9 @@ func setupDiscoveryHandlers(t *testing.T) (*DiscoveryHandlers, *servicediscovery
 	mockExecutor := new(MockCommandExecutor)
 	scanner := servicediscovery.NewDeepScanner(mockExecutor)
 
-	// Create mock state provider
-	mockState := new(MockDiscoveryStateProvider)
-	mockState.On("GetState").Return(servicediscovery.StateSnapshot{})
-
 	// Create service
 	cfg := servicediscovery.DefaultConfig()
-	service := servicediscovery.NewService(store, scanner, mockState, cfg)
+	service := servicediscovery.NewService(store, scanner, cfg)
 
 	// Create config for handlers (needed for admin check)
 	hashed, err := internalauth.HashPassword("admin")
