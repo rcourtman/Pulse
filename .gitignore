@@ -87,6 +87,7 @@ AI_DEVELOPMENT.md
 scripts/pulse-watchdog.sh
 pulse-watchdog.log
 .mcp-servers/
+.mcp.json
 .codex/
 
 # Release process files
