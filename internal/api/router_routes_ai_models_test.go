@@ -224,3 +224,121 @@ func TestRouteListModels_EmptyModelList(t *testing.T) {
 	assert.NotNil(t, resp.Models, "models should be non-nil empty array")
 	assert.Len(t, resp.Models, 0)
 }
+
+// TestRouteListModels_ResponseContentType verifies the response Content-Type
+// is application/json on a successful response.
+func TestRouteListModels_ResponseContentType(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/tags" {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"models": []map[string]any{{"name": "llama3:latest"}},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ollama.Close()
+
+	router, token := setupModelsRouter(t, ollama.URL)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/models", nil)
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"),
+		"response must have application/json Content-Type")
+}
+
+// TestRouteListModels_CachedField verifies that the cached field is present
+// in the response and set to false on the first (uncached) call.
+func TestRouteListModels_CachedField(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/tags" {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"models": []map[string]any{{"name": "llama3:latest"}},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ollama.Close()
+
+	router, token := setupModelsRouter(t, ollama.URL)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/models", nil)
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	// Parse raw JSON to verify the "cached" key is present and boolean.
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &raw))
+	cachedRaw, ok := raw["cached"]
+	require.True(t, ok, "response must contain 'cached' field")
+	var cached bool
+	require.NoError(t, json.Unmarshal(cachedRaw, &cached))
+	// First call should not be cached.
+	assert.False(t, cached, "first request should not be cached")
+}
+
+// TestRouteListModels_MalformedProviderResponse verifies that when the
+// provider returns invalid JSON, the endpoint does not crash and returns
+// a valid JSON response with an empty model list. The service layer silently
+// skips providers that fail (including JSON decode errors) and returns
+// whatever models it could collect, so no error field is set.
+func TestRouteListModels_MalformedProviderResponse(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Return garbage that is not valid JSON
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{not valid json`))
+	}))
+	defer ollama.Close()
+
+	router, token := setupModelsRouter(t, ollama.URL)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/models", nil)
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	// Should not crash — should return 200 with empty models.
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp struct {
+		Models []json.RawMessage `json:"models"`
+		Error  string            `json:"error"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp),
+		"response body must be valid JSON even when provider returns garbage")
+	assert.NotNil(t, resp.Models, "models field should be present")
+	assert.Empty(t, resp.Models, "models should be empty when provider returns invalid JSON")
+	// The service layer silently skips failed providers and does not propagate
+	// an error string unless all providers fail at the ListModelsWithCache level.
+	assert.Empty(t, resp.Error, "no error field expected when provider is silently skipped")
+}
+
+// TestRouteListModels_HEADMethod verifies that HEAD /api/ai/models is
+// rejected with 405 (the handler only accepts GET).
+func TestRouteListModels_HEADMethod(t *testing.T) {
+	t.Parallel()
+
+	router, token := setupModelsRouter(t, "http://192.0.2.1:11434")
+
+	req := httptest.NewRequest(http.MethodHead, "/api/ai/models", nil)
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code,
+		"HEAD should be rejected with 405")
+}
