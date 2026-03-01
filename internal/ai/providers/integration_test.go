@@ -28,7 +28,7 @@ func getOllamaURL() string {
 }
 
 func TestIntegration_Ollama_TestConnection(t *testing.T) {
-	client := providers.NewOllamaClient("tinyllama", getOllamaURL())
+	client := providers.NewOllamaClient("tinyllama", getOllamaURL(), 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -41,7 +41,7 @@ func TestIntegration_Ollama_TestConnection(t *testing.T) {
 }
 
 func TestIntegration_Ollama_ListModels(t *testing.T) {
-	client := providers.NewOllamaClient("tinyllama", getOllamaURL())
+	client := providers.NewOllamaClient("tinyllama", getOllamaURL(), 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -62,7 +62,7 @@ func TestIntegration_Ollama_ListModels(t *testing.T) {
 }
 
 func TestIntegration_Ollama_SimpleChat(t *testing.T) {
-	client := providers.NewOllamaClient("tinyllama", getOllamaURL())
+	client := providers.NewOllamaClient("tinyllama", getOllamaURL(), 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -87,7 +87,7 @@ func TestIntegration_Ollama_SimpleChat(t *testing.T) {
 }
 
 func TestIntegration_Ollama_SystemPrompt(t *testing.T) {
-	client := providers.NewOllamaClient("tinyllama", getOllamaURL())
+	client := providers.NewOllamaClient("tinyllama", getOllamaURL(), 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -117,7 +117,7 @@ func TestIntegration_Ollama_SystemPrompt(t *testing.T) {
 }
 
 func TestIntegration_Ollama_MultiTurnConversation(t *testing.T) {
-	client := providers.NewOllamaClient("tinyllama", getOllamaURL())
+	client := providers.NewOllamaClient("tinyllama", getOllamaURL(), 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
@@ -156,7 +156,7 @@ func TestIntegration_Ollama_MultiTurnConversation(t *testing.T) {
 }
 
 func TestIntegration_Ollama_TokenCounting(t *testing.T) {
-	client := providers.NewOllamaClient("tinyllama", getOllamaURL())
+	client := providers.NewOllamaClient("tinyllama", getOllamaURL(), 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -184,7 +184,7 @@ func TestIntegration_Ollama_TokenCounting(t *testing.T) {
 }
 
 func TestIntegration_Ollama_ErrorHandling_BadModel(t *testing.T) {
-	client := providers.NewOllamaClient("nonexistent-model-12345", getOllamaURL())
+	client := providers.NewOllamaClient("nonexistent-model-12345", getOllamaURL(), 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -203,7 +203,7 @@ func TestIntegration_Ollama_ErrorHandling_BadModel(t *testing.T) {
 }
 
 func TestIntegration_Ollama_Timeout(t *testing.T) {
-	client := providers.NewOllamaClient("tinyllama", getOllamaURL())
+	client := providers.NewOllamaClient("tinyllama", getOllamaURL(), 0)
 
 	// Very short timeout - should fail
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
@@ -226,7 +226,7 @@ func TestIntegration_Ollama_Timeout(t *testing.T) {
 // --- More useful tests below ---
 
 func TestIntegration_Ollama_JSONOutput(t *testing.T) {
-	client := providers.NewOllamaClient("tinyllama", getOllamaURL())
+	client := providers.NewOllamaClient("tinyllama", getOllamaURL(), 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -268,7 +268,7 @@ func TestIntegration_Ollama_JSONOutput(t *testing.T) {
 }
 
 func TestIntegration_Ollama_LongResponse(t *testing.T) {
-	client := providers.NewOllamaClient("tinyllama", getOllamaURL())
+	client := providers.NewOllamaClient("tinyllama", getOllamaURL(), 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
@@ -293,7 +293,7 @@ func TestIntegration_Ollama_LongResponse(t *testing.T) {
 }
 
 func TestIntegration_Ollama_EmptyMessage(t *testing.T) {
-	client := providers.NewOllamaClient("tinyllama", getOllamaURL())
+	client := providers.NewOllamaClient("tinyllama", getOllamaURL(), 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -314,7 +314,7 @@ func TestIntegration_Ollama_EmptyMessage(t *testing.T) {
 }
 
 func TestIntegration_Ollama_SpecialCharacters(t *testing.T) {
-	client := providers.NewOllamaClient("tinyllama", getOllamaURL())
+	client := providers.NewOllamaClient("tinyllama", getOllamaURL(), 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -337,7 +337,7 @@ func TestIntegration_Ollama_SpecialCharacters(t *testing.T) {
 }
 
 func TestIntegration_Ollama_ConcurrentRequests(t *testing.T) {
-	client := providers.NewOllamaClient("tinyllama", getOllamaURL())
+	client := providers.NewOllamaClient("tinyllama", getOllamaURL(), 0)
 
 	const numRequests = 3
 	results := make(chan error, numRequests)
@@ -373,7 +373,7 @@ func TestIntegration_Ollama_ConcurrentRequests(t *testing.T) {
 
 func TestIntegration_Ollama_InfrastructureAnalysis(t *testing.T) {
 	// This simulates what Pulse actually does - send infrastructure context
-	client := providers.NewOllamaClient("tinyllama", getOllamaURL())
+	client := providers.NewOllamaClient("tinyllama", getOllamaURL(), 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
@@ -417,7 +417,7 @@ What should I investigate first?`
 }
 
 func TestIntegration_Ollama_ModelName_Preserved(t *testing.T) {
-	client := providers.NewOllamaClient("tinyllama", getOllamaURL())
+	client := providers.NewOllamaClient("tinyllama", getOllamaURL(), 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -442,7 +442,7 @@ func TestIntegration_Ollama_ModelName_Preserved(t *testing.T) {
 }
 
 func TestIntegration_Ollama_StopReason(t *testing.T) {
-	client := providers.NewOllamaClient("tinyllama", getOllamaURL())
+	client := providers.NewOllamaClient("tinyllama", getOllamaURL(), 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -462,7 +462,7 @@ func TestIntegration_Ollama_StopReason(t *testing.T) {
 }
 
 func TestIntegration_Ollama_VeryLongInput(t *testing.T) {
-	client := providers.NewOllamaClient("tinyllama", getOllamaURL())
+	client := providers.NewOllamaClient("tinyllama", getOllamaURL(), 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
@@ -487,7 +487,7 @@ func TestIntegration_Ollama_VeryLongInput(t *testing.T) {
 }
 
 func TestIntegration_Ollama_RapidFireRequests(t *testing.T) {
-	client := providers.NewOllamaClient("tinyllama", getOllamaURL())
+	client := providers.NewOllamaClient("tinyllama", getOllamaURL(), 0)
 
 	// Send 5 requests in rapid succession
 	for i := 0; i < 5; i++ {
