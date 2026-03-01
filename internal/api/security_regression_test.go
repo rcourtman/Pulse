@@ -16,6 +16,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
@@ -86,6 +87,13 @@ func readRegisteredPayload(t *testing.T, conn *websocket.Conn) agentexec.Registe
 		t.Fatalf("unmarshal registered payload: %v", err)
 	}
 	return payload
+}
+
+// newLegacyAIServiceForTest creates an *ai.Service with loaded config for route-level tests.
+func newLegacyAIServiceForTest(persistence *config.ConfigPersistence) *ai.Service {
+	svc := ai.NewService(persistence, nil)
+	_ = svc.LoadConfig()
+	return svc
 }
 
 func TestSimpleStatsRequiresAuthInAPIMode(t *testing.T) {
@@ -2160,7 +2168,7 @@ func TestDiscoverySettingsRejectsProxyNonAdmin(t *testing.T) {
 	cfg.ProxyAuthAdminRole = "admin"
 
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	service := servicediscovery.NewService(nil, nil, nil, servicediscovery.DefaultConfig())
+	service := servicediscovery.NewService(nil, nil, servicediscovery.DefaultConfig())
 	router.SetDiscoveryService(service)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/discovery/settings", strings.NewReader(`{"max_discovery_age_days":5}`))
@@ -2183,7 +2191,7 @@ func TestDiscoveryNotesRejectsProxyUserSecrets(t *testing.T) {
 	cfg.ProxyAuthAdminRole = "admin"
 
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	service := servicediscovery.NewService(nil, nil, nil, servicediscovery.DefaultConfig())
+	service := servicediscovery.NewService(nil, nil, servicediscovery.DefaultConfig())
 	router.SetDiscoveryService(service)
 
 	payload := `{"user_notes":"note","user_secrets":{"token":"abc"}}`
@@ -2647,6 +2655,154 @@ func TestAITestProviderRejectsProxyNonAdmin(t *testing.T) {
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 for non-admin proxy AI provider test, got %d", rec.Code)
+	}
+}
+
+func TestAITestConnectionRouteWithValidScope(t *testing.T) {
+	t.Parallel()
+
+	// Set up a mock Ollama server for the AI connection test
+	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/version" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "0.1.0"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ollama.Close()
+
+	rawToken := "ai-test-conn-valid-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+
+	persistence := config.NewConfigPersistence(cfg.DataPath)
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = "ollama:llama3"
+	aiCfg.OllamaBaseURL = ollama.URL
+	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
+		t.Fatalf("SaveAIConfig: %v", err)
+	}
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router.aiSettingsHandler.legacyConfig = cfg
+	router.aiSettingsHandler.legacyPersistence = persistence
+	router.aiSettingsHandler.legacyAIService = newLegacyAIServiceForTest(persistence)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/test", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for valid settings:write scope on /api/ai/test, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !resp.Success {
+		t.Fatalf("expected success=true, got %+v", resp)
+	}
+}
+
+func TestAITestProviderRouteWithValidScope(t *testing.T) {
+	t.Parallel()
+
+	// Set up a mock Ollama server for the provider test
+	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/version" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "0.1.0"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ollama.Close()
+
+	rawToken := "ai-test-prov-valid-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+
+	persistence := config.NewConfigPersistence(cfg.DataPath)
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = "ollama:llama3"
+	aiCfg.OllamaBaseURL = ollama.URL
+	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
+		t.Fatalf("SaveAIConfig: %v", err)
+	}
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router.aiSettingsHandler.legacyConfig = cfg
+	router.aiSettingsHandler.legacyPersistence = persistence
+	router.aiSettingsHandler.legacyAIService = newLegacyAIServiceForTest(persistence)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/test/ollama", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for valid settings:write scope on /api/ai/test/ollama, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Success  bool   `json:"success"`
+		Provider string `json:"provider"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !resp.Success || resp.Provider != "ollama" {
+		t.Fatalf("expected success=true provider=ollama, got %+v", resp)
+	}
+}
+
+func TestAITestConnectionRouteRejectsWrongScope(t *testing.T) {
+	t.Parallel()
+
+	// Token with monitoring:read scope — NOT settings:write
+	rawToken := "ai-test-wrong-scope-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/test", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for wrong scope on /api/ai/test, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+}
+
+func TestAITestProviderRouteRejectsWrongScope(t *testing.T) {
+	t.Parallel()
+
+	// Token with monitoring:read scope — NOT settings:write
+	rawToken := "ai-test-prov-wrong-scope-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/test/openai", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for wrong scope on /api/ai/test/openai, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
 	}
 }
 
