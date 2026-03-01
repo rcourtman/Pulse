@@ -96,15 +96,14 @@ func TestHandleGetNodes_MockMode_UsesReadState(t *testing.T) {
 	}
 }
 
-// TestHandleGetNodes_MockMode_FallbackToGetState verifies the legacy fallback
-// when ReadState is not yet populated (e.g., during startup). The handler
-// should fall back to GetState() and still return mock data.
-func TestHandleGetNodes_MockMode_FallbackToGetState(t *testing.T) {
+// TestHandleGetNodes_MockMode_NilReadState verifies that when ReadState is nil
+// (no resource store wired), the handler returns an empty node list without
+// calling GetState(). This replaced the former GetState() fallback test.
+func TestHandleGetNodes_MockMode_NilReadState(t *testing.T) {
 	mock.SetEnabled(true)
 	t.Cleanup(func() { mock.SetEnabled(false) })
 
-	// Monitor with state but no resource store — GetUnifiedReadState() returns nil,
-	// so the handler falls back to GetState().
+	// Monitor with state but no resource store — GetUnifiedReadState() returns nil.
 	monitor := &monitoring.Monitor{}
 	state := models.NewState()
 	state.Nodes = []models.Node{
@@ -129,16 +128,9 @@ func TestHandleGetNodes_MockMode_FallbackToGetState(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&nodes); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	// Fallback to GetState() should produce at least 1 PVE node entry.
-	hasPVE := false
-	for _, n := range nodes {
-		if n.Type == "pve" {
-			hasPVE = true
-			break
-		}
-	}
-	if !hasPVE {
-		t.Error("expected at least 1 PVE node from GetState() fallback")
+	// With no ReadState, handler returns empty list (no GetState fallback).
+	if len(nodes) != 0 {
+		t.Errorf("expected 0 nodes when ReadState is nil, got %d", len(nodes))
 	}
 }
 
@@ -154,10 +146,9 @@ func TestConfigHandlers_getMonitor_Legacy(t *testing.T) {
 	}
 }
 
-// TestHandleGetNodes_MockMode_ReadStateTakesPriority seeds the legacy state
-// with one set of node names and the ReadState adapter with different names.
-// Because both are populated, the handler must prefer ReadState. We assert the
-// ReadState names appear in the response, proving the ReadState branch is taken.
+// TestHandleGetNodes_MockMode_ReadStateTakesPriority seeds both the legacy state
+// and the ReadState adapter with different names. Since the handler uses ReadState
+// exclusively (no GetState fallback), only ReadState names should appear.
 func TestHandleGetNodes_MockMode_ReadStateTakesPriority(t *testing.T) {
 	mock.SetEnabled(true)
 	t.Cleanup(func() { mock.SetEnabled(false) })

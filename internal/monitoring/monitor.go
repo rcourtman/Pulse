@@ -2698,9 +2698,17 @@ func (m *Monitor) DisableTemperatureMonitoring() {
 // for nodes that have host agents providing data.
 func (m *Monitor) SetResourceStore(store ResourceStoreInterface) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.resourceStore = store
+	m.mu.Unlock()
 	log.Info().Msg("resource store set for polling optimization")
+
+	// Immediately backfill the store from current state so ReadState
+	// consumers have data as soon as the store is wired.
+	// Guard against minimally initialized monitors (e.g., test fixtures
+	// with bare &Monitor{}) where m.state may be nil.
+	if store != nil && m.state != nil {
+		m.updateResourceStore(m.GetState())
+	}
 }
 
 // SetSupplementalRecordsProvider configures source-native resource providers

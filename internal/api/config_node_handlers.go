@@ -26,12 +26,8 @@ func (h *ConfigHandlers) handleGetNodes(w http.ResponseWriter, r *http.Request) 
 		mockNodes := []NodeResponse{}
 
 		// Get ReadState from the monitor to extract node information.
-		// Fall back to GetState() if ReadState is nil or not yet populated
-		// (e.g., during startup before the first snapshot is ingested).
 		monitor := h.getMonitor(r.Context())
 		readState := monitor.GetUnifiedReadState()
-		useReadState := readState != nil &&
-			(len(readState.Nodes()) > 0 || len(readState.PBSInstances()) > 0 || len(readState.PMGInstances()) > 0)
 
 		type mockNode struct {
 			Name     string
@@ -52,7 +48,7 @@ func (h *ConfigHandlers) handleGetNodes(w http.ResponseWriter, r *http.Request) 
 		var pbsEntries []mockPBS
 		var pmgEntries []mockPMG
 
-		if useReadState {
+		if readState != nil {
 			for _, nv := range readState.Nodes() {
 				mn := mockNode{
 					Name:     nv.Name(),
@@ -70,23 +66,6 @@ func (h *ConfigHandlers) handleGetNodes(w http.ResponseWriter, r *http.Request) 
 			}
 			for _, pmgView := range readState.PMGInstances() {
 				pmgEntries = append(pmgEntries, mockPMG{Name: pmgView.Name(), Host: pmgView.Hostname()})
-			}
-		} else {
-			// Legacy fallback: ReadState not yet populated.
-			snap := monitor.GetState()
-			for _, node := range snap.Nodes {
-				mn := mockNode{Name: node.Name, Instance: node.Instance, Status: node.Status}
-				if mn.Instance == "mock-cluster" {
-					clusterNodes = append(clusterNodes, mn)
-				} else {
-					standaloneNodes = append(standaloneNodes, mn)
-				}
-			}
-			for _, pbs := range snap.PBSInstances {
-				pbsEntries = append(pbsEntries, mockPBS{Name: pbs.Name, Host: pbs.Host})
-			}
-			for _, pmg := range snap.PMGInstances {
-				pmgEntries = append(pmgEntries, mockPMG{Name: pmg.Name, Host: pmg.Host})
 			}
 		}
 

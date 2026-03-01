@@ -162,7 +162,7 @@ type legacyStateRatchet struct {
 // These represent legacy nil-fallback paths that are dead code when
 // ReadState is wired. Each number must only decrease over time.
 //
-// Last updated: 2026-03-01 (total state.*: 1, GetState: 27).
+// Last updated: 2026-03-01 (total state.*: 1, GetState: 26).
 // SRC-03u: Migrated ai/chat/context_prefetch.go from stateProvider.GetState()+state.ResolveResource
 // to unifiedresources.ResolveResource(ReadState, name). Removed stateProvider dependency entirely.
 // ContextPrefetcher now uses ReadState as sole data source. Delta: GetState -1.
@@ -265,6 +265,11 @@ type legacyStateRatchet struct {
 // infradiscovery/service.go (legacy fallback path, real access).
 // Delta: state.VMs -8, state.Containers -8, state.Nodes -9, state.DockerHosts -7,
 // state.Hosts -3, state.Storage -4, state.KubernetesClusters -2.
+// SRC-04g: Removed GetState() legacy fallback from config_node_handlers.go handleGetNodes.
+// ReadState is now the sole data source for mock-mode node listing. Monitor.SetResourceStore
+// now performs immediate backfill from current state, guaranteeing ReadState is populated
+// as soon as the store is wired (no startup race).
+// Delta: GetState -1.
 var legacyStateRatchets = []legacyStateRatchet{
 	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 0, "ReadState.VMs()"},
 	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 0, "ReadState.Containers()"},
@@ -277,7 +282,7 @@ var legacyStateRatchets = []legacyStateRatchet{
 	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 0, "ReadState.PMGInstances()"},
 
 	// GetState() calls — consumer packages must use ReadState interface
-	{regexp.MustCompile(`\.GetState\(\)`), ".GetState()", 27, "ReadState interface"},
+	{regexp.MustCompile(`\.GetState\(\)`), ".GetState()", 26, "ReadState interface"},
 }
 
 // TestLegacyStateAccessRatchet is a monotonic ratchet that prevents new
