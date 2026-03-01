@@ -27,7 +27,28 @@ var (
 	enforcementRecorder   *conversionRecorder
 	enforcementHealth     *conversionPipelineHealth
 	enforcementDisableAll func() bool
+
+	deployReservationCounterMu sync.RWMutex
+	deployReservationCounter   func(ctx context.Context) int
 )
+
+// SetDeployReservationCounter wires a callback that returns the number of
+// license slots reserved by in-flight cluster deployments for the org in ctx.
+func SetDeployReservationCounter(fn func(ctx context.Context) int) {
+	deployReservationCounterMu.Lock()
+	defer deployReservationCounterMu.Unlock()
+	deployReservationCounter = fn
+}
+
+func deployReservedCount(ctx context.Context) int {
+	deployReservationCounterMu.RLock()
+	fn := deployReservationCounter
+	deployReservationCounterMu.RUnlock()
+	if fn == nil {
+		return 0
+	}
+	return fn(ctx)
+}
 
 // SetOverflowBaseDataDir configures the base data directory used by the
 // enforcement path to read OverflowGrantedAt from billing state.
@@ -148,12 +169,14 @@ func enforceAgentLimitForHostReport(
 	}
 
 	current := len(snapshot.Hosts)
-	if current+1 <= limit {
+	reserved := deployReservedCount(ctx)
+	effective := current + reserved
+	if effective+1 <= limit {
 		return false
 	}
 
-	emitLimitBlockedEvent(ctx, current, limit)
-	writeMaxAgentsLimitExceeded(w, current, limit)
+	emitLimitBlockedEvent(ctx, effective, limit)
+	writeMaxAgentsLimitExceeded(w, effective, limit)
 	return true
 }
 

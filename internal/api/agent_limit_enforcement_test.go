@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -54,4 +55,20 @@ func TestHostReportTargetsExistingHostBridge(t *testing.T) {
 			t.Fatal("expected no match with different token")
 		}
 	})
+}
+
+func TestDeployReservedCount(t *testing.T) {
+	// Nil counter returns 0.
+	SetDeployReservationCounter(nil)
+	if got := deployReservedCount(context.Background()); got != 0 {
+		t.Fatalf("expected 0 with nil counter, got %d", got)
+	}
+
+	// Wired counter returns value.
+	SetDeployReservationCounter(func(_ context.Context) int { return 5 })
+	t.Cleanup(func() { SetDeployReservationCounter(nil) })
+
+	if got := deployReservedCount(context.Background()); got != 5 {
+		t.Fatalf("expected 5, got %d", got)
+	}
 }
