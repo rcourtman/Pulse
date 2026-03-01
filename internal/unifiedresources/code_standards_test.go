@@ -162,7 +162,7 @@ type legacyStateRatchet struct {
 // These represent legacy nil-fallback paths that are dead code when
 // ReadState is wired. Each number must only decrease over time.
 //
-// Last updated: 2026-03-01 (total state.*: 160, GetState: 27).
+// Last updated: 2026-03-01 (total state.*: 154, GetState: 27).
 // SRC-03u: Migrated ai/chat/context_prefetch.go from stateProvider.GetState()+state.ResolveResource
 // to unifiedresources.ResolveResource(ReadState, name). Removed stateProvider dependency entirely.
 // ContextPrefetcher now uses ReadState as sole data source. Delta: GetState -1.
@@ -216,12 +216,17 @@ type legacyStateRatchet struct {
 // variable (not `state`) so only state.* ceilings decrease. GetState call count unchanged
 // because the legacy path still calls monitor.GetState().
 // Delta: state.Nodes -1, state.PBSInstances -1, state.PMGInstances -1.
+// SRC-03w: Renamed local `state` variable to `snap` in host_agents.go (HandleLookup,
+// resolveConfigHost, ensureHostTokenMatch) to eliminate 6 false-positive ratchet matches.
+// host_agents.go uses GetLiveStateSnapshot() (not GetState()) — these were regex false positives
+// from the local variable name, not real legacy state accesses.
+// Delta: state.Hosts -6.
 var legacyStateRatchets = []legacyStateRatchet{
 	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 29, "ReadState.VMs()"},
 	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 29, "ReadState.Containers()"},
 	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 28, "ReadState.Nodes()"},
 	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 18, "ReadState.DockerHosts()"},
-	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 10, "ReadState.Hosts()"},
+	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 4, "ReadState.Hosts()"},
 	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 16, "ReadState.StoragePools()"},
 	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 5, "ReadState.K8sClusters()"},
 	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 4, "ReadState.PBSInstances()"},
