@@ -120,6 +120,26 @@
       "agentic": {
         "task_file": "evals/tasks/relay-pairing.md"
       }
+    },
+    {
+      "id": "agent-registration",
+      "name": "Agent Install & Registration",
+      "description": "Validates host agent registration via report API, host visibility in unified state, and infrastructure page rendering.",
+      "deterministic": {
+        "command": [
+          "npx",
+          "playwright",
+          "test",
+          "tests/journeys/04-agent-install-registration.spec.ts",
+          "--project=chromium",
+          "--reporter=list",
+          "--retries=1"
+        ],
+        "env": {}
+      },
+      "agentic": {
+        "task_file": "evals/tasks/agent-registration.md"
+      }
     }
   ]
 }
