@@ -3612,6 +3612,11 @@ func (h *AISettingsHandler) HandleGetGuestKnowledge(w http.ResponseWriter, r *ht
 
 // HandleSaveGuestNote saves a note for a guest
 func (h *AISettingsHandler) HandleSaveGuestNote(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	var req struct {
 		GuestID   string `json:"guest_id"`
 		GuestName string `json:"guest_name"`

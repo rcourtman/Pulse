@@ -141,6 +141,172 @@ func TestHandleSaveGuestNote_GuestIDTooLong(t *testing.T) {
 	}
 }
 
+func TestHandleSaveGuestNote_InvalidJSON(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/save", strings.NewReader("{bad"))
+	rec := httptest.NewRecorder()
+	handler.HandleSaveGuestNote(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d for invalid JSON, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestHandleSaveGuestNote_MissingRequiredFields(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	tests := []struct {
+		name string
+		body map[string]string
+	}{
+		{
+			name: "missing_guest_id",
+			body: map[string]string{"category": "ops", "title": "T", "content": "C"},
+		},
+		{
+			name: "missing_category",
+			body: map[string]string{"guest_id": "vm-1", "title": "T", "content": "C"},
+		},
+		{
+			name: "missing_title",
+			body: map[string]string{"guest_id": "vm-1", "category": "ops", "content": "C"},
+		},
+		{
+			name: "missing_content",
+			body: map[string]string{"guest_id": "vm-1", "category": "ops", "title": "T"},
+		},
+		{
+			name: "all_empty",
+			body: map[string]string{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body, _ := json.Marshal(tc.body)
+			req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/save", bytes.NewReader(body))
+			rec := httptest.NewRecorder()
+			handler.HandleSaveGuestNote(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("expected %d for %s, got %d: %s", http.StatusBadRequest, tc.name, rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestHandleSaveGuestNote_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete, http.MethodPatch, http.MethodHead} {
+		t.Run(method, func(t *testing.T) {
+			req := httptest.NewRequest(method, "/api/ai/knowledge/save", nil)
+			rec := httptest.NewRecorder()
+			handler.HandleSaveGuestNote(rec, req)
+
+			if rec.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("expected %d for %s, got %d", http.StatusMethodNotAllowed, method, rec.Code)
+			}
+		})
+	}
+}
+
+func TestHandleSaveGuestNote_VerifySavedFields(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	body := `{"guest_id":"vm-verify","guest_name":"Test VM","guest_type":"container","category":"service","title":"Nginx Config","content":"proxy_pass http://backend:8080"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/save", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleSaveGuestNote(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	gk, err := handler.legacyAIService.GetGuestKnowledge("vm-verify")
+	if err != nil {
+		t.Fatalf("get knowledge: %v", err)
+	}
+	if len(gk.Notes) != 1 {
+		t.Fatalf("expected 1 note, got %d", len(gk.Notes))
+	}
+	note := gk.Notes[0]
+	if note.Category != "service" {
+		t.Errorf("expected category 'service', got %q", note.Category)
+	}
+	if note.Title != "Nginx Config" {
+		t.Errorf("expected title 'Nginx Config', got %q", note.Title)
+	}
+	if note.Content != "proxy_pass http://backend:8080" {
+		t.Errorf("expected content 'proxy_pass http://backend:8080', got %q", note.Content)
+	}
+	if note.ID == "" {
+		t.Error("expected note ID to be populated")
+	}
+	if gk.GuestName != "Test VM" {
+		t.Errorf("expected guest name 'Test VM', got %q", gk.GuestName)
+	}
+	if gk.GuestType != "container" {
+		t.Errorf("expected guest type 'container', got %q", gk.GuestType)
+	}
+}
+
+func TestHandleSaveGuestNote_MultipleNotes(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	// Save two notes for the same guest
+	for i, note := range []struct{ title, content string }{
+		{"Note One", "Content one"},
+		{"Note Two", "Content two"},
+	} {
+		body, _ := json.Marshal(map[string]string{
+			"guest_id": "vm-multi", "guest_name": "Multi VM", "guest_type": "vm",
+			"category": "learning", "title": note.title, "content": note.content,
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/save", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleSaveGuestNote(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("save %d: expected %d, got %d: %s", i, http.StatusOK, rec.Code, rec.Body.String())
+		}
+	}
+
+	gk, err := handler.legacyAIService.GetGuestKnowledge("vm-multi")
+	if err != nil {
+		t.Fatalf("get knowledge: %v", err)
+	}
+	if len(gk.Notes) != 2 {
+		t.Fatalf("expected 2 notes, got %d", len(gk.Notes))
+	}
+}
+
+func TestHandleSaveGuestNote_GuestIDExactlyAtLimit(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	// 256 chars passes validation but may fail on the filesystem (.enc suffix
+	// pushes total filename past OS limits). The important assertion is that
+	// the handler does NOT reject it as 400 — the validation boundary is 256.
+	exactID := strings.Repeat("s", 256)
+	body, _ := json.Marshal(map[string]string{
+		"guest_id": exactID, "category": "ops", "title": "Boundary", "content": "Boundary content",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/save", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleSaveGuestNote(rec, req)
+
+	if rec.Code == http.StatusBadRequest {
+		t.Fatalf("expected 256-char guest_id to pass validation, got 400: %s", rec.Body.String())
+	}
+}
+
 // ========================================
 // HandleDeleteGuestNote — happy path
 // ========================================
