@@ -3651,6 +3651,11 @@ func (h *AISettingsHandler) HandleSaveGuestNote(w http.ResponseWriter, r *http.R
 
 // HandleDeleteGuestNote deletes a note from a guest
 func (h *AISettingsHandler) HandleDeleteGuestNote(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	var req struct {
 		GuestID string `json:"guest_id"`
 		NoteID  string `json:"note_id"`
@@ -3669,8 +3674,16 @@ func (h *AISettingsHandler) HandleDeleteGuestNote(w http.ResponseWriter, r *http
 		http.Error(w, "guest_id too long", http.StatusBadRequest)
 		return
 	}
+	if len(req.NoteID) > maxGuestIDLength {
+		http.Error(w, "note_id too long", http.StatusBadRequest)
+		return
+	}
 
 	if err := h.GetAIService(r.Context()).DeleteGuestNote(req.GuestID, req.NoteID); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, "Note not found", http.StatusNotFound)
+			return
+		}
 		http.Error(w, sanitizeErrorForClient(err, "Failed to delete note"), http.StatusInternalServerError)
 		return
 	}

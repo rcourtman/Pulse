@@ -339,12 +339,136 @@ func TestHandleDeleteGuestNote_HappyPath(t *testing.T) {
 	}
 }
 
+func TestHandleDeleteGuestNote_VerifyDeletion(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	// Save two notes
+	if err := handler.legacyAIService.SaveGuestNote("vm-del-verify", "VM", "vm", "service", "Redis", "Port 6379"); err != nil {
+		t.Fatalf("save note: %v", err)
+	}
+	if err := handler.legacyAIService.SaveGuestNote("vm-del-verify", "VM", "vm", "service", "Nginx", "Port 80"); err != nil {
+		t.Fatalf("save note: %v", err)
+	}
+
+	gk, err := handler.legacyAIService.GetGuestKnowledge("vm-del-verify")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if len(gk.Notes) != 2 {
+		t.Fatalf("expected 2 notes, got %d", len(gk.Notes))
+	}
+	noteID := gk.Notes[0].ID
+
+	body, _ := json.Marshal(map[string]string{"guest_id": "vm-del-verify", "note_id": noteID})
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/delete", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleDeleteGuestNote(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	// Verify the note was actually removed and the other remains
+	gk, err = handler.legacyAIService.GetGuestKnowledge("vm-del-verify")
+	if err != nil {
+		t.Fatalf("get after delete: %v", err)
+	}
+	if len(gk.Notes) != 1 {
+		t.Fatalf("expected 1 note after delete, got %d", len(gk.Notes))
+	}
+	if gk.Notes[0].ID == noteID {
+		t.Fatalf("deleted note ID should not still be present")
+	}
+}
+
+func TestHandleDeleteGuestNote_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete, http.MethodPatch, http.MethodHead} {
+		t.Run(method, func(t *testing.T) {
+			req := httptest.NewRequest(method, "/api/ai/knowledge/delete", nil)
+			rec := httptest.NewRecorder()
+			handler.HandleDeleteGuestNote(rec, req)
+
+			if rec.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("expected %d for %s, got %d", http.StatusMethodNotAllowed, method, rec.Code)
+			}
+		})
+	}
+}
+
 func TestHandleDeleteGuestNote_GuestIDTooLong(t *testing.T) {
 	t.Parallel()
 	handler := newTestAISettingsHandlerWithService(t)
 
 	longID := strings.Repeat("d", 257)
 	body, _ := json.Marshal(map[string]string{"guest_id": longID, "note_id": "n-1"})
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/delete", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleDeleteGuestNote(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestHandleDeleteGuestNote_NoteIDTooLong(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	longNoteID := strings.Repeat("n", 257)
+	body, _ := json.Marshal(map[string]string{"guest_id": "vm-100", "note_id": longNoteID})
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/delete", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleDeleteGuestNote(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestHandleDeleteGuestNote_NonExistentNote(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	// Save a note so the guest exists in the cache
+	if err := handler.legacyAIService.SaveGuestNote("vm-noexist", "VM", "vm", "service", "Redis", "Port 6379"); err != nil {
+		t.Fatalf("save note: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]string{"guest_id": "vm-noexist", "note_id": "nonexistent-id"})
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/delete", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleDeleteGuestNote(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected %d for non-existent note, got %d: %s", http.StatusNotFound, rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleDeleteGuestNote_NoteIDExactlyAtLimit(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	// 256-char note_id should pass validation (may fail at store level, but not 400)
+	exactNoteID := strings.Repeat("n", 256)
+	body, _ := json.Marshal(map[string]string{"guest_id": "vm-100", "note_id": exactNoteID})
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/delete", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleDeleteGuestNote(rec, req)
+
+	if rec.Code == http.StatusBadRequest {
+		t.Fatalf("expected 256-char note_id to pass validation, got 400: %s", rec.Body.String())
+	}
+}
+
+func TestHandleDeleteGuestNote_MissingOnlyGuestID(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	body, _ := json.Marshal(map[string]string{"note_id": "n-1"})
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/delete", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.HandleDeleteGuestNote(rec, req)
