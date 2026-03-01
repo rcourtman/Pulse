@@ -18,17 +18,17 @@ func (h *ReportingHandlers) getRuntimeStateSnapshot(ctx context.Context, orgID s
 		return extensions.ReportingStateSnapshot{}, false
 	}
 
-	state := monitor.GetState()
+	snap := monitor.GetState()
 	snapshot := extensions.ReportingStateSnapshot{
-		Nodes:          make([]extensions.ReportingNodeSnapshot, 0, len(state.Nodes)),
-		VMs:            make([]extensions.ReportingVMSnapshot, 0, len(state.VMs)),
-		Containers:     make([]extensions.ReportingContainerSnapshot, 0, len(state.Containers)),
-		ActiveAlerts:   make([]extensions.ReportingAlertSnapshot, 0, len(state.ActiveAlerts)),
-		ResolvedAlerts: make([]extensions.ReportingAlertSnapshot, 0, len(state.RecentlyResolved)),
-		LegacyBackups:  make([]extensions.ReportingLegacyBackupSnapshot, 0, len(state.PVEBackups.StorageBackups)),
+		Nodes:          make([]extensions.ReportingNodeSnapshot, 0, len(snap.Nodes)),
+		VMs:            make([]extensions.ReportingVMSnapshot, 0, len(snap.VMs)),
+		Containers:     make([]extensions.ReportingContainerSnapshot, 0, len(snap.Containers)),
+		ActiveAlerts:   make([]extensions.ReportingAlertSnapshot, 0, len(snap.ActiveAlerts)),
+		ResolvedAlerts: make([]extensions.ReportingAlertSnapshot, 0, len(snap.RecentlyResolved)),
+		LegacyBackups:  make([]extensions.ReportingLegacyBackupSnapshot, 0, len(snap.PVEBackups.StorageBackups)),
 	}
 
-	for _, node := range state.Nodes {
+	for _, node := range snap.Nodes {
 		var temperature *float64
 		if node.Temperature != nil && node.Temperature.CPUPackage > 0 {
 			value := node.Temperature.CPUPackage
@@ -57,7 +57,7 @@ func (h *ReportingHandlers) getRuntimeStateSnapshot(ctx context.Context, orgID s
 		})
 	}
 
-	for _, vm := range state.VMs {
+	for _, vm := range snap.VMs {
 		snapshot.VMs = append(snapshot.VMs, extensions.ReportingVMSnapshot{
 			ID:          vm.ID,
 			VMID:        vm.VMID,
@@ -76,7 +76,7 @@ func (h *ReportingHandlers) getRuntimeStateSnapshot(ctx context.Context, orgID s
 		})
 	}
 
-	for _, ct := range state.Containers {
+	for _, ct := range snap.Containers {
 		snapshot.Containers = append(snapshot.Containers, extensions.ReportingContainerSnapshot{
 			ID:          ct.ID,
 			VMID:        ct.VMID,
@@ -94,7 +94,7 @@ func (h *ReportingHandlers) getRuntimeStateSnapshot(ctx context.Context, orgID s
 		})
 	}
 
-	for _, alert := range state.ActiveAlerts {
+	for _, alert := range snap.ActiveAlerts {
 		snapshot.ActiveAlerts = append(snapshot.ActiveAlerts, extensions.ReportingAlertSnapshot{
 			ResourceID: alert.ResourceID,
 			Node:       alert.Node,
@@ -107,7 +107,7 @@ func (h *ReportingHandlers) getRuntimeStateSnapshot(ctx context.Context, orgID s
 		})
 	}
 
-	for _, resolved := range state.RecentlyResolved {
+	for _, resolved := range snap.RecentlyResolved {
 		resolvedTime := resolved.ResolvedTime
 		snapshot.ResolvedAlerts = append(snapshot.ResolvedAlerts, extensions.ReportingAlertSnapshot{
 			ResourceID:   resolved.ResourceID,
@@ -122,7 +122,7 @@ func (h *ReportingHandlers) getRuntimeStateSnapshot(ctx context.Context, orgID s
 		})
 	}
 
-	for _, backup := range state.PVEBackups.StorageBackups {
+	for _, backup := range snap.PVEBackups.StorageBackups {
 		snapshot.LegacyBackups = append(snapshot.LegacyBackups, extensions.ReportingLegacyBackupSnapshot{
 			VMID:      backup.VMID,
 			Node:      backup.Node,

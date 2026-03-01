@@ -162,7 +162,7 @@ type legacyStateRatchet struct {
 // These represent legacy nil-fallback paths that are dead code when
 // ReadState is wired. Each number must only decrease over time.
 //
-// Last updated: 2026-03-01 (total state.*: 141, GetState: 27).
+// Last updated: 2026-03-01 (total state.*: 135, GetState: 27).
 // SRC-03u: Migrated ai/chat/context_prefetch.go from stateProvider.GetState()+state.ResolveResource
 // to unifiedresources.ResolveResource(ReadState, name). Removed stateProvider dependency entirely.
 // ContextPrefetcher now uses ReadState as sole data source. Delta: GetState -1.
@@ -237,10 +237,16 @@ type legacyStateRatchet struct {
 // accesses were false positives from function parameters passed by callers.
 // Delta: state.VMs -3, state.Containers -3, state.Nodes -2, state.Storage -2,
 // state.DockerHosts -1, state.PBSInstances -1, state.PMGInstances -1.
+// SRC-04c: Renamed local `state` variable to `snap` in reporting_runtime_snapshot.go
+// getRuntimeStateSnapshot(). All 6 ratchet-tracked accesses were false positives from
+// the local variable named `state` (assigned from monitor.GetState()). The GetState()
+// call itself remains (it's a real legacy access). ActiveAlerts, RecentlyResolved, and
+// PVEBackups accesses are not ratchet-tracked so only Nodes/VMs/Containers change.
+// Delta: state.VMs -2, state.Containers -2, state.Nodes -2.
 var legacyStateRatchets = []legacyStateRatchet{
-	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 18, "ReadState.VMs()"},
-	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 18, "ReadState.Containers()"},
-	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 20, "ReadState.Nodes()"},
+	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 16, "ReadState.VMs()"},
+	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 16, "ReadState.Containers()"},
+	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 18, "ReadState.Nodes()"},
 	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 17, "ReadState.DockerHosts()"},
 	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 4, "ReadState.Hosts()"},
 	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 11, "ReadState.StoragePools()"},
