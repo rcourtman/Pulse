@@ -3665,6 +3665,11 @@ func sanitizeFilenameComponent(s string) string {
 
 // HandleGetGuestKnowledge returns all notes for a guest
 func (h *AISettingsHandler) HandleGetGuestKnowledge(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	guestID := r.URL.Query().Get("guest_id")
 	if guestID == "" {
 		http.Error(w, "guest_id is required", http.StatusBadRequest)
@@ -3770,6 +3775,11 @@ func (h *AISettingsHandler) HandleDeleteGuestNote(w http.ResponseWriter, r *http
 
 // HandleExportGuestKnowledge exports all knowledge for a guest as JSON
 func (h *AISettingsHandler) HandleExportGuestKnowledge(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	guestID := r.URL.Query().Get("guest_id")
 	if guestID == "" {
 		http.Error(w, "guest_id is required", http.StatusBadRequest)

@@ -16,6 +16,36 @@ import (
 // HandleGetGuestKnowledge — happy path & edge cases
 // ========================================
 
+func TestHandleGetGuestKnowledge_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch, http.MethodHead} {
+		t.Run(method, func(t *testing.T) {
+			req := httptest.NewRequest(method, "/api/ai/knowledge?guest_id=vm-1", nil)
+			rec := httptest.NewRecorder()
+			handler.HandleGetGuestKnowledge(rec, req)
+
+			if rec.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("expected %d for %s, got %d", http.StatusMethodNotAllowed, method, rec.Code)
+			}
+		})
+	}
+}
+
+func TestHandleGetGuestKnowledge_MissingGuestID(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/knowledge", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetGuestKnowledge(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d for missing guest_id, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
 func TestHandleGetGuestKnowledge_HappyPath(t *testing.T) {
 	t.Parallel()
 	handler := newTestAISettingsHandlerWithService(t)
@@ -464,6 +494,33 @@ func TestHandleDeleteGuestNote_NoteIDExactlyAtLimit(t *testing.T) {
 	}
 }
 
+func TestHandleDeleteGuestNote_MissingOnlyNoteID(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	body, _ := json.Marshal(map[string]string{"guest_id": "vm-1"})
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/delete", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleDeleteGuestNote(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestHandleDeleteGuestNote_InvalidJSON(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/delete", strings.NewReader("{bad"))
+	rec := httptest.NewRecorder()
+	handler.HandleDeleteGuestNote(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d for invalid JSON, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
 func TestHandleDeleteGuestNote_MissingOnlyGuestID(t *testing.T) {
 	t.Parallel()
 	handler := newTestAISettingsHandlerWithService(t)
@@ -481,6 +538,54 @@ func TestHandleDeleteGuestNote_MissingOnlyGuestID(t *testing.T) {
 // ========================================
 // HandleExportGuestKnowledge — sanitized filename
 // ========================================
+
+func TestHandleExportGuestKnowledge_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch, http.MethodHead} {
+		t.Run(method, func(t *testing.T) {
+			req := httptest.NewRequest(method, "/api/ai/knowledge/export?guest_id=vm-1", nil)
+			rec := httptest.NewRecorder()
+			handler.HandleExportGuestKnowledge(rec, req)
+
+			if rec.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("expected %d for %s, got %d", http.StatusMethodNotAllowed, method, rec.Code)
+			}
+		})
+	}
+}
+
+func TestHandleExportGuestKnowledge_MissingGuestID(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/knowledge/export", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleExportGuestKnowledge(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d for missing guest_id, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestHandleExportGuestKnowledge_EmptyKnowledge(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/knowledge/export?guest_id=nonexistent-vm", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleExportGuestKnowledge(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d", http.StatusOK, rec.Code)
+	}
+	// Should have Content-Disposition header even for empty knowledge
+	disp := rec.Header().Get("Content-Disposition")
+	if disp == "" {
+		t.Fatal("expected Content-Disposition header for export")
+	}
+}
 
 func TestHandleExportGuestKnowledge_MaliciousGuestID(t *testing.T) {
 	t.Parallel()
@@ -549,6 +654,37 @@ func TestHandleExportGuestKnowledge_GuestIDTooLong(t *testing.T) {
 // ========================================
 // HandleClearGuestKnowledge — confirm=false & happy path
 // ========================================
+
+func TestHandleClearGuestKnowledge_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete, http.MethodPatch, http.MethodHead} {
+		t.Run(method, func(t *testing.T) {
+			req := httptest.NewRequest(method, "/api/ai/knowledge/clear", nil)
+			rec := httptest.NewRecorder()
+			handler.HandleClearGuestKnowledge(rec, req)
+
+			if rec.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("expected %d for %s, got %d", http.StatusMethodNotAllowed, method, rec.Code)
+			}
+		})
+	}
+}
+
+func TestHandleClearGuestKnowledge_MissingGuestID(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	body := `{"confirm":true}`
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/clear", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleClearGuestKnowledge(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d for missing guest_id, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
 
 func TestHandleClearGuestKnowledge_ConfirmFalse(t *testing.T) {
 	t.Parallel()
@@ -632,6 +768,150 @@ func TestHandleClearGuestKnowledge_GuestIDTooLong(t *testing.T) {
 // ========================================
 // HandleImportGuestKnowledge — merge mode & edge cases
 // ========================================
+
+func TestHandleImportGuestKnowledge_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete, http.MethodPatch, http.MethodHead} {
+		t.Run(method, func(t *testing.T) {
+			req := httptest.NewRequest(method, "/api/ai/knowledge/import", nil)
+			rec := httptest.NewRecorder()
+			handler.HandleImportGuestKnowledge(rec, req)
+
+			if rec.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("expected %d for %s, got %d", http.StatusMethodNotAllowed, method, rec.Code)
+			}
+		})
+	}
+}
+
+func TestHandleImportGuestKnowledge_InvalidJSON(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/import", strings.NewReader("{bad"))
+	rec := httptest.NewRecorder()
+	handler.HandleImportGuestKnowledge(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d for invalid JSON, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestHandleImportGuestKnowledge_MissingGuestID(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	payload := map[string]interface{}{
+		"notes": []map[string]string{{"category": "ops", "title": "T", "content": "C"}},
+	}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/import", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleImportGuestKnowledge(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d for missing guest_id, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestHandleImportGuestKnowledge_EmptyNotes(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	payload := map[string]interface{}{
+		"guest_id": "vm-1",
+		"notes":    []map[string]string{},
+	}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/import", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleImportGuestKnowledge(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d for empty notes, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestHandleImportGuestKnowledge_ReplaceMode(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	// Save an existing note
+	if err := handler.legacyAIService.SaveGuestNote("vm-replace", "VM", "vm", "ops", "Old", "Old content"); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	payload := map[string]interface{}{
+		"guest_id":   "vm-replace",
+		"guest_name": "VM",
+		"guest_type": "vm",
+		"merge":      false,
+		"notes": []map[string]string{
+			{"category": "ops", "title": "New", "content": "New content"},
+		},
+	}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/import", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleImportGuestKnowledge(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	// With merge=false, only the new note should exist
+	gk, err := handler.legacyAIService.GetGuestKnowledge("vm-replace")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if len(gk.Notes) != 1 {
+		t.Fatalf("expected 1 note with replace, got %d", len(gk.Notes))
+	}
+	if gk.Notes[0].Title != "New" {
+		t.Errorf("expected title 'New', got %q", gk.Notes[0].Title)
+	}
+}
+
+func TestHandleImportGuestKnowledge_SkipsInvalidNotes(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	payload := map[string]interface{}{
+		"guest_id":   "vm-skip",
+		"guest_name": "VM",
+		"guest_type": "vm",
+		"notes": []map[string]string{
+			{"category": "ops", "title": "Valid", "content": "Valid content"},
+			{"category": "", "title": "Missing Category", "content": "C"},    // invalid: empty category
+			{"category": "ops", "title": "", "content": "Missing title"},     // invalid: empty title
+			{"category": "ops", "title": "Missing Content", "content": ""},   // invalid: empty content
+			{"category": "ops", "title": "Also Valid", "content": "Content"}, // valid
+		},
+	}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/import", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleImportGuestKnowledge(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	imported, _ := resp["imported"].(float64)
+	total, _ := resp["total"].(float64)
+	if imported != 2 {
+		t.Errorf("expected 2 imported, got %v", imported)
+	}
+	if total != 5 {
+		t.Errorf("expected 5 total, got %v", total)
+	}
+}
 
 func TestHandleImportGuestKnowledge_GuestIDTooLong(t *testing.T) {
 	t.Parallel()
