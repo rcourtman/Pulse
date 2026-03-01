@@ -52,14 +52,14 @@ type TriageSummary struct {
 // RunDeterministicTriage runs deterministic checks and returns triage output for seed/context use.
 func (p *PatrolService) RunDeterministicTriage(
 	ctx context.Context,
-	state models.StateSnapshot,
+	snap models.StateSnapshot,
 	scope *PatrolScope,
 	guestIntel map[string]*GuestIntelligence,
 ) *TriageResult {
 	_ = ctx
 
 	scopedSet := p.buildScopedSet(scope)
-	intel := p.seedPrecomputeIntelligence(state, scopedSet, time.Now())
+	intel := p.seedPrecomputeIntelligence(snap, scopedSet, time.Now())
 
 	thresholds := p.GetThresholds()
 	if triageThresholdsUnset(thresholds) {
@@ -67,12 +67,12 @@ func (p *PatrolService) RunDeterministicTriage(
 	}
 
 	flags := make([]TriageFlag, 0)
-	flags = append(flags, triageThresholdChecks(state, scopedSet, thresholds)...)
+	flags = append(flags, triageThresholdChecks(snap, scopedSet, thresholds)...)
 	flags = append(flags, triageAnomalyChecks(intel)...)
-	flags = append(flags, triageBackupChecks(state, scopedSet)...)
-	flags = append(flags, triageDiskHealthChecks(state, scopedSet)...)
-	flags = append(flags, triageAlertChecks(state, scopedSet)...)
-	flags = append(flags, triageConnectivityChecks(state, guestIntel, scopedSet)...)
+	flags = append(flags, triageBackupChecks(snap, scopedSet)...)
+	flags = append(flags, triageDiskHealthChecks(snap, scopedSet)...)
+	flags = append(flags, triageAlertChecks(snap, scopedSet)...)
+	flags = append(flags, triageConnectivityChecks(snap, guestIntel, scopedSet)...)
 	flags = append(flags, triageRecentChanges(intel)...)
 	flags = deduplicateTriageFlags(flags)
 
@@ -83,7 +83,7 @@ func (p *PatrolService) RunDeterministicTriage(
 		}
 	}
 
-	summary := triageBuildSummary(state, flaggedIDs)
+	summary := triageBuildSummary(snap, flaggedIDs)
 
 	activeFindings := 0
 	if p != nil && p.findings != nil {
@@ -100,10 +100,10 @@ func (p *PatrolService) RunDeterministicTriage(
 	}
 }
 
-func triageThresholdChecks(state models.StateSnapshot, scopedSet map[string]bool, thresholds PatrolThresholds) []TriageFlag {
+func triageThresholdChecks(snap models.StateSnapshot, scopedSet map[string]bool, thresholds PatrolThresholds) []TriageFlag {
 	flags := make([]TriageFlag, 0)
 
-	for _, n := range state.Nodes {
+	for _, n := range snap.Nodes {
 		if !seedIsInScope(scopedSet, n.ID) {
 			continue
 		}
@@ -139,7 +139,7 @@ func triageThresholdChecks(state models.StateSnapshot, scopedSet map[string]bool
 		}
 	}
 
-	for _, vm := range state.VMs {
+	for _, vm := range snap.VMs {
 		if vm.Template || vm.Status != "running" || !seedIsInScope(scopedSet, vm.ID) {
 			continue
 		}
@@ -190,7 +190,7 @@ func triageThresholdChecks(state models.StateSnapshot, scopedSet map[string]bool
 		}
 	}
 
-	for _, ct := range state.Containers {
+	for _, ct := range snap.Containers {
 		if ct.Template || ct.Status != "running" || !seedIsInScope(scopedSet, ct.ID) {
 			continue
 		}
@@ -241,7 +241,7 @@ func triageThresholdChecks(state models.StateSnapshot, scopedSet map[string]bool
 		}
 	}
 
-	for _, s := range state.Storage {
+	for _, s := range snap.Storage {
 		if !seedIsInScope(scopedSet, s.ID) {
 			continue
 		}
@@ -321,18 +321,18 @@ func triageAnomalyChecks(intel seedIntelligence) []TriageFlag {
 	return flags
 }
 
-func triageBackupChecks(state models.StateSnapshot, scopedSet map[string]bool) []TriageFlag {
+func triageBackupChecks(snap models.StateSnapshot, scopedSet map[string]bool) []TriageFlag {
 	flags := make([]TriageFlag, 0)
 	now := time.Now()
 
-	for _, vm := range state.VMs {
+	for _, vm := range snap.VMs {
 		if vm.Template || vm.Status != "running" || !seedIsInScope(scopedSet, vm.ID) {
 			continue
 		}
 		flags = append(flags, triageBackupFlag(vm.ID, vm.Name, "vm", vm.LastBackup, now)...)
 	}
 
-	for _, ct := range state.Containers {
+	for _, ct := range snap.Containers {
 		if ct.Template || ct.Status != "running" || !seedIsInScope(scopedSet, ct.ID) {
 			continue
 		}
@@ -342,11 +342,11 @@ func triageBackupChecks(state models.StateSnapshot, scopedSet map[string]bool) [
 	return flags
 }
 
-func triageDiskHealthChecks(state models.StateSnapshot, scopedSet map[string]bool) []TriageFlag {
+func triageDiskHealthChecks(snap models.StateSnapshot, scopedSet map[string]bool) []TriageFlag {
 	flags := make([]TriageFlag, 0)
 
 	registry := unifiedresources.NewRegistry(nil)
-	registry.IngestSnapshot(state)
+	registry.IngestSnapshot(snap)
 	physicalDisks := registry.ListByType(unifiedresources.ResourceTypePhysicalDisk)
 
 	for _, disk := range physicalDisks {
@@ -419,10 +419,10 @@ func triageDiskHealthChecks(state models.StateSnapshot, scopedSet map[string]boo
 	return flags
 }
 
-func triageAlertChecks(state models.StateSnapshot, scopedSet map[string]bool) []TriageFlag {
-	flags := make([]TriageFlag, 0, len(state.ActiveAlerts))
+func triageAlertChecks(snap models.StateSnapshot, scopedSet map[string]bool) []TriageFlag {
+	flags := make([]TriageFlag, 0, len(snap.ActiveAlerts))
 
-	for _, alert := range state.ActiveAlerts {
+	for _, alert := range snap.ActiveAlerts {
 		if !seedIsInScope(scopedSet, alert.ResourceID) {
 			continue
 		}
@@ -461,10 +461,10 @@ func triageAlertChecks(state models.StateSnapshot, scopedSet map[string]bool) []
 	return flags
 }
 
-func triageConnectivityChecks(state models.StateSnapshot, guestIntel map[string]*GuestIntelligence, scopedSet map[string]bool) []TriageFlag {
+func triageConnectivityChecks(snap models.StateSnapshot, guestIntel map[string]*GuestIntelligence, scopedSet map[string]bool) []TriageFlag {
 	flags := make([]TriageFlag, 0)
 
-	for resourceID, healthy := range state.ConnectionHealth {
+	for resourceID, healthy := range snap.ConnectionHealth {
 		if healthy || !seedIsInScope(scopedSet, resourceID) {
 			continue
 		}
@@ -638,17 +638,17 @@ func FormatTriageBriefing(triage *TriageResult) string {
 	return sb.String()
 }
 
-func triageBuildSummary(state models.StateSnapshot, flaggedIDs map[string]bool) TriageSummary {
+func triageBuildSummary(snap models.StateSnapshot, flaggedIDs map[string]bool) TriageSummary {
 	summary := TriageSummary{
-		TotalNodes:   len(state.Nodes),
-		TotalStorage: len(state.Storage),
-		TotalDocker:  len(state.DockerHosts),
-		TotalPBS:     len(state.PBSInstances),
-		TotalPMG:     len(state.PMGInstances),
+		TotalNodes:   len(snap.Nodes),
+		TotalStorage: len(snap.Storage),
+		TotalDocker:  len(snap.DockerHosts),
+		TotalPBS:     len(snap.PBSInstances),
+		TotalPMG:     len(snap.PMGInstances),
 		FlaggedCount: len(flaggedIDs),
 	}
 
-	for _, vm := range state.VMs {
+	for _, vm := range snap.VMs {
 		if vm.Template {
 			continue
 		}
@@ -660,7 +660,7 @@ func triageBuildSummary(state models.StateSnapshot, flaggedIDs map[string]bool) 
 		}
 	}
 
-	for _, ct := range state.Containers {
+	for _, ct := range snap.Containers {
 		if ct.Template {
 			continue
 		}
