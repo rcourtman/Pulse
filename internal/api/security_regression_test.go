@@ -510,6 +510,37 @@ func TestHostAgentManagementRequiresSettingsWriteScope(t *testing.T) {
 	}
 }
 
+func TestHostAgentDeleteMissingSettingsWriteErrorContract(t *testing.T) {
+	rawToken := "host-delete-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeHostManage}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/agents/host/agent-1", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:write scope, got %d", rec.Code)
+	}
+
+	var body struct {
+		Error         string `json:"error"`
+		RequiredScope string `json:"requiredScope"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("expected JSON error contract, decode failed: %v", err)
+	}
+
+	if body.Error != "missing_scope" {
+		t.Fatalf("expected error code %q, got %q", "missing_scope", body.Error)
+	}
+	if body.RequiredScope != config.ScopeSettingsWrite {
+		t.Fatalf("expected required scope %q, got %q", config.ScopeSettingsWrite, body.RequiredScope)
+	}
+}
+
 func TestTestNotificationRequiresSettingsWriteScope(t *testing.T) {
 	rawToken := "notify-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)

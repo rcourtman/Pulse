@@ -21,12 +21,16 @@ import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useResourcesAsLegacy } from '@/hooks/useResources';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { HostMetadataAPI, type HostMetadata } from '@/api/hostMetadata';
+import { MonitoringAPI } from '@/api/monitoring';
+import { SecurityAPI } from '@/api/security';
+import { hasSettingsWriteAccess } from './permissions';
 
 import { logger } from '@/utils/logger';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
 import { HostDrawer } from './HostDrawer';
+import { HostRemoveActionButton } from './HostRemoveActionButton';
 import { UrlEditPopover, createUrlEditState } from '@/components/shared/UrlEditPopover';
 import { showSuccess, showError } from '@/utils/toast';
 
@@ -653,6 +657,7 @@ function HostRAIDStatusCell(props: HostRAIDStatusCellProps) {
 }
 
 type SortKey = 'name' | 'platform' | 'cpu' | 'memory' | 'disk' | 'uptime';
+
 export const HostsOverview: Component = () => {
   const navigate = useNavigate();
   const wsContext = useWebSocket();
@@ -695,6 +700,10 @@ export const HostsOverview: Component = () => {
   // Host metadata management (for custom URLs)
   const [hostMetadata, setHostMetadata] = createSignal<Record<string, HostMetadata>>({});
   const [hostMetadataVersion, setHostMetadataVersion] = createSignal(0);
+  const [canRemoveHostAgents, setCanRemoveHostAgents] = createSignal(false);
+  const [removingHostIds, setRemovingHostIds] = createSignal<Record<string, boolean>>({});
+  const [actionsMenuHostId, setActionsMenuHostId] = createSignal<string | null>(null);
+  const [actionsMenuPosition, setActionsMenuPosition] = createSignal<{ top: number; left: number } | null>(null);
 
   // Load host metadata on mount
   createEffect(() => {
@@ -706,6 +715,53 @@ export const HostsOverview: Component = () => {
       .catch(err => {
         logger.warn('Failed to load host metadata', { error: err });
       });
+  });
+
+  onMount(() => {
+    let isActive = true;
+    void SecurityAPI.getStatus()
+      .then((status) => {
+        if (!isActive) return;
+        setCanRemoveHostAgents(hasSettingsWriteAccess(status.tokenScopes));
+      })
+      .catch((err) => {
+        if (!isActive) return;
+        setCanRemoveHostAgents(false);
+        logger.debug('Failed to load token scopes for host removal action', { error: err });
+      });
+
+    return () => {
+      isActive = false;
+    };
+  });
+
+  onMount(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+
+      const clickedMenu = target.closest('[data-host-actions-menu]');
+      const clickedTrigger = target.closest('[data-host-actions-trigger]');
+      if (!clickedMenu && !clickedTrigger) {
+        setActionsMenuHostId(null);
+        setActionsMenuPosition(null);
+      }
+    };
+
+    const handleMenuEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setActionsMenuHostId(null);
+        setActionsMenuPosition(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleMenuEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleMenuEscape);
+    };
   });
 
   // Get custom URL for a host
@@ -747,6 +803,63 @@ export const HostsOverview: Component = () => {
     } catch (err) {
       logger.error('Failed to delete host custom URL', { hostId, error: err });
       return false;
+    }
+  };
+
+  const handleRemoveHostAgent = async (host: Host): Promise<void> => {
+    setActionsMenuHostId(null);
+    setActionsMenuPosition(null);
+
+    const hostName = host.displayName || host.hostname || host.id;
+    const currentRemoving = removingHostIds();
+    if (currentRemoving[host.id]) {
+      return;
+    }
+
+    const confirmed = confirm(
+      `Remove "${hostName}" from Pulse?\n\nThis only removes it from the Pulse host list. It does not uninstall the agent from the server.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setRemovingHostIds(prev => ({ ...prev, [host.id]: true }));
+
+    try {
+      await MonitoringAPI.deleteHostAgent(host.id);
+
+      try {
+        await HostMetadataAPI.deleteMetadata(host.id);
+        setHostMetadata(prev => {
+          if (!prev[host.id]) {
+            return prev;
+          }
+          const next = { ...prev };
+          delete next[host.id];
+          return next;
+        });
+        setHostMetadataVersion(v => v + 1);
+      } catch (metaErr) {
+        logger.debug('Failed to clean up host metadata after host removal', { hostId: host.id, error: metaErr });
+      }
+
+      setExpandedHostId(prev => (prev === host.id ? null : prev));
+      showSuccess(`${hostName} removed from Pulse`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to remove host';
+      const normalized = message.toLowerCase();
+      if (normalized.includes('settings:write') || normalized.includes('forbidden') || normalized.includes('status 403')) {
+        showError('You need settings:write permission to remove hosts.');
+      } else {
+        showError(message);
+      }
+      logger.error('Failed to remove host from Pulse', { hostId: host.id, error: err });
+    } finally {
+      setRemovingHostIds(prev => {
+        const next = { ...prev };
+        delete next[host.id];
+        return next;
+      });
     }
   };
 
@@ -796,6 +909,50 @@ export const HostsOverview: Component = () => {
 
   // Access asHosts() directly inside the memo to maintain reactivity
   const hosts = () => asHosts() as Host[];
+  const menuHost = createMemo(() => {
+    const hostID = actionsMenuHostId();
+    if (!hostID) {
+      return null;
+    }
+    return hosts().find(h => h.id === hostID) || null;
+  });
+
+  const toggleRowActionsMenu = (hostId: string, event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (actionsMenuHostId() === hostId) {
+      setActionsMenuHostId(null);
+      setActionsMenuPosition(null);
+      return;
+    }
+
+    const trigger = event.currentTarget as HTMLElement;
+    const rect = trigger.getBoundingClientRect();
+    const menuWidth = 200;
+    const menuHeight = 80;
+    const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+    const viewportOffsetTop = window.visualViewport?.offsetTop ?? 0;
+
+    const spaceBelow = viewportHeight - (rect.bottom - viewportOffsetTop);
+    const top = spaceBelow >= menuHeight + 8 ? rect.bottom + 6 : rect.top - menuHeight - 6;
+    const left = Math.max(8, Math.min(rect.right - menuWidth, viewportWidth - menuWidth - 8));
+
+    setActionsMenuHostId(hostId);
+    setActionsMenuPosition({ top, left });
+  };
+
+  createEffect(() => {
+    const hostID = actionsMenuHostId();
+    if (!hostID) {
+      return;
+    }
+    if (!hosts().some(h => h.id === hostID)) {
+      setActionsMenuHostId(null);
+      setActionsMenuPosition(null);
+    }
+  });
 
   const isInitialLoading = createMemo(() => {
     return !connected() && !reconnecting() && hosts().length === 0;
@@ -1054,7 +1211,7 @@ export const HostsOverview: Component = () => {
                             <th class={thClass} title="Linux Software RAID (mdadm) Status">RAID</th>
                           </Show>
                           <Show when={isColVisible('link')}>
-                            <th class={thClass}></th>
+                            <th class={thClass} style={{ "width": isMobile() ? "64px" : "84px" }}></th>
                           </Show>
                         </tr>
                       </thead>
@@ -1072,6 +1229,11 @@ export const HostsOverview: Component = () => {
                               isExpanded={expandedHostId() === host.id}
                               onToggleExpand={() => toggleHostExpand(host.id)}
                               totalColumns={visibleColumnIds().length}
+                              canRemoveHost={canRemoveHostAgents()}
+                              isRemovingHost={Boolean(removingHostIds()[host.id])}
+                              onRemoveHost={handleRemoveHostAgent}
+                              isActionsMenuOpen={actionsMenuHostId() === host.id}
+                              onToggleActionsMenu={(event) => toggleRowActionsMenu(host.id, event)}
                             />
                           )}
                         </For>
@@ -1113,6 +1275,31 @@ export const HostsOverview: Component = () => {
           </Card>
         </Show>
       </Show>
+
+      <Show when={menuHost() && actionsMenuPosition() && canRemoveHostAgents()}>
+        <Portal mount={document.body}>
+          <div
+            data-host-actions-menu
+            class="fixed z-[9999] w-[200px] rounded-lg border border-gray-200 bg-white p-1.5 shadow-xl dark:border-gray-700 dark:bg-gray-800"
+            style={{
+              top: `${actionsMenuPosition()!.top}px`,
+              left: `${actionsMenuPosition()!.left}px`,
+            }}
+          >
+            <HostRemoveActionButton
+              loading={Boolean(menuHost() && removingHostIds()[menuHost()!.id])}
+              disabled={Boolean(menuHost() && removingHostIds()[menuHost()!.id])}
+              onClick={() => {
+                const host = menuHost();
+                if (!host) {
+                  return;
+                }
+                void handleRemoveHostAgent(host);
+              }}
+            />
+          </div>
+        </Portal>
+      </Show>
     </div >
   );
 };
@@ -1129,6 +1316,11 @@ interface HostRowProps {
   isExpanded: boolean;
   onToggleExpand: () => void;
   totalColumns: number;
+  canRemoveHost: boolean;
+  isRemovingHost: boolean;
+  onRemoveHost: (host: Host) => Promise<void>;
+  isActionsMenuOpen: boolean;
+  onToggleActionsMenu: (event: MouseEvent) => void;
 }
 
 const HostRow: Component<HostRowProps> = (props) => {
@@ -1413,6 +1605,19 @@ const HostRow: Component<HostRowProps> = (props) => {
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                 </svg>
               </button>
+              <Show when={props.canRemoveHost}>
+                <button
+                  type="button"
+                  data-host-actions-trigger
+                  onClick={props.onToggleActionsMenu}
+                  class={`inline-flex justify-center items-center text-gray-400 transition-colors ${props.isActionsMenuOpen ? 'text-gray-700 dark:text-gray-200' : 'hover:text-gray-600 dark:hover:text-gray-300'}`}
+                  title="Host actions"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5h.01M12 12h.01M12 19h.01" />
+                  </svg>
+                </button>
+              </Show>
             </div>
           </td>
         </Show>
