@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // ========================================
@@ -126,87 +127,83 @@ func TestFormatKubernetesAge(t *testing.T) {
 }
 
 // ========================================
-// isKubernetesPodHealthy tests
+// isK8sPodHealthy tests
 // ========================================
 
-func TestIsKubernetesPodHealthy(t *testing.T) {
+func TestIsK8sPodHealthy(t *testing.T) {
 	tests := []struct {
-		name     string
-		pod      models.KubernetesPod
-		expected bool
+		name       string
+		phase      string
+		containers []unifiedresources.K8sPodContainer
+		expected   bool
 	}{
 		{
 			name:     "empty phase",
-			pod:      models.KubernetesPod{Phase: ""},
+			phase:    "",
 			expected: false,
 		},
 		{
 			name:     "pending phase",
-			pod:      models.KubernetesPod{Phase: "Pending"},
+			phase:    "Pending",
 			expected: false,
 		},
 		{
 			name:     "running phase, no containers",
-			pod:      models.KubernetesPod{Phase: "Running", Containers: nil},
+			phase:    "Running",
 			expected: true,
 		},
 		{
-			name: "running phase, healthy container",
-			pod: models.KubernetesPod{
-				Phase: "Running",
-				Containers: []models.KubernetesPodContainer{
-					{Name: "app", Ready: true, State: "running"},
-				},
+			name:  "running phase, healthy container",
+			phase: "Running",
+			containers: []unifiedresources.K8sPodContainer{
+				{Name: "app", Ready: true, State: "running"},
 			},
 			expected: true,
 		},
 		{
-			name: "running phase, not ready container",
-			pod: models.KubernetesPod{
-				Phase: "Running",
-				Containers: []models.KubernetesPodContainer{
-					{Name: "app", Ready: false, State: "running"},
-				},
+			name:  "running phase, not ready container",
+			phase: "Running",
+			containers: []unifiedresources.K8sPodContainer{
+				{Name: "app", Ready: false, State: "running"},
 			},
 			expected: false,
 		},
 		{
-			name: "running phase, container not running",
-			pod: models.KubernetesPod{
-				Phase: "Running",
-				Containers: []models.KubernetesPodContainer{
-					{Name: "app", Ready: true, State: "waiting"},
-				},
+			name:  "running phase, container not running",
+			phase: "Running",
+			containers: []unifiedresources.K8sPodContainer{
+				{Name: "app", Ready: true, State: "waiting"},
 			},
 			expected: false,
 		},
 		{
 			name:     "failed phase",
-			pod:      models.KubernetesPod{Phase: "Failed"},
+			phase:    "Failed",
 			expected: false,
 		},
 		{
 			name:     "succeeded phase",
-			pod:      models.KubernetesPod{Phase: "Succeeded"},
+			phase:    "Succeeded",
 			expected: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isKubernetesPodHealthy(tt.pod)
+			pod := makePodView(t, tt.phase, tt.containers)
+			result := isK8sPodHealthy(pod)
 			if result != tt.expected {
-				t.Errorf("isKubernetesPodHealthy() = %v, want %v", result, tt.expected)
+				t.Errorf("isK8sPodHealthy() = %v, want %v", result, tt.expected)
 			}
 		})
 	}
 }
 
 // ========================================
-// kubernetesPodReason tests
+// k8sPodReason tests
 // ========================================
 
-func TestKubernetesPodReason(t *testing.T) {
+func TestK8sPodReason(t *testing.T) {
 	tests := []struct {
 		name     string
 		pod      models.KubernetesPod
@@ -262,10 +259,11 @@ func TestKubernetesPodReason(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := kubernetesPodReason(tt.pod)
+			podView := makePodViewFromModel(t, tt.pod)
+			result := k8sPodReason(podView)
 			for _, expected := range tt.contains {
 				if len(expected) > 0 && !kubeTestContains(result, expected) {
-					t.Errorf("kubernetesPodReason() = %q, want to contain %q", result, expected)
+					t.Errorf("k8sPodReason() = %q, want to contain %q", result, expected)
 				}
 			}
 		})
@@ -282,77 +280,29 @@ func kubeTestContains(s, substr string) bool {
 }
 
 // ========================================
-// isKubernetesDeploymentHealthy tests
+// isK8sDeploymentHealthy tests
 // ========================================
 
-func TestIsKubernetesDeploymentHealthy(t *testing.T) {
+func TestIsK8sDeploymentHealthy(t *testing.T) {
 	tests := []struct {
-		name       string
-		deployment models.KubernetesDeployment
-		expected   bool
+		name                               string
+		desired, ready, available, updated int32
+		expected                           bool
 	}{
-		{
-			name:       "empty deployment",
-			deployment: models.KubernetesDeployment{},
-			expected:   true, // 0/0 replicas is considered healthy
-		},
-		{
-			name: "all replicas ready",
-			deployment: models.KubernetesDeployment{
-				DesiredReplicas:   3,
-				ReadyReplicas:     3,
-				AvailableReplicas: 3,
-				UpdatedReplicas:   3,
-			},
-			expected: true,
-		},
-		{
-			name: "some replicas not ready",
-			deployment: models.KubernetesDeployment{
-				DesiredReplicas:   3,
-				ReadyReplicas:     2,
-				AvailableReplicas: 3,
-				UpdatedReplicas:   3,
-			},
-			expected: false,
-		},
-		{
-			name: "no replicas ready",
-			deployment: models.KubernetesDeployment{
-				DesiredReplicas:   3,
-				ReadyReplicas:     0,
-				AvailableReplicas: 0,
-				UpdatedReplicas:   0,
-			},
-			expected: false,
-		},
-		{
-			name: "not all available",
-			deployment: models.KubernetesDeployment{
-				DesiredReplicas:   3,
-				ReadyReplicas:     3,
-				AvailableReplicas: 2,
-				UpdatedReplicas:   3,
-			},
-			expected: false,
-		},
-		{
-			name: "not all updated",
-			deployment: models.KubernetesDeployment{
-				DesiredReplicas:   3,
-				ReadyReplicas:     3,
-				AvailableReplicas: 3,
-				UpdatedReplicas:   2,
-			},
-			expected: false,
-		},
+		{"empty deployment", 0, 0, 0, 0, true},
+		{"all replicas ready", 3, 3, 3, 3, true},
+		{"some replicas not ready", 3, 2, 3, 3, false},
+		{"no replicas ready", 3, 0, 0, 0, false},
+		{"not all available", 3, 3, 2, 3, false},
+		{"not all updated", 3, 3, 3, 2, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isKubernetesDeploymentHealthy(tt.deployment)
+			view := makeDeploymentView(t, tt.desired, tt.ready, tt.available, tt.updated)
+			result := isK8sDeploymentHealthy(view)
 			if result != tt.expected {
-				t.Errorf("isKubernetesDeploymentHealthy() = %v, want %v", result, tt.expected)
+				t.Errorf("isK8sDeploymentHealthy() = %v, want %v", result, tt.expected)
 			}
 		})
 	}
@@ -513,67 +463,57 @@ func TestFormatPodRestarts(t *testing.T) {
 }
 
 // ========================================
-// findKubernetesCluster tests
+// findK8sCluster tests
 // ========================================
 
-func TestFindKubernetesCluster(t *testing.T) {
-	clusters := []models.KubernetesCluster{
-		{ID: "cluster-1"},
-		{ID: "cluster-2"},
+func TestFindK8sCluster(t *testing.T) {
+	reg := unifiedresources.NewRegistry(nil)
+	reg.IngestSnapshot(models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{
+			{ID: "cluster-1", Name: "one"},
+			{ID: "cluster-2", Name: "two"},
+		},
+	})
+
+	cluster := findK8sCluster(reg.K8sClusters(), "cluster-2")
+	if cluster == nil || cluster.ClusterID() != "cluster-2" {
+		t.Fatalf("expected to find cluster-2, got %v", cluster)
 	}
 
-	cluster, ok := findKubernetesCluster(clusters, "cluster-2")
-	if !ok || cluster.ID != "cluster-2" {
-		t.Fatalf("expected to find cluster-2, got ok=%t id=%s", ok, cluster.ID)
-	}
-
-	if _, ok := findKubernetesCluster(clusters, "missing"); ok {
-		t.Fatal("expected missing cluster to return ok=false")
+	if missing := findK8sCluster(reg.K8sClusters(), "missing"); missing != nil {
+		t.Fatal("expected missing cluster to return nil")
 	}
 }
 
 // ========================================
-// kubernetesClusterDisplayName tests
+// summarizeK8sNodes tests
 // ========================================
 
-func TestKubernetesClusterDisplayName(t *testing.T) {
-	cluster := models.KubernetesCluster{
-		ID:                "id",
-		Name:              "name",
-		DisplayName:       "display",
-		CustomDisplayName: "custom",
-	}
-	if got := kubernetesClusterDisplayName(cluster); got != "custom" {
-		t.Fatalf("expected custom display name, got %s", got)
-	}
+func TestSummarizeK8sNodes(t *testing.T) {
+	reg := unifiedresources.NewRegistry(nil)
+	reg.IngestSnapshot(models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{{
+			ID:   "c1",
+			Name: "cluster",
+			Nodes: []models.KubernetesNode{
+				{Name: "node-1", Ready: true},
+				{Name: "node-2", Ready: false, Unschedulable: true},
+			},
+		}},
+	})
 
-	cluster.CustomDisplayName = ""
-	if got := kubernetesClusterDisplayName(cluster); got != "display" {
-		t.Fatalf("expected display name, got %s", got)
+	cluster := findK8sCluster(reg.K8sClusters(), "c1")
+	if cluster == nil {
+		t.Fatal("cluster not found")
 	}
-
-	cluster.DisplayName = ""
-	if got := kubernetesClusterDisplayName(cluster); got != "name" {
-		t.Fatalf("expected name, got %s", got)
-	}
-
-	cluster.Name = ""
-	if got := kubernetesClusterDisplayName(cluster); got != "id" {
-		t.Fatalf("expected id, got %s", got)
-	}
-}
-
-// ========================================
-// summarizeKubernetesNodes tests
-// ========================================
-
-func TestSummarizeKubernetesNodes(t *testing.T) {
-	nodes := []models.KubernetesNode{
-		{Name: "node-1", Ready: true},
-		{Name: "node-2", Ready: false, Unschedulable: true},
+	var clusterNodes []*unifiedresources.K8sNodeView
+	for _, node := range reg.K8sNodes() {
+		if node != nil && node.ParentID() == cluster.ID() {
+			clusterNodes = append(clusterNodes, node)
+		}
 	}
 
-	summary, issues := summarizeKubernetesNodes(nodes)
+	summary, issues := summarizeK8sNodes(clusterNodes)
 	if !strings.Contains(summary, "2 total, 1 ready, 1 not ready, 1 unschedulable") {
 		t.Fatalf("unexpected summary: %s", summary)
 	}
@@ -582,13 +522,28 @@ func TestSummarizeKubernetesNodes(t *testing.T) {
 	}
 }
 
-func TestSummarizeKubernetesNodes_Truncates(t *testing.T) {
+func TestSummarizeK8sNodes_Truncates(t *testing.T) {
 	nodes := make([]models.KubernetesNode, maxKubernetesNodeIssues+1)
 	for i := range nodes {
 		nodes[i] = models.KubernetesNode{Name: "node-" + string(rune('a'+i)), Ready: false}
 	}
+	reg := unifiedresources.NewRegistry(nil)
+	reg.IngestSnapshot(models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{{ID: "c1", Name: "cluster", Nodes: nodes}},
+	})
 
-	_, issues := summarizeKubernetesNodes(nodes)
+	cluster := findK8sCluster(reg.K8sClusters(), "c1")
+	if cluster == nil {
+		t.Fatal("cluster not found")
+	}
+	var clusterNodes []*unifiedresources.K8sNodeView
+	for _, node := range reg.K8sNodes() {
+		if node != nil && node.ParentID() == cluster.ID() {
+			clusterNodes = append(clusterNodes, node)
+		}
+	}
+
+	_, issues := summarizeK8sNodes(clusterNodes)
 	if len(issues) != maxKubernetesNodeIssues+1 {
 		t.Fatalf("expected truncated issues list, got %d", len(issues))
 	}
@@ -598,35 +553,53 @@ func TestSummarizeKubernetesNodes_Truncates(t *testing.T) {
 }
 
 // ========================================
-// summarizeKubernetesPods tests
+// summarizeK8sPods tests
 // ========================================
 
-func TestSummarizeKubernetesPods(t *testing.T) {
-	pods := []models.KubernetesPod{
-		{
-			Name:      "ok",
-			Namespace: "default",
-			Phase:     "Running",
-			Containers: []models.KubernetesPodContainer{
-				{Name: "app", Ready: true, State: "running"},
+func TestSummarizeK8sPods(t *testing.T) {
+	reg := unifiedresources.NewRegistry(nil)
+	reg.IngestSnapshot(models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{{
+			ID:   "c1",
+			Name: "cluster",
+			Pods: []models.KubernetesPod{
+				{
+					Name:      "ok",
+					Namespace: "default",
+					Phase:     "Running",
+					Containers: []models.KubernetesPodContainer{
+						{Name: "app", Ready: true, State: "running"},
+					},
+				},
+				{
+					Name:      "bad",
+					Namespace: "default",
+					Phase:     "Running",
+					Restarts:  2,
+					Containers: []models.KubernetesPodContainer{
+						{Name: "app", Ready: false, State: "waiting", Reason: "CrashLoopBackOff"},
+					},
+				},
+				{Name: "pending", Namespace: "default", Phase: "Pending"},
+				{Name: "failed", Namespace: "default", Phase: "Failed", Reason: "Error", Message: "failed", Restarts: 1},
+				{Name: "unknown", Namespace: "default", Phase: ""},
+				{Name: "succeeded", Namespace: "default", Phase: "Succeeded"},
 			},
-		},
-		{
-			Name:      "bad",
-			Namespace: "default",
-			Phase:     "Running",
-			Restarts:  2,
-			Containers: []models.KubernetesPodContainer{
-				{Name: "app", Ready: false, State: "waiting", Reason: "CrashLoopBackOff"},
-			},
-		},
-		{Name: "pending", Namespace: "default", Phase: "Pending"},
-		{Name: "failed", Namespace: "default", Phase: "Failed", Reason: "Error", Message: "failed", Restarts: 1},
-		{Name: "unknown", Namespace: "default", Phase: ""},
-		{Name: "succeeded", Namespace: "default", Phase: "Succeeded"},
+		}},
+	})
+
+	cluster := findK8sCluster(reg.K8sClusters(), "c1")
+	if cluster == nil {
+		t.Fatal("cluster not found")
+	}
+	var clusterPods []*unifiedresources.PodView
+	for _, pod := range reg.Pods() {
+		if pod != nil && pod.ParentID() == cluster.ID() {
+			clusterPods = append(clusterPods, pod)
+		}
 	}
 
-	summary, issues, restarts := summarizeKubernetesPods(pods)
+	summary, issues, restarts := summarizeK8sPods(clusterPods)
 	if !strings.Contains(summary, "6 total") || !strings.Contains(summary, "2 running") || !strings.Contains(summary, "1 pending") ||
 		!strings.Contains(summary, "1 failed") || !strings.Contains(summary, "1 succeeded") || !strings.Contains(summary, "1 unknown") {
 		t.Fatalf("unexpected summary: %s", summary)
@@ -640,16 +613,34 @@ func TestSummarizeKubernetesPods(t *testing.T) {
 }
 
 // ========================================
-// summarizeKubernetesDeployments tests
+// summarizeK8sDeployments tests
 // ========================================
 
-func TestSummarizeKubernetesDeployments(t *testing.T) {
-	deployments := []models.KubernetesDeployment{
-		{Namespace: "default", Name: "ok", DesiredReplicas: 2, ReadyReplicas: 2, UpdatedReplicas: 2, AvailableReplicas: 2},
-		{Namespace: "default", Name: "bad", DesiredReplicas: 2, ReadyReplicas: 1, UpdatedReplicas: 1, AvailableReplicas: 1},
+func TestSummarizeK8sDeployments(t *testing.T) {
+	reg := unifiedresources.NewRegistry(nil)
+	reg.IngestSnapshot(models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{{
+			ID:   "c1",
+			Name: "cluster",
+			Deployments: []models.KubernetesDeployment{
+				{Namespace: "default", Name: "ok", DesiredReplicas: 2, ReadyReplicas: 2, UpdatedReplicas: 2, AvailableReplicas: 2},
+				{Namespace: "default", Name: "bad", DesiredReplicas: 2, ReadyReplicas: 1, UpdatedReplicas: 1, AvailableReplicas: 1},
+			},
+		}},
+	})
+
+	cluster := findK8sCluster(reg.K8sClusters(), "c1")
+	if cluster == nil {
+		t.Fatal("cluster not found")
+	}
+	var clusterDeploys []*unifiedresources.K8sDeploymentView
+	for _, deploy := range reg.K8sDeployments() {
+		if deploy != nil && deploy.ParentID() == cluster.ID() {
+			clusterDeploys = append(clusterDeploys, deploy)
+		}
 	}
 
-	summary, issues := summarizeKubernetesDeployments(deployments)
+	summary, issues := summarizeK8sDeployments(clusterDeploys)
 	if !strings.Contains(summary, "2 total, 1 healthy, 1 unhealthy") {
 		t.Fatalf("unexpected summary: %s", summary)
 	}
@@ -658,7 +649,7 @@ func TestSummarizeKubernetesDeployments(t *testing.T) {
 	}
 }
 
-func TestSummarizeKubernetesDeployments_Truncates(t *testing.T) {
+func TestSummarizeK8sDeployments_Truncates(t *testing.T) {
 	deployments := make([]models.KubernetesDeployment, maxKubernetesDeploymentIssues+1)
 	for i := range deployments {
 		deployments[i] = models.KubernetesDeployment{
@@ -671,7 +662,27 @@ func TestSummarizeKubernetesDeployments_Truncates(t *testing.T) {
 		}
 	}
 
-	_, issues := summarizeKubernetesDeployments(deployments)
+	reg := unifiedresources.NewRegistry(nil)
+	reg.IngestSnapshot(models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{{
+			ID:          "c1",
+			Name:        "cluster",
+			Deployments: deployments,
+		}},
+	})
+
+	cluster := findK8sCluster(reg.K8sClusters(), "c1")
+	if cluster == nil {
+		t.Fatal("cluster not found")
+	}
+	var clusterDeploys []*unifiedresources.K8sDeploymentView
+	for _, deploy := range reg.K8sDeployments() {
+		if deploy != nil && deploy.ParentID() == cluster.ID() {
+			clusterDeploys = append(clusterDeploys, deploy)
+		}
+	}
+
+	_, issues := summarizeK8sDeployments(clusterDeploys)
 	if len(issues) != maxKubernetesDeploymentIssues+1 {
 		t.Fatalf("expected truncated issues list, got %d", len(issues))
 	}
@@ -681,31 +692,39 @@ func TestSummarizeKubernetesDeployments_Truncates(t *testing.T) {
 }
 
 // ========================================
-// buildKubernetesClusterContext tests
+// buildK8sClusterContext tests
 // ========================================
 
-func TestBuildKubernetesClusterContext(t *testing.T) {
+func TestBuildK8sClusterContext(t *testing.T) {
 	now := time.Now().Add(-5 * time.Minute)
-	cluster := models.KubernetesCluster{
-		ID:               "cluster-1",
-		Name:             "prod",
-		Status:           "healthy",
-		Version:          "1.27",
-		Server:           "https://kube.local",
-		Context:          "prod",
-		AgentVersion:     "v1",
-		IntervalSeconds:  60,
-		LastSeen:         now,
-		PendingUninstall: true,
-		Nodes:            []models.KubernetesNode{{Name: "node-1", Ready: false, Unschedulable: true}},
-		Pods: []models.KubernetesPod{
-			{Name: "pod-1", Namespace: "default", Phase: "Pending"},
-			{Name: "pod-2", Namespace: "default", Phase: "Running", Restarts: 2},
-		},
-		Deployments: []models.KubernetesDeployment{{Namespace: "default", Name: "dep", DesiredReplicas: 1}},
+	reg := unifiedresources.NewRegistry(nil)
+	reg.IngestSnapshot(models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{{
+			ID:               "cluster-1",
+			Name:             "prod",
+			Status:           "healthy",
+			Version:          "1.27",
+			Server:           "https://kube.local",
+			Context:          "prod",
+			AgentVersion:     "v1",
+			IntervalSeconds:  60,
+			LastSeen:         now,
+			PendingUninstall: true,
+			Nodes:            []models.KubernetesNode{{Name: "node-1", Ready: false, Unschedulable: true}},
+			Pods: []models.KubernetesPod{
+				{Name: "pod-1", Namespace: "default", Phase: "Pending"},
+				{Name: "pod-2", Namespace: "default", Phase: "Running", Restarts: 2},
+			},
+			Deployments: []models.KubernetesDeployment{{Namespace: "default", Name: "dep", DesiredReplicas: 1}},
+		}},
+	})
+
+	cluster := findK8sCluster(reg.K8sClusters(), "cluster-1")
+	if cluster == nil {
+		t.Fatal("cluster not found")
 	}
 
-	ctx := buildKubernetesClusterContext(cluster)
+	ctx := buildK8sClusterContext(cluster, reg)
 	if !strings.Contains(ctx, "Cluster Summary") || !strings.Contains(ctx, "Pending uninstall: true") {
 		t.Fatalf("unexpected context: %s", ctx)
 	}
@@ -735,7 +754,9 @@ func TestAnalyzeKubernetesCluster_Errors(t *testing.T) {
 		t.Fatalf("expected ErrKubernetesStateUnavailable, got %v", err)
 	}
 
-	svc.SetStateProvider(&mockStateProvider{})
+	// Set up ReadState with no clusters → should return ClusterNotFound.
+	reg := unifiedresources.NewRegistry(nil)
+	svc.SetReadState(reg)
 	if _, err := svc.AnalyzeKubernetesCluster(context.Background(), "cluster-1"); !errors.Is(err, ErrKubernetesClusterNotFound) {
 		t.Fatalf("expected ErrKubernetesClusterNotFound, got %v", err)
 	}
@@ -756,11 +777,11 @@ func TestAnalyzeKubernetesCluster_Success(t *testing.T) {
 		ID:   "cluster-1",
 		Name: "prod",
 	}
-	svc.SetStateProvider(&mockStateProvider{
-		state: models.StateSnapshot{
-			KubernetesClusters: []models.KubernetesCluster{cluster},
-		},
+	reg := unifiedresources.NewRegistry(nil)
+	reg.IngestSnapshot(models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{cluster},
 	})
+	svc.SetReadState(reg)
 
 	resp, err := svc.AnalyzeKubernetesCluster(context.Background(), "cluster-1")
 	if err != nil {
@@ -769,4 +790,87 @@ func TestAnalyzeKubernetesCluster_Success(t *testing.T) {
 	if resp == nil || resp.Content != "ok" {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
+}
+
+// ========================================
+// Test helpers
+// ========================================
+
+// makePodView creates a PodView from a phase and containers for testing.
+func makePodView(t *testing.T, phase string, containers []unifiedresources.K8sPodContainer) *unifiedresources.PodView {
+	t.Helper()
+	pod := models.KubernetesPod{
+		Name:      "test-pod",
+		Namespace: "default",
+		Phase:     phase,
+	}
+	for _, c := range containers {
+		pod.Containers = append(pod.Containers, models.KubernetesPodContainer{
+			Name:  c.Name,
+			Ready: c.Ready,
+			State: c.State,
+		})
+	}
+	reg := unifiedresources.NewRegistry(nil)
+	reg.IngestSnapshot(models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{{
+			ID:   "c1",
+			Name: "cluster",
+			Pods: []models.KubernetesPod{pod},
+		}},
+	})
+	pods := reg.Pods()
+	if len(pods) == 0 {
+		t.Fatal("expected pod in registry")
+	}
+	return pods[0]
+}
+
+// makePodViewFromModel creates a PodView from a models.KubernetesPod for testing.
+func makePodViewFromModel(t *testing.T, pod models.KubernetesPod) *unifiedresources.PodView {
+	t.Helper()
+	if pod.Name == "" {
+		pod.Name = "test-pod"
+	}
+	if pod.Namespace == "" {
+		pod.Namespace = "default"
+	}
+	reg := unifiedresources.NewRegistry(nil)
+	reg.IngestSnapshot(models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{{
+			ID:   "c1",
+			Name: "cluster",
+			Pods: []models.KubernetesPod{pod},
+		}},
+	})
+	pods := reg.Pods()
+	if len(pods) == 0 {
+		t.Fatal("expected pod in registry")
+	}
+	return pods[0]
+}
+
+// makeDeploymentView creates a K8sDeploymentView for testing.
+func makeDeploymentView(t *testing.T, desired, ready, available, updated int32) *unifiedresources.K8sDeploymentView {
+	t.Helper()
+	reg := unifiedresources.NewRegistry(nil)
+	reg.IngestSnapshot(models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{{
+			ID:   "c1",
+			Name: "cluster",
+			Deployments: []models.KubernetesDeployment{{
+				Name:              "test-deploy",
+				Namespace:         "default",
+				DesiredReplicas:   desired,
+				ReadyReplicas:     ready,
+				AvailableReplicas: available,
+				UpdatedReplicas:   updated,
+			}},
+		}},
+	})
+	deploys := reg.K8sDeployments()
+	if len(deploys) == 0 {
+		t.Fatal("expected deployment in registry")
+	}
+	return deploys[0]
 }

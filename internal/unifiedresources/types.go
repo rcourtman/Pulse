@@ -597,12 +597,15 @@ type K8sMetricCapabilities struct {
 type K8sData struct {
 	ClusterID               string                 `json:"clusterId,omitempty"`
 	ClusterName             string                 `json:"clusterName,omitempty"`
-	SourceName              string                 `json:"sourceName,omitempty"` // raw model Name before display-name resolution
+	SourceName              string                 `json:"sourceName,omitempty"`   // raw model Name before display-name resolution
+	SourceStatus            string                 `json:"sourceStatus,omitempty"` // raw model Status before normalization
 	AgentID                 string                 `json:"agentId,omitempty"`
 	Context                 string                 `json:"context,omitempty"`
 	Server                  string                 `json:"server,omitempty"`
 	Version                 string                 `json:"version,omitempty"`
 	PendingUninstall        bool                   `json:"pendingUninstall,omitempty"`
+	AgentVersion            string                 `json:"agentVersion,omitempty"`    // cluster: k8s agent version
+	IntervalSeconds         int                    `json:"intervalSeconds,omitempty"` // cluster: telemetry interval
 	NodeUID                 string                 `json:"nodeUid,omitempty"`
 	NodeName                string                 `json:"nodeName,omitempty"`
 	Ready                   bool                   `json:"ready,omitempty"`
@@ -622,6 +625,9 @@ type K8sData struct {
 	Namespace               string                 `json:"namespace,omitempty"`
 	PodUID                  string                 `json:"podUid,omitempty"`
 	PodPhase                string                 `json:"podPhase,omitempty"`
+	PodReason               string                 `json:"podReason,omitempty"`     // pod: status reason
+	PodMessage              string                 `json:"podMessage,omitempty"`    // pod: status message
+	PodContainers           []K8sPodContainer      `json:"podContainers,omitempty"` // pod: sub-containers
 	UptimeSeconds           int64                  `json:"uptimeSeconds,omitempty"`
 	Temperature             *float64               `json:"temperature,omitempty"`
 	Restarts                int                    `json:"restarts,omitempty"`
@@ -635,6 +641,17 @@ type K8sData struct {
 	ReadyReplicas           int32                  `json:"readyReplicas,omitempty"`
 	AvailableReplicas       int32                  `json:"availableReplicas,omitempty"`
 	MetricCapabilities      *K8sMetricCapabilities `json:"metricCapabilities,omitempty"`
+}
+
+// K8sPodContainer describes a container within a Kubernetes pod.
+type K8sPodContainer struct {
+	Name         string `json:"name"`
+	Image        string `json:"image,omitempty"`
+	Ready        bool   `json:"ready"`
+	RestartCount int32  `json:"restartCount,omitempty"`
+	State        string `json:"state,omitempty"`
+	Reason       string `json:"reason,omitempty"`
+	Message      string `json:"message,omitempty"`
 }
 
 // CPUInfo describes CPU characteristics.

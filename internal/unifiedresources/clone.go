@@ -186,7 +186,17 @@ func cloneK8sData(in *K8sData) *K8sData {
 	out.Temperature = cloneFloat64Ptr(in.Temperature)
 	out.Labels = cloneStringMap(in.Labels)
 	out.MetricCapabilities = cloneKubernetesMetricCapabilities(in.MetricCapabilities)
+	out.PodContainers = cloneK8sPodContainerSlice(in.PodContainers)
 	return &out
+}
+
+func cloneK8sPodContainerSlice(in []K8sPodContainer) []K8sPodContainer {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]K8sPodContainer, len(in))
+	copy(out, in) // K8sPodContainer has no pointer/slice/map fields — shallow copy is sufficient
+	return out
 }
 
 func clonePhysicalDiskMeta(in *PhysicalDiskMeta) *PhysicalDiskMeta {

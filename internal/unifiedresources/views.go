@@ -1643,6 +1643,13 @@ func (v K8sClusterView) SourceName() string {
 	return v.r.Kubernetes.SourceName
 }
 
+func (v K8sClusterView) SourceStatus() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.SourceStatus
+}
+
 func (v K8sClusterView) AgentID() string {
 	if v.r == nil || v.r.Kubernetes == nil {
 		return ""
@@ -1711,6 +1718,20 @@ func (v K8sClusterView) LastSeen() time.Time {
 		return time.Time{}
 	}
 	return v.r.LastSeen
+}
+
+func (v K8sClusterView) AgentVersion() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.AgentVersion
+}
+
+func (v K8sClusterView) IntervalSeconds() int {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.IntervalSeconds
 }
 
 func (v K8sClusterView) ChildCount() int {
@@ -2194,6 +2215,33 @@ func (v PodView) LastSeen() time.Time {
 		return time.Time{}
 	}
 	return v.r.LastSeen
+}
+
+func (v PodView) PodReason() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.PodReason
+}
+
+func (v PodView) PodMessage() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.PodMessage
+}
+
+func (v PodView) PodContainers() []K8sPodContainer {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return nil
+	}
+	src := v.r.Kubernetes.PodContainers
+	if len(src) == 0 {
+		return nil
+	}
+	out := make([]K8sPodContainer, len(src))
+	copy(out, src)
+	return out
 }
 
 func (v PodView) ParentID() string {

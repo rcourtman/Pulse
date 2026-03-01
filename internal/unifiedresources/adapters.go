@@ -998,11 +998,14 @@ func resourceFromKubernetesCluster(cluster models.KubernetesCluster, linkedHosts
 			ClusterID:          cluster.ID,
 			ClusterName:        clusterName,
 			SourceName:         cluster.Name,
+			SourceStatus:       cluster.Status,
 			AgentID:            cluster.AgentID,
 			Context:            cluster.Context,
 			Server:             cluster.Server,
 			Version:            cluster.Version,
 			PendingUninstall:   cluster.PendingUninstall,
+			AgentVersion:       cluster.AgentVersion,
+			IntervalSeconds:    cluster.IntervalSeconds,
 			MetricCapabilities: cloneKubernetesMetricCapabilities(capabilities),
 		},
 		Tags: nil,
@@ -1093,16 +1096,19 @@ func resourceFromKubernetesPod(cluster models.KubernetesCluster, pod models.Kube
 		UpdatedAt:  now,
 		Metrics:    metrics,
 		Kubernetes: &K8sData{
-			ClusterID:   cluster.ID,
-			ClusterName: clusterName,
-			AgentID:     cluster.AgentID,
-			Context:     cluster.Context,
-			Server:      cluster.Server,
-			Version:     cluster.Version,
-			Namespace:   pod.Namespace,
-			PodUID:      pod.UID,
-			NodeName:    pod.NodeName,
-			PodPhase:    pod.Phase,
+			ClusterID:     cluster.ID,
+			ClusterName:   clusterName,
+			AgentID:       cluster.AgentID,
+			Context:       cluster.Context,
+			Server:        cluster.Server,
+			Version:       cluster.Version,
+			Namespace:     pod.Namespace,
+			PodUID:        pod.UID,
+			NodeName:      pod.NodeName,
+			PodPhase:      pod.Phase,
+			PodReason:     pod.Reason,
+			PodMessage:    pod.Message,
+			PodContainers: cloneK8sPodContainers(pod.Containers),
 			UptimeSeconds: func() int64 {
 				if pod.StartTime != nil {
 					start := pod.StartTime.UTC()
@@ -1183,6 +1189,25 @@ func kubernetesClusterDisplayName(cluster models.KubernetesCluster) string {
 		return v
 	}
 	return strings.TrimSpace(cluster.ID)
+}
+
+func cloneK8sPodContainers(in []models.KubernetesPodContainer) []K8sPodContainer {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]K8sPodContainer, len(in))
+	for i, c := range in {
+		out[i] = K8sPodContainer{
+			Name:         c.Name,
+			Image:        c.Image,
+			Ready:        c.Ready,
+			RestartCount: c.RestartCount,
+			State:        c.State,
+			Reason:       c.Reason,
+			Message:      c.Message,
+		}
+	}
+	return out
 }
 
 func cloneLabelMap(in map[string]string) map[string]string {
