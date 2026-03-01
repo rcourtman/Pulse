@@ -162,7 +162,7 @@ type legacyStateRatchet struct {
 // These represent legacy nil-fallback paths that are dead code when
 // ReadState is wired. Each number must only decrease over time.
 //
-// Last updated: 2026-03-01 (total state.*: 135, GetState: 27).
+// Last updated: 2026-03-01 (total state.*: 112, GetState: 27).
 // SRC-03u: Migrated ai/chat/context_prefetch.go from stateProvider.GetState()+state.ResolveResource
 // to unifiedresources.ResolveResource(ReadState, name). Removed stateProvider dependency entirely.
 // ContextPrefetcher now uses ReadState as sole data source. Delta: GetState -1.
@@ -243,15 +243,21 @@ type legacyStateRatchet struct {
 // call itself remains (it's a real legacy access). ActiveAlerts, RecentlyResolved, and
 // PVEBackups accesses are not ratchet-tracked so only Nodes/VMs/Containers change.
 // Delta: state.VMs -2, state.Containers -2, state.Nodes -2.
+// SRC-04d: Renamed `state` parameter to `snap` in patrol_run.go filterStateByScope,
+// shouldResolveAlert, getCurrentMetricValue, isResourceOnline, askAIAboutAlert,
+// getResourceCurrentState. All 23 ratchet-tracked accesses were false positives from
+// function parameters named `state`, not real legacy state accesses.
+// Delta: state.VMs -4, state.Containers -4, state.Nodes -4, state.DockerHosts -4,
+// state.Storage -4, state.PBSInstances -1, state.Hosts -1, state.KubernetesClusters -1.
 var legacyStateRatchets = []legacyStateRatchet{
-	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 16, "ReadState.VMs()"},
-	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 16, "ReadState.Containers()"},
-	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 18, "ReadState.Nodes()"},
-	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 17, "ReadState.DockerHosts()"},
-	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 4, "ReadState.Hosts()"},
-	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 11, "ReadState.StoragePools()"},
-	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 5, "ReadState.K8sClusters()"},
-	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 3, "ReadState.PBSInstances()"},
+	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 12, "ReadState.VMs()"},
+	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 12, "ReadState.Containers()"},
+	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 14, "ReadState.Nodes()"},
+	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 13, "ReadState.DockerHosts()"},
+	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 3, "ReadState.Hosts()"},
+	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 7, "ReadState.StoragePools()"},
+	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 4, "ReadState.K8sClusters()"},
+	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 2, "ReadState.PBSInstances()"},
 	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 0, "ReadState.PMGInstances()"},
 
 	// GetState() calls — consumer packages must use ReadState interface

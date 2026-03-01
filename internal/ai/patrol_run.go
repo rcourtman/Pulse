@@ -941,7 +941,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 }
 
 // filterStateByScope filters a StateSnapshot to only include resources matching the scope.
-func (p *PatrolService) filterStateByScope(state models.StateSnapshot, scope PatrolScope) models.StateSnapshot {
+func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope PatrolScope) models.StateSnapshot {
 	// Build lookup sets for efficient matching
 	resourceIDSet := make(map[string]bool)
 	for _, id := range scope.ResourceIDs {
@@ -1022,30 +1022,30 @@ func (p *PatrolService) filterStateByScope(state models.StateSnapshot, scope Pat
 	}
 
 	filtered := models.StateSnapshot{
-		LastUpdate:       state.LastUpdate,
-		ConnectionHealth: state.ConnectionHealth,
-		Stats:            state.Stats,
-		ActiveAlerts:     state.ActiveAlerts,
-		RecentlyResolved: state.RecentlyResolved,
+		LastUpdate:       snap.LastUpdate,
+		ConnectionHealth: snap.ConnectionHealth,
+		Stats:            snap.Stats,
+		ActiveAlerts:     snap.ActiveAlerts,
+		RecentlyResolved: snap.RecentlyResolved,
 	}
 
 	// Filter each resource type
-	for _, n := range state.Nodes {
+	for _, n := range snap.Nodes {
 		if matchesType("node") && matchesID(n.ID, n.Name) {
 			filtered.Nodes = append(filtered.Nodes, n)
 		}
 	}
-	for _, vm := range state.VMs {
+	for _, vm := range snap.VMs {
 		if matchesType("vm") && matchesID(vm.ID, vm.Name) {
 			filtered.VMs = append(filtered.VMs, vm)
 		}
 	}
-	for _, c := range state.Containers {
+	for _, c := range snap.Containers {
 		if matchesType("system-container") && matchesID(c.ID, c.Name) {
 			filtered.Containers = append(filtered.Containers, c)
 		}
 	}
-	for _, d := range state.DockerHosts {
+	for _, d := range snap.DockerHosts {
 		if !matchesType("docker", "docker_host", "docker_container") {
 			continue
 		}
@@ -1081,12 +1081,12 @@ func (p *PatrolService) filterStateByScope(state models.StateSnapshot, scope Pat
 			filtered.DockerHosts = append(filtered.DockerHosts, hostCopy)
 		}
 	}
-	for _, s := range state.Storage {
+	for _, s := range snap.Storage {
 		if matchesType("storage") && matchesID(s.ID, s.Name) {
 			filtered.Storage = append(filtered.Storage, s)
 		}
 	}
-	for _, pbs := range state.PBSInstances {
+	for _, pbs := range snap.PBSInstances {
 		if !matchesType("pbs", "pbs_datastore", "pbs_job") {
 			continue
 		}
@@ -1128,12 +1128,12 @@ func (p *PatrolService) filterStateByScope(state models.StateSnapshot, scope Pat
 			filtered.PBSInstances = append(filtered.PBSInstances, pbs)
 		}
 	}
-	for _, h := range state.Hosts {
+	for _, h := range snap.Hosts {
 		if matchesType("host", "host_raid", "host_sensor") && matchesID(h.ID, h.DisplayName, h.Hostname) {
 			filtered.Hosts = append(filtered.Hosts, h)
 		}
 	}
-	for _, k := range state.KubernetesClusters {
+	for _, k := range snap.KubernetesClusters {
 		clusterName := k.CustomDisplayName
 		if clusterName == "" {
 			clusterName = k.DisplayName
@@ -1579,12 +1579,12 @@ func (p *PatrolService) reviewAndResolveAlerts(ctx context.Context, state models
 
 // shouldResolveAlert determines if an alert should be auto-resolved based on current state.
 // Returns (shouldResolve, reason)
-func (p *PatrolService) shouldResolveAlert(ctx context.Context, alert AlertInfo, state models.StateSnapshot, aiService *Service) (bool, string) {
+func (p *PatrolService) shouldResolveAlert(ctx context.Context, alert AlertInfo, snap models.StateSnapshot, aiService *Service) (bool, string) {
 	// First, try smart heuristic checks based on alert type
 	switch alert.Type {
 	case "usage": // Storage usage alert
-		// Find the storage in current state
-		for _, storage := range state.Storage {
+		// Find the storage in current snapshot
+		for _, storage := range snap.Storage {
 			if storage.ID == alert.ResourceID {
 				// If current usage is below the threshold (with some margin), resolve
 				if storage.Usage < alert.Threshold*0.95 { // 5% margin below threshold
@@ -1595,7 +1595,7 @@ func (p *PatrolService) shouldResolveAlert(ctx context.Context, alert AlertInfo,
 				return false, ""
 			}
 		}
-		// Storage not found in current state - might have been removed
+		// Storage not found in current snapshot - might have been removed
 		// Resolve after 24 hours if resource is gone
 		if time.Since(alert.StartTime) > 24*time.Hour {
 			return true, "resource no longer present in infrastructure"
@@ -1603,7 +1603,7 @@ func (p *PatrolService) shouldResolveAlert(ctx context.Context, alert AlertInfo,
 
 	case "cpu", "memory": // Resource utilization alerts
 		// Check if this is a node, VM, container, or docker container
-		currentValue := p.getCurrentMetricValue(alert, state)
+		currentValue := p.getCurrentMetricValue(alert, snap)
 		if currentValue >= 0 && currentValue < alert.Threshold*0.95 {
 			return true, fmt.Sprintf("%s dropped from %.1f%% to %.1f%% (threshold: %.1f%%)",
 				alert.Type, alert.Value, currentValue, alert.Threshold)
@@ -1611,24 +1611,24 @@ func (p *PatrolService) shouldResolveAlert(ctx context.Context, alert AlertInfo,
 
 	case "offline", "stopped", "docker-offline":
 		// Check if the resource is now online
-		if p.isResourceOnline(alert, state) {
+		if p.isResourceOnline(alert, snap) {
 			return true, "resource is now online/running"
 		}
 	}
 
 	// For complex cases or when heuristics don't apply, use AI judgment if available
 	if aiService != nil && aiService.IsEnabled() {
-		return p.askAIAboutAlert(ctx, alert, state, aiService)
+		return p.askAIAboutAlert(ctx, alert, snap, aiService)
 	}
 
 	return false, ""
 }
 
 // getCurrentMetricValue gets the current value of the metric that triggered the alert
-func (p *PatrolService) getCurrentMetricValue(alert AlertInfo, state models.StateSnapshot) float64 {
+func (p *PatrolService) getCurrentMetricValue(alert AlertInfo, snap models.StateSnapshot) float64 {
 	switch alert.ResourceType {
 	case "node":
-		for _, node := range state.Nodes {
+		for _, node := range snap.Nodes {
 			if node.ID == alert.ResourceID || node.Name == alert.ResourceName {
 				if alert.Type == "cpu" {
 					return node.CPU * 100
@@ -1638,7 +1638,7 @@ func (p *PatrolService) getCurrentMetricValue(alert AlertInfo, state models.Stat
 			}
 		}
 	case "guest", "vm":
-		for _, vm := range state.VMs {
+		for _, vm := range snap.VMs {
 			if vm.ID == alert.ResourceID || vm.Name == alert.ResourceName {
 				if alert.Type == "cpu" {
 					return vm.CPU * 100
@@ -1648,7 +1648,7 @@ func (p *PatrolService) getCurrentMetricValue(alert AlertInfo, state models.Stat
 			}
 		}
 	case "system-container", "container":
-		for _, ct := range state.Containers {
+		for _, ct := range snap.Containers {
 			if ct.ID == alert.ResourceID || ct.Name == alert.ResourceName {
 				if alert.Type == "cpu" {
 					return ct.CPU * 100
@@ -1658,7 +1658,7 @@ func (p *PatrolService) getCurrentMetricValue(alert AlertInfo, state models.Stat
 			}
 		}
 	case "docker":
-		for _, host := range state.DockerHosts {
+		for _, host := range snap.DockerHosts {
 			for _, container := range host.Containers {
 				if container.ID == alert.ResourceID || container.Name == alert.ResourceName {
 					if alert.Type == "cpu" {
@@ -1670,7 +1670,7 @@ func (p *PatrolService) getCurrentMetricValue(alert AlertInfo, state models.Stat
 			}
 		}
 	case "Storage":
-		for _, storage := range state.Storage {
+		for _, storage := range snap.Storage {
 			if storage.ID == alert.ResourceID || storage.Name == alert.ResourceName {
 				return storage.Usage
 			}
@@ -1680,28 +1680,28 @@ func (p *PatrolService) getCurrentMetricValue(alert AlertInfo, state models.Stat
 }
 
 // isResourceOnline checks if a resource that triggered an offline alert is now online
-func (p *PatrolService) isResourceOnline(alert AlertInfo, state models.StateSnapshot) bool {
+func (p *PatrolService) isResourceOnline(alert AlertInfo, snap models.StateSnapshot) bool {
 	switch alert.ResourceType {
 	case "node":
-		for _, node := range state.Nodes {
+		for _, node := range snap.Nodes {
 			if (node.ID == alert.ResourceID || node.Name == alert.ResourceName) && node.Status == "online" {
 				return true
 			}
 		}
 	case "guest", "vm":
-		for _, vm := range state.VMs {
+		for _, vm := range snap.VMs {
 			if (vm.ID == alert.ResourceID || vm.Name == alert.ResourceName) && vm.Status == "running" {
 				return true
 			}
 		}
 	case "system-container", "container":
-		for _, ct := range state.Containers {
+		for _, ct := range snap.Containers {
 			if (ct.ID == alert.ResourceID || ct.Name == alert.ResourceName) && ct.Status == "running" {
 				return true
 			}
 		}
 	case "docker":
-		for _, host := range state.DockerHosts {
+		for _, host := range snap.DockerHosts {
 			for _, container := range host.Containers {
 				if (container.ID == alert.ResourceID || container.Name == alert.ResourceName) && container.State == "running" {
 					return true
@@ -1713,7 +1713,7 @@ func (p *PatrolService) isResourceOnline(alert AlertInfo, state models.StateSnap
 }
 
 // askAIAboutAlert uses the AI to determine if an alert should be resolved
-func (p *PatrolService) askAIAboutAlert(ctx context.Context, alert AlertInfo, state models.StateSnapshot, aiService *Service) (bool, string) {
+func (p *PatrolService) askAIAboutAlert(ctx context.Context, alert AlertInfo, snap models.StateSnapshot, aiService *Service) (bool, string) {
 	// Build a focused prompt for the AI
 	prompt := fmt.Sprintf(`Review this alert and determine if it should be auto-resolved based on current state.
 
@@ -1735,7 +1735,7 @@ Respond with ONLY one of:
 - KEEP: <brief reason>`,
 		alert.ID, alert.Type, alert.ResourceName, alert.ResourceType,
 		alert.Message, alert.Value, alert.Threshold, alert.Duration,
-		p.getResourceCurrentState(alert, state))
+		p.getResourceCurrentState(alert, snap))
 
 	// Use a quick, low-cost AI call
 	response, err := aiService.QuickAnalysis(ctx, prompt)
@@ -1757,17 +1757,17 @@ Respond with ONLY one of:
 }
 
 // getResourceCurrentState returns a description of the resource's current state
-func (p *PatrolService) getResourceCurrentState(alert AlertInfo, state models.StateSnapshot) string {
+func (p *PatrolService) getResourceCurrentState(alert AlertInfo, snap models.StateSnapshot) string {
 	switch alert.ResourceType {
 	case "Storage":
-		for _, storage := range state.Storage {
+		for _, storage := range snap.Storage {
 			if storage.ID == alert.ResourceID || storage.Name == alert.ResourceName {
 				return fmt.Sprintf("Storage '%s': %.1f%% used, status: %s", storage.Name, storage.Usage, storage.Status)
 			}
 		}
 		return "Storage not found in current state (may have been removed)"
 	case "node":
-		for _, node := range state.Nodes {
+		for _, node := range snap.Nodes {
 			if node.ID == alert.ResourceID || node.Name == alert.ResourceName {
 				return fmt.Sprintf("Node '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
 					node.Name, node.CPU, node.Memory.Usage, node.Status)
@@ -1775,7 +1775,7 @@ func (p *PatrolService) getResourceCurrentState(alert AlertInfo, state models.St
 		}
 		return "Node not found in current state"
 	case "guest", "vm":
-		for _, vm := range state.VMs {
+		for _, vm := range snap.VMs {
 			if vm.ID == alert.ResourceID || vm.Name == alert.ResourceName {
 				return fmt.Sprintf("VM '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
 					vm.Name, vm.CPU, vm.Memory.Usage, vm.Status)
@@ -1783,7 +1783,7 @@ func (p *PatrolService) getResourceCurrentState(alert AlertInfo, state models.St
 		}
 		return "VM not found in current state"
 	case "system-container", "container":
-		for _, ct := range state.Containers {
+		for _, ct := range snap.Containers {
 			if ct.ID == alert.ResourceID || ct.Name == alert.ResourceName {
 				return fmt.Sprintf("Container '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
 					ct.Name, ct.CPU, ct.Memory.Usage, ct.Status)
@@ -1791,7 +1791,7 @@ func (p *PatrolService) getResourceCurrentState(alert AlertInfo, state models.St
 		}
 		return "Container not found in current state"
 	case "docker":
-		for _, host := range state.DockerHosts {
+		for _, host := range snap.DockerHosts {
 			for _, container := range host.Containers {
 				if container.ID == alert.ResourceID || container.Name == alert.ResourceName {
 					return fmt.Sprintf("Docker container '%s': CPU %.1f%%, Memory %.1f%%, State: %s",
