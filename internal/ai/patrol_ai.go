@@ -214,7 +214,7 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 
 	// Gather guest intelligence (discovery + reachability) before building seed context
 	intelCtx, intelCancel := context.WithTimeout(ctx, 5*time.Second)
-	guestIntel := p.gatherGuestIntelligence(intelCtx, state)
+	guestIntel := p.gatherGuestIntelligence(intelCtx)
 	intelCancel()
 
 	// Phase 1: Deterministic triage

@@ -408,8 +408,7 @@ func TestGatherGuestIntelligence_ReadStatePath(t *testing.T) {
 	}
 	ps.SetReadState(rs)
 
-	// Pass empty state — ReadState should be used instead
-	intel := ps.gatherGuestIntelligence(context.Background(), models.StateSnapshot{})
+	intel := ps.gatherGuestIntelligence(context.Background())
 
 	// Expect 3 entries: 2 VMs (template skipped) + 1 container
 	if len(intel) != 3 {
@@ -452,7 +451,7 @@ func TestGatherGuestIntelligence_ReadStateReachability(t *testing.T) {
 	}
 	ps.SetReadState(rs)
 
-	intel := ps.gatherGuestIntelligence(context.Background(), models.StateSnapshot{})
+	intel := ps.gatherGuestIntelligence(context.Background())
 
 	if len(intel) != 2 {
 		t.Fatalf("expected 2 entries, got %d", len(intel))
@@ -488,7 +487,7 @@ func TestGatherGuestIntelligence_ReadStateInstanceFallback(t *testing.T) {
 	}
 	ps.SetReadState(rs)
 
-	intel := ps.gatherGuestIntelligence(context.Background(), models.StateSnapshot{})
+	intel := ps.gatherGuestIntelligence(context.Background())
 
 	if gi := intel["qemu/100"]; gi == nil || gi.ServiceName != "Redis" {
 		t.Fatalf("expected Redis service from instance lookup, got: %+v", gi)

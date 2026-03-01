@@ -195,9 +195,11 @@ type legacyStateRatchet struct {
 // SRC-03o delta: GetState -2, state.VMs -2, state.Containers -2, state.Nodes -1,
 // state.DockerHosts -1, state.Hosts -1, state.PBSInstances -1.
 // Ceilings also reflect in-flight SRC-03l (servicediscovery migration) reductions.
+// SRC-03p: Removed gatherGuestsFromSnapshot legacy fallback from patrol_intelligence.go.
+// ReadState is now the sole path for gatherGuestIntelligence (state.VMs -1, state.Containers -1).
 var legacyStateRatchets = []legacyStateRatchet{
-	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 37, "ReadState.VMs()"},
-	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 37, "ReadState.Containers()"},
+	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 36, "ReadState.VMs()"},
+	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 36, "ReadState.Containers()"},
 	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 35, "ReadState.Nodes()"},
 	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 27, "ReadState.DockerHosts()"},
 	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 15, "ReadState.Hosts()"},

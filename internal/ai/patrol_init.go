@@ -412,7 +412,8 @@ func (p *PatrolService) SetUnifiedResourceProvider(urp UnifiedResourceProvider) 
 }
 
 // SetReadState sets the typed ReadState view provider for resource iteration.
-// When nil, patrol will fall back to legacy models.StateSnapshot field iteration.
+// ReadState is required for guest intelligence gathering — when nil,
+// gatherGuestIntelligence returns an empty map.
 func (p *PatrolService) SetReadState(rs unifiedresources.ReadState) {
 	p.mu.Lock()
 	defer p.mu.Unlock()

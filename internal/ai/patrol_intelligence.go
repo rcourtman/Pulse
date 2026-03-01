@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
@@ -53,8 +52,20 @@ type guestIPInfo struct {
 // (e.g. "qemu/100" or "lxc/101"). It loads discovery data for service identity
 // and probes reachability via host agents. The entire operation is best-effort
 // and capped at 5 seconds — errors are logged but never block patrol.
-func (p *PatrolService) gatherGuestIntelligence(ctx context.Context, state models.StateSnapshot) map[string]*GuestIntelligence {
+//
+// Requires ReadState to be wired — returns an empty map if it is not.
+func (p *PatrolService) gatherGuestIntelligence(ctx context.Context) map[string]*GuestIntelligence {
 	intel := make(map[string]*GuestIntelligence)
+
+	// ReadState is required — return empty if not wired.
+	p.mu.RLock()
+	rs := p.readState
+	p.mu.RUnlock()
+
+	if rs == nil {
+		log.Warn().Msg("AI Patrol: ReadState not wired, skipping guest intelligence gathering")
+		return intel
+	}
 
 	// Phase 1: Load discovery data for service identity
 	p.mu.RLock()
@@ -83,16 +94,7 @@ func (p *PatrolService) gatherGuestIntelligence(ctx context.Context, state model
 	// Also collect running guests with IPs grouped by node for reachability probing.
 	nodeGuests := make(map[string][]guestIPInfo) // node name -> guests with IPs
 
-	// Prefer ReadState typed views; fall back to state snapshot if ReadState is not wired.
-	p.mu.RLock()
-	rs := p.readState
-	p.mu.RUnlock()
-
-	if rs != nil {
-		gatherGuestsFromReadState(rs, discoveryIndex, intel, nodeGuests)
-	} else {
-		gatherGuestsFromSnapshot(state, discoveryIndex, intel, nodeGuests)
-	}
+	gatherGuestsFromReadState(rs, discoveryIndex, intel, nodeGuests)
 
 	// Phase 3: Reachability probing via host agents
 	p.mu.RLock()
@@ -262,81 +264,6 @@ func gatherGuestsFromReadState(
 			for _, ip := range ct.IPAddresses() {
 				nodeGuests[ct.Node()] = append(nodeGuests[ct.Node()], guestIPInfo{
 					guestID: sourceID,
-					ip:      ip,
-				})
-			}
-		}
-	}
-}
-
-// gatherGuestsFromSnapshot iterates VMs and Containers via legacy StateSnapshot.
-// This is the fallback path used when ReadState is not wired.
-func gatherGuestsFromSnapshot(
-	state models.StateSnapshot,
-	discoveryIndex map[discoveryKey]*servicediscovery.ResourceDiscovery,
-	intel map[string]*GuestIntelligence,
-	nodeGuests map[string][]guestIPInfo,
-) {
-	for _, vm := range state.VMs {
-		if vm.Template {
-			continue
-		}
-		gi := &GuestIntelligence{
-			Name:      vm.Name,
-			GuestType: "vm",
-		}
-
-		vmidStr := strconv.Itoa(vm.VMID)
-		if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeVM, vm.Node, vmidStr}]; ok {
-			gi.ServiceName = d.ServiceName
-			gi.ServiceType = d.ServiceType
-		}
-		if gi.ServiceName == "" && vm.Instance != "" && vm.Instance != vm.Node {
-			if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeVM, vm.Instance, vmidStr}]; ok {
-				gi.ServiceName = d.ServiceName
-				gi.ServiceType = d.ServiceType
-			}
-		}
-
-		intel[vm.ID] = gi
-
-		if vm.Status == "running" && len(vm.IPAddresses) > 0 {
-			for _, ip := range vm.IPAddresses {
-				nodeGuests[vm.Node] = append(nodeGuests[vm.Node], guestIPInfo{
-					guestID: vm.ID,
-					ip:      ip,
-				})
-			}
-		}
-	}
-
-	for _, ct := range state.Containers {
-		if ct.Template {
-			continue
-		}
-		gi := &GuestIntelligence{
-			Name:      ct.Name,
-			GuestType: "system-container",
-		}
-
-		vmidStr := strconv.Itoa(ct.VMID)
-		if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeSystemContainer, ct.Node, vmidStr}]; ok {
-			gi.ServiceName = d.ServiceName
-			gi.ServiceType = d.ServiceType
-		}
-		if gi.ServiceName == "" && ct.Instance != "" && ct.Instance != ct.Node {
-			if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeSystemContainer, ct.Instance, vmidStr}]; ok {
-				gi.ServiceName = d.ServiceName
-				gi.ServiceType = d.ServiceType
-			}
-		}
-
-		intel[ct.ID] = gi
-
-		if ct.Status == "running" && len(ct.IPAddresses) > 0 {
-			for _, ip := range ct.IPAddresses {
-				nodeGuests[ct.Node] = append(nodeGuests[ct.Node], guestIPInfo{
-					guestID: ct.ID,
 					ip:      ip,
 				})
 			}
