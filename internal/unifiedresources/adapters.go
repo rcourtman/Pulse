@@ -27,6 +27,7 @@ func resourceFromProxmoxNode(node models.Node) (Resource, ResourceIdentity) {
 		SourceID:          node.ID,
 		NodeName:          node.Name,
 		ClusterName:       node.ClusterName,
+		Instance:          node.Instance,
 		Temperature:       maxNodeTemp(node.Temperature),
 		PVEVersion:        node.PVEVersion,
 		KernelVersion:     node.KernelVersion,

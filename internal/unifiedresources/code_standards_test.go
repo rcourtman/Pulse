@@ -211,16 +211,21 @@ type legacyStateRatchet struct {
 // SRC-03t: Migrated infradiscovery/service.go DiscoverApplications from GetState+state.DockerHosts
 // to ReadState typed accessors. RunDiscovery now prefers ReadState.DockerHosts()/DockerContainers()
 // when wired; legacy GetState fallback kept for backward compat. Delta: state.DockerHosts -2.
+// SRC-03v: Migrated config_node_handlers.go handleGetNodes mock-mode branch from GetState() to
+// ReadState typed accessors (Nodes, PBSInstances, PMGInstances). Legacy fallback path uses `snap`
+// variable (not `state`) so only state.* ceilings decrease. GetState call count unchanged
+// because the legacy path still calls monitor.GetState().
+// Delta: state.Nodes -1, state.PBSInstances -1, state.PMGInstances -1.
 var legacyStateRatchets = []legacyStateRatchet{
 	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 29, "ReadState.VMs()"},
 	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 29, "ReadState.Containers()"},
-	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 29, "ReadState.Nodes()"},
+	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 28, "ReadState.Nodes()"},
 	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 18, "ReadState.DockerHosts()"},
 	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 10, "ReadState.Hosts()"},
 	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 16, "ReadState.StoragePools()"},
 	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 5, "ReadState.K8sClusters()"},
-	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 5, "ReadState.PBSInstances()"},
-	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 2, "ReadState.PMGInstances()"},
+	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 4, "ReadState.PBSInstances()"},
+	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 1, "ReadState.PMGInstances()"},
 
 	// GetState() calls — consumer packages must use ReadState interface
 	{regexp.MustCompile(`\.GetState\(\)`), ".GetState()", 27, "ReadState interface"},

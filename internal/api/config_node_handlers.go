@@ -12,7 +12,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
@@ -26,18 +25,68 @@ func (h *ConfigHandlers) handleGetNodes(w http.ResponseWriter, r *http.Request) 
 		// Return mock nodes for settings page
 		mockNodes := []NodeResponse{}
 
-		// Get mock state to extract node information
-		state := h.getMonitor(r.Context()).GetState()
+		// Get ReadState from the monitor to extract node information.
+		// Fall back to GetState() if ReadState is nil or not yet populated
+		// (e.g., during startup before the first snapshot is ingested).
+		monitor := h.getMonitor(r.Context())
+		readState := monitor.GetUnifiedReadState()
+		useReadState := readState != nil &&
+			(len(readState.Nodes()) > 0 || len(readState.PBSInstances()) > 0 || len(readState.PMGInstances()) > 0)
 
-		// Get all cluster nodes and standalone nodes
-		var clusterNodes []models.Node
-		var standaloneNodes []models.Node
+		type mockNode struct {
+			Name     string
+			Instance string
+			Status   string
+		}
+		type mockPBS struct {
+			Name string
+			Host string
+		}
+		type mockPMG struct {
+			Name string
+			Host string
+		}
 
-		for _, node := range state.Nodes {
-			if node.Instance == "mock-cluster" {
-				clusterNodes = append(clusterNodes, node)
-			} else {
-				standaloneNodes = append(standaloneNodes, node)
+		var clusterNodes []mockNode
+		var standaloneNodes []mockNode
+		var pbsEntries []mockPBS
+		var pmgEntries []mockPMG
+
+		if useReadState {
+			for _, nv := range readState.Nodes() {
+				mn := mockNode{
+					Name:     nv.Name(),
+					Instance: nv.Instance(),
+					Status:   string(nv.Status()),
+				}
+				if mn.Instance == "mock-cluster" {
+					clusterNodes = append(clusterNodes, mn)
+				} else {
+					standaloneNodes = append(standaloneNodes, mn)
+				}
+			}
+			for _, pbsView := range readState.PBSInstances() {
+				pbsEntries = append(pbsEntries, mockPBS{Name: pbsView.Name(), Host: pbsView.Hostname()})
+			}
+			for _, pmgView := range readState.PMGInstances() {
+				pmgEntries = append(pmgEntries, mockPMG{Name: pmgView.Name(), Host: pmgView.Hostname()})
+			}
+		} else {
+			// Legacy fallback: ReadState not yet populated.
+			snap := monitor.GetState()
+			for _, node := range snap.Nodes {
+				mn := mockNode{Name: node.Name, Instance: node.Instance, Status: node.Status}
+				if mn.Instance == "mock-cluster" {
+					clusterNodes = append(clusterNodes, mn)
+				} else {
+					standaloneNodes = append(standaloneNodes, mn)
+				}
+			}
+			for _, pbs := range snap.PBSInstances {
+				pbsEntries = append(pbsEntries, mockPBS{Name: pbs.Name, Host: pbs.Host})
+			}
+			for _, pmg := range snap.PMGInstances {
+				pmgEntries = append(pmgEntries, mockPMG{Name: pmg.Name, Host: pmg.Host})
 			}
 		}
 
@@ -105,7 +154,7 @@ func (h *ConfigHandlers) handleGetNodes(w http.ResponseWriter, r *http.Request) 
 		}
 
 		// Add mock PBS instances
-		for i, pbs := range state.PBSInstances {
+		for i, pbs := range pbsEntries {
 			pbsNode := NodeResponse{
 				ID:                 generateNodeID("pbs", i),
 				Type:               "pbs",
@@ -128,7 +177,7 @@ func (h *ConfigHandlers) handleGetNodes(w http.ResponseWriter, r *http.Request) 
 		}
 
 		// Add mock PMG instances
-		for i, pmg := range state.PMGInstances {
+		for i, pmg := range pmgEntries {
 			pmgNode := NodeResponse{
 				ID:          generateNodeID("pmg", i),
 				Type:        "pmg",
