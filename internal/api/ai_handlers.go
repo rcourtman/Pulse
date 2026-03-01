@@ -3566,11 +3566,36 @@ func normalizeRunCommandApprovalTarget(req AIRunCommandRequest) (string, string,
 	return targetType, targetID, nil
 }
 
+// maxGuestIDLength is the maximum allowed length for guest_id across all
+// knowledge endpoints, preventing abuse via oversized identifiers.
+const maxGuestIDLength = 256
+
+// sanitizeFilenameComponent strips characters unsafe for Content-Disposition
+// filenames. Only alphanumeric, hyphens, underscores, and dots are kept.
+func sanitizeFilenameComponent(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, c := range s {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' {
+			b.WriteRune(c)
+		}
+	}
+	result := b.String()
+	if result == "" {
+		return "export"
+	}
+	return result
+}
+
 // HandleGetGuestKnowledge returns all notes for a guest
 func (h *AISettingsHandler) HandleGetGuestKnowledge(w http.ResponseWriter, r *http.Request) {
 	guestID := r.URL.Query().Get("guest_id")
 	if guestID == "" {
 		http.Error(w, "guest_id is required", http.StatusBadRequest)
+		return
+	}
+	if len(guestID) > maxGuestIDLength {
+		http.Error(w, "guest_id too long", http.StatusBadRequest)
 		return
 	}
 
@@ -3605,6 +3630,10 @@ func (h *AISettingsHandler) HandleSaveGuestNote(w http.ResponseWriter, r *http.R
 		http.Error(w, "guest_id, category, title, and content are required", http.StatusBadRequest)
 		return
 	}
+	if len(req.GuestID) > maxGuestIDLength {
+		http.Error(w, "guest_id too long", http.StatusBadRequest)
+		return
+	}
 
 	if err := h.GetAIService(r.Context()).SaveGuestNote(req.GuestID, req.GuestName, req.GuestType, req.Category, req.Title, req.Content); err != nil {
 		http.Error(w, sanitizeErrorForClient(err, "Failed to save note"), http.StatusInternalServerError)
@@ -3631,6 +3660,10 @@ func (h *AISettingsHandler) HandleDeleteGuestNote(w http.ResponseWriter, r *http
 		http.Error(w, "guest_id and note_id are required", http.StatusBadRequest)
 		return
 	}
+	if len(req.GuestID) > maxGuestIDLength {
+		http.Error(w, "guest_id too long", http.StatusBadRequest)
+		return
+	}
 
 	if err := h.GetAIService(r.Context()).DeleteGuestNote(req.GuestID, req.NoteID); err != nil {
 		http.Error(w, sanitizeErrorForClient(err, "Failed to delete note"), http.StatusInternalServerError)
@@ -3648,6 +3681,10 @@ func (h *AISettingsHandler) HandleExportGuestKnowledge(w http.ResponseWriter, r 
 		http.Error(w, "guest_id is required", http.StatusBadRequest)
 		return
 	}
+	if len(guestID) > maxGuestIDLength {
+		http.Error(w, "guest_id too long", http.StatusBadRequest)
+		return
+	}
 
 	knowledge, err := h.GetAIService(r.Context()).GetGuestKnowledge(guestID)
 	if err != nil {
@@ -3655,9 +3692,13 @@ func (h *AISettingsHandler) HandleExportGuestKnowledge(w http.ResponseWriter, r 
 		return
 	}
 
+	// Sanitize guestID for Content-Disposition header to prevent header injection.
+	// Only allow alphanumeric, hyphens, underscores, and dots.
+	safeID := sanitizeFilenameComponent(guestID)
+
 	// Set headers for file download
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Disposition", "attachment; filename=\"pulse-notes-"+guestID+".json\"")
+	w.Header().Set("Content-Disposition", "attachment; filename=\"pulse-notes-"+safeID+".json\"")
 
 	if err := json.NewEncoder(w).Encode(knowledge); err != nil {
 		log.Error().Err(err).Msg("Failed to encode knowledge export")
@@ -3693,6 +3734,10 @@ func (h *AISettingsHandler) HandleImportGuestKnowledge(w http.ResponseWriter, r 
 
 	if importData.GuestID == "" {
 		http.Error(w, "guest_id is required in import data", http.StatusBadRequest)
+		return
+	}
+	if len(importData.GuestID) > maxGuestIDLength {
+		http.Error(w, "guest_id too long", http.StatusBadRequest)
 		return
 	}
 
@@ -3758,6 +3803,10 @@ func (h *AISettingsHandler) HandleClearGuestKnowledge(w http.ResponseWriter, r *
 
 	if req.GuestID == "" {
 		http.Error(w, "guest_id is required", http.StatusBadRequest)
+		return
+	}
+	if len(req.GuestID) > maxGuestIDLength {
+		http.Error(w, "guest_id too long", http.StatusBadRequest)
 		return
 	}
 
