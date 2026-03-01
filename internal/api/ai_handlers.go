@@ -5799,7 +5799,9 @@ func (h *AISettingsHandler) HandleGetAICostSummary(w http.ResponseWriter, r *htt
 	// Parse optional days query parameter (default: 30, max: 365)
 	days := 30
 	if daysStr := r.URL.Query().Get("days"); daysStr != "" {
-		if _, err := fmt.Sscanf(daysStr, "%d", &days); err == nil && days > 0 {
+		var parsed int
+		if _, err := fmt.Sscanf(daysStr, "%d", &parsed); err == nil && parsed > 0 {
+			days = parsed
 			if days > 365 {
 				days = 365
 			}
@@ -5812,8 +5814,12 @@ func (h *AISettingsHandler) HandleGetAICostSummary(w http.ResponseWriter, r *htt
 	} else {
 		summary = cost.Summary{
 			Days:           days,
+			RetentionDays:  cost.DefaultMaxDays,
+			EffectiveDays:  days,
 			PricingAsOf:    cost.PricingAsOf(),
 			ProviderModels: []cost.ProviderModelSummary{},
+			UseCases:       []cost.UseCaseSummary{},
+			Targets:        []cost.TargetSummary{},
 			DailyTotals:    []cost.DailySummary{},
 			Totals:         cost.ProviderModelSummary{Provider: "all"},
 		}

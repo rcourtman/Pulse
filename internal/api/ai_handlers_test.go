@@ -692,6 +692,230 @@ func TestHandleGetAICostSummary_MaxDays(t *testing.T) {
 	}
 }
 
+func TestHandleGetAICostSummary_NegativeDays(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary?days=-5", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetAICostSummary(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var resp struct {
+		Days int `json:"days"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Days != 30 {
+		t.Fatalf("expected Days=30 (default for negative), got %d", resp.Days)
+	}
+}
+
+func TestHandleGetAICostSummary_ZeroDays(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary?days=0", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetAICostSummary(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var resp struct {
+		Days int `json:"days"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Days != 30 {
+		t.Fatalf("expected Days=30 (default for zero), got %d", resp.Days)
+	}
+}
+
+func TestHandleGetAICostSummary_NonNumericDays(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary?days=abc", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetAICostSummary(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var resp struct {
+		Days int `json:"days"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Days != 30 {
+		t.Fatalf("expected Days=30 (default for non-numeric), got %d", resp.Days)
+	}
+}
+
+func TestHandleGetAICostSummary_ResponseShape(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetAICostSummary(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	requiredFields := []string{"days", "pricing_as_of", "provider_models", "use_cases", "targets", "daily_totals", "totals"}
+	for _, field := range requiredFields {
+		if _, ok := resp[field]; !ok {
+			t.Errorf("missing required field %q in response", field)
+		}
+	}
+
+	// Verify all array fields are arrays (not null)
+	arrayFields := []string{"provider_models", "use_cases", "targets", "daily_totals"}
+	for _, field := range arrayFields {
+		v, ok := resp[field]
+		if !ok {
+			t.Fatalf("missing %s", field)
+		}
+		if _, ok := v.([]interface{}); !ok {
+			t.Fatalf("expected %s to be array, got %T", field, v)
+		}
+	}
+}
+
+func TestHandleGetAICostSummary_NoService_InvalidDays(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	// Pass nil persistence so legacyAIService is nil — exercises the no-service stub path
+	handler := newTestAISettingsHandler(cfg, nil, nil)
+
+	tests := []struct {
+		name  string
+		query string
+		want  int
+	}{
+		{"negative", "?days=-5", 30},
+		{"zero", "?days=0", 30},
+		{"non-numeric", "?days=abc", 30},
+		{"over-max", "?days=1000", 365},
+		{"valid", "?days=7", 7},
+		{"default", "", 30},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary"+tt.query, nil)
+			rec := httptest.NewRecorder()
+			handler.HandleGetAICostSummary(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+			}
+
+			var resp struct {
+				Days int `json:"days"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if resp.Days != tt.want {
+				t.Fatalf("expected Days=%d, got %d", tt.want, resp.Days)
+			}
+		})
+	}
+}
+
+func TestHandleGetAICostSummary_NoService_ResponseShape(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	// nil persistence → nil legacyAIService → exercises no-service stub
+	handler := newTestAISettingsHandler(cfg, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetAICostSummary(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var resp struct {
+		Days           int                    `json:"days"`
+		RetentionDays  int                    `json:"retention_days"`
+		EffectiveDays  int                    `json:"effective_days"`
+		Truncated      bool                   `json:"truncated"`
+		PricingAsOf    string                 `json:"pricing_as_of"`
+		ProviderModels []interface{}          `json:"provider_models"`
+		UseCases       []interface{}          `json:"use_cases"`
+		Targets        []interface{}          `json:"targets"`
+		DailyTotals    []interface{}          `json:"daily_totals"`
+		Totals         map[string]interface{} `json:"totals"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	if resp.Days != 30 {
+		t.Errorf("expected Days=30, got %d", resp.Days)
+	}
+	if resp.RetentionDays != 365 {
+		t.Errorf("expected RetentionDays=365, got %d", resp.RetentionDays)
+	}
+	if resp.EffectiveDays != 30 {
+		t.Errorf("expected EffectiveDays=30, got %d", resp.EffectiveDays)
+	}
+	if resp.Truncated {
+		t.Errorf("expected Truncated=false, got true")
+	}
+
+	// All array fields must be non-null arrays in the stub response
+	if resp.ProviderModels == nil {
+		t.Error("provider_models is null, expected empty array")
+	}
+	if resp.UseCases == nil {
+		t.Error("use_cases is null, expected empty array")
+	}
+	if resp.Targets == nil {
+		t.Error("targets is null, expected empty array")
+	}
+	if resp.DailyTotals == nil {
+		t.Error("daily_totals is null, expected empty array")
+	}
+}
+
 // ========================================
 // HandleResetAICostHistory tests
 // ========================================
