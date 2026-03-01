@@ -18,7 +18,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -85,8 +84,7 @@ type AIHandler struct {
 	servicesMu        sync.RWMutex
 	serviceInitMu     sync.RWMutex
 	serviceInit       func(ctx context.Context, svc AIService)
-	stateProviders    map[string]AIStateProvider
-	stateProvidersMu  sync.RWMutex
+	legacyMonitor     *monitoring.Monitor
 	unifiedStoreMu    sync.RWMutex
 	unifiedStore      *unified.UnifiedStore
 	unifiedStores     map[string]*unified.UnifiedStore
@@ -123,7 +121,6 @@ func NewAIHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.MultiTenan
 		legacyPersistence: defaultPersistence,
 		agentServer:       agentServer,
 		services:          make(map[string]AIService),
-		stateProviders:    make(map[string]AIStateProvider),
 		unifiedStores:     make(map[string]*unified.UnifiedStore),
 	}
 }
@@ -342,9 +339,6 @@ func (h *AIHandler) RemoveTenantService(ctx context.Context, orgID string) error
 	}
 
 	delete(h.services, orgID)
-	h.stateProvidersMu.Lock()
-	delete(h.stateProviders, orgID)
-	h.stateProvidersMu.Unlock()
 	log.Info().Str("orgID", orgID).Msg("Removed AI service for tenant")
 	return nil
 }
@@ -386,9 +380,6 @@ func (h *AIHandler) initTenantService(ctx context.Context, orgID string) AIServi
 	if mtMonitor != nil {
 		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
 			chatCfg.StateProvider = m
-			h.stateProvidersMu.Lock()
-			h.stateProviders[orgID] = m
-			h.stateProvidersMu.Unlock()
 		}
 	}
 
@@ -492,14 +483,9 @@ func (h *AIHandler) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
 	h.mtMonitor = mtm
 }
 
-// AIStateProvider interface for infrastructure state.
-// Consumers should call ReadSnapshot() instead of the legacy GetState().
-type AIStateProvider interface {
-	ReadSnapshot() models.StateSnapshot
-}
-
-// Start initializes and starts the AI chat service
-func (h *AIHandler) Start(ctx context.Context, stateProvider AIStateProvider) error {
+// Start initializes and starts the AI chat service.
+// The monitor parameter provides state snapshots to the chat service (satisfies chat.StateProvider).
+func (h *AIHandler) Start(ctx context.Context, monitor *monitoring.Monitor) error {
 	log.Info().Msg("AIHandler.Start called")
 	aiCfg := h.loadAIConfig(ctx)
 	if aiCfg == nil {
@@ -519,19 +505,17 @@ func (h *AIHandler) Start(ctx context.Context, stateProvider AIStateProvider) er
 	if orgID == "" {
 		orgID = "default"
 	}
-	h.stateProvidersMu.Lock()
-	if stateProvider == nil {
-		delete(h.stateProviders, orgID)
-	} else {
-		h.stateProviders[orgID] = stateProvider
-	}
-	h.stateProvidersMu.Unlock()
+
+	// Cache the monitor for use by Restart().
+	h.stateMu.Lock()
+	h.legacyMonitor = monitor
+	h.stateMu.Unlock()
 
 	// Create chat config
 	chatCfg := chat.Config{
 		AIConfig:      aiCfg,
 		DataDir:       dataDir,
-		StateProvider: stateProvider,
+		StateProvider: monitor,
 		AgentServer:   h.agentServer,
 		ReadState:     h.readStateForOrg(orgID),
 		OrgID:         orgID,
@@ -592,21 +576,18 @@ func (h *AIHandler) Restart(ctx context.Context) error {
 		if newCfg != nil && newCfg.Enabled {
 			log.Info().Msg("Starting AI service via restart trigger")
 
-			// We need a state provider to start
-			// Prefer default-org provider when available.
-			var sp AIStateProvider
-			h.stateProvidersMu.RLock()
-			sp = h.stateProviders["default"]
-			if sp == nil {
-				for _, p := range h.stateProviders {
-					sp = p
-					break
-				}
+			// Recover the monitor: prefer cached legacy monitor, fall back to mtMonitor.
+			h.stateMu.RLock()
+			m := h.legacyMonitor
+			mtm := h.mtMonitor
+			h.stateMu.RUnlock()
+
+			if m == nil && mtm != nil {
+				m, _ = mtm.GetMonitor("default")
 			}
-			h.stateProvidersMu.RUnlock()
 
 			// Reuse start logic
-			return h.Start(ctx, sp)
+			return h.Start(ctx, m)
 		}
 		return nil // Not running and not enabled, nothing to do
 	}

@@ -12,7 +12,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
@@ -175,15 +174,6 @@ func (m *MockAIPersistence) LoadAIConfig() (*config.AIConfig, error) {
 
 func (m *MockAIPersistence) DataDir() string {
 	return m.dataDir
-}
-
-type MockAIStateProvider struct {
-	mock.Mock
-}
-
-func (m *MockAIStateProvider) ReadSnapshot() models.StateSnapshot {
-	args := m.Called()
-	return args.Get(0).(models.StateSnapshot)
 }
 
 func newTestAIHandler(cfg *config.Config, persistence AIPersistence, _ *agentexec.Server) *AIHandler {
@@ -1004,13 +994,10 @@ func TestRemoveTenantService(t *testing.T) {
 	mockSvc := new(MockAIService)
 	mockSvc.On("Stop", mock.Anything).Return(assert.AnError).Once()
 	h.services["acme"] = mockSvc
-	h.stateProviders["acme"] = &MockAIStateProvider{}
 
 	err := h.RemoveTenantService(context.Background(), "acme")
 	assert.NoError(t, err)
 	_, exists := h.services["acme"]
-	assert.False(t, exists)
-	_, exists = h.stateProviders["acme"]
 	assert.False(t, exists)
 
 	mockSvc.AssertExpectations(t)
