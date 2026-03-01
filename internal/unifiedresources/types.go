@@ -375,10 +375,11 @@ type DockerMountMeta struct {
 
 // DockerUpdateStatusMeta describes container image update status.
 type DockerUpdateStatusMeta struct {
-	UpdateAvailable bool   `json:"updateAvailable"`
-	CurrentDigest   string `json:"currentDigest,omitempty"`
-	LatestDigest    string `json:"latestDigest,omitempty"`
-	Error           string `json:"error,omitempty"`
+	UpdateAvailable bool      `json:"updateAvailable"`
+	CurrentDigest   string    `json:"currentDigest,omitempty"`
+	LatestDigest    string    `json:"latestDigest,omitempty"`
+	LastChecked     time.Time `json:"lastChecked,omitempty"`
+	Error           string    `json:"error,omitempty"`
 }
 
 // DockerServiceUpdateMeta captures service update progress.

@@ -893,6 +893,7 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 			UpdateAvailable: ct.UpdateStatus.UpdateAvailable,
 			CurrentDigest:   ct.UpdateStatus.CurrentDigest,
 			LatestDigest:    ct.UpdateStatus.LatestDigest,
+			LastChecked:     ct.UpdateStatus.LastChecked,
 			Error:           ct.UpdateStatus.Error,
 		}
 	}

@@ -2347,6 +2347,13 @@ func (v DockerContainerView) ContainerID() string {
 	return v.r.Docker.ContainerID
 }
 
+func (v DockerContainerView) HostSourceID() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.HostSourceID
+}
+
 func (v DockerContainerView) Image() string {
 	if v.r == nil || v.r.Docker == nil {
 		return ""

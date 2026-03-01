@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
@@ -13,12 +14,13 @@ import (
 // UpdateDetectionHandlers manages API endpoints for infrastructure update detection.
 // This is separate from UpdateHandlers which handles Pulse self-updates.
 type UpdateDetectionHandlers struct {
-	monitor *monitoring.Monitor
+	monitor   *monitoring.Monitor
+	readState unifiedresources.ReadState
 }
 
 // NewUpdateDetectionHandlers creates a new update detection handlers group.
-func NewUpdateDetectionHandlers(monitor *monitoring.Monitor) *UpdateDetectionHandlers {
-	return &UpdateDetectionHandlers{monitor: monitor}
+func NewUpdateDetectionHandlers(monitor *monitoring.Monitor, readState unifiedresources.ReadState) *UpdateDetectionHandlers {
+	return &UpdateDetectionHandlers{monitor: monitor, readState: readState}
 }
 
 // ContainerUpdateInfo represents a container with an available update
@@ -304,53 +306,61 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesForHost(w http.ResponseWr
 	}
 }
 
-// collectDockerUpdates gathers update information from Docker hosts
+// collectDockerUpdates gathers update information from Docker hosts via ReadState.
 func (h *UpdateDetectionHandlers) collectDockerUpdates(hostIDFilter string) []ContainerUpdateInfo {
+	if h.readState == nil {
+		return nil
+	}
+
+	// Build host source ID → display name map for lookups.
+	hostNames := make(map[string]string)
+	for _, dh := range h.readState.DockerHosts() {
+		hostNames[dh.HostSourceID()] = dh.Name()
+	}
+
 	var updates []ContainerUpdateInfo
+	for _, c := range h.readState.DockerContainers() {
+		hostSourceID := c.HostSourceID()
 
-	state := h.monitor.GetState()
-
-	for _, host := range state.DockerHosts {
-		// Filter by host ID if specified
-		if hostIDFilter != "" && host.ID != hostIDFilter {
+		// Filter by host ID if specified.
+		if hostIDFilter != "" && hostSourceID != hostIDFilter {
 			continue
 		}
 
-		for _, container := range host.Containers {
-			if container.UpdateStatus == nil {
-				continue
-			}
-
-			// Only include containers with updates available or errors
-			if !container.UpdateStatus.UpdateAvailable && container.UpdateStatus.Error == "" {
-				continue
-			}
-
-			update := ContainerUpdateInfo{
-				HostID:          host.ID,
-				HostName:        host.DisplayName,
-				ContainerID:     container.ID,
-				ContainerName:   strings.TrimPrefix(container.Name, "/"),
-				Image:           container.Image,
-				UpdateAvailable: container.UpdateStatus.UpdateAvailable,
-				ResourceType:    infraUpdateResourceTypeDocker,
-			}
-
-			if container.UpdateStatus.CurrentDigest != "" {
-				update.CurrentDigest = container.UpdateStatus.CurrentDigest
-			}
-			if container.UpdateStatus.LatestDigest != "" {
-				update.LatestDigest = container.UpdateStatus.LatestDigest
-			}
-			if !container.UpdateStatus.LastChecked.IsZero() {
-				update.LastChecked = container.UpdateStatus.LastChecked.Unix()
-			}
-			if container.UpdateStatus.Error != "" {
-				update.Error = container.UpdateStatus.Error
-			}
-
-			updates = append(updates, update)
+		us := c.UpdateStatus()
+		if us == nil {
+			continue
 		}
+
+		// Only include containers with updates available or errors.
+		if !us.UpdateAvailable && us.Error == "" {
+			continue
+		}
+
+		update := ContainerUpdateInfo{
+			HostID:          hostSourceID,
+			HostName:        hostNames[hostSourceID],
+			ContainerID:     c.ContainerID(),
+			ContainerName:   strings.TrimPrefix(c.Name(), "/"),
+			Image:           c.Image(),
+			UpdateAvailable: us.UpdateAvailable,
+			ResourceType:    infraUpdateResourceTypeDocker,
+		}
+
+		if us.CurrentDigest != "" {
+			update.CurrentDigest = us.CurrentDigest
+		}
+		if us.LatestDigest != "" {
+			update.LatestDigest = us.LatestDigest
+		}
+		if !us.LastChecked.IsZero() {
+			update.LastChecked = us.LastChecked.Unix()
+		}
+		if us.Error != "" {
+			update.Error = us.Error
+		}
+
+		updates = append(updates, update)
 	}
 
 	return updates

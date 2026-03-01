@@ -10,6 +10,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestHandleGetInfraUpdates(t *testing.T) {
@@ -274,9 +275,15 @@ func TestUpdateDetectionHandlers_WithMonitorState(t *testing.T) {
 		},
 	}
 
+	// Build ReadState via ResourceRegistry from the same state snapshot.
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		DockerHosts: state.DockerHosts,
+	})
+
 	monitor := &monitoring.Monitor{}
 	setUnexportedField(t, monitor, "state", state)
-	handler := NewUpdateDetectionHandlers(monitor)
+	handler := NewUpdateDetectionHandlers(monitor, registry)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/infra-updates?hostId=host-1", nil)
 	rr := httptest.NewRecorder()

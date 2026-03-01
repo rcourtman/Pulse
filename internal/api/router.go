@@ -409,7 +409,7 @@ func (r *Router) setupRoutes() {
 		r.config.DataPath,
 	)
 	stripeWebhookHandlers := r.stripeWebhookHandlers
-	infraUpdateHandlers := NewUpdateDetectionHandlers(r.monitor)
+	infraUpdateHandlers := NewUpdateDetectionHandlers(r.monitor, r.defaultReadState())
 	auditHandlers := NewAuditHandlers()
 
 	// System settings and API token management
