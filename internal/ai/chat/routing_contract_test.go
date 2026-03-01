@@ -74,7 +74,7 @@ func TestContract_MentionTriggersRoutingMismatchBlock(t *testing.T) {
 	}
 
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{
-		StateProvider: &stateProviderAdapter{mockState},
+		StateProvider: mockState,
 	})
 	executor.SetResolvedContext(resolvedCtx)
 

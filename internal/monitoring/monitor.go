@@ -2502,8 +2502,8 @@ func (m *Monitor) GetState() models.StateSnapshot {
 //
 // This is the preferred accessor for consumer code that needs the full
 // StateSnapshot (e.g., chart rendering, reporting, AI state queries).
-// Consumer interfaces (ai.StateProvider, api.SnapshotProvider, etc.)
-// expose this method rather than the legacy GetState(). Fields available
+// This method satisfies models.SnapshotProvider — the single canonical
+// interface that all consumer packages depend on. Fields available
 // via ReadState should be accessed there instead when practical.
 func (m *Monitor) ReadSnapshot() models.StateSnapshot {
 	return m.GetState()

@@ -23,11 +23,9 @@ type UnifiedResourceProvider interface {
 // ServerVersion is the version of the MCP tool implementation
 const ServerVersion = "1.0.0"
 
-// StateProvider provides access to infrastructure state.
-// Consumers should call ReadSnapshot() instead of the legacy GetState().
-type StateProvider interface {
-	ReadSnapshot() models.StateSnapshot
-}
+// StateProvider is a type alias for models.SnapshotProvider.
+// Kept for local convenience; all new code should use models.SnapshotProvider directly.
+type StateProvider = models.SnapshotProvider
 
 // RecoveryPointsProvider provides paged access to persisted recovery points.
 // Tool handlers should prefer this over legacy state backup arrays when present.

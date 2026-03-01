@@ -20,11 +20,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// StateProvider provides access to infrastructure state.
-// Consumers should call ReadSnapshot() instead of the legacy GetState().
-type StateProvider interface {
-	ReadSnapshot() models.StateSnapshot
-}
+// StateProvider is a type alias for models.SnapshotProvider.
+// Kept for local convenience; all new code should use models.SnapshotProvider directly.
+type StateProvider = models.SnapshotProvider
 
 // CommandPolicy evaluates command security
 type CommandPolicy interface {
@@ -97,13 +95,9 @@ type Service struct {
 // NewService creates a new chat service
 func NewService(cfg Config) *Service {
 	// Create tool executor
-	var stateProvider tools.StateProvider
 	var policy tools.CommandPolicy
 	var agentServer tools.AgentServer
 
-	if cfg.StateProvider != nil {
-		stateProvider = &stateProviderAdapter{cfg.StateProvider}
-	}
 	if cfg.Policy != nil {
 		policy = &commandPolicyAdapter{cfg.Policy}
 	}
@@ -112,7 +106,7 @@ func NewService(cfg Config) *Service {
 	}
 
 	execCfg := tools.ExecutorConfig{
-		StateProvider:          stateProvider,
+		StateProvider:          cfg.StateProvider,
 		ReadState:              cfg.ReadState,
 		Policy:                 policy,
 		AgentServer:            agentServer,
@@ -142,14 +136,6 @@ func NewService(cfg Config) *Service {
 }
 
 // Adapter types
-type stateProviderAdapter struct {
-	sp StateProvider
-}
-
-func (a *stateProviderAdapter) ReadSnapshot() models.StateSnapshot {
-	return a.sp.ReadSnapshot()
-}
-
 type commandPolicyAdapter struct {
 	p CommandPolicy
 }

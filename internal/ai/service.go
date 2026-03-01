@@ -34,11 +34,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// StateProvider provides access to the current infrastructure state.
-// Consumers should call ReadSnapshot() instead of the legacy GetState().
-type StateProvider interface {
-	ReadSnapshot() models.StateSnapshot
-}
+// StateProvider is a type alias for models.SnapshotProvider.
+// Kept for local convenience; all new code should use models.SnapshotProvider directly.
+type StateProvider = models.SnapshotProvider
 
 // CommandPolicy defines the interface for command security policy
 type CommandPolicy interface {

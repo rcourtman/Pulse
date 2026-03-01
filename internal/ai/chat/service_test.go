@@ -301,17 +301,6 @@ func TestService_SessionWrappers(t *testing.T) {
 }
 
 func TestService_Adapters(t *testing.T) {
-	// Test StateProviderAdapter
-	mockState := &mockStateProvider{
-		state: models.StateSnapshot{
-			Hosts: []models.Host{{Hostname: "host1"}},
-		},
-	}
-	spAdapter := &stateProviderAdapter{sp: mockState}
-	state := spAdapter.ReadSnapshot()
-	assert.Len(t, state.Hosts, 1)
-	assert.Equal(t, "host1", state.Hosts[0].Hostname)
-
 	// Test CommandPolicyAdapter
 	mockPolicy := &mockCommandPolicy{}
 	cpAdapter := &commandPolicyAdapter{p: mockPolicy}
