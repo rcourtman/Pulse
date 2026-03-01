@@ -2800,32 +2800,17 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 }
 
 // HandleTestAIConnection tests the AI provider connection (POST /api/ai/test)
+// Auth is enforced by RequirePermission middleware at route registration; with
+// default authorizer, non-admin proxy users are hard-denied (with RBAC, deferred
+// to authorizer). Token scope is enforced by RequireScope middleware.
+// ensureSettingsWriteScope provides the additional admin-session identity guard
+// for session-based (non-token) users.
 func (h *AISettingsHandler) HandleTestAIConnection(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Require admin authentication
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
-		return
-	}
-
-	// Check proxy auth admin status if applicable
-	if h.getConfig(r.Context()).ProxyAuthSecret != "" {
-		if valid, username, isAdmin := CheckProxyAuth(h.getConfig(r.Context()), r); valid && !isAdmin {
-			log.Warn().
-				Str("ip", r.RemoteAddr).
-				Str("path", r.URL.Path).
-				Str("method", r.Method).
-				Str("username", username).
-				Msg("Non-admin user attempted AI connection test")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "Admin privileges required"})
-			return
-		}
-	}
 	if !ensureSettingsWriteScope(h.getConfig(r.Context()), w, r) {
 		return
 	}
@@ -2859,32 +2844,17 @@ func (h *AISettingsHandler) HandleTestAIConnection(w http.ResponseWriter, r *htt
 }
 
 // HandleTestProvider tests a specific AI provider connection (POST /api/ai/test/:provider)
+// Auth is enforced by RequirePermission middleware at route registration; with
+// default authorizer, non-admin proxy users are hard-denied (with RBAC, deferred
+// to authorizer). Token scope is enforced by RequireScope middleware.
+// ensureSettingsWriteScope provides the additional admin-session identity guard
+// for session-based (non-token) users.
 func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Require admin authentication
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
-		return
-	}
-
-	// Check proxy auth admin status if applicable
-	if h.getConfig(r.Context()).ProxyAuthSecret != "" {
-		if valid, username, isAdmin := CheckProxyAuth(h.getConfig(r.Context()), r); valid && !isAdmin {
-			log.Warn().
-				Str("ip", r.RemoteAddr).
-				Str("path", r.URL.Path).
-				Str("method", r.Method).
-				Str("username", username).
-				Msg("Non-admin user attempted AI provider test")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "Admin privileges required"})
-			return
-		}
-	}
 	if !ensureSettingsWriteScope(h.getConfig(r.Context()), w, r) {
 		return
 	}
