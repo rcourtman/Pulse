@@ -20,11 +20,18 @@ PULSE_E2E_BOOTSTRAP_TOKEN="${PULSE_E2E_BOOTSTRAP_TOKEN:-}"
 MULTI_TENANT_SCENARIO="${MULTI_TENANT_SCENARIO:-multi-tenant}"
 TRIAL_SCENARIO="${TRIAL_SCENARIO:-trial-signup}"
 CLOUD_SCENARIOS="${CLOUD_SCENARIOS:-cloud-hosting,cloud-billing-lifecycle}"
+TRUENAS_SCENARIO="${TRUENAS_SCENARIO:-truenas-node-add}"
+RELAY_SCENARIO="${RELAY_SCENARIO:-relay-pairing}"
 
 PULSE_CP_ADMIN_KEY="${PULSE_CP_ADMIN_KEY:-}"
 PULSE_E2E_STRIPE_API_KEY="${PULSE_E2E_STRIPE_API_KEY:-}"
 PULSE_E2E_STRIPE_WEBHOOK_SECRET="${PULSE_E2E_STRIPE_WEBHOOK_SECRET:-}"
 PULSE_E2E_CP_BINARY="${PULSE_E2E_CP_BINARY:-}"
+
+# Infrastructure journey env vars (TrueNAS + relay)
+PULSE_E2E_TRUENAS_HOST="${PULSE_E2E_TRUENAS_HOST:-}"
+PULSE_E2E_TRUENAS_API_KEY="${PULSE_E2E_TRUENAS_API_KEY:-}"
+PULSE_E2E_RELAY_HOST="${PULSE_E2E_RELAY_HOST:-}"
 
 CT_IP=""
 TUNNEL_PID=""
@@ -147,8 +154,19 @@ run_eval_scenarios() {
     PULSE_E2E_STRIPE_WEBHOOK_SECRET="${PULSE_E2E_STRIPE_WEBHOOK_SECRET}" \
     PULSE_E2E_LXC_SSH_TARGET="${PVE_TARGET}" \
     PULSE_E2E_LXC_CTID="${PVE_CTID}" \
+    PULSE_E2E_TRUENAS_HOST="${PULSE_E2E_TRUENAS_HOST}" \
+    PULSE_E2E_TRUENAS_API_KEY="${PULSE_E2E_TRUENAS_API_KEY}" \
+    PULSE_E2E_RELAY_HOST="${PULSE_E2E_RELAY_HOST}" \
     node ./scripts/run-evals.mjs --mode deterministic --scenario "${scenarios}"
   )
+}
+
+seed_infra_entitlement() {
+  ssh_cmd "pct exec ${PVE_CTID} -- sh -lc 'cat > /etc/pulse/billing.json <<\"JSON\"
+{\"capabilities\":[\"relay\",\"update_alerts\",\"advanced_reporting\",\"audit_logging\",\"ai_patrol\"],\"limits\":{},\"meters_enabled\":[],\"plan_version\":\"pro_eval\",\"subscription_state\":\"active\",\"integrity\":\"\"}
+JSON
+systemctl restart pulse.service
+'"
 }
 
 load_cloud_secrets() {
@@ -259,44 +277,84 @@ verify_trial_expired_via_api() {
   rm -rf "${tmp_dir}" >/dev/null 2>&1 || true
 }
 
-echo "[1/9] Discovering container IP"
+TOTAL_STEPS=9
+INFRA_JOURNEYS_AVAILABLE=false
+# TrueNAS requires both host AND API key; relay requires host.
+# At least one fully-configured journey must be present to add infra steps.
+TRUENAS_READY=false
+RELAY_READY=false
+if [[ -n "${PULSE_E2E_TRUENAS_HOST}" && -n "${PULSE_E2E_TRUENAS_API_KEY}" ]]; then
+  TRUENAS_READY=true
+fi
+if [[ -n "${PULSE_E2E_RELAY_HOST}" ]]; then
+  RELAY_READY=true
+fi
+if [[ "${TRUENAS_READY}" == "true" || "${RELAY_READY}" == "true" ]]; then
+  INFRA_JOURNEYS_AVAILABLE=true
+  TOTAL_STEPS=11
+fi
+
+echo "[1/${TOTAL_STEPS}] Discovering container IP"
 discover_container_ip
 echo "      CT ${PVE_CTID} IP: ${CT_IP}"
 
-echo "[2/9] Rolling back to snapshot ${PVE_SNAPSHOT}"
+echo "[2/${TOTAL_STEPS}] Rolling back to snapshot ${PVE_SNAPSHOT}"
 rollback_and_start_services
 
-echo "[3/9] Starting local SSH tunnel"
+echo "[3/${TOTAL_STEPS}] Starting local SSH tunnel"
 start_tunnel
 wait_http_ready "http://127.0.0.1:${LOCAL_PULSE_PORT}/api/health"
 wait_http_ready "http://127.0.0.1:${LOCAL_CP_PORT}/healthz"
 
-echo "[4/9] Loading control-plane secrets"
+echo "[4/${TOTAL_STEPS}] Loading control-plane secrets"
 load_cloud_secrets
 
-echo "[5/9] Seeding multi-tenant entitlement and running ${MULTI_TENANT_SCENARIO}"
+echo "[5/${TOTAL_STEPS}] Seeding multi-tenant entitlement and running ${MULTI_TENANT_SCENARIO}"
 seed_multi_tenant_entitlement
 wait_http_ready "http://127.0.0.1:${LOCAL_PULSE_PORT}/api/health"
 run_eval_scenarios "${MULTI_TENANT_SCENARIO}"
 
-echo "[6/9] Restoring clean baseline and running ${TRIAL_SCENARIO}"
+echo "[6/${TOTAL_STEPS}] Restoring clean baseline and running ${TRIAL_SCENARIO}"
 rollback_and_start_services
 wait_http_ready "http://127.0.0.1:${LOCAL_PULSE_PORT}/api/health"
 wait_http_ready "http://127.0.0.1:${LOCAL_CP_PORT}/healthz"
 run_eval_scenarios "${TRIAL_SCENARIO}"
 
-echo "[7/9] Forcing trial expiry and validating downgrade contract"
+echo "[7/${TOTAL_STEPS}] Forcing trial expiry and validating downgrade contract"
 force_trial_expiry_on_container
 wait_http_ready "http://127.0.0.1:${LOCAL_PULSE_PORT}/api/health"
 verify_trial_expired_via_api
 
-echo "[8/9] Restoring clean baseline for cloud lifecycle"
+echo "[8/${TOTAL_STEPS}] Restoring clean baseline for cloud lifecycle"
 rollback_and_start_services
 enable_cp_dockerless_provisioning
 wait_http_ready "http://127.0.0.1:${LOCAL_PULSE_PORT}/api/health"
 wait_http_ready "http://127.0.0.1:${LOCAL_CP_PORT}/healthz"
 
-echo "[9/9] Running ${CLOUD_SCENARIOS}"
+echo "[9/${TOTAL_STEPS}] Running ${CLOUD_SCENARIOS}"
 run_eval_scenarios "${CLOUD_SCENARIOS}"
+
+# --- Infrastructure journeys (TrueNAS + relay) ---
+# These require additional env vars (PULSE_E2E_TRUENAS_HOST, PULSE_E2E_RELAY_HOST).
+# When not configured, the Playwright specs skip gracefully via test.skip() guards.
+
+if [[ "${INFRA_JOURNEYS_AVAILABLE}" == "true" ]]; then
+  INFRA_SCENARIOS=""
+  if [[ "${TRUENAS_READY}" == "true" ]]; then
+    INFRA_SCENARIOS="${TRUENAS_SCENARIO}"
+  fi
+  if [[ "${RELAY_READY}" == "true" ]]; then
+    INFRA_SCENARIOS="${INFRA_SCENARIOS:+${INFRA_SCENARIOS},}${RELAY_SCENARIO}"
+  fi
+
+  echo "[10/${TOTAL_STEPS}] Restoring clean baseline for infrastructure journeys"
+  echo "      TrueNAS ready: ${TRUENAS_READY}, Relay ready: ${RELAY_READY}"
+  rollback_and_start_services
+  seed_infra_entitlement
+  wait_http_ready "http://127.0.0.1:${LOCAL_PULSE_PORT}/api/health"
+
+  echo "[11/${TOTAL_STEPS}] Running infrastructure journeys (${INFRA_SCENARIOS})"
+  run_eval_scenarios "${INFRA_SCENARIOS}"
+fi
 
 echo "All requested sandbox scenarios completed."
