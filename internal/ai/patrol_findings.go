@@ -641,7 +641,7 @@ type chatServiceExecutorAccessor interface {
 // the PatrolService's existing FindingsStore and recordFinding method.
 type patrolFindingCreatorAdapter struct {
 	patrol          *PatrolService
-	state           models.StateSnapshot
+	snap            models.StateSnapshot
 	findingsMu      sync.Mutex
 	findings        []*Finding
 	resolvedIDs     []string
@@ -649,10 +649,10 @@ type patrolFindingCreatorAdapter struct {
 	checkedFindings bool
 }
 
-func newPatrolFindingCreatorAdapter(p *PatrolService, state models.StateSnapshot) *patrolFindingCreatorAdapter {
+func newPatrolFindingCreatorAdapter(p *PatrolService, snap models.StateSnapshot) *patrolFindingCreatorAdapter {
 	return &patrolFindingCreatorAdapter{
 		patrol: p,
-		state:  state,
+		snap:   snap,
 	}
 }
 
@@ -832,7 +832,7 @@ func (a *patrolFindingCreatorAdapter) isBaselineAnomaly(resourceID, metric strin
 func (a *patrolFindingCreatorAdapter) isActionable(f *Finding) bool {
 	// Build resource metrics lookup from current state
 	resourceMetrics := make(map[string]map[string]float64)
-	for _, n := range a.state.Nodes {
+	for _, n := range a.snap.Nodes {
 		m := map[string]float64{"cpu": n.CPU * 100}
 		if n.Memory.Total > 0 {
 			m["memory"] = float64(n.Memory.Used) / float64(n.Memory.Total) * 100
@@ -840,17 +840,17 @@ func (a *patrolFindingCreatorAdapter) isActionable(f *Finding) bool {
 		resourceMetrics[n.ID] = m
 		resourceMetrics[n.Name] = m
 	}
-	for _, vm := range a.state.VMs {
+	for _, vm := range a.snap.VMs {
 		m := map[string]float64{"cpu": vm.CPU * 100, "memory": vm.Memory.Usage, "disk": vm.Disk.Usage}
 		resourceMetrics[vm.ID] = m
 		resourceMetrics[vm.Name] = m
 	}
-	for _, ct := range a.state.Containers {
+	for _, ct := range a.snap.Containers {
 		m := map[string]float64{"cpu": ct.CPU * 100, "memory": ct.Memory.Usage, "disk": ct.Disk.Usage}
 		resourceMetrics[ct.ID] = m
 		resourceMetrics[ct.Name] = m
 	}
-	for _, s := range a.state.Storage {
+	for _, s := range a.snap.Storage {
 		m := map[string]float64{}
 		if s.Total > 0 {
 			m["usage"] = float64(s.Used) / float64(s.Total) * 100
@@ -865,8 +865,8 @@ func (a *patrolFindingCreatorAdapter) isActionable(f *Finding) bool {
 	if !hasMetrics {
 		metrics, hasMetrics = resourceMetrics[f.ResourceName]
 	}
-	stateHasResources := len(a.state.Nodes) > 0 || len(a.state.VMs) > 0 || len(a.state.Containers) > 0 || len(a.state.Storage) > 0
-	if !hasMetrics && stateHasResources {
+	snapHasResources := len(a.snap.Nodes) > 0 || len(a.snap.VMs) > 0 || len(a.snap.Containers) > 0 || len(a.snap.Storage) > 0
+	if !hasMetrics && snapHasResources {
 		// Resource not found — it may have been deleted. Reject the finding.
 		return false
 	}
@@ -1520,7 +1520,7 @@ func isValidJSON(s string) bool {
 	return json.Unmarshal([]byte(trimmed), &v) == nil
 }
 
-func verifyBackupFresh(state models.StateSnapshot, guestID string) (bool, error) {
+func verifyBackupFresh(snap models.StateSnapshot, guestID string) (bool, error) {
 	vmID := strings.TrimSpace(guestID)
 	if vmID == "" {
 		return false, fmt.Errorf("%w: missing guest id", aicontracts.ErrVerificationUnknown)
@@ -1528,14 +1528,14 @@ func verifyBackupFresh(state models.StateSnapshot, guestID string) (bool, error)
 
 	now := time.Now()
 	var last time.Time
-	for _, vm := range state.VMs {
+	for _, vm := range snap.VMs {
 		if fmt.Sprintf("%d", vm.VMID) == vmID || vm.ID == vmID || vm.Name == vmID {
 			last = vm.LastBackup
 			break
 		}
 	}
 	if last.IsZero() {
-		for _, ct := range state.Containers {
+		for _, ct := range snap.Containers {
 			if fmt.Sprintf("%d", ct.VMID) == vmID || ct.ID == vmID || ct.Name == vmID {
 				last = ct.LastBackup
 				break
@@ -1553,7 +1553,7 @@ func verifyBackupFresh(state models.StateSnapshot, guestID string) (bool, error)
 	return false, nil
 }
 
-func verifyMetricRecovered(state models.StateSnapshot, thresholds PatrolThresholds, key, resourceID, resourceType string) (bool, error) {
+func verifyMetricRecovered(snap models.StateSnapshot, thresholds PatrolThresholds, key, resourceID, resourceType string) (bool, error) {
 	rid := strings.TrimSpace(resourceID)
 	if rid == "" {
 		return false, fmt.Errorf("%w: missing resource id", aicontracts.ErrVerificationUnknown)
@@ -1563,7 +1563,7 @@ func verifyMetricRecovered(state models.StateSnapshot, thresholds PatrolThreshol
 	const margin = 0.95
 
 	// Nodes
-	for _, n := range state.Nodes {
+	for _, n := range snap.Nodes {
 		if n.ID != rid && n.Name != rid {
 			continue
 		}
@@ -1576,7 +1576,7 @@ func verifyMetricRecovered(state models.StateSnapshot, thresholds PatrolThreshol
 	}
 
 	// Guests
-	for _, vm := range state.VMs {
+	for _, vm := range snap.VMs {
 		if vm.ID != rid && vm.Name != rid && fmt.Sprintf("%d", vm.VMID) != rid {
 			continue
 		}
@@ -1589,7 +1589,7 @@ func verifyMetricRecovered(state models.StateSnapshot, thresholds PatrolThreshol
 			return vm.Disk.Usage < thresholds.GuestDiskWarn*margin, nil
 		}
 	}
-	for _, ct := range state.Containers {
+	for _, ct := range snap.Containers {
 		if ct.ID != rid && ct.Name != rid && fmt.Sprintf("%d", ct.VMID) != rid {
 			continue
 		}
@@ -1604,7 +1604,7 @@ func verifyMetricRecovered(state models.StateSnapshot, thresholds PatrolThreshol
 	}
 
 	// Storage pools
-	for _, s := range state.Storage {
+	for _, s := range snap.Storage {
 		if s.ID != rid && s.Name != rid {
 			continue
 		}
@@ -1618,7 +1618,7 @@ func verifyMetricRecovered(state models.StateSnapshot, thresholds PatrolThreshol
 	return false, fmt.Errorf("%w: resource not found for metric verification (%s)", aicontracts.ErrVerificationUnknown, rid)
 }
 
-func (p *PatrolService) verifyGuestReachability(ctx context.Context, state models.StateSnapshot, guestID string) (bool, error) {
+func (p *PatrolService) verifyGuestReachability(ctx context.Context, snap models.StateSnapshot, guestID string) (bool, error) {
 	p.mu.RLock()
 	prober := p.guestProber
 	p.mu.RUnlock()
@@ -1633,7 +1633,7 @@ func (p *PatrolService) verifyGuestReachability(ctx context.Context, state model
 
 	var node string
 	var ip string
-	for _, vm := range state.VMs {
+	for _, vm := range snap.VMs {
 		if vm.ID == vmID || vm.Name == vmID || fmt.Sprintf("%d", vm.VMID) == vmID {
 			node = vm.Node
 			if len(vm.IPAddresses) > 0 {
@@ -1643,7 +1643,7 @@ func (p *PatrolService) verifyGuestReachability(ctx context.Context, state model
 		}
 	}
 	if node == "" {
-		for _, ct := range state.Containers {
+		for _, ct := range snap.Containers {
 			if ct.ID == vmID || ct.Name == vmID || fmt.Sprintf("%d", ct.VMID) == vmID {
 				node = ct.Node
 				if len(ct.IPAddresses) > 0 {

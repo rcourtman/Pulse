@@ -267,24 +267,24 @@ func sanitizeFilename(s string) string {
 }
 
 // enrichReportRequest populates enrichment data from the monitor state
-func (h *ReportingHandlers) enrichReportRequest(ctx context.Context, orgID string, req *reporting.MetricReportRequest, state models.StateSnapshot, resources []unifiedresources.Resource, start, end time.Time) {
+func (h *ReportingHandlers) enrichReportRequest(ctx context.Context, orgID string, req *reporting.MetricReportRequest, snap models.StateSnapshot, resources []unifiedresources.Resource, start, end time.Time) {
 	switch req.ResourceType {
 	case "node":
-		h.enrichNodeReport(req, state, resources, start, end)
+		h.enrichNodeReport(req, snap, resources, start, end)
 	case "vm":
-		h.enrichVMReport(ctx, orgID, req, state, start, end)
+		h.enrichVMReport(ctx, orgID, req, snap, start, end)
 	case "container":
-		h.enrichContainerReport(ctx, orgID, req, state, start, end)
+		h.enrichContainerReport(ctx, orgID, req, snap, start, end)
 	}
 }
 
 // enrichNodeReport adds node-specific data to the report request
-func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest, state models.StateSnapshot, resources []unifiedresources.Resource, start, end time.Time) {
+func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest, snap models.StateSnapshot, resources []unifiedresources.Resource, start, end time.Time) {
 	// Find the node
 	var node *models.Node
-	for i := range state.Nodes {
-		if state.Nodes[i].ID == req.ResourceID {
-			node = &state.Nodes[i]
+	for i := range snap.Nodes {
+		if snap.Nodes[i].ID == req.ResourceID {
+			node = &snap.Nodes[i]
 			break
 		}
 	}
@@ -317,7 +317,7 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 	}
 
 	// Find alerts for this node
-	for _, alert := range state.ActiveAlerts {
+	for _, alert := range snap.ActiveAlerts {
 		if alert.ResourceID == req.ResourceID || alert.Node == node.Name {
 			req.Alerts = append(req.Alerts, reporting.AlertInfo{
 				Type:      alert.Type,
@@ -329,7 +329,7 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 			})
 		}
 	}
-	for _, resolved := range state.RecentlyResolved {
+	for _, resolved := range snap.RecentlyResolved {
 		if (resolved.ResourceID == req.ResourceID || resolved.Node == node.Name) &&
 			resolved.ResolvedTime.After(start) && resolved.ResolvedTime.Before(end) {
 			resolvedTime := resolved.ResolvedTime
@@ -418,12 +418,12 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 }
 
 // enrichVMReport adds VM-specific data to the report request
-func (h *ReportingHandlers) enrichVMReport(ctx context.Context, orgID string, req *reporting.MetricReportRequest, state models.StateSnapshot, start, end time.Time) {
+func (h *ReportingHandlers) enrichVMReport(ctx context.Context, orgID string, req *reporting.MetricReportRequest, snap models.StateSnapshot, start, end time.Time) {
 	// Find the VM
 	var vm *models.VM
-	for i := range state.VMs {
-		if state.VMs[i].ID == req.ResourceID {
-			vm = &state.VMs[i]
+	for i := range snap.VMs {
+		if snap.VMs[i].ID == req.ResourceID {
+			vm = &snap.VMs[i]
 			break
 		}
 	}
@@ -448,7 +448,7 @@ func (h *ReportingHandlers) enrichVMReport(ctx context.Context, orgID string, re
 	}
 
 	// Find alerts for this VM
-	for _, alert := range state.ActiveAlerts {
+	for _, alert := range snap.ActiveAlerts {
 		if alert.ResourceID == req.ResourceID {
 			req.Alerts = append(req.Alerts, reporting.AlertInfo{
 				Type:      alert.Type,
@@ -460,7 +460,7 @@ func (h *ReportingHandlers) enrichVMReport(ctx context.Context, orgID string, re
 			})
 		}
 	}
-	for _, resolved := range state.RecentlyResolved {
+	for _, resolved := range snap.RecentlyResolved {
 		if resolved.ResourceID == req.ResourceID &&
 			resolved.ResolvedTime.After(start) && resolved.ResolvedTime.Before(end) {
 			resolvedTime := resolved.ResolvedTime
@@ -481,7 +481,7 @@ func (h *ReportingHandlers) enrichVMReport(ctx context.Context, orgID string, re
 	if backups := h.listBackupsForReport(ctx, orgID, req.ResourceID, start, end); len(backups) > 0 {
 		req.Backups = append(req.Backups, backups...)
 	} else {
-		for _, backup := range state.PVEBackups.StorageBackups {
+		for _, backup := range snap.PVEBackups.StorageBackups {
 			if backup.VMID == vm.VMID && backup.Node == vm.Node {
 				req.Backups = append(req.Backups, reporting.BackupInfo{
 					Type:      "vzdump",
@@ -575,15 +575,15 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 	}
 
 	// Get monitor state for enrichment
-	var state models.StateSnapshot
+	var snap models.StateSnapshot
 	var resources []unifiedresources.Resource
-	var hasState bool
+	var hasSnap bool
 	if h.mtMonitor != nil {
 		orgID := GetOrgID(r.Context())
 		if monitor, err := h.mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
-			state = monitor.GetState()
+			snap = monitor.GetState()
 			resources = monitor.GetUnifiedResources()
-			hasState = true
+			hasSnap = true
 		}
 	}
 
@@ -609,9 +609,9 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 		}
 
 		// Enrich with resource data
-		if hasState {
+		if hasSnap {
 			orgID := GetOrgID(r.Context())
-			h.enrichReportRequest(r.Context(), orgID, &req, state, resources, start, end)
+			h.enrichReportRequest(r.Context(), orgID, &req, snap, resources, start, end)
 		}
 
 		multiReq.Resources = append(multiReq.Resources, req)
@@ -630,12 +630,12 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 }
 
 // enrichContainerReport adds container-specific data to the report request
-func (h *ReportingHandlers) enrichContainerReport(ctx context.Context, orgID string, req *reporting.MetricReportRequest, state models.StateSnapshot, start, end time.Time) {
+func (h *ReportingHandlers) enrichContainerReport(ctx context.Context, orgID string, req *reporting.MetricReportRequest, snap models.StateSnapshot, start, end time.Time) {
 	// Find the container
 	var ct *models.Container
-	for i := range state.Containers {
-		if state.Containers[i].ID == req.ResourceID {
-			ct = &state.Containers[i]
+	for i := range snap.Containers {
+		if snap.Containers[i].ID == req.ResourceID {
+			ct = &snap.Containers[i]
 			break
 		}
 	}
@@ -659,7 +659,7 @@ func (h *ReportingHandlers) enrichContainerReport(ctx context.Context, orgID str
 	}
 
 	// Find alerts for this container
-	for _, alert := range state.ActiveAlerts {
+	for _, alert := range snap.ActiveAlerts {
 		if alert.ResourceID == req.ResourceID {
 			req.Alerts = append(req.Alerts, reporting.AlertInfo{
 				Type:      alert.Type,
@@ -671,7 +671,7 @@ func (h *ReportingHandlers) enrichContainerReport(ctx context.Context, orgID str
 			})
 		}
 	}
-	for _, resolved := range state.RecentlyResolved {
+	for _, resolved := range snap.RecentlyResolved {
 		if resolved.ResourceID == req.ResourceID &&
 			resolved.ResolvedTime.After(start) && resolved.ResolvedTime.Before(end) {
 			resolvedTime := resolved.ResolvedTime
@@ -692,7 +692,7 @@ func (h *ReportingHandlers) enrichContainerReport(ctx context.Context, orgID str
 	if backups := h.listBackupsForReport(ctx, orgID, req.ResourceID, start, end); len(backups) > 0 {
 		req.Backups = append(req.Backups, backups...)
 	} else {
-		for _, backup := range state.PVEBackups.StorageBackups {
+		for _, backup := range snap.PVEBackups.StorageBackups {
 			if backup.VMID == ct.VMID && backup.Node == ct.Node {
 				req.Backups = append(req.Backups, reporting.BackupInfo{
 					Type:      "vzdump",

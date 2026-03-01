@@ -221,13 +221,23 @@ type legacyStateRatchet struct {
 // host_agents.go uses GetLiveStateSnapshot() (not GetState()) — these were regex false positives
 // from the local variable name, not real legacy state accesses.
 // Delta: state.Hosts -6.
+// SRC-03x: Renamed `state` struct field to `snap` in patrol_findings.go
+// (patrolFindingCreatorAdapter.state → .snap) and renamed `state` parameter to `snap`
+// in verifyBackupFresh, verifyMetricRecovered, verifyGuestReachability. All 16 accesses
+// were false positives (struct fields and function parameters, not local GetState() vars).
+// Delta: state.VMs -5, state.Containers -5, state.Nodes -3, state.Storage -3.
+// SRC-03y: Renamed `state` parameter to `snap` in metrics_reporting_handlers.go
+// enrichReportRequest, enrichNodeReport, enrichVMReport, enrichContainerReport, and
+// renamed local `state` to `snap` in HandleGenerateMultiReport. All 9 ratchet-tracked accesses
+// were false positives from function parameters passed down from callers.
+// Delta: state.Nodes -3, state.VMs -3, state.Containers -3.
 var legacyStateRatchets = []legacyStateRatchet{
-	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 29, "ReadState.VMs()"},
-	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 29, "ReadState.Containers()"},
-	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 28, "ReadState.Nodes()"},
+	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 21, "ReadState.VMs()"},
+	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 21, "ReadState.Containers()"},
+	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 22, "ReadState.Nodes()"},
 	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 18, "ReadState.DockerHosts()"},
 	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 4, "ReadState.Hosts()"},
-	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 16, "ReadState.StoragePools()"},
+	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 13, "ReadState.StoragePools()"},
 	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 5, "ReadState.K8sClusters()"},
 	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 4, "ReadState.PBSInstances()"},
 	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 1, "ReadState.PMGInstances()"},
