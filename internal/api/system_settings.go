@@ -431,6 +431,8 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 		settings.TemperatureMonitoringEnabled = h.config.TemperatureMonitoringEnabled
 		// Expose Docker update actions setting (respects env override)
 		settings.DisableDockerUpdateActions = h.config.DisableDockerUpdateActions
+		// Expose public URL so the frontend can display it when env-overridden
+		settings.PublicURL = h.config.PublicURL
 	}
 
 	// Include env override information
