@@ -3193,10 +3193,8 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Require authentication
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
-		return
-	}
+	// NOTE: Authentication is enforced by RequireAdmin middleware at route
+	// registration (router_routes_ai_relay.go). No redundant CheckAuth needed.
 
 	// Check if AI is enabled
 	if !h.GetAIService(r.Context()).IsEnabled() {
