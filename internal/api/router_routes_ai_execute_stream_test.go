@@ -519,3 +519,201 @@ func TestRouteExecuteStream_TargetIDTooLong(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code, "oversized target_id should return 400")
 	assert.Contains(t, rec.Body.String(), "target_id exceeds maximum length")
 }
+
+// TestRouteExecuteStream_ValidTargetTypes verifies that all recognized
+// target_type values are accepted and produce a streaming response.
+func TestRouteExecuteStream_ValidTargetTypes(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, mockOllamaForExecute())
+	defer ollama.Close()
+
+	for _, tt := range []string{"host", "container", "vm", "node", "lxc"} {
+		t.Run(tt, func(t *testing.T) {
+			router, token := setupExecuteRouter(t, ollama.URL)
+
+			body := `{"prompt":"check it","target_type":"` + tt + `","target_id":"test-1"}`
+			req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
+			req.Header.Set("X-API-Token", token)
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code, "target_type %q should be accepted", tt)
+			assert.Contains(t, rec.Header().Get("Content-Type"), "text/event-stream")
+
+			respBody := rec.Body.String()
+			assert.Contains(t, respBody, `"type":"complete"`,
+				"target_type %q should produce a complete event", tt)
+			assert.NotContains(t, respBody, `"type":"error"`,
+				"target_type %q should not produce an error event", tt)
+		})
+	}
+}
+
+// TestRouteExecuteStream_EmptyTargetTypeAllowed verifies that both a missing
+// and an explicit empty target_type are accepted since the field is optional.
+func TestRouteExecuteStream_EmptyTargetTypeAllowed(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, mockOllamaForExecute())
+	defer ollama.Close()
+
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{"missing", `{"prompt":"hello"}`},
+		{"explicit_empty", `{"prompt":"hello","target_type":""}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			router, token := setupExecuteRouter(t, ollama.URL)
+
+			req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(tc.body))
+			req.Header.Set("X-API-Token", token)
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code, "empty target_type should be allowed")
+			assert.Contains(t, rec.Header().Get("Content-Type"), "text/event-stream")
+
+			respBody := rec.Body.String()
+			assert.Contains(t, respBody, `"type":"complete"`,
+				"response should contain a complete event")
+			assert.NotContains(t, respBody, `"type":"error"`,
+				"response should not contain an error event")
+		})
+	}
+}
+
+// TestRouteExecuteStream_WithConversationHistory verifies that the streaming
+// endpoint accepts and processes a request with conversation history.
+func TestRouteExecuteStream_WithConversationHistory(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, mockOllamaForExecute())
+	defer ollama.Close()
+
+	router, token := setupExecuteRouter(t, ollama.URL)
+
+	body := `{
+		"prompt": "What was the last thing I asked?",
+		"history": [
+			{"role": "user", "content": "Hello"},
+			{"role": "assistant", "content": "Hi there!"}
+		]
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/event-stream")
+
+	respBody := rec.Body.String()
+	assert.Contains(t, respBody, `"type":"complete"`,
+		"response should contain a complete event")
+	assert.Contains(t, respBody, `"type":"done"`,
+		"response should contain a done event")
+	assert.NotContains(t, respBody, `"type":"error"`,
+		"response should not contain an error event")
+}
+
+// TestRouteExecuteStream_WithTargetContext verifies that the streaming endpoint
+// accepts and processes a request with target type, ID, and context.
+func TestRouteExecuteStream_WithTargetContext(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, mockOllamaForExecute())
+	defer ollama.Close()
+
+	router, token := setupExecuteRouter(t, ollama.URL)
+
+	body := `{
+		"prompt": "Check CPU usage",
+		"target_type": "node",
+		"target_id": "pve1",
+		"context": {"cpu": 85.5, "memory": 60.2}
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/event-stream")
+
+	respBody := rec.Body.String()
+	assert.Contains(t, respBody, `"type":"complete"`,
+		"response should contain a complete event")
+	assert.Contains(t, respBody, `"type":"done"`,
+		"response should contain a done event")
+	assert.NotContains(t, respBody, `"type":"error"`,
+		"response should not contain an error event")
+}
+
+// TestRouteExecuteStream_DefaultUseCaseIsChat verifies that when no use_case
+// is specified, the endpoint defaults to "chat" and succeeds.
+func TestRouteExecuteStream_DefaultUseCaseIsChat(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, mockOllamaForExecute())
+	defer ollama.Close()
+
+	router, token := setupExecuteRouter(t, ollama.URL)
+
+	body := `{"prompt":"hello"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/event-stream")
+	assert.Contains(t, rec.Body.String(), `"type":"complete"`,
+		"response should contain a complete event")
+}
+
+// TestRouteExecuteStream_FindingIDPassedThrough verifies that a request with
+// a finding_id field is accepted and completes successfully.
+func TestRouteExecuteStream_FindingIDPassedThrough(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, mockOllamaForExecute())
+	defer ollama.Close()
+
+	router, token := setupExecuteRouter(t, ollama.URL)
+
+	body := `{"prompt":"investigate","finding_id":"finding-abc-123"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/event-stream")
+	assert.Contains(t, rec.Body.String(), `"type":"complete"`,
+		"response should contain a complete event")
+}
+
+// TestRouteExecuteStream_ModelFieldPassedThrough verifies that a request with
+// a model field is accepted and completes successfully in streaming mode.
+func TestRouteExecuteStream_ModelFieldPassedThrough(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, mockOllamaForExecute())
+	defer ollama.Close()
+
+	router, token := setupExecuteRouter(t, ollama.URL)
+
+	body := `{"prompt":"hello","model":"ollama:llama3"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/event-stream")
+	assert.Contains(t, rec.Body.String(), `"type":"complete"`,
+		"response should contain a complete event")
+}
