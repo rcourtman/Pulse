@@ -3946,6 +3946,8 @@ func (h *AISettingsHandler) HandleClearGuestKnowledge(w http.ResponseWriter, r *
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 4*1024) // 4KB max — only needs guest_id + confirm
+
 	var req struct {
 		GuestID string `json:"guest_id"`
 		Confirm bool   `json:"confirm"`

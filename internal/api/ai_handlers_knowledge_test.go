@@ -885,6 +885,26 @@ func TestHandleClearGuestKnowledge_GuestIDTooLong(t *testing.T) {
 	}
 }
 
+func TestHandleClearGuestKnowledge_OversizedBody(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	// Build a body that exceeds 4KB limit. Use a large guest_id to push total > 4KB.
+	bigID := strings.Repeat("x", 5*1024) // 5KB guest_id → body > 4KB
+	body, _ := json.Marshal(map[string]interface{}{"guest_id": bigID, "confirm": true})
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/clear", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleClearGuestKnowledge(rec, req)
+
+	// MaxBytesReader triggers a decode error → 400 with "Invalid request body"
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d for oversized body, got %d: %s", http.StatusBadRequest, rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Invalid request body") {
+		t.Fatalf("expected 'Invalid request body' from MaxBytesReader, got %q", rec.Body.String())
+	}
+}
+
 // ========================================
 // HandleImportGuestKnowledge — merge mode & edge cases
 // ========================================
