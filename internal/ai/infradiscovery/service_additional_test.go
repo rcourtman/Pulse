@@ -31,11 +31,11 @@ func waitFor(t *testing.T, timeout time.Duration, check func() bool) {
 }
 
 func TestStartStopUpdatesStatus(t *testing.T) {
-	provider := &mockStateProvider{state: models.StateSnapshot{}}
-	service := NewService(provider, nil, Config{
+	service := NewService(nil, Config{
 		Interval:    10 * time.Millisecond,
 		CacheExpiry: time.Millisecond,
 	})
+	service.SetReadState(&mockReadState{})
 	service.SetAIAnalyzer(&mockAIAnalyzer{})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -65,12 +65,12 @@ func TestStartStopCanRestartSafely(t *testing.T) {
 		}
 	}()
 
-	provider := &mockStateProvider{state: models.StateSnapshot{}}
-	service := NewService(provider, nil, Config{
+	service := NewService(nil, Config{
 		Interval:    10 * time.Millisecond,
 		CacheExpiry: time.Millisecond,
 	})
 	service.SetAIAnalyzer(&mockAIAnalyzer{})
+	service.SetReadState(&mockReadState{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -89,8 +89,8 @@ func TestStartStopCanRestartSafely(t *testing.T) {
 }
 
 func TestForceRefreshUpdatesLastRun(t *testing.T) {
-	provider := &mockStateProvider{state: models.StateSnapshot{}}
-	service := NewService(provider, nil, DefaultConfig())
+	service := NewService(nil, DefaultConfig())
+	service.SetReadState(&mockReadState{})
 	service.SetAIAnalyzer(&mockAIAnalyzer{})
 
 	service.ForceRefresh(context.Background())
@@ -105,7 +105,7 @@ func TestSaveDiscoveriesWritesKnowledge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create knowledge store: %v", err)
 	}
-	service := NewService(&mockStateProvider{}, store, DefaultConfig())
+	service := NewService(store, DefaultConfig())
 
 	apps := []DiscoveredApp{
 		{
@@ -151,19 +151,16 @@ func TestSaveDiscoveriesWritesKnowledge(t *testing.T) {
 }
 
 func TestGetDiscoveriesReturnsCopy(t *testing.T) {
-	provider := &mockStateProvider{
-		state: models.StateSnapshot{
-			DockerHosts: []models.DockerHost{
-				{
-					AgentID:  "agent-1",
-					Hostname: "host1",
-					Containers: []models.DockerContainer{
-						{ID: "1", Name: "web", Image: "nginx:latest"},
-					},
-				},
+	rs := readStateFromDockerHosts([]models.DockerHost{
+		{
+			ID:       "agent-1",
+			AgentID:  "agent-1",
+			Hostname: "host1",
+			Containers: []models.DockerContainer{
+				{ID: "1", Name: "web", Image: "nginx:latest"},
 			},
 		},
-	}
+	})
 
 	analyzer := &mockAIAnalyzer{
 		responses: map[string]string{
@@ -171,7 +168,8 @@ func TestGetDiscoveriesReturnsCopy(t *testing.T) {
 		},
 	}
 
-	service := NewService(provider, nil, DefaultConfig())
+	service := NewService(nil, DefaultConfig())
+	service.SetReadState(rs)
 	service.SetAIAnalyzer(analyzer)
 	service.RunDiscovery(context.Background())
 
@@ -191,7 +189,7 @@ func TestGetDiscoveriesReturnsCopy(t *testing.T) {
 }
 
 func TestAnalyzeContainer_StaleCacheEntryExpiresPerImage(t *testing.T) {
-	service := NewService(&mockStateProvider{}, nil, Config{
+	service := NewService(nil, Config{
 		Interval:          time.Minute,
 		CacheExpiry:       time.Minute,
 		AIAnalysisTimeout: time.Second,
@@ -248,25 +246,23 @@ func TestAnalyzeContainer_StaleCacheEntryExpiresPerImage(t *testing.T) {
 }
 
 func TestRunDiscovery_AIAnalysisTimeout(t *testing.T) {
-	provider := &mockStateProvider{
-		state: models.StateSnapshot{
-			DockerHosts: []models.DockerHost{
-				{
-					AgentID:  "agent-1",
-					Hostname: "docker-host",
-					Containers: []models.DockerContainer{
-						{ID: "1", Name: "slow-service", Image: "slow:latest"},
-					},
-				},
+	rs := readStateFromDockerHosts([]models.DockerHost{
+		{
+			ID:       "agent-1",
+			AgentID:  "agent-1",
+			Hostname: "docker-host",
+			Containers: []models.DockerContainer{
+				{ID: "1", Name: "slow-service", Image: "slow:latest"},
 			},
 		},
-	}
+	})
 
-	service := NewService(provider, nil, Config{
+	service := NewService(nil, Config{
 		Interval:          time.Minute,
 		CacheExpiry:       time.Hour,
 		AIAnalysisTimeout: 20 * time.Millisecond,
 	})
+	service.SetReadState(rs)
 	service.SetAIAnalyzer(blockingAIAnalyzer{})
 
 	start := time.Now()
@@ -340,7 +336,7 @@ func TestRunDiscovery_ReadStatePath(t *testing.T) {
 	}
 
 	// No StateProvider — ReadState only.
-	service := NewService(nil, nil, DefaultConfig())
+	service := NewService(nil, DefaultConfig())
 	service.SetReadState(rs)
 	service.SetAIAnalyzer(analyzer)
 
@@ -388,7 +384,7 @@ func TestRunDiscovery_ReadStateSkipsNilEntries(t *testing.T) {
 		},
 	}
 
-	service := NewService(nil, nil, DefaultConfig())
+	service := NewService(nil, DefaultConfig())
 	service.SetReadState(rs)
 	service.SetAIAnalyzer(analyzer)
 
@@ -425,7 +421,7 @@ func TestRunDiscovery_ReadStateSkipsUnresolvedHost(t *testing.T) {
 		},
 	}
 
-	service := NewService(nil, nil, DefaultConfig())
+	service := NewService(nil, DefaultConfig())
 	service.SetReadState(rs)
 	service.SetAIAnalyzer(analyzer)
 
@@ -492,7 +488,7 @@ func TestRunDiscovery_ReadStateSkipsEmptyHostSourceID(t *testing.T) {
 		},
 	}
 
-	service := NewService(nil, nil, DefaultConfig())
+	service := NewService(nil, DefaultConfig())
 	service.SetReadState(rs)
 	service.SetAIAnalyzer(analyzer)
 

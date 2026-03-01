@@ -162,7 +162,11 @@ type legacyStateRatchet struct {
 // These represent legacy nil-fallback paths that are dead code when
 // ReadState is wired. Each number must only decrease over time.
 //
-// Last updated: 2026-03-01 (total state.*: 1, GetState: 26).
+// Last updated: 2026-03-01 (total state.*: 0, GetState: 0).
+// SRC-04i: Removed legacy GetState() fallback from infradiscovery/service.go DiscoverApplications.
+// ReadState is now the sole data source for Docker container discovery. StateProvider interface,
+// emptyStateProvider, and stateProvider field removed from infradiscovery.Service.
+// Delta: GetState -1, state.DockerHosts -1.
 // SRC-03u: Migrated ai/chat/context_prefetch.go from stateProvider.GetState()+state.ResolveResource
 // to unifiedresources.ResolveResource(ReadState, name). Removed stateProvider dependency entirely.
 // ContextPrefetcher now uses ReadState as sole data source. Delta: GetState -1.
@@ -274,15 +278,16 @@ var legacyStateRatchets = []legacyStateRatchet{
 	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 0, "ReadState.VMs()"},
 	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 0, "ReadState.Containers()"},
 	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 0, "ReadState.Nodes()"},
-	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 1, "ReadState.DockerHosts()"},
+	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 0, "ReadState.DockerHosts()"},
 	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 0, "ReadState.Hosts()"},
 	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 0, "ReadState.StoragePools()"},
 	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 0, "ReadState.K8sClusters()"},
 	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 0, "ReadState.PBSInstances()"},
 	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 0, "ReadState.PMGInstances()"},
 
-	// GetState() calls — consumer packages must use ReadState interface
-	{regexp.MustCompile(`\.GetState\(\)`), ".GetState()", 26, "ReadState interface"},
+	// GetState() calls — consumer packages must use ReadState interface.
+	// All consumer code migrated to ReadSnapshot() / BuildFrontendState() / narrow accessors.
+	{regexp.MustCompile(`\.GetState\(\)`), ".GetState()", 0, "ReadState interface"},
 }
 
 // TestLegacyStateAccessRatchet is a monotonic ratchet that prevents new

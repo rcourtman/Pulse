@@ -8,15 +8,102 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-// mockStateProvider implements StateProvider for testing
-type mockStateProvider struct {
-	state models.StateSnapshot
+// readStateFromDockerHosts builds a mockReadState from legacy model data.
+// This allows tests to set up Docker host/container fixtures concisely using
+// models.DockerHost slices and have them wired through ReadState.
+// It wires HostSourceID on each container so the ReadState path can resolve
+// container→host relationships.
+func readStateFromDockerHosts(hosts []models.DockerHost) *mockReadState {
+	var hostViews []*unifiedresources.DockerHostView
+	var containerViews []*unifiedresources.DockerContainerView
+	for _, dh := range hosts {
+		hv := dockerHostViewFromModel(dh)
+		hostViews = append(hostViews, hv)
+		for _, ct := range dh.Containers {
+			// Build container view with HostSourceID wired to the parent host.
+			cv := dockerContainerViewFromModelWithHost(ct, dh.ID)
+			containerViews = append(containerViews, cv)
+		}
+	}
+	return &mockReadState{
+		dockerHosts:      hostViews,
+		dockerContainers: containerViews,
+	}
 }
 
-func (m *mockStateProvider) GetState() models.StateSnapshot {
-	return m.state
+// dockerContainerViewFromModelWithHost wraps a models.DockerContainer in a
+// DockerContainerView with HostSourceID set so ReadState can resolve the parent host.
+func dockerContainerViewFromModelWithHost(ct models.DockerContainer, hostID string) *unifiedresources.DockerContainerView {
+	ports := make([]unifiedresources.DockerPortMeta, 0, len(ct.Ports))
+	for _, p := range ct.Ports {
+		ports = append(ports, unifiedresources.DockerPortMeta{
+			PrivatePort: p.PrivatePort,
+			PublicPort:  p.PublicPort,
+			Protocol:    p.Protocol,
+			IP:          p.IP,
+		})
+	}
+	mounts := make([]unifiedresources.DockerMountMeta, 0, len(ct.Mounts))
+	for _, m := range ct.Mounts {
+		mounts = append(mounts, unifiedresources.DockerMountMeta{
+			Type:        m.Type,
+			Source:      m.Source,
+			Destination: m.Destination,
+			Mode:        m.Mode,
+			RW:          m.RW,
+		})
+	}
+	networks := make([]unifiedresources.DockerNetworkMeta, 0, len(ct.Networks))
+	for _, n := range ct.Networks {
+		networks = append(networks, unifiedresources.DockerNetworkMeta{
+			Name: n.Name,
+			IPv4: n.IPv4,
+			IPv6: n.IPv6,
+		})
+	}
+	r := &unifiedresources.Resource{
+		ID:   ct.ID,
+		Name: ct.Name,
+		Type: unifiedresources.ResourceTypeAppContainer,
+		Docker: &unifiedresources.DockerData{
+			ContainerID:    ct.ID,
+			HostSourceID:   hostID,
+			Image:          ct.Image,
+			ContainerState: ct.State,
+			Labels:         ct.Labels,
+			Ports:          ports,
+			Mounts:         mounts,
+			Networks:       networks,
+		},
+	}
+	v := unifiedresources.NewDockerContainerView(r)
+	return &v
+}
+
+// dockerContainerViewFromModel wraps a models.DockerContainer in a
+// DockerContainerView for test fixtures. Does NOT set HostSourceID — use
+// dockerContainerViewFromModelWithHost when container→host resolution is needed.
+func dockerContainerViewFromModel(ct models.DockerContainer) *unifiedresources.DockerContainerView {
+	return dockerContainerViewFromModelWithHost(ct, "")
+}
+
+// dockerHostViewFromModel wraps a models.DockerHost in a DockerHostView for test fixtures.
+func dockerHostViewFromModel(dh models.DockerHost) *unifiedresources.DockerHostView {
+	r := &unifiedresources.Resource{
+		ID:   dh.ID,
+		Name: dh.Hostname,
+		Type: unifiedresources.ResourceTypeHost,
+		Docker: &unifiedresources.DockerData{
+			HostSourceID: dh.ID,
+			Hostname:     dh.Hostname,
+			AgentID:      dh.AgentID,
+		},
+	}
+	v := unifiedresources.NewDockerHostView(r)
+	return &v
 }
 
 // mockAIAnalyzer implements AIAnalyzer for testing
@@ -43,8 +130,7 @@ func containsString(s, substr string) bool {
 }
 
 func TestNewService(t *testing.T) {
-	provider := &mockStateProvider{}
-	service := NewService(provider, nil, DefaultConfig())
+	service := NewService(nil, DefaultConfig())
 
 	if service == nil {
 		t.Fatal("NewService returned nil")
@@ -195,20 +281,18 @@ func TestBuildContainerInfo(t *testing.T) {
 }
 
 func TestRunDiscovery_NoAnalyzer(t *testing.T) {
-	provider := &mockStateProvider{
-		state: models.StateSnapshot{
-			DockerHosts: []models.DockerHost{
-				{
-					Hostname: "host1",
-					Containers: []models.DockerContainer{
-						{ID: "1", Name: "test", Image: "test:latest"},
-					},
-				},
+	rs := readStateFromDockerHosts([]models.DockerHost{
+		{
+			ID:       "host1",
+			Hostname: "host1",
+			Containers: []models.DockerContainer{
+				{ID: "1", Name: "test", Image: "test:latest"},
 			},
 		},
-	}
+	})
 
-	service := NewService(provider, nil, DefaultConfig())
+	service := NewService(nil, DefaultConfig())
+	service.SetReadState(rs)
 	// Don't set analyzer
 
 	apps := service.RunDiscovery(context.Background())
@@ -218,20 +302,17 @@ func TestRunDiscovery_NoAnalyzer(t *testing.T) {
 }
 
 func TestRunDiscovery_WithAnalyzer(t *testing.T) {
-	provider := &mockStateProvider{
-		state: models.StateSnapshot{
-			DockerHosts: []models.DockerHost{
-				{
-					AgentID:  "agent-1",
-					Hostname: "docker-host",
-					Containers: []models.DockerContainer{
-						{ID: "1", Name: "mydb", Image: "postgres:14"},
-						{ID: "2", Name: "cache", Image: "redis:7"},
-					},
-				},
+	rs := readStateFromDockerHosts([]models.DockerHost{
+		{
+			ID:       "agent-1",
+			AgentID:  "agent-1",
+			Hostname: "docker-host",
+			Containers: []models.DockerContainer{
+				{ID: "1", Name: "mydb", Image: "postgres:14"},
+				{ID: "2", Name: "cache", Image: "redis:7"},
 			},
 		},
-	}
+	})
 
 	analyzer := &mockAIAnalyzer{
 		responses: map[string]string{
@@ -240,7 +321,8 @@ func TestRunDiscovery_WithAnalyzer(t *testing.T) {
 		},
 	}
 
-	service := NewService(provider, nil, DefaultConfig())
+	service := NewService(nil, DefaultConfig())
+	service.SetReadState(rs)
 	service.SetAIAnalyzer(analyzer)
 
 	apps := service.RunDiscovery(context.Background())
@@ -279,20 +361,17 @@ func TestRunDiscovery_WithAnalyzer(t *testing.T) {
 }
 
 func TestCaching(t *testing.T) {
-	provider := &mockStateProvider{
-		state: models.StateSnapshot{
-			DockerHosts: []models.DockerHost{
-				{
-					AgentID:  "agent-1",
-					Hostname: "host1",
-					Containers: []models.DockerContainer{
-						{ID: "1", Name: "db1", Image: "postgres:14"},
-						{ID: "2", Name: "db2", Image: "postgres:14"}, // Same image
-					},
-				},
+	rs := readStateFromDockerHosts([]models.DockerHost{
+		{
+			ID:       "agent-1",
+			AgentID:  "agent-1",
+			Hostname: "host1",
+			Containers: []models.DockerContainer{
+				{ID: "1", Name: "db1", Image: "postgres:14"},
+				{ID: "2", Name: "db2", Image: "postgres:14"}, // Same image
 			},
 		},
-	}
+	})
 
 	analyzer := &mockAIAnalyzer{
 		responses: map[string]string{
@@ -300,7 +379,8 @@ func TestCaching(t *testing.T) {
 		},
 	}
 
-	service := NewService(provider, nil, DefaultConfig())
+	service := NewService(nil, DefaultConfig())
+	service.SetReadState(rs)
 	service.SetAIAnalyzer(analyzer)
 
 	// First run
@@ -329,7 +409,7 @@ func TestCaching(t *testing.T) {
 }
 
 func TestAnalyzeContainer_CapsAnalysisCacheSize(t *testing.T) {
-	service := NewService(&mockStateProvider{}, nil, DefaultConfig())
+	service := NewService(nil, DefaultConfig())
 	analyzer := &mockAIAnalyzer{}
 	host := dockerHostViewFromModel(models.DockerHost{AgentID: "agent-1", Hostname: "host1"})
 
@@ -358,8 +438,7 @@ func TestAnalyzeContainer_CapsAnalysisCacheSize(t *testing.T) {
 }
 
 func TestGetStatus(t *testing.T) {
-	provider := &mockStateProvider{}
-	service := NewService(provider, nil, DefaultConfig())
+	service := NewService(nil, DefaultConfig())
 
 	status := service.GetStatusSnapshot()
 
@@ -385,19 +464,16 @@ func TestGetStatus(t *testing.T) {
 }
 
 func TestLowConfidenceFiltering(t *testing.T) {
-	provider := &mockStateProvider{
-		state: models.StateSnapshot{
-			DockerHosts: []models.DockerHost{
-				{
-					AgentID:  "agent-1",
-					Hostname: "host1",
-					Containers: []models.DockerContainer{
-						{ID: "1", Name: "mystery", Image: "custom/unknown:latest"},
-					},
-				},
+	rs := readStateFromDockerHosts([]models.DockerHost{
+		{
+			ID:       "agent-1",
+			AgentID:  "agent-1",
+			Hostname: "host1",
+			Containers: []models.DockerContainer{
+				{ID: "1", Name: "mystery", Image: "custom/unknown:latest"},
 			},
 		},
-	}
+	})
 
 	analyzer := &mockAIAnalyzer{
 		responses: map[string]string{
@@ -405,7 +481,8 @@ func TestLowConfidenceFiltering(t *testing.T) {
 		},
 	}
 
-	service := NewService(provider, nil, DefaultConfig())
+	service := NewService(nil, DefaultConfig())
+	service.SetReadState(rs)
 	service.SetAIAnalyzer(analyzer)
 
 	apps := service.RunDiscovery(context.Background())
@@ -462,19 +539,16 @@ func TestParseAIResponse_RejectsOversizedPayload(t *testing.T) {
 }
 
 func TestRunDiscovery_ShellQuotesUnsafeContainerNameInCLI(t *testing.T) {
-	provider := &mockStateProvider{
-		state: models.StateSnapshot{
-			DockerHosts: []models.DockerHost{
-				{
-					AgentID:  "agent-1",
-					Hostname: "docker-host",
-					Containers: []models.DockerContainer{
-						{ID: "1", Name: "db;rm -rf /", Image: "postgres:14"},
-					},
-				},
+	rs := readStateFromDockerHosts([]models.DockerHost{
+		{
+			ID:       "agent-1",
+			AgentID:  "agent-1",
+			Hostname: "docker-host",
+			Containers: []models.DockerContainer{
+				{ID: "1", Name: "db;rm -rf /", Image: "postgres:14"},
 			},
 		},
-	}
+	})
 
 	analyzer := &mockAIAnalyzer{
 		responses: map[string]string{
@@ -482,7 +556,8 @@ func TestRunDiscovery_ShellQuotesUnsafeContainerNameInCLI(t *testing.T) {
 		},
 	}
 
-	service := NewService(provider, nil, DefaultConfig())
+	service := NewService(nil, DefaultConfig())
+	service.SetReadState(rs)
 	service.SetAIAnalyzer(analyzer)
 
 	apps := service.RunDiscovery(context.Background())

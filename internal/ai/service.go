@@ -34,9 +34,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// StateProvider provides access to the current infrastructure state
+// StateProvider provides access to the current infrastructure state.
+// Consumers should call ReadSnapshot() instead of the legacy GetState().
 type StateProvider interface {
-	GetState() models.StateSnapshot
+	ReadSnapshot() models.StateSnapshot
 }
 
 // CommandPolicy defines the interface for command security policy
@@ -461,9 +462,8 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 	// Initialize infrastructure discovery service if not already done
 	// This uses AI to detect applications running in Docker containers
 	// and saves discoveries to the knowledge store for Patrol to use when proposing commands
-	if s.infraDiscoveryService == nil && sp != nil && s.knowledgeStore != nil {
+	if s.infraDiscoveryService == nil && s.knowledgeStore != nil {
 		s.infraDiscoveryService = infradiscovery.NewService(
-			sp,
 			s.knowledgeStore,
 			infradiscovery.DefaultConfig(),
 		)

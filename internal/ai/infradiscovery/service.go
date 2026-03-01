@@ -17,15 +17,9 @@ import (
 	"unicode"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
-
-// StateProvider provides access to the current infrastructure state.
-type StateProvider interface {
-	GetState() models.StateSnapshot
-}
 
 // AIAnalyzer provides AI analysis capabilities for discovery.
 // This interface allows the discovery service to use LLM analysis
@@ -87,7 +81,6 @@ type DiscoveryResult struct {
 
 // Service manages infrastructure discovery.
 type Service struct {
-	stateProvider  StateProvider
 	readState      unifiedresources.ReadState
 	knowledgeStore *knowledge.Store
 	aiAnalyzer     AIAnalyzer
@@ -173,12 +166,6 @@ const (
 	defaultCacheExpiry       = 1 * time.Hour
 )
 
-type emptyStateProvider struct{}
-
-func (emptyStateProvider) GetState() models.StateSnapshot {
-	return models.StateSnapshot{}
-}
-
 // DefaultConfig returns the default discovery configuration.
 func DefaultConfig() Config {
 	return Config{
@@ -213,19 +200,14 @@ func normalizeContext(ctx context.Context) context.Context {
 }
 
 // NewService creates a new infrastructure discovery service.
-func NewService(stateProvider StateProvider, knowledgeStore *knowledge.Store, cfg Config) *Service {
+func NewService(knowledgeStore *knowledge.Store, cfg Config) *Service {
 	cfg = normalizeConfig(cfg)
 
-	if stateProvider == nil {
-		log.Warn().Msg("Infrastructure discovery state provider not configured; using empty state provider")
-		stateProvider = emptyStateProvider{}
-	}
 	if cfg.AIAnalysisTimeout <= 0 {
 		cfg.AIAnalysisTimeout = 45 * time.Second
 	}
 
 	return &Service{
-		stateProvider:     stateProvider,
 		knowledgeStore:    knowledgeStore,
 		interval:          cfg.Interval,
 		cacheExpiry:       cfg.CacheExpiry,
@@ -245,11 +227,19 @@ func (s *Service) SetAIAnalyzer(analyzer AIAnalyzer) {
 }
 
 // SetReadState sets the unified ReadState for typed infrastructure access.
-// When set, RunDiscovery uses ReadState instead of the legacy StateProvider.
+// If the service is already running but has not yet completed an initial
+// discovery (because ReadState was nil at Start time), a background forced
+// refresh is triggered so the first run is not silently skipped.
 func (s *Service) SetReadState(rs unifiedresources.ReadState) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.readState = rs
+	needsKickstart := rs != nil && s.running && s.lastRun.IsZero()
+	s.mu.Unlock()
+
+	if needsKickstart {
+		log.Info().Msg("ReadState wired after service start; triggering initial discovery")
+		s.ForceRefresh(nil)
+	}
 }
 
 // goRecover launches fn in a goroutine with panic recovery logging.
@@ -428,47 +418,34 @@ func (s *Service) RunDiscovery(ctx context.Context) []DiscoveredApp {
 	}
 	var allContainers []containerItem
 
-	if rs != nil {
-		// Preferred path: typed ReadState accessors.
-		hosts := rs.DockerHosts()
-		hostBySourceID := make(map[string]*unifiedresources.DockerHostView, len(hosts))
-		for _, h := range hosts {
-			if h == nil {
-				continue
-			}
-			if sid := h.HostSourceID(); sid != "" {
-				hostBySourceID[sid] = h
-			}
-
-		}
-		for _, ct := range rs.DockerContainers() {
-			if ct == nil {
-				continue
-			}
-			host := hostBySourceID[ct.HostSourceID()]
-			if host == nil {
-				log.Debug().
-					Str("container", ct.Name()).
-					Str("host_source_id", ct.HostSourceID()).
-					Msg("Skipping container with unresolved host")
-				continue
-			}
-			allContainers = append(allContainers, containerItem{container: ct, host: host})
-		}
-	} else if s.stateProvider != nil {
-		// Legacy fallback: GetState() → models snapshot.
-		state := s.stateProvider.GetState()
-		for _, dh := range state.DockerHosts {
-			for _, ct := range dh.Containers {
-				allContainers = append(allContainers, containerItem{
-					container: dockerContainerViewFromModel(ct),
-					host:      dockerHostViewFromModel(dh),
-				})
-			}
-		}
-	} else {
-		log.Error().Msg("Neither ReadState nor StateProvider configured; skipping discovery")
+	if rs == nil {
+		log.Error().Msg("ReadState not configured; skipping discovery")
 		return nil
+	}
+
+	hosts := rs.DockerHosts()
+	hostBySourceID := make(map[string]*unifiedresources.DockerHostView, len(hosts))
+	for _, h := range hosts {
+		if h == nil {
+			continue
+		}
+		if sid := h.HostSourceID(); sid != "" {
+			hostBySourceID[sid] = h
+		}
+	}
+	for _, ct := range rs.DockerContainers() {
+		if ct == nil {
+			continue
+		}
+		host := hostBySourceID[ct.HostSourceID()]
+		if host == nil {
+			log.Debug().
+				Str("container", ct.Name()).
+				Str("host_source_id", ct.HostSourceID()).
+				Msg("Skipping container with unresolved host")
+			continue
+		}
+		allContainers = append(allContainers, containerItem{container: ct, host: host})
 	}
 
 	if len(allContainers) == 0 {
@@ -1135,69 +1112,4 @@ func shellQuoteIfNeeded(input string) string {
 	}
 	escaped := strings.ReplaceAll(input, `'`, `'"'"'`)
 	return "'" + escaped + "'"
-}
-
-// dockerContainerViewFromModel wraps a legacy models.DockerContainer in a
-// DockerContainerView for the fallback path when ReadState is not wired.
-func dockerContainerViewFromModel(ct models.DockerContainer) *unifiedresources.DockerContainerView {
-	ports := make([]unifiedresources.DockerPortMeta, 0, len(ct.Ports))
-	for _, p := range ct.Ports {
-		ports = append(ports, unifiedresources.DockerPortMeta{
-			PrivatePort: p.PrivatePort,
-			PublicPort:  p.PublicPort,
-			Protocol:    p.Protocol,
-			IP:          p.IP,
-		})
-	}
-	mounts := make([]unifiedresources.DockerMountMeta, 0, len(ct.Mounts))
-	for _, m := range ct.Mounts {
-		mounts = append(mounts, unifiedresources.DockerMountMeta{
-			Type:        m.Type,
-			Source:      m.Source,
-			Destination: m.Destination,
-			Mode:        m.Mode,
-			RW:          m.RW,
-		})
-	}
-	networks := make([]unifiedresources.DockerNetworkMeta, 0, len(ct.Networks))
-	for _, n := range ct.Networks {
-		networks = append(networks, unifiedresources.DockerNetworkMeta{
-			Name: n.Name,
-			IPv4: n.IPv4,
-			IPv6: n.IPv6,
-		})
-	}
-	r := &unifiedresources.Resource{
-		ID:   ct.ID,
-		Name: ct.Name,
-		Type: unifiedresources.ResourceTypeAppContainer,
-		Docker: &unifiedresources.DockerData{
-			ContainerID:    ct.ID,
-			Image:          ct.Image,
-			ContainerState: ct.State,
-			Labels:         ct.Labels,
-			Ports:          ports,
-			Mounts:         mounts,
-			Networks:       networks,
-		},
-	}
-	v := unifiedresources.NewDockerContainerView(r)
-	return &v
-}
-
-// dockerHostViewFromModel wraps a legacy models.DockerHost in a
-// DockerHostView for the fallback path when ReadState is not wired.
-func dockerHostViewFromModel(dh models.DockerHost) *unifiedresources.DockerHostView {
-	r := &unifiedresources.Resource{
-		ID:   dh.ID,
-		Name: dh.Hostname,
-		Type: unifiedresources.ResourceTypeHost,
-		Docker: &unifiedresources.DockerData{
-			HostSourceID: dh.ID,
-			Hostname:     dh.Hostname,
-			AgentID:      dh.AgentID,
-		},
-	}
-	v := unifiedresources.NewDockerHostView(r)
-	return &v
 }
