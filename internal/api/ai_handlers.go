@@ -2961,10 +2961,7 @@ func (h *AISettingsHandler) HandleListModels(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Require authentication
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
-		return
-	}
+	// Auth is enforced by RequireAuth + RequireScope middleware at the route level.
 
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
