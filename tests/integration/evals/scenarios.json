@@ -180,6 +180,26 @@
       "agentic": {
         "task_file": "evals/tasks/audit-reporting.md"
       }
+    },
+    {
+      "id": "ai-patrol-lifecycle",
+      "name": "AI Patrol Finding Lifecycle",
+      "description": "Validates AI Patrol status, findings, force run, autonomy settings, approval queue, investigation, finding acknowledge/resolve lifecycle, and AI page UI.",
+      "deterministic": {
+        "command": [
+          "npx",
+          "playwright",
+          "test",
+          "tests/journeys/07-ai-patrol-finding-lifecycle.spec.ts",
+          "--project=chromium",
+          "--reporter=list",
+          "--retries=1"
+        ],
+        "env": {}
+      },
+      "agentic": {
+        "task_file": "evals/tasks/ai-patrol-lifecycle.md"
+      }
     }
   ]
 }
