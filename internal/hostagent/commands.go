@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"math/rand"
 	"net"
 	"net/url"
@@ -20,6 +19,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog"
 )
 
@@ -127,13 +127,17 @@ func (c *CommandClient) stopChan() <-chan struct{} {
 type messageType string
 
 const (
-	msgTypeAgentRegister messageType = "agent_register"
-	msgTypeAgentPing     messageType = "agent_ping"
-	msgTypeCommandResult messageType = "command_result"
-	msgTypeRegistered    messageType = "registered"
-	msgTypePong          messageType = "pong"
-	msgTypeExecuteCmd    messageType = "execute_command"
-	msgTypeReadFile      messageType = "read_file"
+	msgTypeAgentRegister   messageType = "agent_register"
+	msgTypeAgentPing       messageType = "agent_ping"
+	msgTypeCommandResult   messageType = "command_result"
+	msgTypeRegistered      messageType = "registered"
+	msgTypePong            messageType = "pong"
+	msgTypeExecuteCmd      messageType = "execute_command"
+	msgTypeReadFile        messageType = "read_file"
+	msgTypeDeployPreflight messageType = "deploy_preflight"
+	msgTypeDeployInstall   messageType = "deploy_install"
+	msgTypeDeployCancel    messageType = "deploy_cancel"
+	msgTypeDeployProgress  messageType = "deploy_progress"
 )
 
 type wsMessage struct {
@@ -460,26 +464,7 @@ func (c *CommandClient) pingLoop(ctx context.Context, conn *websocket.Conn, done
 }
 
 func computeReconnectDelay(failures int) time.Duration {
-	if reconnectDelay <= 0 {
-		return 0
-	}
-	if failures < 1 {
-		failures = 1
-	}
-
-	delay := reconnectDelay * time.Duration(math.Pow(2, float64(failures-1)))
-	if reconnectMaxDelay > 0 && delay > reconnectMaxDelay {
-		delay = reconnectMaxDelay
-	}
-	if reconnectJitterRatio <= 0 {
-		return delay
-	}
-
-	jitter := time.Duration(float64(delay) * reconnectJitterRatio * (reconnectRandFloat64()*2 - 1))
-	if delay+jitter < 0 {
-		return 0
-	}
-	return delay + jitter
+	return utils.ExponentialBackoff(reconnectDelay, reconnectMaxDelay, failures, reconnectJitterRatio, reconnectRandFloat64)
 }
 
 func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn) error {
@@ -517,6 +502,30 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 				continue
 			}
 			go c.handleExecuteCommand(ctx, conn, payload)
+
+		case msgTypeDeployPreflight:
+			var payload deployPreflightPayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				c.logger.Error().Err(err).Msg("Failed to parse deploy_preflight payload")
+				continue
+			}
+			go c.handleDeployPreflight(ctx, conn, payload)
+
+		case msgTypeDeployInstall:
+			var payload deployInstallPayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				c.logger.Error().Err(err).Msg("Failed to parse deploy_install payload")
+				continue
+			}
+			go c.handleDeployInstall(ctx, conn, payload)
+
+		case msgTypeDeployCancel:
+			var payload deployCancelPayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				c.logger.Error().Err(err).Msg("Failed to parse deploy_cancel payload")
+				continue
+			}
+			c.handleDeployCancel(payload)
 
 		default:
 			c.logger.Debug().Str("type", string(msg.Type)).Msg("Unknown message type")

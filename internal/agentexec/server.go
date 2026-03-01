@@ -56,8 +56,9 @@ var safeTargetIDPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 // Server manages WebSocket connections from agents
 type Server struct {
 	mu            sync.RWMutex
-	agents        map[string]*agentConn                // agentID -> connection
-	pendingReqs   map[string]chan CommandResultPayload // scoped request key -> response channel
+	agents        map[string]*agentConn                 // agentID -> connection
+	pendingReqs   map[string]chan CommandResultPayload  // scoped request key -> response channel
+	deploySubs    map[string]chan DeployProgressPayload // deploySubKey(agentID, jobID) -> progress subscriber
 	validateToken func(token string, agentID string) bool
 	shutdown      chan struct{}
 	shutdownOnce  sync.Once
@@ -86,6 +87,7 @@ func NewServer(validateToken func(token string, agentID string) bool) *Server {
 	return &Server{
 		agents:        make(map[string]*agentConn),
 		pendingReqs:   make(map[string]chan CommandResultPayload),
+		deploySubs:    make(map[string]chan DeployProgressPayload),
 		validateToken: validateToken,
 		shutdown:      make(chan struct{}),
 	}
@@ -102,6 +104,10 @@ func (s *Server) isShuttingDown() bool {
 
 func pendingRequestKey(agentID, requestID string) string {
 	return agentID + "\x00" + requestID
+}
+
+func deploySubKey(agentID, jobID string) string {
+	return agentID + "\x00" + jobID
 }
 
 func normalizeTarget(targetType, targetID string) (string, string, error) {
@@ -546,6 +552,64 @@ func (s *Server) readLoop(ac *agentConn) {
 					Str("request_id", result.RequestID).
 					Msg("No pending request for result")
 			}
+
+		case MsgTypeDeployProgress:
+			var progress DeployProgressPayload
+			if err := msg.DecodePayload(&progress); err != nil {
+				log.Error().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Failed to parse deploy progress")
+				continue
+			}
+			if progress.JobID == "" {
+				log.Warn().Str("agent_id", ac.agent.AgentID).Msg("Dropping deploy progress with empty job_id")
+				continue
+			}
+
+			subKey := deploySubKey(ac.agent.AgentID, progress.JobID)
+			s.mu.RLock()
+			ch, ok := s.deploySubs[subKey]
+			s.mu.RUnlock()
+
+			if ok {
+				sent := false
+				if progress.Final {
+					// Terminal messages (job_complete) get extra delivery attempts
+					// but use a timeout to avoid deadlocking the readLoop.
+					select {
+					case ch <- progress:
+						sent = true
+					case <-time.After(5 * time.Second):
+						log.Error().
+							Str("agent_id", ac.agent.AgentID).
+							Str("job_id", progress.JobID).
+							Msg("Deploy final progress send timed out — subscriber may have leaked")
+					}
+				} else {
+					select {
+					case ch <- progress:
+						sent = true
+					default:
+						log.Warn().
+							Str("agent_id", ac.agent.AgentID).
+							Str("job_id", progress.JobID).
+							Msg("Deploy progress channel full, dropping")
+					}
+				}
+				if sent {
+					log.Debug().
+						Str("agent_id", ac.agent.AgentID).
+						Str("job_id", progress.JobID).
+						Str("target_id", progress.TargetID).
+						Str("phase", string(progress.Phase)).
+						Str("status", string(progress.Status)).
+						Bool("final", progress.Final).
+						Msg("Received deploy progress from agent")
+				}
+			} else {
+				log.Debug().
+					Str("agent_id", ac.agent.AgentID).
+					Str("job_id", progress.JobID).
+					Msg("No subscriber for deploy progress")
+			}
 		}
 	}
 }
@@ -876,4 +940,87 @@ func (s *Server) GetAgentForHost(hostname string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// --- Deploy protocol ---
+
+// SubscribeDeployProgress registers a channel to receive deploy progress
+// events for the given agent and job ID. Returns a buffered channel. The caller
+// must call UnsubscribeDeployProgress when done.
+func (s *Server) SubscribeDeployProgress(agentID, jobID string, bufSize int) chan DeployProgressPayload {
+	if bufSize <= 0 {
+		bufSize = 64
+	}
+	ch := make(chan DeployProgressPayload, bufSize)
+	s.mu.Lock()
+	s.deploySubs[deploySubKey(agentID, jobID)] = ch
+	s.mu.Unlock()
+	return ch
+}
+
+// UnsubscribeDeployProgress removes the progress subscriber for an agent's job.
+func (s *Server) UnsubscribeDeployProgress(agentID, jobID string) {
+	s.mu.Lock()
+	delete(s.deploySubs, deploySubKey(agentID, jobID))
+	s.mu.Unlock()
+}
+
+// SendDeployPreflight sends a preflight check command to the source agent.
+// The caller should subscribe to deploy progress for the job ID before calling
+// this method. Results stream back as DeployProgressPayload messages.
+func (s *Server) SendDeployPreflight(ctx context.Context, agentID string, payload DeployPreflightPayload) error {
+	payload.RequestID = strings.TrimSpace(payload.RequestID)
+	return s.sendDeployCommand(ctx, agentID, MsgTypeDeployPreflight, payload.RequestID, payload)
+}
+
+// SendDeployInstall sends an install command to the source agent.
+// The caller should subscribe to deploy progress for the job ID before calling
+// this method. Results stream back as DeployProgressPayload messages.
+func (s *Server) SendDeployInstall(ctx context.Context, agentID string, payload DeployInstallPayload) error {
+	payload.RequestID = strings.TrimSpace(payload.RequestID)
+	return s.sendDeployCommand(ctx, agentID, MsgTypeDeployInstall, payload.RequestID, payload)
+}
+
+// SendDeployCancel sends a cancel command to the source agent.
+func (s *Server) SendDeployCancel(ctx context.Context, agentID string, payload DeployCancelPayload) error {
+	payload.RequestID = strings.TrimSpace(payload.RequestID)
+	return s.sendDeployCommand(ctx, agentID, MsgTypeDeployCancelJob, payload.RequestID, payload)
+}
+
+func (s *Server) sendDeployCommand(ctx context.Context, agentID string, msgType MessageType, requestID string, payload any) error {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return fmt.Errorf("agent id is required")
+	}
+
+	s.mu.RLock()
+	ac, ok := s.agents[agentID]
+	s.mu.RUnlock()
+
+	if !ok {
+		return fmt.Errorf("agent %s not connected", agentID)
+	}
+
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return fmt.Errorf("request id is required for deploy commands")
+	}
+	if len(requestID) > maxRequestIDLength {
+		return fmt.Errorf("request id exceeds %d characters", maxRequestIDLength)
+	}
+
+	msg, err := NewMessage(msgType, requestID, payload)
+	if err != nil {
+		return fmt.Errorf("failed to encode deploy command: %w", err)
+	}
+
+	ac.writeMu.Lock()
+	err = s.sendMessage(ac.conn, msg)
+	ac.writeMu.Unlock()
+
+	if err != nil {
+		return fmt.Errorf("failed to send deploy command: %w", err)
+	}
+
+	return nil
 }
