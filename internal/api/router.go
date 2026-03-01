@@ -4526,9 +4526,9 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 			"Monitor not available", nil)
 		return
 	}
-	state := monitor.GetState()
+	snap := monitor.GetState()
 
-	frontendState := state.ToFrontend()
+	frontendState := snap.ToFrontend()
 
 	if err := utils.WriteJSONResponse(w, frontendState); err != nil {
 		log.Error().Err(err).Msg("Failed to encode state response")
@@ -4670,11 +4670,11 @@ func (r *Router) handleStorage(w http.ResponseWriter, req *http.Request) {
 		writeErrorResponse(w, http.StatusInternalServerError, "tenant_unavailable", "Tenant monitor is not available", nil)
 		return
 	}
-	state := monitor.GetState()
+	snap := monitor.GetState()
 
 	// Find the storage by ID
 	var storageDetail *models.Storage
-	for _, storage := range state.Storage {
+	for _, storage := range snap.Storage {
 		if storage.ID == path {
 			storageDetail = &storage
 			break
@@ -5493,7 +5493,7 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, "Tenant monitor is not available", http.StatusInternalServerError)
 		return
 	}
-	state := monitor.GetState()
+	snap := monitor.GetState()
 	metricsStoreEnabled := monitor.GetMetricsStore() != nil
 	primarySourceHint := "memory"
 	if metricsStoreEnabled && duration > inMemoryChartThreshold {
@@ -5505,9 +5505,9 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 
 	var selectedNode *models.Node
 	if selectedNodeID != "" {
-		for idx := range state.Nodes {
-			if state.Nodes[idx].ID == selectedNodeID {
-				selectedNode = &state.Nodes[idx]
+		for idx := range snap.Nodes {
+			if snap.Nodes[idx].ID == selectedNodeID {
+				selectedNode = &snap.Nodes[idx]
 				break
 			}
 		}
@@ -5563,7 +5563,7 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 
 	guestTypes := make(map[string]string)
 
-	for _, vm := range state.VMs {
+	for _, vm := range snap.VMs {
 		if !matchesSelectedNode(vm.Instance, vm.Node) {
 			continue
 		}
@@ -5583,7 +5583,7 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 		chartData[vm.ID] = series
 	}
 
-	for _, ct := range state.Containers {
+	for _, ct := range snap.Containers {
 		if !matchesSelectedNode(ct.Instance, ct.Node) {
 			continue
 		}
@@ -5603,7 +5603,7 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 		chartData[ct.ID] = series
 	}
 
-	for _, cluster := range state.KubernetesClusters {
+	for _, cluster := range snap.KubernetesClusters {
 		if cluster.Hidden {
 			continue
 		}
@@ -5634,7 +5634,7 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 
-	for _, host := range state.DockerHosts {
+	for _, host := range snap.DockerHosts {
 		if !matchesSelectedDockerHost(host) {
 			continue
 		}
@@ -6367,7 +6367,7 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		http.Error(w, "Tenant monitor is not available", http.StatusInternalServerError)
 		return
 	}
-	state := monitor.GetState()
+	snap := monitor.GetState()
 	mockModeEnabled := mock.IsMockEnabled()
 	metricsStoreEnabled := monitor.GetMetricsStore() != nil
 	primarySourceHint := "memory"
@@ -6381,13 +6381,13 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 	buckets := make(map[int64]*workloadSummaryBuckets)
 	guestPointCount := 0
 	guestCounts := WorkloadsGuestCounts{}
-	snapshots := make([]workloadsSummarySnapshot, 0, len(state.VMs)+len(state.Containers))
+	snapshots := make([]workloadsSummarySnapshot, 0, len(snap.VMs)+len(snap.Containers))
 
 	var selectedNode *models.Node
 	if selectedNodeID != "" {
-		for idx := range state.Nodes {
-			if state.Nodes[idx].ID == selectedNodeID {
-				selectedNode = &state.Nodes[idx]
+		for idx := range snap.Nodes {
+			if snap.Nodes[idx].ID == selectedNodeID {
+				selectedNode = &snap.Nodes[idx]
 				break
 			}
 		}
@@ -6438,7 +6438,7 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		return strings.EqualFold(strings.TrimSpace(pod.NodeName), nodeName)
 	}
 
-	for _, vm := range state.VMs {
+	for _, vm := range snap.VMs {
 		if !matchesSelectedNode(vm.Instance, vm.Node) {
 			continue
 		}
@@ -6495,7 +6495,7 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		snapshots = append(snapshots, snapshot)
 	}
 
-	for _, ct := range state.Containers {
+	for _, ct := range snap.Containers {
 		if !matchesSelectedNode(ct.Instance, ct.Node) {
 			continue
 		}
@@ -6552,7 +6552,7 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		snapshots = append(snapshots, snapshot)
 	}
 
-	for _, cluster := range state.KubernetesClusters {
+	for _, cluster := range snap.KubernetesClusters {
 		if cluster.Hidden {
 			continue
 		}
@@ -6641,7 +6641,7 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		}
 	}
 
-	for _, host := range state.DockerHosts {
+	for _, host := range snap.DockerHosts {
 		if !matchesSelectedDockerHost(host) {
 			continue
 		}
@@ -7094,7 +7094,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 		return apiPoints
 	}
-	state := monitor.GetState()
+	snap := monitor.GetState()
 	mockModeEnabled := mock.IsMockEnabled()
 
 	parseGuestID := func(id string) (string, string, int, bool) {
@@ -7110,14 +7110,14 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 
 	findVM := func(id string) *models.VM {
-		for i := range state.VMs {
-			if state.VMs[i].ID == id {
-				return &state.VMs[i]
+		for i := range snap.VMs {
+			if snap.VMs[i].ID == id {
+				return &snap.VMs[i]
 			}
 		}
 		if instance, node, vmID, ok := parseGuestID(id); ok {
-			for i := range state.VMs {
-				vm := &state.VMs[i]
+			for i := range snap.VMs {
+				vm := &snap.VMs[i]
 				if vm.VMID == vmID && vm.Node == node && vm.Instance == instance {
 					return vm
 				}
@@ -7127,14 +7127,14 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 
 	findContainer := func(id string) *models.Container {
-		for i := range state.Containers {
-			if state.Containers[i].ID == id {
-				return &state.Containers[i]
+		for i := range snap.Containers {
+			if snap.Containers[i].ID == id {
+				return &snap.Containers[i]
 			}
 		}
 		if instance, node, vmID, ok := parseGuestID(id); ok {
-			for i := range state.Containers {
-				ct := &state.Containers[i]
+			for i := range snap.Containers {
+				ct := &snap.Containers[i]
 				if ct.VMID == vmID && ct.Node == node && ct.Instance == instance {
 					return ct
 				}
@@ -7144,44 +7144,44 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 
 	findNode := func(id string) *models.Node {
-		for i := range state.Nodes {
-			if state.Nodes[i].ID == id {
-				return &state.Nodes[i]
+		for i := range snap.Nodes {
+			if snap.Nodes[i].ID == id {
+				return &snap.Nodes[i]
 			}
 		}
 		return nil
 	}
 
 	findStorage := func(id string) *models.Storage {
-		for i := range state.Storage {
-			if state.Storage[i].ID == id {
-				return &state.Storage[i]
+		for i := range snap.Storage {
+			if snap.Storage[i].ID == id {
+				return &snap.Storage[i]
 			}
 		}
 		return nil
 	}
 
 	findDockerHost := func(id string) *models.DockerHost {
-		for i := range state.DockerHosts {
-			if state.DockerHosts[i].ID == id {
-				return &state.DockerHosts[i]
+		for i := range snap.DockerHosts {
+			if snap.DockerHosts[i].ID == id {
+				return &snap.DockerHosts[i]
 			}
 		}
 		return nil
 	}
 
 	findHost := func(id string) *models.Host {
-		for i := range state.Hosts {
-			if state.Hosts[i].ID == id {
-				return &state.Hosts[i]
+		for i := range snap.Hosts {
+			if snap.Hosts[i].ID == id {
+				return &snap.Hosts[i]
 			}
 		}
 		return nil
 	}
 
 	findDockerContainer := func(id string) *models.DockerContainer {
-		for i := range state.DockerHosts {
-			host := &state.DockerHosts[i]
+		for i := range snap.DockerHosts {
+			host := &snap.DockerHosts[i]
 			for j := range host.Containers {
 				if host.Containers[j].ID == id {
 					return &host.Containers[j]

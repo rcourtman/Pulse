@@ -162,7 +162,7 @@ type legacyStateRatchet struct {
 // These represent legacy nil-fallback paths that are dead code when
 // ReadState is wired. Each number must only decrease over time.
 //
-// Last updated: 2026-03-01 (total state.*: 87, GetState: 27).
+// Last updated: 2026-03-01 (total state.*: 1, GetState: 27).
 // SRC-03u: Migrated ai/chat/context_prefetch.go from stateProvider.GetState()+state.ResolveResource
 // to unifiedresources.ResolveResource(ReadState, name). Removed stateProvider dependency entirely.
 // ContextPrefetcher now uses ReadState as sole data source. Delta: GetState -1.
@@ -257,14 +257,22 @@ type legacyStateRatchet struct {
 // `state`, not real legacy state accesses.
 // Delta: state.VMs -4, state.Containers -4, state.Nodes -5, state.DockerHosts -5,
 // state.Storage -3, state.PBSInstances -2, state.KubernetesClusters -2.
+// SRC-04f: Renamed local `state` variable to `snap` in router.go handleState,
+// handleStorage, handleWorkloadCharts, handleWorkloadsSummaryCharts, handleMetricsHistory.
+// All 41 ratchet-tracked accesses were false positives from local variables named `state`
+// (assigned from monitor.GetState()), not real legacy state accesses. GetState() calls
+// themselves remain (they are real legacy calls). One state.DockerHosts remains in
+// infradiscovery/service.go (legacy fallback path, real access).
+// Delta: state.VMs -8, state.Containers -8, state.Nodes -9, state.DockerHosts -7,
+// state.Hosts -3, state.Storage -4, state.KubernetesClusters -2.
 var legacyStateRatchets = []legacyStateRatchet{
-	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 8, "ReadState.VMs()"},
-	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 8, "ReadState.Containers()"},
-	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 9, "ReadState.Nodes()"},
-	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 8, "ReadState.DockerHosts()"},
-	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 3, "ReadState.Hosts()"},
-	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 4, "ReadState.StoragePools()"},
-	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 2, "ReadState.K8sClusters()"},
+	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 0, "ReadState.VMs()"},
+	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 0, "ReadState.Containers()"},
+	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 0, "ReadState.Nodes()"},
+	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 1, "ReadState.DockerHosts()"},
+	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 0, "ReadState.Hosts()"},
+	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 0, "ReadState.StoragePools()"},
+	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 0, "ReadState.K8sClusters()"},
 	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 0, "ReadState.PBSInstances()"},
 	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 0, "ReadState.PMGInstances()"},
 
