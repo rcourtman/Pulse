@@ -162,7 +162,7 @@ type legacyStateRatchet struct {
 // These represent legacy nil-fallback paths that are dead code when
 // ReadState is wired. Each number must only decrease over time.
 //
-// Last updated: 2026-02-28 (total state.*: 195, GetState: 30).
+// Last updated: 2026-03-01 (total state.*: 161, GetState: 30).
 // SRC-03f: servicediscovery/service.go migrated to ReadState with legacy fallback.
 // SRC-03g: forecast/service.go migrated from StateProvider.GetState to ResourceIterator
 // (removed 3 GetState, state.VMs -2, state.Containers -2, state.Nodes -2, state.Storage -1).
@@ -197,14 +197,19 @@ type legacyStateRatchet struct {
 // Ceilings also reflect in-flight SRC-03l (servicediscovery migration) reductions.
 // SRC-03p: Removed gatherGuestsFromSnapshot legacy fallback from patrol_intelligence.go.
 // ReadState is now the sole path for gatherGuestIntelligence (state.VMs -1, state.Containers -1).
+// SRC-03q: Renamed local `state` variable to `snap` in servicediscovery/service.go to eliminate
+// 34 false-positive ratchet matches. servicediscovery already used ReadState exclusively (SRC-03l)
+// but the local StateSnapshot variable was named `state`, triggering regex matches.
+// Delta: state.VMs -7, state.Containers -7, state.Nodes -6, state.DockerHosts -6,
+// state.Hosts -5, state.KubernetesClusters -3 (total -34 false positives).
 var legacyStateRatchets = []legacyStateRatchet{
-	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 36, "ReadState.VMs()"},
-	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 36, "ReadState.Containers()"},
-	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 35, "ReadState.Nodes()"},
-	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 27, "ReadState.DockerHosts()"},
-	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 15, "ReadState.Hosts()"},
+	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 29, "ReadState.VMs()"},
+	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 29, "ReadState.Containers()"},
+	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 29, "ReadState.Nodes()"},
+	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 21, "ReadState.DockerHosts()"},
+	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 10, "ReadState.Hosts()"},
 	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 16, "ReadState.StoragePools()"},
-	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 9, "ReadState.K8sClusters()"},
+	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 6, "ReadState.K8sClusters()"},
 	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 5, "ReadState.PBSInstances()"},
 	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 2, "ReadState.PMGInstances()"},
 

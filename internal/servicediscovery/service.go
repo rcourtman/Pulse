@@ -885,7 +885,7 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 	s.lastRun = time.Now()
 	s.mu.Unlock()
 
-	state, ok := s.getSnapshot()
+	snap, ok := s.getSnapshot()
 	if !ok {
 		return
 	}
@@ -893,7 +893,7 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 	newCount := 0
 
 	// Process Docker containers
-	for _, host := range state.DockerHosts {
+	for _, host := range snap.DockerHosts {
 		for _, container := range host.Containers {
 			select {
 			case <-ctx.Done():
@@ -953,17 +953,17 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 	}
 
 	// Process system containers (LXC)
-	lxcNew, lxcChanged := s.processFingerprint(ctx, GenerateLXCFingerprint, "system-container", "system-container:", state.Containers)
+	lxcNew, lxcChanged := s.processFingerprint(ctx, GenerateLXCFingerprint, "system-container", "system-container:", snap.Containers)
 	newCount += lxcNew
 	changedCount += lxcChanged
 
 	// Process VMs
-	vmNew, vmChanged := s.processFingerprint(ctx, GenerateVMFingerprint, "vm", "vm:", state.VMs)
+	vmNew, vmChanged := s.processFingerprint(ctx, GenerateVMFingerprint, "vm", "vm:", snap.VMs)
 	newCount += vmNew
 	changedCount += vmChanged
 
 	// Process Kubernetes pods
-	for _, cluster := range state.KubernetesClusters {
+	for _, cluster := range snap.KubernetesClusters {
 		for _, pod := range cluster.Pods {
 			select {
 			case <-ctx.Done():
@@ -1044,7 +1044,7 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 	}
 
 	// Cleanup orphaned data (fingerprints/discoveries for removed resources)
-	s.cleanupOrphanedData(state)
+	s.cleanupOrphanedData(snap)
 }
 
 // processOrphanedDataFingerprint processes fingerprints for LXC containers and VMs.
@@ -1134,11 +1134,11 @@ func (s *Service) processFingerprint(
 }
 
 // cleanupOrphanedData removes fingerprints and discoveries for resources that no longer exist.
-func (s *Service) cleanupOrphanedData(state StateSnapshot) {
+func (s *Service) cleanupOrphanedData(snap StateSnapshot) {
 	// Safety check: Don't cleanup if state appears empty
 	// This prevents catastrophic deletion if state provider has an error
-	totalResources := len(state.Containers) + len(state.VMs) + len(state.KubernetesClusters)
-	for _, host := range state.DockerHosts {
+	totalResources := len(snap.Containers) + len(snap.VMs) + len(snap.KubernetesClusters)
+	for _, host := range snap.DockerHosts {
 		totalResources += len(host.Containers)
 	}
 	if totalResources == 0 {
@@ -1150,7 +1150,7 @@ func (s *Service) cleanupOrphanedData(state StateSnapshot) {
 	currentIDs := make(map[string]bool)
 
 	// Docker containers
-	for _, host := range state.DockerHosts {
+	for _, host := range snap.DockerHosts {
 		for _, container := range host.Containers {
 			fpKey := "docker:" + host.AgentID + ":" + container.Name
 			currentIDs[fpKey] = true
@@ -1158,19 +1158,19 @@ func (s *Service) cleanupOrphanedData(state StateSnapshot) {
 	}
 
 	// System containers
-	for _, ct := range state.Containers {
+	for _, ct := range snap.Containers {
 		fpKey := "system-container:" + ct.Node + ":" + strconv.Itoa(ct.VMID)
 		currentIDs[fpKey] = true
 	}
 
 	// VMs
-	for _, vm := range state.VMs {
+	for _, vm := range snap.VMs {
 		fpKey := "vm:" + vm.Node + ":" + strconv.Itoa(vm.VMID)
 		currentIDs[fpKey] = true
 	}
 
 	// Kubernetes pods
-	for _, cluster := range state.KubernetesClusters {
+	for _, cluster := range snap.KubernetesClusters {
 		for _, pod := range cluster.Pods {
 			fpKey := "k8s:" + cluster.ID + ":" + pod.Namespace + "/" + pod.Name
 			currentIDs[fpKey] = true
@@ -1791,7 +1791,7 @@ func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]st
 	if req.ResourceType != ResourceTypeHost {
 		return req
 	}
-	state, ok := s.getSnapshot()
+	snap, ok := s.getSnapshot()
 	if !ok {
 		return req
 	}
@@ -1808,7 +1808,7 @@ func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]st
 		*aliasIDs = append(*aliasIDs, id)
 	}
 
-	for _, host := range state.Hosts {
+	for _, host := range snap.Hosts {
 		if host.ID == req.HostID || host.ID == req.ResourceID || host.Hostname == req.HostID || host.Hostname == req.ResourceID || (req.Hostname != "" && host.Hostname == req.Hostname) {
 			addAlias(host.ID, host.ID)
 			addAlias(host.Hostname, host.Hostname)
@@ -1821,7 +1821,7 @@ func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]st
 		}
 	}
 
-	for _, node := range state.Nodes {
+	for _, node := range snap.Nodes {
 		if node.Name == req.HostID || node.Name == req.ResourceID || node.ID == req.HostID || node.ID == req.ResourceID || (req.Hostname != "" && node.Name == req.Hostname) {
 			addAlias(node.Name, node.Name)
 			addAlias(node.ID, node.ID)
@@ -1865,7 +1865,7 @@ func (s *Service) cleanupAliasedDiscoveries(canonicalID string, aliasIDs []strin
 
 // getResourceMetadata retrieves metadata for a resource from the state.
 func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
-	state, ok := s.getSnapshot()
+	snap, ok := s.getSnapshot()
 	if !ok {
 		return nil
 	}
@@ -1873,7 +1873,7 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 
 	switch req.ResourceType {
 	case ResourceTypeSystemContainer:
-		for _, c := range state.Containers {
+		for _, c := range snap.Containers {
 			if fmt.Sprintf("%d", c.VMID) == req.ResourceID && c.Node == req.HostID {
 				metadata["name"] = c.Name
 				metadata["status"] = c.Status
@@ -1882,7 +1882,7 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 			}
 		}
 	case ResourceTypeVM:
-		for _, vm := range state.VMs {
+		for _, vm := range snap.VMs {
 			if fmt.Sprintf("%d", vm.VMID) == req.ResourceID && vm.Node == req.HostID {
 				metadata["name"] = vm.Name
 				metadata["status"] = vm.Status
@@ -1891,7 +1891,7 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 			}
 		}
 	case ResourceTypeDocker:
-		for _, host := range state.DockerHosts {
+		for _, host := range snap.DockerHosts {
 			if host.AgentID == req.HostID || host.Hostname == req.HostID {
 				for _, c := range host.Containers {
 					if c.Name == req.ResourceID {
@@ -1906,7 +1906,7 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 			}
 		}
 	case ResourceTypeHost:
-		for _, host := range state.Hosts {
+		for _, host := range snap.Hosts {
 			if host.ID == req.ResourceID || host.Hostname == req.ResourceID || host.ID == req.HostID {
 				metadata["hostname"] = host.Hostname
 				metadata["display_name"] = host.DisplayName
@@ -1932,14 +1932,14 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 // For system containers/VMs, this is the first IP from the Proxmox guest agent.
 // For Docker containers, this is the Docker host's IP/hostname.
 func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
-	state, ok := s.getSnapshot()
+	snap, ok := s.getSnapshot()
 	if !ok {
 		return ""
 	}
 
 	switch req.ResourceType {
 	case ResourceTypeSystemContainer:
-		for _, c := range state.Containers {
+		for _, c := range snap.Containers {
 			if fmt.Sprintf("%d", c.VMID) == req.ResourceID && c.Node == req.HostID {
 				if len(c.IPAddresses) > 0 {
 					return c.IPAddresses[0]
@@ -1948,7 +1948,7 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 			}
 		}
 	case ResourceTypeVM:
-		for _, vm := range state.VMs {
+		for _, vm := range snap.VMs {
 			if fmt.Sprintf("%d", vm.VMID) == req.ResourceID && vm.Node == req.HostID {
 				if len(vm.IPAddresses) > 0 {
 					return vm.IPAddresses[0]
@@ -1958,7 +1958,7 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 		}
 	case ResourceTypeDocker:
 		// For Docker containers, use the Docker host's hostname/IP
-		for _, host := range state.DockerHosts {
+		for _, host := range snap.DockerHosts {
 			if host.AgentID == req.HostID || host.Hostname == req.HostID {
 				// Use hostname if it looks like an IP, otherwise it's a hostname
 				return host.Hostname
@@ -1967,14 +1967,14 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 	case ResourceTypeDockerVM, ResourceTypeDockerSystemContainer:
 		// For Docker containers inside VMs/system containers, find the parent's IP
 		// The hostID contains the parent resource info
-		for _, vm := range state.VMs {
+		for _, vm := range snap.VMs {
 			if fmt.Sprintf("%d", vm.VMID) == req.HostID || vm.Name == req.HostID {
 				if len(vm.IPAddresses) > 0 {
 					return vm.IPAddresses[0]
 				}
 			}
 		}
-		for _, c := range state.Containers {
+		for _, c := range snap.Containers {
 			if fmt.Sprintf("%d", c.VMID) == req.HostID || c.Name == req.HostID {
 				if len(c.IPAddresses) > 0 {
 					return c.IPAddresses[0]
@@ -1983,7 +1983,7 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 		}
 	case ResourceTypeHost:
 		// Host-agent resources: prefer the reported hostname from state
-		for _, host := range state.Hosts {
+		for _, host := range snap.Hosts {
 			if host.ID == req.ResourceID || host.Hostname == req.ResourceID || host.ID == req.HostID || host.Hostname == req.HostID {
 				if isURLHostCandidate(host.Hostname) {
 					return host.Hostname
@@ -1992,7 +1992,7 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 		}
 
 		// Proxmox node resources routed through host discovery: fall back to node name
-		for _, node := range state.Nodes {
+		for _, node := range snap.Nodes {
 			if node.ID == req.ResourceID || node.Name == req.ResourceID || node.ID == req.HostID || node.Name == req.HostID {
 				if isURLHostCandidate(node.Name) {
 					return node.Name
@@ -2120,7 +2120,7 @@ func (s *Service) suggestHostManagementURLWithReason(req DiscoveryRequest, host 
 	if host == "" {
 		return "", "no_host", "no host or IP candidate available"
 	}
-	state, ok := s.getSnapshot()
+	snap, ok := s.getSnapshot()
 	if !ok {
 		return "", "state_provider_unavailable", "state unavailable"
 	}
@@ -2134,8 +2134,8 @@ func (s *Service) suggestHostManagementURLWithReason(req DiscoveryRequest, host 
 	}
 
 	var matchedHost *Host
-	for i := range state.Hosts {
-		h := &state.Hosts[i]
+	for i := range snap.Hosts {
+		h := &snap.Hosts[i]
 		if h.ID == req.HostID || h.Hostname == req.HostID || h.ID == req.ResourceID || h.Hostname == req.ResourceID {
 			matchedHost = h
 			break
@@ -2143,7 +2143,7 @@ func (s *Service) suggestHostManagementURLWithReason(req DiscoveryRequest, host 
 	}
 
 	// Proxmox nodes (or host agents linked to nodes) should suggest the node UI.
-	for _, node := range state.Nodes {
+	for _, node := range snap.Nodes {
 		if nodeMatchesReq(node) {
 			return buildURL("https", host, 8006, ""), "host_management_profile_proxmox_node", "Proxmox node profile"
 		}
@@ -2565,18 +2565,18 @@ func (s *Service) ListDiscoveriesByHost(hostID string) ([]*ResourceDiscovery, er
 // is represented by both its Node Name and its Linked Host Agent ID.
 // The Host Agent ID is preferred.
 func (s *Service) deduplicateDiscoveries(discoveries []*ResourceDiscovery) []*ResourceDiscovery {
-	state, ok := s.getSnapshot()
+	snap, ok := s.getSnapshot()
 	if !ok {
 		return discoveries
 	}
-	if len(state.Nodes) == 0 {
+	if len(snap.Nodes) == 0 {
 		return discoveries
 	}
 
 	// Map linked agent IDs to their PVE node source(s)
 	// AgentID -> NodeName
 	linkedAgents := make(map[string]string)
-	for _, node := range state.Nodes {
+	for _, node := range snap.Nodes {
 		if node.LinkedHostAgentID != "" {
 			linkedAgents[node.LinkedHostAgentID] = node.Name
 		}
@@ -2608,7 +2608,7 @@ func (s *Service) deduplicateDiscoveries(discoveries []*ResourceDiscovery) []*Re
 			isPVENode := false
 			var linkedAgentID string
 
-			for _, node := range state.Nodes {
+			for _, node := range snap.Nodes {
 				if d.HostID == node.Name || d.HostID == node.ID || d.ResourceID == node.Name {
 					isPVENode = true
 					linkedAgentID = node.LinkedHostAgentID
@@ -2654,8 +2654,8 @@ func (s *Service) upgradeCLIAccessIfNeeded(d *ResourceDiscovery) {
 
 	// Fix empty hostname by looking up the resource name from state
 	if d.Hostname == "" {
-		if state, ok := s.getSnapshot(); ok {
-			hostname := s.lookupHostnameFromState(d.ResourceType, d.HostID, d.ResourceID, state)
+		if snap, ok := s.getSnapshot(); ok {
+			hostname := s.lookupHostnameFromState(d.ResourceType, d.HostID, d.ResourceID, snap)
 			if hostname != "" {
 				d.Hostname = hostname
 				upgraded = true
@@ -2690,22 +2690,22 @@ func (s *Service) upgradeCLIAccessIfNeeded(d *ResourceDiscovery) {
 }
 
 // lookupHostnameFromState finds the hostname/name for a resource from state
-func (s *Service) lookupHostnameFromState(resourceType ResourceType, hostID, resourceID string, state StateSnapshot) string {
+func (s *Service) lookupHostnameFromState(resourceType ResourceType, hostID, resourceID string, snap StateSnapshot) string {
 	switch resourceType {
 	case ResourceTypeSystemContainer:
-		for _, c := range state.Containers {
+		for _, c := range snap.Containers {
 			if fmt.Sprintf("%d", c.VMID) == resourceID && c.Node == hostID {
 				return c.Name
 			}
 		}
 	case ResourceTypeVM:
-		for _, vm := range state.VMs {
+		for _, vm := range snap.VMs {
 			if fmt.Sprintf("%d", vm.VMID) == resourceID && vm.Node == hostID {
 				return vm.Name
 			}
 		}
 	case ResourceTypeDocker:
-		for _, host := range state.DockerHosts {
+		for _, host := range snap.DockerHosts {
 			if host.AgentID == hostID || host.Hostname == hostID {
 				for _, c := range host.Containers {
 					if c.Name == resourceID {
