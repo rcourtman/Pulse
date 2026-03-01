@@ -1863,10 +1863,10 @@ create_user() {
 }
 
 backup_existing() {
-    if [[ -d "$CONFIG_DIR" ]]; then
-        print_info "Backing up existing configuration..."
-        cp -a "$CONFIG_DIR" "${CONFIG_DIR}.backup.$(date +%Y%m%d-%H%M%S)"
-    fi
+    # No-op: removed full config-dir backup that accumulated multi-GB copies
+    # on every upgrade without cleanup, filling disks on small VMs.
+    # The upgrade only swaps the binary; config files are not modified.
+    :
 }
 
 download_pulse() {
