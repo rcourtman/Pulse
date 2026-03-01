@@ -3086,6 +3086,35 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Validate and normalize target_type if provided
+	targetType := strings.ToLower(strings.TrimSpace(req.TargetType))
+	if targetType != "" {
+		switch targetType {
+		case "host", "container", "vm", "node", "lxc":
+			// valid
+		default:
+			http.Error(w, "Invalid target_type (allowed: host, container, vm, node, lxc)", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Validate target_id length if provided
+	if len(req.TargetID) > 256 {
+		http.Error(w, "target_id exceeds maximum length", http.StatusBadRequest)
+		return
+	}
+
+	// Validate conversation history roles
+	for _, msg := range req.History {
+		switch msg.Role {
+		case "user", "assistant":
+			// valid
+		default:
+			http.Error(w, "Invalid role in history (allowed: user, assistant)", http.StatusBadRequest)
+			return
+		}
+	}
+
 	// Execute the prompt with a timeout
 	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
 	defer cancel()
@@ -3105,7 +3134,7 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 
 	resp, err := h.GetAIService(r.Context()).Execute(ctx, ai.ExecuteRequest{
 		Prompt:     req.Prompt,
-		TargetType: req.TargetType,
+		TargetType: targetType,
 		TargetID:   req.TargetID,
 		Context:    req.Context,
 		History:    history,
@@ -3243,9 +3272,38 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Validate and normalize target_type if provided
+	targetType := strings.ToLower(strings.TrimSpace(req.TargetType))
+	if targetType != "" {
+		switch targetType {
+		case "host", "container", "vm", "node", "lxc":
+			// valid
+		default:
+			http.Error(w, "Invalid target_type (allowed: host, container, vm, node, lxc)", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Validate target_id length if provided
+	if len(req.TargetID) > 256 {
+		http.Error(w, "target_id exceeds maximum length", http.StatusBadRequest)
+		return
+	}
+
+	// Validate conversation history roles
+	for _, msg := range req.History {
+		switch msg.Role {
+		case "user", "assistant":
+			// valid
+		default:
+			http.Error(w, "Invalid role in history (allowed: user, assistant)", http.StatusBadRequest)
+			return
+		}
+	}
+
 	log.Info().
 		Int("prompt_len", len(req.Prompt)).
-		Str("target_type", req.TargetType).
+		Str("target_type", targetType).
 		Str("target_id", req.TargetID).
 		Msg("AI streaming request started")
 
@@ -3380,7 +3438,7 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 	// Execute with streaming
 	resp, err := h.GetAIService(r.Context()).ExecuteStream(ctx, ai.ExecuteRequest{
 		Prompt:     req.Prompt,
-		TargetType: req.TargetType,
+		TargetType: targetType,
 		TargetID:   req.TargetID,
 		Context:    req.Context,
 		History:    history,

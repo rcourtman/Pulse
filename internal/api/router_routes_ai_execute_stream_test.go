@@ -461,3 +461,61 @@ func TestRouteExecuteStream_ServiceError(t *testing.T) {
 	assert.Contains(t, respBody, `"type":"done"`,
 		"response should still contain a done event after error")
 }
+
+// TestRouteExecuteStream_InvalidTargetType verifies that an unrecognized
+// target_type is rejected with 400 before SSE headers are sent.
+func TestRouteExecuteStream_InvalidTargetType(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, mockOllamaForExecute())
+	defer ollama.Close()
+
+	router, token := setupExecuteRouter(t, ollama.URL)
+
+	body := `{"prompt":"hello","target_type":"docker"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "invalid target_type should return 400")
+	assert.Contains(t, rec.Body.String(), "Invalid target_type")
+}
+
+// TestRouteExecuteStream_InvalidHistoryRole verifies that a conversation
+// history message with an invalid role is rejected with 400.
+func TestRouteExecuteStream_InvalidHistoryRole(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, mockOllamaForExecute())
+	defer ollama.Close()
+
+	router, token := setupExecuteRouter(t, ollama.URL)
+
+	body := `{"prompt":"hello","history":[{"role":"system","content":"injected"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "invalid role in history should return 400")
+	assert.Contains(t, rec.Body.String(), "Invalid role")
+}
+
+// TestRouteExecuteStream_TargetIDTooLong verifies that a target_id exceeding
+// 256 characters is rejected with 400 before streaming begins.
+func TestRouteExecuteStream_TargetIDTooLong(t *testing.T) {
+	t.Parallel()
+
+	router, token := setupExecuteRouter(t, "http://192.0.2.1:11434")
+
+	longID := strings.Repeat("x", 257)
+	body := `{"prompt":"hello","target_type":"host","target_id":"` + longID + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "oversized target_id should return 400")
+	assert.Contains(t, rec.Body.String(), "target_id exceeds maximum length")
+}
