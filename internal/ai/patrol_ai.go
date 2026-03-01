@@ -201,7 +201,7 @@ func CleanThinkingTokens(content string) string {
 // runAIAnalysis uses the agentic tool-driven approach to analyze infrastructure.
 // The LLM investigates using MCP tools and reports findings via patrol_report_finding.
 // An optional scope focuses the patrol on specific resources.
-func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSnapshot, scope *PatrolScope) (*AIAnalysisResult, error) {
+func (p *PatrolService) runAIAnalysis(ctx context.Context, snap models.StateSnapshot, scope *PatrolScope) (*AIAnalysisResult, error) {
 	if p.aiService == nil {
 		return nil, fmt.Errorf("Pulse Patrol service not available")
 	}
@@ -218,7 +218,7 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 	intelCancel()
 
 	// Phase 1: Deterministic triage
-	triageResult := p.RunDeterministicTriage(ctx, state, scope, guestIntel)
+	triageResult := p.RunDeterministicTriage(ctx, snap, scope, guestIntel)
 	log.Info().
 		Int("flags", len(triageResult.Flags)).
 		Bool("quiet", triageResult.IsQuiet).
@@ -241,7 +241,7 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 	}
 
 	// Phase 2: Build focused seed context from triage results
-	seedContext, seededFindingIDs := p.buildTriageSeedContext(triageResult, state, scope, guestIntel)
+	seedContext, seededFindingIDs := p.buildTriageSeedContext(triageResult, snap, scope, guestIntel)
 	if strings.TrimSpace(seedContext) == "" {
 		return nil, nil
 	}
@@ -269,7 +269,7 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 	}
 
 	// Create finding creator adapter
-	adapter := newPatrolFindingCreatorAdapter(p, state)
+	adapter := newPatrolFindingCreatorAdapter(p, snap)
 
 	// Get chat service and set the finding creator on the executor
 	cs := p.aiService.GetChatService()
@@ -1159,7 +1159,7 @@ type seedForecast struct {
 // Unlike buildSeedContext, this includes only flagged resource details plus required context.
 func (p *PatrolService) buildTriageSeedContext(
 	triage *TriageResult,
-	state models.StateSnapshot,
+	snap models.StateSnapshot,
 	scope *PatrolScope,
 	guestIntel map[string]*GuestIntelligence,
 ) (string, []string) {
@@ -1175,22 +1175,22 @@ func (p *PatrolService) buildTriageSeedContext(
 		flaggedSet = map[string]bool{}
 	}
 
-	findingsCtx, seededFindingIDs := p.seedFindingsAndContext(scope, state)
+	findingsCtx, seededFindingIDs := p.seedFindingsAndContext(scope, snap)
 	now := time.Now()
 
 	sections := []seedSection{
 		// P0 — always include.
 		{priority: 0, name: "triage_briefing", content: FormatTriageBriefing(triage)},
 		{priority: 0, name: "findings", content: findingsCtx},
-		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlerts(state, flaggedSet, cfg, now)},
+		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlerts(snap, flaggedSet, cfg, now)},
 		{priority: 0, name: "scope", content: buildScopeSection(scope)},
 
 		// P1 — flagged resource details only.
 		{
 			priority: 1,
 			name:     "flagged_inventory",
-			content:  p.seedResourceInventory(state, flaggedSet, cfg, now, false, guestIntel),
-			summary:  p.seedResourceInventorySummary(state, flaggedSet, cfg, now, guestIntel),
+			content:  p.seedResourceInventory(snap, flaggedSet, cfg, now, false, guestIntel),
+			summary:  p.seedResourceInventorySummary(snap, flaggedSet, cfg, now, guestIntel),
 		},
 	}
 
@@ -1204,20 +1204,20 @@ func (p *PatrolService) buildTriageSeedContext(
 // It pre-assembles current metrics, storage health, backup status, disk health, alerts,
 // connection health, and baselines/trends so the model can analyze without tool calls.
 // Tools remain available for targeted deep-dives.
-func (p *PatrolService) buildSeedContext(state models.StateSnapshot, scope *PatrolScope, guestIntel map[string]*GuestIntelligence) (string, []string) {
+func (p *PatrolService) buildSeedContext(snap models.StateSnapshot, scope *PatrolScope, guestIntel map[string]*GuestIntelligence) (string, []string) {
 	p.mu.RLock()
 	cfg := p.config
 	p.mu.RUnlock()
 
 	now := time.Now()
 	scopedSet := p.buildScopedSet(scope)
-	intel := p.seedPrecomputeIntelligence(state, scopedSet, now)
-	findingsCtx, seededFindingIDs := p.seedFindingsAndContext(scope, state)
+	intel := p.seedPrecomputeIntelligence(snap, scopedSet, now)
+	findingsCtx, seededFindingIDs := p.seedFindingsAndContext(scope, snap)
 
 	sections := []seedSection{
 		// P0 — always include.
 		{priority: 0, name: "findings", content: findingsCtx},
-		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlerts(state, scopedSet, cfg, now)},
+		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlerts(snap, scopedSet, cfg, now)},
 		{priority: 0, name: "scope", content: buildScopeSection(scope)},
 
 		// P1 — always include (typically compact).
@@ -1227,16 +1227,16 @@ func (p *PatrolService) buildSeedContext(state models.StateSnapshot, scope *Patr
 		{
 			priority: 2,
 			name:     "resource_inventory",
-			content:  p.seedResourceInventory(state, scopedSet, cfg, now, false, guestIntel),
-			summary:  p.seedResourceInventorySummary(state, scopedSet, cfg, now, guestIntel),
+			content:  p.seedResourceInventory(snap, scopedSet, cfg, now, false, guestIntel),
+			summary:  p.seedResourceInventorySummary(snap, scopedSet, cfg, now, guestIntel),
 		},
 
 		// P3 — droppable if budget is tight.
 		{priority: 3, name: "intelligence", content: p.seedIntelligenceContext(intel, now)},
-		{priority: 3, name: "backup_analysis", content: p.seedBackupAnalysis(state, now)},
+		{priority: 3, name: "backup_analysis", content: p.seedBackupAnalysis(snap, now)},
 
 		// P4 — least critical, dropped first.
-		{priority: 4, name: "pmg_snapshot", content: p.seedPMGSnapshotString(state, scopedSet, cfg, intel.isQuiet)},
+		{priority: 4, name: "pmg_snapshot", content: p.seedPMGSnapshotString(snap, scopedSet, cfg, intel.isQuiet)},
 	}
 
 	budget := p.calculateSeedBudget()
@@ -1443,7 +1443,7 @@ func (p *PatrolService) seedPreviousRun(now time.Time) string {
 
 // seedPrecomputeIntelligence pre-computes anomalies, forecasts, predictions, changes,
 // and correlations used by multiple seed context sections.
-func (p *PatrolService) seedPrecomputeIntelligence(state models.StateSnapshot, scopedSet map[string]bool, now time.Time) seedIntelligence {
+func (p *PatrolService) seedPrecomputeIntelligence(snap models.StateSnapshot, scopedSet map[string]bool, now time.Time) seedIntelligence {
 	p.mu.RLock()
 	bs := p.baselineStore
 	mh := p.metricsHistory
@@ -1522,7 +1522,7 @@ func (p *PatrolService) seedPrecomputeIntelligence(state models.StateSnapshot, s
 				intel.anomalies = append(intel.anomalies, anomalies...)
 			}
 		} else {
-			for _, n := range state.Nodes {
+			for _, n := range snap.Nodes {
 				if !seedIsInScope(scopedSet, n.ID) {
 					continue
 				}
@@ -1535,7 +1535,7 @@ func (p *PatrolService) seedPrecomputeIntelligence(state models.StateSnapshot, s
 				}
 				intel.anomalies = append(intel.anomalies, anomalies...)
 			}
-			for _, vm := range state.VMs {
+			for _, vm := range snap.VMs {
 				if vm.Template || vm.Status != "running" || !seedIsInScope(scopedSet, vm.ID) {
 					continue
 				}
@@ -1551,7 +1551,7 @@ func (p *PatrolService) seedPrecomputeIntelligence(state models.StateSnapshot, s
 				}
 				intel.anomalies = append(intel.anomalies, anomalies...)
 			}
-			for _, ct := range state.Containers {
+			for _, ct := range snap.Containers {
 				if ct.Template || ct.Status != "running" || !seedIsInScope(scopedSet, ct.ID) {
 					continue
 				}
@@ -1567,7 +1567,7 @@ func (p *PatrolService) seedPrecomputeIntelligence(state models.StateSnapshot, s
 				}
 				intel.anomalies = append(intel.anomalies, anomalies...)
 			}
-			for _, s := range state.Storage {
+			for _, s := range snap.Storage {
 				if !seedIsInScope(scopedSet, s.ID) {
 					continue
 				}
@@ -1647,7 +1647,7 @@ func (p *PatrolService) seedPrecomputeIntelligence(state models.StateSnapshot, s
 				}
 			}
 		} else {
-			for _, n := range state.Nodes {
+			for _, n := range snap.Nodes {
 				if !seedIsInScope(scopedSet, n.ID) {
 					continue
 				}
@@ -1655,7 +1655,7 @@ func (p *PatrolService) seedPrecomputeIntelligence(state models.StateSnapshot, s
 					addForecast(n.ID, n.Name, "memory", pts, n.Memory.Usage)
 				}
 			}
-			for _, vm := range state.VMs {
+			for _, vm := range snap.VMs {
 				if vm.Template || vm.Status != "running" || !seedIsInScope(scopedSet, vm.ID) {
 					continue
 				}
@@ -1666,7 +1666,7 @@ func (p *PatrolService) seedPrecomputeIntelligence(state models.StateSnapshot, s
 					addForecast(vm.ID, vm.Name, "disk", pts, vm.Disk.Usage)
 				}
 			}
-			for _, ct := range state.Containers {
+			for _, ct := range snap.Containers {
 				if ct.Template || ct.Status != "running" || !seedIsInScope(scopedSet, ct.ID) {
 					continue
 				}
@@ -1677,7 +1677,7 @@ func (p *PatrolService) seedPrecomputeIntelligence(state models.StateSnapshot, s
 					addForecast(ct.ID, ct.Name, "disk", pts, ct.Disk.Usage)
 				}
 			}
-			for _, s := range state.Storage {
+			for _, s := range snap.Storage {
 				if !seedIsInScope(scopedSet, s.ID) {
 					continue
 				}
@@ -1732,13 +1732,13 @@ func (p *PatrolService) seedPrecomputeIntelligence(state models.StateSnapshot, s
 		}
 	}
 	intel.isQuiet = len(intel.anomalies) == 0 && !hasWarningForecasts &&
-		len(intel.predictions) == 0 && len(intel.recentChanges) == 0 && len(state.ActiveAlerts) == 0
+		len(intel.predictions) == 0 && len(intel.recentChanges) == 0 && len(snap.ActiveAlerts) == 0
 
 	return intel
 }
 
 // seedResourceInventory builds the node, guest, docker, storage, ceph, and PBS sections.
-func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, now time.Time, isQuiet bool, guestIntel map[string]*GuestIntelligence) string {
+func (p *PatrolService) seedResourceInventory(snap models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, now time.Time, isQuiet bool, guestIntel map[string]*GuestIntelligence) string {
 	var sb strings.Builder
 
 	// --- Node Metrics ---
@@ -1775,7 +1775,7 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 				}
 			}
 		} else {
-			for _, n := range state.Nodes {
+			for _, n := range snap.Nodes {
 				if seedIsInScope(scopedSet, n.ID) {
 					scopedNodes = append(scopedNodes, nodeRow{
 						id:            n.ID,
@@ -1887,7 +1887,7 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 				})
 			}
 		} else {
-			for _, vm := range state.VMs {
+			for _, vm := range snap.VMs {
 				if vm.Template || !seedIsInScope(scopedSet, vm.ID) {
 					continue
 				}
@@ -1900,7 +1900,7 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 					reachable:  formatReachable(reachableFromIntel(gi)),
 				})
 			}
-			for _, ct := range state.Containers {
+			for _, ct := range snap.Containers {
 				if ct.Template || !seedIsInScope(scopedSet, ct.ID) {
 					continue
 				}
@@ -1989,8 +1989,8 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 		p.mu.RUnlock()
 
 		if rs != nil {
-			legacyByID := make(map[string]models.DockerHost, len(state.DockerHosts))
-			for _, dh := range state.DockerHosts {
+			legacyByID := make(map[string]models.DockerHost, len(snap.DockerHosts))
+			for _, dh := range snap.DockerHosts {
 				legacyByID[dh.ID] = dh
 			}
 
@@ -2046,11 +2046,11 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 				}
 				sb.WriteString("\n")
 			}
-		} else if len(state.DockerHosts) > 0 {
+		} else if len(snap.DockerHosts) > 0 {
 			sb.WriteString("# Docker\n")
 			sb.WriteString("| Host | Containers | Running | Stopped |\n")
 			sb.WriteString("|------|------------|---------|--------|\n")
-			for _, dh := range state.DockerHosts {
+			for _, dh := range snap.DockerHosts {
 				if !seedIsInScope(scopedSet, dh.ID) {
 					continue
 				}
@@ -2065,7 +2065,7 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 				sb.WriteString(fmt.Sprintf("| %s | %d | %d | %d |\n",
 					dh.Hostname, len(dh.Containers), running, stopped))
 			}
-			for _, dh := range state.DockerHosts {
+			for _, dh := range snap.DockerHosts {
 				if !seedIsInScope(scopedSet, dh.ID) {
 					continue
 				}
@@ -2244,9 +2244,9 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 	}
 
 	// --- PBS Instances ---
-	if cfg.AnalyzePBS && len(state.PBSInstances) > 0 {
+	if cfg.AnalyzePBS && len(snap.PBSInstances) > 0 {
 		sb.WriteString("# PBS Datastores\n")
-		for _, pbs := range state.PBSInstances {
+		for _, pbs := range snap.PBSInstances {
 			for _, ds := range pbs.Datastores {
 				sb.WriteString(fmt.Sprintf("- %s/%s: %.0f%% used (%s / %s)\n",
 					pbs.Name, ds.Name, ds.Usage,
@@ -2261,7 +2261,7 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 
 // seedResourceInventorySummary builds a compact, always-condensed inventory snapshot.
 // Unlike seedResourceInventory quiet mode, this summary condenses even when scoped.
-func (p *PatrolService) seedResourceInventorySummary(state models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, now time.Time, guestIntel map[string]*GuestIntelligence) string {
+func (p *PatrolService) seedResourceInventorySummary(snap models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, now time.Time, guestIntel map[string]*GuestIntelligence) string {
 	_ = now
 
 	type compactResource struct {
@@ -2278,7 +2278,7 @@ func (p *PatrolService) seedResourceInventorySummary(state models.StateSnapshot,
 		rs := p.readState
 		p.mu.RUnlock()
 
-		nodes := make([]compactResource, 0, len(state.Nodes))
+		nodes := make([]compactResource, 0, len(snap.Nodes))
 		if rs != nil {
 			for _, nv := range rs.Nodes() {
 				if !seedIsInScope(scopedSet, nv.ID()) {
@@ -2293,7 +2293,7 @@ func (p *PatrolService) seedResourceInventorySummary(state models.StateSnapshot,
 				})
 			}
 		} else {
-			for _, n := range state.Nodes {
+			for _, n := range snap.Nodes {
 				if !seedIsInScope(scopedSet, n.ID) {
 					continue
 				}
@@ -2375,7 +2375,7 @@ func (p *PatrolService) seedResourceInventorySummary(state models.StateSnapshot,
 				})
 			}
 		} else {
-			for _, vm := range state.VMs {
+			for _, vm := range snap.VMs {
 				if vm.Template || !seedIsInScope(scopedSet, vm.ID) {
 					continue
 				}
@@ -2387,7 +2387,7 @@ func (p *PatrolService) seedResourceInventorySummary(state models.StateSnapshot,
 					disk:   vm.Disk.Usage,
 				})
 			}
-			for _, ct := range state.Containers {
+			for _, ct := range snap.Containers {
 				if ct.Template || !seedIsInScope(scopedSet, ct.ID) {
 					continue
 				}
@@ -2481,7 +2481,7 @@ func (p *PatrolService) seedResourceInventorySummary(state models.StateSnapshot,
 				rows = append(rows, storageRow{name: name, status: status, usage: usage})
 			}
 		} else {
-			for _, s := range state.Storage {
+			for _, s := range snap.Storage {
 				if !seedIsInScope(scopedSet, s.ID) {
 					continue
 				}
@@ -2523,14 +2523,14 @@ func (p *PatrolService) seedResourceInventorySummary(state models.StateSnapshot,
 	return sb.String()
 }
 
-func (p *PatrolService) seedPMGSnapshotString(state models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, isQuiet bool) string {
+func (p *PatrolService) seedPMGSnapshotString(snap models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, isQuiet bool) string {
 	var sb strings.Builder
-	p.seedPMGSnapshot(&sb, state, scopedSet, cfg, isQuiet)
+	p.seedPMGSnapshot(&sb, snap, scopedSet, cfg, isQuiet)
 	return sb.String()
 }
 
 // seedPMGSnapshot adds Proxmox Mail Gateway status to the seed context
-func (p *PatrolService) seedPMGSnapshot(sb *strings.Builder, state models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, isQuiet bool) {
+func (p *PatrolService) seedPMGSnapshot(sb *strings.Builder, snap models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, isQuiet bool) {
 	if !cfg.AnalyzePMG {
 		return
 	}
@@ -2605,7 +2605,7 @@ func (p *PatrolService) seedPMGSnapshot(sb *strings.Builder, state models.StateS
 }
 
 // seedBackupAnalysis builds the backup status section.
-func (p *PatrolService) seedBackupAnalysis(state models.StateSnapshot, now time.Time) string {
+func (p *PatrolService) seedBackupAnalysis(snap models.StateSnapshot, now time.Time) string {
 	type backupInfo struct {
 		lastBackup time.Time
 		source     string
@@ -2633,7 +2633,7 @@ func (p *PatrolService) seedBackupAnalysis(state models.StateSnapshot, now time.
 		}
 	}
 
-	for _, bt := range state.PVEBackups.BackupTasks {
+	for _, bt := range snap.PVEBackups.BackupTasks {
 		if bt.Status != "OK" {
 			continue
 		}
@@ -2646,7 +2646,7 @@ func (p *PatrolService) seedBackupAnalysis(state models.StateSnapshot, now time.
 		}
 	}
 
-	for _, stb := range state.PVEBackups.StorageBackups {
+	for _, stb := range snap.PVEBackups.StorageBackups {
 		name := vmidToName[stb.VMID]
 		if name == "" {
 			name = fmt.Sprintf("vmid-%d", stb.VMID)
@@ -2656,7 +2656,7 @@ func (p *PatrolService) seedBackupAnalysis(state models.StateSnapshot, now time.
 		}
 	}
 
-	for _, pb := range state.PBSBackups {
+	for _, pb := range snap.PBSBackups {
 		name := pb.VMID
 		if id, err := strconv.Atoi(pb.VMID); err == nil {
 			if n := vmidToName[id]; n != "" {
@@ -2750,7 +2750,7 @@ func (p *PatrolService) seedBackupAnalysis(state models.StateSnapshot, now time.
 }
 
 // seedHealthAndAlerts builds the disk health, alerts, connection health, kubernetes, and hosts sections.
-func (p *PatrolService) seedHealthAndAlerts(state models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, now time.Time) string {
+func (p *PatrolService) seedHealthAndAlerts(snap models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, now time.Time) string {
 	var sb strings.Builder
 
 	p.mu.RLock()
@@ -2810,9 +2810,9 @@ func (p *PatrolService) seedHealthAndAlerts(state models.StateSnapshot, scopedSe
 	}
 
 	// --- Active Alerts ---
-	if len(state.ActiveAlerts) > 0 {
+	if len(snap.ActiveAlerts) > 0 {
 		sb.WriteString("# Active Alerts\n")
-		for _, a := range state.ActiveAlerts {
+		for _, a := range snap.ActiveAlerts {
 			since := seedFormatTimeAgo(now, a.StartTime)
 			sb.WriteString(fmt.Sprintf("- [%s] %s — since %s\n", a.Level, a.Message, since))
 		}
@@ -2820,9 +2820,9 @@ func (p *PatrolService) seedHealthAndAlerts(state models.StateSnapshot, scopedSe
 	}
 
 	// --- Recently Resolved Alerts ---
-	if len(state.RecentlyResolved) > 0 {
+	if len(snap.RecentlyResolved) > 0 {
 		sb.WriteString("# Recently Resolved Alerts\n")
-		for _, r := range state.RecentlyResolved {
+		for _, r := range snap.RecentlyResolved {
 			ago := seedFormatTimeAgo(now, r.ResolvedTime)
 			sb.WriteString(fmt.Sprintf("- %s — resolved %s\n", r.Alert.Message, ago))
 		}
@@ -2830,10 +2830,10 @@ func (p *PatrolService) seedHealthAndAlerts(state models.StateSnapshot, scopedSe
 	}
 
 	// --- Connection Health ---
-	if len(state.ConnectionHealth) > 0 {
+	if len(snap.ConnectionHealth) > 0 {
 		allConnected := true
 		var disconnected []string
-		for name, healthy := range state.ConnectionHealth {
+		for name, healthy := range snap.ConnectionHealth {
 			if !healthy {
 				allConnected = false
 				disconnected = append(disconnected, name)
@@ -2841,12 +2841,12 @@ func (p *PatrolService) seedHealthAndAlerts(state models.StateSnapshot, scopedSe
 		}
 		sb.WriteString("# Connections\n")
 		if allConnected {
-			sb.WriteString(fmt.Sprintf("All %d instances connected.\n", len(state.ConnectionHealth)))
+			sb.WriteString(fmt.Sprintf("All %d instances connected.\n", len(snap.ConnectionHealth)))
 		} else {
 			sort.Strings(disconnected)
 			sb.WriteString(fmt.Sprintf("Disconnected: %s\n", strings.Join(disconnected, ", ")))
 			sb.WriteString(fmt.Sprintf("Connected: %d/%d\n",
-				len(state.ConnectionHealth)-len(disconnected), len(state.ConnectionHealth)))
+				len(snap.ConnectionHealth)-len(disconnected), len(snap.ConnectionHealth)))
 		}
 		sb.WriteString("\n")
 	}
@@ -2856,8 +2856,8 @@ func (p *PatrolService) seedHealthAndAlerts(state models.StateSnapshot, scopedSe
 	if cfg.AnalyzeKubernetes && rs != nil {
 		k8sViews := rs.K8sClusters()
 		if len(k8sViews) > 0 {
-			legacyByID := make(map[string]models.KubernetesCluster, len(state.KubernetesClusters))
-			for _, k := range state.KubernetesClusters {
+			legacyByID := make(map[string]models.KubernetesCluster, len(snap.KubernetesClusters))
+			for _, k := range snap.KubernetesClusters {
 				legacyByID[k.ID] = k
 			}
 			sb.WriteString("# Kubernetes Clusters\n")
@@ -2988,7 +2988,7 @@ func (p *PatrolService) seedIntelligenceContext(intel seedIntelligence, now time
 }
 
 // seedFindingsAndContext builds the thresholds, active findings, dismissed findings, and user notes sections.
-func (p *PatrolService) seedFindingsAndContext(scope *PatrolScope, state models.StateSnapshot) (string, []string) {
+func (p *PatrolService) seedFindingsAndContext(scope *PatrolScope, snap models.StateSnapshot) (string, []string) {
 	var sb strings.Builder
 
 	// --- Alert Thresholds ---
