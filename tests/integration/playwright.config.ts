@@ -74,12 +74,16 @@ export default defineConfig({
       use: {
         ...devices['Pixel 5'],
       },
+      // Journey tests skip on mobile projects (all use test.skip for mobile-*),
+      // so exclude them to avoid unnecessary browser launches.
+      testIgnore: ['**/journeys/**'],
     },
     {
       name: 'mobile-safari',
       use: {
         ...devices['iPhone 12'],
       },
+      testIgnore: ['**/journeys/**'],
     },
 
     // Uncomment to test on Firefox and WebKit

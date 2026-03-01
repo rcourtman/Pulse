@@ -140,6 +140,46 @@
       "agentic": {
         "task_file": "evals/tasks/agent-registration.md"
       }
+    },
+    {
+      "id": "saml-sso-login",
+      "name": "SAML SSO Provider Lifecycle",
+      "description": "Validates SAML SSO provider CRUD, SP metadata generation, test-connection, and SSO settings UI rendering.",
+      "deterministic": {
+        "command": [
+          "npx",
+          "playwright",
+          "test",
+          "tests/journeys/05-saml-sso-login.spec.ts",
+          "--project=chromium",
+          "--reporter=list",
+          "--retries=1"
+        ],
+        "env": {}
+      },
+      "agentic": {
+        "task_file": "evals/tasks/saml-sso.md"
+      }
+    },
+    {
+      "id": "audit-log-reporting",
+      "name": "Audit Log + Reporting Lifecycle",
+      "description": "Validates audit event list/export/summary, audit webhook CRUD, notification webhooks, report generation, and reporting UI.",
+      "deterministic": {
+        "command": [
+          "npx",
+          "playwright",
+          "test",
+          "tests/journeys/06-audit-log-reporting.spec.ts",
+          "--project=chromium",
+          "--reporter=list",
+          "--retries=1"
+        ],
+        "env": {}
+      },
+      "agentic": {
+        "task_file": "evals/tasks/audit-reporting.md"
+      }
     }
   ]
 }
