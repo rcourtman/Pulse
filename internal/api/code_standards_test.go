@@ -312,3 +312,141 @@ func TestPkgLicensingImportBoundary(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Phase 3 Governance — Repo Realignment Boundary Locks
+// ---------------------------------------------------------------------------
+//
+// These tests enforce Phase 3 of the repo realignment plan
+// (pulse-enterprise/docs/V6_REPO_REALIGNMENT.md):
+//
+//   "Lock branch/release gates: no paid implementation changes merged to
+//    pulse after cut-over."
+//
+// The tests below are the Go-native equivalents of the enforcement modes
+// in scripts/audit-private-boundary.sh, ensuring these rules run as part
+// of `go test ./...` without requiring a separate CI script step.
+
+// readConsumerGoFilesFromDir returns the contents of all non-test .go files
+// in the given directory (relative to internal/api/).
+func readConsumerGoFilesFromDir(t *testing.T, relDir string) map[string]string {
+	t.Helper()
+	dir := filepath.Join("..", relDir)
+	files := make(map[string]string)
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		if filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatalf("failed to read %s: %v", path, readErr)
+		}
+		files[path] = string(data)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("failed to walk %s: %v", relDir, err)
+	}
+	return files
+}
+
+// TestNoInternalLicenseImportFromAPIProd ensures that no production file in
+// internal/api/ directly imports internal/license (root or sub-packages).
+// All license access must go through pkg/licensing via licensing_bridge.go.
+//
+// This is the Go-native equivalent of audit-private-boundary.sh
+// --enforce-api-imports.
+func TestNoInternalLicenseImportFromAPIProd(t *testing.T) {
+	importPattern := regexp.MustCompile(`"github\.com/rcourtman/pulse-go-rewrite/internal/license(?:/[^"]*)?"\s*`)
+
+	for name, content := range readGoFiles(t) {
+		for i, line := range strings.Split(content, "\n") {
+			if importPattern.MatchString(line) {
+				t.Errorf("%s:%d: direct internal/license import — use pkg/licensing bridge wrappers instead", name, i+1)
+			}
+		}
+	}
+}
+
+// TestNoInternalLicenseImportFromConsumerPackages ensures that no production
+// file outside internal/api/ and internal/license/ imports internal/license
+// (root package). Consumer packages must use pkg/licensing contracts.
+//
+// Scans all internal/ subdirectories (excluding api/ and license/), plus
+// cmd/ and pkg/ at the repo root. This covers all runtime Go code; the
+// shell-based audit-private-boundary.sh --enforce-nonapi-imports provides
+// broader repo-wide coverage including non-runtime paths.
+func TestNoInternalLicenseImportFromConsumerPackages(t *testing.T) {
+	// Exempt directories under internal/:
+	//   api     — covered by TestNoInternalLicenseImportFromAPIProd
+	//   license — intra-package imports are fine
+	exempt := map[string]bool{
+		"api":     true,
+		"license": true,
+	}
+
+	importPattern := regexp.MustCompile(`"github\.com/rcourtman/pulse-go-rewrite/internal/license"\s*`)
+
+	// Scan all internal/ subdirectories (dynamically discovered).
+	internalDir := filepath.Join("..")
+	entries, err := os.ReadDir(internalDir)
+	if err != nil {
+		t.Fatalf("failed to read internal/ directory: %v", err)
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() || exempt[entry.Name()] {
+			continue
+		}
+		for path, content := range readConsumerGoFilesFromDir(t, entry.Name()) {
+			for i, line := range strings.Split(content, "\n") {
+				if importPattern.MatchString(line) {
+					t.Errorf("%s:%d: direct internal/license import — consumer packages must use pkg/licensing contracts", path, i+1)
+				}
+			}
+		}
+	}
+
+	// Also scan cmd/ and pkg/ at the repo root.
+	repoRoot := filepath.Join("..", "..")
+	for _, topDir := range []string{"cmd", "pkg"} {
+		dir := filepath.Join(repoRoot, topDir)
+		if _, statErr := os.Stat(dir); os.IsNotExist(statErr) {
+			continue
+		}
+		files := make(map[string]string)
+		walkErr := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				return nil
+			}
+			if filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			data, readErr := os.ReadFile(path)
+			if readErr != nil {
+				t.Fatalf("failed to read %s: %v", path, readErr)
+			}
+			files[path] = string(data)
+			return nil
+		})
+		if walkErr != nil {
+			t.Fatalf("failed to walk %s: %v", topDir, walkErr)
+		}
+		for path, content := range files {
+			for i, line := range strings.Split(content, "\n") {
+				if importPattern.MatchString(line) {
+					t.Errorf("%s:%d: direct internal/license import — use pkg/licensing contracts instead", path, i+1)
+				}
+			}
+		}
+	}
+}
