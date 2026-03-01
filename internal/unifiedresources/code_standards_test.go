@@ -162,7 +162,10 @@ type legacyStateRatchet struct {
 // These represent legacy nil-fallback paths that are dead code when
 // ReadState is wired. Each number must only decrease over time.
 //
-// Last updated: 2026-03-01 (total state.*: 160, GetState: 29).
+// Last updated: 2026-03-01 (total state.*: 160, GetState: 27).
+// SRC-03u: Migrated ai/chat/context_prefetch.go from stateProvider.GetState()+state.ResolveResource
+// to unifiedresources.ResolveResource(ReadState, name). Removed stateProvider dependency entirely.
+// ContextPrefetcher now uses ReadState as sole data source. Delta: GetState -1.
 // SRC-03f: servicediscovery/service.go migrated to ReadState with legacy fallback.
 // SRC-03g: forecast/service.go migrated from StateProvider.GetState to ResourceIterator
 // (removed 3 GetState, state.VMs -2, state.Containers -2, state.Nodes -2, state.Storage -1).
@@ -220,7 +223,7 @@ var legacyStateRatchets = []legacyStateRatchet{
 	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 2, "ReadState.PMGInstances()"},
 
 	// GetState() calls — consumer packages must use ReadState interface
-	{regexp.MustCompile(`\.GetState\(\)`), ".GetState()", 28, "ReadState interface"},
+	{regexp.MustCompile(`\.GetState\(\)`), ".GetState()", 27, "ReadState interface"},
 }
 
 // TestLegacyStateAccessRatchet is a monotonic ratchet that prevents new

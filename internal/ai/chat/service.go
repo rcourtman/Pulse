@@ -1111,12 +1111,12 @@ func (s *Service) SetDiscoveryProvider(provider MCPDiscoveryProvider) {
 		s.executor.SetDiscoveryProvider(provider)
 	}
 	// Create/update context prefetcher with the discovery provider
-	if s.stateProvider != nil && provider != nil {
-		s.contextPrefetcher = NewContextPrefetcher(s.stateProvider, s.readState, provider)
+	if s.readState != nil && provider != nil {
+		s.contextPrefetcher = NewContextPrefetcher(s.readState, provider)
 		log.Info().Msg("[ChatService] Context prefetcher created with discovery provider")
 	} else {
 		log.Warn().
-			Bool("hasStateProvider", s.stateProvider != nil).
+			Bool("hasReadState", s.readState != nil).
 			Bool("hasDiscoveryProvider", provider != nil).
 			Msg("[ChatService] Cannot create context prefetcher - missing provider")
 	}

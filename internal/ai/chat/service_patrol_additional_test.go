@@ -179,7 +179,8 @@ func TestService_ListAvailableToolsAndSetters(t *testing.T) {
 	stateProvider := &mockStateProvider{state: models.StateSnapshot{}}
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{StateProvider: stateProvider})
 
-	service := &Service{executor: executor, stateProvider: stateProvider}
+	rs := newTestReadState(models.StateSnapshot{})
+	service := &Service{executor: executor, stateProvider: stateProvider, readState: rs}
 	service.SetGuestConfigProvider(nil)
 	service.SetBudgetChecker(func() error { return nil })
 

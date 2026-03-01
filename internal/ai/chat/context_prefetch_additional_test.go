@@ -10,14 +10,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-type mockPrefetchStateProvider struct {
-	state models.StateSnapshot
-}
-
-func (m mockPrefetchStateProvider) GetState() models.StateSnapshot {
-	return m.state
-}
-
 type mockDiscoveryProvider struct {
 	existing     map[string]*tools.ResourceDiscoveryInfo
 	triggeredKey []string
@@ -78,16 +70,16 @@ func newTestReadState(snapshot models.StateSnapshot) unifiedresources.ReadState 
 	return rr
 }
 
-func TestContextPrefetcher_NoStateProvider(t *testing.T) {
-	prefetcher := NewContextPrefetcher(nil, nil, nil)
+func TestContextPrefetcher_NoReadState(t *testing.T) {
+	prefetcher := NewContextPrefetcher(nil, nil)
 	if ctx := prefetcher.Prefetch(context.Background(), "check @missing", nil); ctx != nil {
-		t.Fatalf("expected nil context when state provider missing")
+		t.Fatalf("expected nil context when ReadState missing")
 	}
 }
 
 func TestContextPrefetcher_UnresolvedMention(t *testing.T) {
 	state := models.StateSnapshot{}
-	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{state: state}, nil, nil)
+	prefetcher := NewContextPrefetcher(newTestReadState(state), nil)
 	ctx := prefetcher.Prefetch(context.Background(), "check @missing", nil)
 	if ctx == nil || !strings.Contains(ctx.Summary, "NOT found") {
 		t.Fatalf("expected unresolved mention summary, got %#v", ctx)
@@ -129,8 +121,8 @@ func TestContextPrefetcher_ExtractResourceMentions(t *testing.T) {
 	}
 
 	rs := newTestReadState(state)
-	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{state: state}, rs, nil)
-	mentions := prefetcher.extractResourceMentions("alpha beta homepage node1 host1 pod1 dep1", state, rs)
+	prefetcher := NewContextPrefetcher(rs, nil)
+	mentions := prefetcher.extractResourceMentions("alpha beta homepage node1 host1 pod1 dep1")
 	if len(mentions) == 0 {
 		t.Fatalf("expected mentions to be detected")
 	}
@@ -186,9 +178,9 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 
 	// Build ReadState from the full state (after appending second docker host)
 	rs := newTestReadState(state)
-	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{state: state}, rs, nil)
+	prefetcher := NewContextPrefetcher(rs, nil)
 
-	mentions := prefetcher.resolveStructuredMentions(structured, state)
+	mentions := prefetcher.resolveStructuredMentions(structured)
 	if len(mentions) != 4 {
 		t.Fatalf("expected 4 mentions, got %d", len(mentions))
 	}
@@ -212,7 +204,7 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 		t.Fatalf("expected docker container ID parsed correctly, got %q", mentions[3].ResourceID)
 	}
 
-	unknown := prefetcher.resolveStructuredMentions([]StructuredMention{{ID: "weird:1", Name: "mystery", Type: "weird"}}, state)
+	unknown := prefetcher.resolveStructuredMentions([]StructuredMention{{ID: "weird:1", Name: "mystery", Type: "weird"}})
 	if len(unknown) != 1 || unknown[0].ResourceType != "weird" {
 		t.Fatalf("expected unknown type to be preserved")
 	}
@@ -220,7 +212,7 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 
 func TestContextPrefetcher_GetOrTriggerDiscovery(t *testing.T) {
 	provider := &mockDiscoveryProvider{existing: map[string]*tools.ResourceDiscoveryInfo{}}
-	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{}, nil, provider)
+	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), provider)
 
 	provider.existing[provider.key("vm", "node1", "101")] = &tools.ResourceDiscoveryInfo{
 		ResourceType: "vm",
@@ -254,7 +246,7 @@ func TestContextPrefetcher_GetOrTriggerDiscovery(t *testing.T) {
 }
 
 func TestContextPrefetcher_FormatContextSummary(t *testing.T) {
-	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{}, nil, nil)
+	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), nil)
 
 	mentions := []ResourceMention{
 		{
@@ -336,7 +328,7 @@ func TestContextPrefetcher_PrefetchStructuredMentions(t *testing.T) {
 		},
 	}}
 
-	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{state: state}, nil, provider)
+	prefetcher := NewContextPrefetcher(newTestReadState(state), provider)
 	ctx := prefetcher.Prefetch(context.Background(), "@alpha", []StructuredMention{
 		{ID: "vm:node1:101", Name: "alpha", Type: "vm", Node: "node1"},
 	})

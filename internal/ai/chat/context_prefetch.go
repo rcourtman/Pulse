@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -22,7 +21,7 @@ type ResourceMention struct {
 	BindMounts []MountInfo
 	// Full routing chain (for Docker containers)
 	DockerHostName string // Name of system-container/VM/host running Docker (e.g., "homepage-docker")
-	DockerHostType string // "system-container", "vm", or "standalone" (from state.ResolveResource)
+	DockerHostType string // "system-container", "vm", or "standalone" (from ResolveResource)
 	DockerHostVMID int    // Guest ID (VMID) if DockerHost is a system container or VM
 	NodeName       string // Hypervisor node name (e.g., "delly")
 	TargetHost     string // The correct target_host to use for commands
@@ -43,15 +42,13 @@ type PrefetchedContext struct {
 
 // ContextPrefetcher proactively gathers context based on user message content
 type ContextPrefetcher struct {
-	stateProvider     StateProvider
 	readState         unifiedresources.ReadState
 	discoveryProvider tools.DiscoveryProvider
 }
 
 // NewContextPrefetcher creates a new context prefetcher
-func NewContextPrefetcher(stateProvider StateProvider, readState unifiedresources.ReadState, discoveryProvider tools.DiscoveryProvider) *ContextPrefetcher {
+func NewContextPrefetcher(readState unifiedresources.ReadState, discoveryProvider tools.DiscoveryProvider) *ContextPrefetcher {
 	return &ContextPrefetcher{
-		stateProvider:     stateProvider,
 		readState:         readState,
 		discoveryProvider: discoveryProvider,
 	}
@@ -62,28 +59,20 @@ func NewContextPrefetcher(stateProvider StateProvider, readState unifiedresource
 // directly instead of fuzzy-matching resource names from the message text.
 func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, structuredMentions []StructuredMention) *PrefetchedContext {
 	log.Info().
-		Bool("hasStateProvider", p.stateProvider != nil).
 		Bool("hasReadState", p.readState != nil).
 		Bool("hasDiscoveryProvider", p.discoveryProvider != nil).
 		Int("structured_mentions", len(structuredMentions)).
 		Msg("[ContextPrefetch] Starting prefetch")
 
-	if p.stateProvider == nil {
-		log.Warn().Msg("[ContextPrefetch] No state provider, cannot prefetch")
+	if p.readState == nil {
+		log.Warn().Msg("[ContextPrefetch] No ReadState, cannot prefetch")
 		return nil
 	}
 
-	state := p.stateProvider.GetState()
-	vmsCount := 0
-	containersCount := 0
-	nodesCount := 0
-	dockerHostsCount := 0
-	if p.readState != nil {
-		vmsCount = len(p.readState.VMs())
-		containersCount = len(p.readState.Containers())
-		nodesCount = len(p.readState.Nodes())
-		dockerHostsCount = len(p.readState.DockerHosts())
-	}
+	vmsCount := len(p.readState.VMs())
+	containersCount := len(p.readState.Containers())
+	nodesCount := len(p.readState.Nodes())
+	dockerHostsCount := len(p.readState.DockerHosts())
 	log.Info().
 		Int("vms", vmsCount).
 		Int("containers", containersCount).
@@ -96,7 +85,7 @@ func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, struct
 	if len(structuredMentions) > 0 {
 		// Structured path: frontend already resolved the resources via autocomplete.
 		// Convert to ResourceMention using ResolveResource for full routing info.
-		mentions = p.resolveStructuredMentions(structuredMentions, state)
+		mentions = p.resolveStructuredMentions(structuredMentions)
 		log.Info().
 			Int("structured_input", len(structuredMentions)).
 			Int("resolved", len(mentions)).
@@ -104,7 +93,7 @@ func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, struct
 	} else {
 		// Fallback: fuzzy-match resource names from the message text.
 		// Used when the user types @name manually without selecting from autocomplete.
-		mentions = p.extractResourceMentions(message, state, p.readState)
+		mentions = p.extractResourceMentions(message)
 	}
 
 	if len(mentions) == 0 {
@@ -171,7 +160,8 @@ func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, struct
 // It supports two modes:
 // 1. Explicit @ mentions: @homepage, @influxdb (high confidence, exact match)
 // 2. Fuzzy name matching: "homepage" matches "homepage-docker" (fallback)
-func (p *ContextPrefetcher) extractResourceMentions(message string, state models.StateSnapshot, rs unifiedresources.ReadState) []ResourceMention {
+func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMention {
+	rs := p.readState
 	messageLower := strings.ToLower(message)
 	var mentions []ResourceMention
 	seen := make(map[string]bool) // Deduplicate by name
@@ -266,7 +256,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 					}
 
 					// Use the authoritative ResolveResource function
-					loc := state.ResolveResource(name)
+					loc := unifiedresources.ResolveResource(rs, name)
 
 					mentions = append(mentions, ResourceMention{
 						Name:           name,
@@ -297,7 +287,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 			if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
 				if !seen[nameLower] {
 					seen[nameLower] = true
-					loc := state.ResolveResource(name)
+					loc := unifiedresources.ResolveResource(rs, name)
 					mentions = append(mentions, ResourceMention{
 						Name:         name,
 						ResourceType: "node",
@@ -322,7 +312,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 			if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
 				if !seen[nameLower] {
 					seen[nameLower] = true
-					loc := state.ResolveResource(hostname)
+					loc := unifiedresources.ResolveResource(rs, hostname)
 					// Use AgentID which maps to the original models.Host.ID
 					hostID := host.AgentID()
 					mentions = append(mentions, ResourceMention{
@@ -354,7 +344,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 			if clusterLower != "" && len(clusterLower) >= 3 && matchesResource(messageLower, messageWords, clusterLower) {
 				if !seen[clusterLower] {
 					seen[clusterLower] = true
-					loc := state.ResolveResource(clusterName)
+					loc := unifiedresources.ResolveResource(rs, clusterName)
 					clusterSourceID := cluster.ClusterID()
 					mentions = append(mentions, ResourceMention{
 						Name:         clusterName,
@@ -378,7 +368,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 			if podLower != "" && len(podLower) >= 3 && matchesResource(messageLower, messageWords, podLower) {
 				if !seen[podLower] {
 					seen[podLower] = true
-					loc := state.ResolveResource(podName)
+					loc := unifiedresources.ResolveResource(rs, podName)
 					hostID := k8sClusterSourceIDs[pod.ParentID()]
 					if hostID == "" {
 						hostID = pod.ParentID()
@@ -405,7 +395,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 			if deployLower != "" && len(deployLower) >= 3 && matchesResource(messageLower, messageWords, deployLower) {
 				if !seen[deployLower] {
 					seen[deployLower] = true
-					loc := state.ResolveResource(deployName)
+					loc := unifiedresources.ResolveResource(rs, deployName)
 					hostID := k8sClusterSourceIDs[deploy.ParentID()]
 					if hostID == "" {
 						hostID = deploy.ParentID()
@@ -428,7 +418,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 
 // resolveStructuredMentions converts frontend StructuredMention objects into ResourceMention
 // objects with full routing info. This is the preferred path — no fuzzy matching needed.
-func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMention, state models.StateSnapshot) []ResourceMention {
+func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMention) []ResourceMention {
 	var mentions []ResourceMention
 	rs := p.readState
 
@@ -445,7 +435,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 		}
 
 		// Use ResolveResource for full routing info (target_host, Docker chain, etc.)
-		loc := state.ResolveResource(sm.Name)
+		loc := unifiedresources.ResolveResource(rs, sm.Name)
 
 		switch resourceType {
 		case "vm":
@@ -481,7 +471,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 			})
 
 		case "docker":
-			hostID, containerID := parseStructuredDockerMentionID(sm.ID, rs, state)
+			hostID, containerID := parseStructuredDockerMentionID(sm.ID, rs)
 
 			// Gather bind mounts via ReadState
 			var mounts []MountInfo
@@ -561,7 +551,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 	return mentions
 }
 
-func parseStructuredDockerMentionID(mentionID string, rs unifiedresources.ReadState, state models.StateSnapshot) (hostID string, containerID string) {
+func parseStructuredDockerMentionID(mentionID string, rs unifiedresources.ReadState) (hostID string, containerID string) {
 	const prefix = "docker:"
 	if !strings.HasPrefix(mentionID, prefix) {
 		return "", ""
