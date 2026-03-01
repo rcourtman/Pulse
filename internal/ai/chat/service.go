@@ -740,12 +740,12 @@ func (s *Service) createProviderForModel(modelStr string) (providers.StreamingPr
 		return nil, fmt.Errorf("no Pulse Assistant config")
 	}
 
-	parts := strings.SplitN(modelStr, ":", 2)
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("invalid model format: %s (expected provider:model)", modelStr)
-	}
-	providerName := parts[0]
-	modelName := parts[1]
+	// Use ParseModelString for all model string formats. It handles:
+	// - Explicit "provider:model" (e.g. "openai:gpt-4o")
+	// - Slash-delimited OpenRouter models (e.g. "google/gemini-2.5-flash")
+	// - OpenRouter models with suffixes (e.g. "google/gemini-2.0-flash:free")
+	// - Bare model names (e.g. "claude-3-opus")
+	providerName, modelName := config.ParseModelString(modelStr)
 
 	timeout := 5 * time.Minute
 

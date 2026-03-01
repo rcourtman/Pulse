@@ -175,18 +175,18 @@ func TestService_CreateProvider(t *testing.T) {
 			expectErr: true,
 		},
 		{
-			name: "Invalid Model Format",
+			name: "Auto-detected Provider Missing Key",
 			config: &config.AIConfig{
-				ChatModel: "gpt-4",
+				ChatModel: "gpt-4", // auto-detects as openai, but no API key
 			},
 			expectErr: true,
 		},
 		{
-			name: "Unsupported Provider",
+			name: "Unknown Prefix Defaults to Ollama",
 			config: &config.AIConfig{
-				ChatModel: "unknown:model",
+				ChatModel: "unknown:model", // no known provider prefix, defaults to ollama
 			},
-			expectErr: true,
+			expectErr: false,
 		},
 		{
 			name: "Missing API Key",
@@ -227,10 +227,10 @@ func TestService_Start_Failures(t *testing.T) {
 		assert.Contains(t, err.Error(), "Pulse Assistant config is nil")
 	})
 
-	t.Run("InvalidProvider", func(t *testing.T) {
+	t.Run("MissingAPIKey", func(t *testing.T) {
 		cfg := Config{
 			AIConfig: &config.AIConfig{
-				ChatModel: "unknown:model",
+				ChatModel: "openai:gpt-4", // explicit provider but no API key
 			},
 		}
 		s := NewService(cfg)

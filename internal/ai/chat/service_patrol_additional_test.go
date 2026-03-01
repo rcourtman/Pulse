@@ -52,16 +52,30 @@ func TestService_CreateProviderForModel(t *testing.T) {
 	}
 
 	svc.cfg = &config.AIConfig{}
-	if _, err := svc.createProviderForModel("bad"); err == nil {
-		t.Fatalf("expected invalid model format error")
+	// "bad" auto-detects as ollama, which should succeed (no API key needed)
+	if _, err := svc.createProviderForModel("bad"); err != nil {
+		t.Fatalf("expected ollama fallback for unrecognized model: %v", err)
 	}
 
-	if _, err := svc.createProviderForModel("unknown:model"); err == nil {
-		t.Fatalf("expected unsupported provider error")
+	// "unknown:model" has no known provider prefix, so ParseModelString falls through
+	// to ollama (default for unrecognized models), which succeeds
+	if _, err := svc.createProviderForModel("unknown:model"); err != nil {
+		t.Fatalf("expected ollama fallback for unknown prefix: %v", err)
 	}
 
 	if _, err := svc.createProviderForModel("ollama:llama3"); err != nil {
 		t.Fatalf("expected ollama provider to be created: %v", err)
+	}
+
+	// Slash-delimited OpenRouter models should auto-detect as openai
+	svc.cfg.OpenAIAPIKey = "sk-test"
+	if _, err := svc.createProviderForModel("google/gemini-2.5-flash"); err != nil {
+		t.Fatalf("expected openai provider for slash-delimited model: %v", err)
+	}
+
+	// OpenRouter models with :free suffix should also route to openai
+	if _, err := svc.createProviderForModel("google/gemini-2.0-flash:free"); err != nil {
+		t.Fatalf("expected openai provider for slash-delimited model with suffix: %v", err)
 	}
 
 	svc.cfg = &config.AIConfig{
