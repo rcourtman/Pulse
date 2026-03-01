@@ -18,7 +18,7 @@ func (h *ReportingHandlers) getRuntimeStateSnapshot(ctx context.Context, orgID s
 		return extensions.ReportingStateSnapshot{}, false
 	}
 
-	snap := monitor.GetState()
+	snap := monitor.ReadSnapshot()
 	snapshot := extensions.ReportingStateSnapshot{
 		Nodes:          make([]extensions.ReportingNodeSnapshot, 0, len(snap.Nodes)),
 		VMs:            make([]extensions.ReportingVMSnapshot, 0, len(snap.VMs)),

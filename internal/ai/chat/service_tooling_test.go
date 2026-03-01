@@ -14,7 +14,7 @@ import (
 
 type fakeStateProvider struct{}
 
-func (f fakeStateProvider) GetState() models.StateSnapshot {
+func (f fakeStateProvider) ReadSnapshot() models.StateSnapshot {
 	return models.StateSnapshot{}
 }
 

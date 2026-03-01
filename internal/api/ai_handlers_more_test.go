@@ -329,7 +329,7 @@ func TestAISettingsHandler_GetAIService_UsesTenantStateProvider(t *testing.T) {
 	if stateProvider == nil {
 		t.Fatalf("expected tenant state provider to be configured")
 	}
-	snapshot := stateProvider.GetState()
+	snapshot := stateProvider.ReadSnapshot()
 	if len(snapshot.VMs) != 1 || snapshot.VMs[0].ID != "vm-tenant" {
 		t.Fatalf("expected tenant state snapshot, got %#v", snapshot.VMs)
 	}

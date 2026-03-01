@@ -34,7 +34,7 @@ func TestRouter_HandleState_MockIsolation(t *testing.T) {
 	InitCSRFStore(dataPath)
 
 	// Create a router with a real monitor
-	// Since monitor.GetState() checks IsMockEnabled(), it will return mock data.
+	// Since monitor.ReadSnapshot() checks IsMockEnabled(), it will return mock data.
 	monitor, _ := monitoring.New(cfg)
 	router := &Router{
 		config:      cfg,

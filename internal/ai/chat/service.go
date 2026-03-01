@@ -20,9 +20,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// StateProvider provides access to infrastructure state
+// StateProvider provides access to infrastructure state.
+// Consumers should call ReadSnapshot() instead of the legacy GetState().
 type StateProvider interface {
-	GetState() models.StateSnapshot
+	ReadSnapshot() models.StateSnapshot
 }
 
 // CommandPolicy evaluates command security
@@ -145,8 +146,8 @@ type stateProviderAdapter struct {
 	sp StateProvider
 }
 
-func (a *stateProviderAdapter) GetState() models.StateSnapshot {
-	return a.sp.GetState()
+func (a *stateProviderAdapter) ReadSnapshot() models.StateSnapshot {
+	return a.sp.ReadSnapshot()
 }
 
 type commandPolicyAdapter struct {

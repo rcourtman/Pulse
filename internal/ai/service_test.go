@@ -19,7 +19,7 @@ type mockStateProvider struct {
 	state models.StateSnapshot
 }
 
-func (m *mockStateProvider) GetState() models.StateSnapshot {
+func (m *mockStateProvider) ReadSnapshot() models.StateSnapshot {
 	return m.state
 }
 

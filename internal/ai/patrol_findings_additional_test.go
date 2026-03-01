@@ -15,7 +15,7 @@ type patrolTestStateProvider struct {
 	state models.StateSnapshot
 }
 
-func (p *patrolTestStateProvider) GetState() models.StateSnapshot {
+func (p *patrolTestStateProvider) ReadSnapshot() models.StateSnapshot {
 	return p.state
 }
 

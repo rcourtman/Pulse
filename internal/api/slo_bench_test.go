@@ -427,6 +427,6 @@ type sloTestStateProvider struct {
 	state *models.State
 }
 
-func (p *sloTestStateProvider) GetState() models.StateSnapshot {
+func (p *sloTestStateProvider) ReadSnapshot() models.StateSnapshot {
 	return p.state.GetSnapshot()
 }

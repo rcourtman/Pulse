@@ -50,7 +50,7 @@ func (concurrencyUnifiedProvider) FindContainerHost(string) string { return "" }
 
 type concurrencyStateProvider struct{}
 
-func (concurrencyStateProvider) GetState() models.StateSnapshot { return models.StateSnapshot{} }
+func (concurrencyStateProvider) ReadSnapshot() models.StateSnapshot { return models.StateSnapshot{} }
 
 type concurrencyMetadataProvider struct{}
 

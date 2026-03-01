@@ -586,6 +586,6 @@ type loadTestStateProvider struct {
 	state *models.State
 }
 
-func (p *loadTestStateProvider) GetState() models.StateSnapshot {
+func (p *loadTestStateProvider) ReadSnapshot() models.StateSnapshot {
 	return p.state.GetSnapshot()
 }

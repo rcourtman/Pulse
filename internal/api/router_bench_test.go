@@ -461,6 +461,6 @@ type benchStateProvider struct {
 	state *models.State
 }
 
-func (p *benchStateProvider) GetState() models.StateSnapshot {
+func (p *benchStateProvider) ReadSnapshot() models.StateSnapshot {
 	return p.state.GetSnapshot()
 }

@@ -48,7 +48,7 @@ type AlertMonitor interface {
 	GetIncidentStore() *memory.IncidentStore
 	GetNotificationManager() *notifications.NotificationManager
 	SyncAlertState()
-	GetState() models.StateSnapshot
+	BuildFrontendState() models.StateFrontend
 }
 
 // AlertHandlers handles alert-related HTTP endpoints
@@ -119,12 +119,12 @@ func (h *AlertHandlers) broadcastStateForContext(ctx context.Context) {
 	}
 
 	orgID := GetOrgID(ctx)
-	state := h.getMonitor(ctx).GetState()
+	frontendState := h.getMonitor(ctx).BuildFrontendState()
 	if orgID != "" {
-		h.wsHub.BroadcastStateToTenant(orgID, state.ToFrontend())
+		h.wsHub.BroadcastStateToTenant(orgID, frontendState)
 		return
 	}
-	h.wsHub.BroadcastState(state.ToFrontend())
+	h.wsHub.BroadcastState(frontendState)
 }
 
 // validateAlertID validates an alert ID for security.

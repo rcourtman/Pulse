@@ -2497,6 +2497,71 @@ func (m *Monitor) GetState() models.StateSnapshot {
 	return m.state.GetSnapshot()
 }
 
+// ReadSnapshot returns a snapshot of the current infrastructure state,
+// respecting mock mode when enabled.
+//
+// This is the preferred accessor for consumer code that needs the full
+// StateSnapshot (e.g., chart rendering, reporting, AI state queries).
+// Consumer interfaces (ai.StateProvider, api.SnapshotProvider, etc.)
+// expose this method rather than the legacy GetState(). Fields available
+// via ReadState should be accessed there instead when practical.
+func (m *Monitor) ReadSnapshot() models.StateSnapshot {
+	return m.GetState()
+}
+
+// BackupsSnapshot returns the current backup state.
+func (m *Monitor) BackupsSnapshot() models.Backups {
+	return m.GetState().Backups
+}
+
+// PBSInstancesSnapshot returns the current PBS instances.
+func (m *Monitor) PBSInstancesSnapshot() []models.PBSInstance {
+	return m.GetState().PBSInstances
+}
+
+// ReplicationJobsSnapshot returns the current replication jobs.
+func (m *Monitor) ReplicationJobsSnapshot() []models.ReplicationJob {
+	return m.GetState().ReplicationJobs
+}
+
+// ConnectionHealthSnapshot returns the current connection health map.
+func (m *Monitor) ConnectionHealthSnapshot() map[string]bool {
+	return m.GetState().ConnectionHealth
+}
+
+// HostsSnapshot returns the current hosts.
+func (m *Monitor) HostsSnapshot() []models.Host {
+	return m.GetState().Hosts
+}
+
+// DockerHostsSnapshot returns the current Docker hosts.
+func (m *Monitor) DockerHostsSnapshot() []models.DockerHost {
+	return m.GetState().DockerHosts
+}
+
+// ActiveAlertsSnapshot returns the current active alerts.
+func (m *Monitor) ActiveAlertsSnapshot() []models.Alert {
+	return m.GetState().ActiveAlerts
+}
+
+// RecentlyResolvedSnapshot returns the recently resolved alerts.
+func (m *Monitor) RecentlyResolvedSnapshot() []models.ResolvedAlert {
+	return m.GetState().RecentlyResolved
+}
+
+// PVEBackupsSnapshot returns the current PVE backups.
+func (m *Monitor) PVEBackupsSnapshot() models.PVEBackups {
+	return m.GetState().PVEBackups
+}
+
+// BuildFrontendState returns the current state converted to frontend format.
+// This replaces the GetState().ToFrontend() pattern in consumer code.
+func (m *Monitor) BuildFrontendState() models.StateFrontend {
+	snap := m.GetState()
+	frontendState := snap.ToFrontend()
+	return frontendState
+}
+
 // GetLiveStateSnapshot returns the underlying monitor state snapshot without
 // applying global mock mode overrides.
 //

@@ -43,7 +43,7 @@ func (p *MultiTenantStateProvider) GetStateForTenant(orgID string) models.StateS
 	// Default org uses the default monitor
 	if orgID == "" || orgID == "default" {
 		if p.defaultMonitor != nil {
-			return p.defaultMonitor.GetState()
+			return p.defaultMonitor.ReadSnapshot()
 		}
 		return models.StateSnapshot{}
 	}
@@ -57,7 +57,7 @@ func (p *MultiTenantStateProvider) GetStateForTenant(orgID string) models.StateS
 			return models.StateSnapshot{}
 		}
 		if monitor != nil {
-			return monitor.GetState()
+			return monitor.ReadSnapshot()
 		}
 	}
 

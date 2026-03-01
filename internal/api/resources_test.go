@@ -17,7 +17,7 @@ type resourceStateProvider struct {
 	snapshot models.StateSnapshot
 }
 
-func (s resourceStateProvider) GetState() models.StateSnapshot {
+func (s resourceStateProvider) ReadSnapshot() models.StateSnapshot {
 	return s.snapshot
 }
 

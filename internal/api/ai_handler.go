@@ -492,9 +492,10 @@ func (h *AIHandler) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
 	h.mtMonitor = mtm
 }
 
-// StateProvider interface for infrastructure state
+// AIStateProvider interface for infrastructure state.
+// Consumers should call ReadSnapshot() instead of the legacy GetState().
 type AIStateProvider interface {
-	GetState() models.StateSnapshot
+	ReadSnapshot() models.StateSnapshot
 }
 
 // Start initializes and starts the AI chat service

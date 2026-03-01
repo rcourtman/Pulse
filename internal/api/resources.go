@@ -27,7 +27,7 @@ type ResourceHandlers struct {
 	registryCache       map[string]registryCacheEntry
 	supplementalMu      sync.RWMutex
 	supplementalRecords map[unified.DataSource]SupplementalRecordsProvider
-	stateProvider       StateProvider
+	stateProvider       SnapshotProvider
 	tenantStateProvider TenantStateProvider
 }
 
@@ -70,7 +70,7 @@ func NewResourceHandlers(cfg *config.Config) *ResourceHandlers {
 }
 
 // SetStateProvider sets the state provider for on-demand population.
-func (h *ResourceHandlers) SetStateProvider(provider StateProvider) {
+func (h *ResourceHandlers) SetStateProvider(provider SnapshotProvider) {
 	h.stateProvider = provider
 }
 
@@ -558,7 +558,7 @@ func (h *ResourceHandlers) buildRegistry(orgID string) (*unified.ResourceRegistr
 		}
 		snapshot = h.tenantStateProvider.GetStateForTenant(orgID)
 	} else if h.stateProvider != nil {
-		snapshot = h.stateProvider.GetState()
+		snapshot = h.stateProvider.ReadSnapshot()
 	}
 
 	h.cacheMu.Lock()

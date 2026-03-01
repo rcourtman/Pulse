@@ -157,7 +157,7 @@ func (failClosedLicenseChecker) GetLicenseStateString() (string, bool) {
 	return string(ai.LicenseStateNone), false
 }
 
-func (p *tenantMonitorStateProvider) GetState() models.StateSnapshot {
+func (p *tenantMonitorStateProvider) ReadSnapshot() models.StateSnapshot {
 	if p == nil || p.mtMonitor == nil {
 		return models.StateSnapshot{}
 	}
@@ -169,7 +169,7 @@ func (p *tenantMonitorStateProvider) GetState() models.StateSnapshot {
 	if monitor == nil {
 		return models.StateSnapshot{}
 	}
-	return monitor.GetState()
+	return monitor.ReadSnapshot()
 }
 
 func (h *AISettingsHandler) providerSnapshot() aiSettingsProviderSnapshot {

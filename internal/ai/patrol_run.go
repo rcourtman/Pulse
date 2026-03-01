@@ -266,7 +266,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		return
 	}
 
-	state := p.stateProvider.GetState()
+	state := p.stateProvider.ReadSnapshot()
 
 	// Snapshot readState under lock to avoid races with SetReadState.
 	p.mu.RLock()
@@ -703,7 +703,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		return
 	}
 
-	fullState := p.stateProvider.GetState()
+	fullState := p.stateProvider.ReadSnapshot()
 
 	// Filter state based on scope
 	filteredState := p.filterStateByScope(fullState, scope)

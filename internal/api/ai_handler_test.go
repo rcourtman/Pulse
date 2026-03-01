@@ -181,7 +181,7 @@ type MockAIStateProvider struct {
 	mock.Mock
 }
 
-func (m *MockAIStateProvider) GetState() models.StateSnapshot {
+func (m *MockAIStateProvider) ReadSnapshot() models.StateSnapshot {
 	args := m.Called()
 	return args.Get(0).(models.StateSnapshot)
 }

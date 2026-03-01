@@ -105,9 +105,9 @@ func (m *MockAlertMonitor) SyncAlertState() {
 	m.Called()
 }
 
-func (m *MockAlertMonitor) GetState() models.StateSnapshot {
+func (m *MockAlertMonitor) BuildFrontendState() models.StateFrontend {
 	args := m.Called()
-	return args.Get(0).(models.StateSnapshot)
+	return args.Get(0).(models.StateFrontend)
 }
 
 type MockConfigPersistence struct {

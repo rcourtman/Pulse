@@ -23,9 +23,10 @@ type UnifiedResourceProvider interface {
 // ServerVersion is the version of the MCP tool implementation
 const ServerVersion = "1.0.0"
 
-// StateProvider provides access to infrastructure state
+// StateProvider provides access to infrastructure state.
+// Consumers should call ReadSnapshot() instead of the legacy GetState().
 type StateProvider interface {
-	GetState() models.StateSnapshot
+	ReadSnapshot() models.StateSnapshot
 }
 
 // RecoveryPointsProvider provides paged access to persisted recovery points.
@@ -507,7 +508,7 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 	// captures stateProvider and fetches the specific field on demand —
 	// this avoids importing the full StateGetter interface into adapters.go.
 	if sp := e.stateProvider; sp != nil {
-		getSnapshot := func() models.StateSnapshot { return sp.GetState() }
+		getSnapshot := func() models.StateSnapshot { return sp.ReadSnapshot() }
 		if e.backupProvider == nil {
 			e.backupProvider = NewBackupMCPAdapter(
 				func() models.Backups { return getSnapshot().Backups },
@@ -551,7 +552,7 @@ func (e *PulseToolExecutor) getReadState() unifiedresources.ReadState {
 	// Compatibility bridge for legacy-only wiring: derive a typed ReadState view
 	// from the latest snapshot so tool handlers can stay platform-agnostic.
 	rr := unifiedresources.NewRegistry(nil)
-	rr.IngestSnapshot(e.stateProvider.GetState())
+	rr.IngestSnapshot(e.stateProvider.ReadSnapshot())
 	return rr
 }
 

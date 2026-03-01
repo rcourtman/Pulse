@@ -291,7 +291,7 @@ func TestDockerUpdateTools(t *testing.T) {
 	}
 
 	stateProv := &mockStateProvider{}
-	stateProv.On("GetState").Return(state)
+	stateProv.On("ReadSnapshot").Return(state)
 	executor := NewPulseToolExecutor(ExecutorConfig{
 		StateProvider: stateProv,
 		ControlLevel:  ControlLevelControlled,

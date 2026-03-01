@@ -19,7 +19,7 @@ type mockStateProvider struct {
 	state models.StateSnapshot
 }
 
-func (m *mockStateProvider) GetState() models.StateSnapshot {
+func (m *mockStateProvider) ReadSnapshot() models.StateSnapshot {
 	return m.state
 }
 
@@ -308,7 +308,7 @@ func TestService_Adapters(t *testing.T) {
 		},
 	}
 	spAdapter := &stateProviderAdapter{sp: mockState}
-	state := spAdapter.GetState()
+	state := spAdapter.ReadSnapshot()
 	assert.Len(t, state.Hosts, 1)
 	assert.Equal(t, "host1", state.Hosts[0].Hostname)
 

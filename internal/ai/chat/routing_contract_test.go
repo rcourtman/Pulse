@@ -307,6 +307,6 @@ type mockRoutingStateProvider struct {
 	state models.StateSnapshot
 }
 
-func (m *mockRoutingStateProvider) GetState() models.StateSnapshot {
+func (m *mockRoutingStateProvider) ReadSnapshot() models.StateSnapshot {
 	return m.state
 }

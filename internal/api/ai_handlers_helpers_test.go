@@ -16,7 +16,7 @@ import (
 
 type stubStateProvider struct{}
 
-func (s *stubStateProvider) GetState() models.StateSnapshot {
+func (s *stubStateProvider) ReadSnapshot() models.StateSnapshot {
 	return models.StateSnapshot{}
 }
 

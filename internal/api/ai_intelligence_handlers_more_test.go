@@ -18,7 +18,7 @@ type snapshotStateProvider struct {
 	state models.StateSnapshot
 }
 
-func (s snapshotStateProvider) GetState() models.StateSnapshot {
+func (s snapshotStateProvider) ReadSnapshot() models.StateSnapshot {
 	return s.state
 }
 

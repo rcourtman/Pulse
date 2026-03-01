@@ -65,7 +65,7 @@ func TestPulseToolExecutor_ExecuteControlGuest(t *testing.T) {
 			{VMID: 100, Name: "test-vm", Node: "node1", Status: "running", Instance: "pve1"},
 		},
 	}
-	stateProv.On("GetState").Return(state)
+	stateProv.On("ReadSnapshot").Return(state)
 
 	agentSrv.On("GetConnectedAgents").Return([]agentexec.ConnectedAgent{
 		{AgentID: "agent1", Hostname: "node1"},
@@ -119,7 +119,7 @@ func TestPulseToolExecutor_ExecuteControlDocker(t *testing.T) {
 			},
 		},
 	}
-	stateProv.On("GetState").Return(state)
+	stateProv.On("ReadSnapshot").Return(state)
 
 	agentSrv.On("GetConnectedAgents").Return([]agentexec.ConnectedAgent{
 		{AgentID: "agent1", Hostname: "docker1"},

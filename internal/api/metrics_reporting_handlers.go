@@ -231,7 +231,7 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 	if h.mtMonitor != nil {
 		orgID := GetOrgID(r.Context())
 		if monitor, err := h.mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
-			h.enrichReportRequest(r.Context(), orgID, &req, monitor.GetState(), monitor.GetUnifiedResources(), start, end)
+			h.enrichReportRequest(r.Context(), orgID, &req, monitor.ReadSnapshot(), monitor.GetUnifiedResources(), start, end)
 		}
 	}
 
@@ -581,7 +581,7 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 	if h.mtMonitor != nil {
 		orgID := GetOrgID(r.Context())
 		if monitor, err := h.mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
-			snap = monitor.GetState()
+			snap = monitor.ReadSnapshot()
 			resources = monitor.GetUnifiedResources()
 			hasSnap = true
 		}

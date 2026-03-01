@@ -1332,7 +1332,7 @@ func (p *PatrolService) verifyFixDeterministically(
 	}
 
 	// State-only verifiers (no tools required).
-	fullState := p.stateProvider.GetState()
+	fullState := p.stateProvider.ReadSnapshot()
 	switch key {
 	case "backup-stale":
 		ok, err := verifyBackupFresh(fullState, resourceID)

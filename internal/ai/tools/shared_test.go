@@ -17,7 +17,7 @@ type mockStateProvider struct {
 	state models.StateSnapshot
 }
 
-func (m *mockStateProvider) GetState() models.StateSnapshot {
+func (m *mockStateProvider) ReadSnapshot() models.StateSnapshot {
 	if len(m.ExpectedCalls) == 0 {
 		return m.state
 	}

@@ -56,9 +56,9 @@ func TestAlertMonitorWrapper_Delegates(t *testing.T) {
 		t.Fatalf("unexpected config persistence")
 	}
 
-	expected := state.GetSnapshot()
-	if got := wrapper.GetState(); !reflect.DeepEqual(got, expected) {
-		t.Fatalf("unexpected state snapshot")
+	expected := state.GetSnapshot().ToFrontend()
+	if got := wrapper.BuildFrontendState(); !reflect.DeepEqual(got, expected) {
+		t.Fatalf("unexpected frontend state")
 	}
 
 	wrapper.SyncAlertState()

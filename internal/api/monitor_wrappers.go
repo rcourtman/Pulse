@@ -40,8 +40,8 @@ func (w *AlertMonitorWrapper) SyncAlertState() {
 	w.m.SyncAlertState()
 }
 
-func (w *AlertMonitorWrapper) GetState() models.StateSnapshot {
-	return w.m.GetState()
+func (w *AlertMonitorWrapper) BuildFrontendState() models.StateFrontend {
+	return w.m.BuildFrontendState()
 }
 
 // NotificationMonitorWrapper wraps *monitoring.Monitor to satisfy NotificationMonitor interface.

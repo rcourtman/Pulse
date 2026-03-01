@@ -60,7 +60,7 @@ func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)
 		if monitor == nil {
 			return models.StateSnapshot{}
 		}
-		return monitor.GetState().ToFrontend()
+		return monitor.BuildFrontendState()
 	})
 
 	go hub.Run()
@@ -73,7 +73,7 @@ func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)
 	monitor.SetMockMode(true)
 
 	hub.SetStateGetter(func() interface{} {
-		return monitor.GetState().ToFrontend()
+		return monitor.BuildFrontendState()
 	})
 
 	version := readRuntimeVersion(t)
@@ -846,7 +846,7 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 	}
 
 	// Broadcast an additional state update and ensure clients receive it
-	state := srv.monitor.GetState().ToFrontend()
+	state := srv.monitor.BuildFrontendState()
 	srv.hub.BroadcastState(state)
 
 	msgType, payload = readMsg()

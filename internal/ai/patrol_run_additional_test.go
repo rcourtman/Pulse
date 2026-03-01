@@ -38,7 +38,7 @@ type mockPatrolStateProvider struct {
 	state models.StateSnapshot
 }
 
-func (m mockPatrolStateProvider) GetState() models.StateSnapshot { return m.state }
+func (m mockPatrolStateProvider) ReadSnapshot() models.StateSnapshot { return m.state }
 
 func TestPatrolService_AskAIAboutAlert(t *testing.T) {
 	ps := NewPatrolService(nil, nil)

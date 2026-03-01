@@ -42,7 +42,7 @@ func TestExecuteGetTemperatures(t *testing.T) {
 			}},
 		},
 	}
-	stateProv.On("GetState").Return(state)
+	stateProv.On("ReadSnapshot").Return(state)
 
 	// Use pulse_metrics tool with type: "temperatures"
 	result, err := exec.ExecuteTool(context.Background(), "pulse_metrics", map[string]interface{}{

@@ -6,6 +6,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,7 +14,7 @@ import (
 // Mock implementation of chat.StateProvider
 type mockChatStateProvider struct{}
 
-func (m *mockChatStateProvider) GetState() interface{} { return nil } // simplified for test
+func (m *mockChatStateProvider) ReadSnapshot() models.StateSnapshot { return models.StateSnapshot{} }
 
 func TestChatServiceAdapter_CreateSession(t *testing.T) {
 	// Setup real chat service with minimal config

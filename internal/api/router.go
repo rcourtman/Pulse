@@ -2084,8 +2084,8 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 	if monitor != nil {
 		m := monitor
 		backupAdapter := tools.NewBackupMCPAdapter(
-			func() models.Backups { return m.GetState().Backups },
-			func() []models.PBSInstance { return m.GetState().PBSInstances },
+			func() models.Backups { return m.BackupsSnapshot() },
+			func() []models.PBSInstance { return m.PBSInstancesSnapshot() },
 		)
 		if backupAdapter != nil {
 			service.SetBackupProvider(backupAdapter)
@@ -2097,7 +2097,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 	if monitor != nil {
 		m := monitor
 		diskHealthAdapter := tools.NewDiskHealthMCPAdapter(
-			func() []models.Host { return m.GetState().Hosts },
+			func() []models.Host { return m.HostsSnapshot() },
 		)
 		if diskHealthAdapter != nil {
 			service.SetDiskHealthProvider(diskHealthAdapter)
@@ -2113,7 +2113,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 			cfg = monitorCfg
 		}
 		updatesAdapter := tools.NewUpdatesMCPAdapter(
-			func() []models.DockerHost { return m.GetState().DockerHosts },
+			func() []models.DockerHost { return m.DockerHostsSnapshot() },
 			m,
 			&updatesConfigWrapper{cfg: cfg},
 		)
@@ -4526,9 +4526,7 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 			"Monitor not available", nil)
 		return
 	}
-	snap := monitor.GetState()
-
-	frontendState := snap.ToFrontend()
+	frontendState := monitor.BuildFrontendState()
 
 	if err := utils.WriteJSONResponse(w, frontendState); err != nil {
 		log.Error().Err(err).Msg("Failed to encode state response")
@@ -4670,7 +4668,7 @@ func (r *Router) handleStorage(w http.ResponseWriter, req *http.Request) {
 		writeErrorResponse(w, http.StatusInternalServerError, "tenant_unavailable", "Tenant monitor is not available", nil)
 		return
 	}
-	snap := monitor.GetState()
+	snap := monitor.ReadSnapshot()
 
 	// Find the storage by ID
 	var storageDetail *models.Storage
@@ -5493,7 +5491,7 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, "Tenant monitor is not available", http.StatusInternalServerError)
 		return
 	}
-	snap := monitor.GetState()
+	snap := monitor.ReadSnapshot()
 	metricsStoreEnabled := monitor.GetMetricsStore() != nil
 	primarySourceHint := "memory"
 	if metricsStoreEnabled && duration > inMemoryChartThreshold {
@@ -6367,7 +6365,7 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		http.Error(w, "Tenant monitor is not available", http.StatusInternalServerError)
 		return
 	}
-	snap := monitor.GetState()
+	snap := monitor.ReadSnapshot()
 	mockModeEnabled := mock.IsMockEnabled()
 	metricsStoreEnabled := monitor.GetMetricsStore() != nil
 	primarySourceHint := "memory"
@@ -7094,7 +7092,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 		return apiPoints
 	}
-	snap := monitor.GetState()
+	snap := monitor.ReadSnapshot()
 	mockModeEnabled := mock.IsMockEnabled()
 
 	parseGuestID := func(id string) (string, string, int, bool) {

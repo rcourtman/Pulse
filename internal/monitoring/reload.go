@@ -157,23 +157,23 @@ func (rm *ReloadableMonitor) GetConfig() *config.Config {
 	return rm.config
 }
 
-// GetState returns the current state for a specific tenant
-func (rm *ReloadableMonitor) GetState(orgID string) interface{} {
+// ReadSnapshot returns the current state for a specific tenant.
+func (rm *ReloadableMonitor) ReadSnapshot(orgID string) interface{} {
 	if orgID == "" {
 		orgID = "default"
 	}
 	mtMonitor := rm.GetMultiTenantMonitor()
 	if mtMonitor == nil {
-		log.Debug().Str("orgID", orgID).Msg("GetState requested with no active multi-tenant monitor")
+		log.Debug().Str("orgID", orgID).Msg("ReadSnapshot requested with no active multi-tenant monitor")
 		return nil
 	}
 
 	monitor, err := mtMonitor.GetMonitor(orgID)
 	if err != nil {
-		log.Debug().Err(err).Str("orgID", orgID).Msg("GetState monitor unavailable")
+		log.Debug().Err(err).Str("orgID", orgID).Msg("ReadSnapshot monitor unavailable")
 		return nil
 	}
-	return monitor.GetState()
+	return monitor.ReadSnapshot()
 }
 
 // Stop stops the monitor
