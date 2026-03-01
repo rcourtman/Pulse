@@ -5654,17 +5654,16 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	}
 	h.markAutoRegistered(req.Type, actualName)
 
-	// Reload monitor to pick up new configuration
+	// Reload monitor to pick up new configuration (synchronous, same as manual add path).
+	// Running this async previously caused a bug where the node config was saved but the
+	// poller never picked it up if reload failed silently.
 	if h.reloadFunc != nil {
 		log.Info().Msg("Reloading monitor after auto-registration")
-		go func() {
-			// Run reload in background to avoid blocking the response
-			if err := h.reloadFunc(); err != nil {
-				log.Error().Err(err).Msg("Failed to reload monitor after auto-registration")
-			} else {
-				log.Info().Msg("Monitor reloaded successfully after auto-registration")
-			}
-		}()
+		if err := h.reloadFunc(); err != nil {
+			log.Error().Err(err).Msg("Failed to reload monitor after auto-registration")
+		} else {
+			log.Info().Msg("Monitor reloaded successfully after auto-registration")
+		}
 	}
 
 	// Trigger a discovery refresh to remove the node from discovered list
@@ -5916,13 +5915,11 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 	}
 	h.markAutoRegistered(req.Type, actualName)
 
-	// Reload monitor
+	// Reload monitor (synchronous, same as manual add path)
 	if h.reloadFunc != nil {
-		go func() {
-			if err := h.reloadFunc(); err != nil {
-				log.Error().Err(err).Msg("Failed to reload monitor after auto-registration")
-			}
-		}()
+		if err := h.reloadFunc(); err != nil {
+			log.Error().Err(err).Msg("Failed to reload monitor after auto-registration")
+		}
 	}
 
 	// Send success response with token details for script to create
