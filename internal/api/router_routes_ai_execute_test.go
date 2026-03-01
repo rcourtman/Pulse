@@ -344,6 +344,50 @@ func TestRouteExecute_DefaultUseCaseIsChat(t *testing.T) {
 	assert.NotEmpty(t, resp.Content)
 }
 
+// TestRouteExecute_AutofixLicenseRequired verifies that a request with
+// use_case "autofix" returns 402 when the FeatureAIAutoFix license is not
+// available.
+func TestRouteExecute_AutofixLicenseRequired(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, mockOllamaForExecute())
+	defer ollama.Close()
+
+	router, token := setupExecuteRouter(t, ollama.URL)
+	// Inject a license checker that denies all features
+	router.aiSettingsHandler.legacyAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
+
+	body := `{"prompt":"fix the issue","use_case":"autofix"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute", strings.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusPaymentRequired, rec.Code, "autofix without license should return 402")
+	assert.Contains(t, rec.Body.String(), "license_required", "body should indicate license is required")
+}
+
+// TestRouteExecute_RemediationLicenseRequired verifies that the "remediation"
+// use_case alias also triggers the 402 license gate.
+func TestRouteExecute_RemediationLicenseRequired(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, mockOllamaForExecute())
+	defer ollama.Close()
+
+	router, token := setupExecuteRouter(t, ollama.URL)
+	router.aiSettingsHandler.legacyAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
+
+	body := `{"prompt":"remediate the issue","use_case":"remediation"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute", strings.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusPaymentRequired, rec.Code, "remediation without license should return 402")
+	assert.Contains(t, rec.Body.String(), "license_required", "body should indicate license is required")
+}
+
 // TestRouteExecute_OversizedBody verifies that a request body exceeding the
 // 64KB limit is rejected.
 func TestRouteExecute_OversizedBody(t *testing.T) {

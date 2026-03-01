@@ -3061,10 +3061,7 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Require authentication
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
-		return
-	}
+	// Authentication is enforced by RequireAdmin middleware at route registration.
 
 	// Check if AI is enabled
 	if !h.GetAIService(r.Context()).IsEnabled() {
