@@ -408,3 +408,121 @@ func TestRouteExecute_OversizedBody(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code, "oversized body should return 400")
 }
+
+// TestRouteExecute_EmptyBody verifies that an empty request body is rejected
+// with 400 Bad Request.
+func TestRouteExecute_EmptyBody(t *testing.T) {
+	t.Parallel()
+
+	router, token := setupExecuteRouter(t, "http://192.0.2.1:11434")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute", strings.NewReader(""))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "empty body should return 400")
+}
+
+// TestRouteExecute_EmptyJSONObject verifies that a JSON body with no prompt
+// field is rejected with 400 Bad Request.
+func TestRouteExecute_EmptyJSONObject(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, mockOllamaForExecute())
+	defer ollama.Close()
+
+	router, token := setupExecuteRouter(t, ollama.URL)
+
+	body := `{}`
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute", strings.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "empty JSON object (missing prompt) should return 400")
+}
+
+// TestRouteExecute_NullPrompt verifies that an explicit null prompt is
+// rejected with 400 Bad Request.
+func TestRouteExecute_NullPrompt(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, mockOllamaForExecute())
+	defer ollama.Close()
+
+	router, token := setupExecuteRouter(t, ollama.URL)
+
+	body := `{"prompt":null}`
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute", strings.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "null prompt should return 400")
+}
+
+// TestRouteExecute_UseCaseCaseInsensitive verifies that use_case matching
+// for license-gated values is case-insensitive and whitespace-tolerant.
+func TestRouteExecute_UseCaseCaseInsensitive(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, mockOllamaForExecute())
+	defer ollama.Close()
+
+	router, token := setupExecuteRouter(t, ollama.URL)
+	router.aiSettingsHandler.legacyAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
+
+	// Mixed case with leading/trailing whitespace should still trigger license gate
+	for _, uc := range []string{"AutoFix", "  REMEDIATION  ", "Autofix", "AUTOFIX"} {
+		t.Run(uc, func(t *testing.T) {
+			body := `{"prompt":"fix","use_case":"` + uc + `"}`
+			req := httptest.NewRequest(http.MethodPost, "/api/ai/execute", strings.NewReader(body))
+			req.Header.Set("X-API-Token", token)
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusPaymentRequired, rec.Code,
+				"use_case %q should trigger license gate (402)", uc)
+			assert.Contains(t, rec.Body.String(), "license_required",
+				"use_case %q should return license_required error", uc)
+		})
+	}
+}
+
+// TestRouteExecute_ServiceError verifies that when the AI service returns an
+// error during execution, the endpoint returns 500.
+func TestRouteExecute_ServiceError(t *testing.T) {
+	t.Parallel()
+
+	// Use a mock that returns a malformed response to trigger a service error
+	broken := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/version":
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "0.3.0"})
+		case "/api/tags":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"models": []map[string]any{{"name": "llama3"}},
+			})
+		case "/api/chat":
+			// Return HTTP 500 from the "provider" to trigger an execution error
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer broken.Close()
+
+	router, token := setupExecuteRouter(t, broken.URL)
+
+	body := `{"prompt":"hello"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute", strings.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code,
+		"service error should return 500")
+	assert.Contains(t, rec.Body.String(), "failed",
+		"body should indicate failure")
+}
