@@ -382,6 +382,213 @@ func TestAISettingsHandler_TestProvider_Ollama(t *testing.T) {
 }
 
 // ========================================
+// HandleTestAIConnection edge-case tests
+// ========================================
+
+func TestAISettingsHandler_TestConnection_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/test", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleTestAIConnection(rec, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestAISettingsHandler_TestConnection_Failure(t *testing.T) {
+	t.Parallel()
+
+	// Ollama server that always returns 500 for /api/version
+	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ollama.Close()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = "ollama:llama3"
+	aiCfg.OllamaBaseURL = ollama.URL
+	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
+		t.Fatalf("SaveAIConfig: %v", err)
+	}
+
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/test", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleTestAIConnection(rec, req)
+
+	// Should still return 200 with success=false (not an HTTP error)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.Success)
+	assert.Equal(t, "Connection test failed", resp.Message)
+}
+
+func TestAISettingsHandler_TestConnection_NoConfig(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+
+	// Don't save any AI config — service will have no configured provider
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/test", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleTestAIConnection(rec, req)
+
+	// Should return 200 with success=false (connection test fails gracefully)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.Success)
+	assert.Equal(t, "Connection test failed", resp.Message)
+}
+
+// ========================================
+// HandleTestProvider edge-case tests
+// ========================================
+
+func TestAISettingsHandler_TestProvider_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/test/ollama", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleTestProvider(rec, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestAISettingsHandler_TestProvider_NotConfigured(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+
+	// Configure Ollama only — so "openai" is unconfigured
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = "ollama:llama3"
+	aiCfg.OllamaBaseURL = "http://192.0.2.1:11434" // TEST-NET, non-routable
+	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
+		t.Fatalf("SaveAIConfig: %v", err)
+	}
+
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/test/openai", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleTestProvider(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp struct {
+		Success  bool   `json:"success"`
+		Message  string `json:"message"`
+		Provider string `json:"provider"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.Success)
+	assert.Equal(t, "Provider not configured", resp.Message)
+	assert.Equal(t, "openai", resp.Provider)
+}
+
+func TestAISettingsHandler_TestProvider_NoAIConfig(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+
+	// No AI config file saved — LoadConfig returns a default config (not nil),
+	// so the handler falls through to the HasProvider check which returns false
+	// for the default (empty) config.
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/test/ollama", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleTestProvider(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp struct {
+		Success  bool   `json:"success"`
+		Message  string `json:"message"`
+		Provider string `json:"provider"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.Success)
+	assert.Equal(t, "Provider not configured", resp.Message)
+	assert.Equal(t, "ollama", resp.Provider)
+}
+
+func TestAISettingsHandler_TestProvider_ConnectionFailure(t *testing.T) {
+	t.Parallel()
+
+	// Server that returns 500 for all requests
+	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ollama.Close()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = "ollama:llama3"
+	aiCfg.OllamaBaseURL = ollama.URL
+	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
+		t.Fatalf("SaveAIConfig: %v", err)
+	}
+
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/test/ollama", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleTestProvider(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp struct {
+		Success  bool   `json:"success"`
+		Message  string `json:"message"`
+		Provider string `json:"provider"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.Success)
+	assert.Equal(t, "Connection test failed", resp.Message)
+	assert.Equal(t, "ollama", resp.Provider)
+}
+
+// ========================================
 // HandleGetAICostSummary tests
 // ========================================
 
