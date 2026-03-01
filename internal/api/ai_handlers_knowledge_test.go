@@ -337,6 +337,91 @@ func TestHandleSaveGuestNote_GuestIDExactlyAtLimit(t *testing.T) {
 	}
 }
 
+func TestHandleSaveGuestNote_CategoryTooLong(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	longCategory := strings.Repeat("c", 129)
+	body, _ := json.Marshal(map[string]string{
+		"guest_id": "vm-1", "category": longCategory, "title": "T", "content": "C",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/save", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleSaveGuestNote(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d for oversized category, got %d", http.StatusBadRequest, rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "category too long") {
+		t.Fatalf("expected 'category too long' error, got %q", rec.Body.String())
+	}
+}
+
+func TestHandleSaveGuestNote_TitleTooLong(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	longTitle := strings.Repeat("t", 1025)
+	body, _ := json.Marshal(map[string]string{
+		"guest_id": "vm-1", "category": "ops", "title": longTitle, "content": "C",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/save", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleSaveGuestNote(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d for oversized title, got %d", http.StatusBadRequest, rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "title too long") {
+		t.Fatalf("expected 'title too long' error, got %q", rec.Body.String())
+	}
+}
+
+func TestHandleSaveGuestNote_ContentTooLong(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	longContent := strings.Repeat("x", 32*1024+1)
+	body, _ := json.Marshal(map[string]string{
+		"guest_id": "vm-1", "category": "ops", "title": "T", "content": longContent,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/save", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleSaveGuestNote(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d for oversized content, got %d", http.StatusBadRequest, rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "content too long") {
+		t.Fatalf("expected 'content too long' error, got %q", rec.Body.String())
+	}
+}
+
+func TestHandleSaveGuestNote_OversizedBody(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	// Build a body that exceeds 64KB at the wire level. We keep content within
+	// its 32KB limit and use guest_name (no field limit) to push total body > 64KB.
+	// This ensures MaxBytesReader is what rejects the request, not field checks.
+	bigName := strings.Repeat("A", 65*1024) // 65KB guest_name → ~67KB JSON body
+	body, _ := json.Marshal(map[string]string{
+		"guest_id": "vm-1", "guest_name": bigName, "guest_type": "vm",
+		"category": "ops", "title": "T", "content": "small content",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/save", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleSaveGuestNote(rec, req)
+
+	// MaxBytesReader triggers a decode error → 400 with "Invalid request body"
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d for oversized body, got %d: %s", http.StatusBadRequest, rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Invalid request body") {
+		t.Fatalf("expected 'Invalid request body' from MaxBytesReader, got %q", rec.Body.String())
+	}
+}
+
 // ========================================
 // HandleDeleteGuestNote — happy path
 // ========================================
@@ -966,6 +1051,84 @@ func TestHandleImportGuestKnowledge_MergeMode(t *testing.T) {
 	}
 	if len(gk.Notes) < 2 {
 		t.Fatalf("expected at least 2 notes with merge, got %d", len(gk.Notes))
+	}
+}
+
+func TestHandleImportGuestKnowledge_AllNotesOversized(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	// Save an existing note — replace mode should NOT delete it when all imports are invalid
+	if err := handler.legacyAIService.SaveGuestNote("vm-oversized-import", "VM", "vm", "ops", "Existing", "Keep me"); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	longContent := strings.Repeat("x", 32*1024+1)
+	payload := map[string]interface{}{
+		"guest_id":   "vm-oversized-import",
+		"guest_name": "VM",
+		"guest_type": "vm",
+		"merge":      false,
+		"notes": []map[string]string{
+			{"category": "ops", "title": "Oversized", "content": longContent},
+		},
+	}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/import", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleImportGuestKnowledge(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d when all notes are oversized, got %d: %s", http.StatusBadRequest, rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "No valid notes") {
+		t.Fatalf("expected 'No valid notes' error, got %q", rec.Body.String())
+	}
+
+	// Verify existing note is preserved
+	gk, err := handler.legacyAIService.GetGuestKnowledge("vm-oversized-import")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if len(gk.Notes) != 1 || gk.Notes[0].Title != "Existing" {
+		t.Fatalf("expected existing note preserved, got %d notes", len(gk.Notes))
+	}
+}
+
+func TestHandleImportGuestKnowledge_OversizedNotesSkipped(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	longTitle := strings.Repeat("t", 1025)
+	payload := map[string]interface{}{
+		"guest_id":   "vm-skip-oversized",
+		"guest_name": "VM",
+		"guest_type": "vm",
+		"notes": []map[string]string{
+			{"category": "ops", "title": "Valid Note", "content": "Valid content"},
+			{"category": "ops", "title": longTitle, "content": "Oversized title"},
+		},
+	}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/import", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleImportGuestKnowledge(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	imported, _ := resp["imported"].(float64)
+	total, _ := resp["total"].(float64)
+	if imported != 1 {
+		t.Errorf("expected 1 imported (oversized skipped), got %v", imported)
+	}
+	if total != 2 {
+		t.Errorf("expected 2 total, got %v", total)
 	}
 }
 

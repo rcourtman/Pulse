@@ -3698,6 +3698,8 @@ func (h *AISettingsHandler) HandleSaveGuestNote(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024) // 64KB max
+
 	var req struct {
 		GuestID   string `json:"guest_id"`
 		GuestName string `json:"guest_name"`
@@ -3718,6 +3720,18 @@ func (h *AISettingsHandler) HandleSaveGuestNote(w http.ResponseWriter, r *http.R
 	}
 	if len(req.GuestID) > maxGuestIDLength {
 		http.Error(w, "guest_id too long", http.StatusBadRequest)
+		return
+	}
+	if len(req.Category) > 128 {
+		http.Error(w, "category too long", http.StatusBadRequest)
+		return
+	}
+	if len(req.Title) > 1024 {
+		http.Error(w, "title too long", http.StatusBadRequest)
+		return
+	}
+	if len(req.Content) > 32*1024 {
+		http.Error(w, "content too long", http.StatusBadRequest)
 		return
 	}
 
@@ -3850,6 +3864,33 @@ func (h *AISettingsHandler) HandleImportGuestKnowledge(w http.ResponseWriter, r 
 		return
 	}
 
+	// Pre-filter valid notes before deleting in replace mode to avoid data loss
+	// when all incoming notes fail validation.
+	isValidNote := func(n struct {
+		Category string `json:"category"`
+		Title    string `json:"title"`
+		Content  string `json:"content"`
+	}) bool {
+		if n.Category == "" || n.Title == "" || n.Content == "" {
+			return false
+		}
+		if len(n.Category) > 128 || len(n.Title) > 1024 || len(n.Content) > 32*1024 {
+			return false
+		}
+		return true
+	}
+
+	validCount := 0
+	for _, note := range importData.Notes {
+		if isValidNote(note) {
+			validCount++
+		}
+	}
+	if validCount == 0 {
+		http.Error(w, "No valid notes to import", http.StatusBadRequest)
+		return
+	}
+
 	// If not merging, we need to delete existing notes first
 	if !importData.Merge {
 		existing, err := h.GetAIService(r.Context()).GetGuestKnowledge(importData.GuestID)
@@ -3863,7 +3904,7 @@ func (h *AISettingsHandler) HandleImportGuestKnowledge(w http.ResponseWriter, r 
 	// Import each note
 	imported := 0
 	for _, note := range importData.Notes {
-		if note.Category == "" || note.Title == "" || note.Content == "" {
+		if !isValidNote(note) {
 			continue
 		}
 		if err := h.GetAIService(r.Context()).SaveGuestNote(
