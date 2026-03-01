@@ -2866,6 +2866,13 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Validate provider name: only allow lowercase alphanumeric and hyphens,
+	// max 64 chars. This rejects path traversal, slashes, and injection attempts.
+	if len(provider) > 64 || !isValidProviderName(provider) {
+		http.Error(w, `{"error":"Invalid provider name"}`, http.StatusBadRequest)
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
@@ -2922,6 +2929,17 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 	if err := utils.WriteJSONResponse(w, testResult); err != nil {
 		log.Error().Err(err).Msg("Failed to write provider test response")
 	}
+}
+
+// isValidProviderName returns true if s contains only lowercase letters, digits,
+// and hyphens. This prevents path traversal, URL injection, and log injection.
+func isValidProviderName(s string) bool {
+	for _, c := range s {
+		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-') {
+			return false
+		}
+	}
+	return len(s) > 0
 }
 
 // HandleListModels fetches available models from the configured AI provider (GET /api/ai/models)

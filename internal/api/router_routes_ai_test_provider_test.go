@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
@@ -239,4 +240,143 @@ func TestRouteTestProvider_UnknownProvider(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.False(t, resp.Success)
 	assert.Equal(t, "nonexistent-provider", resp.Provider)
+}
+
+// TestRouteTestProvider_WrongScope verifies that a token with a different scope
+// (e.g., ai:execute) cannot access the test-provider endpoint.
+func TestRouteTestProvider_WrongScope(t *testing.T) {
+	t.Parallel()
+
+	rawToken := "ai-test-provider-wrong-scope-" + t.Name() + ".12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAIExecute}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/test/ollama", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusForbidden, rec.Code, "wrong scope should return 403")
+}
+
+// TestRouteTestProvider_InvalidProviderNames verifies that malicious or malformed
+// provider names (uppercase, special characters, excessive length) are
+// rejected with 400 before reaching any provider logic.
+func TestRouteTestProvider_InvalidProviderNames(t *testing.T) {
+	t.Parallel()
+
+	router, token := setupTestProviderRouter(t, "http://192.0.2.1:11434")
+
+	cases := []struct {
+		name     string
+		provider string
+	}{
+		{"uppercase", "Ollama"},
+		{"special_chars", "ollama<script>"},
+		{"too_long", strings.Repeat("a", 65)},
+		{"underscore", "my_provider"},
+		{"at_sign", "user@host"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/ai/test/"+tc.provider, nil)
+			req.Header.Set("X-API-Token", token)
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code,
+				"provider %q should be rejected as invalid", tc.provider)
+		})
+	}
+}
+
+// TestRouteTestProvider_PathTraversal verifies that path traversal attempts
+// in the provider name are blocked by the security middleware (returns 401
+// because the traversal rewrite escapes the authenticated route).
+func TestRouteTestProvider_PathTraversal(t *testing.T) {
+	t.Parallel()
+
+	router, token := setupTestProviderRouter(t, "http://192.0.2.1:11434")
+
+	// All traversal paths hit the security middleware which returns 401
+	// ("Path traversal attempt blocked"). Assert the exact status to catch
+	// regressions where the middleware is bypassed.
+	for _, path := range []string{
+		"/api/ai/test/../etc/passwd",
+		"/api/ai/test/ollama/../../secret",
+		"/api/ai/test/ollama..",
+	} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, path, nil)
+			req.Header.Set("X-API-Token", token)
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusUnauthorized, rec.Code,
+				"path traversal in %q should be blocked by security middleware with 401", path)
+		})
+	}
+}
+
+// TestRouteTestProvider_ValidProviderNameEdgeCases verifies that legitimate
+// provider names at the boundary of validation rules are accepted.
+func TestRouteTestProvider_ValidProviderNameEdgeCases(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	defer ollama.Close()
+
+	router, token := setupTestProviderRouter(t, ollama.URL)
+
+	cases := []struct {
+		name     string
+		provider string
+	}{
+		{"single_char", "o"},
+		{"with_hyphens", "my-custom-provider"},
+		{"with_digits", "provider123"},
+		{"max_length_64", strings.Repeat("a", 64)},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/ai/test/"+tc.provider, nil)
+			req.Header.Set("X-API-Token", token)
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+
+			// These should pass validation and reach the provider logic
+			// (which returns 200 with success=false since they're not configured)
+			require.Equal(t, http.StatusOK, rec.Code,
+				"provider %q should pass validation", tc.provider)
+
+			var resp struct {
+				Success  bool   `json:"success"`
+				Provider string `json:"provider"`
+			}
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+			assert.False(t, resp.Success)
+			assert.Equal(t, tc.provider, resp.Provider)
+		})
+	}
+}
+
+// TestIsValidProviderName is a unit test for the isValidProviderName helper.
+func TestIsValidProviderName(t *testing.T) {
+	t.Parallel()
+
+	valid := []string{"ollama", "openai", "deep-seek", "provider123", "a", "my-ai-1"}
+	for _, name := range valid {
+		assert.True(t, isValidProviderName(name), "expected %q to be valid", name)
+	}
+
+	invalid := []string{"", "Ollama", "open ai", "a/b", "test..", "a<b", "a>b", "a&b", "100%"}
+	for _, name := range invalid {
+		assert.False(t, isValidProviderName(name), "expected %q to be invalid", name)
+	}
 }
