@@ -54,15 +54,18 @@ test.describe.serial('Journey: Bootstrap → Login → Dashboard', () => {
         if (current.enabled !== mockModeWasEnabled) {
           await setMockMode(page, mockModeWasEnabled);
         }
-      } catch {
-        // Best-effort restore; don't fail the suite on cleanup.
+      } catch (err) {
+        // Best-effort restore; don't fail the suite on cleanup but warn for diagnosis.
+        console.warn('[journey cleanup] failed to restore mock mode:', err);
       } finally {
         await ctx.close();
       }
     }
   });
 
-  test('health check responds with retry', async ({ page }) => {
+  test('health check responds with retry', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop smoke journey');
+
     // Use waitForPulseReady which retries with backoff — avoids flakes on cold starts.
     await waitForPulseReady(page);
 
