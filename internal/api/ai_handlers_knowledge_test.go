@@ -1167,6 +1167,64 @@ func TestHandleImportGuestKnowledge_OversizedNotesSkipped(t *testing.T) {
 	}
 }
 
+func TestHandleImportGuestKnowledge_TooManyNotes(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	notes := make([]map[string]string, maxImportNotes+1)
+	for i := range notes {
+		notes[i] = map[string]string{"category": "ops", "title": "T", "content": "C"}
+	}
+	payload := map[string]interface{}{
+		"guest_id": "vm-too-many",
+		"notes":    notes,
+	}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/import", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleImportGuestKnowledge(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d for too many notes, got %d: %s", http.StatusBadRequest, rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Too many notes") {
+		t.Fatalf("expected 'Too many notes' error, got %q", rec.Body.String())
+	}
+}
+
+func TestHandleImportGuestKnowledge_ExactlyMaxNotes(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	notes := make([]map[string]string, maxImportNotes)
+	for i := range notes {
+		notes[i] = map[string]string{"category": "ops", "title": "T", "content": "C"}
+	}
+	payload := map[string]interface{}{
+		"guest_id":   "vm-exact-max",
+		"guest_name": "VM",
+		"guest_type": "vm",
+		"notes":      notes,
+	}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/import", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleImportGuestKnowledge(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected %d for exactly max notes, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	imported, _ := resp["imported"].(float64)
+	if int(imported) != maxImportNotes {
+		t.Errorf("expected %d imported, got %v", maxImportNotes, imported)
+	}
+}
+
 // ========================================
 // sanitizeFilenameComponent
 // ========================================

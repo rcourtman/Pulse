@@ -3646,6 +3646,10 @@ func normalizeRunCommandApprovalTarget(req AIRunCommandRequest) (string, string,
 // knowledge endpoints, preventing abuse via oversized identifiers.
 const maxGuestIDLength = 256
 
+// maxImportNotes is the maximum number of notes allowed in a single import
+// request. This prevents abuse even within the 1MB body size limit.
+const maxImportNotes = 500
+
 // sanitizeFilenameComponent strips characters unsafe for Content-Disposition
 // filenames. Only alphanumeric, hyphens, underscores, and dots are kept.
 func sanitizeFilenameComponent(s string) string {
@@ -3863,6 +3867,10 @@ func (h *AISettingsHandler) HandleImportGuestKnowledge(w http.ResponseWriter, r 
 
 	if len(importData.Notes) == 0 {
 		http.Error(w, "No notes to import", http.StatusBadRequest)
+		return
+	}
+	if len(importData.Notes) > maxImportNotes {
+		http.Error(w, fmt.Sprintf("Too many notes: %d exceeds maximum of %d", len(importData.Notes), maxImportNotes), http.StatusBadRequest)
 		return
 	}
 
