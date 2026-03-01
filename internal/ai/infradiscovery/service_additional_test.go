@@ -8,6 +8,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type blockingAIAnalyzer struct{}
@@ -224,14 +225,17 @@ func TestAnalyzeContainer_StaleCacheEntryExpiresPerImage(t *testing.T) {
 		cachedAt: time.Now(),
 	}
 
-	app := service.analyzeContainer(context.Background(), analyzer, models.DockerContainer{
-		ID:    "1",
-		Name:  "db",
-		Image: "postgres:16",
-	}, models.DockerHost{
-		AgentID:  "agent-1",
-		Hostname: "docker-host",
-	})
+	app := service.analyzeContainer(context.Background(), analyzer,
+		dockerContainerViewFromModel(models.DockerContainer{
+			ID:    "1",
+			Name:  "db",
+			Image: "postgres:16",
+		}),
+		dockerHostViewFromModel(models.DockerHost{
+			AgentID:  "agent-1",
+			Hostname: "docker-host",
+		}),
+	)
 	if app == nil {
 		t.Fatalf("expected discovery from refreshed AI analysis")
 	}
@@ -274,5 +278,231 @@ func TestRunDiscovery_AIAnalysisTimeout(t *testing.T) {
 	}
 	if elapsed > 500*time.Millisecond {
 		t.Fatalf("expected run to be bounded by AI timeout, took %v", elapsed)
+	}
+}
+
+// mockReadState implements unifiedresources.ReadState for testing the ReadState path.
+type mockReadState struct {
+	dockerHosts      []*unifiedresources.DockerHostView
+	dockerContainers []*unifiedresources.DockerContainerView
+}
+
+func (m *mockReadState) VMs() []*unifiedresources.VMView                 { return nil }
+func (m *mockReadState) Containers() []*unifiedresources.ContainerView   { return nil }
+func (m *mockReadState) Nodes() []*unifiedresources.NodeView             { return nil }
+func (m *mockReadState) Hosts() []*unifiedresources.HostView             { return nil }
+func (m *mockReadState) DockerHosts() []*unifiedresources.DockerHostView { return m.dockerHosts }
+func (m *mockReadState) DockerContainers() []*unifiedresources.DockerContainerView {
+	return m.dockerContainers
+}
+func (m *mockReadState) StoragePools() []*unifiedresources.StoragePoolView     { return nil }
+func (m *mockReadState) PBSInstances() []*unifiedresources.PBSInstanceView     { return nil }
+func (m *mockReadState) PMGInstances() []*unifiedresources.PMGInstanceView     { return nil }
+func (m *mockReadState) K8sClusters() []*unifiedresources.K8sClusterView       { return nil }
+func (m *mockReadState) K8sNodes() []*unifiedresources.K8sNodeView             { return nil }
+func (m *mockReadState) Pods() []*unifiedresources.PodView                     { return nil }
+func (m *mockReadState) K8sDeployments() []*unifiedresources.K8sDeploymentView { return nil }
+func (m *mockReadState) Workloads() []*unifiedresources.WorkloadView           { return nil }
+func (m *mockReadState) Infrastructure() []*unifiedresources.InfrastructureView {
+	return nil
+}
+
+func TestRunDiscovery_ReadStatePath(t *testing.T) {
+	hostView := dockerHostViewFromModel(models.DockerHost{
+		ID:       "docker-host-1",
+		AgentID:  "agent-1",
+		Hostname: "docker-host",
+	})
+	// Build a container view with HostSourceID wired to the host.
+	ctResource := &unifiedresources.Resource{
+		ID:   "ct-1",
+		Name: "mydb",
+		Type: unifiedresources.ResourceTypeAppContainer,
+		Docker: &unifiedresources.DockerData{
+			ContainerID:    "ct-1",
+			HostSourceID:   "docker-host-1",
+			Image:          "postgres:14",
+			ContainerState: "running",
+		},
+	}
+	ctViewVal := unifiedresources.NewDockerContainerView(ctResource)
+	ctView := &ctViewVal
+
+	rs := &mockReadState{
+		dockerHosts:      []*unifiedresources.DockerHostView{hostView},
+		dockerContainers: []*unifiedresources.DockerContainerView{ctView},
+	}
+
+	analyzer := &mockAIAnalyzer{
+		responses: map[string]string{
+			"postgres:14": `{"service_type":"postgres","service_name":"PostgreSQL","category":"database","cli_command":"docker exec {container} psql","confidence":0.95,"reasoning":"PostgreSQL"}`,
+		},
+	}
+
+	// No StateProvider — ReadState only.
+	service := NewService(nil, nil, DefaultConfig())
+	service.SetReadState(rs)
+	service.SetAIAnalyzer(analyzer)
+
+	apps := service.RunDiscovery(context.Background())
+	if len(apps) != 1 {
+		t.Fatalf("RunDiscovery() via ReadState returned %d apps, want 1", len(apps))
+	}
+	if apps[0].Type != "postgres" {
+		t.Fatalf("Type = %q, want postgres", apps[0].Type)
+	}
+	if apps[0].Hostname != "docker-host" {
+		t.Fatalf("Hostname = %q, want docker-host", apps[0].Hostname)
+	}
+}
+
+func TestRunDiscovery_ReadStateSkipsNilEntries(t *testing.T) {
+	hostView := dockerHostViewFromModel(models.DockerHost{
+		ID:       "docker-host-1",
+		AgentID:  "agent-1",
+		Hostname: "docker-host",
+	})
+	ctResource := &unifiedresources.Resource{
+		ID:   "ct-1",
+		Name: "mydb",
+		Type: unifiedresources.ResourceTypeAppContainer,
+		Docker: &unifiedresources.DockerData{
+			ContainerID:    "ct-1",
+			HostSourceID:   "docker-host-1",
+			Image:          "postgres:14",
+			ContainerState: "running",
+		},
+	}
+	ctViewVal := unifiedresources.NewDockerContainerView(ctResource)
+	ctView := &ctViewVal
+
+	// Include nil entries alongside valid ones.
+	rs := &mockReadState{
+		dockerHosts:      []*unifiedresources.DockerHostView{nil, hostView, nil},
+		dockerContainers: []*unifiedresources.DockerContainerView{nil, ctView, nil},
+	}
+
+	analyzer := &mockAIAnalyzer{
+		responses: map[string]string{
+			"postgres:14": `{"service_type":"postgres","service_name":"PostgreSQL","category":"database","cli_command":"","confidence":0.95,"reasoning":"PostgreSQL"}`,
+		},
+	}
+
+	service := NewService(nil, nil, DefaultConfig())
+	service.SetReadState(rs)
+	service.SetAIAnalyzer(analyzer)
+
+	apps := service.RunDiscovery(context.Background())
+	if len(apps) != 1 {
+		t.Fatalf("RunDiscovery() with nil entries returned %d apps, want 1", len(apps))
+	}
+}
+
+func TestRunDiscovery_ReadStateSkipsUnresolvedHost(t *testing.T) {
+	// Container references a host that doesn't exist in the hosts list.
+	ctResource := &unifiedresources.Resource{
+		ID:   "ct-orphan",
+		Name: "orphan",
+		Type: unifiedresources.ResourceTypeAppContainer,
+		Docker: &unifiedresources.DockerData{
+			ContainerID:    "ct-orphan",
+			HostSourceID:   "nonexistent-host",
+			Image:          "redis:7",
+			ContainerState: "running",
+		},
+	}
+	ctViewVal := unifiedresources.NewDockerContainerView(ctResource)
+	ctView := &ctViewVal
+
+	rs := &mockReadState{
+		dockerHosts:      nil, // no hosts at all
+		dockerContainers: []*unifiedresources.DockerContainerView{ctView},
+	}
+
+	analyzer := &mockAIAnalyzer{
+		responses: map[string]string{
+			"redis:7": `{"service_type":"redis","service_name":"Redis","category":"cache","cli_command":"","confidence":0.9,"reasoning":"Redis"}`,
+		},
+	}
+
+	service := NewService(nil, nil, DefaultConfig())
+	service.SetReadState(rs)
+	service.SetAIAnalyzer(analyzer)
+
+	apps := service.RunDiscovery(context.Background())
+	if len(apps) != 0 {
+		t.Fatalf("RunDiscovery() with unresolved host returned %d apps, want 0", len(apps))
+	}
+	if analyzer.callCount != 0 {
+		t.Fatalf("analyzer should not be called for orphaned containers, got %d calls", analyzer.callCount)
+	}
+}
+
+func TestRunDiscovery_ReadStateSkipsEmptyHostSourceID(t *testing.T) {
+	// Host with empty HostSourceID should not pollute the lookup map.
+	emptyHost := dockerHostViewFromModel(models.DockerHost{
+		ID:       "",
+		AgentID:  "agent-empty",
+		Hostname: "empty-host",
+	})
+	realHost := dockerHostViewFromModel(models.DockerHost{
+		ID:       "real-host-1",
+		AgentID:  "agent-1",
+		Hostname: "real-host",
+	})
+
+	// Container with empty HostSourceID should be skipped (unresolved),
+	// not matched to the empty-ID host.
+	ctEmpty := &unifiedresources.Resource{
+		ID:   "ct-empty",
+		Name: "mystery",
+		Type: unifiedresources.ResourceTypeAppContainer,
+		Docker: &unifiedresources.DockerData{
+			ContainerID:    "ct-empty",
+			HostSourceID:   "",
+			Image:          "nginx:latest",
+			ContainerState: "running",
+		},
+	}
+	ctEmptyView := unifiedresources.NewDockerContainerView(ctEmpty)
+
+	// Container with valid HostSourceID should be processed normally.
+	ctValid := &unifiedresources.Resource{
+		ID:   "ct-valid",
+		Name: "mydb",
+		Type: unifiedresources.ResourceTypeAppContainer,
+		Docker: &unifiedresources.DockerData{
+			ContainerID:    "ct-valid",
+			HostSourceID:   "real-host-1",
+			Image:          "postgres:14",
+			ContainerState: "running",
+		},
+	}
+	ctValidView := unifiedresources.NewDockerContainerView(ctValid)
+
+	rs := &mockReadState{
+		dockerHosts:      []*unifiedresources.DockerHostView{emptyHost, realHost},
+		dockerContainers: []*unifiedresources.DockerContainerView{&ctEmptyView, &ctValidView},
+	}
+
+	analyzer := &mockAIAnalyzer{
+		responses: map[string]string{
+			"nginx:latest": `{"service_type":"nginx","service_name":"Nginx","category":"web","cli_command":"","confidence":0.9,"reasoning":"Nginx"}`,
+			"postgres:14":  `{"service_type":"postgres","service_name":"PostgreSQL","category":"database","cli_command":"","confidence":0.95,"reasoning":"PostgreSQL"}`,
+		},
+	}
+
+	service := NewService(nil, nil, DefaultConfig())
+	service.SetReadState(rs)
+	service.SetAIAnalyzer(analyzer)
+
+	apps := service.RunDiscovery(context.Background())
+	// Only the valid container (postgres on real-host) should be discovered.
+	// The empty-HostSourceID container should be skipped.
+	if len(apps) != 1 {
+		t.Fatalf("RunDiscovery() returned %d apps, want 1 (only valid host container)", len(apps))
+	}
+	if apps[0].Type != "postgres" {
+		t.Fatalf("Type = %q, want postgres", apps[0].Type)
 	}
 }

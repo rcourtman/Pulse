@@ -153,11 +153,11 @@ func TestParseAIResponse(t *testing.T) {
 func TestBuildContainerInfo(t *testing.T) {
 	service := &Service{}
 
-	container := models.DockerContainer{
-		ID:     "abc123",
-		Name:   "mydb",
-		Image:  "postgres:14",
-		Status: "running",
+	cv := dockerContainerViewFromModel(models.DockerContainer{
+		ID:    "abc123",
+		Name:  "mydb",
+		Image: "postgres:14",
+		State: "running",
 		Ports: []models.DockerContainerPort{
 			{PublicPort: 5432, PrivatePort: 5432, Protocol: "tcp"},
 		},
@@ -170,9 +170,9 @@ func TestBuildContainerInfo(t *testing.T) {
 		Networks: []models.DockerContainerNetworkLink{
 			{Name: "backend"},
 		},
-	}
+	})
 
-	info := service.buildContainerInfo(container)
+	info := service.buildContainerInfo(cv)
 
 	if info.Name != "mydb" {
 		t.Errorf("Name = %q, want 'mydb'", info.Name)
@@ -331,17 +331,17 @@ func TestCaching(t *testing.T) {
 func TestAnalyzeContainer_CapsAnalysisCacheSize(t *testing.T) {
 	service := NewService(&mockStateProvider{}, nil, DefaultConfig())
 	analyzer := &mockAIAnalyzer{}
-	host := models.DockerHost{AgentID: "agent-1", Hostname: "host1"}
+	host := dockerHostViewFromModel(models.DockerHost{AgentID: "agent-1", Hostname: "host1"})
 
 	lastImage := ""
 	for i := 0; i < maxAnalysisCacheEntries+5; i++ {
 		lastImage = fmt.Sprintf("image-%d", i)
-		container := models.DockerContainer{
+		cv := dockerContainerViewFromModel(models.DockerContainer{
 			ID:    fmt.Sprintf("%d", i),
 			Name:  fmt.Sprintf("container-%d", i),
 			Image: lastImage,
-		}
-		service.analyzeContainer(context.Background(), analyzer, container, host)
+		})
+		service.analyzeContainer(context.Background(), analyzer, cv, host)
 	}
 
 	service.cacheMu.RLock()
@@ -496,10 +496,10 @@ func TestRunDiscovery_ShellQuotesUnsafeContainerNameInCLI(t *testing.T) {
 
 func TestBuildContainerInfo_SanitizesAndBoundsMetadata(t *testing.T) {
 	service := &Service{}
-	container := models.DockerContainer{
-		Name:   "web\nnode",
-		Image:  "nginx:latest",
-		Status: "running\r\nok",
+	cv := dockerContainerViewFromModel(models.DockerContainer{
+		Name:  "web\nnode",
+		Image: "nginx:latest",
+		State: "running",
 		Ports: []models.DockerContainerPort{
 			{PublicPort: 8080, PrivatePort: 80, Protocol: "TCP"},
 			{PublicPort: 1234, PrivatePort: 0, Protocol: "udp"},
@@ -517,14 +517,14 @@ func TestBuildContainerInfo_SanitizesAndBoundsMetadata(t *testing.T) {
 			{Name: "front\tend"},
 			{Name: ""},
 		},
-	}
+	})
 
-	info := service.buildContainerInfo(container)
+	info := service.buildContainerInfo(cv)
 	if info.Name != "web node" {
 		t.Fatalf("Name = %q, want sanitized value", info.Name)
 	}
-	if info.Status != "running ok" {
-		t.Fatalf("Status = %q, want sanitized value", info.Status)
+	if info.Status != "running" {
+		t.Fatalf("Status = %q, want sanitized container state", info.Status)
 	}
 	if len(info.Ports) != 1 {
 		t.Fatalf("Ports len = %d, want 1 valid port", len(info.Ports))

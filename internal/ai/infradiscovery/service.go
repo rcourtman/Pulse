@@ -18,6 +18,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -87,6 +88,7 @@ type DiscoveryResult struct {
 // Service manages infrastructure discovery.
 type Service struct {
 	stateProvider  StateProvider
+	readState      unifiedresources.ReadState
 	knowledgeStore *knowledge.Store
 	aiAnalyzer     AIAnalyzer
 	mu             sync.RWMutex
@@ -240,6 +242,14 @@ func (s *Service) SetAIAnalyzer(analyzer AIAnalyzer) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.aiAnalyzer = analyzer
+}
+
+// SetReadState sets the unified ReadState for typed infrastructure access.
+// When set, RunDiscovery uses ReadState instead of the legacy StateProvider.
+func (s *Service) SetReadState(rs unifiedresources.ReadState) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.readState = rs
 }
 
 // goRecover launches fn in a goroutine with panic recovery logging.
@@ -399,45 +409,70 @@ func (s *Service) RunDiscovery(ctx context.Context) []DiscoveredApp {
 
 	start := time.Now()
 
-	if s.stateProvider == nil {
-		log.Error().Msg("State provider is not configured; skipping discovery")
-		return nil
-	}
-
-	state := s.stateProvider.GetState()
-
 	s.mu.RLock()
+	rs := s.readState
 	analyzer := s.aiAnalyzer
 	s.mu.RUnlock()
 
 	if analyzer == nil {
-		log.Debug().
-			Int("docker_hosts", len(state.DockerHosts)).
-			Msg("AI analyzer not set, skipping discovery")
+		log.Debug().Msg("AI analyzer not set, skipping discovery")
 		return nil
 	}
 
 	var apps []DiscoveredApp
 
-	// Collect all containers from all Docker hosts
-	var allContainers []struct {
-		Container models.DockerContainer
-		Host      models.DockerHost
+	// Collect containers and their parent host metadata.
+	type containerItem struct {
+		container *unifiedresources.DockerContainerView
+		host      *unifiedresources.DockerHostView
 	}
+	var allContainers []containerItem
 
-	for _, dockerHost := range state.DockerHosts {
-		for _, container := range dockerHost.Containers {
-			allContainers = append(allContainers, struct {
-				Container models.DockerContainer
-				Host      models.DockerHost
-			}{container, dockerHost})
+	if rs != nil {
+		// Preferred path: typed ReadState accessors.
+		hosts := rs.DockerHosts()
+		hostBySourceID := make(map[string]*unifiedresources.DockerHostView, len(hosts))
+		for _, h := range hosts {
+			if h == nil {
+				continue
+			}
+			if sid := h.HostSourceID(); sid != "" {
+				hostBySourceID[sid] = h
+			}
+
 		}
+		for _, ct := range rs.DockerContainers() {
+			if ct == nil {
+				continue
+			}
+			host := hostBySourceID[ct.HostSourceID()]
+			if host == nil {
+				log.Debug().
+					Str("container", ct.Name()).
+					Str("host_source_id", ct.HostSourceID()).
+					Msg("Skipping container with unresolved host")
+				continue
+			}
+			allContainers = append(allContainers, containerItem{container: ct, host: host})
+		}
+	} else if s.stateProvider != nil {
+		// Legacy fallback: GetState() → models snapshot.
+		state := s.stateProvider.GetState()
+		for _, dh := range state.DockerHosts {
+			for _, ct := range dh.Containers {
+				allContainers = append(allContainers, containerItem{
+					container: dockerContainerViewFromModel(ct),
+					host:      dockerHostViewFromModel(dh),
+				})
+			}
+		}
+	} else {
+		log.Error().Msg("Neither ReadState nor StateProvider configured; skipping discovery")
+		return nil
 	}
 
 	if len(allContainers) == 0 {
-		log.Debug().
-			Int("docker_hosts", len(state.DockerHosts)).
-			Msg("No Docker containers found for discovery")
+		log.Debug().Msg("No Docker containers found for discovery")
 		s.mu.Lock()
 		s.lastRun = time.Now()
 		s.mu.Unlock()
@@ -455,7 +490,7 @@ func (s *Service) RunDiscovery(ctx context.Context) []DiscoveredApp {
 			return nil
 		}
 
-		app := s.analyzeContainer(ctx, analyzer, item.Container, item.Host)
+		app := s.analyzeContainer(ctx, analyzer, item.container, item.host)
 		if app != nil {
 			apps = append(apps, *app)
 		}
@@ -485,14 +520,24 @@ func (s *Service) RunDiscovery(ctx context.Context) []DiscoveredApp {
 }
 
 // analyzeContainer uses AI to analyze a single container.
-func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c models.DockerContainer, host models.DockerHost) *DiscoveredApp {
+func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c *unifiedresources.DockerContainerView, host *unifiedresources.DockerHostView) *DiscoveredApp {
 	if s.isStopped() || ctx.Err() != nil {
 		return nil
 	}
 
+	cName := c.Name()
+	cImage := c.Image()
+	cID := c.ContainerID()
+	hostHostname := ""
+	hostAgentID := ""
+	if host != nil {
+		hostHostname = host.Hostname()
+		hostAgentID = host.AgentID()
+	}
+
 	// Check cache first
 	s.cacheMu.RLock()
-	entry, found := s.analysisCache[c.Image]
+	entry, found := s.analysisCache[cImage]
 	cacheValid := found && time.Since(entry.cachedAt) < s.cacheExpiry
 	s.cacheMu.RUnlock()
 
@@ -501,11 +546,11 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 	if found && cacheValid {
 		result = entry.result
 		log.Debug().
-			Str("host", host.Hostname).
-			Str("host_id", host.AgentID).
-			Str("container", c.Name).
-			Str("container_id", c.ID).
-			Str("image", c.Image).
+			Str("host", hostHostname).
+			Str("host_id", hostAgentID).
+			Str("container", cName).
+			Str("container_id", cID).
+			Str("image", cImage).
 			Msg("Using cached analysis result")
 	} else {
 		// Build container info for AI analysis
@@ -517,18 +562,18 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 			if s.isStopped() || ctx.Err() != nil {
 				log.Debug().
 					Err(err).
-					Str("container", c.Name).
-					Str("image", c.Image).
+					Str("container", cName).
+					Str("image", cImage).
 					Msg("Infrastructure discovery interrupted during AI analysis")
 				return nil
 			}
 			log.Warn().
 				Err(err).
-				Str("host", host.Hostname).
-				Str("host_id", host.AgentID).
-				Str("container", c.Name).
-				Str("container_id", c.ID).
-				Str("image", c.Image).
+				Str("host", hostHostname).
+				Str("host_id", hostAgentID).
+				Str("container", cName).
+				Str("container_id", cID).
+				Str("image", cImage).
 				Msg("Failed to build AI analysis prompt for container")
 			return nil
 		}
@@ -542,16 +587,16 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 			if errors.Is(err, context.DeadlineExceeded) {
 				log.Warn().
 					Err(err).
-					Str("container", c.Name).
-					Str("image", c.Image).
+					Str("container", cName).
+					Str("image", cImage).
 					Dur("timeout", s.aiAnalysisTimeout).
 					Msg("AI analysis timed out for container")
 				return nil
 			}
 			log.Warn().
 				Err(err).
-				Str("container", c.Name).
-				Str("image", c.Image).
+				Str("container", cName).
+				Str("image", cImage).
 				Msg("AI analysis failed for container")
 			return nil
 		}
@@ -560,11 +605,11 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 		result = s.parseAIResponse(response)
 		if result == nil {
 			log.Warn().
-				Str("host", host.Hostname).
-				Str("host_id", host.AgentID).
-				Str("container", c.Name).
-				Str("container_id", c.ID).
-				Str("image", c.Image).
+				Str("host", hostHostname).
+				Str("host_id", hostAgentID).
+				Str("container", cName).
+				Str("container_id", cID).
+				Str("image", cImage).
 				Str("response", response).
 				Msg("Failed to parse AI response")
 			return nil
@@ -572,22 +617,22 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 
 		// Cache the result
 		s.cacheMu.Lock()
-		if _, exists := s.analysisCache[c.Image]; !exists && len(s.analysisCache) >= maxAnalysisCacheEntries {
+		if _, exists := s.analysisCache[cImage]; !exists && len(s.analysisCache) >= maxAnalysisCacheEntries {
 			log.Warn().
 				Int("cache_entries", len(s.analysisCache)).
 				Int("cache_limit", maxAnalysisCacheEntries).
 				Msg("Discovery analysis cache reached size limit; clearing cache")
 			s.analysisCache = make(map[string]*analysisCacheEntry)
 		}
-		s.analysisCache[c.Image] = &analysisCacheEntry{result: result, cachedAt: time.Now()}
+		s.analysisCache[cImage] = &analysisCacheEntry{result: result, cachedAt: time.Now()}
 		s.cacheMu.Unlock()
 
 		log.Debug().
-			Str("host", host.Hostname).
-			Str("host_id", host.AgentID).
-			Str("container", c.Name).
-			Str("container_id", c.ID).
-			Str("image", c.Image).
+			Str("host", hostHostname).
+			Str("host_id", hostAgentID).
+			Str("container", cName).
+			Str("container_id", cID).
+			Str("image", cImage).
 			Str("service_type", result.ServiceType).
 			Float64("confidence", result.Confidence).
 			Msg("AI analyzed container")
@@ -596,11 +641,11 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 	// Skip unknown/low-confidence results
 	if result.ServiceType == "unknown" || result.Confidence < 0.5 {
 		log.Debug().
-			Str("host", host.Hostname).
-			Str("host_id", host.AgentID).
-			Str("container", c.Name).
-			Str("container_id", c.ID).
-			Str("image", c.Image).
+			Str("host", hostHostname).
+			Str("host_id", hostAgentID).
+			Str("container", cName).
+			Str("container_id", cID).
+			Str("image", cImage).
 			Str("service_type", result.ServiceType).
 			Float64("confidence", result.Confidence).
 			Msg("Skipping low-confidence or unknown AI discovery result")
@@ -610,16 +655,16 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 	// Build CLI access string
 	cliAccess := result.CLICommand
 	if cliAccess != "" {
-		safeContainerName := shellQuoteIfNeeded(sanitizeText(c.Name, maxAppFieldLength))
+		safeContainerName := shellQuoteIfNeeded(sanitizeText(cName, maxAppFieldLength))
 		// Replace placeholder with actual container name
 		cliAccess = strings.ReplaceAll(cliAccess, "{container}", safeContainerName)
 		cliAccess = strings.ReplaceAll(cliAccess, "${container}", safeContainerName)
 	}
 
-	hostID := sanitizeText(host.AgentID, maxAppFieldLength)
-	hostname := sanitizeText(host.Hostname, maxAppFieldLength)
-	containerID := sanitizeText(c.ID, maxAppFieldLength)
-	containerName := sanitizeText(c.Name, maxAppFieldLength)
+	hostID := sanitizeText(hostAgentID, maxAppFieldLength)
+	hostname := sanitizeText(hostHostname, maxAppFieldLength)
+	containerID := sanitizeText(cID, maxAppFieldLength)
+	containerName := sanitizeText(cName, maxAppFieldLength)
 	if hostname == "" {
 		hostname = "unknown-host"
 	}
@@ -627,13 +672,13 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 		containerName = "unknown-container"
 	}
 
-	// Extract ports
+	// Extract ports from view.
 	var ports []int
-	for _, p := range c.Ports {
+	for _, p := range c.Ports() {
 		if p.PublicPort > 0 && p.PublicPort <= 65535 {
-			ports = append(ports, int(p.PublicPort))
+			ports = append(ports, p.PublicPort)
 		} else if p.PrivatePort > 0 && p.PrivatePort <= 65535 {
-			ports = append(ports, int(p.PrivatePort))
+			ports = append(ports, p.PrivatePort)
 		}
 	}
 
@@ -655,16 +700,16 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 	}
 }
 
-// buildContainerInfo extracts relevant information from a container for AI analysis.
-func (s *Service) buildContainerInfo(container models.DockerContainer) ContainerInfo {
+// buildContainerInfo extracts relevant information from a container view for AI analysis.
+func (s *Service) buildContainerInfo(container *unifiedresources.DockerContainerView) ContainerInfo {
 	info := ContainerInfo{
-		Name:   sanitizeText(container.Name, maxPromptFieldLength),
-		Image:  sanitizeText(container.Image, maxPromptFieldLength),
-		Status: sanitizeText(container.Status, maxPromptFieldLength),
+		Name:   sanitizeText(container.Name(), maxPromptFieldLength),
+		Image:  sanitizeText(container.Image(), maxPromptFieldLength),
+		Status: sanitizeText(container.ContainerState(), maxPromptFieldLength),
 	}
 
 	// Extract ports
-	for _, p := range container.Ports {
+	for _, p := range container.Ports() {
 		if len(info.Ports) >= maxPromptPortCount {
 			break
 		}
@@ -673,19 +718,20 @@ func (s *Service) buildContainerInfo(container models.DockerContainer) Container
 		}
 		hostPort := 0
 		if p.PublicPort > 0 && p.PublicPort <= 65535 {
-			hostPort = int(p.PublicPort)
+			hostPort = p.PublicPort
 		}
 		info.Ports = append(info.Ports, PortInfo{
 			HostPort:      hostPort,
-			ContainerPort: int(p.PrivatePort),
+			ContainerPort: p.PrivatePort,
 			Protocol:      sanitizeProtocol(p.Protocol),
 		})
 	}
 
 	// Extract labels
-	if len(container.Labels) > 0 {
+	labels := container.Labels()
+	if len(labels) > 0 {
 		info.Labels = make(map[string]string)
-		for key, value := range container.Labels {
+		for key, value := range labels {
 			if len(info.Labels) >= maxPromptLabelCount {
 				break
 			}
@@ -701,7 +747,7 @@ func (s *Service) buildContainerInfo(container models.DockerContainer) Container
 	}
 
 	// Extract mount destinations
-	for _, m := range container.Mounts {
+	for _, m := range container.Mounts() {
 		if len(info.Mounts) >= maxPromptMountCount {
 			break
 		}
@@ -711,7 +757,7 @@ func (s *Service) buildContainerInfo(container models.DockerContainer) Container
 	}
 
 	// Extract network names
-	for _, n := range container.Networks {
+	for _, n := range container.Networks() {
 		if len(info.Networks) >= maxPromptNetworkCount {
 			break
 		}
@@ -1089,4 +1135,69 @@ func shellQuoteIfNeeded(input string) string {
 	}
 	escaped := strings.ReplaceAll(input, `'`, `'"'"'`)
 	return "'" + escaped + "'"
+}
+
+// dockerContainerViewFromModel wraps a legacy models.DockerContainer in a
+// DockerContainerView for the fallback path when ReadState is not wired.
+func dockerContainerViewFromModel(ct models.DockerContainer) *unifiedresources.DockerContainerView {
+	ports := make([]unifiedresources.DockerPortMeta, 0, len(ct.Ports))
+	for _, p := range ct.Ports {
+		ports = append(ports, unifiedresources.DockerPortMeta{
+			PrivatePort: p.PrivatePort,
+			PublicPort:  p.PublicPort,
+			Protocol:    p.Protocol,
+			IP:          p.IP,
+		})
+	}
+	mounts := make([]unifiedresources.DockerMountMeta, 0, len(ct.Mounts))
+	for _, m := range ct.Mounts {
+		mounts = append(mounts, unifiedresources.DockerMountMeta{
+			Type:        m.Type,
+			Source:      m.Source,
+			Destination: m.Destination,
+			Mode:        m.Mode,
+			RW:          m.RW,
+		})
+	}
+	networks := make([]unifiedresources.DockerNetworkMeta, 0, len(ct.Networks))
+	for _, n := range ct.Networks {
+		networks = append(networks, unifiedresources.DockerNetworkMeta{
+			Name: n.Name,
+			IPv4: n.IPv4,
+			IPv6: n.IPv6,
+		})
+	}
+	r := &unifiedresources.Resource{
+		ID:   ct.ID,
+		Name: ct.Name,
+		Type: unifiedresources.ResourceTypeAppContainer,
+		Docker: &unifiedresources.DockerData{
+			ContainerID:    ct.ID,
+			Image:          ct.Image,
+			ContainerState: ct.State,
+			Labels:         ct.Labels,
+			Ports:          ports,
+			Mounts:         mounts,
+			Networks:       networks,
+		},
+	}
+	v := unifiedresources.NewDockerContainerView(r)
+	return &v
+}
+
+// dockerHostViewFromModel wraps a legacy models.DockerHost in a
+// DockerHostView for the fallback path when ReadState is not wired.
+func dockerHostViewFromModel(dh models.DockerHost) *unifiedresources.DockerHostView {
+	r := &unifiedresources.Resource{
+		ID:   dh.ID,
+		Name: dh.Hostname,
+		Type: unifiedresources.ResourceTypeHost,
+		Docker: &unifiedresources.DockerData{
+			HostSourceID: dh.ID,
+			Hostname:     dh.Hostname,
+			AgentID:      dh.AgentID,
+		},
+	}
+	v := unifiedresources.NewDockerHostView(r)
+	return &v
 }

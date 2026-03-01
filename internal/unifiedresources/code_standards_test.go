@@ -205,11 +205,14 @@ type legacyStateRatchet struct {
 // SRC-03r: Migrated update_detection.go collectDockerUpdates from GetState() to ReadState.
 // Added HostSourceID() accessor to DockerContainerView and LastChecked field to
 // DockerUpdateStatusMeta. Delta: GetState -1, state.DockerHosts -1.
+// SRC-03t: Migrated infradiscovery/service.go DiscoverApplications from GetState+state.DockerHosts
+// to ReadState typed accessors. RunDiscovery now prefers ReadState.DockerHosts()/DockerContainers()
+// when wired; legacy GetState fallback kept for backward compat. Delta: state.DockerHosts -2.
 var legacyStateRatchets = []legacyStateRatchet{
 	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 29, "ReadState.VMs()"},
 	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 29, "ReadState.Containers()"},
 	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 29, "ReadState.Nodes()"},
-	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 20, "ReadState.DockerHosts()"},
+	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 18, "ReadState.DockerHosts()"},
 	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 10, "ReadState.Hosts()"},
 	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 16, "ReadState.StoragePools()"},
 	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 5, "ReadState.K8sClusters()"},

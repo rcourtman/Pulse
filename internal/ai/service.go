@@ -377,6 +377,9 @@ func (s *Service) SetReadState(rs unifiedresources.ReadState) {
 	if s.discoveryService != nil {
 		s.discoveryService.SetReadState(rs)
 	}
+	if s.infraDiscoveryService != nil {
+		s.infraDiscoveryService.SetReadState(rs)
+	}
 
 	// Attempt lazy init — discovery service requires ReadState + discoveryStore,
 	// and SetReadState may be called after SetStateProvider (which sets up
@@ -466,6 +469,10 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 		)
 		// Wire the AI service as the analyzer (implements infradiscovery.AIAnalyzer)
 		s.infraDiscoveryService.SetAIAnalyzer(s)
+		// Forward unified ReadState if already configured.
+		if s.readState != nil {
+			s.infraDiscoveryService.SetReadState(s.readState)
+		}
 
 		// Only start if AI is enabled
 		if s.cfg != nil && s.cfg.Enabled {
