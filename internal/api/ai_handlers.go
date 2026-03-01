@@ -3874,6 +3874,57 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 	}
 }
 
+// HandleUndismissFinding reverts a dismissed/suppressed finding back to active state (POST /api/ai/patrol/undismiss)
+func (h *AISettingsHandler) HandleUndismissFinding(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !CheckAuth(h.getConfig(r.Context()), w, r) {
+		return
+	}
+
+	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	if patrol == nil {
+		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		FindingID string `json:"finding_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.FindingID == "" {
+		http.Error(w, "finding_id is required", http.StatusBadRequest)
+		return
+	}
+
+	findings := patrol.GetFindings()
+	findings.Undismiss(req.FindingID)
+
+	if store := h.GetUnifiedStore(); store != nil {
+		store.Undismiss(req.FindingID)
+	}
+
+	log.Info().
+		Str("finding_id", req.FindingID).
+		Msg("AI Patrol: Finding undismissed by user")
+
+	response := map[string]interface{}{
+		"success": true,
+		"message": "Finding undismissed",
+	}
+
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write undismiss response")
+	}
+}
+
 // HandleSuppressFinding permanently suppresses similar findings for a resource (POST /api/ai/patrol/suppress)
 // The LLM will be told never to re-raise findings of this type for this resource
 func (h *AISettingsHandler) HandleSuppressFinding(w http.ResponseWriter, r *http.Request) {

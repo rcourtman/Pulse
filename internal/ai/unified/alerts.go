@@ -677,6 +677,30 @@ func (s *UnifiedStore) Dismiss(findingID, reason, note string) bool {
 	return true
 }
 
+// Undismiss reverts a dismissed finding back to active state
+func (s *UnifiedStore) Undismiss(findingID string) bool {
+	s.mu.Lock()
+
+	f, ok := s.findings[findingID]
+	if !ok {
+		s.mu.Unlock()
+		return false
+	}
+
+	if f.DismissedReason == "" && !f.Suppressed {
+		s.mu.Unlock()
+		return false
+	}
+
+	f.DismissedReason = ""
+	f.Suppressed = false
+	f.AcknowledgedAt = nil
+
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
 // Snooze snoozes a finding for the specified duration
 func (s *UnifiedStore) Snooze(findingID string, duration time.Duration) bool {
 	s.mu.Lock()

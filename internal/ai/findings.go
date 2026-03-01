@@ -743,6 +743,16 @@ func (s *FindingsStore) Undismiss(id string) bool {
 		return false
 	}
 
+	// Remove any explicit suppression rules that were created for this finding's
+	// resource+category (from Suppress()), so future findings aren't blocked.
+	if f.Suppressed && f.ResourceID != "" {
+		for ruleID, rule := range s.suppressionRules {
+			if rule.ResourceID == f.ResourceID && rule.Category == f.Category {
+				delete(s.suppressionRules, ruleID)
+			}
+		}
+	}
+
 	// Clear dismissal state
 	f.DismissedReason = ""
 	f.Suppressed = false
