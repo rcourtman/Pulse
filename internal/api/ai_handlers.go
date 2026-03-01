@@ -3751,6 +3751,8 @@ func (h *AISettingsHandler) HandleDeleteGuestNote(w http.ResponseWriter, r *http
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 4*1024) // 4KB max — only needs guest_id + note_id
+
 	var req struct {
 		GuestID string `json:"guest_id"`
 		NoteID  string `json:"note_id"`

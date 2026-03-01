@@ -620,6 +620,41 @@ func TestHandleDeleteGuestNote_MissingOnlyGuestID(t *testing.T) {
 	}
 }
 
+func TestHandleDeleteGuestNote_OversizedBody(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	// Build a body that exceeds 4KB limit. Use a large note_id to push total > 4KB.
+	bigNoteID := strings.Repeat("x", 5*1024) // 5KB note_id → body > 4KB
+	body, _ := json.Marshal(map[string]string{"guest_id": "vm-1", "note_id": bigNoteID})
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/delete", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleDeleteGuestNote(rec, req)
+
+	// MaxBytesReader triggers a decode error → 400 with "Invalid request body"
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d for oversized body, got %d: %s", http.StatusBadRequest, rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Invalid request body") {
+		t.Fatalf("expected 'Invalid request body' from MaxBytesReader, got %q", rec.Body.String())
+	}
+}
+
+func TestHandleDeleteGuestNote_NonExistentGuest(t *testing.T) {
+	t.Parallel()
+	handler := newTestAISettingsHandlerWithService(t)
+
+	// Don't save any notes — the guest won't exist in the cache at all
+	body, _ := json.Marshal(map[string]string{"guest_id": "vm-nonexistent", "note_id": "n-1"})
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/delete", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleDeleteGuestNote(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected %d for non-existent guest, got %d: %s", http.StatusNotFound, rec.Code, rec.Body.String())
+	}
+}
+
 // ========================================
 // HandleExportGuestKnowledge — sanitized filename
 // ========================================
