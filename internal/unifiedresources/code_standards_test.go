@@ -33,8 +33,8 @@ package unifiedresources
 //     internal/websocket/: Exempt (producer/wire-format packages).
 //
 //   - All state.* field access patterns and GetState() calls are
-//     enforced via ratchet ceilings below. The ceilings must only
-//     decrease over time until all direct state access is eliminated.
+//     enforced as hard bans (SRC-04b). Migration is complete — zero
+//     direct state access remains in consumer packages.
 //
 // See: docs/architecture/state-read-consolidation-plan-2026-02.md
 // Progress: docs/architecture/state-read-consolidation-progress-2026-02.md
@@ -106,6 +106,50 @@ var migratedResourcePatterns = []bannedPattern{
 		re:      regexp.MustCompile(`StorageProvider\b`),
 		message: "StorageProvider was removed — storage pools are accessed via unified resources registry",
 	},
+
+	// SRC-04b hard bans: state.* field access patterns and GetState() calls.
+	// Converted from ratchet ceilings (all reached 0) to hard bans on 2026-03-01.
+	// Consumer packages must use ReadState typed accessors exclusively.
+	{
+		re:      regexp.MustCompile(`state\.VMs\b`),
+		message: "use ReadState.VMs() instead of state.VMs — direct state access banned (SRC-04b)",
+	},
+	{
+		re:      regexp.MustCompile(`state\.Containers\b`),
+		message: "use ReadState.Containers() instead of state.Containers — direct state access banned (SRC-04b)",
+	},
+	{
+		re:      regexp.MustCompile(`state\.Nodes\b`),
+		message: "use ReadState.Nodes() instead of state.Nodes — direct state access banned (SRC-04b)",
+	},
+	{
+		re:      regexp.MustCompile(`state\.DockerHosts\b`),
+		message: "use ReadState.DockerHosts() instead of state.DockerHosts — direct state access banned (SRC-04b)",
+	},
+	{
+		re:      regexp.MustCompile(`state\.Hosts\b`),
+		message: "use ReadState.Hosts() instead of state.Hosts — direct state access banned (SRC-04b)",
+	},
+	{
+		re:      regexp.MustCompile(`state\.Storage\b`),
+		message: "use ReadState.StoragePools() instead of state.Storage — direct state access banned (SRC-04b)",
+	},
+	{
+		re:      regexp.MustCompile(`state\.KubernetesClusters\b`),
+		message: "use ReadState.K8sClusters() instead of state.KubernetesClusters — direct state access banned (SRC-04b)",
+	},
+	{
+		re:      regexp.MustCompile(`state\.PBSInstances\b`),
+		message: "use ReadState.PBSInstances() instead of state.PBSInstances — direct state access banned (SRC-04b)",
+	},
+	{
+		re:      regexp.MustCompile(`state\.PMGInstances\b`),
+		message: "use ReadState.PMGInstances() instead of state.PMGInstances — direct state access banned (SRC-04b)",
+	},
+	{
+		re:      regexp.MustCompile(`\.GetState\(\)`),
+		message: "use ReadState interface instead of GetState() — direct state access banned (SRC-04b)",
+	},
 }
 
 // consumerPackage defines a package directory to scan and any files that are
@@ -124,214 +168,45 @@ var consumerPackages = []consumerPackage{
 }
 
 // TestNoDirectStateAccessForMigratedResources ensures that consumer packages
-// do not directly access state.PhysicalDisks, state.CephClusters, or use
-// removed provider interfaces. These resource types have been migrated to
-// the unified resources registry.
+// do not directly access state.* fields, call GetState(), or use removed
+// provider interfaces. All resource types have been migrated to the unified
+// resources registry and ReadState interface (SRC-04b).
 func TestNoDirectStateAccessForMigratedResources(t *testing.T) {
+	// Collect all consumer file contents, deduplicating across overlapping
+	// package entries (e.g., "ai" walks into "ai/tools" and "ai/chat").
+	// Track exempt files so per-package exemptions are preserved.
+	allFiles := make(map[string]string)
+	exemptFiles := make(map[string]bool)
 	for _, pkg := range consumerPackages {
-		files := readConsumerGoFiles(t, pkg.dir)
-		for path, content := range files {
-			base := filepath.Base(path)
-			if pkg.exemptFiles[base] {
-				continue
+		for path, content := range readConsumerGoFiles(t, pkg.dir) {
+			allFiles[path] = content
+			if pkg.exemptFiles[filepath.Base(path)] {
+				exemptFiles[path] = true
 			}
-			for _, bp := range migratedResourcePatterns {
-				if matches := bp.re.FindAllStringIndex(content, -1); len(matches) > 0 {
-					for _, m := range matches {
-						line := 1 + strings.Count(content[:m[0]], "\n")
-						t.Errorf("%s:%d: %s", path, line, bp.message)
-					}
+		}
+	}
+
+	for path, content := range allFiles {
+		if exemptFiles[path] {
+			continue
+		}
+		for _, bp := range migratedResourcePatterns {
+			if matches := bp.re.FindAllStringIndex(content, -1); len(matches) > 0 {
+				for _, m := range matches {
+					line := 1 + strings.Count(content[:m[0]], "\n")
+					t.Errorf("%s:%d: %s", path, line, bp.message)
 				}
 			}
 		}
 	}
 }
 
-// legacyStateRatchet defines a state.* access pattern and its maximum allowed
-// count across all consumer packages. The ceiling is the count at the time
-// the ratchet was added. Each cleanup PR that removes fallback paths should
-// lower these numbers. Adding new state.* usage will cause the test to fail.
-type legacyStateRatchet struct {
-	re       *regexp.Regexp
-	field    string
-	ceiling  int
-	readView string // the ReadState accessor to use instead
-}
-
-// Ceilings captured after SRC-03 + SRC-04a refresh (Feb 2026).
-// These represent legacy nil-fallback paths that are dead code when
-// ReadState is wired. Each number must only decrease over time.
+// SRC-04b: Ratchet-to-hard-ban conversion completed 2026-03-01.
 //
-// Last updated: 2026-03-01 (total state.*: 0, GetState: 0).
-// SRC-04i: Removed legacy GetState() fallback from infradiscovery/service.go DiscoverApplications.
-// ReadState is now the sole data source for Docker container discovery. StateProvider interface,
-// emptyStateProvider, and stateProvider field removed from infradiscovery.Service.
-// Delta: GetState -1, state.DockerHosts -1.
-// SRC-03u: Migrated ai/chat/context_prefetch.go from stateProvider.GetState()+state.ResolveResource
-// to unifiedresources.ResolveResource(ReadState, name). Removed stateProvider dependency entirely.
-// ContextPrefetcher now uses ReadState as sole data source. Delta: GetState -1.
-// SRC-03f: servicediscovery/service.go migrated to ReadState with legacy fallback.
-// SRC-03g: forecast/service.go migrated from StateProvider.GetState to ResourceIterator
-// (removed 3 GetState, state.VMs -2, state.Containers -2, state.Nodes -2, state.Storage -1).
-// SRC-03h: Removed learnBaselines legacy GetState fallback (router.go) and
-// patrol_run.go resource counting legacy fallbacks — ReadState is sole path.
-// SRC-03j: Removed legacy state fallbacks in patrol_ai.go seedBackupAnalysis
-// and seedHealthAndAlerts (state.VMs -4, state.Containers -4, state.Hosts -2,
-// state.KubernetesClusters -2) — ReadState is sole path for these functions.
-// SRC-03k: Migrated adapters.go from StateGetter interface to functional closures.
-// Removed StateGetter/UpdatesMonitor interfaces from adapters.go. Backup, Replication,
-// ConnectionHealth, DiskHealth adapters now use functional getters instead of GetState().
-// (GetState -1, state.DockerHosts -1, state.Hosts -1, state.PBSInstances -1,
+// All state.* field access patterns and GetState() calls in consumer packages
+// reached ceiling 0 through SRC-03a → SRC-04g migration work. They are now
+// enforced as hard bans via migratedResourcePatterns above (per-file, per-line
+// error reporting). The legacy ratchet infrastructure (legacyStateRatchet type,
+// legacyStateRatchets slice, TestLegacyStateAccessRatchet) has been removed.
 //
-//	plus untracked: state.Backups -1, state.ReplicationJobs -1, state.ConnectionHealth -1).
-//
-// SRC-03l: Removed shadow StateProvider/StateSnapshot interface from servicediscovery
-// and discoveryStateAdapter from ai/discovery_adapter.go. ReadState is now the sole
-// state source for servicediscovery. (GetState -2 from servicediscovery, discovery_adapter.go
-// exemption removed — no longer needed).
-// SRC-03m: Removed legacy StateProvider/GetState fallbacks from ai/adapters/adapters.go
-// MetricsAdapter. ReadState is now the sole source for both GetMonitoredResourceIDs and
-// GetCurrentMetrics. (GetState -2, state.VMs -2, state.Containers -2, state.Nodes -2,
-// state.Storage -1).
-// SRC-03n: Removed GetState() from NotificationMonitor interface and NotificationMonitorWrapper.
-// TestNotification handler now uses ReadState.Nodes() for node info instead of state.Nodes.
-// (GetState -2, state.Nodes -2).
-// SRC-03o: Migrated lookupGuestsByVMID and GetDebugContext in ai/service.go from
-// stateProvider.GetState() to ReadState accessors. ReadState is now the sole data source
-// for guest VMID lookups and debug context resource summaries.
-// SRC-03o delta: GetState -2, state.VMs -2, state.Containers -2, state.Nodes -1,
-// state.DockerHosts -1, state.Hosts -1, state.PBSInstances -1.
-// Ceilings also reflect in-flight SRC-03l (servicediscovery migration) reductions.
-// SRC-03p: Removed gatherGuestsFromSnapshot legacy fallback from patrol_intelligence.go.
-// ReadState is now the sole path for gatherGuestIntelligence (state.VMs -1, state.Containers -1).
-// SRC-03q: Renamed local `state` variable to `snap` in servicediscovery/service.go to eliminate
-// 34 false-positive ratchet matches. servicediscovery already used ReadState exclusively (SRC-03l)
-// but the local StateSnapshot variable was named `state`, triggering regex matches.
-// Delta: state.VMs -7, state.Containers -7, state.Nodes -6, state.DockerHosts -6,
-// state.Hosts -5, state.KubernetesClusters -3 (total -34 false positives).
-// SRC-03r: Migrated update_detection.go collectDockerUpdates from GetState() to ReadState.
-// Added HostSourceID() accessor to DockerContainerView and LastChecked field to
-// DockerUpdateStatusMeta. Delta: GetState -1, state.DockerHosts -1.
-// SRC-03t: Migrated infradiscovery/service.go DiscoverApplications from GetState+state.DockerHosts
-// to ReadState typed accessors. RunDiscovery now prefers ReadState.DockerHosts()/DockerContainers()
-// when wired; legacy GetState fallback kept for backward compat. Delta: state.DockerHosts -2.
-// SRC-03v: Migrated config_node_handlers.go handleGetNodes mock-mode branch from GetState() to
-// ReadState typed accessors (Nodes, PBSInstances, PMGInstances). Legacy fallback path uses `snap`
-// variable (not `state`) so only state.* ceilings decrease. GetState call count unchanged
-// because the legacy path still calls monitor.GetState().
-// Delta: state.Nodes -1, state.PBSInstances -1, state.PMGInstances -1.
-// SRC-03w: Renamed local `state` variable to `snap` in host_agents.go (HandleLookup,
-// resolveConfigHost, ensureHostTokenMatch) to eliminate 6 false-positive ratchet matches.
-// host_agents.go uses GetLiveStateSnapshot() (not GetState()) — these were regex false positives
-// from the local variable name, not real legacy state accesses.
-// Delta: state.Hosts -6.
-// SRC-03x: Renamed `state` struct field to `snap` in patrol_findings.go
-// (patrolFindingCreatorAdapter.state → .snap) and renamed `state` parameter to `snap`
-// in verifyBackupFresh, verifyMetricRecovered, verifyGuestReachability. All 16 accesses
-// were false positives (struct fields and function parameters, not local GetState() vars).
-// Delta: state.VMs -5, state.Containers -5, state.Nodes -3, state.Storage -3.
-// SRC-03y: Renamed `state` parameter to `snap` in metrics_reporting_handlers.go
-// enrichReportRequest, enrichNodeReport, enrichVMReport, enrichContainerReport, and
-// renamed local `state` to `snap` in HandleGenerateMultiReport. All 9 ratchet-tracked accesses
-// were false positives from function parameters passed down from callers.
-// Delta: state.Nodes -3, state.VMs -3, state.Containers -3.
-// SRC-03z: Renamed `state` parameter to `snap` in patrol_triage.go
-// RunDeterministicTriage, triageThresholdChecks, triageBackupChecks, triageDiskHealthChecks,
-// triageAlertChecks, triageConnectivityChecks, triageBuildSummary. All 13 ratchet-tracked
-// accesses were false positives from function parameters passed by callers.
-// Delta: state.VMs -3, state.Containers -3, state.Nodes -2, state.Storage -2,
-// state.DockerHosts -1, state.PBSInstances -1, state.PMGInstances -1.
-// SRC-04c: Renamed local `state` variable to `snap` in reporting_runtime_snapshot.go
-// getRuntimeStateSnapshot(). All 6 ratchet-tracked accesses were false positives from
-// the local variable named `state` (assigned from monitor.GetState()). The GetState()
-// call itself remains (it's a real legacy access). ActiveAlerts, RecentlyResolved, and
-// PVEBackups accesses are not ratchet-tracked so only Nodes/VMs/Containers change.
-// Delta: state.VMs -2, state.Containers -2, state.Nodes -2.
-// SRC-04d: Renamed `state` parameter to `snap` in patrol_run.go filterStateByScope,
-// shouldResolveAlert, getCurrentMetricValue, isResourceOnline, askAIAboutAlert,
-// getResourceCurrentState. All 23 ratchet-tracked accesses were false positives from
-// function parameters named `state`, not real legacy state accesses.
-// Delta: state.VMs -4, state.Containers -4, state.Nodes -4, state.DockerHosts -4,
-// state.Storage -4, state.PBSInstances -1, state.Hosts -1, state.KubernetesClusters -1.
-// SRC-04e: Renamed `state` parameter to `snap` in patrol_ai.go runAIAnalysis,
-// buildTriageSeedContext, buildSeedContext, seedPrecomputeIntelligence,
-// seedResourceInventory, seedResourceInventorySummary, seedPMGSnapshotString,
-// seedPMGSnapshot, seedBackupAnalysis, seedHealthAndAlerts, seedFindingsAndContext.
-// All 25 ratchet-tracked accesses were false positives from function parameters named
-// `state`, not real legacy state accesses.
-// Delta: state.VMs -4, state.Containers -4, state.Nodes -5, state.DockerHosts -5,
-// state.Storage -3, state.PBSInstances -2, state.KubernetesClusters -2.
-// SRC-04f: Renamed local `state` variable to `snap` in router.go handleState,
-// handleStorage, handleWorkloadCharts, handleWorkloadsSummaryCharts, handleMetricsHistory.
-// All 41 ratchet-tracked accesses were false positives from local variables named `state`
-// (assigned from monitor.GetState()), not real legacy state accesses. GetState() calls
-// themselves remain (they are real legacy calls). One state.DockerHosts remains in
-// infradiscovery/service.go (legacy fallback path, real access).
-// Delta: state.VMs -8, state.Containers -8, state.Nodes -9, state.DockerHosts -7,
-// state.Hosts -3, state.Storage -4, state.KubernetesClusters -2.
-// SRC-04g: Removed GetState() legacy fallback from config_node_handlers.go handleGetNodes.
-// ReadState is now the sole data source for mock-mode node listing. Monitor.SetResourceStore
-// now performs immediate backfill from current state, guaranteeing ReadState is populated
-// as soon as the store is wired (no startup race).
-// Delta: GetState -1.
-var legacyStateRatchets = []legacyStateRatchet{
-	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 0, "ReadState.VMs()"},
-	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 0, "ReadState.Containers()"},
-	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 0, "ReadState.Nodes()"},
-	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 0, "ReadState.DockerHosts()"},
-	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 0, "ReadState.Hosts()"},
-	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 0, "ReadState.StoragePools()"},
-	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 0, "ReadState.K8sClusters()"},
-	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 0, "ReadState.PBSInstances()"},
-	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 0, "ReadState.PMGInstances()"},
-
-	// GetState() calls — consumer packages must use ReadState interface.
-	// All consumer code migrated to ReadSnapshot() / BuildFrontendState() / narrow accessors.
-	{regexp.MustCompile(`\.GetState\(\)`), ".GetState()", 0, "ReadState interface"},
-}
-
-// TestLegacyStateAccessRatchet is a monotonic ratchet that prevents new
-// state.* direct access and GetState() calls from being added to consumer
-// packages.
-//
-// Existing references are legacy paths being migrated to ReadState. Each
-// number must only decrease over time. As migration progresses, lower the
-// ceiling numbers above until they reach zero (SRC-04b enforcement).
-//
-// If this test fails with "count N exceeds ceiling M":
-//
-//	You added new state.* access — use ReadState views instead.
-//
-// If the count drops below the ceiling:
-//
-//	Great! Lower the ceiling constant to lock in the improvement.
-func TestLegacyStateAccessRatchet(t *testing.T) {
-	// Collect all consumer file contents, deduplicating across overlapping
-	// package entries (e.g., "ai" walks into "ai/tools" and "ai/chat").
-	allFiles := make(map[string]string)
-	for _, pkg := range consumerPackages {
-		for path, content := range readConsumerGoFiles(t, pkg.dir) {
-			allFiles[path] = content
-		}
-	}
-	allContent := make([]string, 0, len(allFiles))
-	for _, content := range allFiles {
-		allContent = append(allContent, content)
-	}
-
-	for _, r := range legacyStateRatchets {
-		count := 0
-		for _, content := range allContent {
-			count += len(r.re.FindAllStringIndex(content, -1))
-		}
-
-		if count > r.ceiling {
-			t.Errorf("%s: count %d exceeds ceiling %d — use %s instead of adding new %s access",
-				r.field, count, r.ceiling, r.readView, r.field)
-		}
-		if count < r.ceiling {
-			t.Logf("%s: count %d is below ceiling %d — lower the ceiling in legacyStateRatchets to lock in this improvement",
-				r.field, count, r.ceiling)
-		}
-	}
-}
+// Migration changelog preserved in git history (see commits SRC-03f → SRC-04g).
