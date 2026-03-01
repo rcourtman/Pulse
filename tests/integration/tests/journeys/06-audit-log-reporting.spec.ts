@@ -272,29 +272,38 @@ test.describe.serial(
 
       await ensureAuthenticated(page);
 
-      // First, get a resource ID from /api/state to use for the report.
-      const stateRes = await apiRequest(page, '/api/state');
-      expect(stateRes.ok()).toBeTruthy();
-      const state = (await stateRes.json()) as Record<string, unknown>;
-
-      // Find a node or VM to report on.
+      // Poll for resources — mock mode may still be populating after earlier
+      // journey toggles. Wait up to 30s for at least one node/VM.
       let resourceType = '';
       let resourceId = '';
+      let stateApiReachable = false;
+      const deadline = Date.now() + 30_000;
+      while (!resourceId && Date.now() < deadline) {
+        const stateRes = await apiRequest(page, '/api/state');
+        if (stateRes.ok()) {
+          stateApiReachable = true;
+          const state = (await stateRes.json()) as Record<string, unknown>;
 
-      const nodes = state.nodes as any[] | undefined;
-      if (Array.isArray(nodes) && nodes.length > 0) {
-        resourceType = 'node';
-        resourceId = nodes[0].id || nodes[0].name || '';
-      }
+          const nodes = state.nodes as any[] | undefined;
+          if (Array.isArray(nodes) && nodes.length > 0) {
+            resourceType = 'node';
+            resourceId = nodes[0].id || nodes[0].name || '';
+          }
 
-      if (!resourceId) {
-        const vms = state.guests as any[] | undefined;
-        if (Array.isArray(vms) && vms.length > 0) {
-          resourceType = 'vm';
-          resourceId = vms[0].id || '';
+          if (!resourceId) {
+            const vms = state.guests as any[] | undefined;
+            if (Array.isArray(vms) && vms.length > 0) {
+              resourceType = 'vm';
+              resourceId = vms[0].id || '';
+            }
+          }
+        }
+        if (!resourceId) {
+          await page.waitForTimeout(2_000);
         }
       }
 
+      expect(stateApiReachable, '/api/state must be reachable').toBeTruthy();
       test.skip(!resourceId, 'No resources available for reporting');
 
       const reportUrl = `/api/admin/reports/generate?resourceType=${resourceType}&resourceId=${encodeURIComponent(resourceId)}&format=csv`;
@@ -335,25 +344,34 @@ test.describe.serial(
 
       await ensureAuthenticated(page);
 
-      // Get resources to include in the fleet report.
-      const stateRes = await apiRequest(page, '/api/state');
-      expect(stateRes.ok()).toBeTruthy();
-      const state = (await stateRes.json()) as Record<string, unknown>;
-
-      const resources: { resourceType: string; resourceId: string }[] = [];
-
-      const nodes = state.nodes as any[] | undefined;
-      if (Array.isArray(nodes)) {
-        for (const n of nodes.slice(0, 2)) {
-          if (n.id || n.name) {
-            resources.push({
-              resourceType: 'node',
-              resourceId: n.id || n.name,
-            });
+      // Poll for resources — mock mode may still be populating after earlier
+      // journey toggles. Wait up to 30s for at least one node to appear.
+      let resources: { resourceType: string; resourceId: string }[] = [];
+      let stateApiReachable = false;
+      const deadline = Date.now() + 30_000;
+      while (resources.length === 0 && Date.now() < deadline) {
+        const stateRes = await apiRequest(page, '/api/state');
+        if (stateRes.ok()) {
+          stateApiReachable = true;
+          const state = (await stateRes.json()) as Record<string, unknown>;
+          const nodes = state.nodes as any[] | undefined;
+          if (Array.isArray(nodes)) {
+            for (const n of nodes.slice(0, 2)) {
+              if (n.id || n.name) {
+                resources.push({
+                  resourceType: 'node',
+                  resourceId: n.id || n.name,
+                });
+              }
+            }
           }
+        }
+        if (resources.length === 0) {
+          await page.waitForTimeout(2_000);
         }
       }
 
+      expect(stateApiReachable, '/api/state must be reachable').toBeTruthy();
       test.skip(resources.length === 0, 'No resources for fleet report');
 
       const res = await apiRequest(page, '/api/admin/reports/generate-multi', {
@@ -365,6 +383,15 @@ test.describe.serial(
         },
         headers: { 'Content-Type': 'application/json' },
       });
+
+      if (res.status() === 402) {
+        reportingLicensed = false;
+        const body = await res.json();
+        expect(body).toHaveProperty('feature');
+        expect(body.feature).toBe('advanced_reporting');
+        expect(body).toHaveProperty('upgrade_url');
+        return;
+      }
 
       expect(
         res.ok(),
