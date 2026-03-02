@@ -29,7 +29,8 @@
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
     "lint:cpd": "jscpd",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\"",
+    "check:bundlesize": "node scripts/check-bundle-size.mjs"
   },
   "dependencies": {
     "@solidjs/router": "^0.10.10",

@@ -1,0 +1,73 @@
+{
+  "$comment": "Frontend bundle size baseline. Run 'npm run check:bundlesize' to validate. To update: run 'node scripts/check-bundle-size.mjs --update-baseline' after vite build.",
+  "version": 1,
+  "generated": "2026-03-02",
+  "defaultThresholdPercent": 15,
+  "chunks": {
+    "settings-admin": {
+      "baselineGzip": 92582
+    },
+    "Alerts": {
+      "baselineGzip": 73539
+    },
+    "ai-ui": {
+      "baselineGzip": 64189
+    },
+    "settings-heavy": {
+      "baselineGzip": 53886
+    },
+    "Dashboard": {
+      "baselineGzip": 51512
+    },
+    "Infrastructure": {
+      "baselineGzip": 41568
+    },
+    "settings-shell": {
+      "baselineGzip": 28192
+    },
+    "Storage": {
+      "baselineGzip": 27477
+    },
+    "vendor-ai": {
+      "baselineGzip": 20729
+    },
+    "settings-auth": {
+      "baselineGzip": 20630
+    },
+    "ScrollToTopButton": {
+      "baselineGzip": 19829
+    },
+    "RecoveryRoute": {
+      "baselineGzip": 18281
+    },
+    "vendor-solid": {
+      "baselineGzip": 17262
+    },
+    "index": {
+      "baselineGzip": 13923
+    },
+    "AIIntelligence": {
+      "baselineGzip": 10271
+    },
+    "settings-core": {
+      "baselineGzip": 10203
+    },
+    "vendor-icons": {
+      "baselineGzip": 8457
+    },
+    "Ceph": {
+      "baselineGzip": 7210
+    },
+    "InteractiveSparkline": {
+      "baselineGzip": 6765
+    }
+  },
+  "totals": {
+    "js": {
+      "baselineGzip": 616545
+    },
+    "css": {
+      "baselineGzip": 21929
+    }
+  }
+}
