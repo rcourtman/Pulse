@@ -157,6 +157,7 @@ export const AISettings: Component = () => {
     { id: string; name: string; description?: string }[]
   >([]);
   const [modelsLoading, setModelsLoading] = createSignal(false);
+  const [modelsError, setModelsError] = createSignal('');
 
   const [chatSessions, setChatSessions] = createSignal<ChatSession[]>([]);
   const [chatSessionsLoading, setChatSessionsLoading] = createSignal(false);
@@ -360,13 +361,18 @@ export const AISettings: Component = () => {
   // Load available models from the provider's API
   const loadModels = async () => {
     setModelsLoading(true);
+    setModelsError('');
     try {
       const result = await AIAPI.getModels();
-      if (result.models && result.models.length > 0) {
-        setAvailableModels(result.models);
+      if (result.error) {
+        setModelsError(result.error);
+        logger.debug('[AISettings] API returned error for models:', result.error);
       }
+      setAvailableModels(result.models ?? []);
     } catch (e) {
-      // Silently fail - user can still type model names manually
+      const message = e instanceof Error ? e.message : 'Failed to load models';
+      setModelsError(message);
+      setAvailableModels([]);
       logger.debug('[AISettings] Failed to load models from API:', e);
     } finally {
       setModelsLoading(false);
@@ -1154,6 +1160,26 @@ export const AISettings: Component = () => {
                       )}
                     </For>
                   </select>
+                </Show>
+                {/* Warning when model loading failed */}
+                <Show when={modelsError()}>
+                  <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+                    <svg
+                      class="w-3.5 h-3.5 flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                      />
+                    </svg>
+                    Failed to load models: {modelsError()}. Enter a model ID manually (format:
+                    provider:model-name) or click Refresh to retry.
+                  </p>
                 </Show>
                 {/* Warning if selected model's provider is not configured */}
                 <Show when={form.model && !isModelProviderConfigured(form.model, settings())}>

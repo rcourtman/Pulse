@@ -103,41 +103,174 @@ const renderComponent = () =>
     </Router>
   ));
 
+const resetAllMocks = () => {
+  getSettingsMock.mockReset();
+  updateSettingsMock.mockReset();
+  getModelsMock.mockReset();
+  testProviderMock.mockReset();
+  testConnectionMock.mockReset();
+  listSessionsMock.mockReset();
+  summarizeSessionMock.mockReset();
+  getSessionDiffMock.mockReset();
+  revertSessionMock.mockReset();
+  notificationSuccessMock.mockReset();
+  notificationErrorMock.mockReset();
+  notificationInfoMock.mockReset();
+  notifySettingsChangedMock.mockReset();
+  loggerDebugMock.mockReset();
+  loggerErrorMock.mockReset();
+  hasFeatureMock.mockReset();
+  loadLicenseStatusMock.mockReset();
+  trackPaywallViewedMock.mockReset();
+  trackUpgradeClickedMock.mockReset();
+};
+
+const setupDefaultMocks = () => {
+  hasFeatureMock.mockReturnValue(true);
+  getSettingsMock.mockResolvedValue(baseSettings());
+  getModelsMock.mockResolvedValue({ models: [] });
+  testConnectionMock.mockResolvedValue({ success: true, message: 'ok' });
+  testProviderMock.mockResolvedValue({
+    success: true,
+    message: 'OpenRouter reachable',
+    provider: 'openrouter',
+  });
+  listSessionsMock.mockResolvedValue([]);
+  summarizeSessionMock.mockResolvedValue(undefined);
+  getSessionDiffMock.mockResolvedValue({ files: [], summary: '' });
+  revertSessionMock.mockResolvedValue(undefined);
+};
+
+describe('AISettings model loading error states', () => {
+  beforeEach(() => {
+    resetAllMocks();
+    setupDefaultMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('shows inline warning when getModels throws a network error', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      configured: true,
+      anthropic_configured: true,
+      configured_providers: ['anthropic'],
+    });
+    getModelsMock.mockRejectedValue(new Error('Network request failed'));
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByText(/Failed to load models: Network request failed/)).toBeInTheDocument();
+    });
+  });
+
+  it('shows inline warning when API returns an error field', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      configured: true,
+      anthropic_configured: true,
+      configured_providers: ['anthropic'],
+    });
+    getModelsMock.mockResolvedValue({ models: [], error: 'Invalid API key' });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByText(/Failed to load models: Invalid API key/)).toBeInTheDocument();
+    });
+  });
+
+  it('clears error and retries when Refresh is clicked', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      configured: true,
+      anthropic_configured: true,
+      configured_providers: ['anthropic'],
+    });
+    getModelsMock.mockRejectedValueOnce(new Error('Temporary failure'));
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByText(/Failed to load models: Temporary failure/)).toBeInTheDocument();
+    });
+
+    // Now mock a successful response for retry
+    getModelsMock.mockResolvedValueOnce({
+      models: [{ id: 'anthropic:claude-sonnet-4-20250514', name: 'Claude Sonnet' }],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /refresh/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Failed to load models/)).not.toBeInTheDocument();
+    });
+
+    // Verify retry actually completed and models loaded
+    expect(getModelsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not show warning when models load successfully', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      configured: true,
+      anthropic_configured: true,
+      configured_providers: ['anthropic'],
+    });
+    getModelsMock.mockResolvedValue({
+      models: [{ id: 'anthropic:claude-sonnet-4-20250514', name: 'Claude Sonnet' }],
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(getModelsMock).toHaveBeenCalled();
+    });
+
+    expect(screen.queryByText(/Failed to load models/)).not.toBeInTheDocument();
+  });
+
+  it('clears stale models when API returns error with empty list', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      configured: true,
+      anthropic_configured: true,
+      configured_providers: ['anthropic'],
+    });
+    // First call succeeds with models, second returns error with empty list
+    getModelsMock
+      .mockResolvedValueOnce({
+        models: [{ id: 'anthropic:claude-sonnet-4-20250514', name: 'Claude Sonnet' }],
+      })
+      .mockResolvedValueOnce({ models: [], error: 'API key revoked' });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(getModelsMock).toHaveBeenCalledTimes(1);
+    });
+
+    // Trigger a refresh that returns an error
+    fireEvent.click(screen.getByRole('button', { name: /refresh/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Failed to load models: API key revoked/)).toBeInTheDocument();
+    });
+
+    // Stale model options should be cleared — fallback text input should be shown instead of select
+    expect(
+      screen.getByPlaceholderText('Configure a provider below to see available models'),
+    ).toBeInTheDocument();
+  });
+});
+
 describe('AISettings OpenRouter flow', () => {
   beforeEach(() => {
-    getSettingsMock.mockReset();
-    updateSettingsMock.mockReset();
-    getModelsMock.mockReset();
-    testProviderMock.mockReset();
-    testConnectionMock.mockReset();
-    listSessionsMock.mockReset();
-    summarizeSessionMock.mockReset();
-    getSessionDiffMock.mockReset();
-    revertSessionMock.mockReset();
-    notificationSuccessMock.mockReset();
-    notificationErrorMock.mockReset();
-    notificationInfoMock.mockReset();
-    notifySettingsChangedMock.mockReset();
-    loggerDebugMock.mockReset();
-    loggerErrorMock.mockReset();
-    hasFeatureMock.mockReset();
-    loadLicenseStatusMock.mockReset();
-    trackPaywallViewedMock.mockReset();
-    trackUpgradeClickedMock.mockReset();
-
-    hasFeatureMock.mockReturnValue(true);
-    getSettingsMock.mockResolvedValue(baseSettings());
-    getModelsMock.mockResolvedValue({ models: [] });
-    testConnectionMock.mockResolvedValue({ success: true, message: 'ok' });
-    testProviderMock.mockResolvedValue({
-      success: true,
-      message: 'OpenRouter reachable',
-      provider: 'openrouter',
-    });
-    listSessionsMock.mockResolvedValue([]);
-    summarizeSessionMock.mockResolvedValue(undefined);
-    getSessionDiffMock.mockResolvedValue({ files: [], summary: '' });
-    revertSessionMock.mockResolvedValue(undefined);
+    resetAllMocks();
+    setupDefaultMocks();
 
     updateSettingsMock.mockImplementation(async (payload: Record<string, unknown>) => {
       if (typeof payload.openrouter_api_key === 'string') {
