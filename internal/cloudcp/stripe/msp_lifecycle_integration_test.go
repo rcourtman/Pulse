@@ -571,6 +571,116 @@ func TestMSPLifecycle_TenantIsolation(t *testing.T) {
 	}
 }
 
+// TestMSPLifecycle_PlanVersionFromAccount verifies that ProvisionWorkspace
+// uses the account's actual Stripe plan version instead of a hardcoded default.
+// MSP Growth accounts should get msp_growth limits (150 agents), not msp_hosted_v1 (50).
+func TestMSPLifecycle_PlanVersionFromAccount(t *testing.T) {
+	reg := newStripeTestRegistry(t)
+	tenantsDir := t.TempDir()
+	provisioner := NewProvisioner(reg, tenantsDir, nil, nil, "https://cloud.example.com", nil, "", true)
+
+	tests := []struct {
+		name        string
+		planVersion string
+		wantAgents  int64
+	}{
+		{"msp_starter", "msp_starter", 50},
+		{"msp_growth", "msp_growth", 150},
+		{"msp_scale", "msp_scale", 400},
+		{"legacy_msp_hosted_v1", "msp_hosted_v1", 50},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			accountID, err := registry.GenerateAccountID()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := reg.CreateAccount(&registry.Account{
+				ID:          accountID,
+				Kind:        registry.AccountKindMSP,
+				DisplayName: "MSP " + tc.name,
+			}); err != nil {
+				t.Fatalf("CreateAccount: %v", err)
+			}
+			if err := reg.CreateStripeAccount(&registry.StripeAccount{
+				AccountID:        accountID,
+				StripeCustomerID: "cus_plan_test_" + tc.name,
+				PlanVersion:      tc.planVersion,
+			}); err != nil {
+				t.Fatalf("CreateStripeAccount: %v", err)
+			}
+
+			ws, err := provisioner.ProvisionWorkspace(context.Background(), accountID, "Client")
+			if err != nil {
+				t.Fatalf("ProvisionWorkspace: %v", err)
+			}
+			if ws.PlanVersion != tc.planVersion {
+				t.Fatalf("workspace.PlanVersion = %q, want %q", ws.PlanVersion, tc.planVersion)
+			}
+
+			store := config.NewFileBillingStore(provisioner.tenantDataDir(ws.ID))
+			bs, err := store.GetBillingState("default")
+			if err != nil {
+				t.Fatalf("GetBillingState: %v", err)
+			}
+			if bs == nil {
+				t.Fatal("billing state is nil")
+			}
+			if bs.PlanVersion != tc.planVersion {
+				t.Fatalf("billing.PlanVersion = %q, want %q", bs.PlanVersion, tc.planVersion)
+			}
+			if bs.Limits["max_agents"] != tc.wantAgents {
+				t.Fatalf("billing.Limits[max_agents] = %d, want %d", bs.Limits["max_agents"], tc.wantAgents)
+			}
+		})
+	}
+}
+
+// TestMSPLifecycle_PlanVersionFallback verifies that ProvisionWorkspace falls
+// back to msp_hosted_v1 when no StripeAccount exists for the account.
+func TestMSPLifecycle_PlanVersionFallback(t *testing.T) {
+	reg := newStripeTestRegistry(t)
+	tenantsDir := t.TempDir()
+	provisioner := NewProvisioner(reg, tenantsDir, nil, nil, "https://cloud.example.com", nil, "", true)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindMSP,
+		DisplayName: "No Billing MSP",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+
+	// No StripeAccount created — should fall back to msp_hosted_v1.
+	ws, err := provisioner.ProvisionWorkspace(context.Background(), accountID, "Client")
+	if err != nil {
+		t.Fatalf("ProvisionWorkspace: %v", err)
+	}
+	if ws.PlanVersion != "msp_hosted_v1" {
+		t.Fatalf("workspace.PlanVersion = %q, want %q (fallback)", ws.PlanVersion, "msp_hosted_v1")
+	}
+
+	store := config.NewFileBillingStore(provisioner.tenantDataDir(ws.ID))
+	bs, err := store.GetBillingState("default")
+	if err != nil {
+		t.Fatalf("GetBillingState: %v", err)
+	}
+	if bs == nil {
+		t.Fatal("billing state is nil")
+	}
+	if bs.PlanVersion != "msp_hosted_v1" {
+		t.Fatalf("billing.PlanVersion = %q, want %q", bs.PlanVersion, "msp_hosted_v1")
+	}
+	if bs.Limits["max_agents"] != 50 {
+		t.Fatalf("billing.Limits[max_agents] = %d, want 50 (msp_hosted_v1 default)", bs.Limits["max_agents"])
+	}
+}
+
 // ─── Test helpers ──────────────────────────────────────────────────────────
 
 func newMemberMux(reg *registry.TenantRegistry) *http.ServeMux {

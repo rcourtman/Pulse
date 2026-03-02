@@ -660,7 +660,27 @@ func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, display
 		return nil, fmt.Errorf("write cloud handoff key for tenant %s: %w", tenantID, err)
 	}
 
+	// Look up the account's actual plan version from its Stripe billing record.
+	// Fail on DB errors (consistent with enforceWorkspaceLimit). Fall back to
+	// msp_hosted_v1 (lowest MSP tier) only when no billing record exists.
+	sa, saErr := p.registry.GetStripeAccount(accountID)
+	if saErr != nil {
+		return nil, fmt.Errorf("look up billing record for account %s: %w", accountID, saErr)
+	}
 	planVersion := "msp_hosted_v1"
+	if sa != nil && strings.TrimSpace(sa.PlanVersion) != "" {
+		planVersion = strings.TrimSpace(sa.PlanVersion)
+	} else {
+		reason := "no_billing_record"
+		if sa != nil {
+			reason = "empty_plan_version"
+		}
+		log.Warn().
+			Str("account_id", accountID).
+			Str("fallback_plan", planVersion).
+			Str("reason", reason).
+			Msg("Using default MSP plan for workspace")
+	}
 	limits, knownPlan := pkglicensing.LimitsForCloudPlan(planVersion)
 	if !knownPlan {
 		log.Warn().
