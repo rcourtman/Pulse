@@ -370,38 +370,30 @@ test.describe.serial(
       await page.goto('/ai');
       await page.waitForURL('**/ai**');
 
-      // Wait for the lazy-loaded AI page to finish loading
-      await page
-        .waitForFunction(
-          () => !document.body.textContent?.includes('Loading...'),
-          { timeout: 15000 },
-        )
-        .catch(() => {
-          /* page may never show Loading or already past it */
-        });
+      // Wait for the AI/Intelligence page main content to render.
+      // Scope to <main> to avoid false positives from nav tab labels.
+      // Use waitForFunction (browser-context) for reliability — Playwright
+      // locator chains can miss deeply nested elements during hydration.
+      await page.waitForFunction(
+        () => {
+          const main = document.querySelector('main');
+          if (!main) return false;
+          const text = (main.textContent || '').toLowerCase();
+          if (text.length <= 20) return false;
+          return (
+            text.includes('patrol') ||
+            text.includes('intelligence') ||
+            text.includes('finding') ||
+            text.includes('monitor')
+          );
+        },
+        { timeout: 15_000 },
+      );
 
-      await page.waitForTimeout(1000);
-
-      // The AI page should render with content beyond just "Loading..."
-      const content = await page.textContent('body');
-      expect(content).toBeTruthy();
-      expect(content!.length).toBeGreaterThan(20);
-
-      // Check for AI-related content on the intelligence page
-      const hasContent =
-        (await page
-          .locator(
-            '[class*="ai"], [class*="patrol"], [class*="intelligence"], [data-testid], h1, h2, h3',
-          )
-          .first()
-          .isVisible({ timeout: 5000 })
-          .catch(() => false)) ||
-        content!.toLowerCase().includes('intelligence') ||
-        content!.toLowerCase().includes('patrol') ||
-        content!.toLowerCase().includes('health') ||
-        content!.toLowerCase().includes('finding') ||
-        content!.toLowerCase().includes('monitor');
-      expect(hasContent).toBe(true);
+      // Verify substantive content rendered in main area
+      const mainText = await page.locator('main').first().textContent();
+      expect(mainText).toBeTruthy();
+      expect(mainText!.length).toBeGreaterThan(20);
     });
   },
 );

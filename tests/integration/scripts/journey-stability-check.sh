@@ -35,8 +35,25 @@ echo "Workspace: $REPO_ROOT"
 echo "Running $RUNS consecutive iterations..."
 echo ""
 
+BASE_URL="${PULSE_BASE_URL:-${PLAYWRIGHT_BASE_URL:-http://localhost:7655}}"
+
 for i in $(seq 1 "$RUNS"); do
   echo "--- Run $i/$RUNS ---"
+
+  # Between runs, wait for the backend to be healthy. Consecutive full-suite
+  # runs accumulate async work (mock data generation, patrol runs, host
+  # registrations) — a brief cooldown prevents resource-exhaustion flakes.
+  if [ "$i" -gt 1 ]; then
+    echo "  Waiting for backend health..."
+    for _hc in $(seq 1 10); do
+      if curl -sf --connect-timeout 3 --max-time 5 "$BASE_URL/api/health" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 1
+    done
+    sleep 3
+  fi
+
   START=$(date +%s)
 
   if npx playwright test tests/journeys --project=chromium --reporter=list 2>&1 | tail -5; then

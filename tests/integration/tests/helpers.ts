@@ -160,16 +160,29 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
 
+  // Wait for SPA JavaScript to execute. The raw HTML shell contains a
+  // "You need to enable JavaScript" noscript message. Under load (e.g.
+  // running the full journey suite sequentially), Vite can take several
+  // seconds to serve the JS bundle. Wait for #root to have meaningful
+  // child content before looking for login form or authenticated route.
+  await page.waitForFunction(
+    () => {
+      const root = document.getElementById('root');
+      return root !== null && root.children.length > 0;
+    },
+    { timeout: 20_000 },
+  );
+
   const authenticatedURL = /\/(proxmox|dashboard|nodes|hosts|docker|infrastructure)/;
   const usernameInput = page.locator('input[name="username"]');
 
   const state = await Promise.race([
     usernameInput
-      .waitFor({ state: 'visible', timeout: 10_000 })
+      .waitFor({ state: 'visible', timeout: 15_000 })
       .then(() => 'login')
       .catch(() => undefined),
     page
-      .waitForURL(authenticatedURL, { timeout: 10_000 })
+      .waitForURL(authenticatedURL, { timeout: 15_000 })
       .then(() => 'authenticated')
       .catch(() => undefined),
   ]);
@@ -229,16 +242,34 @@ export async function setMockMode(page: Page, enabled: boolean) {
     headers: { 'Content-Type': 'application/json' },
   });
 
-  let res = await send();
-  if (res.status() === 401) {
-    await login(page);
-    res = await send();
+  // Mock mode toggle can fail transiently when the backend is still
+  // processing a previous toggle (e.g. between consecutive suite runs).
+  // Retry up to 3 times with a short backoff, catching both HTTP errors
+  // and transport-level failures (connection reset, timeout).
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      let res = await send();
+      if (res.status() === 401) {
+        await login(page);
+        res = await send();
+      }
+
+      if (res.ok()) {
+        return (await res.json()) as { enabled: boolean };
+      }
+
+      lastError = new Error(`HTTP ${res.status()}: ${await res.text()}`);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+    }
+
+    if (attempt < 2) {
+      await page.waitForTimeout(2000);
+    }
   }
 
-  if (!res.ok()) {
-    throw new Error(`Failed to update mock mode: ${res.status()} ${await res.text()}`);
-  }
-  return (await res.json()) as { enabled: boolean };
+  throw new Error(`Failed to update mock mode after 3 attempts: ${lastError?.message}`);
 }
 
 export async function getMockMode(page: Page) {
