@@ -251,6 +251,7 @@ var publicRouteAllowlist = []string{
 }
 
 var bareRouteAllowlist = []string{
+	"/api/agent-deploy/jobs/",
 	"/api/agent-deploy/preflights/",
 	"/api/agent/version",
 	"/api/agent/ws",
@@ -582,6 +583,7 @@ var allRouteAllowlist = []string{
 	"/api/agents/host/enroll",
 	"/api/clusters/",
 	"/api/agent-deploy/preflights/",
+	"/api/agent-deploy/jobs/",
 	"/install-docker-agent.sh",
 	"/install-container-agent.sh",
 	"/download/pulse-docker-agent",

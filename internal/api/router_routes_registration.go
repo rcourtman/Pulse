@@ -535,6 +535,8 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 				RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandleCandidates))(w, req)
 			case strings.HasSuffix(path, "/agent-deploy/preflights"):
 				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.deployHandlers.HandleCreatePreflight))(w, req)
+			case strings.HasSuffix(path, "/agent-deploy/jobs"):
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.deployHandlers.HandleCreateJob))(w, req)
 			default:
 				http.Error(w, "Not found", http.StatusNotFound)
 			}
@@ -549,6 +551,20 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 				RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandlePreflightEvents))(w, req)
 			default:
 				RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandleGetPreflight))(w, req)
+			}
+		})
+
+		r.mux.HandleFunc("/api/agent-deploy/jobs/", func(w http.ResponseWriter, req *http.Request) {
+			path := req.URL.Path
+			switch {
+			case strings.HasSuffix(path, "/events"):
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandleJobEvents))(w, req)
+			case strings.HasSuffix(path, "/cancel"):
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.deployHandlers.HandleCancelJob))(w, req)
+			case strings.HasSuffix(path, "/retry"):
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.deployHandlers.HandleRetryJob))(w, req)
+			default:
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandleGetJob))(w, req)
 			}
 		})
 	}

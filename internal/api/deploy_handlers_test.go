@@ -843,6 +843,583 @@ func TestHandleEnroll_TokenAlreadyConsumed(t *testing.T) {
 	}
 }
 
+// --- Deploy Job tests ---
+
+func TestHandleCreateJob_Success(t *testing.T) {
+	nodes := []models.Node{
+		{
+			ID: "node_pve-a", Name: "pve-a", Host: "https://10.0.0.1:8006",
+			IsClusterMember: true, ClusterName: "lab",
+			LinkedHostAgentID: "host-a",
+		},
+		{
+			ID: "node_pve-b", Name: "pve-b", Host: "https://10.0.0.2:8006",
+			IsClusterMember: true, ClusterName: "lab",
+		},
+		{
+			ID: "node_pve-c", Name: "pve-c", Host: "https://10.0.0.3:8006",
+			IsClusterMember: true, ClusterName: "lab",
+		},
+	}
+
+	h := newTestDeployHandlers(t, nodes, nil)
+	ctx := context.Background()
+
+	// Simulate a connected source agent.
+	t.Cleanup(h.execServer.TestRegisterAgent("host-a", "host-a"))
+
+	// Create a succeeded preflight job with ready targets.
+	now := time.Now().UTC()
+	pfJob := &deploy.Job{
+		ID: "pf_test_ok", ClusterID: "lab", ClusterName: "lab",
+		SourceAgentID: "host-a", SourceNodeID: "node_pve-a",
+		OrgID: "default", Status: deploy.JobSucceeded,
+		MaxParallel: 2, CreatedAt: now, UpdatedAt: now,
+	}
+	if err := h.store.CreateJob(ctx, pfJob); err != nil {
+		t.Fatalf("create preflight job: %v", err)
+	}
+	// Create ready targets.
+	for _, info := range []struct{ id, nodeID, name, ip string }{
+		{"tgt_pf_b", "node_pve-b", "pve-b", "10.0.0.2"},
+		{"tgt_pf_c", "node_pve-c", "pve-c", "10.0.0.3"},
+	} {
+		if err := h.store.CreateTarget(ctx, &deploy.Target{
+			ID: info.id, JobID: "pf_test_ok", NodeID: info.nodeID,
+			NodeName: info.name, NodeIP: info.ip, Arch: "amd64",
+			Status: deploy.TargetReady, CreatedAt: now, UpdatedAt: now,
+		}); err != nil {
+			t.Fatalf("create preflight target: %v", err)
+		}
+	}
+
+	body := `{"sourceAgentId":"host-a","preflightId":"pf_test_ok","targetNodeIds":["node_pve-b","node_pve-c"],"mode":"install"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/clusters/lab/agent-deploy/jobs", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	h.HandleCreateJob(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp createJobResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.JobID == "" {
+		t.Fatal("expected non-empty jobId")
+	}
+	if len(resp.AcceptedTargets) != 2 {
+		t.Fatalf("expected 2 accepted targets, got %d", len(resp.AcceptedTargets))
+	}
+	if len(resp.SkippedTargets) != 0 {
+		t.Fatalf("expected 0 skipped targets, got %d", len(resp.SkippedTargets))
+	}
+	if resp.ReservedLicenseSlots != 2 {
+		t.Fatalf("expected 2 reserved license slots, got %d", resp.ReservedLicenseSlots)
+	}
+	if resp.EventsURL == "" {
+		t.Fatal("expected non-empty eventsUrl")
+	}
+}
+
+func TestHandleCreateJob_PreflightNotPassed(t *testing.T) {
+	h := newTestDeployHandlers(t, nil, nil)
+	ctx := context.Background()
+
+	t.Cleanup(h.execServer.TestRegisterAgent("host-a", "host-a"))
+
+	// Preflight with failed status.
+	now := time.Now().UTC()
+	if err := h.store.CreateJob(ctx, &deploy.Job{
+		ID: "pf_failed", ClusterID: "lab", ClusterName: "lab",
+		SourceAgentID: "host-a", SourceNodeID: "node_a",
+		OrgID: "default", Status: deploy.JobFailed,
+		MaxParallel: 2, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	body := `{"sourceAgentId":"host-a","preflightId":"pf_failed","targetNodeIds":["node_b"]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/clusters/lab/agent-deploy/jobs", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	h.HandleCreateJob(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleCreateJob_SourceAgentOffline(t *testing.T) {
+	h := newTestDeployHandlers(t, nil, nil)
+
+	body := `{"sourceAgentId":"offline-agent","preflightId":"pf_1","targetNodeIds":["node_b"]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/clusters/lab/agent-deploy/jobs", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	h.HandleCreateJob(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleCreateJob_NoPreflightID(t *testing.T) {
+	h := newTestDeployHandlers(t, nil, nil)
+
+	t.Cleanup(h.execServer.TestRegisterAgent("host-a", "host-a"))
+
+	body := `{"sourceAgentId":"host-a","targetNodeIds":["node_b"]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/clusters/lab/agent-deploy/jobs", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	h.HandleCreateJob(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleCreateJob_TargetsNotReady(t *testing.T) {
+	h := newTestDeployHandlers(t, nil, nil)
+	ctx := context.Background()
+
+	t.Cleanup(h.execServer.TestRegisterAgent("host-a", "host-a"))
+
+	now := time.Now().UTC()
+	if err := h.store.CreateJob(ctx, &deploy.Job{
+		ID: "pf_partial", ClusterID: "lab", ClusterName: "lab",
+		SourceAgentID: "host-a", SourceNodeID: "node_a",
+		OrgID: "default", Status: deploy.JobPartialSuccess,
+		MaxParallel: 2, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	// One ready, one failed.
+	if err := h.store.CreateTarget(ctx, &deploy.Target{
+		ID: "tgt_ready", JobID: "pf_partial", NodeID: "node_b",
+		NodeName: "pve-b", NodeIP: "10.0.0.2", Arch: "amd64",
+		Status: deploy.TargetReady, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+	if err := h.store.CreateTarget(ctx, &deploy.Target{
+		ID: "tgt_fail", JobID: "pf_partial", NodeID: "node_c",
+		NodeName: "pve-c", NodeIP: "10.0.0.3",
+		Status: deploy.TargetFailedPermanent, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+
+	// Request both — only ready should be accepted.
+	body := `{"sourceAgentId":"host-a","preflightId":"pf_partial","targetNodeIds":["node_b","node_c"]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/clusters/lab/agent-deploy/jobs", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	h.HandleCreateJob(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp createJobResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.AcceptedTargets) != 1 {
+		t.Fatalf("expected 1 accepted target, got %d", len(resp.AcceptedTargets))
+	}
+	if len(resp.SkippedTargets) != 1 {
+		t.Fatalf("expected 1 skipped target, got %d", len(resp.SkippedTargets))
+	}
+	if resp.SkippedTargets[0].NodeID != "node_c" {
+		t.Fatalf("expected skipped nodeId=node_c, got %s", resp.SkippedTargets[0].NodeID)
+	}
+}
+
+func TestHandleGetJob_Success(t *testing.T) {
+	h := newTestDeployHandlers(t, nil, nil)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	if err := h.store.CreateJob(ctx, &deploy.Job{
+		ID: "dep_test1", ClusterID: "lab", ClusterName: "lab",
+		SourceAgentID: "agent-1", SourceNodeID: "node_a",
+		OrgID: "default", Status: deploy.JobRunning,
+		MaxParallel: 2, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agent-deploy/jobs/dep_test1", nil)
+	rec := httptest.NewRecorder()
+	h.HandleGetJob(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		ID      string `json:"id"`
+		Status  string `json:"status"`
+		Targets []any  `json:"targets"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.ID != "dep_test1" {
+		t.Fatalf("expected id dep_test1, got %q", resp.ID)
+	}
+	if resp.Status != "running" {
+		t.Fatalf("expected status running, got %q", resp.Status)
+	}
+}
+
+func TestHandleGetJob_NotFound(t *testing.T) {
+	h := newTestDeployHandlers(t, nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agent-deploy/jobs/nonexistent", nil)
+	rec := httptest.NewRecorder()
+	h.HandleGetJob(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleGetJob_TenantIsolation(t *testing.T) {
+	h := newTestDeployHandlers(t, nil, nil)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// Job belongs to org "other-org".
+	if err := h.store.CreateJob(ctx, &deploy.Job{
+		ID: "dep_other", ClusterID: "lab", ClusterName: "lab",
+		SourceAgentID: "agent-1", SourceNodeID: "node_a",
+		OrgID: "other-org", Status: deploy.JobRunning,
+		MaxParallel: 2, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	// Request without org header defaults to "default" org → should not see "other-org" job.
+	req := httptest.NewRequest(http.MethodGet, "/api/agent-deploy/jobs/dep_other", nil)
+	rec := httptest.NewRecorder()
+	h.HandleGetJob(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for tenant isolation, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleCancelJob_Success(t *testing.T) {
+	h := newTestDeployHandlers(t, nil, nil)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	t.Cleanup(h.execServer.TestRegisterAgent("agent-1", "agent-1"))
+
+	if err := h.store.CreateJob(ctx, &deploy.Job{
+		ID: "dep_cancel", ClusterID: "lab", ClusterName: "lab",
+		SourceAgentID: "agent-1", SourceNodeID: "node_a",
+		OrgID: "default", Status: deploy.JobRunning,
+		MaxParallel: 2, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agent-deploy/jobs/dep_cancel/cancel", nil)
+	rec := httptest.NewRecorder()
+	h.HandleCancelJob(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify job is now canceling.
+	job, _ := h.store.GetJob(ctx, "dep_cancel")
+	if job.Status != deploy.JobCanceling {
+		t.Fatalf("expected status canceling, got %q", job.Status)
+	}
+}
+
+func TestHandleCancelJob_NotRunning(t *testing.T) {
+	h := newTestDeployHandlers(t, nil, nil)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	if err := h.store.CreateJob(ctx, &deploy.Job{
+		ID: "dep_done", ClusterID: "lab", ClusterName: "lab",
+		SourceAgentID: "agent-1", SourceNodeID: "node_a",
+		OrgID: "default", Status: deploy.JobSucceeded,
+		MaxParallel: 2, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agent-deploy/jobs/dep_done/cancel", nil)
+	rec := httptest.NewRecorder()
+	h.HandleCancelJob(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleRetryJob_Success(t *testing.T) {
+	h := newTestDeployHandlers(t, nil, nil)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	t.Cleanup(h.execServer.TestRegisterAgent("agent-1", "agent-1"))
+
+	if err := h.store.CreateJob(ctx, &deploy.Job{
+		ID: "dep_retry", ClusterID: "lab", ClusterName: "lab",
+		SourceAgentID: "agent-1", SourceNodeID: "node_a",
+		OrgID: "default", Status: deploy.JobFailed,
+		MaxParallel: 2, RetryMax: 3, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	if err := h.store.CreateTarget(ctx, &deploy.Target{
+		ID: "tgt_retry_1", JobID: "dep_retry", NodeID: "node_b",
+		NodeName: "pve-b", NodeIP: "10.0.0.2", Arch: "amd64",
+		Status: deploy.TargetFailedRetryable, Attempts: 1,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+
+	body := `{}`
+	req := httptest.NewRequest(http.MethodPost, "/api/agent-deploy/jobs/dep_retry/retry", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	h.HandleRetryJob(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify job is now running.
+	job, _ := h.store.GetJob(ctx, "dep_retry")
+	if job.Status != deploy.JobRunning {
+		t.Fatalf("expected status running, got %q", job.Status)
+	}
+}
+
+func TestHandleRetryJob_NothingToRetry(t *testing.T) {
+	h := newTestDeployHandlers(t, nil, nil)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	t.Cleanup(h.execServer.TestRegisterAgent("agent-1", "agent-1"))
+
+	if err := h.store.CreateJob(ctx, &deploy.Job{
+		ID: "dep_ok", ClusterID: "lab", ClusterName: "lab",
+		SourceAgentID: "agent-1", SourceNodeID: "node_a",
+		OrgID: "default", Status: deploy.JobSucceeded,
+		MaxParallel: 2, RetryMax: 3, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	if err := h.store.CreateTarget(ctx, &deploy.Target{
+		ID: "tgt_ok_1", JobID: "dep_ok", NodeID: "node_b",
+		NodeName: "pve-b", NodeIP: "10.0.0.2",
+		Status:    deploy.TargetSucceeded,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+
+	body := `{}`
+	req := httptest.NewRequest(http.MethodPost, "/api/agent-deploy/jobs/dep_ok/retry", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	h.HandleRetryJob(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestProcessInstallProgress_InstallTransfer(t *testing.T) {
+	h := newTestDeployHandlers(t, nil, nil)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	if err := h.store.CreateJob(ctx, &deploy.Job{
+		ID: "dep_prog", ClusterID: "lab", ClusterName: "lab",
+		SourceAgentID: "agent-1", SourceNodeID: "node_a",
+		OrgID: "default", Status: deploy.JobRunning,
+		MaxParallel: 2, RetryMax: 3, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+	if err := h.store.CreateTarget(ctx, &deploy.Target{
+		ID: "tgt_prog_1", JobID: "dep_prog", NodeID: "node_b",
+		NodeName: "pve-b", NodeIP: "10.0.0.2",
+		Status:    deploy.TargetPending,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+
+	// Simulate install_transfer started.
+	h.updateTargetFromInstallProgress(ctx, agentexec.DeployProgressPayload{
+		TargetID: "tgt_prog_1",
+		Phase:    agentexec.DeployPhaseInstallTransfer,
+		Status:   agentexec.DeployStepStarted,
+	}, 3)
+
+	target, _ := h.store.GetTarget(ctx, "tgt_prog_1")
+	if target.Status != deploy.TargetInstalling {
+		t.Fatalf("expected status installing, got %q", target.Status)
+	}
+}
+
+func TestProcessInstallProgress_InstallFailed(t *testing.T) {
+	h := newTestDeployHandlers(t, nil, nil)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	if err := h.store.CreateJob(ctx, &deploy.Job{
+		ID: "dep_fail", ClusterID: "lab", ClusterName: "lab",
+		SourceAgentID: "agent-1", SourceNodeID: "node_a",
+		OrgID: "default", Status: deploy.JobRunning,
+		MaxParallel: 2, RetryMax: 3, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+	if err := h.store.CreateTarget(ctx, &deploy.Target{
+		ID: "tgt_fail_1", JobID: "dep_fail", NodeID: "node_b",
+		NodeName: "pve-b", NodeIP: "10.0.0.2",
+		Status: deploy.TargetInstalling, Attempts: 0,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+
+	// Simulate install_execute failed.
+	h.updateTargetFromInstallProgress(ctx, agentexec.DeployProgressPayload{
+		TargetID: "tgt_fail_1",
+		Phase:    agentexec.DeployPhaseInstallExecute,
+		Status:   agentexec.DeployStepFailed,
+		Message:  "install script exited 1",
+	}, 3)
+
+	target, _ := h.store.GetTarget(ctx, "tgt_fail_1")
+	if target.Status != deploy.TargetFailedRetryable {
+		t.Fatalf("expected status failed_retryable, got %q", target.Status)
+	}
+	if target.Attempts != 1 {
+		t.Fatalf("expected attempts=1, got %d", target.Attempts)
+	}
+}
+
+func TestProcessInstallProgress_InstallFailedPermanent(t *testing.T) {
+	h := newTestDeployHandlers(t, nil, nil)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	if err := h.store.CreateJob(ctx, &deploy.Job{
+		ID: "dep_failp", ClusterID: "lab", ClusterName: "lab",
+		SourceAgentID: "agent-1", SourceNodeID: "node_a",
+		OrgID: "default", Status: deploy.JobRunning,
+		MaxParallel: 2, RetryMax: 2, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+	if err := h.store.CreateTarget(ctx, &deploy.Target{
+		ID: "tgt_failp_1", JobID: "dep_failp", NodeID: "node_b",
+		NodeName: "pve-b", NodeIP: "10.0.0.2",
+		Status: deploy.TargetInstalling, Attempts: 1,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+
+	// At attempt 1, retryMax is 2, so attempts+1 >= retryMax → permanent.
+	h.updateTargetFromInstallProgress(ctx, agentexec.DeployProgressPayload{
+		TargetID: "tgt_failp_1",
+		Phase:    agentexec.DeployPhaseInstallExecute,
+		Status:   agentexec.DeployStepFailed,
+		Message:  "install script exited 1",
+	}, 2)
+
+	target, _ := h.store.GetTarget(ctx, "tgt_failp_1")
+	if target.Status != deploy.TargetFailedPermanent {
+		t.Fatalf("expected status failed_permanent, got %q", target.Status)
+	}
+}
+
+func TestProcessInstallProgress_AgentDisconnect(t *testing.T) {
+	h := newTestDeployHandlers(t, nil, nil)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	if err := h.store.CreateJob(ctx, &deploy.Job{
+		ID: "dep_disc", ClusterID: "lab", ClusterName: "lab",
+		SourceAgentID: "agent-1", SourceNodeID: "node_a",
+		OrgID: "default", Status: deploy.JobRunning,
+		MaxParallel: 2, RetryMax: 3, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	// Reserve so we can verify release.
+	_ = h.reservation.Reserve("dep_disc", "default", 1, 1*time.Hour)
+
+	// Close the channel immediately to simulate disconnect.
+	ch := make(chan agentexec.DeployProgressPayload, 1)
+	close(ch)
+
+	// Run in foreground for testing.
+	h.processInstallProgress("dep_disc", "agent-1", 3, ch)
+
+	// Job should be failed.
+	job, _ := h.store.GetJob(ctx, "dep_disc")
+	if job.Status != deploy.JobFailed {
+		t.Fatalf("expected status failed after disconnect, got %q", job.Status)
+	}
+}
+
+func TestGetTargetArchFromPreflight(t *testing.T) {
+	h := newTestDeployHandlers(t, nil, nil)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	if err := h.store.CreateJob(ctx, &deploy.Job{
+		ID: "pf_arch", ClusterID: "lab", ClusterName: "lab",
+		SourceAgentID: "agent-1", SourceNodeID: "node_a",
+		OrgID: "default", Status: deploy.JobSucceeded,
+		MaxParallel: 2, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	// Create target with arch set on it.
+	if err := h.store.CreateTarget(ctx, &deploy.Target{
+		ID: "tgt_arch_1", JobID: "pf_arch", NodeID: "node_b",
+		NodeName: "pve-b", NodeIP: "10.0.0.2", Arch: "arm64",
+		Status: deploy.TargetReady, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+
+	got := h.getTargetArchFromPreflight(ctx, "pf_arch", "node_b")
+	if got != "arm64" {
+		t.Fatalf("expected arm64, got %q", got)
+	}
+
+	// Fallback for unknown node.
+	got = h.getTargetArchFromPreflight(ctx, "pf_arch", "node_unknown")
+	if got != "amd64" {
+		t.Fatalf("expected fallback amd64, got %q", got)
+	}
+}
+
 func TestGetTarget(t *testing.T) {
 	store, err := deploy.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {

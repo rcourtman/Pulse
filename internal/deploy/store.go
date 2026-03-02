@@ -298,6 +298,54 @@ func (s *Store) IncrementTargetAttempts(ctx context.Context, id string) error {
 	return nil
 }
 
+// UpdateTargetArch sets the architecture discovered during preflight for a target.
+func (s *Store) UpdateTargetArch(ctx context.Context, id, arch string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE deploy_targets SET arch = ?, updated_at = ? WHERE id = ?`,
+		nilIfEmpty(arch), now, id)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("deploy target %q not found", id)
+	}
+	return nil
+}
+
+// ResetTargetsForRetry resets targets in failed states back to pending.
+// Attempt counters are NOT incremented here — they are incremented by
+// updateTargetFromInstallProgress when the next failure occurs. Returns the
+// number of targets actually reset.
+func (s *Store) ResetTargetsForRetry(ctx context.Context, targetIDs []string) (int, error) {
+	if len(targetIDs) == 0 {
+		return 0, nil
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Build placeholders and args for IN clause.
+	placeholders := make([]string, len(targetIDs))
+	args := make([]any, 0, len(targetIDs)+1)
+	args = append(args, now)
+	for i, id := range targetIDs {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+
+	query := fmt.Sprintf(
+		`UPDATE deploy_targets SET status = 'pending', error_message = NULL, updated_at = ?
+		 WHERE id IN (%s) AND status IN ('failed_retryable', 'failed_permanent')`,
+		strings.Join(placeholders, ","))
+
+	res, err := s.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
 // --- Events ---
 
 // AppendEvent inserts an immutable audit event.
