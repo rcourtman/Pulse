@@ -5837,6 +5837,9 @@ func (h *AISettingsHandler) HandleResetAICostHistory(w http.ResponseWriter, r *h
 		return
 	}
 
+	// Limit body size — this endpoint takes no body but cap it to prevent abuse.
+	r.Body = http.MaxBytesReader(w, r.Body, 1024)
+
 	if h.GetAIService(r.Context()) == nil {
 		http.Error(w, "Pulse Assistant service unavailable", http.StatusServiceUnavailable)
 		return
