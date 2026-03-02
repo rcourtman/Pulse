@@ -71,12 +71,12 @@ export const AgentDeployModal: Component<AgentDeployModalProps> = (props) => {
       </div>
 
       {/* Step indicator */}
-      <div class="border-b border-border px-4 py-2">
+      <nav aria-label="Deploy progress" class="border-b border-border px-4 py-2">
         <StepIndicator steps={STEP_LABELS} currentStep={currentStepIndex()} />
-      </div>
+      </nav>
 
       {/* Body */}
-      <div class="overflow-y-auto p-4 max-h-[60vh]">
+      <div class="overflow-y-auto p-4 max-h-[60vh]" aria-live="polite">
         <Switch>
           <Match when={wizard.step() === 'candidates'}>
             <CandidatesStep wizard={wizard} />

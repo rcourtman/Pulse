@@ -16,13 +16,20 @@ export const CandidatesStep: Component<CandidatesStepProps> = (props) => {
   return (
     <div class="space-y-4">
       <Show when={w.candidatesError()}>
-        <div class="rounded-md bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-700 dark:text-red-300">
+        <div
+          role="alert"
+          class="rounded-md bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-700 dark:text-red-300"
+        >
           {w.candidatesError()}
         </div>
       </Show>
 
       <Show when={w.candidatesLoading()}>
-        <div class="flex items-center justify-center py-8 text-sm text-muted">
+        <div
+          role="status"
+          aria-live="polite"
+          class="flex items-center justify-center py-8 text-sm text-muted"
+        >
           <div class="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
           Loading cluster nodes...
         </div>
@@ -57,7 +64,10 @@ export const CandidatesStep: Component<CandidatesStepProps> = (props) => {
         </Show>
 
         <Show when={w.onlineSourceAgents().length === 0 && !w.candidatesLoading()}>
-          <div class="rounded-md bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-700 dark:text-amber-300 flex items-start gap-2">
+          <div
+            role="alert"
+            class="rounded-md bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-700 dark:text-amber-300 flex items-start gap-2"
+          >
             <AlertCircleIcon class="w-4 h-4 mt-0.5 shrink-0" />
             <span>
               No online source agents found. At least one node in this cluster must have a connected
@@ -114,8 +124,15 @@ export const CandidatesStep: Component<CandidatesStepProps> = (props) => {
                           class={`border-t border-border transition-colors ${
                             isDisabled() ? 'opacity-50' : 'hover:bg-surface-hover cursor-pointer'
                           }`}
+                          tabIndex={isDisabled() ? undefined : 0}
                           onClick={() => {
                             if (!isDisabled()) w.toggleNodeSelection(node.nodeId);
+                          }}
+                          onKeyDown={(e) => {
+                            if (!isDisabled() && (e.key === 'Enter' || e.key === ' ')) {
+                              e.preventDefault();
+                              w.toggleNodeSelection(node.nodeId);
+                            }
                           }}
                         >
                           <td class="px-3 py-2">

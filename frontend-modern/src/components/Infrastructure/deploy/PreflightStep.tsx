@@ -1,6 +1,7 @@
 import { Component, For, Show, createMemo } from 'solid-js';
 import type { DeployWizardState } from '@/hooks/useDeployWizard';
 import { DeployStatusBadge } from './DeployStatusBadge';
+import { ErrorDetail } from './ErrorDetail';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle-2';
 import LoaderIcon from 'lucide-solid/icons/loader-2';
 
@@ -22,13 +23,16 @@ export const PreflightStep: Component<PreflightStepProps> = (props) => {
   return (
     <div class="space-y-4">
       <Show when={w.preflightError()}>
-        <div class="rounded-md bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-700 dark:text-red-300">
+        <div
+          role="alert"
+          class="rounded-md bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-700 dark:text-red-300"
+        >
           {w.preflightError()}
         </div>
       </Show>
 
       {/* Progress summary */}
-      <div class="flex items-center gap-2 text-sm text-muted">
+      <div role="status" aria-live="polite" class="flex items-center gap-2 text-sm text-muted">
         <Show
           when={completedCount() < totalCount()}
           fallback={<CheckCircleIcon class="w-4 h-4 text-emerald-500" />}
@@ -62,12 +66,8 @@ export const PreflightStep: Component<PreflightStepProps> = (props) => {
                   <td class="px-3 py-2">
                     <DeployStatusBadge status={target.status} />
                   </td>
-                  <td class="px-3 py-2 text-xs text-muted max-w-[200px] truncate">
-                    <Show when={target.errorMessage}>
-                      <span class="text-red-600 dark:text-red-400" title={target.errorMessage}>
-                        {target.errorMessage}
-                      </span>
-                    </Show>
+                  <td class="px-3 py-2">
+                    <ErrorDetail message={target.errorMessage} />
                   </td>
                 </tr>
               )}

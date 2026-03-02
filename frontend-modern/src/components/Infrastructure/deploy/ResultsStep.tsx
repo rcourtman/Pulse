@@ -1,11 +1,16 @@
-import { Component, For, Show, createSignal } from 'solid-js';
+import { Component, For, Show, createSignal, onCleanup } from 'solid-js';
 import type { DeployWizardState } from '@/hooks/useDeployWizard';
+import { NodesAPI } from '@/api/nodes';
+import { copyToClipboard } from '@/utils/clipboard';
 import { DeployStatusBadge } from './DeployStatusBadge';
+import { ErrorDetail } from './ErrorDetail';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle-2';
 import XCircleIcon from 'lucide-solid/icons/x-circle';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 import ChevronDownIcon from 'lucide-solid/icons/chevron-down';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
+import CopyIcon from 'lucide-solid/icons/copy';
+import CheckIcon from 'lucide-solid/icons/check';
 
 interface ResultsStepProps {
   wizard: DeployWizardState;
@@ -14,6 +19,49 @@ interface ResultsStepProps {
 export const ResultsStep: Component<ResultsStepProps> = (props) => {
   const w = props.wizard;
   const [manualInstallOpen, setManualInstallOpen] = createSignal(false);
+  const [installCommand, setInstallCommand] = createSignal('');
+  const [installCommandLoading, setInstallCommandLoading] = createSignal(false);
+  const [installCommandError, setInstallCommandError] = createSignal('');
+  const [copied, setCopied] = createSignal(false);
+
+  let commandFetched = false;
+  let copyTimer: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => {
+    if (copyTimer !== undefined) clearTimeout(copyTimer);
+  });
+
+  async function fetchInstallCommand() {
+    if (commandFetched) return;
+    commandFetched = true;
+    setInstallCommandLoading(true);
+    setInstallCommandError('');
+    try {
+      const resp = await NodesAPI.getAgentInstallCommand({ type: 'pve', enableProxmox: true });
+      setInstallCommand(resp.command);
+    } catch (err) {
+      setInstallCommandError(err instanceof Error ? err.message : 'Failed to load install command');
+      commandFetched = false;
+    } finally {
+      setInstallCommandLoading(false);
+    }
+  }
+
+  async function handleCopy() {
+    const cmd = installCommand();
+    if (!cmd) return;
+    const ok = await copyToClipboard(cmd);
+    if (ok) {
+      setCopied(true);
+      if (copyTimer !== undefined) clearTimeout(copyTimer);
+      copyTimer = setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
+  function handleAccordionToggle() {
+    const opening = !manualInstallOpen();
+    setManualInstallOpen(opening);
+    if (opening) void fetchInstallCommand();
+  }
 
   return (
     <div class="space-y-4">
@@ -62,11 +110,8 @@ export const ResultsStep: Component<ResultsStepProps> = (props) => {
                       <td class="px-3 py-2">
                         <DeployStatusBadge status={target.status} />
                       </td>
-                      <td
-                        class="px-3 py-2 text-xs text-red-600 dark:text-red-400 max-w-[200px] truncate"
-                        title={target.errorMessage}
-                      >
-                        {target.errorMessage}
+                      <td class="px-3 py-2">
+                        <ErrorDetail message={target.errorMessage} />
                       </td>
                     </tr>
                   )}
@@ -78,7 +123,9 @@ export const ResultsStep: Component<ResultsStepProps> = (props) => {
           {/* Manual install accordion for failed nodes */}
           <button
             type="button"
-            onClick={() => setManualInstallOpen((o) => !o)}
+            onClick={handleAccordionToggle}
+            aria-expanded={manualInstallOpen()}
+            aria-controls="manual-install-content"
             class="flex items-center gap-1 text-xs text-muted hover:text-base-content transition-colors"
           >
             <Show when={manualInstallOpen()} fallback={<ChevronRightIcon class="w-3 h-3" />}>
@@ -87,18 +134,42 @@ export const ResultsStep: Component<ResultsStepProps> = (props) => {
             Manual install instructions
           </button>
           <Show when={manualInstallOpen()}>
-            <div class="rounded-md bg-surface-alt p-3 text-xs space-y-2">
+            <div
+              id="manual-install-content"
+              class="rounded-md bg-surface-alt p-3 text-xs space-y-2"
+            >
               <p class="text-muted">
                 For nodes that failed SSH-based deployment, you can install the agent manually by
                 SSHing into the node and running:
               </p>
-              <pre class="bg-surface border border-border rounded p-2 text-[11px] font-mono text-base-content overflow-x-auto select-all">
-                curl -fsSL http://&lt;pulse-url&gt;:7655/api/agent/install.sh | bash
-              </pre>
-              <p class="text-muted">
-                Generate a bootstrap token in Settings &gt; Agents, then pass it with{' '}
-                <code class="text-base-content">PULSE_TOKEN=&lt;token&gt;</code>.
-              </p>
+              <Show when={installCommandLoading()}>
+                <div class="flex items-center gap-2 py-2 text-muted">
+                  <div class="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Loading install command...
+                </div>
+              </Show>
+              <Show when={installCommandError()}>
+                <div role="alert" class="text-red-600 dark:text-red-400">
+                  {installCommandError()}
+                </div>
+              </Show>
+              <Show when={installCommand()}>
+                <div class="relative">
+                  <pre class="bg-surface border border-border rounded p-2 pr-10 text-[11px] font-mono text-base-content overflow-x-auto whitespace-pre-wrap break-all">
+                    {installCommand()}
+                  </pre>
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    class="absolute top-1.5 right-1.5 rounded p-1 text-muted hover:text-base-content hover:bg-surface-hover transition-colors"
+                    aria-label={copied() ? 'Copied' : 'Copy to clipboard'}
+                  >
+                    <Show when={copied()} fallback={<CopyIcon class="w-3.5 h-3.5" />}>
+                      <CheckIcon class="w-3.5 h-3.5 text-emerald-500" />
+                    </Show>
+                  </button>
+                </div>
+              </Show>
             </div>
           </Show>
         </div>

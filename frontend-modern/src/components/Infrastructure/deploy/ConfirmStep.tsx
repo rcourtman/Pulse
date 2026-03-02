@@ -19,6 +19,7 @@ export const ConfirmStep: Component<ConfirmStepProps> = (props) => {
       {/* License slot summary */}
       <Show when={maxSlots() > 0}>
         <div
+          role="status"
           class={`rounded-md p-3 text-sm flex items-start gap-2 ${
             exceedsLicense()
               ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300'
@@ -59,7 +60,14 @@ export const ConfirmStep: Component<ConfirmStepProps> = (props) => {
                   {(target) => (
                     <tr
                       class="border-t border-border hover:bg-surface-hover cursor-pointer"
+                      tabIndex={0}
                       onClick={() => w.toggleConfirmNode(target.nodeId)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          w.toggleConfirmNode(target.nodeId);
+                        }
+                      }}
                     >
                       <td class="px-3 py-2">
                         <input

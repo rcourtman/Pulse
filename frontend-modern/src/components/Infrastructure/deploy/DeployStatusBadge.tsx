@@ -55,6 +55,7 @@ export const DeployStatusBadge: Component<DeployStatusBadgeProps> = (props) => {
 
   return (
     <span
+      role="status"
       class={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${config().className}`}
     >
       {config().label}
