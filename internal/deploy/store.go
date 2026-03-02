@@ -208,6 +208,31 @@ func (s *Store) ListJobs(ctx context.Context, orgID string, limit int) ([]Job, e
 
 // --- Targets ---
 
+// GetTarget retrieves a single deployment target by ID.
+func (s *Store) GetTarget(ctx context.Context, targetID string) (*Target, error) {
+	row := s.db.QueryRowContext(ctx,
+		`SELECT id, job_id, node_id, node_name, node_ip, arch, status, error_message, attempts, created_at, updated_at
+		 FROM deploy_targets WHERE id = ?`, targetID)
+	var t Target
+	var status string
+	var arch, errMsg sql.NullString
+	var createdAt, updatedAt string
+	err := row.Scan(&t.ID, &t.JobID, &t.NodeID, &t.NodeName, &t.NodeIP,
+		&arch, &status, &errMsg, &t.Attempts, &createdAt, &updatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	t.Status = TargetStatus(status)
+	t.Arch = arch.String
+	t.ErrorMessage = errMsg.String
+	t.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+	t.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+	return &t, nil
+}
+
 // CreateTarget inserts a new deployment target.
 func (s *Store) CreateTarget(ctx context.Context, target *Target) error {
 	_, err := s.db.ExecContext(ctx,

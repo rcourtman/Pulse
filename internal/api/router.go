@@ -464,7 +464,29 @@ func (r *Router) setupRoutes() {
 		r.deployStore = deployStore
 		if r.monitor != nil {
 			reservation := deploy.NewReservationManager()
-			r.deployHandlers = NewDeployHandlers(deployStore, r.monitor, r.agentExecServer, reservation, r.resolvePublicURL)
+			r.deployHandlers = NewDeployHandlers(deployStore, r.monitor, r.agentExecServer, reservation, r.resolvePublicURL, r.config, r.persistence)
+
+			SetDeployReservationCounter(func(ctx context.Context) int {
+				orgID := GetOrgID(ctx)
+				if orgID == "" {
+					orgID = "default"
+				}
+				return reservation.ReservedForOrg(orgID)
+			})
+
+			// Periodic cleanup of expired reservations.
+			go func() {
+				ticker := time.NewTicker(5 * time.Minute)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-r.lifecycleCtx.Done():
+						return
+					case <-ticker.C:
+						reservation.CleanExpired()
+					}
+				}
+			}()
 		}
 	}
 

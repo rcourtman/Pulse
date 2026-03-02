@@ -539,6 +539,9 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 				http.Error(w, "Not found", http.StatusNotFound)
 			}
 		})
+		r.mux.HandleFunc("/api/agents/host/enroll",
+			RequireAuth(r.config, RequireScope(config.ScopeHostEnroll, r.deployHandlers.HandleEnroll)))
+
 		r.mux.HandleFunc("/api/agent-deploy/preflights/", func(w http.ResponseWriter, req *http.Request) {
 			path := req.URL.Path
 			switch {

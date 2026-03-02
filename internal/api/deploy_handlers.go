@@ -11,9 +11,11 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/deploy"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
 
@@ -26,6 +28,10 @@ type DeployHandlers struct {
 
 	// resolvePublicURL derives the Pulse URL for agent reachability checks.
 	resolvePublicURL func(req *http.Request) string
+
+	// config and persistence for token minting/validation in enroll flow.
+	config      *config.Config
+	persistence *config.ConfigPersistence
 
 	// Active preflight SSE subscriptions keyed by preflightID.
 	sseMu   sync.Mutex
@@ -45,6 +51,8 @@ func NewDeployHandlers(
 	execServer *agentexec.Server,
 	reservation *deploy.ReservationManager,
 	resolvePublicURL func(req *http.Request) string,
+	cfg *config.Config,
+	persistence *config.ConfigPersistence,
 ) *DeployHandlers {
 	return &DeployHandlers{
 		store:            store,
@@ -52,6 +60,8 @@ func NewDeployHandlers(
 		execServer:       execServer,
 		reservation:      reservation,
 		resolvePublicURL: resolvePublicURL,
+		config:           cfg,
+		persistence:      persistence,
 		sseSubs:          make(map[string]*deploySSESub),
 	}
 }
@@ -696,6 +706,217 @@ func (h *DeployHandlers) closeSSESub(jobID string) {
 		delete(sub.clients, id)
 	}
 	sub.mu.Unlock()
+}
+
+// --- Bootstrap Enrollment ---
+
+// MintBootstrapTokenForTarget creates a single-use bootstrap token for a deploy target.
+// Used by the deploy job creation flow to issue per-target tokens.
+func (h *DeployHandlers) MintBootstrapTokenForTarget(req deploy.BootstrapTokenRequest) (rawToken string, tokenID string, err error) {
+	if req.TTL <= 0 {
+		return "", "", fmt.Errorf("TTL must be positive, got %v", req.TTL)
+	}
+
+	raw, err := auth.GenerateAPIToken()
+	if err != nil {
+		return "", "", fmt.Errorf("generate token: %w", err)
+	}
+
+	record, err := config.NewAPITokenRecord(raw,
+		fmt.Sprintf("deploy-bootstrap:%s:%s", req.JobID, req.TargetID),
+		[]string{config.ScopeHostEnroll})
+	if err != nil {
+		return "", "", fmt.Errorf("create token record: %w", err)
+	}
+
+	exp := time.Now().UTC().Add(req.TTL)
+	record.ExpiresAt = &exp
+	record.OrgID = req.OrgID
+	record.Metadata = req.BuildMetadata()
+
+	config.Mu.Lock()
+	h.config.UpsertAPIToken(*record)
+	tokens := make([]config.APITokenRecord, len(h.config.APITokens))
+	copy(tokens, h.config.APITokens)
+	config.Mu.Unlock()
+
+	if h.persistence != nil {
+		if err := h.persistence.SaveAPITokens(tokens); err != nil {
+			log.Warn().Err(err).Msg("Failed to persist bootstrap token")
+		}
+	}
+
+	return raw, record.ID, nil
+}
+
+// enrollRequest matches the design doc Section 3 enrollment payload.
+type enrollRequest struct {
+	Hostname     string `json:"hostname"`
+	FQDN         string `json:"fqdn,omitempty"`
+	MachineID    string `json:"machineId,omitempty"`
+	OS           string `json:"os"`
+	Arch         string `json:"arch"`
+	AgentVersion string `json:"agentVersion"`
+	Proxmox      *struct {
+		ClusterName string `json:"clusterName,omitempty"`
+		NodeName    string `json:"nodeName,omitempty"`
+	} `json:"proxmox,omitempty"`
+	DeployJobID string `json:"deployJobId,omitempty"`
+}
+
+// HandleEnroll processes bootstrap token enrollment from freshly-deployed agents.
+// POST /api/agents/host/enroll
+func (h *DeployHandlers) HandleEnroll(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 1. Decode request body.
+	var req enrollRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_body", "Invalid request body", nil)
+		return
+	}
+	req.Hostname = strings.TrimSpace(req.Hostname)
+	if req.Hostname == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_hostname", "hostname is required", nil)
+		return
+	}
+
+	// 2. Get bootstrap token from context (set by RequireAuth middleware).
+	bootstrapToken := getAPITokenRecordFromRequest(r)
+	if bootstrapToken == nil {
+		writeErrorResponse(w, http.StatusUnauthorized, "no_token", "Bootstrap token required", nil)
+		return
+	}
+
+	// 3. Validate token binding metadata.
+	meta := bootstrapToken.Metadata
+	if meta == nil {
+		writeErrorResponse(w, http.StatusForbidden, "invalid_token", "Token is not a bootstrap deploy token", nil)
+		return
+	}
+	jobID := meta[deploy.MetaKeyJobID]
+	targetID := meta[deploy.MetaKeyTargetID]
+	expectedNode := meta[deploy.MetaKeyExpectedNode]
+
+	if jobID == "" || targetID == "" {
+		writeErrorResponse(w, http.StatusForbidden, "invalid_token", "Token missing deploy binding", nil)
+		return
+	}
+
+	// 4. Validate node name binding (if set).
+	if expectedNode != "" && req.Hostname != expectedNode {
+		proxmoxMatch := false
+		if req.Proxmox != nil && req.Proxmox.NodeName == expectedNode {
+			proxmoxMatch = true
+		}
+		if !proxmoxMatch {
+			writeErrorResponse(w, http.StatusForbidden, "binding_mismatch",
+				fmt.Sprintf("Token bound to node %q, got hostname %q", expectedNode, req.Hostname), nil)
+			return
+		}
+	}
+
+	// 5. Verify deploy target exists and is in correct state.
+	ctx := r.Context()
+	target, err := h.store.GetTarget(ctx, targetID)
+	if err != nil || target == nil {
+		writeErrorResponse(w, http.StatusNotFound, "target_not_found", "Deploy target not found", nil)
+		return
+	}
+	if target.Status != deploy.TargetEnrolling && target.Status != deploy.TargetInstalling {
+		writeErrorResponse(w, http.StatusConflict, "invalid_target_state",
+			fmt.Sprintf("Target is in state %q, expected enrolling or installing", target.Status), nil)
+		return
+	}
+
+	// 6. Verify target belongs to the job referenced in the token.
+	if target.JobID != jobID {
+		writeErrorResponse(w, http.StatusForbidden, "binding_mismatch",
+			"Token job binding does not match target", nil)
+		return
+	}
+
+	// 7. Invalidate bootstrap token (single-use) BEFORE minting runtime token.
+	// Check return value to prevent concurrent replay.
+	config.Mu.Lock()
+	removed := h.config.RemoveAPIToken(bootstrapToken.ID)
+	tokensAfterRemove := make([]config.APITokenRecord, len(h.config.APITokens))
+	copy(tokensAfterRemove, h.config.APITokens)
+	config.Mu.Unlock()
+	if removed == nil {
+		writeErrorResponse(w, http.StatusConflict, "token_already_consumed",
+			"Bootstrap token has already been used", nil)
+		return
+	}
+	if h.persistence != nil {
+		if err := h.persistence.SaveAPITokens(tokensAfterRemove); err != nil {
+			log.Warn().Err(err).Msg("Failed to persist token removal during enroll")
+		}
+	}
+
+	// 8. Mint runtime token (long-lived, host-bound).
+	runtimeRaw, err := auth.GenerateAPIToken()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to generate runtime token during enroll")
+		writeErrorResponse(w, http.StatusInternalServerError, "token_error", "Failed to generate runtime token", nil)
+		return
+	}
+	runtimeRecord, err := config.NewAPITokenRecord(runtimeRaw,
+		fmt.Sprintf("host-agent:%s", req.Hostname),
+		[]string{config.ScopeHostReport, config.ScopeHostConfigRead})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create runtime token record during enroll")
+		writeErrorResponse(w, http.StatusInternalServerError, "token_error", "Failed to create runtime token", nil)
+		return
+	}
+	runtimeRecord.OrgID = bootstrapToken.OrgID
+	runtimeRecord.Metadata = map[string]string{
+		"bound_hostname": req.Hostname,
+		"deploy_job_id":  jobID,
+	}
+
+	config.Mu.Lock()
+	h.config.UpsertAPIToken(*runtimeRecord)
+	tokensAfterMint := make([]config.APITokenRecord, len(h.config.APITokens))
+	copy(tokensAfterMint, h.config.APITokens)
+	config.Mu.Unlock()
+	if h.persistence != nil {
+		if err := h.persistence.SaveAPITokens(tokensAfterMint); err != nil {
+			log.Warn().Err(err).Msg("Failed to persist runtime token during enroll")
+		}
+	}
+
+	// 9. Update target status to VERIFYING.
+	_ = h.store.UpdateTargetStatus(ctx, targetID, deploy.TargetVerifying, "")
+
+	// 10. Append enroll event.
+	enrollEvt := &deploy.Event{
+		ID:        generateID("evt"),
+		JobID:     jobID,
+		TargetID:  targetID,
+		Type:      deploy.EventEnrollComplete,
+		Message:   fmt.Sprintf("Agent enrolled from %s", req.Hostname),
+		CreatedAt: time.Now().UTC(),
+	}
+	_ = h.store.AppendEvent(ctx, enrollEvt)
+
+	// 11. Broadcast to SSE clients.
+	h.broadcastSSE(jobID, enrollEvt)
+
+	// 12. Return runtime token + config to agent.
+	resp := map[string]any{
+		"hostId":         fmt.Sprintf("host-%s", req.Hostname),
+		"runtimeToken":   runtimeRaw,
+		"runtimeTokenId": runtimeRecord.ID,
+		"reportInterval": "30s",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
 }
 
 // --- Helpers ---

@@ -579,6 +579,7 @@ var allRouteAllowlist = []string{
 	"/api/discovery/host/",
 	"/api/discovery/",
 	"/api/agent/ws",
+	"/api/agents/host/enroll",
 	"/api/clusters/",
 	"/api/agent-deploy/preflights/",
 	"/install-docker-agent.sh",
