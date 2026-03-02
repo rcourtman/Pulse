@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -4568,8 +4569,8 @@ func (h *AISettingsHandler) HandleOAuthCallback(w http.ResponseWriter, r *http.R
 			Str("error", errParam).
 			Str("description", errDesc).
 			Msg("OAuth authorization failed")
-		// Redirect to settings page with error
-		http.Redirect(w, r, "/settings?ai_oauth_error="+errParam, http.StatusTemporaryRedirect)
+		// Redirect to settings page with error (URL-encode to prevent injection)
+		http.Redirect(w, r, "/settings?ai_oauth_error="+url.QueryEscape(errParam), http.StatusTemporaryRedirect)
 		return
 	}
 

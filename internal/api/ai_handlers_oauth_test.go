@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -470,6 +471,154 @@ func TestHandleOAuthCallback_UsesSessionBoundOrgForSave(t *testing.T) {
 	}
 	if cfgB.OAuthAccessToken != "" || cfgB.AuthMethod != config.AuthMethodAPIKey {
 		t.Fatalf("expected tenant-b OAuth config to remain unchanged, got auth=%q token=%q", cfgB.AuthMethod, cfgB.OAuthAccessToken)
+	}
+}
+
+func TestHandleOAuthCallback_MethodNotAllowed(t *testing.T) {
+	handler := &AISettingsHandler{}
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/oauth/callback", nil)
+	rr := httptest.NewRecorder()
+
+	handler.HandleOAuthCallback(rr, req)
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", rr.Code)
+	}
+}
+
+func TestHandleOAuthCallback_ExpiredSession(t *testing.T) {
+	resetOAuthSessions()
+
+	oauthSessionsMu.Lock()
+	oauthSessions["expired-cb"] = &oauthSessionBinding{
+		session: &providers.OAuthSession{
+			State:        "expired-cb",
+			CodeVerifier: "verifier",
+			CreatedAt:    time.Now().Add(-oauthSessionTTL - time.Minute),
+		},
+		orgID: "default",
+	}
+	oauthSessionsMu.Unlock()
+
+	handler := &AISettingsHandler{}
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/oauth/callback?code=abc&state=expired-cb", nil)
+	rr := httptest.NewRecorder()
+
+	handler.HandleOAuthCallback(rr, req)
+	if rr.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("expected 307, got %d", rr.Code)
+	}
+	location := rr.Header().Get("Location")
+	if !strings.Contains(location, "ai_oauth_error=invalid_state") {
+		t.Fatalf("expected invalid_state redirect for expired session, got %q", location)
+	}
+}
+
+func TestHandleOAuthCallback_TokenExchangeFailure(t *testing.T) {
+	resetOAuthSessions()
+
+	oldExchange := exchangeOAuthCodeForTokens
+	exchangeOAuthCodeForTokens = func(ctx context.Context, code string, session *providers.OAuthSession) (*providers.OAuthTokens, error) {
+		return nil, errors.New("token exchange failed")
+	}
+	defer func() { exchangeOAuthCodeForTokens = oldExchange }()
+
+	oauthSessionsMu.Lock()
+	oauthSessions["state-fail-cb"] = &oauthSessionBinding{
+		session: &providers.OAuthSession{
+			State:        "state-fail-cb",
+			CodeVerifier: "verifier",
+			CreatedAt:    time.Now(),
+		},
+		orgID: "default",
+	}
+	oauthSessionsMu.Unlock()
+
+	handler := &AISettingsHandler{}
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/oauth/callback?code=badcode&state=state-fail-cb", nil)
+	rr := httptest.NewRecorder()
+
+	handler.HandleOAuthCallback(rr, req)
+	if rr.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("expected 307, got %d", rr.Code)
+	}
+	location := rr.Header().Get("Location")
+	if !strings.Contains(location, "ai_oauth_error=token_exchange_failed") {
+		t.Fatalf("expected token_exchange_failed redirect, got %q", location)
+	}
+}
+
+func TestHandleOAuthCallback_ErrorParamURLEncoded(t *testing.T) {
+	handler := &AISettingsHandler{}
+	// Inject special characters in the error param to verify URL-encoding
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/oauth/callback?error=bad%26inject%3Dfoo&error_description=test", nil)
+	rr := httptest.NewRecorder()
+
+	handler.HandleOAuthCallback(rr, req)
+	if rr.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("expected 307, got %d", rr.Code)
+	}
+	location := rr.Header().Get("Location")
+	// Parse the redirect URL and verify the error value round-trips correctly.
+	parsed, err := url.Parse(location)
+	if err != nil {
+		t.Fatalf("failed to parse redirect URL %q: %v", location, err)
+	}
+	qvals := parsed.Query()
+	// Only one query key should be present — injection would add extra keys.
+	if len(qvals) != 1 {
+		t.Fatalf("expected exactly 1 query key, got %d: %v", len(qvals), qvals)
+	}
+	got := qvals.Get("ai_oauth_error")
+	if got != "bad&inject=foo" {
+		t.Fatalf("expected decoded error value %q, got %q", "bad&inject=foo", got)
+	}
+}
+
+func TestHandleOAuthCallback_SessionConsumedOnce(t *testing.T) {
+	resetOAuthSessions()
+
+	oldExchange := exchangeOAuthCodeForTokens
+	exchangeOAuthCodeForTokens = func(ctx context.Context, code string, session *providers.OAuthSession) (*providers.OAuthTokens, error) {
+		return &providers.OAuthTokens{
+			AccessToken:  "at",
+			RefreshToken: "rt",
+			ExpiresAt:    time.Now().Add(time.Hour),
+		}, nil
+	}
+	defer func() { exchangeOAuthCodeForTokens = oldExchange }()
+
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	if _, err := mtp.GetPersistence("default"); err != nil {
+		t.Fatalf("create default persistence: %v", err)
+	}
+	handler := NewAISettingsHandler(mtp, nil, nil)
+
+	oauthSessionsMu.Lock()
+	oauthSessions["state-once"] = &oauthSessionBinding{
+		session: &providers.OAuthSession{
+			State:        "state-once",
+			CodeVerifier: "verifier",
+			CreatedAt:    time.Now(),
+		},
+		orgID: "default",
+	}
+	oauthSessionsMu.Unlock()
+
+	// First call should succeed
+	req1 := httptest.NewRequest(http.MethodGet, "/api/ai/oauth/callback?code=abc&state=state-once", nil)
+	rr1 := httptest.NewRecorder()
+	handler.HandleOAuthCallback(rr1, req1)
+	if !strings.Contains(rr1.Header().Get("Location"), "ai_oauth_success=true") {
+		t.Fatalf("first call should succeed, got %q", rr1.Header().Get("Location"))
+	}
+
+	// Second call with same state should fail (session consumed)
+	req2 := httptest.NewRequest(http.MethodGet, "/api/ai/oauth/callback?code=abc&state=state-once", nil)
+	rr2 := httptest.NewRecorder()
+	handler.HandleOAuthCallback(rr2, req2)
+	if !strings.Contains(rr2.Header().Get("Location"), "ai_oauth_error=invalid_state") {
+		t.Fatalf("second call should fail with invalid_state, got %q", rr2.Header().Get("Location"))
 	}
 }
 
