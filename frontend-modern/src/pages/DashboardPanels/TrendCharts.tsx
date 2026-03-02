@@ -1,4 +1,4 @@
-import { For, createMemo } from 'solid-js';
+import { For, Show, createMemo } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import {
   InteractiveSparkline,
@@ -116,6 +116,12 @@ export function TrendCharts(props: TrendChartsProps) {
           </For>
         </div>
       </div>
+
+      <Show when={props.trends.error}>
+        <div class="mb-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800 dark:border-amber-700 dark:bg-amber-900/50 dark:text-amber-200">
+          Unable to load trends
+        </div>
+      </Show>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <Card padding="none" tone="default" class="px-4 py-3 border-border-subtle">
