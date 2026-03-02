@@ -311,57 +311,29 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 							guestRaw.MemInfoBuffers = status.MemInfo.Buffers
 							guestRaw.MemInfoCached = status.MemInfo.Cached
 							guestRaw.MemInfoShared = status.MemInfo.Shared
-							componentAvailable := status.MemInfo.Free
-							if status.MemInfo.Buffers > 0 {
-								if math.MaxUint64-componentAvailable < status.MemInfo.Buffers {
-									componentAvailable = math.MaxUint64
-								} else {
-									componentAvailable += status.MemInfo.Buffers
-								}
-							}
-							if status.MemInfo.Cached > 0 {
-								if math.MaxUint64-componentAvailable < status.MemInfo.Cached {
-									componentAvailable = math.MaxUint64
-								} else {
-									componentAvailable += status.MemInfo.Cached
-								}
-							}
-							if status.MemInfo.Total > 0 && componentAvailable > status.MemInfo.Total {
-								componentAvailable = status.MemInfo.Total
-							}
 
-							availableFromUsed := uint64(0)
-							if status.MemInfo.Total > 0 && status.MemInfo.Used > 0 && status.MemInfo.Total >= status.MemInfo.Used {
-								availableFromUsed = status.MemInfo.Total - status.MemInfo.Used
-								guestRaw.MemInfoTotalMinusUsed = availableFromUsed
-							}
-
-							missingCacheMetrics := status.MemInfo.Available == 0 &&
-								status.MemInfo.Buffers == 0 &&
-								status.MemInfo.Cached == 0
-
+							// Derive memAvailable from balloon MemInfo. Prefer Available (most
+							// accurate), then Free+Buffers+Cached when cache metrics are present.
+							// When Buffers=0 AND Cached=0, the balloon isn't reporting cache
+							// breakdown — using Free alone gives wildly inflated usage because
+							// reclaimable page cache is counted as used. In that case, skip and
+							// fall through to RRD/guest-agent fallbacks. Refs: #1302, #1270
 							switch {
 							case status.MemInfo.Available > 0:
 								memAvailable = status.MemInfo.Available
 								memorySource = "meminfo-available"
-							case status.MemInfo.Free > 0 ||
-								status.MemInfo.Buffers > 0 ||
-								status.MemInfo.Cached > 0:
+							case status.MemInfo.Buffers > 0 || status.MemInfo.Cached > 0:
 								memAvailable = status.MemInfo.Free +
 									status.MemInfo.Buffers +
 									status.MemInfo.Cached
 								memorySource = "meminfo-derived"
 							}
 
-							if memAvailable == 0 && availableFromUsed > 0 && missingCacheMetrics {
-								const vmTotalMinusUsedGapTolerance uint64 = 4 * 1024 * 1024
-								if availableFromUsed > componentAvailable {
-									gap := availableFromUsed - componentAvailable
-									if componentAvailable == 0 || gap >= vmTotalMinusUsedGapTolerance {
-										memAvailable = availableFromUsed
-										memorySource = "meminfo-total-minus-used"
-									}
-								}
+							// Record Total-Used for diagnostics even when not used as the source
+							if status.MemInfo.Total > 0 &&
+								status.MemInfo.Used > 0 &&
+								status.MemInfo.Total >= status.MemInfo.Used {
+								guestRaw.MemInfoTotalMinusUsed = status.MemInfo.Total - status.MemInfo.Used
 							}
 						}
 						// Note: We intentionally do NOT override memTotal with balloon.
@@ -426,6 +398,19 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 									Uint64("available", memAvailable).
 									Msg("QEMU memory: using guest agent /proc/meminfo fallback (excludes reclaimable cache)")
 							}
+						}
+
+						// Last-chance MemInfo fallback: when balloon reports Used/Total but no
+						// cache breakdown (Buffers=Cached=0), use Total-Used. This may equal
+						// Free (if Used=Total-Free) but is still better than status-mem which
+						// can be even more inflated. Placed after RRD/agent so those get
+						// priority. Refs: #1302, #1270
+						if memAvailable == 0 && status.MemInfo != nil &&
+							status.MemInfo.Total > 0 &&
+							status.MemInfo.Used > 0 &&
+							status.MemInfo.Total >= status.MemInfo.Used {
+							memAvailable = status.MemInfo.Total - status.MemInfo.Used
+							memorySource = "meminfo-total-minus-used"
 						}
 
 						switch {

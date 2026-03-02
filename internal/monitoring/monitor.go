@@ -6906,17 +6906,28 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 						guestRaw.MemInfoCached = detailedStatus.MemInfo.Cached
 						guestRaw.MemInfoShared = detailedStatus.MemInfo.Shared
 
+						// Derive memAvailable from balloon MemInfo. Prefer Available (most
+						// accurate), then Free+Buffers+Cached when cache metrics are present.
+						// When Buffers=0 AND Cached=0, the balloon isn't reporting cache
+						// breakdown — using Free alone gives wildly inflated usage because
+						// reclaimable page cache is counted as used. In that case, skip and
+						// fall through to RRD/guest-agent fallbacks. Refs: #1302, #1270
 						switch {
 						case detailedStatus.MemInfo.Available > 0:
 							memAvailable = detailedStatus.MemInfo.Available
 							memorySource = "meminfo-available"
-						case detailedStatus.MemInfo.Free > 0 ||
-							detailedStatus.MemInfo.Buffers > 0 ||
-							detailedStatus.MemInfo.Cached > 0:
+						case detailedStatus.MemInfo.Buffers > 0 || detailedStatus.MemInfo.Cached > 0:
 							memAvailable = detailedStatus.MemInfo.Free +
 								detailedStatus.MemInfo.Buffers +
 								detailedStatus.MemInfo.Cached
 							memorySource = "meminfo-derived"
+						}
+
+						// Record Total-Used for diagnostics even when not used as the source
+						if detailedStatus.MemInfo.Total > 0 &&
+							detailedStatus.MemInfo.Used > 0 &&
+							detailedStatus.MemInfo.Total >= detailedStatus.MemInfo.Used {
+							guestRaw.MemInfoTotalMinusUsed = detailedStatus.MemInfo.Total - detailedStatus.MemInfo.Used
 						}
 					}
 
@@ -7002,6 +7013,19 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								Uint64("available", memAvailable).
 								Msg("QEMU memory: using guest agent /proc/meminfo fallback (excludes reclaimable cache)")
 						}
+					}
+
+					// Last-chance MemInfo fallback: when balloon reports Used/Total but no
+					// cache breakdown (Buffers=Cached=0), use Total-Used. This may equal
+					// Free (if Used=Total-Free) but is still better than status-mem which
+					// can be even more inflated. Placed after RRD/agent so those get
+					// priority. Refs: #1302, #1270
+					if memAvailable == 0 && detailedStatus.MemInfo != nil &&
+						detailedStatus.MemInfo.Total > 0 &&
+						detailedStatus.MemInfo.Used > 0 &&
+						detailedStatus.MemInfo.Total >= detailedStatus.MemInfo.Used {
+						memAvailable = detailedStatus.MemInfo.Total - detailedStatus.MemInfo.Used
+						memorySource = "meminfo-total-minus-used"
 					}
 
 					switch {
