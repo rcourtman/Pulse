@@ -251,6 +251,7 @@ var publicRouteAllowlist = []string{
 }
 
 var bareRouteAllowlist = []string{
+	"/api/agent-deploy/preflights/",
 	"/api/agent/version",
 	"/api/agent/ws",
 	"/api/ai/oauth/callback",
@@ -305,6 +306,7 @@ var bareRouteAllowlist = []string{
 	"/api/public/magic-link/request",
 	"/api/public/magic-link/verify",
 	"/api/cloud/handoff/exchange",
+	"/api/clusters/",
 	"/auth/cloud-handoff",
 	"/auth/trial-activate",
 	"/socket.io/",
@@ -577,6 +579,8 @@ var allRouteAllowlist = []string{
 	"/api/discovery/host/",
 	"/api/discovery/",
 	"/api/agent/ws",
+	"/api/clusters/",
+	"/api/agent-deploy/preflights/",
 	"/install-docker-agent.sh",
 	"/install-container-agent.sh",
 	"/download/pulse-docker-agent",

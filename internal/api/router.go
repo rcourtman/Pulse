@@ -41,6 +41,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/deploy"
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -92,6 +93,8 @@ type Router struct {
 	rbacProvider               *TenantRBACProvider
 	logHandlers                *LogHandlers
 	agentExecServer            *agentexec.Server
+	deployHandlers             *DeployHandlers
+	deployStore                *deploy.Store
 	wsHub                      *websocket.Hub
 	reloadFunc                 func() error
 	updateManager              *updates.Manager
@@ -451,6 +454,19 @@ func (r *Router) setupRoutes() {
 		}
 		return false
 	})
+
+	// Deploy store and handlers for cluster agent deployment
+	deployStore, deployErr := deploy.Open(filepath.Join(r.config.DataPath, "deploy.db"))
+	if deployErr != nil {
+		log.Error().Err(deployErr).Msg("Failed to open deploy store (cluster deployment disabled)")
+	}
+	if deployStore != nil {
+		r.deployStore = deployStore
+		if r.monitor != nil {
+			reservation := deploy.NewReservationManager()
+			r.deployHandlers = NewDeployHandlers(deployStore, r.monitor, r.agentExecServer, reservation, r.resolvePublicURL)
+		}
+	}
 
 	// AI settings endpoints
 	r.aiSettingsHandler = NewAISettingsHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
@@ -1925,6 +1941,11 @@ func (r *Router) shutdownBackgroundWorkers() {
 	}
 	if r.trueNASPoller != nil {
 		r.trueNASPoller.Stop()
+	}
+	if r.deployStore != nil {
+		if err := r.deployStore.Close(); err != nil {
+			log.Error().Err(err).Msg("Failed to close deploy store")
+		}
 	}
 }
 

@@ -457,15 +457,29 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) readLoop(ac *agentConn) {
 	defer func() {
+		agentID := ac.agent.AgentID
 		s.mu.Lock()
-		if existing, ok := s.agents[ac.agent.AgentID]; ok && existing == ac {
-			delete(s.agents, ac.agent.AgentID)
+		if existing, ok := s.agents[agentID]; ok && existing == ac {
+			delete(s.agents, agentID)
+		}
+		// Close all deploy progress subscriptions for this agent so
+		// processPreflightProgress goroutines unblock and detect disconnect.
+		var closeChs []chan DeployProgressPayload
+		prefix := agentID + "\x00"
+		for key, ch := range s.deploySubs {
+			if strings.HasPrefix(key, prefix) {
+				closeChs = append(closeChs, ch)
+				delete(s.deploySubs, key)
+			}
 		}
 		s.mu.Unlock()
-		if err := ac.conn.Close(); err != nil {
-			log.Debug().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Failed to close connection during read-loop cleanup")
+		for _, ch := range closeChs {
+			close(ch)
 		}
-		log.Info().Str("agent_id", ac.agent.AgentID).Msg("Agent disconnected")
+		if err := ac.conn.Close(); err != nil {
+			log.Debug().Err(err).Str("agent_id", agentID).Msg("Failed to close connection during read-loop cleanup")
+		}
+		log.Info().Str("agent_id", agentID).Msg("Agent disconnected")
 	}()
 
 	log.Debug().Str("agent_id", ac.agent.AgentID).Msg("Starting read loop for agent")
@@ -565,35 +579,70 @@ func (s *Server) readLoop(ac *agentConn) {
 			}
 
 			subKey := deploySubKey(ac.agent.AgentID, progress.JobID)
+
+			// Hold the read lock across map lookup AND the non-blocking send to
+			// prevent UnsubscribeDeployProgress from closing the channel between
+			// lookup and send (it needs the write lock to delete + close).
+			sent := false
 			s.mu.RLock()
 			ch, ok := s.deploySubs[subKey]
+			if ok {
+				select {
+				case ch <- progress:
+					sent = true
+				default:
+				}
+			}
 			s.mu.RUnlock()
 
-			if ok {
-				sent := false
-				if progress.Final {
-					// Terminal messages (job_complete) get extra delivery attempts
-					// but use a timeout to avoid deadlocking the readLoop.
+			// Final messages must be delivered — retry with backoff if the
+			// initial non-blocking send failed (channel was full).
+			if ok && !sent && progress.Final {
+				deadline := time.After(5 * time.Second)
+				ticker := time.NewTicker(50 * time.Millisecond)
+			retryLoop:
+				for {
 					select {
-					case ch <- progress:
-						sent = true
-					case <-time.After(5 * time.Second):
+					case <-deadline:
 						log.Error().
 							Str("agent_id", ac.agent.AgentID).
 							Str("job_id", progress.JobID).
-							Msg("Deploy final progress send timed out — subscriber may have leaked")
-					}
-				} else {
-					select {
-					case ch <- progress:
-						sent = true
-					default:
-						log.Warn().
-							Str("agent_id", ac.agent.AgentID).
-							Str("job_id", progress.JobID).
-							Msg("Deploy progress channel full, dropping")
+							Msg("Deploy final progress send timed out — force-closing subscription")
+						// Force-close the subscription so the consumer goroutine
+						// unblocks on channel close and can finalize the job.
+						s.mu.Lock()
+						if closeCh, exists := s.deploySubs[subKey]; exists {
+							delete(s.deploySubs, subKey)
+							close(closeCh)
+						}
+						s.mu.Unlock()
+						break retryLoop
+					case <-ticker.C:
+						s.mu.RLock()
+						ch, ok = s.deploySubs[subKey]
+						if !ok {
+							s.mu.RUnlock()
+							break retryLoop // channel was closed/unsubscribed
+						}
+						select {
+						case ch <- progress:
+							sent = true
+							s.mu.RUnlock()
+							break retryLoop
+						default:
+							s.mu.RUnlock()
+						}
 					}
 				}
+				ticker.Stop()
+			} else if ok && !sent {
+				log.Warn().
+					Str("agent_id", ac.agent.AgentID).
+					Str("job_id", progress.JobID).
+					Msg("Deploy progress channel full, dropping")
+			}
+
+			if ok {
 				if sent {
 					log.Debug().
 						Str("agent_id", ac.agent.AgentID).
@@ -958,11 +1007,17 @@ func (s *Server) SubscribeDeployProgress(agentID, jobID string, bufSize int) cha
 	return ch
 }
 
-// UnsubscribeDeployProgress removes the progress subscriber for an agent's job.
+// UnsubscribeDeployProgress removes and closes the progress subscriber for an agent's job.
+// Safe to call multiple times — a no-op if already unsubscribed (e.g. by readLoop cleanup).
 func (s *Server) UnsubscribeDeployProgress(agentID, jobID string) {
+	key := deploySubKey(agentID, jobID)
 	s.mu.Lock()
-	delete(s.deploySubs, deploySubKey(agentID, jobID))
+	ch, exists := s.deploySubs[key]
+	delete(s.deploySubs, key)
 	s.mu.Unlock()
+	if exists {
+		close(ch)
+	}
 }
 
 // SendDeployPreflight sends a preflight check command to the source agent.

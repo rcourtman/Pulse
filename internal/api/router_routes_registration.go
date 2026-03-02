@@ -525,6 +525,30 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	r.mux.HandleFunc("/api/system/settings/update", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.systemSettingsHandler.HandleUpdateSystemSettings)))
 	r.mux.HandleFunc("/api/system/ssh-config", r.handleSSHConfig)
 	r.mux.HandleFunc("/api/system/verify-temperature-ssh", r.handleVerifyTemperatureSSH)
+
+	// Cluster agent deployment routes
+	if r.deployHandlers != nil {
+		r.mux.HandleFunc("/api/clusters/", func(w http.ResponseWriter, req *http.Request) {
+			path := req.URL.Path
+			switch {
+			case strings.HasSuffix(path, "/agent-deploy/candidates"):
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandleCandidates))(w, req)
+			case strings.HasSuffix(path, "/agent-deploy/preflights"):
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.deployHandlers.HandleCreatePreflight))(w, req)
+			default:
+				http.Error(w, "Not found", http.StatusNotFound)
+			}
+		})
+		r.mux.HandleFunc("/api/agent-deploy/preflights/", func(w http.ResponseWriter, req *http.Request) {
+			path := req.URL.Path
+			switch {
+			case strings.HasSuffix(path, "/events"):
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandlePreflightEvents))(w, req)
+			default:
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandleGetPreflight))(w, req)
+			}
+		})
+	}
 }
 
 func (r *Router) registerAIRelayRoutes() {
