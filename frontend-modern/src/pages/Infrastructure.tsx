@@ -18,6 +18,7 @@ import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { segmentedButtonClass } from '@/utils/segmentedButton';
 import { useKioskMode } from '@/hooks/useKioskMode';
+import { AgentDeployModal } from '@/components/Infrastructure/AgentDeployModal';
 import { isSummaryTimeRange } from '@/components/shared/summaryTimeRange';
 import {
   tokenizeSearch,
@@ -83,6 +84,7 @@ export function Infrastructure() {
   const [handledQueryParam, setHandledQueryParam] = createSignal<string>('');
   const [hideMigrationNotice, setHideMigrationNotice] = createSignal(true);
   const { isMobile } = useBreakpoint();
+  const [deployCluster, setDeployCluster] = createSignal<{ id: string; name: string } | null>(null);
   const [filtersOpen, setFiltersOpen] = createSignal(false);
   const activeFilterCount = createMemo(
     () => (selectedSource() !== '' ? 1 : 0) + (selectedStatus() !== '' ? 1 : 0),
@@ -593,11 +595,22 @@ export function Infrastructure() {
                   onExpandedResourceChange={setExpandedResourceId}
                   onHoverChange={setHoveredResourceId}
                   groupingMode={groupingMode()}
+                  onDeployCluster={(id, name) => setDeployCluster({ id, name })}
                 />
               </Show>
             </div>
           </Show>
         </Show>
+      </Show>
+      <Show when={deployCluster()}>
+        {(cluster) => (
+          <AgentDeployModal
+            isOpen={true}
+            clusterId={cluster().id}
+            clusterName={cluster().name}
+            onClose={() => setDeployCluster(null)}
+          />
+        )}
       </Show>
       <ScrollToTopButton />
     </div>

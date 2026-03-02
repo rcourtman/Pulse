@@ -33,6 +33,7 @@ import { buildWorkloadsHref } from './workloadsLink';
 import { buildServiceDetailLinks } from './serviceDetailLinks';
 import { getPlatformBadge, getSourceBadge, getUnifiedSourceBadges } from './resourceBadges';
 import { useTableWindowing } from './useTableWindowing';
+import { ClusterDeployBanner } from './ClusterDeployBanner';
 
 interface UnifiedResourceTableProps {
   resources: Resource[];
@@ -42,6 +43,7 @@ interface UnifiedResourceTableProps {
   onExpandedResourceChange: (id: string | null) => void;
   onHoverChange?: (id: string | null) => void;
   groupingMode?: 'grouped' | 'flat';
+  onDeployCluster?: (clusterId: string, clusterName: string) => void;
 }
 
 type SortKey =
@@ -525,6 +527,12 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                 {group.resources.length === 1 ? 'resource' : 'resources'}
                               </span>
                             </div>
+                            <Show when={props.onDeployCluster}>
+                              <ClusterDeployBanner
+                                group={group}
+                                onDeploy={props.onDeployCluster!}
+                              />
+                            </Show>
                           </TableCell>
                         </TableRow>
                       );
