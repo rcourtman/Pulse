@@ -68,6 +68,10 @@ jobs:
       - name: Build frontend bundle (with embed copy)
         run: make frontend
 
+      - name: Check frontend bundle size budget
+        working-directory: frontend-modern
+        run: npm run check:bundlesize
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
