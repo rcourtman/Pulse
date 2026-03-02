@@ -5409,6 +5409,11 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			instance.Password = ""
 			instance.TokenName = nodeConfig.TokenName
 			instance.TokenValue = nodeConfig.TokenValue
+			// Update TLS fingerprint only when one was captured; a failed
+			// FetchFingerprint must not erase a previously valid pin. Refs: #1303
+			if nodeConfig.Fingerprint != "" {
+				instance.Fingerprint = nodeConfig.Fingerprint
+			}
 			// Update source if provided (allows upgrade from script to agent)
 			if req.Source != "" {
 				instance.Source = req.Source
@@ -5417,10 +5422,11 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			// Check for cluster if not already detected
 			if !instance.IsCluster {
 				clientConfig := proxmox.ClientConfig{
-					Host:       instance.Host,
-					TokenName:  nodeConfig.TokenName,
-					TokenValue: nodeConfig.TokenValue,
-					VerifySSL:  instance.VerifySSL,
+					Host:        instance.Host,
+					TokenName:   nodeConfig.TokenName,
+					TokenValue:  nodeConfig.TokenValue,
+					VerifySSL:   instance.VerifySSL,
+					Fingerprint: instance.Fingerprint,
 				}
 
 				isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, instance.Name, instance.ClusterEndpoints)
@@ -5447,6 +5453,11 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			instance.Password = ""
 			instance.TokenName = nodeConfig.TokenName
 			instance.TokenValue = nodeConfig.TokenValue
+			// Update TLS fingerprint only when one was captured; a failed
+			// FetchFingerprint must not erase a previously valid pin. Refs: #1303
+			if nodeConfig.Fingerprint != "" {
+				instance.Fingerprint = nodeConfig.Fingerprint
+			}
 			// Update source if provided (allows upgrade from script to agent)
 			if req.Source != "" {
 				instance.Source = req.Source
@@ -5468,10 +5479,11 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				verifySSL = *nodeConfig.VerifySSL
 			}
 			clientConfig := proxmox.ClientConfig{
-				Host:       nodeConfig.Host,
-				TokenName:  nodeConfig.TokenName,
-				TokenValue: nodeConfig.TokenValue,
-				VerifySSL:  verifySSL,
+				Host:        nodeConfig.Host,
+				TokenName:   nodeConfig.TokenName,
+				TokenValue:  nodeConfig.TokenValue,
+				VerifySSL:   verifySSL,
+				Fingerprint: nodeConfig.Fingerprint,
 			}
 
 			isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, nodeConfig.Name, nil)
@@ -5556,6 +5568,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				Host:              nodeConfig.Host,
 				TokenName:         nodeConfig.TokenName,
 				TokenValue:        nodeConfig.TokenValue,
+				Fingerprint:       nodeConfig.Fingerprint,
 				VerifySSL:         verifySSL,
 				MonitorVMs:        monitorVMs,
 				MonitorContainers: monitorContainers,
@@ -5608,6 +5621,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				Host:               nodeConfig.Host,
 				TokenName:          nodeConfig.TokenName,
 				TokenValue:         nodeConfig.TokenValue,
+				Fingerprint:        nodeConfig.Fingerprint,
 				VerifySSL:          verifySSL,
 				MonitorBackups:     true, // Enable by default for PBS
 				MonitorDatastores:  monitorDatastores,
@@ -5859,7 +5873,11 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 			instance.Password = ""
 			instance.TokenName = pveNode.TokenName
 			instance.TokenValue = pveNode.TokenValue
-			instance.Fingerprint = pveNode.Fingerprint
+			// Update TLS fingerprint only when one was captured; a failed
+			// FetchFingerprint must not erase a previously valid pin. Refs: #1303
+			if pveNode.Fingerprint != "" {
+				instance.Fingerprint = pveNode.Fingerprint
+			}
 			instance.VerifySSL = pveNode.VerifySSL
 			log.Info().Str("host", host).Str("type", "pve").Msg("Secure auto-register matched existing node by host; updated token in-place")
 		} else {
@@ -5894,7 +5912,11 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 			instance.Password = ""
 			instance.TokenName = pbsNode.TokenName
 			instance.TokenValue = pbsNode.TokenValue
-			instance.Fingerprint = pbsNode.Fingerprint
+			// Update TLS fingerprint only when one was captured; a failed
+			// FetchFingerprint must not erase a previously valid pin. Refs: #1303
+			if pbsNode.Fingerprint != "" {
+				instance.Fingerprint = pbsNode.Fingerprint
+			}
 			instance.VerifySSL = pbsNode.VerifySSL
 			log.Info().Str("host", host).Str("type", "pbs").Msg("Secure auto-register matched existing node by host; updated token in-place")
 		} else {
