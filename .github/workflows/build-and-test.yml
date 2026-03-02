@@ -89,5 +89,25 @@ jobs:
           PULSE_DATA_DIR: /tmp/pulse-test-data
         run: go test ./...
 
+      - name: Go benchmarks
+        env:
+          PULSE_DATA_DIR: /tmp/pulse-bench-data
+        run: |
+          set -o pipefail
+          go test -bench=. -benchmem -count=1 -run=^$ -timeout=5m \
+            ./pkg/metrics/ \
+            ./internal/api/ \
+            ./internal/unifiedresources/ \
+            ./internal/dockeragent/ \
+            | tee bench-results.txt
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results
+          path: bench-results.txt
+          retention-days: 90
+
       - name: Build Pulse backend
         run: go build ./cmd/pulse
