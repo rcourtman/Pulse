@@ -28,6 +28,7 @@ type portalPageAccount struct {
 	Name       string
 	Role       string
 	CanManage  bool // owner or admin
+	HasBilling bool // true when a Stripe customer exists for the account
 	Workspaces []portalPageWorkspace
 }
 
@@ -170,6 +171,9 @@ var portalPageTmpl = template.Must(template.New("portal").Parse(`<!DOCTYPE html>
       {{if eq $account.Kind "msp"}}
       <button class="btn-secondary" id="add-ws-btn-{{$account.ID}}" onclick="toggleAddWorkspace('{{$account.ID}}')">+ Add workspace</button>
       {{end}}
+      {{if $account.HasBilling}}
+      <button class="btn-secondary" onclick="openBilling('{{$account.ID}}')">Manage billing</button>
+      {{end}}
       {{/* Team management page is not yet available */}}
     </div>
 
@@ -265,6 +269,25 @@ function suspendOrDelete(evt, accountID, tenantID, state, name) {
   }).catch(function() {
     showToast('Network error.', true);
   });
+}
+
+async function openBilling(accountID) {
+  try {
+    var r = await fetch('/api/portal/billing?account_id=' + encodeURIComponent(accountID), { method: 'POST' });
+    if (!r.ok) {
+      var err = await r.json().catch(function() { return {}; });
+      showToast((err && err.error) || 'Failed to open billing portal.', true);
+      return;
+    }
+    var data = await r.json();
+    if (data && data.url) {
+      window.location.href = data.url;
+    } else {
+      showToast('Failed to open billing portal.', true);
+    }
+  } catch(e) {
+    showToast('Network error.', true);
+  }
 }
 </script>
 </body>
@@ -465,6 +488,13 @@ func HandlePortalPage(sessionSvc *cpauth.Service, reg *registry.TenantRegistry) 
 				kindLabel = "MSP"
 			}
 
+			hasBilling := false
+			if sa, saErr := reg.GetStripeAccount(accountID); saErr != nil {
+				log.Warn().Err(saErr).Str("account_id", accountID).Msg("cloudcp.portal.page: lookup stripe account for billing button")
+			} else if sa != nil && sa.StripeCustomerID != "" {
+				hasBilling = true
+			}
+
 			accounts = append(accounts, portalPageAccount{
 				ID:         a.ID,
 				Kind:       string(a.Kind),
@@ -472,6 +502,7 @@ func HandlePortalPage(sessionSvc *cpauth.Service, reg *registry.TenantRegistry) 
 				Name:       a.DisplayName,
 				Role:       string(m.Role),
 				CanManage:  m.Role == registry.MemberRoleOwner || m.Role == registry.MemberRoleAdmin,
+				HasBilling: hasBilling,
 				Workspaces: workspaces,
 			})
 		}

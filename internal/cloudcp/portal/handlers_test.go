@@ -2,6 +2,7 @@ package portal
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/admin"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	stripe "github.com/stripe/stripe-go/v82"
 )
 
 func newTestRegistry(t *testing.T) *registry.TenantRegistry {
@@ -306,5 +308,316 @@ func TestPortalWorkspaceDetail(t *testing.T) {
 	}
 	if !resp.Workspace.CreatedAt.Equal(created) {
 		t.Fatalf("workspace.created_at = %v, want %v", resp.Workspace.CreatedAt, created)
+	}
+}
+
+// --- Billing portal redirect tests ---
+
+func newBillingHandler(t *testing.T, reg *registry.TenantRegistry, apiKey string, returnURL string,
+	mock func(*stripe.BillingPortalSessionParams) (*stripe.BillingPortalSession, error),
+) http.HandlerFunc {
+	t.Helper()
+	h := &billingPortalHandler{
+		reg: reg,
+		cfg: BillingPortalConfig{
+			StripeAPIKey: apiKey,
+			ReturnURL:    returnURL,
+		},
+		createSession: mock,
+	}
+	return h.serveHTTP
+}
+
+func TestBillingPortalRedirect_Success(t *testing.T) {
+	reg := newTestRegistry(t)
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindIndividual, DisplayName: "Test Account"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateStripeAccount(&registry.StripeAccount{
+		AccountID:        accountID,
+		StripeCustomerID: "cus_test_billing123",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var capturedParams *stripe.BillingPortalSessionParams
+	handler := newBillingHandler(t, reg, "sk_test_key", "https://cloud.example.com/portal",
+		func(params *stripe.BillingPortalSessionParams) (*stripe.BillingPortalSession, error) {
+			capturedParams = params
+			return &stripe.BillingPortalSession{URL: "https://billing.stripe.com/session/bps_test"}, nil
+		},
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/portal/billing?account_id="+accountID, nil)
+	req.Header.Set("X-User-Role", "owner")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v (body=%q)", err, rec.Body.String())
+	}
+	if resp["url"] != "https://billing.stripe.com/session/bps_test" {
+		t.Fatalf("url = %q, want stripe billing portal URL", resp["url"])
+	}
+
+	if capturedParams == nil {
+		t.Fatal("expected createSession to be called")
+	}
+	if got := stripe.StringValue(capturedParams.Customer); got != "cus_test_billing123" {
+		t.Fatalf("Customer = %q, want %q", got, "cus_test_billing123")
+	}
+	if got := stripe.StringValue(capturedParams.ReturnURL); got != "https://cloud.example.com/portal" {
+		t.Fatalf("ReturnURL = %q, want %q", got, "https://cloud.example.com/portal")
+	}
+}
+
+func TestBillingPortalRedirect_AdminRoleAllowed(t *testing.T) {
+	reg := newTestRegistry(t)
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindIndividual, DisplayName: "Test"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateStripeAccount(&registry.StripeAccount{
+		AccountID:        accountID,
+		StripeCustomerID: "cus_test_admin",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := newBillingHandler(t, reg, "sk_test_key", "",
+		func(*stripe.BillingPortalSessionParams) (*stripe.BillingPortalSession, error) {
+			return &stripe.BillingPortalSession{URL: "https://billing.stripe.com/session/admin"}, nil
+		},
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/portal/billing?account_id="+accountID, nil)
+	req.Header.Set("X-User-Role", "admin")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+}
+
+func TestBillingPortalRedirect_ForbiddenForTechRole(t *testing.T) {
+	handler := newBillingHandler(t, newTestRegistry(t), "sk_test_key", "",
+		func(*stripe.BillingPortalSessionParams) (*stripe.BillingPortalSession, error) {
+			t.Fatal("should not be called")
+			return nil, nil
+		},
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/portal/billing?account_id=a_test", nil)
+	req.Header.Set("X-User-Role", "tech")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestBillingPortalRedirect_ForbiddenForReadOnlyRole(t *testing.T) {
+	handler := newBillingHandler(t, newTestRegistry(t), "sk_test_key", "",
+		func(*stripe.BillingPortalSessionParams) (*stripe.BillingPortalSession, error) {
+			t.Fatal("should not be called")
+			return nil, nil
+		},
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/portal/billing?account_id=a_test", nil)
+	req.Header.Set("X-User-Role", "read_only")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestBillingPortalRedirect_MethodNotAllowed(t *testing.T) {
+	handler := newBillingHandler(t, newTestRegistry(t), "sk_test_key", "",
+		func(*stripe.BillingPortalSessionParams) (*stripe.BillingPortalSession, error) {
+			t.Fatal("should not be called")
+			return nil, nil
+		},
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/portal/billing?account_id=a_test", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+func TestBillingPortalRedirect_MissingAccountID(t *testing.T) {
+	handler := newBillingHandler(t, newTestRegistry(t), "sk_test_key", "",
+		func(*stripe.BillingPortalSessionParams) (*stripe.BillingPortalSession, error) {
+			t.Fatal("should not be called")
+			return nil, nil
+		},
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/portal/billing", nil)
+	req.Header.Set("X-User-Role", "owner")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestBillingPortalRedirect_NoStripeAccount(t *testing.T) {
+	reg := newTestRegistry(t)
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindIndividual, DisplayName: "No Billing"}); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := newBillingHandler(t, reg, "sk_test_key", "",
+		func(*stripe.BillingPortalSessionParams) (*stripe.BillingPortalSession, error) {
+			t.Fatal("should not be called")
+			return nil, nil
+		},
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/portal/billing?account_id="+accountID, nil)
+	req.Header.Set("X-User-Role", "owner")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+}
+
+func TestBillingPortalRedirect_StripeAPIKeyNotConfigured(t *testing.T) {
+	handler := newBillingHandler(t, newTestRegistry(t), "", "",
+		func(*stripe.BillingPortalSessionParams) (*stripe.BillingPortalSession, error) {
+			t.Fatal("should not be called")
+			return nil, nil
+		},
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/portal/billing?account_id=a_test", nil)
+	req.Header.Set("X-User-Role", "owner")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestBillingPortalRedirect_StripeError(t *testing.T) {
+	reg := newTestRegistry(t)
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindIndividual, DisplayName: "Test"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateStripeAccount(&registry.StripeAccount{
+		AccountID:        accountID,
+		StripeCustomerID: "cus_test_err",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := newBillingHandler(t, reg, "sk_test_key", "",
+		func(*stripe.BillingPortalSessionParams) (*stripe.BillingPortalSession, error) {
+			return nil, fmt.Errorf("stripe API unavailable")
+		},
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/portal/billing?account_id="+accountID, nil)
+	req.Header.Set("X-User-Role", "owner")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusBadGateway, rec.Body.String())
+	}
+}
+
+func TestBillingPortalRedirect_EmptyURL(t *testing.T) {
+	reg := newTestRegistry(t)
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindIndividual, DisplayName: "Test"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateStripeAccount(&registry.StripeAccount{
+		AccountID:        accountID,
+		StripeCustomerID: "cus_test_empty",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := newBillingHandler(t, reg, "sk_test_key", "",
+		func(*stripe.BillingPortalSessionParams) (*stripe.BillingPortalSession, error) {
+			return &stripe.BillingPortalSession{URL: ""}, nil
+		},
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/portal/billing?account_id="+accountID, nil)
+	req.Header.Set("X-User-Role", "owner")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusBadGateway, rec.Body.String())
+	}
+}
+
+func TestBillingPortalRedirect_NoReturnURL(t *testing.T) {
+	reg := newTestRegistry(t)
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindIndividual, DisplayName: "Test"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateStripeAccount(&registry.StripeAccount{
+		AccountID:        accountID,
+		StripeCustomerID: "cus_test_noreturn",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var capturedParams *stripe.BillingPortalSessionParams
+	handler := newBillingHandler(t, reg, "sk_test_key", "",
+		func(params *stripe.BillingPortalSessionParams) (*stripe.BillingPortalSession, error) {
+			capturedParams = params
+			return &stripe.BillingPortalSession{URL: "https://billing.stripe.com/session/bps_test"}, nil
+		},
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/portal/billing?account_id="+accountID, nil)
+	req.Header.Set("X-User-Role", "owner")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	if capturedParams == nil {
+		t.Fatal("expected createSession to be called")
+	}
+	if capturedParams.ReturnURL != nil {
+		t.Fatalf("ReturnURL = %q, want nil (no return URL configured)", stripe.StringValue(capturedParams.ReturnURL))
 	}
 }

@@ -195,6 +195,13 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	mux.Handle("/api/portal/dashboard", portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalDashboard(deps.Registry))))
 	mux.Handle("/api/portal/workspaces/{tenant_id}", portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalWorkspaceDetail(deps.Registry))))
 
+	// Stripe Customer Portal redirect (session + account-membership authenticated)
+	billingCfg := portal.BillingPortalConfig{
+		StripeAPIKey: deps.Config.StripeAPIKey,
+		ReturnURL:    buildCPURL(deps.Config.BaseURL, "/portal", nil),
+	}
+	mux.Handle("/api/portal/billing", portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandleBillingPortalRedirect(deps.Registry, billingCfg))))
+
 	// MSP/Cloud portal HTML page — self-authenticating (shows login form if no session)
 	portalPageLimiter := NewCPRateLimiter(60, time.Minute)
 	mux.Handle("/portal", portalPageLimiter.Middleware(http.HandlerFunc(portal.HandlePortalPage(deps.MagicLinks, deps.Registry))))

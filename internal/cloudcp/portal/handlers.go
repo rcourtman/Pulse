@@ -8,6 +8,8 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rs/zerolog/log"
+	stripe "github.com/stripe/stripe-go/v82"
+	billingportalsession "github.com/stripe/stripe-go/v82/billingportal/session"
 )
 
 type accountInfo struct {
@@ -200,6 +202,102 @@ func HandlePortalWorkspaceDetail(reg *registry.TenantRegistry) http.HandlerFunc 
 		w.WriteHeader(http.StatusOK)
 		encodeJSON(w, resp)
 	}
+}
+
+// BillingPortalConfig holds the configuration for the billing portal redirect handler.
+type BillingPortalConfig struct {
+	StripeAPIKey string
+	ReturnURL    string // URL the user returns to after leaving the Stripe portal
+}
+
+// billingPortalHandler is the internal handler for Stripe billing portal session creation.
+type billingPortalHandler struct {
+	reg           *registry.TenantRegistry
+	cfg           BillingPortalConfig
+	createSession func(params *stripe.BillingPortalSessionParams) (*stripe.BillingPortalSession, error)
+}
+
+// HandleBillingPortalRedirect creates a Stripe Customer Portal session and returns
+// the redirect URL. The authenticated user must be an owner or admin of the account.
+// Route: POST /api/portal/billing?account_id=...
+//
+// Auth: control-plane session + account membership middleware + owner/admin role check.
+func HandleBillingPortalRedirect(reg *registry.TenantRegistry, cfg BillingPortalConfig) http.HandlerFunc {
+	h := &billingPortalHandler{
+		reg:           reg,
+		cfg:           cfg,
+		createSession: defaultCreateBillingPortalSession,
+	}
+	return h.serveHTTP
+}
+
+func (h *billingPortalHandler) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.reg == nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Only account owners and admins may access billing.
+	role := registry.MemberRole(strings.TrimSpace(r.Header.Get("X-User-Role")))
+	if role != registry.MemberRoleOwner && role != registry.MemberRoleAdmin {
+		http.Error(w, "forbidden: billing access requires owner or admin role", http.StatusForbidden)
+		return
+	}
+
+	if strings.TrimSpace(h.cfg.StripeAPIKey) == "" {
+		log.Warn().Msg("cloudcp.portal: billing portal redirect called but Stripe API key not configured")
+		http.Error(w, "billing portal not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	accountID := accountIDFromRequest(r)
+	if accountID == "" {
+		http.Error(w, "missing account_id", http.StatusBadRequest)
+		return
+	}
+
+	sa, err := h.reg.GetStripeAccount(accountID)
+	if err != nil {
+		log.Error().Err(err).Str("account_id", accountID).Msg("cloudcp.portal: lookup stripe account")
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if sa == nil || strings.TrimSpace(sa.StripeCustomerID) == "" {
+		http.Error(w, "no billing account found", http.StatusNotFound)
+		return
+	}
+
+	stripe.Key = strings.TrimSpace(h.cfg.StripeAPIKey)
+	params := &stripe.BillingPortalSessionParams{
+		Customer: stripe.String(strings.TrimSpace(sa.StripeCustomerID)),
+	}
+	if returnURL := strings.TrimSpace(h.cfg.ReturnURL); returnURL != "" {
+		params.ReturnURL = stripe.String(returnURL)
+	}
+
+	session, err := h.createSession(params)
+	if err != nil {
+		log.Error().Err(err).Str("account_id", accountID).Msg("cloudcp.portal: create billing portal session")
+		http.Error(w, "failed to create billing portal session", http.StatusBadGateway)
+		return
+	}
+	if session == nil || strings.TrimSpace(session.URL) == "" {
+		log.Error().Str("account_id", accountID).Msg("cloudcp.portal: Stripe returned empty billing portal URL")
+		http.Error(w, "failed to create billing portal session", http.StatusBadGateway)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	encodeJSON(w, map[string]string{"url": strings.TrimSpace(session.URL)})
+}
+
+func defaultCreateBillingPortalSession(params *stripe.BillingPortalSessionParams) (*stripe.BillingPortalSession, error) {
+	return billingportalsession.New(params)
 }
 
 func encodeJSON(w http.ResponseWriter, payload any) {
