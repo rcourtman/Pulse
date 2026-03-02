@@ -63,7 +63,15 @@ describe('HostLedgerPanel', () => {
 
     // Now make API succeed on retry
     getLedgerMock.mockResolvedValue({
-      hosts: [{ name: 'host-1', type: 'agent', status: 'online', last_seen: '2026-01-01T00:00:00Z', source: 'agent' }],
+      hosts: [
+        {
+          name: 'host-1',
+          type: 'agent',
+          status: 'online',
+          last_seen: '2026-01-01T00:00:00Z',
+          source: 'agent',
+        },
+      ],
       total: 1,
       limit: 5,
     });
@@ -101,8 +109,20 @@ describe('HostLedgerPanel', () => {
   it('renders ledger data on successful load', async () => {
     getLedgerMock.mockResolvedValue({
       hosts: [
-        { name: 'server-a', type: 'agent', status: 'online', last_seen: '2026-01-01T00:00:00Z', source: 'agent' },
-        { name: 'server-b', type: 'agent', status: 'offline', last_seen: '2026-01-02T00:00:00Z', source: 'agent' },
+        {
+          name: 'server-a',
+          type: 'agent',
+          status: 'online',
+          last_seen: '2026-01-01T00:00:00Z',
+          source: 'agent',
+        },
+        {
+          name: 'server-b',
+          type: 'agent',
+          status: 'offline',
+          last_seen: '2026-01-02T00:00:00Z',
+          source: 'agent',
+        },
       ],
       total: 2,
       limit: 10,
