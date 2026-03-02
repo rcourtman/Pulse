@@ -92,6 +92,14 @@ test.describe.serial('Journey: Bootstrap → Login → Dashboard', () => {
 
     await ensureAuthenticated(page);
 
+    // Wait for the primary navigation tablist to render before checking individual
+    // tabs. After login redirect, the SPA may still be hydrating the layout.
+    // Target the specific aria-label to avoid matching other tablists (e.g. mobile nav).
+    await expect(
+      page.locator('[role="tablist"][aria-label="Primary navigation"]'),
+      'Primary navigation tablist should render',
+    ).toBeVisible({ timeout: 15_000 });
+
     // Core navigation tabs that must always be present
     const expectedTabs = [
       'Dashboard',

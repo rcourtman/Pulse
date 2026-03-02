@@ -107,6 +107,72 @@ function buildHostReport(overrides?: {
   };
 }
 
+/**
+ * Re-register the test host if it's missing from state.
+ * The backend file watcher may restart Pulse during the test suite
+ * (especially with parallel dev work), losing in-memory host state.
+ * Also ensures mock mode is off — the API toggle only sets an env var,
+ * not the mock.env file, so a backend restart may restore mock mode.
+ * Returns the host record from /api/state after ensuring it exists.
+ */
+async function ensureHostRegistered(
+  page: import('@playwright/test').Page,
+): Promise<Record<string, unknown>> {
+  // Ensure mock mode is still off (backend restart restores mock.env defaults).
+  // Retry once if the backend is mid-restart when this first runs.
+  for (let mockAttempt = 0; mockAttempt < 2; mockAttempt++) {
+    try {
+      const mockState = await getMockMode(page);
+      if (mockState.enabled) {
+        await setMockMode(page, false);
+      }
+      break;
+    } catch {
+      if (mockAttempt === 0) await page.waitForTimeout(2000);
+    }
+  }
+
+  const stateRes = await apiRequest(page, '/api/state');
+  if (stateRes.ok()) {
+    const state = (await stateRes.json()) as Record<string, unknown>;
+    const hosts = state.hosts as Array<Record<string, unknown>>;
+    const found = hosts?.find(
+      (h) => h.id === serverHostId || h.hostname === TEST_HOSTNAME,
+    );
+    if (found) return found;
+  }
+
+  // Host not found — re-register.
+  const report = buildHostReport();
+  const regRes = await apiRequest(page, '/api/agents/host/report', {
+    method: 'POST',
+    data: report,
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!regRes.ok()) {
+    throw new Error(`Host re-registration failed: ${regRes.status()}`);
+  }
+  const body = (await regRes.json()) as Record<string, unknown>;
+  serverHostId = (body.hostId as string) || serverHostId;
+  hostRegistered = true;
+
+  // Poll state after re-registration to allow for short settling windows
+  // (e.g. backend just finished restarting and state is still initializing).
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const stateRes2 = await apiRequest(page, '/api/state');
+    if (stateRes2.ok()) {
+      const state2 = (await stateRes2.json()) as Record<string, unknown>;
+      const hosts2 = state2.hosts as Array<Record<string, unknown>>;
+      const found = hosts2?.find(
+        (h) => h.id === serverHostId || h.hostname === TEST_HOSTNAME,
+      );
+      if (found) return found;
+    }
+    await page.waitForTimeout(500);
+  }
+  throw new Error('Host not found in state even after re-registration');
+}
+
 test.describe.serial(
   'Journey: Agent Install → Registration → Host Visible',
   () => {
@@ -214,37 +280,16 @@ test.describe.serial(
 
       await ensureAuthenticated(page);
 
-      // Poll /api/state until the host appears (should be near-instant after report).
-      let foundHost: Record<string, unknown> | null = null;
-      for (let attempt = 0; attempt < 10; attempt++) {
-        const res = await apiRequest(page, '/api/state');
-        if (res.ok()) {
-          const state = (await res.json()) as Record<string, unknown>;
-          const hosts = state.hosts as Array<Record<string, unknown>>;
-          if (Array.isArray(hosts)) {
-            foundHost =
-              hosts.find(
-                (h) =>
-                  h.id === serverHostId || h.hostname === TEST_HOSTNAME,
-              ) ?? null;
-          }
-        }
-        if (foundHost) break;
-        await page.waitForTimeout(1000);
-      }
-
-      expect(
-        foundHost,
-        `Host ${serverHostId} not found in /api/state hosts`,
-      ).toBeTruthy();
+      // Ensure the host is in state (re-registers if backend restarted).
+      const foundHost = await ensureHostRegistered(page);
 
       // Verify host details match what we reported.
-      expect(foundHost!.hostname).toBe(TEST_HOSTNAME);
-      expect(foundHost!.platform).toBe('linux');
-      expect(foundHost!.osName).toBe('Ubuntu');
-      expect(foundHost!.osVersion).toBe('24.04 LTS');
-      expect(foundHost!.cpuCount).toBe(4);
-      expect(foundHost!.architecture).toBe('x86_64');
+      expect(foundHost.hostname).toBe(TEST_HOSTNAME);
+      expect(foundHost.platform).toBe('linux');
+      expect(foundHost.osName).toBe('Ubuntu');
+      expect(foundHost.osVersion).toBe('24.04 LTS');
+      expect(foundHost.cpuCount).toBe(4);
+      expect(foundHost.architecture).toBe('x86_64');
     });
 
     test('host details include CPU and memory metrics', async (
@@ -259,23 +304,15 @@ test.describe.serial(
 
       await ensureAuthenticated(page);
 
-      const res = await apiRequest(page, '/api/state');
-      expect(res.ok()).toBeTruthy();
-
-      const state = (await res.json()) as Record<string, unknown>;
-      const hosts = state.hosts as Array<Record<string, unknown>>;
-      const host = hosts?.find(
-        (h) => h.id === serverHostId || h.hostname === TEST_HOSTNAME,
-      );
-      expect(host, 'Host should exist in state').toBeTruthy();
+      const host = await ensureHostRegistered(page);
 
       // CPU usage should be close to what we reported (42.5%).
-      const cpuUsage = host!.cpuUsage as number;
+      const cpuUsage = host.cpuUsage as number;
       expect(cpuUsage).toBeGreaterThan(0);
       expect(cpuUsage).toBeLessThanOrEqual(100);
 
       // Memory should be present.
-      const memory = host!.memory as Record<string, unknown> | undefined;
+      const memory = host.memory as Record<string, unknown> | undefined;
       expect(memory, 'Host should have memory metrics').toBeTruthy();
       expect(memory!.total).toBeGreaterThan(0);
       expect(memory!.used).toBeGreaterThan(0);
@@ -291,18 +328,12 @@ test.describe.serial(
       );
       test.skip(!hostRegistered, 'Host was not registered');
 
+      test.setTimeout(30_000);
+
       await ensureAuthenticated(page);
 
-      // Capture current lastSeen.
-      const stateRes1 = await apiRequest(page, '/api/state');
-      expect(stateRes1.ok()).toBeTruthy();
-      const state1 = (await stateRes1.json()) as Record<string, unknown>;
-      const hosts1 = state1.hosts as Array<Record<string, unknown>>;
-      const host1 = hosts1?.find(
-        (h) => h.id === serverHostId || h.hostname === TEST_HOSTNAME,
-      );
-      expect(host1, 'Host must exist before update test').toBeTruthy();
-      const lastSeen1 = host1!.lastSeen as string;
+      const host1 = await ensureHostRegistered(page);
+      const lastSeen1 = host1.lastSeen as string;
 
       // Wait briefly and send a second report with updated metrics.
       await page.waitForTimeout(1100);
@@ -361,6 +392,9 @@ test.describe.serial(
 
       await ensureAuthenticated(page);
 
+      // Ensure the host is registered in state before navigating to the UI.
+      await ensureHostRegistered(page);
+
       await page.goto('/infrastructure', { waitUntil: 'domcontentloaded' });
       await expect(page).toHaveURL(/\/infrastructure/);
 
@@ -382,6 +416,9 @@ test.describe.serial(
       test.skip(!hostRegistered, 'Host was not registered');
 
       await ensureAuthenticated(page);
+
+      // Ensure host exists before attempting delete.
+      await ensureHostRegistered(page);
 
       const delRes = await apiRequest(
         page,
