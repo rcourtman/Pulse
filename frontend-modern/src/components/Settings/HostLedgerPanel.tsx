@@ -31,7 +31,7 @@ function usagePercent(total: number, limit: number): number {
 }
 
 export function HostLedgerPanel() {
-  const [ledger] = createResource(() => HostLedgerAPI.getLedger());
+  const [ledger, { refetch }] = createResource(() => HostLedgerAPI.getLedger());
 
   const total = () => ledger()?.total ?? 0;
   const limit = () => ledger()?.limit ?? 0;
@@ -46,7 +46,7 @@ export function HostLedgerPanel() {
         {/* Summary */}
         <div class="flex items-center justify-between">
           <h3 class="text-sm font-semibold text-base-content">Installed Agents</h3>
-          <Show when={ledger()}>
+          <Show when={!ledger.error && ledger()}>
             <span
               class="text-sm font-medium"
               classList={{
@@ -67,9 +67,17 @@ export function HostLedgerPanel() {
 
         {/* Error state */}
         <Show when={ledger.error}>
-          <p class="text-sm text-red-600 dark:text-red-400 py-4 text-center">
-            Failed to load agent ledger.
-          </p>
+          <div class="text-sm text-red-600 dark:text-red-400 py-4 text-center">
+            <p>Failed to load agent ledger.</p>
+            <button
+              type="button"
+              class="mt-2 text-xs text-primary hover:underline disabled:opacity-50"
+              disabled={ledger.loading}
+              onClick={() => refetch()}
+            >
+              {ledger.loading ? 'Retrying\u2026' : 'Retry'}
+            </button>
+          </div>
         </Show>
 
         {/* Loaded content */}
