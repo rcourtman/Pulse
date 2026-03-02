@@ -253,7 +253,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
   };
 
   return (
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div class="w-full max-w-2xl bg-surface rounded-md shadow-sm border border-border mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div class="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
