@@ -23,18 +23,12 @@ func TestClientNodeStatusAndRRD(t *testing.T) {
 				"data": []NodeRRDPoint{{Time: 123}},
 			})
 		case "/api2/json/nodes/node1/lxc/101/rrddata":
-			if !strings.Contains(r.URL.RawQuery, "ds=memused") {
-				http.Error(w, "bad query", http.StatusBadRequest)
-				return
-			}
+			// ds parameter is intentionally NOT sent (PVE 9.x rejects it)
 			writeJSON(t, w, map[string]interface{}{
 				"data": []GuestRRDPoint{{Time: 456}},
 			})
 		case "/api2/json/nodes/node1/qemu/101/rrddata":
-			if !strings.Contains(r.URL.RawQuery, "ds=memavailable") {
-				http.Error(w, "bad query", http.StatusBadRequest)
-				return
-			}
+			// ds parameter is intentionally NOT sent (PVE 9.x rejects it)
 			writeJSON(t, w, map[string]interface{}{
 				"data": []GuestRRDPoint{{Time: 789}},
 			})

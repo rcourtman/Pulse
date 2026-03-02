@@ -729,9 +729,9 @@ func (c *Client) GetNodeRRDData(ctx context.Context, node, timeframe, cf string,
 	params := url.Values{}
 	params.Set("timeframe", timeframe)
 	params.Set("cf", cf)
-	if len(ds) > 0 {
-		params.Set("ds", strings.Join(ds, ","))
-	}
+	// Note: the "ds" parameter is not sent because older PVE versions
+	// (including 9.x) reject it as an unknown property.  The API returns
+	// all available RRD fields regardless, so we simply filter client-side.
 
 	path := fmt.Sprintf("/nodes/%s/rrddata", url.PathEscape(node))
 	if query := params.Encode(); query != "" {
@@ -767,9 +767,8 @@ func (c *Client) GetLXCRRDData(ctx context.Context, node string, vmid int, timef
 	params := url.Values{}
 	params.Set("timeframe", timeframe)
 	params.Set("cf", cf)
-	if len(ds) > 0 {
-		params.Set("ds", strings.Join(ds, ","))
-	}
+	// Note: the "ds" parameter is not sent because older PVE versions
+	// (including 9.x) reject it as an unknown property.
 
 	path := fmt.Sprintf("/nodes/%s/lxc/%d/rrddata", url.PathEscape(node), vmid)
 	if query := params.Encode(); query != "" {
@@ -805,9 +804,8 @@ func (c *Client) GetVMRRDData(ctx context.Context, node string, vmid int, timefr
 	params := url.Values{}
 	params.Set("timeframe", timeframe)
 	params.Set("cf", cf)
-	if len(ds) > 0 {
-		params.Set("ds", strings.Join(ds, ","))
-	}
+	// Note: the "ds" parameter is not sent because older PVE versions
+	// (including 9.x) reject it as an unknown property.
 
 	path := fmt.Sprintf("/nodes/%s/qemu/%d/rrddata", url.PathEscape(node), vmid)
 	if query := params.Encode(); query != "" {
