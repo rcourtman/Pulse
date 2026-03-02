@@ -137,6 +137,12 @@ export function ProblemResourcesTable(props: ProblemResourcesTableProps) {
               Infrastructure
             </a>
             <a
+              href={buildWorkloadsPath()}
+              class="text-[11px] text-blue-600 hover:underline dark:text-blue-400"
+            >
+              Workloads
+            </a>
+            <a
               href={buildStoragePath()}
               class="text-[11px] text-blue-600 hover:underline dark:text-blue-400"
             >
