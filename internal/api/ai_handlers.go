@@ -3905,10 +3905,17 @@ func (h *AISettingsHandler) HandleUndismissFinding(w http.ResponseWriter, r *htt
 	}
 
 	findings := patrol.GetFindings()
-	findings.Undismiss(req.FindingID)
+	ok := findings.Undismiss(req.FindingID)
 
 	if store := h.GetUnifiedStore(); store != nil {
-		store.Undismiss(req.FindingID)
+		if store.Undismiss(req.FindingID) {
+			ok = true
+		}
+	}
+
+	if !ok {
+		http.Error(w, "Finding not found or not dismissed", http.StatusNotFound)
+		return
 	}
 
 	log.Info().
