@@ -107,6 +107,196 @@ func TestHandleOAuthExchange_UnknownState(t *testing.T) {
 	}
 }
 
+func TestHandleOAuthExchange_BodySizeLimit(t *testing.T) {
+	handler := &AISettingsHandler{}
+	// Build valid JSON that exceeds the 4 KB limit so failure is specifically
+	// from MaxBytesReader, not from JSON syntax errors.
+	longCode := strings.Repeat("a", 8*1024)
+	oversized := []byte(`{"code":"` + longCode + `","state":"s"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/oauth/exchange", bytes.NewReader(oversized))
+	rr := httptest.NewRecorder()
+
+	handler.HandleOAuthExchange(rr, req)
+	// MaxBytesReader truncates the stream → json.Decode fails → 400.
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for oversized body, got %d", rr.Code)
+	}
+}
+
+func TestHandleOAuthExchange_ExpiredSession(t *testing.T) {
+	resetOAuthSessions()
+
+	oauthSessionsMu.Lock()
+	oauthSessions["expired-state"] = &oauthSessionBinding{
+		session: &providers.OAuthSession{
+			State:        "expired-state",
+			CodeVerifier: "verifier",
+			CreatedAt:    time.Now().Add(-oauthSessionTTL - time.Minute),
+		},
+		orgID: "default",
+	}
+	oauthSessionsMu.Unlock()
+
+	handler := &AISettingsHandler{}
+	body := []byte(`{"code":"code123","state":"expired-state"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/oauth/exchange", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+
+	handler.HandleOAuthExchange(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for expired session, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "expired") {
+		t.Fatalf("expected 'expired' in body, got %q", rr.Body.String())
+	}
+}
+
+func TestHandleOAuthExchange_StripsHashFromCode(t *testing.T) {
+	resetOAuthSessions()
+
+	var capturedCode string
+	oldExchange := exchangeOAuthCodeForTokens
+	exchangeOAuthCodeForTokens = func(ctx context.Context, code string, session *providers.OAuthSession) (*providers.OAuthTokens, error) {
+		capturedCode = code
+		return &providers.OAuthTokens{
+			AccessToken:  "at",
+			RefreshToken: "rt",
+			ExpiresAt:    time.Now().Add(time.Hour),
+		}, nil
+	}
+	oldCreateAPIKey := createAPIKeyFromOAuth
+	createAPIKeyFromOAuth = func(ctx context.Context, accessToken string) (string, error) {
+		return "", errors.New("403 org:create_api_key")
+	}
+	defer func() {
+		exchangeOAuthCodeForTokens = oldExchange
+		createAPIKeyFromOAuth = oldCreateAPIKey
+	}()
+
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	if _, err := mtp.GetPersistence("default"); err != nil {
+		t.Fatalf("create default persistence: %v", err)
+	}
+	handler := NewAISettingsHandler(mtp, nil, nil)
+
+	oauthSessionsMu.Lock()
+	oauthSessions["state-hash"] = &oauthSessionBinding{
+		session: &providers.OAuthSession{
+			State:        "state-hash",
+			CodeVerifier: "verifier",
+			CreatedAt:    time.Now(),
+		},
+		orgID: "default",
+	}
+	oauthSessionsMu.Unlock()
+
+	// Anthropic displays code as "code#state" — handler should strip #state.
+	body := []byte(`{"code":"  realcode#extrapart  ","state":"state-hash"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/oauth/exchange", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+
+	handler.HandleOAuthExchange(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%q", rr.Code, rr.Body.String())
+	}
+	if capturedCode != "realcode" {
+		t.Fatalf("expected code='realcode' after hash stripping, got %q", capturedCode)
+	}
+}
+
+func TestHandleOAuthExchange_TokenExchangeFailure(t *testing.T) {
+	resetOAuthSessions()
+
+	oldExchange := exchangeOAuthCodeForTokens
+	exchangeOAuthCodeForTokens = func(ctx context.Context, code string, session *providers.OAuthSession) (*providers.OAuthTokens, error) {
+		return nil, errors.New("token exchange failed: invalid_grant")
+	}
+	defer func() { exchangeOAuthCodeForTokens = oldExchange }()
+
+	oauthSessionsMu.Lock()
+	oauthSessions["state-fail"] = &oauthSessionBinding{
+		session: &providers.OAuthSession{
+			State:        "state-fail",
+			CodeVerifier: "verifier",
+			CreatedAt:    time.Now(),
+		},
+		orgID: "default",
+	}
+	oauthSessionsMu.Unlock()
+
+	handler := &AISettingsHandler{}
+	body := []byte(`{"code":"badcode","state":"state-fail"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/oauth/exchange", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+
+	handler.HandleOAuthExchange(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for token exchange failure, got %d", rr.Code)
+	}
+}
+
+func TestHandleOAuthExchange_APIKeyCreatedSuccessfully(t *testing.T) {
+	resetOAuthSessions()
+
+	oldExchange := exchangeOAuthCodeForTokens
+	exchangeOAuthCodeForTokens = func(ctx context.Context, code string, session *providers.OAuthSession) (*providers.OAuthTokens, error) {
+		return &providers.OAuthTokens{
+			AccessToken:  "access-token",
+			RefreshToken: "refresh-token",
+			ExpiresAt:    time.Now().Add(time.Hour),
+		}, nil
+	}
+	oldCreateAPIKey := createAPIKeyFromOAuth
+	createAPIKeyFromOAuth = func(ctx context.Context, accessToken string) (string, error) {
+		return "sk-ant-generated-key", nil
+	}
+	defer func() {
+		exchangeOAuthCodeForTokens = oldExchange
+		createAPIKeyFromOAuth = oldCreateAPIKey
+	}()
+
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	if _, err := mtp.GetPersistence("default"); err != nil {
+		t.Fatalf("create default persistence: %v", err)
+	}
+	handler := NewAISettingsHandler(mtp, nil, nil)
+
+	oauthSessionsMu.Lock()
+	oauthSessions["state-apikey"] = &oauthSessionBinding{
+		session: &providers.OAuthSession{
+			State:        "state-apikey",
+			CodeVerifier: "verifier",
+			CreatedAt:    time.Now(),
+		},
+		orgID: "default",
+	}
+	oauthSessionsMu.Unlock()
+
+	body := []byte(`{"code":"goodcode","state":"state-apikey"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/oauth/exchange", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+
+	handler.HandleOAuthExchange(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%q", rr.Code, rr.Body.String())
+	}
+
+	// Verify the API key was saved.
+	p, _ := mtp.GetPersistence("default")
+	cfg, err := p.LoadAIConfig()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if cfg.APIKey != "sk-ant-generated-key" {
+		t.Fatalf("expected API key 'sk-ant-generated-key', got %q", cfg.APIKey)
+	}
+	if cfg.AuthMethod != config.AuthMethodOAuth {
+		t.Fatalf("expected auth method OAuth, got %q", cfg.AuthMethod)
+	}
+}
+
 func TestHandleOAuthCallback_ErrorParam(t *testing.T) {
 	handler := &AISettingsHandler{}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/oauth/callback?error=access_denied&error_description=no", nil)

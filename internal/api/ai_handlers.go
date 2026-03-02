@@ -4418,6 +4418,9 @@ func (h *AISettingsHandler) HandleOAuthExchange(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Limit body size — OAuth codes are short strings, 4 KB is plenty.
+	r.Body = http.MaxBytesReader(w, r.Body, 4*1024)
+
 	// Parse request body
 	var req struct {
 		Code  string `json:"code"`
