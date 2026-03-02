@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -275,6 +276,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			EnableProxmox:      cfg.EnableProxmox,
 			ProxmoxType:        cfg.ProxmoxType,
 			EnableCommands:     cfg.EnableCommands,
+			Enroll:             cfg.Enroll,
 			DiskExclude:        cfg.DiskExclude,
 			StateDir:           cfg.StateDir,
 			ReportIP:           cfg.ReportIP,
@@ -527,6 +529,9 @@ type Config struct {
 	// Security
 	EnableCommands bool // Enable command execution for AI auto-fix (disabled by default)
 
+	// Enrollment
+	Enroll bool // Exchange bootstrap token for runtime token on startup
+
 	// State directory
 	StateDir string // Persistent state directory for host-id, proxmox registration, etc.
 
@@ -642,6 +647,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	dockerRuntimeFlag := fs.String("docker-runtime", envDockerRuntime, "Container runtime: auto, docker, or podman (default: auto)")
 	enableCommandsFlag := fs.Bool("enable-commands", utils.ParseBool(envEnableCommands), "Enable command execution for AI auto-fix (disabled by default)")
 	disableCommandsFlag := fs.Bool("disable-commands", false, "[DEPRECATED] Commands are now disabled by default; use --enable-commands to enable")
+	enrollFlag := fs.Bool("enroll", false, "Exchange bootstrap token for runtime token (used by deploy wizard)")
 	healthAddrFlag := fs.String("health-addr", defaultHealthAddr, "Health/metrics server address (empty to disable)")
 	kubeconfigFlag := fs.String("kubeconfig", envKubeconfig, "Path to kubeconfig (optional; uses in-cluster config if available)")
 	kubeContextFlag := fs.String("kube-context", envKubeContext, "Kubeconfig context (optional)")
@@ -680,6 +686,24 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 
 	// Resolve token with priority: --token > --token-file > env > default file
 	token := resolveToken(*tokenFlag, *tokenFileFlag, envToken)
+
+	// When --enroll is set and a runtime token already exists from a previous
+	// enrollment, use it instead of the bootstrap token embedded in the service
+	// config. This ensures the agent survives restarts after enrollment.
+	stateDir := strings.TrimSpace(*stateDirFlag)
+	if *enrollFlag {
+		enrollStateDir := stateDir
+		if enrollStateDir == "" {
+			enrollStateDir = "/var/lib/pulse-agent"
+		}
+		runtimeTokenPath := filepath.Join(enrollStateDir, "runtime.token")
+		if content, err := os.ReadFile(runtimeTokenPath); err == nil {
+			if t := strings.TrimSpace(string(content)); t != "" {
+				token = t
+			}
+		}
+	}
+
 	if token == "" && !*selfTest {
 		return Config{}, fmt.Errorf("Pulse API token is required (use --token, --token-file, PULSE_TOKEN env, or /var/lib/pulse-agent/token)")
 	}
@@ -735,6 +759,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		DisableDockerUpdateChecks: *disableDockerUpdateChecksFlag,
 		DockerRuntime:             dockerRuntime,
 		EnableCommands:            resolveEnableCommands(*enableCommandsFlag, *disableCommandsFlag, envEnableCommands, envDisableCommands),
+		Enroll:                    *enrollFlag,
 		HealthAddr:                strings.TrimSpace(*healthAddrFlag),
 		KubeconfigPath:            strings.TrimSpace(*kubeconfigFlag),
 		KubeContext:               strings.TrimSpace(*kubeContextFlag),

@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -148,6 +149,15 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 
 		w.Header().Set("X-Checksum-Sha256", checksum)
 		http.ServeContent(w, req, filepath.Base(candidate), info.ModTime(), file)
+		return
+	}
+
+	// In dev mode, never fall through to GitHub releases — the released binary
+	// would lack current fixes. Return a clear 404 with build instructions.
+	if r.serverVersion == "dev" {
+		http.Error(w, fmt.Sprintf("Agent binary not found for %q in dev mode. Build with:\n"+
+			"  GOOS=linux GOARCH=amd64 go build -o bin/pulse-agent-linux-amd64 ./cmd/pulse-agent",
+			normalized), http.StatusNotFound)
 		return
 	}
 

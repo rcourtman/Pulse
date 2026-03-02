@@ -843,6 +843,122 @@ func TestHandleEnroll_TokenAlreadyConsumed(t *testing.T) {
 	}
 }
 
+func TestHandleEnroll_CommandsEnabledAddsAgentExecScope(t *testing.T) {
+	h, store := newEnrollTestHandlers(t)
+	jobID, targetID := seedEnrollJobAndTarget(t, store, deploy.TargetEnrolling)
+	rec := mintTestBootstrapToken(t, h.config, jobID, targetID, "cmd-host")
+
+	body, _ := json.Marshal(map[string]any{
+		"hostname": "cmd-host", "os": "linux", "arch": "amd64",
+		"agentVersion": "6.0.0", "commandsEnabled": true,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/enroll", bytes.NewBuffer(body))
+	attachAPITokenRecord(req, rec)
+
+	rr := httptest.NewRecorder()
+	h.HandleEnroll(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	runtimeTokenID, _ := resp["runtimeTokenId"].(string)
+	if runtimeTokenID == "" {
+		t.Fatal("expected runtimeTokenId in response")
+	}
+
+	// Find the runtime token and verify scopes include agent:exec.
+	config.Mu.Lock()
+	var found *config.APITokenRecord
+	for i := range h.config.APITokens {
+		if h.config.APITokens[i].ID == runtimeTokenID {
+			found = &h.config.APITokens[i]
+			break
+		}
+	}
+	config.Mu.Unlock()
+
+	if found == nil {
+		t.Fatal("runtime token not found in config")
+	}
+
+	hasExec := false
+	hasManage := false
+	for _, s := range found.Scopes {
+		if s == config.ScopeAgentExec {
+			hasExec = true
+		}
+		if s == config.ScopeHostManage {
+			hasManage = true
+		}
+	}
+	if !hasExec {
+		t.Errorf("expected runtime token to have %s scope, got scopes: %v", config.ScopeAgentExec, found.Scopes)
+	}
+	if !hasManage {
+		t.Errorf("expected runtime token to have %s scope, got scopes: %v", config.ScopeHostManage, found.Scopes)
+	}
+}
+
+func TestHandleEnroll_CommandsDisabledNoAgentExecScope(t *testing.T) {
+	h, store := newEnrollTestHandlers(t)
+	jobID, targetID := seedEnrollJobAndTarget(t, store, deploy.TargetEnrolling)
+	rec := mintTestBootstrapToken(t, h.config, jobID, targetID, "no-cmd-host")
+
+	// commandsEnabled defaults to false (not sent).
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/enroll", enrollJSON(t, "no-cmd-host"))
+	attachAPITokenRecord(req, rec)
+
+	rr := httptest.NewRecorder()
+	h.HandleEnroll(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	runtimeTokenID, _ := resp["runtimeTokenId"].(string)
+
+	config.Mu.Lock()
+	var found *config.APITokenRecord
+	for i := range h.config.APITokens {
+		if h.config.APITokens[i].ID == runtimeTokenID {
+			found = &h.config.APITokens[i]
+			break
+		}
+	}
+	config.Mu.Unlock()
+
+	if found == nil {
+		t.Fatal("runtime token not found in config")
+	}
+
+	// Should have report, config:read, and manage — but NOT agent:exec.
+	for _, s := range found.Scopes {
+		if s == config.ScopeAgentExec {
+			t.Errorf("runtime token should NOT have %s scope when commandsEnabled is false", config.ScopeAgentExec)
+		}
+	}
+
+	// Should still have manage.
+	hasManage := false
+	for _, s := range found.Scopes {
+		if s == config.ScopeHostManage {
+			hasManage = true
+		}
+	}
+	if !hasManage {
+		t.Errorf("expected runtime token to have %s scope", config.ScopeHostManage)
+	}
+}
+
 // --- Deploy Job tests ---
 
 func TestHandleCreateJob_Success(t *testing.T) {

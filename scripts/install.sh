@@ -75,6 +75,7 @@ INSECURE="false"
 AGENT_ID=""
 HOSTNAME_OVERRIDE=""
 ENABLE_COMMANDS="false"
+ENROLL="false"
 KUBECONFIG_PATH=""  # Path to kubeconfig file for Kubernetes monitoring
 KUBE_INCLUDE_ALL_PODS="false"
 KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
@@ -188,6 +189,7 @@ Options:
   --insecure              Skip TLS verification
   --cacert <path>         Custom CA certificate for TLS (used by curl and agent)
   --enable-commands       Enable AI command execution
+  --enroll                Exchange bootstrap token for runtime token (deploy wizard)
   --uninstall             Remove the agent
   --non-interactive       Skip TTY prompts (for automated/scripted installs)
   --token-file <path>     Read token from file (alternative to --token)
@@ -355,6 +357,7 @@ build_exec_args() {
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS="$EXEC_ARGS --proxmox-type ${PROXMOX_TYPE}"; fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-commands"; fi
+    if [[ "$ENROLL" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enroll"; fi
     if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-pods"; fi
     if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-deployments"; fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi
@@ -385,6 +388,7 @@ build_exec_args_array() {
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS_ARRAY+=(--proxmox-type "$PROXMOX_TYPE"); fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS_ARRAY+=(--insecure); fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-commands); fi
+    if [[ "$ENROLL" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enroll); fi
     if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--kube-include-all-pods); fi
     if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--kube-include-all-deployments); fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS_ARRAY+=(--agent-id "$AGENT_ID"); fi
@@ -453,6 +457,7 @@ while [[ $# -gt 0 ]]; do
         --insecure) INSECURE="true"; shift ;;
         --cacert) CURL_CA_BUNDLE="$2"; shift 2 ;;
         --enable-commands) ENABLE_COMMANDS="true"; shift ;;
+        --enroll) ENROLL="true"; shift ;;
         --uninstall) UNINSTALL="true"; shift ;;
         --agent-id) AGENT_ID="$2"; shift 2 ;;
         --hostname) HOSTNAME_OVERRIDE="$2"; shift 2 ;;
@@ -1191,6 +1196,10 @@ if [[ "$OS" == "darwin" ]]; then
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
         <string>--enable-commands</string>"
+    fi
+    if [[ "$ENROLL" == "true" ]]; then
+        PLIST_ARGS="${PLIST_ARGS}
+        <string>--enroll</string>"
     fi
     if [[ -n "$AGENT_ID" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
@@ -2054,6 +2063,7 @@ if command -v systemctl >/dev/null 2>&1; then
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS="$EXEC_ARGS --proxmox-type ${PROXMOX_TYPE}"; fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-commands"; fi
+    if [[ "$ENROLL" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enroll"; fi
     if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-pods"; fi
     if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-deployments"; fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi

@@ -1,7 +1,12 @@
 package hostagent
 
 import (
+	"context"
+	"os/exec"
+	"strings"
 	"testing"
+
+	"github.com/rs/zerolog"
 )
 
 func TestShellescape(t *testing.T) {
@@ -110,5 +115,41 @@ func TestDeployCancelTracker(t *testing.T) {
 	activeDeploysMu.Unlock()
 	if ok {
 		t.Error("expected job to be unregistered")
+	}
+}
+
+func TestRunInstallSSH_IncludesEnrollAndEnableCommands(t *testing.T) {
+	origExec := execCommandContext
+	defer func() { execCommandContext = origExec }()
+
+	var capturedArgs []string
+	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		capturedArgs = append([]string{name}, args...)
+		// Return a command that exits 0 immediately.
+		return exec.Command("true")
+	}
+
+	c := &CommandClient{
+		logger: zerolog.New(zerolog.NewTestWriter(t)),
+	}
+
+	exitCode, _, err := c.runInstallSSH(context.Background(), "10.0.0.1", "http://10.0.0.1:7655")
+	if err != nil {
+		t.Fatalf("runInstallSSH error: %v", err)
+	}
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d", exitCode)
+	}
+
+	// Join all args to find the inner command string.
+	joined := strings.Join(capturedArgs, " ")
+	if !strings.Contains(joined, "--enroll") {
+		t.Error("SSH install command does not include --enroll")
+	}
+	if !strings.Contains(joined, "--enable-commands") {
+		t.Error("SSH install command does not include --enable-commands")
+	}
+	if !strings.Contains(joined, "--enable-proxmox") {
+		t.Error("SSH install command does not include --enable-proxmox")
 	}
 }

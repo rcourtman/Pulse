@@ -50,6 +50,9 @@ type Config struct {
 	// Security options
 	EnableCommands bool // If true, enables the command execution feature (AI auto-fix)
 
+	// Enrollment
+	Enroll bool // If true, exchange bootstrap token for runtime token on startup
+
 	// Disk filtering
 	DiskExclude []string // Mount points or path prefixes to exclude from disk monitoring
 
@@ -340,6 +343,22 @@ func (a *Agent) Run(ctx context.Context) error {
 		a.commandClientMu.Unlock()
 		a.stopCommandClient(true)
 	}()
+
+	// Enrollment: exchange bootstrap token for runtime token (must run before
+	// Proxmox setup and reporting, which require the runtime token's scopes).
+	if a.cfg.Enroll {
+		if err := a.runEnrollmentLoop(ctx); err != nil {
+			return fmt.Errorf("enrollment failed: %w", err)
+		}
+		// Re-create command client with the new runtime token, since the
+		// original was built with the bootstrap token during New().
+		if a.cfg.EnableCommands {
+			a.commandClientMu.Lock()
+			a.commandClient = newCommandClient(a.cfg, a.agentID, a.hostname, a.platform, a.agentVersion)
+			commandClient = a.commandClient
+			a.commandClientMu.Unlock()
+		}
+	}
 
 	// Proxmox setup (if enabled)
 	if a.cfg.EnableProxmox {

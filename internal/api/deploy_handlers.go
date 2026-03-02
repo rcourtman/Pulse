@@ -753,13 +753,14 @@ func (h *DeployHandlers) MintBootstrapTokenForTarget(req deploy.BootstrapTokenRe
 
 // enrollRequest matches the design doc Section 3 enrollment payload.
 type enrollRequest struct {
-	Hostname     string `json:"hostname"`
-	FQDN         string `json:"fqdn,omitempty"`
-	MachineID    string `json:"machineId,omitempty"`
-	OS           string `json:"os"`
-	Arch         string `json:"arch"`
-	AgentVersion string `json:"agentVersion"`
-	Proxmox      *struct {
+	Hostname        string `json:"hostname"`
+	FQDN            string `json:"fqdn,omitempty"`
+	MachineID       string `json:"machineId,omitempty"`
+	OS              string `json:"os"`
+	Arch            string `json:"arch"`
+	AgentVersion    string `json:"agentVersion"`
+	CommandsEnabled bool   `json:"commandsEnabled,omitempty"`
+	Proxmox         *struct {
 		ClusterName string `json:"clusterName,omitempty"`
 		NodeName    string `json:"nodeName,omitempty"`
 	} `json:"proxmox,omitempty"`
@@ -866,9 +867,16 @@ func (h *DeployHandlers) HandleEnroll(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, http.StatusInternalServerError, "token_error", "Failed to generate runtime token", nil)
 		return
 	}
+	runtimeScopes := []string{
+		config.ScopeHostReport, config.ScopeHostConfigRead, config.ScopeHostManage,
+		config.ScopeDockerReport, config.ScopeKubernetesReport,
+	}
+	if req.CommandsEnabled {
+		runtimeScopes = append(runtimeScopes, config.ScopeAgentExec)
+	}
 	runtimeRecord, err := config.NewAPITokenRecord(runtimeRaw,
 		fmt.Sprintf("host-agent:%s", req.Hostname),
-		[]string{config.ScopeHostReport, config.ScopeHostConfigRead})
+		runtimeScopes)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create runtime token record during enroll")
 		writeErrorResponse(w, http.StatusInternalServerError, "token_error", "Failed to create runtime token", nil)

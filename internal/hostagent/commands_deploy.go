@@ -478,7 +478,7 @@ func (c *CommandClient) runInstallSSH(ctx context.Context, nodeIP, pulseURL stri
 	// using the '\'' escape pattern (end quote, literal quote, resume quote).
 	escapedURL := shellescape(pulseURL)
 	innerCmd := fmt.Sprintf(
-		"set -o pipefail; curl -sfL -- %s/install.sh | bash -s -- --non-interactive --token-file /run/pulse-agent/bootstrap.token --pulse-url %s",
+		"set -o pipefail; curl -sfL -- %s/install.sh | bash -s -- --non-interactive --token-file /run/pulse-agent/bootstrap.token --pulse-url %s --enroll --enable-commands --enable-proxmox",
 		escapedURL, escapedURL,
 	)
 	remoteCmd := "bash -c " + shellescape(innerCmd)
