@@ -12,6 +12,7 @@ import type { TimeRange } from '@/api/charts';
 import ServerIcon from 'lucide-solid/icons/server';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import ListFilterIcon from 'lucide-solid/icons/list-filter';
+import SettingsIcon from 'lucide-solid/icons/settings';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
 import { STORAGE_KEYS } from '@/utils/localStorage';
@@ -375,6 +376,16 @@ export function Infrastructure() {
                   icon={<ServerIcon class="w-6 h-6 text-slate-400" />}
                   title="No infrastructure resources yet"
                   description="Once resources are reporting, they will appear here."
+                  actions={
+                    <button
+                      type="button"
+                      onClick={() => navigate('/settings/infrastructure')}
+                      class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:bg-slate-50"
+                    >
+                      <SettingsIcon class="h-3.5 w-3.5" />
+                      Add Infrastructure
+                    </button>
+                  }
                 />
               </Card>
             }
