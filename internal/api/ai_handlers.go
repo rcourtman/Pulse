@@ -6714,6 +6714,11 @@ func (h *AISettingsHandler) HandleGetPatrolAutonomy(w http.ResponseWriter, r *ht
 // HandleUpdatePatrolAutonomy has been moved to enterprise.
 // The route now delegates to aiAutoFixEndpoints.HandleUpdatePatrolAutonomy.
 
+// maxFindingIDLength is the maximum allowed length for finding IDs in URL paths.
+// Real finding IDs are 16 hex chars (SHA256[:8]), but we accept up to 256 for
+// forward compatibility with any future ID scheme.
+const maxFindingIDLength = 256
+
 // HandleGetInvestigation returns investigation details for a finding (GET /api/ai/findings/{id}/investigation)
 func (h *AISettingsHandler) HandleGetInvestigation(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -6726,6 +6731,10 @@ func (h *AISettingsHandler) HandleGetInvestigation(w http.ResponseWriter, r *htt
 	findingID = strings.TrimSuffix(findingID, "/investigation")
 	if findingID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Finding ID is required", nil)
+		return
+	}
+	if len(findingID) > maxFindingIDLength {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_id", "Finding ID is too long", nil)
 		return
 	}
 
@@ -6768,6 +6777,10 @@ func (h *AISettingsHandler) HandleGetInvestigationMessages(w http.ResponseWriter
 	findingID = strings.TrimSuffix(findingID, "/investigation/messages")
 	if findingID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Finding ID is required", nil)
+		return
+	}
+	if len(findingID) > maxFindingIDLength {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_id", "Finding ID is too long", nil)
 		return
 	}
 
