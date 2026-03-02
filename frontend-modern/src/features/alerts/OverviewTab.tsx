@@ -342,31 +342,52 @@ export function OverviewTab(props: {
           when={Object.keys(props.activeAlerts).length > 0}
           fallback={
             <div class="text-center py-8 text-muted">
-              <div class="flex justify-center mb-3">
-                <svg
-                  class="w-12 h-12 text-green-500 dark:text-green-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    stroke-width="2"
+              <Show
+                when={!props.alertsDisabled()}
+                fallback={
+                  <>
+                    <div class="flex justify-center mb-3">
+                      <svg
+                        class="w-12 h-12 text-muted"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle cx="12" cy="12" r="10" stroke-width="2" />
+                        <line x1="4" y1="4" x2="20" y2="20" stroke-width="2" stroke-linecap="round" />
+                      </svg>
+                    </div>
+                    <p class="text-sm">Alerting is paused</p>
+                    <p class="text-xs mt-1">Toggle alerts on to resume monitoring</p>
+                  </>
+                }
+              >
+                <div class="flex justify-center mb-3">
+                  <svg
+                    class="w-12 h-12 text-green-500 dark:text-green-400"
                     fill="none"
-                  />
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 12l2 2 4-4"
-                  />
-                </svg>
-              </div>
-              <p class="text-sm">No active alerts</p>
-              <p class="text-xs mt-1">Alerts will appear here when thresholds are exceeded</p>
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      fill="none"
+                    />
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 12l2 2 4-4"
+                    />
+                  </svg>
+                </div>
+                <p class="text-sm">No active alerts</p>
+                <p class="text-xs mt-1">Alerts will appear here when thresholds are exceeded</p>
+              </Show>
             </div>
           }
         >
