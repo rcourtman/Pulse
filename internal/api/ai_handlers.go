@@ -4839,9 +4839,20 @@ func (h *AISettingsHandler) HandleGetIntelligence(w http.ResponseWriter, r *http
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	aiService := h.GetAIService(r.Context())
+	if aiService == nil {
+		response := map[string]interface{}{
+			"error": "Pulse Patrol service not available",
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+		if err := utils.WriteJSONResponse(w, response); err != nil {
+			log.Error().Err(err).Msg("Failed to write intelligence response")
+		}
+		return
+	}
+
+	patrol := aiService.GetPatrolService()
 	if patrol == nil {
-		// Return empty intelligence when not initialized
 		response := map[string]interface{}{
 			"error": "Pulse Patrol service not available",
 		}
@@ -4868,6 +4879,10 @@ func (h *AISettingsHandler) HandleGetIntelligence(w http.ResponseWriter, r *http
 	// Check for resource_id query parameter for resource-specific intelligence
 	resourceID := r.URL.Query().Get("resource_id")
 	if resourceID != "" {
+		if len(resourceID) > 500 {
+			http.Error(w, "resource_id too long", http.StatusBadRequest)
+			return
+		}
 		// Return resource-specific intelligence
 		resourceIntel := intel.GetResourceIntelligence(resourceID)
 		if err := utils.WriteJSONResponse(w, resourceIntel); err != nil {
