@@ -3402,6 +3402,12 @@ const Settings: Component<SettingsProps> = (props) => {
 
               {/* System General Tab */}
               <Show when={activeTab() === 'system-general'}>
+                <Show when={!initialLoadComplete()}>
+                  <div class="flex items-center justify-center rounded-md border border-dashed border-border bg-surface-alt py-12 text-sm text-muted">
+                    Loading configuration...
+                  </div>
+                </Show>
+                <Show when={initialLoadComplete()}>
                 <GeneralSettingsPanel
                   darkMode={props.darkMode}
                   themePreference={props.themePreference}
@@ -3427,6 +3433,7 @@ const Settings: Component<SettingsProps> = (props) => {
                   savingTelemetry={savingTelemetry}
                   handleTelemetryEnabledChange={handleTelemetryEnabledChange}
                 />
+                </Show>
               </Show>
 
               {/* System Network Tab */}
