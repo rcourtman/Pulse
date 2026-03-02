@@ -37,6 +37,11 @@ export const ResultsStep: Component<ResultsStepProps> = (props) => {
     setInstallCommandError('');
     try {
       const resp = await NodesAPI.getAgentInstallCommand({ type: 'pve', enableProxmox: true });
+      if (!resp.command) {
+        setInstallCommandError('Server returned an empty install command');
+        commandFetched = false;
+        return;
+      }
       setInstallCommand(resp.command);
     } catch (err) {
       setInstallCommandError(err instanceof Error ? err.message : 'Failed to load install command');

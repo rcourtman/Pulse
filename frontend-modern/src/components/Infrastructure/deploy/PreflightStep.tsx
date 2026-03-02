@@ -34,13 +34,13 @@ export const PreflightStep: Component<PreflightStepProps> = (props) => {
       {/* Progress summary */}
       <div role="status" aria-live="polite" class="flex items-center gap-2 text-sm text-muted">
         <Show
-          when={completedCount() < totalCount()}
+          when={totalCount() === 0 || completedCount() < totalCount()}
           fallback={<CheckCircleIcon class="w-4 h-4 text-emerald-500" />}
         >
           <LoaderIcon class="w-4 h-4 animate-spin" />
         </Show>
         <span>
-          <Show when={completedCount() < totalCount()} fallback="Preflight checks complete">
+          <Show when={totalCount() === 0 || completedCount() < totalCount()} fallback="Preflight checks complete">
             Checking {completedCount()} of {totalCount()} nodes...
           </Show>
         </span>
