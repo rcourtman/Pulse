@@ -67,6 +67,7 @@ jobs:
           PULSE_E2E_BOOTSTRAP_TOKEN: 0123456789abcdef0123456789abcdef0123456789abcdef
           PULSE_E2E_SKIP_DOCKER: "true"
           PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL: "true"
+          PULSE_E2E_PERF: "1"
         run: npm test
 
       - name: Collect container logs
