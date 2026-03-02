@@ -172,8 +172,8 @@ describe('ResultsStep', () => {
       });
       render(() => <ResultsStep wizard={wizard} />);
 
-      // DeployStatusBadge renders with role="status" — one per succeeded row
-      const badges = screen.getAllByRole('status');
+      // DeployStatusBadge renders a badge span for each succeeded row
+      const badges = screen.getAllByText('Deployed');
       expect(badges).toHaveLength(2);
     });
 
@@ -246,7 +246,12 @@ describe('ResultsStep', () => {
     it('renders node names and IPs in the skipped table', () => {
       const wizard = createMockWizard({
         skippedTargets: [
-          makeTarget({ id: 't1', nodeName: 'pve4', nodeIP: '10.0.0.4', status: 'skipped_already_agent' }),
+          makeTarget({
+            id: 't1',
+            nodeName: 'pve4',
+            nodeIP: '10.0.0.4',
+            status: 'skipped_already_agent',
+          }),
         ],
       });
       render(() => <ResultsStep wizard={wizard} />);
@@ -268,9 +273,7 @@ describe('ResultsStep', () => {
   describe('canceled targets', () => {
     it('shows the Canceled header with count', () => {
       const wizard = createMockWizard({
-        canceledTargets: [
-          makeTarget({ id: 't1', status: 'canceled' }),
-        ],
+        canceledTargets: [makeTarget({ id: 't1', status: 'canceled' })],
       });
       render(() => <ResultsStep wizard={wizard} />);
 
@@ -321,7 +324,9 @@ describe('ResultsStep', () => {
       const wizard = createMockWizard({
         succeededTargets: [makeTarget({ id: 's1', nodeName: 'pve-ok', status: 'succeeded' })],
         failedTargets: [makeTarget({ id: 'f1', nodeName: 'pve-fail', status: 'failed_permanent' })],
-        skippedTargets: [makeTarget({ id: 'sk1', nodeName: 'pve-skip', status: 'skipped_already_agent' })],
+        skippedTargets: [
+          makeTarget({ id: 'sk1', nodeName: 'pve-skip', status: 'skipped_already_agent' }),
+        ],
         canceledTargets: [makeTarget({ id: 'c1', nodeName: 'pve-cancel', status: 'canceled' })],
       });
       render(() => <ResultsStep wizard={wizard} />);
@@ -371,7 +376,9 @@ describe('ResultsStep', () => {
     });
 
     it('expands the accordion on click and fetches install command', async () => {
-      nodesAPIMock.getAgentInstallCommand.mockResolvedValueOnce({ command: 'curl -s https://example.com | bash' });
+      nodesAPIMock.getAgentInstallCommand.mockResolvedValueOnce({
+        command: 'curl -s https://example.com | bash',
+      });
       renderWithFailedTargets();
 
       const btn = screen.getByText('Manual install instructions');
