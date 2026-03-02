@@ -131,6 +131,22 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 			args:      []any{int64(60), int64(60), "minute", "vm", "vm-1", "cpu", "raw", int64(0), farFuture},
 			wantIndex: "idx_metrics_lookup",
 		},
+		{
+			name:      "max timestamp for tier (rollup scheduling)",
+			query:     `SELECT MAX(timestamp) FROM metrics WHERE tier = ?`,
+			args:      []any{"raw"},
+			wantIndex: "idx_metrics_tier_time",
+		},
+		{
+			name:  "tier count stats (GetStats)",
+			query: `SELECT tier, COUNT(*) FROM metrics GROUP BY tier`,
+			args:  []any{},
+			// GROUP BY tier scans all rows — a covering-index scan on
+			// idx_metrics_tier_time reads only the index (tier, timestamp),
+			// avoiding the full table row fetch. A SEARCH is also acceptable
+			// if the planner chooses a different strategy.
+			allowCoveringIndexScan: true,
+		},
 	}
 
 	for _, tt := range tests {
