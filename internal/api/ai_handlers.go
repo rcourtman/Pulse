@@ -4533,8 +4533,10 @@ func (h *AISettingsHandler) HandleOAuthExchange(w http.ResponseWriter, r *http.R
 	}
 
 	// Reload the AI service with new settings
-	if err := h.GetAIService(oauthCtx).Reload(); err != nil {
-		log.Warn().Err(err).Msg("Failed to reload AI service after OAuth setup")
+	if svc := h.GetAIService(oauthCtx); svc != nil {
+		if err := svc.Reload(); err != nil {
+			log.Warn().Err(err).Msg("Failed to reload AI service after OAuth setup")
+		}
 	}
 
 	log.Info().Msg("Claude OAuth authentication successful")
@@ -4635,8 +4637,10 @@ func (h *AISettingsHandler) HandleOAuthCallback(w http.ResponseWriter, r *http.R
 	}
 
 	// Reload the AI service with new settings
-	if err := h.GetAIService(oauthCtx).Reload(); err != nil {
-		log.Warn().Err(err).Msg("Failed to reload AI service after OAuth setup")
+	if svc := h.GetAIService(oauthCtx); svc != nil {
+		if err := svc.Reload(); err != nil {
+			log.Warn().Err(err).Msg("Failed to reload AI service after OAuth setup")
+		}
 	}
 
 	log.Info().Msg("Claude OAuth authentication successful")
@@ -4658,7 +4662,13 @@ func (h *AISettingsHandler) HandleOAuthDisconnect(w http.ResponseWriter, r *http
 	}
 
 	// Load existing settings
-	settings, err := h.getPersistence(r.Context()).LoadAIConfig()
+	persistence := h.getPersistence(r.Context())
+	if persistence == nil {
+		log.Error().Msg("No persistence available for OAuth disconnect")
+		http.Error(w, "Failed to load settings", http.StatusInternalServerError)
+		return
+	}
+	settings, err := persistence.LoadAIConfig()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load Pulse Assistant settings for OAuth disconnect")
 		http.Error(w, "Failed to load settings", http.StatusInternalServerError)
@@ -4673,15 +4683,17 @@ func (h *AISettingsHandler) HandleOAuthDisconnect(w http.ResponseWriter, r *http
 	settings.AuthMethod = config.AuthMethodAPIKey
 
 	// Save settings
-	if err := h.getPersistence(r.Context()).SaveAIConfig(*settings); err != nil {
+	if err := persistence.SaveAIConfig(*settings); err != nil {
 		log.Error().Err(err).Msg("Failed to save settings after OAuth disconnect")
 		http.Error(w, "Failed to save settings", http.StatusInternalServerError)
 		return
 	}
 
 	// Reload the AI service
-	if err := h.GetAIService(r.Context()).Reload(); err != nil {
-		log.Warn().Err(err).Msg("Failed to reload AI service after OAuth disconnect")
+	if svc := h.GetAIService(r.Context()); svc != nil {
+		if err := svc.Reload(); err != nil {
+			log.Warn().Err(err).Msg("Failed to reload AI service after OAuth disconnect")
+		}
 	}
 
 	log.Info().Msg("Claude OAuth disconnected")

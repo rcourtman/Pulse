@@ -355,6 +355,155 @@ func TestHandleOAuthDisconnect_MethodNotAllowed(t *testing.T) {
 	}
 }
 
+func TestHandleOAuthDisconnect_AuthFailure(t *testing.T) {
+	// With nil config, CheckAuth returns 503 Service Unavailable.
+	handler := &AISettingsHandler{}
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/oauth/disconnect", nil)
+	rr := httptest.NewRecorder()
+
+	handler.HandleOAuthDisconnect(rr, req)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 for nil config auth failure, got %d", rr.Code)
+	}
+}
+
+func TestHandleOAuthDisconnect_Success(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	p, err := mtp.GetPersistence("default")
+	if err != nil {
+		t.Fatalf("create default persistence: %v", err)
+	}
+
+	// Pre-populate with OAuth tokens so we can verify they get cleared.
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.AuthMethod = config.AuthMethodOAuth
+	aiCfg.OAuthAccessToken = "access-token-123"
+	aiCfg.OAuthRefreshToken = "refresh-token-456"
+	aiCfg.OAuthExpiresAt = time.Now().Add(time.Hour)
+	if err := p.SaveAIConfig(*aiCfg); err != nil {
+		t.Fatalf("seed AI config: %v", err)
+	}
+
+	handler := NewAISettingsHandler(mtp, nil, nil)
+	// Set a config with no auth credentials so CheckAuth passes as anonymous.
+	handler.SetConfig(&config.Config{})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/oauth/disconnect", nil)
+	rr := httptest.NewRecorder()
+
+	handler.HandleOAuthDisconnect(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%q", rr.Code, rr.Body.String())
+	}
+
+	// Verify JSON response.
+	var resp map[string]interface{}
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp["success"] != true {
+		t.Fatalf("expected success=true, got %v", resp["success"])
+	}
+
+	// Verify OAuth tokens were cleared and auth method reverted to API key.
+	saved, err := p.LoadAIConfig()
+	if err != nil {
+		t.Fatalf("load AI config after disconnect: %v", err)
+	}
+	if saved.AuthMethod != config.AuthMethodAPIKey {
+		t.Fatalf("expected auth method %q, got %q", config.AuthMethodAPIKey, saved.AuthMethod)
+	}
+	if saved.OAuthAccessToken != "" {
+		t.Fatalf("expected empty access token, got %q", saved.OAuthAccessToken)
+	}
+	if saved.OAuthRefreshToken != "" {
+		t.Fatalf("expected empty refresh token, got %q", saved.OAuthRefreshToken)
+	}
+	if !saved.OAuthExpiresAt.IsZero() {
+		t.Fatalf("expected zero expiry, got %v", saved.OAuthExpiresAt)
+	}
+}
+
+func TestHandleOAuthDisconnect_NilPersistence(t *testing.T) {
+	// Handler with nil persistence should return 500 when loading config fails.
+	handler := NewAISettingsHandler(nil, nil, nil)
+	handler.SetConfig(&config.Config{})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/oauth/disconnect", nil)
+	rr := httptest.NewRecorder()
+
+	handler.HandleOAuthDisconnect(rr, req)
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for nil persistence, got %d body=%q", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleOAuthDisconnect_TenantIsolation(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+
+	// Set up two tenants with OAuth tokens.
+	pA, err := mtp.GetPersistence("tenant-a")
+	if err != nil {
+		t.Fatalf("create tenant-a persistence: %v", err)
+	}
+	pB, err := mtp.GetPersistence("tenant-b")
+	if err != nil {
+		t.Fatalf("create tenant-b persistence: %v", err)
+	}
+
+	seedOAuth := func(p *config.ConfigPersistence, token, refresh string) {
+		aiCfg := config.NewDefaultAIConfig()
+		aiCfg.AuthMethod = config.AuthMethodOAuth
+		aiCfg.OAuthAccessToken = token
+		aiCfg.OAuthRefreshToken = refresh
+		aiCfg.OAuthExpiresAt = time.Now().Add(time.Hour)
+		if err := p.SaveAIConfig(*aiCfg); err != nil {
+			t.Fatalf("seed AI config: %v", err)
+		}
+	}
+	seedOAuth(pA, "access-a", "refresh-a")
+	seedOAuth(pB, "access-b", "refresh-b")
+
+	handler := NewAISettingsHandler(mtp, nil, nil)
+	handler.SetConfig(&config.Config{})
+
+	// Disconnect tenant-a's OAuth.
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/oauth/disconnect", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "tenant-a"))
+	rr := httptest.NewRecorder()
+
+	handler.HandleOAuthDisconnect(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%q", rr.Code, rr.Body.String())
+	}
+
+	// Verify tenant-a tokens are cleared.
+	cfgA, err := pA.LoadAIConfig()
+	if err != nil {
+		t.Fatalf("load tenant-a config: %v", err)
+	}
+	if cfgA.OAuthAccessToken != "" || cfgA.OAuthRefreshToken != "" || cfgA.AuthMethod != config.AuthMethodAPIKey {
+		t.Fatalf("expected tenant-a OAuth cleared, got auth=%q token=%q refresh=%q", cfgA.AuthMethod, cfgA.OAuthAccessToken, cfgA.OAuthRefreshToken)
+	}
+
+	// Verify tenant-b tokens are completely untouched (exact values preserved).
+	cfgB, err := pB.LoadAIConfig()
+	if err != nil {
+		t.Fatalf("load tenant-b config: %v", err)
+	}
+	if cfgB.AuthMethod != config.AuthMethodOAuth {
+		t.Fatalf("expected tenant-b auth method %q, got %q", config.AuthMethodOAuth, cfgB.AuthMethod)
+	}
+	if cfgB.OAuthAccessToken != "access-b" {
+		t.Fatalf("expected tenant-b access token %q, got %q", "access-b", cfgB.OAuthAccessToken)
+	}
+	if cfgB.OAuthRefreshToken != "refresh-b" {
+		t.Fatalf("expected tenant-b refresh token %q, got %q", "refresh-b", cfgB.OAuthRefreshToken)
+	}
+}
+
 func TestHandleOAuthStart_BindsSessionToOrgFromContext(t *testing.T) {
 	resetOAuthSessions()
 	handler := &AISettingsHandler{}
