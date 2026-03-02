@@ -81,6 +81,10 @@ KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
 DISK_EXCLUDES=()  # Array for multiple --disk-exclude values
 STATE_DIR="/var/lib/pulse-agent"  # Persistent state directory (overridden per platform)
 CURL_CA_BUNDLE="" # Path to CA bundle for curl and agent TLS (sets SSL_CERT_FILE)
+NON_INTERACTIVE="false"
+TOKEN_FILE_PATH=""       # Path to file containing the token
+OUTPUT_FORMAT="text"     # "text" (default) or "json"
+PREFLIGHT_ONLY="false"
 
 # Track if flags were explicitly set (to override auto-detection)
 DOCKER_EXPLICIT="false"
@@ -88,17 +92,75 @@ KUBERNETES_EXPLICIT="false"
 PROXMOX_EXPLICIT="false"
 
 # --- Helper Functions ---
-log_info() { printf "[INFO] %s\n" "$1"; }
-log_warn() { printf "[WARN] %s\n" "$1"; }
-log_error() { printf "[ERROR] %s\n" "$1"; }
-fail() {
-    log_error "$1"
-    if [[ -t 0 ]]; then
-        read -r -p "Press Enter to exit..."
-    elif [[ -e /dev/tty ]]; then
-        read -r -p "Press Enter to exit..." < /dev/tty
+log_info() {
+    if [[ "$NON_INTERACTIVE" == "true" ]]; then
+        printf "[INFO] %s\n" "$(redact_token "$1")"
+    else
+        printf "[INFO] %s\n" "$1"
     fi
-    exit 1
+}
+log_warn() {
+    if [[ "$NON_INTERACTIVE" == "true" ]]; then
+        printf "[WARN] %s\n" "$(redact_token "$1")"
+    else
+        printf "[WARN] %s\n" "$1"
+    fi
+}
+log_error() {
+    if [[ "$NON_INTERACTIVE" == "true" ]]; then
+        printf "[ERROR] %s\n" "$(redact_token "$1")"
+    else
+        printf "[ERROR] %s\n" "$1"
+    fi
+}
+fail() {
+    local code="${2:-1}"
+    if [[ "$OUTPUT_FORMAT" == "json" ]]; then
+        printf '{"phase":"error","code":"install_failed","message":"%s","exitCode":%d}\n' \
+            "$(echo "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/	/\\t/g' | tr -d '\n\r')" "$code"
+    else
+        log_error "$1"
+    fi
+    if [[ "$NON_INTERACTIVE" != "true" ]]; then
+        if [[ -t 0 ]]; then
+            read -r -p "Press Enter to exit..."
+        elif [[ -e /dev/tty ]]; then
+            read -r -p "Press Enter to exit..." < /dev/tty
+        fi
+    fi
+    exit "$code"
+}
+
+# Stable exit codes by failure class
+EXIT_OK=0
+EXIT_GENERAL=1
+EXIT_UNSUPPORTED_ARCH=10
+EXIT_DOWNLOAD_FAILED=11
+EXIT_CHECKSUM_FAILED=12
+EXIT_SERVICE_START_FAILED=13
+EXIT_PREFLIGHT_FAILED=14
+EXIT_ALREADY_INSTALLED=15    # Not a failure — used with --preflight-only
+EXIT_MISSING_ARGS=16
+
+json_event() {
+    # Usage: json_event <phase> <code> <message> [exitCode]
+    if [[ "$OUTPUT_FORMAT" == "json" ]]; then
+        local exit_code="${4:-0}"
+        printf '{"phase":"%s","code":"%s","message":"%s","exitCode":%d}\n' \
+            "$1" "$2" "$(echo "$3" | sed 's/\\/\\\\/g; s/"/\\"/g; s/	/\\t/g' | tr -d '\n\r')" "$exit_code"
+    fi
+}
+
+redact_token() {
+    # Replace token values with redacted placeholder in log output
+    local msg="$1"
+    if [[ -n "$PULSE_TOKEN" ]]; then
+        msg="${msg//$PULSE_TOKEN/[REDACTED]}"
+    fi
+    if [[ -n "$TOKEN_FILE_PATH" ]]; then
+        msg="${msg//$TOKEN_FILE_PATH/[token-file]}"
+    fi
+    echo "$msg"
 }
 
 show_help() {
@@ -127,6 +189,11 @@ Options:
   --cacert <path>         Custom CA certificate for TLS (used by curl and agent)
   --enable-commands       Enable AI command execution
   --uninstall             Remove the agent
+  --non-interactive       Skip TTY prompts (for automated/scripted installs)
+  --token-file <path>     Read token from file (alternative to --token)
+  --pulse-url <url>       Alias for --url
+  --preflight-only        Run preflight checks and exit (no install)
+  --output <format>       Output format: text (default) or json
   --help, -h              Show this help
 
 EOF
@@ -392,9 +459,29 @@ while [[ $# -gt 0 ]]; do
         --kube-include-all-pods) KUBE_INCLUDE_ALL_PODS="true"; shift ;;
         --kube-include-all-deployments) KUBE_INCLUDE_ALL_DEPLOYMENTS="true"; shift ;;
         --disk-exclude) DISK_EXCLUDES+=("$2"); shift 2 ;;
+        --non-interactive) NON_INTERACTIVE="true"; shift ;;
+        --token-file) TOKEN_FILE_PATH="$2"; shift 2 ;;
+        --pulse-url) PULSE_URL="$2"; shift 2 ;;
+        --output) OUTPUT_FORMAT="$2"; shift 2 ;;
+        --preflight-only) PREFLIGHT_ONLY="true"; shift ;;
         *) fail "Unknown argument: $1" ;;
     esac
 done
+
+# Read token from file if --token-file was provided
+if [[ -n "$TOKEN_FILE_PATH" ]]; then
+    if [[ ! -f "$TOKEN_FILE_PATH" ]]; then
+        fail "Token file not found: ${TOKEN_FILE_PATH}" "$EXIT_MISSING_ARGS"
+    fi
+    PULSE_TOKEN=$(cat "$TOKEN_FILE_PATH")
+    if [[ -z "$PULSE_TOKEN" ]]; then
+        fail "Token file is empty: ${TOKEN_FILE_PATH}" "$EXIT_MISSING_ARGS"
+    fi
+    # Clean up token file after reading in non-interactive mode (deploy bootstrap tokens are one-time use)
+    if [[ "$NON_INTERACTIVE" == "true" ]]; then
+        rm -f "$TOKEN_FILE_PATH" 2>/dev/null || true
+    fi
+fi
 
 if [[ -n "$PROXMOX_TYPE" && "$PROXMOX_TYPE" != "pve" && "$PROXMOX_TYPE" != "pbs" ]]; then
     fail "Invalid --proxmox-type value: ${PROXMOX_TYPE} (expected 'pve' or 'pbs')"
@@ -734,8 +821,11 @@ if [[ "$UNINSTALL" == "true" ]]; then
 fi
 
 # --- Validation ---
-if [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" ]]; then
-    fail "Missing required arguments: --url and --token"
+if [[ -z "$PULSE_URL" ]]; then
+    fail "Missing required argument: --url (or --pulse-url)" "$EXIT_MISSING_ARGS"
+fi
+if [[ -z "$PULSE_TOKEN" ]]; then
+    fail "Missing required argument: --token (or --token-file)" "$EXIT_MISSING_ARGS"
 fi
 
 # Validate URL format (basic check) - case-insensitive for http:// or https://
@@ -805,6 +895,65 @@ elif [[ "$(uname -s)" == "FreeBSD" ]] && [[ -d /data ]] && ! is_install_dir_writ
     log_info "Immutable filesystem detected (read-only /usr/local/bin). Using $TRUENAS_STATE_DIR for installation."
 fi
 
+# --- Preflight-Only Mode ---
+if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
+    json_event "preflight" "checking" "Running preflight checks"
+
+    # Check 1: Architecture
+    PF_OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+    PF_ARCH=$(uname -m)
+    case "$PF_ARCH" in
+        x86_64|amd64) PF_ARCH="amd64" ;;
+        aarch64|arm64) PF_ARCH="arm64" ;;
+        armv7l|armhf) PF_ARCH="armv7" ;;
+        armv6l) PF_ARCH="armv6" ;;
+        i386|i686) PF_ARCH="386" ;;
+        *) fail "Unsupported architecture: $PF_ARCH" "$EXIT_UNSUPPORTED_ARCH" ;;
+    esac
+    json_event "preflight" "arch_ok" "Architecture: ${PF_OS}-${PF_ARCH}"
+
+    # Check 2: Existing agent
+    AGENT_STATUS="not_installed"
+    if [[ -x "${INSTALL_DIR}/${BINARY_NAME}" ]]; then
+        AGENT_STATUS="already_installed"
+    elif command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet "${AGENT_NAME}" 2>/dev/null; then
+        AGENT_STATUS="already_installed"
+    fi
+    json_event "preflight" "$AGENT_STATUS" "Agent status: ${AGENT_STATUS}"
+
+    # Check 3: Pulse URL reachability
+    PREFLIGHT_EXIT="$EXIT_OK"
+    if [[ -n "$PULSE_URL" ]]; then
+        CURL_TEST_ARGS=(-sf --connect-timeout 5 -o /dev/null)
+        if [[ "$INSECURE" == "true" ]]; then CURL_TEST_ARGS+=(-k); fi
+        if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_TEST_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
+        if curl "${CURL_TEST_ARGS[@]}" "${PULSE_URL}/api/health"; then
+            json_event "preflight" "pulse_reachable" "Pulse URL reachable"
+        else
+            json_event "preflight" "pulse_unreachable" "Pulse URL not reachable" "$EXIT_PREFLIGHT_FAILED"
+            PREFLIGHT_EXIT="$EXIT_PREFLIGHT_FAILED"
+        fi
+    fi
+
+    # Output summary
+    if [[ "$PREFLIGHT_EXIT" -eq 0 ]]; then
+        if [[ "$OUTPUT_FORMAT" == "json" ]]; then
+            printf '{"phase":"preflight_complete","code":"ok","message":"Preflight checks passed","exitCode":0,"data":{"arch":"%s-%s","agent_status":"%s"}}\n' \
+                "$PF_OS" "$PF_ARCH" "$AGENT_STATUS"
+        else
+            log_info "Preflight checks passed (arch: ${PF_OS}-${PF_ARCH}, agent: ${AGENT_STATUS})"
+        fi
+    else
+        if [[ "$OUTPUT_FORMAT" == "json" ]]; then
+            printf '{"phase":"preflight_complete","code":"failed","message":"Preflight checks failed","exitCode":%d,"data":{"arch":"%s-%s","agent_status":"%s"}}\n' \
+                "$PREFLIGHT_EXIT" "$PF_OS" "$PF_ARCH" "$AGENT_STATUS"
+        else
+            log_error "Preflight checks failed (arch: ${PF_OS}-${PF_ARCH}, agent: ${AGENT_STATUS})"
+        fi
+    fi
+    exit "$PREFLIGHT_EXIT"
+fi
+
 # --- Download ---
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
@@ -815,7 +964,7 @@ case "$ARCH" in
     armv7l|armhf) ARCH="armv7" ;;
     armv6l) ARCH="armv6" ;;
     i386|i686) ARCH="386" ;;
-    *) fail "Unsupported architecture: $ARCH" ;;
+    *) fail "Unsupported architecture: $ARCH" "$EXIT_UNSUPPORTED_ARCH" ;;
 esac
 
 # Construct arch param in format expected by download endpoint (e.g., linux-amd64)
@@ -834,25 +983,47 @@ if [[ "$INSECURE" == "true" ]]; then CURL_ARGS+=(-k); fi
 if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
 
 if ! curl "${CURL_ARGS[@]}" -o "$TMP_BIN" "$DOWNLOAD_URL"; then
-    fail "Download failed. Check URL and connectivity."
+    fail "Download failed. Check URL and connectivity." "$EXIT_DOWNLOAD_FAILED"
 fi
 
 # Verify downloaded binary
 if [[ ! -s "$TMP_BIN" ]]; then
-    fail "Downloaded file is empty."
+    fail "Downloaded file is empty." "$EXIT_DOWNLOAD_FAILED"
 fi
 
 # Check if it's a valid executable (ELF for Linux, Mach-O for macOS)
 if [[ "$OS" == "linux" ]]; then
     if ! head -c 4 "$TMP_BIN" | grep -q "ELF"; then
-        fail "Downloaded file is not a valid Linux executable."
+        fail "Downloaded file is not a valid Linux executable." "$EXIT_DOWNLOAD_FAILED"
     fi
 elif [[ "$OS" == "darwin" ]]; then
     # Mach-O magic: feedface (32-bit) or feedfacf (64-bit) or cafebabe (universal)
     MAGIC=$(xxd -p -l 4 "$TMP_BIN" 2>/dev/null || head -c 4 "$TMP_BIN" | od -A n -t x1 | tr -d ' ')
     if [[ ! "$MAGIC" =~ ^(cffaedfe|cefaedfe|cafebabe|feedface|feedfacf) ]]; then
-        fail "Downloaded file is not a valid macOS executable."
+        fail "Downloaded file is not a valid macOS executable." "$EXIT_DOWNLOAD_FAILED"
     fi
+fi
+
+# Checksum verification (when header is available)
+CHECKSUM_URL="${PULSE_URL}/download/${BINARY_NAME}?arch=${ARCH_PARAM}"
+TMP_HEADERS=$(mktemp)
+TMP_FILES+=("$TMP_HEADERS")
+HEADER_CURL_ARGS=(-fsSL --connect-timeout 10 --max-time 30 -D "$TMP_HEADERS" -o /dev/null)
+if [[ "$INSECURE" == "true" ]]; then HEADER_CURL_ARGS+=(-k); fi
+if [[ -n "$CURL_CA_BUNDLE" ]]; then HEADER_CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
+
+EXPECTED_SHA=""
+if curl "${HEADER_CURL_ARGS[@]}" "$CHECKSUM_URL" 2>/dev/null; then
+    EXPECTED_SHA=$(grep -i '^X-Checksum-Sha256:' "$TMP_HEADERS" 2>/dev/null | tr -d '\r' | awk '{print $2}' || true)
+fi
+
+if [[ -n "$EXPECTED_SHA" ]]; then
+    ACTUAL_SHA=$(sha256sum "$TMP_BIN" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$TMP_BIN" 2>/dev/null | awk '{print $1}')
+    if [[ -n "$ACTUAL_SHA" && "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
+        fail "Checksum verification failed (expected: ${EXPECTED_SHA:0:16}..., got: ${ACTUAL_SHA:0:16}...)" "$EXIT_CHECKSUM_FAILED"
+    fi
+    json_event "download" "checksum_ok" "Binary checksum verified"
+    log_info "Binary checksum verified"
 fi
 
 chmod +x "$TMP_BIN"
@@ -1076,8 +1247,10 @@ EOF
     save_connection_info "/var/lib/pulse-agent"
     if [[ "$UPGRADE_MODE" == "true" ]]; then
         log_info "Upgrade complete! Agent restarted with new configuration."
+        json_event "complete" "updated" "Installation updated"
     else
         log_info "Installation complete! Agent service started."
+        json_event "complete" "installed" "Installation installed"
     fi
     if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
     exit 0
@@ -1150,8 +1323,10 @@ EOF
     save_connection_info "/var/lib/pulse-agent"
     if [[ "$UPGRADE_MODE" == "true" ]]; then
         log_info "Upgrade complete! Agent restarted with new configuration."
+        json_event "complete" "updated" "Installation updated"
     else
         log_info "Installation complete! Agent service started."
+        json_event "complete" "installed" "Installation installed"
     fi
     if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
     exit 0
@@ -1275,6 +1450,11 @@ EOF
     log_info "To check status: pgrep -a pulse-agent"
     log_info "To view logs: tail -f /var/log/${AGENT_NAME}.log"
     if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
+    if [[ "$UPGRADE_MODE" == "true" ]]; then
+        json_event "complete" "updated" "Installation updated"
+    else
+        json_event "complete" "installed" "Installation installed"
+    fi
     exit 0
 fi
 
@@ -1647,6 +1827,11 @@ BOOTSTRAP
     log_info ""
     log_info "The Init/Shutdown task ensures the agent survives TrueNAS upgrades."
     if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
+    if [[ "$UPGRADE_MODE" == "true" ]]; then
+        json_event "complete" "updated" "Installation updated"
+    else
+        json_event "complete" "installed" "Installation installed"
+    fi
     exit 0
 fi
 
@@ -1706,8 +1891,10 @@ INITEOF
     save_connection_info "/var/lib/pulse-agent"
     if [[ "$UPGRADE_MODE" == "true" ]]; then
         log_info "Upgrade complete! Agent restarted with new configuration."
+        json_event "complete" "updated" "Installation updated"
     else
         log_info "Installation complete! Agent service started."
+        json_event "complete" "installed" "Installation installed"
     fi
     if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
     exit 0
@@ -1825,8 +2012,10 @@ BOOTEOF
     save_connection_info "/var/lib/pulse-agent"
     if [[ "$UPGRADE_MODE" == "true" ]]; then
         log_info "Upgrade complete! Agent restarted with new configuration."
+        json_event "complete" "updated" "Installation updated"
     else
         log_info "Installation complete! Agent service started."
+        json_event "complete" "installed" "Installation installed"
     fi
     log_info "To check status: $RCSCRIPT status"
     log_info "To view logs: tail -f /var/log/messages"
@@ -1909,9 +2098,11 @@ EOF
     save_connection_info "/var/lib/pulse-agent"
     if [[ "$UPGRADE_MODE" == "true" ]]; then
         log_info "Upgrade complete! Agent restarted with new configuration."
+        json_event "complete" "updated" "Installation updated"
     else
         log_info "Installation complete! Agent service started."
         log_info "Token file: $TOKEN_FILE (mode 600, root only)"
+        json_event "complete" "installed" "Installation installed"
     fi
     if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
     exit 0
@@ -2089,8 +2280,10 @@ INITEOF
     save_connection_info "/var/lib/pulse-agent"
     if [[ "$UPGRADE_MODE" == "true" ]]; then
         log_info "Upgrade complete! Agent restarted with new configuration."
+        json_event "complete" "updated" "Installation updated"
     else
         log_info "Installation complete! Agent service started."
+        json_event "complete" "installed" "Installation installed"
     fi
     log_info "To check status: $INITSCRIPT status"
     log_info "To view logs: tail -f /var/log/${AGENT_NAME}.log"
