@@ -160,6 +160,7 @@ export const ResultsStep: Component<ResultsStepProps> = (props) => {
               </Show>
               <Show when={installCommand()}>
                 <div class="relative">
+                  {/* prettier-ignore */}
                   <pre class="bg-surface border border-border rounded p-2 pr-10 text-[11px] font-mono text-base-content overflow-x-auto whitespace-pre-wrap break-all">{installCommand()}</pre>
                   <button
                     type="button"

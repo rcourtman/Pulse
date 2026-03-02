@@ -40,7 +40,10 @@ export const PreflightStep: Component<PreflightStepProps> = (props) => {
           <LoaderIcon class="w-4 h-4 animate-spin" />
         </Show>
         <span>
-          <Show when={totalCount() === 0 || completedCount() < totalCount()} fallback="Preflight checks complete">
+          <Show
+            when={totalCount() === 0 || completedCount() < totalCount()}
+            fallback="Preflight checks complete"
+          >
             Checking {completedCount()} of {totalCount()} nodes...
           </Show>
         </span>
