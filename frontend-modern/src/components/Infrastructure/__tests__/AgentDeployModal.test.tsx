@@ -58,9 +58,7 @@ type WizardStep = 'candidates' | 'preflight' | 'confirm' | 'deploying' | 'result
 
 /** Creates a full mock wizard with sensible defaults. */
 function createMockWizard(overrides: Partial<Record<string, unknown>> = {}) {
-  const [step, setStep] = createSignal<WizardStep>(
-    (overrides.step as WizardStep) ?? 'candidates',
-  );
+  const [step, setStep] = createSignal<WizardStep>((overrides.step as WizardStep) ?? 'candidates');
   const [selectedNodeIds] = createSignal<Set<string>>(
     (overrides.selectedNodeIds as Set<string>) ?? new Set<string>(),
   );
@@ -70,9 +68,7 @@ function createMockWizard(overrides: Partial<Record<string, unknown>> = {}) {
   const [startingPreflight] = createSignal<boolean>(
     (overrides.startingPreflight as boolean) ?? false,
   );
-  const [startingDeploy] = createSignal<boolean>(
-    (overrides.startingDeploy as boolean) ?? false,
-  );
+  const [startingDeploy] = createSignal<boolean>((overrides.startingDeploy as boolean) ?? false);
   const [canceling] = createSignal<boolean>((overrides.canceling as boolean) ?? false);
   const [retrying] = createSignal<boolean>((overrides.retrying as boolean) ?? false);
 
@@ -154,9 +150,7 @@ describe('AgentDeployModal', () => {
       render(() => <AgentDeployModal {...defaultProps()} />);
 
       const indicator = screen.getByTestId('step-indicator');
-      expect(indicator).toHaveTextContent(
-        'Select Nodes | Preflight | Confirm | Deploy | Results',
-      );
+      expect(indicator).toHaveTextContent('Select Nodes | Preflight | Confirm | Deploy | Results');
     });
 
     it('has a close X button with aria-label', () => {
@@ -243,16 +237,13 @@ describe('AgentDeployModal', () => {
       ['results', 4],
     ];
 
-    it.each(cases)(
-      'maps wizard step "%s" to indicator index %d',
-      (wizardStep, expectedIndex) => {
-        useDeployWizardMock.mockReturnValue(createMockWizard({ step: wizardStep }));
-        render(() => <AgentDeployModal {...defaultProps()} />);
+    it.each(cases)('maps wizard step "%s" to indicator index %d', (wizardStep, expectedIndex) => {
+      useDeployWizardMock.mockReturnValue(createMockWizard({ step: wizardStep }));
+      render(() => <AgentDeployModal {...defaultProps()} />);
 
-        const indicator = screen.getByTestId('step-indicator');
-        expect(indicator.dataset.currentStep).toBe(String(expectedIndex));
-      },
-    );
+      const indicator = screen.getByTestId('step-indicator');
+      expect(indicator.dataset.currentStep).toBe(String(expectedIndex));
+    });
   });
 
   /* ── Candidates step footer ────────────────────────────────── */
@@ -486,9 +477,7 @@ describe('AgentDeployModal', () => {
       );
       render(() => <AgentDeployModal {...defaultProps()} />);
 
-      expect(
-        screen.getByText("Closing won't cancel the deployment."),
-      ).toBeInTheDocument();
+      expect(screen.getByText("Closing won't cancel the deployment.")).toBeInTheDocument();
     });
 
     it('hides close-warning when operation is not active', () => {
@@ -500,9 +489,7 @@ describe('AgentDeployModal', () => {
       );
       render(() => <AgentDeployModal {...defaultProps()} />);
 
-      expect(
-        screen.queryByText("Closing won't cancel the deployment."),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByText("Closing won't cancel the deployment.")).not.toBeInTheDocument();
     });
   });
 
