@@ -10,8 +10,15 @@ import { aiChatStore } from '@/stores/aiChat';
 import { logger } from '@/utils/logger';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession, type FileChange } from '@/api/aiChat';
-import { getUpgradeActionUrlOrFallback, hasFeature, loadLicenseStatus } from '@/stores/license';
+import {
+  getUpgradeActionUrlOrFallback,
+  hasFeature,
+  loadLicenseStatus,
+  entitlements,
+  startProTrial,
+} from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
+import { showSuccess, showWarning } from '@/utils/toast';
 import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/types/ai';
 
 // Providers are now configured via accordion sections, not a single-provider selector
@@ -181,9 +188,33 @@ export const AISettings: Component = () => {
   const [preflightLastCheckedAt, setPreflightLastCheckedAt] = createSignal<number | null>(null);
   const hasAutoFixFeature = createMemo(() => hasFeature('ai_autofix'));
   const autoFixLocked = createMemo(() => !hasAutoFixFeature());
+  const canStartTrial = () => entitlements()?.trial_eligible !== false;
+  const [startingTrial, setStartingTrial] = createSignal(false);
   const providerIssueCount = createMemo(
     () => AI_PROVIDERS.filter((provider) => providerHealth[provider].status === 'error').length,
   );
+
+  const handleStartTrial = async () => {
+    if (startingTrial()) return;
+    setStartingTrial(true);
+    try {
+      const result = await startProTrial();
+      if (result?.outcome === 'redirect') {
+        window.location.href = result.actionUrl;
+        return;
+      }
+      showSuccess('Pro trial started');
+    } catch (err) {
+      const statusCode = (err as { status?: number } | null)?.status;
+      if (statusCode === 409) {
+        showWarning('Trial already used');
+      } else {
+        showWarning(err instanceof Error ? err.message : 'Failed to start trial');
+      }
+    } finally {
+      setStartingTrial(false);
+    }
+  };
 
   createEffect((wasPaywallVisible) => {
     const isPaywallVisible = form.controlLevel === 'autonomous' && autoFixLocked();
@@ -2273,6 +2304,17 @@ export const AISettings: Component = () => {
                       Upgrade to Pro
                     </a>{' '}
                     to enable autonomous mode.
+                    <Show when={canStartTrial()}>
+                      {' '}
+                      <button
+                        type="button"
+                        onClick={handleStartTrial}
+                        disabled={startingTrial()}
+                        class="text-indigo-500 hover:underline disabled:opacity-50"
+                      >
+                        Start free trial
+                      </button>
+                    </Show>
                   </p>
                 </Show>
 

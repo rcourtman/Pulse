@@ -26,7 +26,7 @@ export function AuditWebhookPanel() {
   const [loading, setLoading] = createSignal(true);
   const [startingTrial, setStartingTrial] = createSignal(false);
 
-  const canStartTrial = () => entitlements()?.trial_eligible === true;
+  const canStartTrial = () => entitlements()?.trial_eligible !== false;
 
   const handleStartTrial = async () => {
     if (startingTrial()) return;

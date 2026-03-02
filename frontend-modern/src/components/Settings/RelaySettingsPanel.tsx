@@ -32,7 +32,7 @@ export const RelaySettingsPanel: Component = () => {
   const [pairingQRCode, setPairingQRCode] = createSignal<string | null>(null);
   const [startingTrial, setStartingTrial] = createSignal(false);
 
-  const canStartTrial = () => entitlements()?.trial_eligible === true;
+  const canStartTrial = () => entitlements()?.trial_eligible !== false;
 
   const handleStartTrial = async () => {
     if (startingTrial()) return;

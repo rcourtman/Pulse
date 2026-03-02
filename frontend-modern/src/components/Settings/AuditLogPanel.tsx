@@ -25,6 +25,8 @@ import {
   hasFeature,
   loadLicenseStatus,
   licenseLoaded,
+  entitlements,
+  startProTrial,
 } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 
@@ -79,6 +81,31 @@ export default function AuditLogPanel() {
     STORAGE_KEYS.AUDIT_VERIFICATION_FILTER,
     'all',
   );
+
+  const canStartTrial = () => entitlements()?.trial_eligible !== false;
+  const [startingTrial, setStartingTrial] = createSignal(false);
+
+  const handleStartTrial = async () => {
+    if (startingTrial()) return;
+    setStartingTrial(true);
+    try {
+      const result = await startProTrial();
+      if (result?.outcome === 'redirect') {
+        window.location.href = result.actionUrl;
+        return;
+      }
+      showSuccess('Pro trial started');
+    } catch (err) {
+      const statusCode = (err as { status?: number } | null)?.status;
+      if (statusCode === 409) {
+        showWarning('Trial already used');
+      } else {
+        showWarning(err instanceof Error ? err.message : 'Failed to start trial');
+      }
+    } finally {
+      setStartingTrial(false);
+    }
+  };
 
   // Track when the in-panel Audit Logging paywall is actually shown.
   // Note: settings tab gating is tracked separately via settingsFeatureGates.
@@ -586,15 +613,27 @@ export default function AuditLogPanel() {
                   Persistent, searchable audit logs with cryptographic signature verification.
                 </p>
               </div>
-              <a
-                href={getUpgradeActionUrlOrFallback('audit_logging')}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                onClick={() => trackUpgradeClicked('settings_audit_log_panel', 'audit_logging')}
-              >
-                Upgrade to Pro
-              </a>
+              <div class="flex flex-col items-center gap-2">
+                <a
+                  href={getUpgradeActionUrlOrFallback('audit_logging')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  onClick={() => trackUpgradeClicked('settings_audit_log_panel', 'audit_logging')}
+                >
+                  Upgrade to Pro
+                </a>
+                <Show when={canStartTrial()}>
+                  <button
+                    type="button"
+                    onClick={handleStartTrial}
+                    disabled={startingTrial()}
+                    class="text-sm text-indigo-500 hover:underline disabled:opacity-50"
+                  >
+                    Start free trial
+                  </button>
+                </Show>
+              </div>
             </div>
           </div>
         </Show>

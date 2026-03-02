@@ -46,7 +46,7 @@ export async function loadLicenseStatus(force = false): Promise<void> {
       upgrade_reasons: [],
       tier: 'free',
       hosted_mode: false,
-      trial_eligible: false,
+      trial_eligible: true,
     });
     setLoaded(true);
   } finally {

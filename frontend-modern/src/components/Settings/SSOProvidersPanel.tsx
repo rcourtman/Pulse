@@ -207,7 +207,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
 
   const hasAdvancedSSO = createMemo(() => hasFeature('advanced_sso'));
   const [startingTrial, setStartingTrial] = createSignal(false);
-  const canStartTrial = () => entitlements()?.trial_eligible === true;
+  const canStartTrial = () => entitlements()?.trial_eligible !== false;
 
   const handleStartTrial = async () => {
     if (startingTrial()) return;

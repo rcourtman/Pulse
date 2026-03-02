@@ -45,7 +45,7 @@ export function ReportingPanel() {
   loadLicenseStatus();
 
   const isLocked = () => licenseLoaded() && !hasFeature('advanced_reporting');
-  const canStartTrial = () => entitlements()?.trial_eligible === true;
+  const canStartTrial = () => entitlements()?.trial_eligible !== false;
 
   createEffect((wasVisible: boolean) => {
     const visible = isLocked();

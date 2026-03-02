@@ -56,7 +56,7 @@ export const AgentProfilesPanel: Component = () => {
   const checkingLicense = () => !licenseLoaded() || licenseLoading();
   const hasAgentProfiles = () => hasEntitlement('agent_profiles');
   const [startingTrial, setStartingTrial] = createSignal(false);
-  const canStartTrial = () => entitlements()?.trial_eligible === true;
+  const canStartTrial = () => entitlements()?.trial_eligible !== false;
 
   const handleStartTrial = async () => {
     if (startingTrial()) return;
