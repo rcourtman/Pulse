@@ -87,8 +87,8 @@ func TestPVESetupScriptArgumentAlignment(t *testing.T) {
 		},
 		{
 			name:     "token_name_variable_defined",
-			contains: `TOKEN_NAME="pulse-SENTINEL_URL-`,
-			desc:     "Bash variable TOKEN_NAME should be defined with correct format",
+			contains: `TOKEN_NAME="pulse-sentinel-url"`,
+			desc:     "Bash variable TOKEN_NAME should be deterministic for the Pulse server",
 		},
 	}
 

@@ -40,6 +40,100 @@ func TestParsePBSTokenValue_RegexFallback(t *testing.T) {
 	}
 }
 
+func TestMonitorTokenName_Deterministic(t *testing.T) {
+	p := &ProxmoxSetup{pulseURL: "https://Pulse.EXAMPLE.com:7655"}
+	if got := p.monitorTokenName(); got != "pulse-pulse-example-com" {
+		t.Fatalf("monitorTokenName() = %q", got)
+	}
+
+	p = &ProxmoxSetup{hostname: "Pulse Host"}
+	if got := p.monitorTokenName(); got != "pulse-pulse-host" {
+		t.Fatalf("monitorTokenName() with hostname fallback = %q", got)
+	}
+}
+
+func TestSetupPVEToken_RotatesExistingToken(t *testing.T) {
+	mc := &mockCollector{}
+	createCalls := 0
+	removeCalled := false
+	mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+		if name == "pveum" && len(arg) > 2 && arg[0] == "user" && arg[1] == "token" && arg[2] == "add" {
+			createCalls++
+			if createCalls == 1 {
+				return "already exists", fmt.Errorf("already exists")
+			}
+			return "│ value │ rotated-token │", nil
+		}
+		if name == "pveum" && len(arg) > 2 && arg[0] == "user" && arg[1] == "token" && arg[2] == "remove" {
+			removeCalled = true
+			return "", nil
+		}
+		return "", nil
+	}
+
+	p := &ProxmoxSetup{
+		logger:    zerolog.Nop(),
+		collector: mc,
+	}
+	tokenID, tokenValue, err := p.setupPVEToken(context.Background(), "pulse-test")
+	if err != nil {
+		t.Fatalf("setupPVEToken: %v", err)
+	}
+	if tokenID != "pulse-monitor@pam!pulse-test" {
+		t.Fatalf("tokenID = %q", tokenID)
+	}
+	if tokenValue != "rotated-token" {
+		t.Fatalf("tokenValue = %q", tokenValue)
+	}
+	if !removeCalled {
+		t.Fatal("expected existing token to be removed before recreate")
+	}
+	if createCalls != 2 {
+		t.Fatalf("expected 2 create attempts, got %d", createCalls)
+	}
+}
+
+func TestSetupPBSToken_RotatesExistingToken(t *testing.T) {
+	mc := &mockCollector{}
+	createCalls := 0
+	deleteCalled := false
+	mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+		if name == "proxmox-backup-manager" && len(arg) > 1 && arg[0] == "user" && arg[1] == "generate-token" {
+			createCalls++
+			if createCalls == 1 {
+				return "already exists", fmt.Errorf("already exists")
+			}
+			return `{"value":"rotated-pbs-token"}`, nil
+		}
+		if name == "proxmox-backup-manager" && len(arg) > 1 && arg[0] == "user" && arg[1] == "delete-token" {
+			deleteCalled = true
+			return "", nil
+		}
+		return "", nil
+	}
+
+	p := &ProxmoxSetup{
+		logger:    zerolog.Nop(),
+		collector: mc,
+	}
+	tokenID, tokenValue, err := p.setupPBSToken(context.Background(), "pulse-test")
+	if err != nil {
+		t.Fatalf("setupPBSToken: %v", err)
+	}
+	if tokenID != "pulse-monitor@pbs!pulse-test" {
+		t.Fatalf("tokenID = %q", tokenID)
+	}
+	if tokenValue != "rotated-pbs-token" {
+		t.Fatalf("tokenValue = %q", tokenValue)
+	}
+	if !deleteCalled {
+		t.Fatal("expected existing token to be deleted before recreate")
+	}
+	if createCalls != 2 {
+		t.Fatalf("expected 2 create attempts, got %d", createCalls)
+	}
+}
+
 func TestSelectBestIP(t *testing.T) {
 	tests := []struct {
 		name       string

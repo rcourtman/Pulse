@@ -1,0 +1,67 @@
+package api
+
+import "testing"
+
+func TestBuildPulseMonitorTokenName(t *testing.T) {
+	tests := []struct {
+		name       string
+		candidates []string
+		want       string
+	}{
+		{
+			name:       "uses url host when available",
+			candidates: []string{"https://192.168.0.98:7655"},
+			want:       "pulse-192-168-0-98",
+		},
+		{
+			name:       "uses bare host with port",
+			candidates: []string{"pulse.example.com:7655"},
+			want:       "pulse-pulse-example-com",
+		},
+		{
+			name:       "falls back to second candidate",
+			candidates: []string{"", "tower.local"},
+			want:       "pulse-tower-local",
+		},
+		{
+			name:       "falls back to server when no valid candidates",
+			candidates: []string{"", "   "},
+			want:       "pulse-server",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := buildPulseMonitorTokenName(tc.candidates...)
+			if got != tc.want {
+				t.Fatalf("buildPulseMonitorTokenName(%v) = %q, want %q", tc.candidates, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestPulseTokenSlugTruncatesToMaxLen(t *testing.T) {
+	raw := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
+	got := pulseTokenSlug(raw)
+	if len(got) > 48 {
+		t.Fatalf("pulseTokenSlug length = %d, want <= 48", len(got))
+	}
+}
+
+func TestIsPulseAgentTokenHelpers(t *testing.T) {
+	tests := []struct {
+		tokenID string
+		want    bool
+	}{
+		{tokenID: "pulse-monitor@pam!pulse-192-168-0-98", want: true},
+		{tokenID: "pulse-monitor@pbs!pulse-server", want: true},
+		{tokenID: "root@pam!pulse-foo", want: false},
+		{tokenID: "pulse-monitor@pam!other-token", want: false},
+	}
+
+	for _, tc := range tests {
+		if got := isPulseAgentToken(tc.tokenID); got != tc.want {
+			t.Fatalf("isPulseAgentToken(%q) = %v, want %v", tc.tokenID, got, tc.want)
+		}
+	}
+}

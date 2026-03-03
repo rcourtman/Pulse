@@ -34,7 +34,7 @@ type ProxmoxSetup struct {
 // ProxmoxSetupResult contains the result of a successful Proxmox setup.
 type ProxmoxSetupResult struct {
 	ProxmoxType string // "pve" or "pbs"
-	TokenID     string // Full token ID (e.g., "pulse-monitor@pam!pulse-1234567890")
+	TokenID     string // Full token ID (e.g., "pulse-monitor@pam!pulse-pulse-example-com")
 	TokenValue  string // The secret token value
 	NodeHost    string // The host URL for auto-registration
 	Registered  bool   // Whether the node was successfully registered with Pulse
@@ -48,6 +48,73 @@ const (
 )
 
 const proxmoxMonitorRole = "PulseMonitor"
+
+var proxmoxTokenSlugPattern = regexp.MustCompile(`[^a-z0-9]+`)
+
+func proxmoxTokenHostCandidate(candidate string) string {
+	raw := strings.TrimSpace(candidate)
+	if raw == "" {
+		return ""
+	}
+
+	if strings.Contains(raw, "://") {
+		if parsed, err := url.Parse(raw); err == nil && parsed.Hostname() != "" {
+			return parsed.Hostname()
+		}
+	}
+
+	if host, _, err := net.SplitHostPort(raw); err == nil {
+		return strings.Trim(host, "[]")
+	}
+
+	if parsed, err := url.Parse("https://" + raw); err == nil && parsed.Hostname() != "" {
+		return parsed.Hostname()
+	}
+
+	return strings.Trim(raw, "[]")
+}
+
+func proxmoxTokenSlug(raw string) string {
+	trimmed := strings.Trim(strings.ToLower(strings.TrimSpace(raw)), ".")
+	if trimmed == "" {
+		return ""
+	}
+
+	slug := proxmoxTokenSlugPattern.ReplaceAllString(trimmed, "-")
+	slug = strings.Trim(slug, "-")
+	if slug == "" {
+		return ""
+	}
+
+	const maxSlugLen = 48
+	if len(slug) > maxSlugLen {
+		slug = strings.Trim(slug[:maxSlugLen], "-")
+	}
+	return slug
+}
+
+func proxmoxTokenScope(candidates ...string) string {
+	for _, candidate := range candidates {
+		host := proxmoxTokenHostCandidate(candidate)
+		if host == "" {
+			continue
+		}
+		if slug := proxmoxTokenSlug(host); slug != "" {
+			return slug
+		}
+	}
+	return "server"
+}
+
+func (p *ProxmoxSetup) monitorTokenName() string {
+	return "pulse-" + proxmoxTokenScope(p.pulseURL, p.hostname)
+}
+
+func tokenAlreadyExists(err error, output string) bool {
+	lowerErr := strings.ToLower(fmt.Sprintf("%v", err))
+	lowerOutput := strings.ToLower(output)
+	return strings.Contains(lowerErr, "already exists") || strings.Contains(lowerOutput, "already exists")
+}
 
 func privProbeRoleName(priv string) string {
 	// Keep role name deterministic (helps tests) and valid for pveum.
@@ -306,7 +373,7 @@ func (p *ProxmoxSetup) detectProxmoxTypes() []string {
 
 // setupToken creates the monitoring user and API token.
 func (p *ProxmoxSetup) setupToken(ctx context.Context, ptype string) (string, string, error) {
-	tokenName := fmt.Sprintf("pulse-%d", time.Now().Unix())
+	tokenName := p.monitorTokenName()
 
 	if ptype == "pve" {
 		return p.setupPVEToken(ctx, tokenName)
@@ -325,7 +392,16 @@ func (p *ProxmoxSetup) setupPVEToken(ctx context.Context, tokenName string) (str
 	// Create token with privilege separation disabled
 	output, err := p.collector.CommandCombinedOutput(ctx, "pveum", "user", "token", "add", proxmoxUserPVE, tokenName, "--privsep", "0")
 	if err != nil {
-		return "", "", fmt.Errorf("failed to create token: %w", err)
+		if tokenAlreadyExists(err, output) {
+			p.logger.Info().Str("token", tokenName).Msg("PVE monitoring token already exists; rotating token in place")
+			if _, deleteErr := p.collector.CommandCombinedOutput(ctx, "pveum", "user", "token", "remove", proxmoxUserPVE, tokenName); deleteErr != nil {
+				return "", "", fmt.Errorf("failed to delete existing token before rotation: %w", deleteErr)
+			}
+			output, err = p.collector.CommandCombinedOutput(ctx, "pveum", "user", "token", "add", proxmoxUserPVE, tokenName, "--privsep", "0")
+		}
+		if err != nil {
+			return "", "", fmt.Errorf("failed to create token: %w", err)
+		}
 	}
 
 	// Parse token value from output
@@ -349,7 +425,16 @@ func (p *ProxmoxSetup) setupPBSToken(ctx context.Context, tokenName string) (str
 	// Create token
 	output, err := p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "user", "generate-token", proxmoxUserPBS, tokenName)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to create token: %w", err)
+		if tokenAlreadyExists(err, output) {
+			p.logger.Info().Str("token", tokenName).Msg("PBS monitoring token already exists; rotating token in place")
+			if _, deleteErr := p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "user", "delete-token", proxmoxUserPBS, tokenName); deleteErr != nil {
+				return "", "", fmt.Errorf("failed to delete existing token before rotation: %w", deleteErr)
+			}
+			output, err = p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "user", "generate-token", proxmoxUserPBS, tokenName)
+		}
+		if err != nil {
+			return "", "", fmt.Errorf("failed to create token: %w", err)
+		}
 	}
 
 	// Parse token value from JSON output

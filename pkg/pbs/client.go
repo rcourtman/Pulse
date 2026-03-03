@@ -329,6 +329,11 @@ func (c *Client) post(ctx context.Context, path string, data url.Values) (*http.
 	return c.request(ctx, "POST", path, data)
 }
 
+// delete performs a DELETE request
+func (c *Client) delete(ctx context.Context, path string) (*http.Response, error) {
+	return c.request(ctx, "DELETE", path, nil)
+}
+
 // TokenResponse represents the response from token creation
 type TokenResponse struct {
 	TokenID string `json:"tokenid"`
@@ -349,7 +354,7 @@ func (c *Client) CreateUser(ctx context.Context, userID, comment string) error {
 	resp, err := c.post(ctx, "/access/users", data)
 	if err != nil {
 		// User might already exist, which is okay
-		if strings.Contains(err.Error(), "already exists") {
+		if isAlreadyExistsError(err) {
 			log.Debug().Str("userID", userID).Msg("PBS CreateUser: user already exists")
 			return nil
 		}
@@ -359,6 +364,10 @@ func (c *Client) CreateUser(ctx context.Context, userID, comment string) error {
 
 	log.Info().Str("userID", userID).Msg("PBS CreateUser: user created successfully")
 	return nil
+}
+
+func isAlreadyExistsError(err error) bool {
+	return strings.Contains(strings.ToLower(err.Error()), "already exists")
 }
 
 // SetUserACL sets ACL permissions for a user
@@ -424,6 +433,28 @@ func (c *Client) CreateUserToken(ctx context.Context, userID, tokenName string) 
 	return &result.Data, nil
 }
 
+// DeleteUserToken deletes an existing API token for a user.
+func (c *Client) DeleteUserToken(ctx context.Context, userID, tokenName string) error {
+	log.Debug().Str("userID", userID).Str("tokenName", tokenName).Msg("PBS DeleteUserToken: deleting token")
+	path := fmt.Sprintf("/access/users/%s/token/%s", url.PathEscape(userID), url.PathEscape(tokenName))
+
+	resp, err := c.delete(ctx, path)
+	if err != nil {
+		// Deleting a missing token should be treated as already converged.
+		if strings.Contains(err.Error(), "API error 404") {
+			return nil
+		}
+		return fmt.Errorf("delete token: %w", err)
+	}
+	defer resp.Body.Close()
+
+	log.Info().
+		Str("userID", userID).
+		Str("tokenName", tokenName).
+		Msg("PBS DeleteUserToken: token deleted successfully")
+	return nil
+}
+
 // SetupMonitoringAccess creates a monitoring user with Audit role and returns API token
 // This is the turnkey method for setting up PBS monitoring access
 func (c *Client) SetupMonitoringAccess(ctx context.Context, tokenName string) (tokenID, tokenValue string, err error) {
@@ -449,7 +480,16 @@ func (c *Client) SetupMonitoringAccess(ctx context.Context, tokenName string) (t
 	// Step 3: Create API token
 	token, err := c.CreateUserToken(ctx, monitorUser, tokenName)
 	if err != nil {
-		return "", "", fmt.Errorf("create token: %w", err)
+		if isAlreadyExistsError(err) {
+			log.Warn().Str("tokenName", tokenName).Msg("PBS SetupMonitoringAccess: token already exists; rotating in place")
+			if deleteErr := c.DeleteUserToken(ctx, monitorUser, tokenName); deleteErr != nil {
+				return "", "", fmt.Errorf("delete existing token: %w", deleteErr)
+			}
+			token, err = c.CreateUserToken(ctx, monitorUser, tokenName)
+		}
+		if err != nil {
+			return "", "", fmt.Errorf("create token: %w", err)
+		}
 	}
 
 	// Step 4: Grant Audit role to the token as well

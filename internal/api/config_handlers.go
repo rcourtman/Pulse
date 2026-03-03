@@ -40,6 +40,7 @@ import (
 
 var (
 	setupAuthTokenPattern = regexp.MustCompile(`^[A-Fa-f0-9]{32,128}$`)
+	pulseTokenSlugPattern = regexp.MustCompile(`[^a-z0-9]+`)
 )
 
 func sanitizeInstallerURL(raw string) (string, error) {
@@ -76,6 +77,69 @@ func sanitizeSetupAuthToken(token string) (string, error) {
 		return "", fmt.Errorf("token must be hexadecimal")
 	}
 	return trimmed, nil
+}
+
+// buildPulseMonitorTokenName returns a deterministic Pulse-managed token name.
+// The result is stable across reruns for the same Pulse instance.
+func buildPulseMonitorTokenName(candidates ...string) string {
+	return "pulse-" + pulseTokenSuffix(candidates...)
+}
+
+func pulseTokenSuffix(candidates ...string) string {
+	for _, candidate := range candidates {
+		host := pulseTokenHostCandidate(candidate)
+		if host == "" {
+			continue
+		}
+		slug := pulseTokenSlug(host)
+		if slug != "" {
+			return slug
+		}
+	}
+	return "server"
+}
+
+func pulseTokenHostCandidate(candidate string) string {
+	raw := strings.TrimSpace(candidate)
+	if raw == "" {
+		return ""
+	}
+
+	if strings.Contains(raw, "://") {
+		if parsed, err := url.Parse(raw); err == nil && parsed.Hostname() != "" {
+			return parsed.Hostname()
+		}
+	}
+
+	if host, _, err := net.SplitHostPort(raw); err == nil {
+		return strings.Trim(host, "[]")
+	}
+
+	if parsed, err := url.Parse("https://" + raw); err == nil && parsed.Hostname() != "" {
+		return parsed.Hostname()
+	}
+
+	return strings.Trim(raw, "[]")
+}
+
+func pulseTokenSlug(raw string) string {
+	trimmed := strings.Trim(strings.ToLower(strings.TrimSpace(raw)), ".")
+	if trimmed == "" {
+		return ""
+	}
+
+	slug := pulseTokenSlugPattern.ReplaceAllString(trimmed, "-")
+	slug = strings.Trim(slug, "-")
+	if slug == "" {
+		return ""
+	}
+
+	const maxSlugLen = 48
+	if len(slug) > maxSlugLen {
+		slug = strings.Trim(slug[:maxSlugLen], "-")
+	}
+
+	return slug
 }
 
 // SetupCode represents a one-time setup code for secure node registration
@@ -1380,8 +1444,9 @@ func normalizeNodeHost(rawHost, nodeType string) (string, error) {
 // extractHostIP extracts the IP address from a host URL if it's an IP-based URL.
 // Returns empty string if the URL uses a hostname instead of an IP.
 // isPulseAgentToken returns true if the token ID was created by the Pulse agent.
-// Agent tokens follow the pattern "pulse-monitor@pam!pulse-<timestamp>" (PVE)
-// or "pulse-monitor@pbs!pulse-<timestamp>" (PBS).
+// Agent tokens follow the pattern "pulse-monitor@pam!pulse-<scope>" (PVE)
+// or "pulse-monitor@pbs!pulse-<scope>" (PBS).
+// Legacy agent tokens may include an additional "-<timestamp>" suffix.
 func isPulseAgentToken(tokenID string) bool {
 	return strings.HasPrefix(tokenID, "pulse-monitor@pam!pulse-") ||
 		strings.HasPrefix(tokenID, "pulse-monitor@pbs!pulse-")
@@ -1797,13 +1862,8 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 				// Fallback to password auth
 				pbsPassword = req.Password
 			} else {
-				// Generate a unique token name
 				hostname, _ := os.Hostname()
-				if hostname == "" {
-					hostname = "pulse"
-				}
-				timestamp := time.Now().Unix()
-				tokenName := fmt.Sprintf("pulse-%s-%d", hostname, timestamp)
+				tokenName := buildPulseMonitorTokenName(r.Host, hostname)
 
 				tokenID, tokenSecret, err := pbsClient.SetupMonitoringAccess(context.Background(), tokenName)
 				if err != nil {
@@ -3801,32 +3861,15 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	// Extract Pulse IP from the pulse URL to make token name unique
-	pulseIP := "pulse"
-	if pulseURL != "" {
-		// Extract IP/hostname from Pulse URL
-		if match := strings.Contains(pulseURL, "://"); match {
-			parts := strings.Split(pulseURL, "://")
-			if len(parts) > 1 {
-				hostPart := strings.Split(parts[1], ":")[0]
-				// Replace dots with dashes for token name compatibility
-				pulseIP = strings.ReplaceAll(hostPart, ".", "-")
-			}
-		}
-	}
-
-	// Create unique token name based on Pulse IP and timestamp
-	// Adding timestamp ensures truly unique tokens even when running from same Pulse server
-	timestamp := time.Now().Unix()
-	tokenName := fmt.Sprintf("pulse-%s-%d", pulseIP, timestamp)
+	pulseTokenScope := pulseTokenSuffix(pulseURL, r.Host)
+	tokenName := buildPulseMonitorTokenName(pulseURL, r.Host)
 
 	// Log the token name for debugging
 	log.Info().
 		Str("pulseURL", pulseURL).
-		Str("pulseIP", pulseIP).
+		Str("pulseTokenScope", pulseTokenScope).
 		Str("tokenName", tokenName).
-		Int64("timestamp", timestamp).
-		Msg("Generated unique token name for setup script")
+		Msg("Generated deterministic token name for setup script")
 
 	// Get or generate SSH public key for temperature monitoring
 	sshKeys := h.getOrGenerateSSHKeys()
@@ -4215,33 +4258,31 @@ attempt_auto_registration() {
 # Generate API token
 echo "Generating API token..."
 
-# Check if token already exists
+# Rotate token if it already exists so reruns remain idempotent
 TOKEN_EXISTED=false
+TOKEN_OUTPUT=""
+TOKEN_VALUE=""
 if pveum user token list pulse-monitor@pam 2>/dev/null | grep -q "$TOKEN_NAME"; then
     TOKEN_EXISTED=true
+    echo "Existing token '$TOKEN_NAME' found. Rotating in place..."
+    if ! pveum user token remove pulse-monitor@pam "$TOKEN_NAME" >/dev/null 2>&1; then
+        echo "⚠️  Failed to remove existing token '$TOKEN_NAME'. Attempting create anyway..."
+    fi
+fi
+
+# Create token and capture value (shown once by Proxmox)
+TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pam "$TOKEN_NAME" --privsep 0 2>&1)
+TOKEN_CREATE_RC=$?
+if [ "$TOKEN_CREATE_RC" -ne 0 ]; then
+    echo "❌ Failed to create token '$TOKEN_NAME'"
+    echo "$TOKEN_OUTPUT"
     echo ""
-    echo "================================================================"
-    echo "WARNING: Token '$TOKEN_NAME' already exists!"
-    echo "================================================================"
-    echo ""
-    echo "To create a new token, first remove the existing one:"
-    echo "  pveum user token remove pulse-monitor@pam $TOKEN_NAME"
-    echo ""
-    echo "Or create a token with a different name:"
-    echo "  pveum user token add pulse-monitor@pam ${TOKEN_NAME}-$(date +%%s) --privsep 0"
-    echo ""
-    echo "Then use the new token ID in Pulse (e.g., ${PULSE_TOKEN_ID}-1234567890)"
-    echo "================================================================"
+    echo "Manual registration may be required."
     echo ""
 else
-    # Create token silently first
-    TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pam "$TOKEN_NAME" --privsep 0)
-    
-    # Extract the token value for auto-registration
     TOKEN_VALUE=$(echo "$TOKEN_OUTPUT" | grep "│ value" | awk -F'│' '{print $3}' | tr -d ' ' | tail -1)
-    
+
     if [ -z "$TOKEN_VALUE" ]; then
-        # If we can't extract the token, show it to the user
         echo ""
         echo "================================================================"
         echo "IMPORTANT: Copy the token value below - it's only shown once!"
@@ -4253,8 +4294,11 @@ else
         echo "   Manual registration may be required."
         echo ""
     else
-        # Token created successfully
-        echo "API token generated successfully"
+        if [ "$TOKEN_EXISTED" = true ]; then
+            echo "API token rotated successfully"
+        else
+            echo "API token generated successfully"
+        fi
         echo ""
     fi
 
@@ -4505,9 +4549,7 @@ echo ""
 if [ "$AUTO_REG_SUCCESS" != true ]; then
     echo "Manual setup instructions:"
     echo "  Token ID: $PULSE_TOKEN_ID"
-    if [ "$TOKEN_EXISTED" = true ]; then
-        echo "  Token Value: [Use your existing token or create a new one as shown above]"
-    elif [ -n "$TOKEN_VALUE" ]; then
+    if [ -n "$TOKEN_VALUE" ]; then
         echo "  Token Value: $TOKEN_VALUE"
     else
         echo "  Token Value: [See token output above]"
@@ -4517,7 +4559,7 @@ echo ""
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"),
 			pulseURL, serverHost, tokenName,
-			pulseIP,
+			pulseTokenScope,
 			authToken,
 			storagePerms,
 			sshKeys.SensorsPublicKey)
@@ -4559,6 +4601,8 @@ fi
 
 # Extract Pulse server IP from the URL for token matching
 PULSE_IP_PATTERN=$(echo "%s" | sed 's/\./\-/g')
+TOKEN_NAME="%s"
+PULSE_TOKEN_ID="pulse-monitor@pbs!${TOKEN_NAME}"
 
 # Check for old Pulse tokens from the same Pulse server and offer to clean them up
 echo "Checking for existing Pulse monitoring tokens from this Pulse server..."
@@ -4612,38 +4656,49 @@ proxmox-backup-manager user create pulse-monitor@pbs 2>/dev/null || echo "User a
 # Generate API token
 echo "Generating API token..."
 
-# Check if token already exists (PBS tokens can be regenerated with same name)
+# Rotate token if it already exists so reruns remain idempotent
+TOKEN_EXISTED=false
+TOKEN_OUTPUT=""
+TOKEN_VALUE=""
+if proxmox-backup-manager user list-tokens pulse-monitor@pbs 2>/dev/null | grep -q "$TOKEN_NAME"; then
+    TOKEN_EXISTED=true
+    echo "Existing token '$TOKEN_NAME' found. Rotating in place..."
+    if ! proxmox-backup-manager user delete-token pulse-monitor@pbs "$TOKEN_NAME" >/dev/null 2>&1; then
+        echo "⚠️  Failed to remove existing token '$TOKEN_NAME'. Attempting create anyway..."
+    fi
+fi
+
 echo ""
 echo "================================================================"
 echo "IMPORTANT: Copy the token value below - it's only shown once!"
 echo "================================================================"
-TOKEN_OUTPUT=$(proxmox-backup-manager user generate-token pulse-monitor@pbs %s 2>&1)
-if echo "$TOKEN_OUTPUT" | grep -q "already exists"; then
-    echo "WARNING: Token '%s' already exists!"
+TOKEN_OUTPUT=$(proxmox-backup-manager user generate-token pulse-monitor@pbs "$TOKEN_NAME" 2>&1)
+TOKEN_CREATE_RC=$?
+if [ "$TOKEN_CREATE_RC" -ne 0 ]; then
+    echo "❌ Failed to create token '$TOKEN_NAME'"
+    echo "$TOKEN_OUTPUT"
     echo ""
-    echo "You can either:"
-    echo "1. Delete the existing token first:"
-    echo "   proxmox-backup-manager user delete-token pulse-monitor@pbs %s"
+    echo "Manual registration may be required."
     echo ""
-    echo "2. Or create a token with a different name:"
-    echo "   proxmox-backup-manager user generate-token pulse-monitor@pbs %s-$(date +%%s)"
-    echo ""
-    echo "Then use the new token ID in Pulse (e.g., pulse-monitor@pbs!%s-1234567890)"
 else
     echo "$TOKEN_OUTPUT"
-    
+
     # Extract the token value for auto-registration
     TOKEN_VALUE=$(echo "$TOKEN_OUTPUT" | grep '"value"' | sed 's/.*"value"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-    
+
     if [ -z "$TOKEN_VALUE" ]; then
         echo "⚠️  Failed to extract token value from output."
         echo "   Manual registration may be required."
         echo ""
     else
-        echo "✅ Token created for Pulse monitoring"
+        if [ "$TOKEN_EXISTED" = true ]; then
+            echo "✅ Token rotated for Pulse monitoring"
+        else
+            echo "✅ Token created for Pulse monitoring"
+        fi
         echo ""
     fi
-    
+
     # Try auto-registration
     echo "🔄 Attempting auto-registration with Pulse..."
     echo ""
@@ -4696,7 +4751,7 @@ else
             echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pbs&host=https://192.168.0.8:8007&pulse_url=$PULSE_URL\" | bash"
             echo ""
             echo "📝 For manual setup, use the token created above with:"
-            echo "   Token ID: pulse-monitor@pbs!%s"
+            echo "   Token ID: $PULSE_TOKEN_ID"
             echo "   Token Value: [See above]"
             echo ""
             exit 1
@@ -4708,7 +4763,7 @@ else
   "type": "pbs",
   "host": "$HOST_URL",
   "serverName": "$SERVER_HOSTNAME",
-  "tokenId": "pulse-monitor@pbs!%s",
+  "tokenId": "$PULSE_TOKEN_ID",
   "tokenValue": "$TOKEN_VALUE",
   "authToken": "$AUTH_TOKEN"
 }
@@ -4758,7 +4813,7 @@ echo ""
 # Set up permissions
 echo "Setting up permissions..."
 proxmox-backup-manager acl update / Audit --auth-id pulse-monitor@pbs
-proxmox-backup-manager acl update / Audit --auth-id 'pulse-monitor@pbs!%s'
+proxmox-backup-manager acl update / Audit --auth-id "$PULSE_TOKEN_ID"
 
 echo ""
 echo "✅ Setup complete!"
@@ -4767,8 +4822,12 @@ echo ""
 # Only show manual setup instructions if auto-registration failed
 if [ "$AUTO_REG_SUCCESS" != true ]; then
     echo "Add this server to Pulse with:"
-    echo "  Token ID: pulse-monitor@pbs!%s"
-    echo "  Token Value: [Check the output above for the token or instructions]"
+    echo "  Token ID: $PULSE_TOKEN_ID"
+    if [ -n "$TOKEN_VALUE" ]; then
+        echo "  Token Value: $TOKEN_VALUE"
+    else
+        echo "  Token Value: [Check the output above for the token or instructions]"
+    fi
     echo "  Host URL: https://$SERVER_IP:8007"
     echo ""
     echo "If auto-registration is enabled but requires a token:"
@@ -4776,9 +4835,8 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
     echo "  2. Re-run this script with: PULSE_REG_TOKEN=your-token ./setup.sh"
     echo ""
 fi
-`, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
-			tokenName, tokenName, tokenName, tokenName, tokenName,
-			authToken, pulseURL, serverHost, tokenName, tokenName, tokenName, tokenName)
+`, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseTokenScope,
+			tokenName, authToken, pulseURL, serverHost)
 	}
 
 	// Set headers for script download
@@ -5748,13 +5806,14 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 		Str("username", req.Username).
 		Msg("Processing secure auto-register request")
 
-	// Generate a unique token name based on Pulse's IP/hostname
-	hostname, _ := os.Hostname()
-	if hostname == "" {
-		hostname = strings.ReplaceAll(clientIP, ".", "-")
+	host, err := normalizeNodeHost(req.Host, req.Type)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
-	timestamp := time.Now().Unix()
-	tokenName := fmt.Sprintf("pulse-%s-%d", hostname, timestamp)
+
+	hostname, _ := os.Hostname()
+	tokenName := buildPulseMonitorTokenName(r.Host, hostname, clientIP)
 
 	// Generate a secure random token value
 	tokenBytes := make([]byte, 16)
@@ -5766,12 +5825,6 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 	tokenValue := fmt.Sprintf("%x-%x-%x-%x-%x",
 		tokenBytes[0:4], tokenBytes[4:6], tokenBytes[6:8], tokenBytes[8:10], tokenBytes[10:16])
 
-	host, err := normalizeNodeHost(req.Host, req.Type)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
 	fingerprint := ""
 	if fp, err := tlsutil.FetchFingerprint(host); err != nil {
 		log.Warn().Err(err).Str("host", host).Msg("Failed to fetch TLS fingerprint for auto-register")
@@ -5780,11 +5833,35 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 	}
 	verifySSL := true
 
-	// Create the token on the remote server
-	var fullTokenID string
-	var createErr error
-
+	existingTokenID := ""
+	existingTokenValue := ""
 	if req.Type == "pve" {
+		for _, node := range h.getConfig(r.Context()).PVEInstances {
+			if node.Host == host && isPulseAgentToken(node.TokenName) && strings.TrimSpace(node.TokenValue) != "" {
+				existingTokenID = node.TokenName
+				existingTokenValue = node.TokenValue
+				break
+			}
+		}
+	} else if req.Type == "pbs" {
+		for _, node := range h.getConfig(r.Context()).PBSInstances {
+			if node.Host == host && isPulseAgentToken(node.TokenName) && strings.TrimSpace(node.TokenValue) != "" {
+				existingTokenID = node.TokenName
+				existingTokenValue = node.TokenValue
+				break
+			}
+		}
+	}
+
+	var fullTokenID string
+	if existingTokenID != "" {
+		fullTokenID = existingTokenID
+		tokenValue = existingTokenValue
+		log.Info().
+			Str("host", host).
+			Str("tokenID", fullTokenID).
+			Msg("Reusing existing Pulse-managed token for secure auto-register")
+	} else if req.Type == "pve" {
 		// For PVE, create token via API
 		fullTokenID = fmt.Sprintf("pulse-monitor@pam!%s", tokenName)
 		// Note: This would require implementing token creation in the proxmox package
@@ -5824,12 +5901,6 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 			Str("host", host).
 			Str("tokenID", fullTokenID).
 			Msg("Successfully created PBS token via API")
-	}
-
-	if createErr != nil {
-		log.Error().Err(createErr).Msg("Failed to create token on remote server")
-		http.Error(w, "Failed to create token on remote server", http.StatusInternalServerError)
-		return
 	}
 
 	// Determine server name
