@@ -772,6 +772,7 @@ type Monitor struct {
 	guestMetadataStore         *config.GuestMetadataStore
 	dockerMetadataStore        *config.DockerMetadataStore
 	hostMetadataStore          *config.HostMetadataStore
+	hostRuntimeStore           *config.HostRuntimeStore
 	mu                         sync.RWMutex
 	startTime                  time.Time
 	rateTracker                *RateTracker
@@ -810,6 +811,7 @@ type Monitor struct {
 	removedKubernetesClusters  map[string]time.Time          // Track deliberately removed Kubernetes clusters (ID -> removal time)
 	kubernetesTokenBindings    map[string]string             // Track token ID -> agent ID bindings to enforce uniqueness
 	hostTokenBindings          map[string]string             // Track tokenID:hostname -> host identity bindings
+	lastHostRuntimePersist     map[string]time.Time          // Track last persisted host runtime write per host ID
 	dockerCommands             map[string]*dockerHostCommand
 	dockerCommandIndex         map[string]string
 	guestMetadataMu            sync.RWMutex
@@ -1153,6 +1155,7 @@ const (
 	dockerConnectionPrefix           = "docker-"
 	kubernetesConnectionPrefix       = "kubernetes-"
 	hostConnectionPrefix             = "host-"
+	hostRuntimePersistInterval       = 2 * time.Minute
 	dockerOfflineGraceMultiplier     = 4
 	dockerMinimumHealthWindow        = 30 * time.Second
 	dockerMaximumHealthWindow        = 10 * time.Minute
@@ -1437,6 +1440,173 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 	return host, nil
 }
 
+func hostRuntimeIdentityChanged(previous, current models.Host) bool {
+	if previous.ID != current.ID ||
+		previous.Hostname != current.Hostname ||
+		previous.DisplayName != current.DisplayName ||
+		previous.Platform != current.Platform ||
+		previous.OSName != current.OSName ||
+		previous.OSVersion != current.OSVersion ||
+		previous.KernelVersion != current.KernelVersion ||
+		previous.Architecture != current.Architecture ||
+		previous.CPUCount != current.CPUCount ||
+		previous.IntervalSeconds != current.IntervalSeconds ||
+		previous.AgentVersion != current.AgentVersion ||
+		previous.TokenID != current.TokenID ||
+		previous.TokenName != current.TokenName ||
+		previous.TokenHint != current.TokenHint ||
+		previous.CommandsEnabled != current.CommandsEnabled ||
+		previous.ReportIP != current.ReportIP ||
+		previous.IsLegacy != current.IsLegacy ||
+		previous.LinkedNodeID != current.LinkedNodeID ||
+		previous.LinkedVMID != current.LinkedVMID ||
+		previous.LinkedContainerID != current.LinkedContainerID {
+		return true
+	}
+
+	if len(previous.Tags) != len(current.Tags) {
+		return true
+	}
+	for i := range previous.Tags {
+		if previous.Tags[i] != current.Tags[i] {
+			return true
+		}
+	}
+
+	if len(previous.DiskExclude) != len(current.DiskExclude) {
+		return true
+	}
+	for i := range previous.DiskExclude {
+		if previous.DiskExclude[i] != current.DiskExclude[i] {
+			return true
+		}
+	}
+
+	if previous.TokenLastUsedAt == nil && current.TokenLastUsedAt == nil {
+		return false
+	}
+	if (previous.TokenLastUsedAt == nil) != (current.TokenLastUsedAt == nil) {
+		return true
+	}
+
+	return !previous.TokenLastUsedAt.Equal(*current.TokenLastUsedAt)
+}
+
+func (m *Monitor) persistHostRuntimeSnapshot(host models.Host, force bool) {
+	if m == nil || m.hostRuntimeStore == nil || strings.TrimSpace(host.ID) == "" {
+		return
+	}
+
+	now := time.Now()
+
+	m.mu.Lock()
+	if m.lastHostRuntimePersist == nil {
+		m.lastHostRuntimePersist = make(map[string]time.Time)
+	}
+	lastPersisted := m.lastHostRuntimePersist[host.ID]
+	shouldPersist := force || lastPersisted.IsZero() || now.Sub(lastPersisted) >= hostRuntimePersistInterval
+	m.mu.Unlock()
+
+	if !shouldPersist {
+		return
+	}
+
+	if err := m.hostRuntimeStore.Upsert(host); err != nil {
+		log.Warn().Err(err).Str("hostID", host.ID).Msg("Failed to persist host runtime snapshot")
+		return
+	}
+
+	m.mu.Lock()
+	if m.lastHostRuntimePersist == nil {
+		m.lastHostRuntimePersist = make(map[string]time.Time)
+	}
+	m.lastHostRuntimePersist[host.ID] = now
+	m.mu.Unlock()
+}
+
+func (m *Monitor) deletePersistedHostRuntime(hostID string) {
+	if m == nil || m.hostRuntimeStore == nil || strings.TrimSpace(hostID) == "" {
+		return
+	}
+
+	if err := m.hostRuntimeStore.Delete(hostID); err != nil {
+		log.Warn().Err(err).Str("hostID", hostID).Msg("Failed to delete persisted host runtime snapshot")
+	}
+
+	m.mu.Lock()
+	delete(m.lastHostRuntimePersist, hostID)
+	m.mu.Unlock()
+}
+
+func (m *Monitor) clearPersistedHostRuntime() {
+	if m == nil || m.hostRuntimeStore == nil {
+		return
+	}
+
+	if err := m.hostRuntimeStore.Clear(); err != nil {
+		log.Warn().Err(err).Msg("Failed to clear persisted host runtime snapshots")
+	}
+
+	m.mu.Lock()
+	m.lastHostRuntimePersist = make(map[string]time.Time)
+	m.mu.Unlock()
+}
+
+func (m *Monitor) restorePersistedHostAgents() {
+	if m == nil || m.state == nil || m.hostRuntimeStore == nil {
+		return
+	}
+
+	persisted := m.hostRuntimeStore.GetAll()
+	if len(persisted) == 0 {
+		return
+	}
+
+	now := time.Now().UTC()
+	restoredCount := 0
+	for hostID, host := range persisted {
+		resolvedID := strings.TrimSpace(host.ID)
+		if resolvedID == "" {
+			resolvedID = strings.TrimSpace(hostID)
+		}
+		hostname := strings.TrimSpace(host.Hostname)
+		if resolvedID == "" || hostname == "" {
+			continue
+		}
+
+		host.ID = resolvedID
+		host.Hostname = hostname
+		if strings.TrimSpace(host.DisplayName) == "" {
+			host.DisplayName = host.Hostname
+		}
+		if host.LastSeen.IsZero() {
+			host.LastSeen = now.Add(-hostMaximumHealthWindow)
+		}
+		host.Status = "offline"
+
+		// Keep server-side command override consistent on restore.
+		if cfg := m.GetHostAgentConfig(host.ID); cfg.CommandsEnabled != nil {
+			host.CommandsEnabled = *cfg.CommandsEnabled
+		}
+
+		m.state.UpsertHost(host)
+		m.state.SetConnectionHealth(hostConnectionPrefix+host.ID, false)
+
+		m.mu.Lock()
+		if m.lastHostRuntimePersist == nil {
+			m.lastHostRuntimePersist = make(map[string]time.Time)
+		}
+		m.lastHostRuntimePersist[host.ID] = now
+		m.mu.Unlock()
+
+		restoredCount++
+	}
+
+	if restoredCount > 0 {
+		log.Info().Int("hosts", restoredCount).Msg("Restored host agents from persisted runtime state")
+	}
+}
+
 // RemoveHostAgent removes a host agent from monitoring state and clears related data.
 func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 	hostID = strings.TrimSpace(hostID)
@@ -1551,6 +1721,8 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 	if m.alertManager != nil {
 		m.alertManager.HandleHostRemoved(host)
 	}
+
+	m.deletePersistedHostRuntime(hostID)
 
 	return host, nil
 }
@@ -1996,6 +2168,7 @@ func (m *Monitor) ClearUnauthenticatedAgents() (int, int) {
 
 	// Clear all hosts
 	hostCount := m.state.ClearAllHosts()
+	m.clearPersistedHostRuntime()
 
 	// Clear all docker hosts
 	dockerCount := m.state.ClearAllDockerHosts()
@@ -2829,6 +3002,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 	m.state.UpsertHost(host)
 	m.state.SetConnectionHealth(hostConnectionPrefix+host.ID, true)
+	m.persistHostRuntimeSnapshot(host, !hasPrevious || hostRuntimeIdentityChanged(previous, host))
 
 	// Update the linked PVE node to point back to this host agent
 	if host.LinkedNodeID != "" {
@@ -3864,6 +4038,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		guestMetadataStore:         config.NewGuestMetadataStore(cfg.DataPath, nil),
 		dockerMetadataStore:        config.NewDockerMetadataStore(cfg.DataPath, nil),
 		hostMetadataStore:          config.NewHostMetadataStore(cfg.DataPath, nil),
+		hostRuntimeStore:           config.NewHostRuntimeStore(cfg.DataPath, nil),
 		startTime:                  time.Now(),
 		rateTracker:                NewRateTracker(),
 		metricsHistory:             NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points (~8h @ 30s)
@@ -3893,6 +4068,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		removedKubernetesClusters:  make(map[string]time.Time),
 		kubernetesTokenBindings:    make(map[string]string),
 		hostTokenBindings:          make(map[string]string),
+		lastHostRuntimePersist:     make(map[string]time.Time),
 		dockerCommands:             make(map[string]*dockerHostCommand),
 		dockerCommandIndex:         make(map[string]string),
 		guestMetadataCache:         make(map[string]guestMetadataCacheEntry),
@@ -3928,6 +4104,11 @@ func New(cfg *config.Config) (*Monitor, error) {
 
 	// Initialize state with config values
 	m.state.TemperatureMonitoringEnabled = cfg.TemperatureMonitoringEnabled
+
+	// Rehydrate last known host agents to preserve offline visibility/alerting
+	// when Pulse restarts while agents are offline.
+	m.restorePersistedHostAgents()
+	m.RebuildTokenBindings()
 
 	if m.pollMetrics != nil {
 		m.pollMetrics.ResetQueueDepth(0)
@@ -6897,6 +7078,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					guestRaw.BalloonMin = detailedStatus.BalloonMin
 					guestRaw.Agent = detailedStatus.Agent.Value
 					memAvailable := uint64(0)
+					memInfoTotalMinusUsed := uint64(0)
 					if detailedStatus.MemInfo != nil {
 						guestRaw.MemInfoUsed = detailedStatus.MemInfo.Used
 						guestRaw.MemInfoFree = detailedStatus.MemInfo.Free
@@ -6906,28 +7088,12 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 						guestRaw.MemInfoCached = detailedStatus.MemInfo.Cached
 						guestRaw.MemInfoShared = detailedStatus.MemInfo.Shared
 
-						// Derive memAvailable from balloon MemInfo. Prefer Available (most
-						// accurate), then Free+Buffers+Cached when cache metrics are present.
-						// When Buffers=0 AND Cached=0, the balloon isn't reporting cache
-						// breakdown — using Free alone gives wildly inflated usage because
-						// reclaimable page cache is counted as used. In that case, skip and
-						// fall through to RRD/guest-agent fallbacks. Refs: #1302, #1270
-						switch {
-						case detailedStatus.MemInfo.Available > 0:
-							memAvailable = detailedStatus.MemInfo.Available
-							memorySource = "meminfo-available"
-						case detailedStatus.MemInfo.Buffers > 0 || detailedStatus.MemInfo.Cached > 0:
-							memAvailable = detailedStatus.MemInfo.Free +
-								detailedStatus.MemInfo.Buffers +
-								detailedStatus.MemInfo.Cached
-							memorySource = "meminfo-derived"
-						}
-
-						// Record Total-Used for diagnostics even when not used as the source
-						if detailedStatus.MemInfo.Total > 0 &&
-							detailedStatus.MemInfo.Used > 0 &&
-							detailedStatus.MemInfo.Total >= detailedStatus.MemInfo.Used {
-							guestRaw.MemInfoTotalMinusUsed = detailedStatus.MemInfo.Total - detailedStatus.MemInfo.Used
+						selection := selectVMAvailableFromMemInfo(detailedStatus.MemInfo)
+						memInfoTotalMinusUsed = selection.TotalMinusUsed
+						guestRaw.MemInfoTotalMinusUsed = memInfoTotalMinusUsed
+						if selection.Available > 0 {
+							memAvailable = selection.Available
+							memorySource = selection.Source
 						}
 					}
 
@@ -7015,16 +7181,10 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 						}
 					}
 
-					// Last-chance MemInfo fallback: when balloon reports Used/Total but no
-					// cache breakdown (Buffers=Cached=0), use Total-Used. This may equal
-					// Free (if Used=Total-Free) but is still better than status-mem which
-					// can be even more inflated. Placed after RRD/agent so those get
-					// priority. Refs: #1302, #1270
-					if memAvailable == 0 && detailedStatus.MemInfo != nil &&
-						detailedStatus.MemInfo.Total > 0 &&
-						detailedStatus.MemInfo.Used > 0 &&
-						detailedStatus.MemInfo.Total >= detailedStatus.MemInfo.Used {
-						memAvailable = detailedStatus.MemInfo.Total - detailedStatus.MemInfo.Used
+					// Last-chance MemInfo fallback: use Total-Used only after RRD/agent
+					// attempts, so those more reliable cache-aware sources get priority.
+					if memAvailable == 0 && memInfoTotalMinusUsed > 0 {
+						memAvailable = memInfoTotalMinusUsed
 						memorySource = "meminfo-total-minus-used"
 					}
 

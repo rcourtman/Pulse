@@ -68,6 +68,143 @@ func TestEvaluateHostAgentsTriggersOfflineAlert(t *testing.T) {
 	}
 }
 
+func TestRestorePersistedHostAgents(t *testing.T) {
+	dataDir := t.TempDir()
+	runtimeStore := config.NewHostRuntimeStore(dataDir, nil)
+	metadataStore := config.NewHostMetadataStore(dataDir, nil)
+
+	now := time.Now().UTC()
+	if err := runtimeStore.Upsert(models.Host{
+		ID:              "host-restored",
+		Hostname:        "restored.local",
+		DisplayName:     "Restored Host",
+		Status:          "online",
+		IntervalSeconds: 30,
+		LastSeen:        now.Add(-5 * time.Minute),
+		TokenID:         "token-restored",
+	}); err != nil {
+		t.Fatalf("seed runtime store: %v", err)
+	}
+
+	enabled := true
+	if err := metadataStore.Set("host-restored", &config.HostMetadata{CommandsEnabled: &enabled}); err != nil {
+		t.Fatalf("set host metadata: %v", err)
+	}
+
+	monitor := &Monitor{
+		state:                  models.NewState(),
+		config:                 &config.Config{APITokens: []config.APITokenRecord{{ID: "token-restored"}}},
+		hostMetadataStore:      metadataStore,
+		hostRuntimeStore:       runtimeStore,
+		hostTokenBindings:      make(map[string]string),
+		lastHostRuntimePersist: make(map[string]time.Time),
+	}
+
+	monitor.restorePersistedHostAgents()
+	monitor.RebuildTokenBindings()
+
+	snapshot := monitor.state.GetSnapshot()
+	if len(snapshot.Hosts) != 1 {
+		t.Fatalf("expected 1 restored host, got %d", len(snapshot.Hosts))
+	}
+	restored := snapshot.Hosts[0]
+	if restored.ID != "host-restored" {
+		t.Fatalf("restored host id = %q, want host-restored", restored.ID)
+	}
+	if restored.Status != "offline" {
+		t.Fatalf("restored host status = %q, want offline", restored.Status)
+	}
+	if !restored.CommandsEnabled {
+		t.Fatalf("expected commandsEnabled override to apply on restore")
+	}
+
+	connKey := hostConnectionPrefix + restored.ID
+	if healthy, ok := snapshot.ConnectionHealth[connKey]; !ok || healthy {
+		t.Fatalf("expected restored host connection health false, got %v (exists=%v)", healthy, ok)
+	}
+
+	if boundID := monitor.hostTokenBindings["token-restored:restored.local"]; boundID != "host-restored" {
+		t.Fatalf("expected token binding to be rebuilt, got %q", boundID)
+	}
+}
+
+func TestApplyHostReportPersistsAndRemoveHostAgentClearsRuntime(t *testing.T) {
+	dataDir := t.TempDir()
+	runtimeStore := config.NewHostRuntimeStore(dataDir, nil)
+
+	monitor := &Monitor{
+		state:                  models.NewState(),
+		alertManager:           alerts.NewManager(),
+		hostTokenBindings:      make(map[string]string),
+		config:                 &config.Config{},
+		rateTracker:            NewRateTracker(),
+		hostRuntimeStore:       runtimeStore,
+		lastHostRuntimePersist: make(map[string]time.Time),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-runtime",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:       "machine-runtime",
+			Hostname: "runtime.local",
+			Platform: "linux",
+		},
+		Timestamp: time.Now().UTC(),
+		Metrics: agentshost.Metrics{
+			CPUUsagePercent: 5.5,
+		},
+	}
+
+	host, err := monitor.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+
+	if persisted := runtimeStore.GetAll(); len(persisted) != 1 {
+		t.Fatalf("expected 1 persisted host after report, got %d", len(persisted))
+	}
+
+	if _, err := monitor.RemoveHostAgent(host.ID); err != nil {
+		t.Fatalf("RemoveHostAgent: %v", err)
+	}
+
+	if persisted := runtimeStore.GetAll(); len(persisted) != 0 {
+		t.Fatalf("expected persisted host to be removed, got %d entries", len(persisted))
+	}
+}
+
+func TestClearUnauthenticatedAgentsClearsPersistedHostRuntime(t *testing.T) {
+	dataDir := t.TempDir()
+	runtimeStore := config.NewHostRuntimeStore(dataDir, nil)
+	if err := runtimeStore.Upsert(models.Host{ID: "host-clear", Hostname: "clear.local", LastSeen: time.Now().UTC()}); err != nil {
+		t.Fatalf("seed runtime store: %v", err)
+	}
+
+	monitor := &Monitor{
+		state:                  models.NewState(),
+		config:                 &config.Config{},
+		hostRuntimeStore:       runtimeStore,
+		hostTokenBindings:      make(map[string]string),
+		dockerTokenBindings:    make(map[string]string),
+		lastHostRuntimePersist: make(map[string]time.Time),
+	}
+	monitor.state.UpsertHost(models.Host{ID: "host-clear", Hostname: "clear.local"})
+
+	hostCount, dockerCount := monitor.ClearUnauthenticatedAgents()
+	if hostCount != 1 || dockerCount != 0 {
+		t.Fatalf("ClearUnauthenticatedAgents = (%d,%d), want (1,0)", hostCount, dockerCount)
+	}
+
+	if persisted := runtimeStore.GetAll(); len(persisted) != 0 {
+		t.Fatalf("expected persisted runtime store to be cleared, got %d entries", len(persisted))
+	}
+}
+
 func TestEvaluateHostAgentsClearsAlertWhenHostReturns(t *testing.T) {
 	t.Helper()
 
