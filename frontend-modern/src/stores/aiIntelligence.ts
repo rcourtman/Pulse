@@ -9,7 +9,7 @@
 
 import { createSignal } from 'solid-js';
 import { AIAPI } from '@/api/ai';
-import { acknowledgeFinding, snoozeFinding, dismissFinding, setFindingNote } from '@/api/patrol';
+import { acknowledgeFinding, snoozeFinding, dismissFinding, undismissFinding, setFindingNote } from '@/api/patrol';
 import type {
   RemediationPlan,
   CircuitBreakerStatus,
@@ -269,6 +269,17 @@ export const aiIntelligenceStore = {
       return true;
     } catch (e) {
       logger.error('Failed to dismiss finding:', e);
+      return false;
+    }
+  },
+
+  async restoreFinding(findingId: string) {
+    try {
+      await undismissFinding(findingId);
+      await this.loadFindings();
+      return true;
+    } catch (e) {
+      logger.error('Failed to restore finding:', e);
       return false;
     }
   },

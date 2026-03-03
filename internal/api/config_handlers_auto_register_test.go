@@ -12,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 func newTestConfigHandlers(t *testing.T, cfg *config.Config) *ConfigHandlers {
@@ -326,6 +327,7 @@ func TestIsPulseAgentToken(t *testing.T) {
 	}{
 		{"pulse-monitor@pam!pulse-1234567890", true},
 		{"pulse-monitor@pbs!pulse-1234567890", true},
+		{"pulse-monitor@pam!pulse-pulse-example-com", true},
 		{"pulse-monitor@pam!pulse-", true},
 		{"pulse-monitor@pam!token1", false},
 		{"root@pam!mytoken", false},
@@ -831,5 +833,138 @@ func TestAutoRegisterAgentDifferentHostsSameNameStaySeparate(t *testing.T) {
 	// Should be 2 separate nodes (one has manual token, other has Pulse token)
 	if len(cfg.PVEInstances) != 2 {
 		t.Fatalf("expected 2 PVE instances (different hosts), got %d", len(cfg.PVEInstances))
+	}
+}
+
+func TestHandleAutoRegisterStoresFingerprintForNewPVE(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	originalDetectPVECluster := detectPVECluster
+	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+		return false, "", nil
+	}
+	defer func() { detectPVECluster = originalDetectPVECluster }()
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	pveServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer pveServer.Close()
+
+	const authToken = "TEMP-TOKEN"
+	tokenHash := internalauth.HashAPIToken(authToken)
+	handler.codeMutex.Lock()
+	handler.setupCodes[tokenHash] = &SetupCode{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       pveServer.URL,
+		TokenID:    "pulse-monitor@pam!pulse-1772387119",
+		TokenValue: "secret-token",
+		ServerName: "pve01",
+		Source:     "agent",
+		AuthToken:  authToken,
+	}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAutoRegister(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("registration failed: status=%d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance, got %d", len(cfg.PVEInstances))
+	}
+
+	expectedFP, err := tlsutil.FetchFingerprint(pveServer.URL)
+	if err != nil {
+		t.Fatalf("failed to fetch expected fingerprint: %v", err)
+	}
+
+	if cfg.PVEInstances[0].Fingerprint == "" {
+		t.Fatalf("expected non-empty fingerprint on auto-registered node")
+	}
+	if cfg.PVEInstances[0].Fingerprint != expectedFP {
+		t.Fatalf("fingerprint mismatch: got %q want %q", cfg.PVEInstances[0].Fingerprint, expectedFP)
+	}
+}
+
+func TestHandleAutoRegisterUpdateDoesNotClearFingerprintWhenFetchFails(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	originalDetectPVECluster := detectPVECluster
+	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+		return false, "", nil
+	}
+	defer func() { detectPVECluster = originalDetectPVECluster }()
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:        "pve01",
+				Host:        "https://127.0.0.1:1", // Force FetchFingerprint to fail quickly
+				TokenName:   "pulse-monitor@pam!pulse-1700000000",
+				TokenValue:  "old-secret",
+				Fingerprint: "existing-fingerprint",
+				VerifySSL:   true,
+				Source:      "agent",
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	const authToken = "TEMP-TOKEN"
+	tokenHash := internalauth.HashAPIToken(authToken)
+	handler.codeMutex.Lock()
+	handler.setupCodes[tokenHash] = &SetupCode{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://127.0.0.1:1",
+		TokenID:    "pulse-monitor@pam!pulse-1700000001",
+		TokenValue: "new-secret",
+		ServerName: "pve01",
+		Source:     "agent",
+		AuthToken:  authToken,
+	}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAutoRegister(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("re-registration failed: status=%d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance, got %d", len(cfg.PVEInstances))
+	}
+	if cfg.PVEInstances[0].Fingerprint != "existing-fingerprint" {
+		t.Fatalf("expected existing fingerprint to be preserved, got %q", cfg.PVEInstances[0].Fingerprint)
 	}
 }

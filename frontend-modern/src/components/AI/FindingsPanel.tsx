@@ -316,6 +316,18 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     setDismissingId(null);
   };
 
+  const handleRestore = async (finding: UnifiedFinding, e: Event) => {
+    e.stopPropagation();
+    setActionLoading(finding.id);
+    const ok = await aiIntelligenceStore.restoreFinding(finding.id);
+    setActionLoading(null);
+    if (ok) {
+      notificationStore.success('Finding restored');
+    } else {
+      notificationStore.error('Failed to restore finding');
+    }
+  };
+
   const handleSnooze = async (finding: UnifiedFinding, durationHours: number, e: Event) => {
     e.stopPropagation();
     setActionLoading(finding.id);
@@ -612,6 +624,19 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </svg>
             </button>
           </Show>
+          <Show when={finding.status === 'dismissed'}>
+            <button
+              type="button"
+              onClick={(e) => handleRestore(finding, e)}
+              class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              title="Restore"
+              disabled={actionLoading() === finding.id}
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h11M7 6l-4 4 4 4M21 14v4a2 2 0 01-2 2H9" />
+              </svg>
+            </button>
+          </Show>
           {/* Expand indicator */}
           <svg
             class={`w-4 h-4 text-gray-400 transition-transform ${expandedId() === finding.id ? 'rotate-180' : ''}`}
@@ -781,6 +806,18 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             disabled={actionLoading() === finding.id}
           >
             Dismiss: Later
+          </button>
+        </div>
+      </Show>
+      <Show when={finding.status === 'dismissed'}>
+        <div class="mt-3 flex flex-wrap gap-2 text-xs">
+          <button
+            type="button"
+            onClick={(e) => handleRestore(finding, e)}
+            class="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+            disabled={actionLoading() === finding.id}
+          >
+            Restore
           </button>
         </div>
       </Show>

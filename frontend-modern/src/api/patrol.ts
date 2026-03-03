@@ -186,6 +186,17 @@ export async function dismissFinding(
 }
 
 /**
+ * Restore a dismissed/suppressed finding back to active state.
+ * @param findingId The ID of the finding to restore
+ */
+export async function undismissFinding(findingId: string): Promise<{ success: boolean; message: string }> {
+    return apiFetchJSON('/api/ai/patrol/undismiss', {
+        method: 'POST',
+        body: JSON.stringify({ finding_id: findingId }),
+    });
+}
+
+/**
  * Set or update a user note on a finding
  * Notes provide context that Patrol sees on future runs.
  * @param findingId The ID of the finding
