@@ -613,10 +613,14 @@ func TestGetQueueStats(t *testing.T) {
 		}
 		defer nq.Stop()
 
+		// Keep pending notifications out of the runnable window so the background
+		// processor can't race this test and mutate statuses before assertions.
+		futureRetry := time.Now().Add(1 * time.Hour)
+
 		// Enqueue notifications with different statuses
 		notifications := []*QueuedNotification{
-			{ID: "pending-1", Type: "email", Status: QueueStatusPending, MaxAttempts: 3, Config: []byte(`{}`)},
-			{ID: "pending-2", Type: "email", Status: QueueStatusPending, MaxAttempts: 3, Config: []byte(`{}`)},
+			{ID: "pending-1", Type: "email", Status: QueueStatusPending, MaxAttempts: 3, Config: []byte(`{}`), NextRetryAt: &futureRetry},
+			{ID: "pending-2", Type: "email", Status: QueueStatusPending, MaxAttempts: 3, Config: []byte(`{}`), NextRetryAt: &futureRetry},
 			{ID: "sending-1", Type: "webhook", Status: QueueStatusSending, MaxAttempts: 3, Config: []byte(`{}`)},
 		}
 
