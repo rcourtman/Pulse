@@ -1,6 +1,13 @@
 package api
 
-import "testing"
+import (
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
+)
 
 func TestClassifyStatus(t *testing.T) {
 	tests := []struct {
@@ -230,4 +237,160 @@ func TestNormalizeRoute(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ---------------------------------------------------------------------------
+// recordAPIRequest integration tests — verify that the core recording
+// function correctly populates all three Prometheus metric vectors.
+// ---------------------------------------------------------------------------
+
+func TestRecordAPIRequest_SuccessMetrics(t *testing.T) {
+	httpMetricsOnce.Do(initHTTPMetrics)
+
+	route := "/test/record/success"
+	status := "200"
+
+	totalBefore := httpCounterValue(t, apiRequestTotal, "GET", route, status)
+	durCountBefore := httpHistogramSampleCount(t, apiRequestDuration, "GET", route, status)
+
+	recordAPIRequest("GET", route, 200, 42*time.Millisecond)
+
+	if delta := httpCounterValue(t, apiRequestTotal, "GET", route, status) - totalBefore; delta != 1 {
+		t.Errorf("requests_total delta: want 1, got %v", delta)
+	}
+	if delta := httpHistogramSampleCount(t, apiRequestDuration, "GET", route, status) - durCountBefore; delta != 1 {
+		t.Errorf("request_duration_seconds observation count delta: want 1, got %v", delta)
+	}
+}
+
+func TestRecordAPIRequest_ClientErrorCounter(t *testing.T) {
+	httpMetricsOnce.Do(initHTTPMetrics)
+
+	route := "/test/record/client-err"
+	errBefore := httpCounterValue(t, apiRequestErrors, "GET", route, "client_error")
+	totalBefore := httpCounterValue(t, apiRequestTotal, "GET", route, "404")
+
+	recordAPIRequest("GET", route, 404, 5*time.Millisecond)
+
+	if delta := httpCounterValue(t, apiRequestErrors, "GET", route, "client_error") - errBefore; delta != 1 {
+		t.Errorf("request_errors_total (client_error) delta: want 1, got %v", delta)
+	}
+	if delta := httpCounterValue(t, apiRequestTotal, "GET", route, "404") - totalBefore; delta != 1 {
+		t.Errorf("requests_total (404) delta: want 1, got %v", delta)
+	}
+}
+
+func TestRecordAPIRequest_ServerErrorCounter(t *testing.T) {
+	httpMetricsOnce.Do(initHTTPMetrics)
+
+	route := "/test/record/server-err"
+	errBefore := httpCounterValue(t, apiRequestErrors, "POST", route, "server_error")
+
+	recordAPIRequest("POST", route, 500, 100*time.Millisecond)
+
+	if delta := httpCounterValue(t, apiRequestErrors, "POST", route, "server_error") - errBefore; delta != 1 {
+		t.Errorf("request_errors_total (server_error) delta: want 1, got %v", delta)
+	}
+}
+
+func TestRecordAPIRequest_SuccessSkipsErrorCounter(t *testing.T) {
+	httpMetricsOnce.Do(initHTTPMetrics)
+
+	route := "/test/record/no-error"
+	clientBefore := httpCounterValue(t, apiRequestErrors, "GET", route, "client_error")
+	serverBefore := httpCounterValue(t, apiRequestErrors, "GET", route, "server_error")
+
+	recordAPIRequest("GET", route, 200, 5*time.Millisecond)
+	recordAPIRequest("GET", route, 301, 3*time.Millisecond)
+
+	if delta := httpCounterValue(t, apiRequestErrors, "GET", route, "client_error") - clientBefore; delta != 0 {
+		t.Errorf("client_error counter changed for 2xx/3xx: delta=%v", delta)
+	}
+	if delta := httpCounterValue(t, apiRequestErrors, "GET", route, "server_error") - serverBefore; delta != 0 {
+		t.Errorf("server_error counter changed for 2xx/3xx: delta=%v", delta)
+	}
+}
+
+func TestRecordAPIRequest_DurationAccuracy(t *testing.T) {
+	httpMetricsOnce.Do(initHTTPMetrics)
+
+	route := "/test/record/duration"
+	status := "200"
+	sumBefore := httpHistogramSum(t, apiRequestDuration, "GET", route, status)
+
+	recordAPIRequest("GET", route, 200, 100*time.Millisecond)
+
+	delta := httpHistogramSum(t, apiRequestDuration, "GET", route, status) - sumBefore
+	// 100ms = 0.1s; allow small float tolerance.
+	if delta < 0.099 || delta > 0.101 {
+		t.Errorf("duration_seconds sum delta: want ~0.1, got %v", delta)
+	}
+}
+
+func TestRecordAPIRequest_MultipleStatusCodes(t *testing.T) {
+	httpMetricsOnce.Do(initHTTPMetrics)
+
+	route := "/test/record/multi-status"
+	codes := []int{200, 201, 400, 401, 404, 500, 502, 503}
+
+	for _, code := range codes {
+		status := strconv.Itoa(code)
+		before := httpCounterValue(t, apiRequestTotal, "GET", route, status)
+		recordAPIRequest("GET", route, code, time.Millisecond)
+		if delta := httpCounterValue(t, apiRequestTotal, "GET", route, status) - before; delta != 1 {
+			t.Errorf("requests_total for status %d: want delta=1, got %v", code, delta)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test helpers for reading Prometheus metric values (delta-safe pattern).
+// ---------------------------------------------------------------------------
+
+func httpCounterValue(t *testing.T, vec *prometheus.CounterVec, labels ...string) float64 {
+	t.Helper()
+	counter, err := vec.GetMetricWithLabelValues(labels...)
+	if err != nil {
+		t.Fatalf("GetMetricWithLabelValues(%v): %v", labels, err)
+	}
+	m := &dto.Metric{}
+	if err := counter.Write(m); err != nil {
+		t.Fatalf("Write metric: %v", err)
+	}
+	if m.Counter == nil {
+		return 0
+	}
+	return m.Counter.GetValue()
+}
+
+func httpHistogramSampleCount(t *testing.T, vec *prometheus.HistogramVec, labels ...string) uint64 {
+	t.Helper()
+	obs, err := vec.GetMetricWithLabelValues(labels...)
+	if err != nil {
+		t.Fatalf("GetMetricWithLabelValues(%v): %v", labels, err)
+	}
+	m := &dto.Metric{}
+	if err := obs.(prometheus.Metric).Write(m); err != nil {
+		t.Fatalf("Write metric: %v", err)
+	}
+	if m.Histogram == nil {
+		return 0
+	}
+	return m.Histogram.GetSampleCount()
+}
+
+func httpHistogramSum(t *testing.T, vec *prometheus.HistogramVec, labels ...string) float64 {
+	t.Helper()
+	obs, err := vec.GetMetricWithLabelValues(labels...)
+	if err != nil {
+		t.Fatalf("GetMetricWithLabelValues(%v): %v", labels, err)
+	}
+	m := &dto.Metric{}
+	if err := obs.(prometheus.Metric).Write(m); err != nil {
+		t.Fatalf("Write metric: %v", err)
+	}
+	if m.Histogram == nil {
+		return 0
+	}
+	return m.Histogram.GetSampleSum()
 }
