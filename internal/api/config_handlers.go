@@ -4164,9 +4164,9 @@ pveum user add pulse-monitor@pam --comment "Pulse monitoring service" 2>/dev/nul
 
 SETUP_AUTH_TOKEN="%s"
 AUTO_REG_SUCCESS=false
+TOKEN_ROTATION_SKIPPED=false
 
-attempt_auto_registration() {
-
+resolve_setup_auth_token() {
     if [ -z "$SETUP_AUTH_TOKEN" ] && [ -n "$PULSE_SETUP_TOKEN" ]; then
         SETUP_AUTH_TOKEN="$PULSE_SETUP_TOKEN"
     fi
@@ -4186,9 +4186,18 @@ attempt_auto_registration() {
 			printf "\n" >/dev/tty
 		fi
 	fi
+}
+
+attempt_auto_registration() {
+    resolve_setup_auth_token
 
     if [ -z "$TOKEN_VALUE" ]; then
-        echo "⚠️  Auto-registration skipped: token value unavailable"
+        if [ "$TOKEN_ROTATION_SKIPPED" = true ]; then
+            echo "⚠️  Auto-registration skipped: existing token preserved to avoid credential drift"
+            echo "   Set PULSE_FORCE_TOKEN_ROTATE=1 if you need to rotate and register a new token."
+        else
+            echo "⚠️  Auto-registration skipped: token value unavailable"
+        fi
         AUTO_REG_SUCCESS=false
         REGISTER_RESPONSE=""
         return
@@ -4258,50 +4267,57 @@ attempt_auto_registration() {
 # Generate API token
 echo "Generating API token..."
 
-# Rotate token if it already exists so reruns remain idempotent
+# Keep existing tokens by default so reruns cannot silently desynchronize Pulse credentials.
 TOKEN_EXISTED=false
 TOKEN_OUTPUT=""
 TOKEN_VALUE=""
 if pveum user token list pulse-monitor@pam 2>/dev/null | grep -q "$TOKEN_NAME"; then
     TOKEN_EXISTED=true
-    echo "Existing token '$TOKEN_NAME' found. Rotating in place..."
-    if ! pveum user token remove pulse-monitor@pam "$TOKEN_NAME" >/dev/null 2>&1; then
-        echo "⚠️  Failed to remove existing token '$TOKEN_NAME'. Attempting create anyway..."
+    if [ "${PULSE_FORCE_TOKEN_ROTATE:-}" = "1" ]; then
+        echo "Existing token '$TOKEN_NAME' found. Rotating in place (PULSE_FORCE_TOKEN_ROTATE=1)."
+        if ! pveum user token remove pulse-monitor@pam "$TOKEN_NAME" >/dev/null 2>&1; then
+            echo "⚠️  Failed to remove existing token '$TOKEN_NAME'. Attempting create anyway..."
+        fi
+    else
+        TOKEN_ROTATION_SKIPPED=true
+        echo "Existing token '$TOKEN_NAME' found. Keeping it unchanged to avoid breaking existing Pulse credentials."
+        echo "Set PULSE_FORCE_TOKEN_ROTATE=1 to rotate this token and issue a new secret."
     fi
 fi
 
-# Create token and capture value (shown once by Proxmox)
-TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pam "$TOKEN_NAME" --privsep 0 2>&1)
-TOKEN_CREATE_RC=$?
-if [ "$TOKEN_CREATE_RC" -ne 0 ]; then
-    echo "❌ Failed to create token '$TOKEN_NAME'"
-    echo "$TOKEN_OUTPUT"
-    echo ""
-    echo "Manual registration may be required."
-    echo ""
-else
-    TOKEN_VALUE=$(echo "$TOKEN_OUTPUT" | grep "│ value" | awk -F'│' '{print $3}' | tr -d ' ' | tail -1)
-
-    if [ -z "$TOKEN_VALUE" ]; then
-        echo ""
-        echo "================================================================"
-        echo "IMPORTANT: Copy the token value below - it's only shown once!"
-        echo "================================================================"
+if [ "$TOKEN_ROTATION_SKIPPED" != true ]; then
+    # Create token and capture value (shown once by Proxmox)
+    TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pam "$TOKEN_NAME" --privsep 0 2>&1)
+    TOKEN_CREATE_RC=$?
+    if [ "$TOKEN_CREATE_RC" -ne 0 ]; then
+        echo "❌ Failed to create token '$TOKEN_NAME'"
         echo "$TOKEN_OUTPUT"
-        echo "================================================================"
         echo ""
-        echo "⚠️  Failed to extract token value from output."
-        echo "   Manual registration may be required."
+        echo "Manual registration may be required."
         echo ""
     else
-        if [ "$TOKEN_EXISTED" = true ]; then
-            echo "API token rotated successfully"
-        else
-            echo "API token generated successfully"
-        fi
-        echo ""
-    fi
+        TOKEN_VALUE=$(echo "$TOKEN_OUTPUT" | grep "│ value" | awk -F'│' '{print $3}' | tr -d ' ' | tail -1)
 
+        if [ -z "$TOKEN_VALUE" ]; then
+            echo ""
+            echo "================================================================"
+            echo "IMPORTANT: Copy the token value below - it's only shown once!"
+            echo "================================================================"
+            echo "$TOKEN_OUTPUT"
+            echo "================================================================"
+            echo ""
+            echo "⚠️  Failed to extract token value from output."
+            echo "   Manual registration may be required."
+            echo ""
+        else
+            if [ "$TOKEN_EXISTED" = true ]; then
+                echo "API token rotated successfully"
+            else
+                echo "API token generated successfully"
+            fi
+            echo ""
+        fi
+    fi
 fi
 
 # Set up permissions
@@ -4549,7 +4565,9 @@ echo ""
 if [ "$AUTO_REG_SUCCESS" != true ]; then
     echo "Manual setup instructions:"
     echo "  Token ID: $PULSE_TOKEN_ID"
-    if [ -n "$TOKEN_VALUE" ]; then
+    if [ "$TOKEN_ROTATION_SKIPPED" = true ]; then
+        echo "  Token Value: [unchanged - existing token secret preserved]"
+    elif [ -n "$TOKEN_VALUE" ]; then
         echo "  Token Value: $TOKEN_VALUE"
     else
         echo "  Token Value: [See token output above]"
@@ -4656,80 +4674,89 @@ proxmox-backup-manager user create pulse-monitor@pbs 2>/dev/null || echo "User a
 # Generate API token
 echo "Generating API token..."
 
-# Rotate token if it already exists so reruns remain idempotent
+# Keep existing tokens by default so reruns cannot silently desynchronize Pulse credentials.
 TOKEN_EXISTED=false
 TOKEN_OUTPUT=""
 TOKEN_VALUE=""
+TOKEN_ROTATION_SKIPPED=false
+AUTO_REG_SUCCESS=false
 if proxmox-backup-manager user list-tokens pulse-monitor@pbs 2>/dev/null | grep -q "$TOKEN_NAME"; then
     TOKEN_EXISTED=true
-    echo "Existing token '$TOKEN_NAME' found. Rotating in place..."
-    if ! proxmox-backup-manager user delete-token pulse-monitor@pbs "$TOKEN_NAME" >/dev/null 2>&1; then
-        echo "⚠️  Failed to remove existing token '$TOKEN_NAME'. Attempting create anyway..."
+    if [ "${PULSE_FORCE_TOKEN_ROTATE:-}" = "1" ]; then
+        echo "Existing token '$TOKEN_NAME' found. Rotating in place (PULSE_FORCE_TOKEN_ROTATE=1)."
+        if ! proxmox-backup-manager user delete-token pulse-monitor@pbs "$TOKEN_NAME" >/dev/null 2>&1; then
+            echo "⚠️  Failed to remove existing token '$TOKEN_NAME'. Attempting create anyway..."
+        fi
+    else
+        TOKEN_ROTATION_SKIPPED=true
+        echo "Existing token '$TOKEN_NAME' found. Keeping it unchanged to avoid breaking existing Pulse credentials."
+        echo "Set PULSE_FORCE_TOKEN_ROTATE=1 to rotate this token and issue a new secret."
     fi
 fi
 
-echo ""
-echo "================================================================"
-echo "IMPORTANT: Copy the token value below - it's only shown once!"
-echo "================================================================"
-TOKEN_OUTPUT=$(proxmox-backup-manager user generate-token pulse-monitor@pbs "$TOKEN_NAME" 2>&1)
-TOKEN_CREATE_RC=$?
-if [ "$TOKEN_CREATE_RC" -ne 0 ]; then
-    echo "❌ Failed to create token '$TOKEN_NAME'"
-    echo "$TOKEN_OUTPUT"
+if [ "$TOKEN_ROTATION_SKIPPED" != true ]; then
     echo ""
-    echo "Manual registration may be required."
-    echo ""
-else
-    echo "$TOKEN_OUTPUT"
-
-    # Extract the token value for auto-registration
-    TOKEN_VALUE=$(echo "$TOKEN_OUTPUT" | grep '"value"' | sed 's/.*"value"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-
-    if [ -z "$TOKEN_VALUE" ]; then
-        echo "⚠️  Failed to extract token value from output."
-        echo "   Manual registration may be required."
+    echo "================================================================"
+    echo "IMPORTANT: Copy the token value below - it's only shown once!"
+    echo "================================================================"
+    TOKEN_OUTPUT=$(proxmox-backup-manager user generate-token pulse-monitor@pbs "$TOKEN_NAME" 2>&1)
+    TOKEN_CREATE_RC=$?
+    if [ "$TOKEN_CREATE_RC" -ne 0 ]; then
+        echo "❌ Failed to create token '$TOKEN_NAME'"
+        echo "$TOKEN_OUTPUT"
+        echo ""
+        echo "Manual registration may be required."
         echo ""
     else
-        if [ "$TOKEN_EXISTED" = true ]; then
-            echo "✅ Token rotated for Pulse monitoring"
+        echo "$TOKEN_OUTPUT"
+
+        # Extract the token value for auto-registration
+        TOKEN_VALUE=$(echo "$TOKEN_OUTPUT" | grep '"value"' | sed 's/.*"value"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+
+        if [ -z "$TOKEN_VALUE" ]; then
+            echo "⚠️  Failed to extract token value from output."
+            echo "   Manual registration may be required."
+            echo ""
         else
-            echo "✅ Token created for Pulse monitoring"
+            if [ "$TOKEN_EXISTED" = true ]; then
+                echo "✅ Token rotated for Pulse monitoring"
+            else
+                echo "✅ Token created for Pulse monitoring"
+            fi
+            echo ""
         fi
+
+        # Try auto-registration
+        echo "🔄 Attempting auto-registration with Pulse..."
         echo ""
-    fi
-
-    # Try auto-registration
-    echo "🔄 Attempting auto-registration with Pulse..."
-    echo ""
     
-    # Use auth token from URL parameter when provided (automation workflows)
-    AUTH_TOKEN="%s"
+        # Use auth token from URL parameter when provided (automation workflows)
+        AUTH_TOKEN="%s"
 
-    # Allow non-interactive override via environment variable
-    if [ -z "$AUTH_TOKEN" ] && [ -n "$PULSE_SETUP_TOKEN" ]; then
-        AUTH_TOKEN="$PULSE_SETUP_TOKEN"
-    fi
+        # Allow non-interactive override via environment variable
+        if [ -z "$AUTH_TOKEN" ] && [ -n "$PULSE_SETUP_TOKEN" ]; then
+            AUTH_TOKEN="$PULSE_SETUP_TOKEN"
+        fi
 
-    # Prompt the operator if we still don't have a token and a TTY is available
-    if [ -z "$AUTH_TOKEN" ]; then
-        if [ -t 0 ]; then
-            printf "Pulse setup token: "
-            if command -v stty >/dev/null 2>&1; then stty -echo; fi
-            IFS= read -r AUTH_TOKEN
-            if command -v stty >/dev/null 2>&1; then stty echo; fi
-            printf "\n"
+        # Prompt the operator if we still don't have a token and a TTY is available
+        if [ -z "$AUTH_TOKEN" ]; then
+            if [ -t 0 ]; then
+                printf "Pulse setup token: "
+                if command -v stty >/dev/null 2>&1; then stty -echo; fi
+                IFS= read -r AUTH_TOKEN
+                if command -v stty >/dev/null 2>&1; then stty echo; fi
+                printf "\n"
 		elif [ -c /dev/tty ] && [ -r /dev/tty ] && [ -w /dev/tty ]; then
 			printf "Pulse setup token: " >/dev/tty
 			if command -v stty >/dev/null 2>&1; then stty -echo </dev/tty 2>/dev/null || true; fi
 			IFS= read -r AUTH_TOKEN </dev/tty || true
 			if command -v stty >/dev/null 2>&1; then stty echo </dev/tty 2>/dev/null || true; fi
 			printf "\n" >/dev/tty
+		    fi
 		fi
-	fi
 
-    # Only proceed with auto-registration if we have an auth token
-    if [ -n "$AUTH_TOKEN" ]; then
+        # Only proceed with auto-registration if we have an auth token
+        if [ -n "$AUTH_TOKEN" ]; then
         # Get the server's hostname (short form to match Pulse node names)
         SERVER_HOSTNAME=$(hostname -s 2>/dev/null || hostname)
         SERVER_IP=$(hostname -I | awk '{print $1}')
@@ -4773,39 +4800,39 @@ EOF
         REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
         
         # Send registration with setup code
-        REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
-            -H "Content-Type: application/json" \
-            -d "$REGISTER_JSON" 2>&1)
-    else
-        echo "⚠️  Auto-registration skipped: no setup token provided"
-        AUTO_REG_SUCCESS=false
-        REGISTER_RESPONSE=""
-    fi
-    
-    AUTO_REG_SUCCESS=false
-    if echo "$REGISTER_RESPONSE" | grep -q "success"; then
-        AUTO_REG_SUCCESS=true
-        echo "✅ Successfully registered with Pulse!"
-    else
-        if echo "$REGISTER_RESPONSE" | grep -q "Authentication required"; then
-            echo "Error: Auto-registration failed - authentication required"
-            echo ""
-            if [ -z "$PULSE_API_TOKEN" ]; then
-                echo "To enable auto-registration, add your API token to the setup URL"
-                echo "You can find your API token in Pulse Settings → Security"
-            else
-                echo "The provided API token was invalid"
-            fi
+            REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
+                -H "Content-Type: application/json" \
+                -d "$REGISTER_JSON" 2>&1)
         else
-            echo "⚠️  Auto-registration failed. Manual configuration may be needed."
-            echo "   Response: $REGISTER_RESPONSE"
+            echo "⚠️  Auto-registration skipped: no setup token provided"
+            AUTO_REG_SUCCESS=false
+            REGISTER_RESPONSE=""
         fi
-        echo ""
-        echo "📝 For manual setup:"
-        echo "   1. Copy the token value shown above"
-        echo "   2. Add this node manually in Pulse Settings"
+        
+        AUTO_REG_SUCCESS=false
+        if echo "$REGISTER_RESPONSE" | grep -q "success"; then
+            AUTO_REG_SUCCESS=true
+            echo "✅ Successfully registered with Pulse!"
+        else
+            if echo "$REGISTER_RESPONSE" | grep -q "Authentication required"; then
+                echo "Error: Auto-registration failed - authentication required"
+                echo ""
+                if [ -z "$PULSE_API_TOKEN" ]; then
+                    echo "To enable auto-registration, add your API token to the setup URL"
+                    echo "You can find your API token in Pulse Settings → Security"
+                else
+                    echo "The provided API token was invalid"
+                fi
+            else
+                echo "⚠️  Auto-registration failed. Manual configuration may be needed."
+                echo "   Response: $REGISTER_RESPONSE"
+            fi
+            echo ""
+            echo "📝 For manual setup:"
+            echo "   1. Copy the token value shown above"
+            echo "   2. Add this node manually in Pulse Settings"
+        fi
     fi
-    echo ""
 fi
 echo "================================================================"
 echo ""
@@ -4823,7 +4850,9 @@ echo ""
 if [ "$AUTO_REG_SUCCESS" != true ]; then
     echo "Add this server to Pulse with:"
     echo "  Token ID: $PULSE_TOKEN_ID"
-    if [ -n "$TOKEN_VALUE" ]; then
+    if [ "$TOKEN_ROTATION_SKIPPED" = true ]; then
+        echo "  Token Value: [unchanged - existing token secret preserved]"
+    elif [ -n "$TOKEN_VALUE" ]; then
         echo "  Token Value: $TOKEN_VALUE"
     else
         echo "  Token Value: [Check the output above for the token or instructions]"

@@ -90,6 +90,11 @@ func TestPVESetupScriptArgumentAlignment(t *testing.T) {
 			contains: `TOKEN_NAME="pulse-sentinel-url"`,
 			desc:     "Bash variable TOKEN_NAME should be deterministic for the Pulse server",
 		},
+		{
+			name:     "existing_token_not_rotated_by_default",
+			contains: `Set PULSE_FORCE_TOKEN_ROTATE=1 to rotate this token and issue a new secret.`,
+			desc:     "Existing tokens should be preserved by default to avoid credential drift",
+		},
 	}
 
 	for _, tt := range tests {
@@ -268,6 +273,11 @@ func TestHandleSetupScript_PBSTypeGeneratesScript(t *testing.T) {
 			name:     "pbs_acl_update",
 			contains: "proxmox-backup-manager acl update",
 			desc:     "Should set PBS ACLs",
+		},
+		{
+			name:     "pbs_existing_token_guard",
+			contains: "Set PULSE_FORCE_TOKEN_ROTATE=1 to rotate this token and issue a new secret.",
+			desc:     "PBS script should preserve existing tokens unless rotation is explicitly forced",
 		},
 	}
 
