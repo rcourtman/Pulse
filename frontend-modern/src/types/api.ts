@@ -191,6 +191,7 @@ export interface VM {
   uptime: number;
   template: boolean;
   lastBackup: number;
+  memorySource?: string;
   tags: string[] | string | null;
   lock: string;
   lastSeen: string;

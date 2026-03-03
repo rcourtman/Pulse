@@ -219,6 +219,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 	// and gets accurate MemAvailable (excluding page cache). We use this as
 	// a memory fallback before the inflated status.Mem value. Refs: #1270
 	prevState := m.GetState()
+	prevInstanceVMs := filterVMsByInstance(prevState.VMs, instanceName)
 	vmIDToHostAgent := make(map[string]models.Host)
 	for _, h := range prevState.Hosts {
 		if h.LinkedVMID != "" && h.Status == "online" && h.Memory.Total > 0 {
@@ -303,6 +304,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 						guestRaw.BalloonMin = status.BalloonMin
 						guestRaw.Agent = status.Agent.Value
 						memAvailable := uint64(0)
+						memInfoTotalMinusUsed := uint64(0)
 						if status.MemInfo != nil {
 							guestRaw.MemInfoUsed = status.MemInfo.Used
 							guestRaw.MemInfoFree = status.MemInfo.Free
@@ -312,28 +314,12 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 							guestRaw.MemInfoCached = status.MemInfo.Cached
 							guestRaw.MemInfoShared = status.MemInfo.Shared
 
-							// Derive memAvailable from balloon MemInfo. Prefer Available (most
-							// accurate), then Free+Buffers+Cached when cache metrics are present.
-							// When Buffers=0 AND Cached=0, the balloon isn't reporting cache
-							// breakdown — using Free alone gives wildly inflated usage because
-							// reclaimable page cache is counted as used. In that case, skip and
-							// fall through to RRD/guest-agent fallbacks. Refs: #1302, #1270
-							switch {
-							case status.MemInfo.Available > 0:
-								memAvailable = status.MemInfo.Available
-								memorySource = "meminfo-available"
-							case status.MemInfo.Buffers > 0 || status.MemInfo.Cached > 0:
-								memAvailable = status.MemInfo.Free +
-									status.MemInfo.Buffers +
-									status.MemInfo.Cached
-								memorySource = "meminfo-derived"
-							}
-
-							// Record Total-Used for diagnostics even when not used as the source
-							if status.MemInfo.Total > 0 &&
-								status.MemInfo.Used > 0 &&
-								status.MemInfo.Total >= status.MemInfo.Used {
-								guestRaw.MemInfoTotalMinusUsed = status.MemInfo.Total - status.MemInfo.Used
+							selection := selectVMAvailableFromMemInfo(status.MemInfo)
+							memInfoTotalMinusUsed = selection.TotalMinusUsed
+							guestRaw.MemInfoTotalMinusUsed = memInfoTotalMinusUsed
+							if selection.Available > 0 {
+								memAvailable = selection.Available
+								memorySource = selection.Source
 							}
 						}
 						// Note: We intentionally do NOT override memTotal with balloon.
@@ -400,16 +386,10 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 							}
 						}
 
-						// Last-chance MemInfo fallback: when balloon reports Used/Total but no
-						// cache breakdown (Buffers=Cached=0), use Total-Used. This may equal
-						// Free (if Used=Total-Free) but is still better than status-mem which
-						// can be even more inflated. Placed after RRD/agent so those get
-						// priority. Refs: #1302, #1270
-						if memAvailable == 0 && status.MemInfo != nil &&
-							status.MemInfo.Total > 0 &&
-							status.MemInfo.Used > 0 &&
-							status.MemInfo.Total >= status.MemInfo.Used {
-							memAvailable = status.MemInfo.Total - status.MemInfo.Used
+						// Last-chance MemInfo fallback: use Total-Used only after RRD/agent
+						// attempts, so those more reliable cache-aware sources get priority.
+						if memAvailable == 0 && memInfoTotalMinusUsed > 0 {
+							memAvailable = memInfoTotalMinusUsed
 							memorySource = "meminfo-total-minus-used"
 						}
 
@@ -788,16 +768,17 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 
 				// Create VM model
 				modelVM := models.VM{
-					ID:       guestID,
-					VMID:     vm.VMID,
-					Name:     vm.Name,
-					Node:     n.Node,
-					Instance: instanceName,
-					Status:   vm.Status,
-					Type:     "qemu",
-					CPU:      cpuUsage,
-					CPUs:     vm.CPUs,
-					Memory:   memory,
+					ID:           guestID,
+					VMID:         vm.VMID,
+					Name:         vm.Name,
+					Node:         n.Node,
+					Instance:     instanceName,
+					Status:       vm.Status,
+					Type:         "qemu",
+					CPU:          cpuUsage,
+					CPUs:         vm.CPUs,
+					Memory:       memory,
+					MemorySource: memorySource,
 					Disk: models.Disk{
 						Total: int64(diskTotal),
 						Used:  int64(diskUsed),
@@ -886,14 +867,10 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 	// If we got ZERO VMs but had VMs before (likely cluster health issue),
 	// preserve previous VMs instead of clearing them
 	if len(allVMs) == 0 && len(nodes) > 0 {
-		prevState := m.GetState()
-		prevVMCount := 0
-		for _, vm := range prevState.VMs {
-			if vm.Instance == instanceName {
-				allVMs = append(allVMs, vm)
-				prevVMCount++
-			}
+		for _, vm := range prevInstanceVMs {
+			allVMs = append(allVMs, vm)
 		}
+		prevVMCount := len(prevInstanceVMs)
 		if prevVMCount > 0 {
 			log.Warn().
 				Str("instance", instanceName).
@@ -903,6 +880,8 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 				Msg("Traditional polling returned zero VMs but had VMs before - preserving previous VMs")
 		}
 	}
+
+	m.logSuspiciousRepeatedVMMemoryUsage(instanceName, allVMs, prevInstanceVMs)
 
 	// Update state with all VMs
 	m.state.UpdateVMsForInstance(instanceName, allVMs)

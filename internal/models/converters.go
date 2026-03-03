@@ -76,6 +76,7 @@ func (v VM) ToFrontend() VMFrontend {
 		CPUs:             v.CPUs,
 		Mem:              v.Memory.Used,
 		MaxMem:           v.Memory.Total,
+		MemorySource:     v.MemorySource,
 		NetIn:            zeroIfNegative(v.NetworkIn),
 		NetOut:           zeroIfNegative(v.NetworkOut),
 		DiskRead:         zeroIfNegative(v.DiskRead),

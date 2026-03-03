@@ -185,28 +185,29 @@ func TestVMToFrontend(t *testing.T) {
 	lastBackup := now.Add(-24 * time.Hour)
 
 	vm := VM{
-		ID:          "vm-100",
-		VMID:        100,
-		Name:        "test-vm",
-		Node:        "pve1",
-		Instance:    "default",
-		Status:      "running",
-		Type:        "qemu",
-		CPU:         0.15,
-		CPUs:        4,
-		Memory:      Memory{Total: 8000000000, Used: 4000000000},
-		Disk:        Disk{Total: 100000000000, Used: 50000000000},
-		NetworkIn:   1000000,
-		NetworkOut:  500000,
-		DiskRead:    100000,
-		DiskWrite:   50000,
-		Uptime:      3600,
-		Tags:        []string{"production", "web"},
-		LastSeen:    now,
-		LastBackup:  lastBackup,
-		IPAddresses: []string{"192.168.1.50", "10.0.0.50"},
-		OSName:      "Ubuntu",
-		OSVersion:   "22.04",
+		ID:           "vm-100",
+		VMID:         100,
+		Name:         "test-vm",
+		Node:         "pve1",
+		Instance:     "default",
+		Status:       "running",
+		Type:         "qemu",
+		CPU:          0.15,
+		CPUs:         4,
+		Memory:       Memory{Total: 8000000000, Used: 4000000000},
+		Disk:         Disk{Total: 100000000000, Used: 50000000000},
+		NetworkIn:    1000000,
+		NetworkOut:   500000,
+		DiskRead:     100000,
+		DiskWrite:    50000,
+		Uptime:       3600,
+		Tags:         []string{"production", "web"},
+		MemorySource: "rrd-memavailable",
+		LastSeen:     now,
+		LastBackup:   lastBackup,
+		IPAddresses:  []string{"192.168.1.50", "10.0.0.50"},
+		OSName:       "Ubuntu",
+		OSVersion:    "22.04",
 	}
 
 	frontend := vm.ToFrontend()
@@ -237,6 +238,9 @@ func TestVMToFrontend(t *testing.T) {
 	}
 	if frontend.OSName != "Ubuntu" {
 		t.Errorf("OSName = %q, want Ubuntu", frontend.OSName)
+	}
+	if frontend.MemorySource != "rrd-memavailable" {
+		t.Errorf("MemorySource = %q, want %q", frontend.MemorySource, "rrd-memavailable")
 	}
 	if frontend.Memory == nil {
 		t.Error("Memory should not be nil when Total > 0")

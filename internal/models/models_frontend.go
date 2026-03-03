@@ -65,7 +65,8 @@ type VMFrontend struct {
 	Uptime            int64                   `json:"uptime"`
 	Template          bool                    `json:"template"`
 	LastBackup        int64                   `json:"lastBackup,omitempty"` // Unix timestamp
-	Tags              string                  `json:"tags,omitempty"`       // Joined string
+	MemorySource      string                  `json:"memorySource,omitempty"`
+	Tags              string                  `json:"tags,omitempty"` // Joined string
 	Lock              string                  `json:"lock,omitempty"`
 	LastSeen          int64                   `json:"lastSeen"` // Unix timestamp
 }

@@ -6980,6 +6980,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 	// Seed OCI classification from previous state so we never "downgrade" to LXC
 	// if container config fetching intermittently fails (permissions or transient API errors).
 	prevState := m.GetState()
+	prevInstanceVMs := filterVMsByInstance(prevState.VMs, instanceName)
 	prevContainerIsOCI := make(map[int]bool)
 	for _, ct := range prevState.Containers {
 		if ct.Instance != instanceName {
@@ -7579,16 +7580,17 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			}
 
 			vm := models.VM{
-				ID:       guestID,
-				VMID:     res.VMID,
-				Name:     res.Name,
-				Node:     res.Node,
-				Instance: instanceName,
-				Status:   res.Status,
-				Type:     "qemu",
-				CPU:      safeFloat(res.CPU),
-				CPUs:     res.MaxCPU,
-				Memory:   memory,
+				ID:           guestID,
+				VMID:         res.VMID,
+				Name:         res.Name,
+				Node:         res.Node,
+				Instance:     instanceName,
+				Status:       res.Status,
+				Type:         "qemu",
+				CPU:          safeFloat(res.CPU),
+				CPUs:         res.MaxCPU,
+				Memory:       memory,
+				MemorySource: memorySource,
 				Disk: models.Disk{
 					Total: int64(diskTotal),
 					Used:  int64(diskUsed),
@@ -7965,6 +7967,8 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			Int("totalPreservedContainers", preservedContainerCount).
 			Msg("Grace period preservation complete")
 	}
+
+	m.logSuspiciousRepeatedVMMemoryUsage(instanceName, allVMs, prevInstanceVMs)
 
 	// Always update state when using efficient polling path
 	// Even if arrays are empty, we need to update to clear out VMs from genuinely offline nodes

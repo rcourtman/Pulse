@@ -125,6 +125,7 @@ type VM struct {
 	Uptime            int64                   `json:"uptime"`
 	Template          bool                    `json:"template"`
 	LastBackup        time.Time               `json:"lastBackup,omitempty"`
+	MemorySource      string                  `json:"memorySource,omitempty"` // Source used to calculate memory (diagnostics/support)
 	Tags              []string                `json:"tags,omitempty"`
 	Lock              string                  `json:"lock,omitempty"`
 	LastSeen          time.Time               `json:"lastSeen"`
