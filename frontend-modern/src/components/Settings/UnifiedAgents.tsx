@@ -234,7 +234,7 @@ const buildCommandsByPlatform = (
 
 export const UnifiedAgents: Component = () => {
   const { state } = useWebSocket();
-  const { byType } = useResources();
+  const { byType, resources } = useResources();
   const navigate = useNavigate();
 
   const pd = (r: Resource) =>
@@ -277,8 +277,7 @@ export const UnifiedAgents: Component = () => {
     return (
       asString(platformDocker(r)?.hostSourceId) ||
       asString(platformData?.hostSourceId) ||
-      r.discoveryTarget?.hostId ||
-      (r.type === 'docker-host' ? r.id : undefined)
+      (r.type === 'docker-host' ? (r.discoveryTarget?.hostId || r.id) : undefined)
     );
   };
 
@@ -558,8 +557,13 @@ export const UnifiedAgents: Component = () => {
 
   const allHosts = createMemo(() => {
     const hosts = byType('host');
+    // Include resources that have an agent but are typed as something else
+    // (e.g., nodes that are also Proxmox hosts get merged to type "node").
+    const hostIds = new Set(hosts.map((r) => r.id));
+    const agentMerged = resources().filter((r) => r.agent && !hostIds.has(r.id));
+    const allAgentHosts = [...hosts, ...agentMerged];
     const dockerHosts = byType('docker-host');
-    const hasAnyDockerData = hosts.some(hasDockerSource) || dockerHosts.length > 0;
+    const hasAnyDockerData = allAgentHosts.some(hasDockerSource) || dockerHosts.length > 0;
 
     // Create a unified list
     const unified = new Map<
@@ -582,7 +586,7 @@ export const UnifiedAgents: Component = () => {
     >();
 
     // Process Host Agents (include linked ones with a badge)
-    hosts.forEach((r) => {
+    allAgentHosts.forEach((r) => {
       const hostname = r.identity?.hostname || r.name || 'Unknown';
       const agentVersion = getAgentVersion(r);
       const dockerVersion = getDockerVersion(r);
@@ -700,7 +704,7 @@ export const UnifiedAgents: Component = () => {
 
   const hostByActionId = createMemo(() => {
     const map = new Map<string, Resource>();
-    for (const host of byType('host')) {
+    for (const host of resources().filter((r) => r.agent || r.type === 'host')) {
       const actionId = getHostActionId(host);
       if (!actionId || map.has(actionId)) continue;
       map.set(actionId, host);

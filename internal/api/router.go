@@ -369,6 +369,9 @@ func (r *Router) setupRoutes() {
 	}
 	if r.monitor != nil {
 		r.configureMonitorDependencies(r.monitor)
+		if r.resourceHandlers != nil {
+			r.resourceHandlers.SetStateProvider(r.monitor)
+		}
 	}
 	if r.mtMonitor != nil {
 		r.mtMonitor.SetMonitorInitializer(r.configureMonitorDependencies)
