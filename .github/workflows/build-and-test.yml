@@ -96,6 +96,7 @@ jobs:
           set -o pipefail
           go test -bench=. -benchmem -count=1 -run=^$ -timeout=5m \
             ./pkg/metrics/ \
+            ./pkg/auth/ \
             ./internal/api/ \
             ./internal/unifiedresources/ \
             ./internal/dockeragent/ \
