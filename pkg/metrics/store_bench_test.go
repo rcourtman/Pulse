@@ -224,6 +224,72 @@ func BenchmarkWriteBuffered(b *testing.B) {
 	}
 }
 
+// BenchmarkRollupCandidate measures the core rollup aggregation path — an
+// INSERT SELECT that reads raw-tier data, aggregates into minute buckets, and
+// writes the result. This is the inner loop called once per resource/metric
+// pair every 5 minutes. At 500-node scale (4 metrics × ~500 resources), this
+// runs ~2000 times per rollup cycle.
+//
+// After the first iteration, INSERT OR IGNORE detects existing minute-tier rows
+// and skips re-insertion. The SELECT + GROUP BY aggregation (the expensive part)
+// still executes every iteration, so this accurately measures scan/aggregation
+// cost which dominates rollup latency.
+func BenchmarkRollupCandidate(b *testing.B) {
+	suppressLogs(b)
+
+	for _, numPoints := range []int{100, 1000} {
+		b.Run(fmt.Sprintf("points=%d", numPoints), func(b *testing.B) {
+			store := newBenchStore(b)
+
+			// Place all data points well in the past so even the largest
+			// sub-benchmark (1000 points at 1-second spacing = ~17 minutes)
+			// never extends past "now". 30 minutes of headroom is sufficient.
+			// Floor to minute boundary so startTs alignment doesn't trim
+			// leading points, keeping the effective input size deterministic.
+			raw := time.Now().Add(-30 * time.Minute).Unix()
+			base := time.Unix((raw/60)*60, 0)
+			batch := make([]WriteMetric, numPoints)
+			for i := range batch {
+				batch[i] = WriteMetric{
+					ResourceType: "vm",
+					ResourceID:   "vm-rollup",
+					MetricType:   "cpu",
+					Value:        float64(i % 100),
+					Timestamp:    base.Add(time.Duration(i) * time.Second),
+					Tier:         TierRaw,
+				}
+			}
+			store.WriteBatchSync(batch)
+
+			// Bucket-align boundaries to match production rollupTier behavior.
+			// startTs is floored (base is already aligned). endTs is ceiled so
+			// all seeded points fall within the [startTs, endTs) window.
+			bucketSecs := int64(60)
+			startTs := (base.Unix() / bucketSecs) * bucketSecs
+			rawEnd := base.Add(time.Duration(numPoints) * time.Second).Unix()
+			endTs := ((rawEnd + bucketSecs - 1) / bucketSecs) * bucketSecs
+
+			// Sanity check: verify rollup actually produces data on first call.
+			store.rollupCandidate("vm", "vm-rollup", "cpu", TierRaw, TierMinute, bucketSecs, startTs, endTs)
+			var minuteCount int
+			if err := store.db.QueryRow(
+				`SELECT COUNT(*) FROM metrics WHERE tier = 'minute' AND resource_id = 'vm-rollup'`,
+			).Scan(&minuteCount); err != nil {
+				b.Fatalf("sanity check query: %v", err)
+			}
+			if minuteCount == 0 {
+				b.Fatal("sanity check: rollupCandidate produced no minute-tier rows")
+			}
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				store.rollupCandidate("vm", "vm-rollup", "cpu", TierRaw, TierMinute, bucketSecs, startTs, endTs)
+			}
+		})
+	}
+}
+
 // BenchmarkQueryManyResources measures query latency when the metrics table
 // contains data for many distinct resources — simulating a 100-resource
 // deployment where index isolation matters.
