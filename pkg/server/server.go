@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -256,15 +257,6 @@ func Run(ctx context.Context, version string) error {
 	// Wire multi-tenant monitor to resource handlers for tenant-aware state
 	router.SetMultiTenantMonitor(reloadableMonitor.GetMultiTenantMonitor())
 
-	// Start AI patrol service for background infrastructure monitoring
-	router.StartPatrol(ctx)
-
-	// Start AI chat service
-	router.StartAIChat(ctx)
-
-	// Wire alert-triggered AI analysis
-	router.WireAlertTriggeredAI()
-
 	// Create HTTP server with unified configuration
 	srv := &http.Server{
 		Addr:              fmt.Sprintf("%s:%d", cfg.BindAddress, cfg.FrontendPort),
@@ -273,6 +265,48 @@ func Run(ctx context.Context, version string) error {
 		WriteTimeout:      0, // Disabled to support SSE/streaming
 		IdleTimeout:       120 * time.Second,
 	}
+
+	useTLS := cfg.HTTPSEnabled && cfg.TLSCertFile != "" && cfg.TLSKeyFile != ""
+	if cfg.HTTPSEnabled && !useTLS {
+		log.Warn().Msg("HTTPS_ENABLED is true but TLS_CERT_FILE or TLS_KEY_FILE not configured, falling back to HTTP")
+	}
+
+	listener, err := net.Listen("tcp", srv.Addr)
+	if err != nil {
+		return fmt.Errorf("failed to bind frontend listener on %s: %w", srv.Addr, err)
+	}
+
+	serverErrCh := make(chan error, 1)
+	go func() {
+		if useTLS {
+			log.Info().
+				Str("host", cfg.BindAddress).
+				Int("port", cfg.FrontendPort).
+				Str("protocol", "HTTPS").
+				Msg("Server listening")
+			if err := srv.ServeTLS(listener, cfg.TLSCertFile, cfg.TLSKeyFile); err != nil && err != http.ErrServerClosed {
+				serverErrCh <- fmt.Errorf("https server failed: %w", err)
+			}
+		} else {
+			log.Info().
+				Str("host", cfg.BindAddress).
+				Int("port", cfg.FrontendPort).
+				Str("protocol", "HTTP").
+				Msg("Server listening")
+			if err := srv.Serve(listener); err != nil && err != http.ErrServerClosed {
+				serverErrCh <- fmt.Errorf("http server failed: %w", err)
+			}
+		}
+	}()
+
+	// Start AI patrol service for background infrastructure monitoring
+	router.StartPatrol(ctx)
+
+	// Start AI chat service
+	router.StartAIChat(ctx)
+
+	// Wire alert-triggered AI analysis
+	router.WireAlertTriggeredAI()
 
 	// Start config watcher for .env file changes
 	configWatcher, err := config.NewConfigWatcher(cfg)
@@ -304,35 +338,10 @@ func Run(ctx context.Context, version string) error {
 		defer configWatcher.Stop()
 	}
 
-	// Start server
-	go func() {
-		if cfg.HTTPSEnabled && cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
-			log.Info().
-				Str("host", cfg.BindAddress).
-				Int("port", cfg.FrontendPort).
-				Str("protocol", "HTTPS").
-				Msg("Server listening")
-			if err := srv.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile); err != nil && err != http.ErrServerClosed {
-				log.Error().Err(err).Msg("Failed to start HTTPS server")
-			}
-		} else {
-			if cfg.HTTPSEnabled {
-				log.Warn().Msg("HTTPS_ENABLED is true but TLS_CERT_FILE or TLS_KEY_FILE not configured, falling back to HTTP")
-			}
-			log.Info().
-				Str("host", cfg.BindAddress).
-				Int("port", cfg.FrontendPort).
-				Str("protocol", "HTTP").
-				Msg("Server listening")
-			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Error().Err(err).Msg("Failed to start HTTP server")
-			}
-		}
-	}()
-
 	// Setup signal handlers
 	sigChan := make(chan os.Signal, 1)
 	reloadChan := make(chan os.Signal, 1)
+	var runErr error
 
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	signal.Notify(reloadChan, syscall.SIGHUP)
@@ -341,6 +350,11 @@ func Run(ctx context.Context, version string) error {
 		select {
 		case <-ctx.Done():
 			log.Info().Msg("Context cancelled, shutting down...")
+			goto shutdown
+
+		case err := <-serverErrCh:
+			log.Error().Err(err).Msg("Frontend server terminated unexpectedly")
+			runErr = err
 			goto shutdown
 
 		case <-reloadChan:
@@ -386,7 +400,7 @@ shutdown:
 	tenantAuditManager.Close()
 
 	log.Info().Msg("Server stopped")
-	return nil
+	return runErr
 }
 
 // startMetricsServer is moved from main.go

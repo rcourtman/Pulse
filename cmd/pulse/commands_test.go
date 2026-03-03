@@ -36,6 +36,16 @@ func createTestEncryptionKey(t *testing.T, dir string) {
 	}
 }
 
+func getFreeTCPPort(t *testing.T) int {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to allocate free tcp port: %v", err)
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port
+}
+
 func TestVersionCmd(t *testing.T) {
 	oldVersion := Version
 	oldBuildTime := BuildTime
@@ -442,7 +452,7 @@ func TestRunServer(t *testing.T) {
 
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
-	t.Setenv("PULSE_FRONTEND_PORT", "0")
+	t.Setenv("FRONTEND_PORT", fmt.Sprintf("%d", getFreeTCPPort(t)))
 
 	// Create a dummy .env to avoid config load error
 	createTestEncryptionKey(t, tempDir)
@@ -474,7 +484,7 @@ func TestSIGHUP(t *testing.T) {
 
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
-	t.Setenv("PULSE_FRONTEND_PORT", "0")
+	t.Setenv("FRONTEND_PORT", fmt.Sprintf("%d", getFreeTCPPort(t)))
 	createTestEncryptionKey(t, tempDir)
 	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
 
@@ -602,7 +612,7 @@ func TestRunServer_HTTPS(t *testing.T) {
 func TestRunServer_ConfigReload(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
-	t.Setenv("PULSE_FRONTEND_PORT", "0")
+	t.Setenv("FRONTEND_PORT", fmt.Sprintf("%d", getFreeTCPPort(t)))
 	createTestEncryptionKey(t, tempDir)
 	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
 
@@ -638,6 +648,10 @@ func TestRunServer_ConfigReload(t *testing.T) {
 }
 
 func TestMainCmd(t *testing.T) {
+	oldPort := metricsPort
+	metricsPort = 0
+	defer func() { metricsPort = oldPort }()
+
 	// Root command without args should run runServer
 	// But we don't want it to block forever
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -645,6 +659,7 @@ func TestMainCmd(t *testing.T) {
 
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
+	t.Setenv("FRONTEND_PORT", fmt.Sprintf("%d", getFreeTCPPort(t)))
 	createTestEncryptionKey(t, tempDir)
 	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
 
@@ -922,11 +937,9 @@ func TestRunServer_FrontendFail(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
-	output := captureOutput(func() {
-		runServer(ctx)
-	})
-	// Expect "Failed to start HTTP server"
-	assert.Contains(t, output, "Failed to start HTTP server")
+	err := runServer(ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to bind frontend listener")
 }
 
 // Helper to capture stdout and stderr
