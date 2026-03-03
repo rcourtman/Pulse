@@ -1676,27 +1676,114 @@ PY
 
     local pulse_host_slug
     pulse_host_slug=$(python3 - <<'PY' "$pulse_url"
-import sys, urllib.parse
+import re, sys, urllib.parse
 parsed = urllib.parse.urlparse(sys.argv[1])
-host = (parsed.hostname or "pulse").replace(".", "-")
-print(host)
+host = (parsed.hostname or "").strip().lower().strip(".")
+slug = re.sub(r"[^a-z0-9]+", "-", host).strip("-")
+if not slug:
+    slug = "server"
+if len(slug) > 48:
+    slug = slug[:48].rstrip("-")
+print(slug or "server")
 PY
 )
-    local token_name="pulse-${pulse_host_slug}-$(date +%s)"
-
+    local token_name="pulse-${pulse_host_slug}"
     local token_output=""
+    local existing_tokens=""
+    local token_exists=false
+    local legacy_tokens=()
+    local existing_token=""
+
+    existing_tokens=$(pveum user token list pulse-monitor@pam 2>/dev/null | awk '
+{
+    line=$0
+    gsub(/\r/, "", line)
+    gsub(/│/, "|", line)
+    if (index(line, "|") == 0) {
+        next
+    }
+    n = split(line, parts, "|")
+    if (n < 3) {
+        next
+    }
+    name = parts[2]
+    gsub(/^[[:space:]]+|[[:space:]]+$/, "", name)
+    if (name != "" && name != "tokenid" && name ~ /^pulse-/) {
+        print name
+    }
+}')
+
+    if [[ -n "$existing_tokens" ]]; then
+        while IFS= read -r existing_token; do
+            if [[ -z "$existing_token" ]]; then
+                continue
+            fi
+            if [[ "$existing_token" == "$token_name" ]]; then
+                token_exists=true
+                continue
+            fi
+            if [[ "$existing_token" == "${token_name}-"* ]]; then
+                legacy_tokens+=("$existing_token")
+            fi
+        done <<< "$existing_tokens"
+    fi
+
+    if [[ "$token_exists" == true ]]; then
+        print_info "Existing monitoring token '${token_name}' found. Rotating in place"
+        pveum user token remove pulse-monitor@pam "$token_name" >/dev/null 2>&1 || true
+    fi
+
+    if [[ ${#legacy_tokens[@]} -gt 0 ]]; then
+        print_info "Removing ${#legacy_tokens[@]} legacy monitoring token(s) for this Pulse server"
+        local legacy_token=""
+        for legacy_token in "${legacy_tokens[@]}"; do
+            pveum user token remove pulse-monitor@pam "$legacy_token" >/dev/null 2>&1 || true
+        done
+    fi
+
     set +e
     token_output=$(pveum user token add pulse-monitor@pam "$token_name" --privsep 0 2>&1)
     local token_status=$?
     set -e
+    if [[ $token_status -ne 0 ]] && grep -qi "already exists" <<<"$token_output"; then
+        print_info "Monitoring token '${token_name}' already exists. Rotating in place"
+        pveum user token remove pulse-monitor@pam "$token_name" >/dev/null 2>&1 || true
+        set +e
+        token_output=$(pveum user token add pulse-monitor@pam "$token_name" --privsep 0 2>&1)
+        token_status=$?
+        set -e
+    fi
     if [[ $token_status -ne 0 ]]; then
         AUTO_NODE_REGISTER_ERROR="failed to create token"
-        print_warn "Unable to create monitoring API token; skipping automatic node registration"
+        print_warn "Unable to create monitoring API token '${token_name}'; skipping automatic node registration"
         return
     fi
 
     local token_value
-    token_value=$(awk -F'│' '/[[:space:]]value[[:space:]]/{col=$3; gsub(/^[[:space:]]+|[[:space:]]+$/, "", col); print col}' <<<"$token_output" | tail -n1 | tr -d '\r')
+    token_value=$(awk '
+{
+    line=$0
+    gsub(/\r/, "", line)
+    gsub(/│/, "|", line)
+    if (index(line, "|") == 0) {
+        next
+    }
+    n = split(line, parts, "|")
+    if (n < 3) {
+        next
+    }
+    key = parts[2]
+    value = parts[3]
+    gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+    gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+    if (key == "value" && value != "") {
+        print value
+        exit
+    }
+}' <<<"$token_output")
+    if [[ -z "$token_value" ]]; then
+        token_value=$(grep -Eo '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}' <<<"$token_output" | head -n1 || true)
+    fi
     if [[ -z "$token_value" ]]; then
         AUTO_NODE_REGISTER_ERROR="token value unavailable"
         print_warn "Failed to extract token value from pveum output; skipping automatic node registration"
