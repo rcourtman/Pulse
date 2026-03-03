@@ -169,6 +169,16 @@ func collectDisks(ctx context.Context, diskExclude []string) []agentshost.Disk {
 			continue
 		}
 
+		isZFSMount := strings.EqualFold(part.Fstype, "zfs") || strings.EqualFold(part.Fstype, "fuse.zfs")
+
+		// Filter mounts that should never be counted before probing usage stats.
+		// This avoids potentially blocking statfs calls on stale/unreachable network mounts.
+		if !isZFSMount {
+			if shouldSkip, _ := fsfilters.ShouldSkipFilesystemBeforeUsage(part.Fstype, part.Mountpoint); shouldSkip {
+				continue
+			}
+		}
+
 		usage, err := diskUsage(ctx, part.Mountpoint)
 		if err != nil {
 			log.Debug().Err(err).Str("mount", part.Mountpoint).Str("device", part.Device).Str("fstype", part.Fstype).Msg("disk: failed to get usage")
@@ -179,7 +189,7 @@ func collectDisks(ctx context.Context, diskExclude []string) []agentshost.Disk {
 			continue
 		}
 
-		if strings.EqualFold(part.Fstype, "zfs") || strings.EqualFold(part.Fstype, "fuse.zfs") {
+		if isZFSMount {
 			pool := zfsPoolFromDevice(part.Device)
 			if pool == "" {
 				log.Debug().Str("device", part.Device).Str("mount", part.Mountpoint).Msg("disk: zfs partition with empty pool name, skipping")

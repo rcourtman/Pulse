@@ -3,6 +3,7 @@ package hostmetrics
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	godisk "github.com/shirou/gopsutil/v4/disk"
@@ -109,5 +110,92 @@ func TestCollectDisks_DeviceDeduplication(t *testing.T) {
 	expectedTotal := int64(volume1Total + backupTotal)
 	if total != expectedTotal {
 		t.Errorf("Total storage should be %d bytes, got %d bytes", expectedTotal, total)
+	}
+}
+
+// TestCollectDisks_SkipsNetworkMountsBeforeUsageProbe verifies network filesystems
+// are filtered before disk usage calls to prevent hangs on stale remote mounts.
+func TestCollectDisks_SkipsNetworkMountsBeforeUsageProbe(t *testing.T) {
+	origPartitions := diskPartitions
+	origUsage := diskUsage
+	defer func() {
+		diskPartitions = origPartitions
+		diskUsage = origUsage
+	}()
+
+	diskPartitions = func(ctx context.Context, all bool) ([]godisk.PartitionStat, error) {
+		return []godisk.PartitionStat{
+			{Device: "nas:/pool/share", Mountpoint: "/mnt/nas", Fstype: "nfs4"},
+			{Device: "/dev/sda1", Mountpoint: "/", Fstype: "ext4"},
+		}, nil
+	}
+
+	usageCalls := 0
+	diskUsage = func(ctx context.Context, path string) (*godisk.UsageStat, error) {
+		usageCalls++
+		if path == "/mnt/nas" {
+			t.Fatalf("diskUsage was called for network mount %q", path)
+		}
+		return &godisk.UsageStat{
+			Total:       1000,
+			Used:        400,
+			Free:        600,
+			UsedPercent: 40.0,
+		}, nil
+	}
+
+	disks := collectDisks(context.Background(), nil)
+	if usageCalls != 1 {
+		t.Fatalf("expected diskUsage to be called once for local filesystems, got %d calls", usageCalls)
+	}
+	if len(disks) != 1 {
+		t.Fatalf("expected 1 disk after skipping network mounts, got %d", len(disks))
+	}
+	if disks[0].Mountpoint != "/" {
+		t.Fatalf("expected local root mount to remain, got %q", disks[0].Mountpoint)
+	}
+}
+
+func TestCollectDisks_DoesNotPreSkipFuseZFS(t *testing.T) {
+	origPartitions := diskPartitions
+	origUsage := diskUsage
+	origQuery := queryZpoolStats
+	defer func() {
+		diskPartitions = origPartitions
+		diskUsage = origUsage
+		queryZpoolStats = origQuery
+	}()
+
+	diskPartitions = func(ctx context.Context, all bool) ([]godisk.PartitionStat, error) {
+		return []godisk.PartitionStat{
+			{Device: "tank/data", Mountpoint: "/tank/data", Fstype: "fuse.zfs"},
+		}, nil
+	}
+
+	usageCalls := 0
+	diskUsage = func(ctx context.Context, path string) (*godisk.UsageStat, error) {
+		usageCalls++
+		return &godisk.UsageStat{
+			Total:       1000,
+			Used:        200,
+			Free:        800,
+			UsedPercent: 20.0,
+		}, nil
+	}
+
+	// Force fallback path so this test does not depend on system zpool binaries.
+	queryZpoolStats = func(ctx context.Context, pools []string) (map[string]zpoolStats, error) {
+		return nil, errors.New("zpool unavailable in test")
+	}
+
+	disks := collectDisks(context.Background(), nil)
+	if usageCalls != 1 {
+		t.Fatalf("expected diskUsage to be called for fuse.zfs dataset, got %d calls", usageCalls)
+	}
+	if len(disks) != 1 {
+		t.Fatalf("expected 1 summarized zfs disk, got %d", len(disks))
+	}
+	if disks[0].Filesystem != "zfs" {
+		t.Fatalf("expected filesystem type zfs, got %q", disks[0].Filesystem)
 	}
 }

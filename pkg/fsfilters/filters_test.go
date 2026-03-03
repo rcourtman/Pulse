@@ -226,6 +226,43 @@ func TestShouldSkipFilesystem(t *testing.T) {
 	}
 }
 
+func TestShouldSkipFilesystemBeforeUsage(t *testing.T) {
+	tests := []struct {
+		name       string
+		fsType     string
+		mountpoint string
+		expectSkip bool
+	}{
+		{
+			name:       "network mount is skipped before usage probe",
+			fsType:     "nfs4",
+			mountpoint: "/mnt/nas",
+			expectSkip: true,
+		},
+		{
+			name:       "regular local filesystem is kept for usage probe",
+			fsType:     "ext4",
+			mountpoint: "/",
+			expectSkip: false,
+		},
+		{
+			name:       "special mountpoint is skipped before usage probe",
+			fsType:     "ext4",
+			mountpoint: "/run/user/1000",
+			expectSkip: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			skip, _ := ShouldSkipFilesystemBeforeUsage(tc.fsType, tc.mountpoint)
+			if skip != tc.expectSkip {
+				t.Errorf("expected skip=%t, got skip=%t", tc.expectSkip, skip)
+			}
+		})
+	}
+}
+
 func TestMatchesUserExclude(t *testing.T) {
 	tests := []struct {
 		name       string
