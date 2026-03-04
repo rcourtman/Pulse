@@ -423,8 +423,50 @@ try {
     Exit 1
 }
 
+# Verify agent is running and healthy
+Write-Host "Verifying agent started successfully..." -ForegroundColor Cyan
+$healthUrl = "http://127.0.0.1:9191/readyz"
+$maxIterations = 8
+$interval = 2
+$healthy = $false
+
+Start-Sleep -Seconds 2
+
+for ($i = 0; $i -lt $maxIterations; $i++) {
+    try {
+        $response = Invoke-WebRequest -Uri $healthUrl -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+        if ($response.StatusCode -eq 200) {
+            $healthy = $true
+            break
+        }
+    } catch {
+        # Health endpoint not ready yet
+    }
+
+    # Check if the service process is still alive after a grace period
+    if ($i -ge 3) {
+        $svc = Get-Service -Name $AgentName -ErrorAction SilentlyContinue
+        if (-not $svc -or ($svc.Status -ne 'Running' -and $svc.Status -ne 'StartPending')) {
+            $statusMsg = if ($svc) { $svc.Status } else { "not found" }
+            Write-Host "WARNING: Agent service is not running (status: $statusMsg)!" -ForegroundColor Yellow
+            if (Test-Path $LogFile) {
+                Write-Host "Last log lines:" -ForegroundColor Yellow
+                Get-Content $LogFile -Tail 5 | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+            }
+            break
+        }
+    }
+
+    Start-Sleep -Seconds $interval
+}
+
 Write-Host ""
-Write-Host "Installation complete." -ForegroundColor Green
+if ($healthy) {
+    Write-Host "Installation complete! Agent is running." -ForegroundColor Green
+} else {
+    Write-Host "Installation complete, but the agent may not be running correctly." -ForegroundColor Yellow
+    Write-Host "Check logs: Get-Content '$LogFile' -Tail 50" -ForegroundColor Yellow
+}
 Write-Host "Service: $AgentName"
 Write-Host "Binary:  $DestPath"
 Write-Host "Logs:    $LogFile"
