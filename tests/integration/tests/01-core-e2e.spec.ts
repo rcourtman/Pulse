@@ -234,7 +234,7 @@ test.describe.serial('Core E2E flows', () => {
         .locator('label:has-text("Token ID")')
         .locator('..')
         .locator('input')
-        .fill('pulse-monitor@pam!pulse-e2e');
+        .fill('pulse-monitor@pve!pulse-e2e');
       await modalForm
         .locator('label:has-text("Token Value")')
         .locator('..')

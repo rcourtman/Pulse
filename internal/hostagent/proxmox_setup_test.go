@@ -338,7 +338,7 @@ func TestProxmoxSetup_RunForType(t *testing.T) {
 	t.Run("performs registration successfully", func(t *testing.T) {
 		mc.statFn = func(name string) (os.FileInfo, error) { return nil, os.ErrNotExist }
 		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
-			// pveum user token add pulse-monitor@pam ... --privsep 0
+			// pveum user token add pulse-monitor@pve ... --privsep 0
 			// arg[0]=user, arg[1]=token, arg[2]=add
 			if name == "pveum" && len(arg) > 2 && arg[1] == "token" && arg[2] == "add" {
 				return "│ value │ my-token │", nil

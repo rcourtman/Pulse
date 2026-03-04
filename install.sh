@@ -1610,10 +1610,10 @@ PY
         return
     fi
 
-    pveum user add pulse-monitor@pam --comment "Pulse monitoring service" >/dev/null 2>&1 || true
-    pveum aclmod / -user pulse-monitor@pam -role PVEAuditor >/dev/null 2>&1 || true
+    pveum user add pulse-monitor@pve --comment "Pulse monitoring service" >/dev/null 2>&1 || true
+    pveum aclmod / -user pulse-monitor@pve -role PVEAuditor >/dev/null 2>&1 || true
     if [[ "$backup_perms" == "true" ]]; then
-        pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin >/dev/null 2>&1 || true
+        pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin >/dev/null 2>&1 || true
     fi
 
     local extra_privs=()
@@ -1650,7 +1650,7 @@ PY
         local priv_string="${extra_privs[*]}"
         pveum role delete PulseMonitor >/dev/null 2>&1 || true
         if pveum role add PulseMonitor -privs "$priv_string" >/dev/null 2>&1; then
-            pveum aclmod / -user pulse-monitor@pam -role PulseMonitor >/dev/null 2>&1 || true
+            pveum aclmod / -user pulse-monitor@pve -role PulseMonitor >/dev/null 2>&1 || true
         fi
     fi
 
@@ -1666,7 +1666,7 @@ PY
 
     local token_output=""
     set +e
-    token_output=$(pveum user token add pulse-monitor@pam "$token_name" --privsep 0 2>&1)
+    token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 0 2>&1)
     local token_status=$?
     set -e
     if [[ $token_status -ne 0 ]]; then
@@ -1682,7 +1682,7 @@ PY
         print_warn "Failed to extract token value from pveum output; skipping automatic node registration"
         return
     fi
-    local token_id="pulse-monitor@pam!${token_name}"
+    local token_id="pulse-monitor@pve!${token_name}"
 
     local register_payload
     register_payload=$(python3 - <<'PY' "$normalized_host_url" "$token_id" "$token_value" "$server_name" "$setup_token"
