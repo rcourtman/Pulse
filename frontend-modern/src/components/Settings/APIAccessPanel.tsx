@@ -20,7 +20,8 @@ export const APIAccessPanel: Component<APIAccessPanelProps> = (props) => {
       >
         <div class="space-y-3 p-4 sm:p-6 pb-6">
           <p class="text-sm text-muted">
-            Generate scoped tokens for Docker agents, system agents, and automation pipelines.
+            Generate scoped tokens for container runtime agents, system agents, and automation
+            pipelines.
             Tokens are shown once—store them securely and rotate when infrastructure changes.
           </p>
           <a

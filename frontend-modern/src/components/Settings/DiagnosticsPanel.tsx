@@ -690,7 +690,7 @@ export const DiagnosticsPanel: Component = () => {
             </Card>
           </Show>
 
-          {/* Docker Agents */}
+          {/* Container Runtime Agents */}
           <Show when={diagnosticsData()?.dockerAgents}>
             <Card padding="md">
               <div class="flex items-center gap-3 mb-4 pb-3 border-b border-border">
@@ -698,8 +698,10 @@ export const DiagnosticsPanel: Component = () => {
                   <Database class="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
-                  <h4 class="text-sm font-semibold text-base-content">Docker Agents</h4>
-                  <p class="text-xs text-muted">Container monitoring</p>
+                  <h4 class="text-sm font-semibold text-base-content">
+                    Container Runtime Agents
+                  </h4>
+                  <p class="text-xs text-muted">Agent-backed container runtime monitoring</p>
                 </div>
                 <div class="ml-auto text-right">
                   <div class="text-lg font-bold text-base-content">
