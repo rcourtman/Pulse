@@ -1683,8 +1683,8 @@ const DockerContainerRow: Component<{
               <Show when={activeTab() === 'discovery'}>
                 <DiscoveryTab
                   resourceType="docker"
-                  hostId={host.id}
-                  resourceId={container.id}
+                  hostId={host.agentId || host.id}
+                  resourceId={container.name || container.id}
                   hostname={container.name}
                   guestId={container.id}
                   customUrl={props.guestMetadata?.[container.id]?.customUrl}
@@ -2164,8 +2164,8 @@ const DockerServiceRow: Component<{
               <Show when={activeTab() === 'discovery'}>
                 <DiscoveryTab
                   resourceType="docker"
-                  hostId={host.id}
-                  resourceId={service.id || service.name || ''}
+                  hostId={host.agentId || host.id}
+                  resourceId={service.name || service.id || ''}
                   hostname={service.name || service.id || 'Service'}
                   guestId={resourceId()}
                   customUrl={props.guestMetadata?.[resourceId()]?.customUrl}
