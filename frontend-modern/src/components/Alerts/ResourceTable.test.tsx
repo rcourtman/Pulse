@@ -46,16 +46,32 @@ vi.mock('@/components/shared/Toggle', () => ({
 }));
 
 vi.mock('@/components/shared/Card', () => ({
-  Card: (props: any) => <div data-testid="card" class={props.class}>{props.children}</div>,
+  Card: (props: any) => (
+    <div data-testid="card" class={props.class}>
+      {props.children}
+    </div>
+  ),
 }));
 
 vi.mock('@/components/shared/Table', () => ({
-  Table: (props: any) => <table data-testid="table" class={props.class}>{props.children}</table>,
+  Table: (props: any) => (
+    <table data-testid="table" class={props.class}>
+      {props.children}
+    </table>
+  ),
   TableHeader: (props: any) => <thead>{props.children}</thead>,
   TableBody: (props: any) => <tbody class={props.class}>{props.children}</tbody>,
   TableRow: (props: any) => <tr class={props.class}>{props.children}</tr>,
-  TableHead: (props: any) => <th class={props.class} title={props.title}>{props.children}</th>,
-  TableCell: (props: any) => <td class={props.class} colspan={props.colspan}>{props.children}</td>,
+  TableHead: (props: any) => (
+    <th class={props.class} title={props.title}>
+      {props.children}
+    </th>
+  ),
+  TableCell: (props: any) => (
+    <td class={props.class} colspan={props.colspan}>
+      {props.children}
+    </td>
+  ),
 }));
 
 vi.mock('@/components/shared/SectionHeader', () => ({
@@ -114,7 +130,9 @@ interface DefaultProps {
   setEditingNote: ReturnType<typeof vi.fn>;
 }
 
-function makeProps(overrides: Partial<DefaultProps> & Record<string, any> = {}): DefaultProps & Record<string, any> {
+function makeProps(
+  overrides: Partial<DefaultProps> & Record<string, any> = {},
+): DefaultProps & Record<string, any> {
   return {
     title: 'Virtual Machines',
     resources: [makeResource()],
@@ -273,9 +291,7 @@ describe('ResourceTable', () => {
     it('calls onRemoveOverride with resource id when revert button is clicked', () => {
       const onRemoveOverride = vi.fn();
       const props = makeProps({
-        resources: [
-          makeResource({ id: 'vm-1', name: 'Overridden VM', hasOverride: true }),
-        ],
+        resources: [makeResource({ id: 'vm-1', name: 'Overridden VM', hasOverride: true })],
         onRemoveOverride,
       });
       render(() => <ResourceTable {...props} />);
@@ -312,7 +328,13 @@ describe('ResourceTable', () => {
       const props = makeProps({
         resources: undefined,
         groupedResources: {
-          node1: [makeResource({ id: 'vm-1', name: 'Noted VM', note: 'Threshold lowered for maintenance' })],
+          node1: [
+            makeResource({
+              id: 'vm-1',
+              name: 'Noted VM',
+              note: 'Threshold lowered for maintenance',
+            }),
+          ],
         },
       });
       render(() => <ResourceTable {...props} />);
@@ -787,9 +809,7 @@ describe('ResourceTable', () => {
     it('clears selection when clear button is clicked', () => {
       const onBulkEdit = vi.fn();
       const props = makeProps({
-        resources: [
-          makeResource({ id: 'vm-1', name: 'VM Alpha' }),
-        ],
+        resources: [makeResource({ id: 'vm-1', name: 'VM Alpha' })],
         onBulkEdit,
       });
       render(() => <ResourceTable {...props} />);
@@ -808,7 +828,9 @@ describe('ResourceTable', () => {
     it('only formats supported metrics for storage type (usage only)', () => {
       const formatMetricValue = vi.fn(() => '80');
       const props = makeProps({
-        resources: [makeResource({ id: 'st-1', name: 'Storage', type: 'storage', thresholds: { usage: 80 } })],
+        resources: [
+          makeResource({ id: 'st-1', name: 'Storage', type: 'storage', thresholds: { usage: 80 } }),
+        ],
         columns: ['CPU %', 'Memory %', 'Usage %'],
         formatMetricValue,
       });
@@ -853,8 +875,8 @@ describe('ResourceTable', () => {
       expect(cpuCalls.length).toBeGreaterThanOrEqual(1);
 
       // Unsupported metrics should not call formatMetricValue
-      const unsupportedCalls = formatMetricValue.mock.calls.filter(
-        ([metric]: [string]) => ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric),
+      const unsupportedCalls = formatMetricValue.mock.calls.filter(([metric]: [string]) =>
+        ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric),
       );
       expect(unsupportedCalls.length).toBe(0);
     });
@@ -1106,13 +1128,13 @@ describe('ResourceTable', () => {
       render(() => <ResourceTable {...props} />);
 
       // Find the editing input with the "Set to -1" title (unique to resource editing inputs)
-      const editInputs = document.querySelectorAll('input[type="number"][title="Set to -1 to disable alerts for this metric"]');
+      const editInputs = document.querySelectorAll(
+        'input[type="number"][title="Set to -1 to disable alerts for this metric"]',
+      );
       expect(editInputs.length).toBeGreaterThanOrEqual(1);
       fireEvent.input(editInputs[0], { target: { value: '95' } });
 
-      expect(setEditingThresholds).toHaveBeenCalledWith(
-        expect.objectContaining({ cpu: 95 }),
-      );
+      expect(setEditingThresholds).toHaveBeenCalledWith(expect.objectContaining({ cpu: 95 }));
     });
 
     it('calls onSaveEdit on input blur', () => {
@@ -1129,7 +1151,9 @@ describe('ResourceTable', () => {
       });
       render(() => <ResourceTable {...props} />);
 
-      const editInputs = document.querySelectorAll('input[type="number"][title="Set to -1 to disable alerts for this metric"]');
+      const editInputs = document.querySelectorAll(
+        'input[type="number"][title="Set to -1 to disable alerts for this metric"]',
+      );
       expect(editInputs.length).toBeGreaterThanOrEqual(1);
       fireEvent.blur(editInputs[0]);
 

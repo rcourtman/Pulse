@@ -15,7 +15,6 @@ func TestGetTimeThresholdMappings(t *testing.T) {
 		"storage": 45,
 		"pbs":     90,
 	}
-	manager.config.TimeThreshold = 15
 	manager.mu.Unlock()
 
 	testCases := []struct {
@@ -31,7 +30,7 @@ func TestGetTimeThresholdMappings(t *testing.T) {
 		{"Node", 120},
 		{"storage", 45},
 		{"PBS", 90},
-		{"UNKNOWN", 15},
+		{"UNKNOWN", 0},
 	}
 
 	for _, tc := range testCases {
@@ -45,7 +44,6 @@ func TestGetTimeThresholdMetricOverrides(t *testing.T) {
 	manager := NewManager()
 
 	manager.mu.Lock()
-	manager.config.TimeThreshold = 15
 	manager.config.TimeThresholds = map[string]int{
 		"guest":   30,
 		"node":    60,

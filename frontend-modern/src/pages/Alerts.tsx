@@ -23,6 +23,7 @@ import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { notificationStore } from '@/stores/notifications';
 import { eventBus } from '@/stores/events';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
+import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import Calendar from 'lucide-solid/icons/calendar';
 import ListFilterIcon from 'lucide-solid/icons/list-filter';
 import { SearchInput } from '@/components/shared/SearchInput';
@@ -54,8 +55,10 @@ import { useWebSocket } from '@/App';
 import { useResources } from '@/hooks/useResources';
 import { aiChatStore } from '@/stores/aiChat';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
-import type { Incident, State } from '@/types/api';
+import type { Incident, PBSInstance, PMGInstance } from '@/types/api';
 import type { EmailConfig, AppriseConfig } from '@/api/notifications';
+import { pbsInstanceFromResource, pmgInstanceFromResource } from '@/utils/resourceStateAdapters';
+import { getAgentDiscoveryResourceId, isAgentDiscoveryResourceType } from '@/utils/discoveryTarget';
 
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { filterIncidentEvents } from '@/features/alerts/types';
@@ -108,7 +111,7 @@ import {
 } from '@/features/alerts/helpers';
 
 export function Alerts() {
-  const { state, activeAlerts, updateAlert, removeAlerts } = useWebSocket();
+  const { activeAlerts, updateAlert, removeAlerts } = useWebSocket();
   const { get: getResource, resources: allResources, byType, children } = useResources();
   const navigate = useNavigate();
   const location = useLocation();
@@ -214,6 +217,8 @@ export function Alerts() {
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
   const [isReloadingConfig, setIsReloadingConfig] = createSignal(false);
+  const [isLoadingDestinations, setIsLoadingDestinations] = createSignal(false);
+  const [destConfigLoadError, setDestConfigLoadError] = createSignal<string | null>(null);
   const [showAcknowledged, setShowAcknowledged] = createSignal(true);
   // Quick tip visibility state
   const [showQuickTip, setShowQuickTip] = createSignal(
@@ -365,9 +370,7 @@ export function Alerts() {
     const data = pd(resource);
     const agent = asRecord(data?.agent);
     return uniqueIds(
-      resource.discoveryTarget?.resourceType === 'host'
-        ? resource.discoveryTarget.resourceId
-        : undefined,
+      getAgentDiscoveryResourceId(resource.discoveryTarget),
       resource.discoveryTarget?.hostId,
       resource.agent?.agentId,
       agent?.agentId,
@@ -392,6 +395,42 @@ export function Alerts() {
     uniqueIds(
       ...dockerHostOverrideIdCandidates(host).map((hostId) => `docker:${hostId}/${shortId}`),
     );
+  const hasHostAgentFacet = (resource: Resource): boolean => {
+    if (resource.agent) return true;
+    const data = pd(resource);
+    const agent = asRecord(data?.agent);
+    return Boolean(
+      agent ||
+      asString(data?.agentId) ||
+      (isAgentDiscoveryResourceType(resource.discoveryTarget?.resourceType) &&
+        resource.discoveryTarget.hostId),
+    );
+  };
+  const hostAgentResources = createMemo(() =>
+    allResources().filter(
+      (resource) =>
+        (resource.type === 'node' ||
+          resource.type === 'pbs' ||
+          resource.type === 'pmg' ||
+          resource.type === 'truenas') &&
+        hasHostAgentFacet(resource),
+    ),
+  );
+  const pbsInstances = createMemo<PBSInstance[]>(() =>
+    allResources()
+      .filter((resource) => resource.type === 'pbs')
+      .map(pbsInstanceFromResource)
+      .filter((resource): resource is PBSInstance => Boolean(resource)),
+  );
+  const pbsInstanceById = createMemo(
+    () => new Map(pbsInstances().map((instance) => [instance.id, instance])),
+  );
+  const pmgInstances = createMemo<PMGInstance[]>(() =>
+    allResources()
+      .filter((resource) => resource.type === 'pmg')
+      .map(pmgInstanceFromResource)
+      .filter((resource): resource is PMGInstance => Boolean(resource)),
+  );
 
   // Process raw overrides config when state changes
   createEffect(() => {
@@ -412,7 +451,7 @@ export function Alerts() {
       const storageResources = allResources().filter(
         (r) => r.type === 'storage' || r.type === 'datastore',
       );
-      const hostResources = byType('host');
+      const hostResources = hostAgentResources();
       const dockerHostResources = byType('docker-host');
 
       // Convert overrides object to array format
@@ -569,15 +608,20 @@ export function Alerts() {
             hostAgent.name ||
             hostAgent.id;
           const data = pd(hostAgent);
+          const agent = asRecord(data?.agent);
 
           overridesList.push({
             id: key,
             name: displayName,
             type: 'hostAgent',
-            resourceType: 'Host Agent',
+            resourceType: 'Agent',
             node: hostAgent.identity?.hostname ?? hostAgent.name,
             instance:
-              (data?.platform as string | undefined) || (data?.osName as string | undefined) || '',
+              asString(agent?.platform) ||
+              asString(agent?.osName) ||
+              asString(data?.platform) ||
+              asString(data?.osName) ||
+              '',
             disabled: thresholds.disabled || false,
             disableConnectivity: thresholds.disableConnectivity || false,
             thresholds: extractTriggerValues(thresholds),
@@ -587,7 +631,7 @@ export function Alerts() {
 
         // Check if it's a PBS server override (starts with "pbs-")
         if (key.startsWith('pbs-')) {
-          const pbs = (state.pbs || []).find((p) => p.id === key);
+          const pbs = pbsInstanceById().get(key);
           if (pbs) {
             overridesList.push({
               id: key,
@@ -696,6 +740,7 @@ export function Alerts() {
   const loadAlertConfiguration = async (options: { notify?: boolean } = {}) => {
     setIsReloadingConfig(true);
     setHasUnsavedChanges(false);
+    setDestConfigLoadError(null);
 
     // Reset to defaults before applying server state
     setGuestDefaults({
@@ -716,7 +761,6 @@ export function Alerts() {
       temperature: 80,
     });
     setStorageDefault(85);
-    setTimeThreshold(DEFAULT_DELAY_SECONDS);
     setTimeThresholds({
       guest: DEFAULT_DELAY_SECONDS,
       node: DEFAULT_DELAY_SECONDS,
@@ -834,9 +878,6 @@ export function Alerts() {
       if (config.storageDefault) {
         setStorageDefault(getTriggerValue(config.storageDefault) ?? 85);
       }
-      if (config.timeThreshold !== undefined) {
-        setTimeThreshold(config.timeThreshold);
-      }
       if (config.timeThresholds) {
         setTimeThresholds({
           guest: config.timeThresholds.guest ?? DEFAULT_DELAY_SECONDS,
@@ -846,16 +887,12 @@ export function Alerts() {
           host: config.timeThresholds.host ?? DEFAULT_DELAY_SECONDS,
         });
       } else {
-        const fallback =
-          config.timeThreshold && config.timeThreshold > 0
-            ? config.timeThreshold
-            : DEFAULT_DELAY_SECONDS;
         setTimeThresholds({
-          guest: fallback,
-          node: fallback,
-          storage: fallback,
-          pbs: fallback,
-          host: fallback,
+          guest: DEFAULT_DELAY_SECONDS,
+          node: DEFAULT_DELAY_SECONDS,
+          storage: DEFAULT_DELAY_SECONDS,
+          pbs: DEFAULT_DELAY_SECONDS,
+          host: DEFAULT_DELAY_SECONDS,
         });
       }
       if (config.metricTimeThresholds) {
@@ -1027,14 +1064,12 @@ export function Alerts() {
           });
         }
 
-        if (config.schedule.grouping || config.schedule.groupingWindow !== undefined) {
+        if (config.schedule.grouping) {
           const groupingConfig = config.schedule.grouping;
           const rawGroupingWindowSeconds =
             typeof groupingConfig?.window === 'number'
               ? groupingConfig.window
-              : typeof config.schedule.groupingWindow === 'number'
-                ? config.schedule.groupingWindow
-                : GROUPING_WINDOW_DEFAULT_SECONDS;
+              : GROUPING_WINDOW_DEFAULT_SECONDS;
           const normalizedGroupingWindowSeconds = Math.max(0, rawGroupingWindowSeconds);
           const groupingWindowMinutes = Math.round(normalizedGroupingWindowSeconds / 60);
 
@@ -1073,6 +1108,9 @@ export function Alerts() {
         setEmailConfig(normalizeEmailConfigFromAPI(emailConfigData));
       } catch (emailErr) {
         logger.error('Failed to load email configuration:', emailErr);
+        setDestConfigLoadError(
+          'Failed to load notification configuration. Your existing settings could not be retrieved.',
+        );
       }
 
       try {
@@ -1094,6 +1132,9 @@ export function Alerts() {
         });
       } catch (appriseErr) {
         logger.error('Failed to load Apprise configuration:', appriseErr);
+        setDestConfigLoadError(
+          'Failed to load notification configuration. Your existing settings could not be retrieved.',
+        );
       }
 
       if (options.notify) {
@@ -1101,6 +1142,11 @@ export function Alerts() {
       }
     } catch (err) {
       logger.error('Failed to load alert configuration:', err);
+      // If the top-level config fetch failed, destination state may still hold
+      // defaults from the reset above.  Re-flag so Save stays disabled.
+      setDestConfigLoadError(
+        'Failed to load notification configuration. Your existing settings could not be retrieved.',
+      );
       if (options.notify) {
         notificationStore.error('Failed to reload configuration');
       }
@@ -1122,20 +1168,24 @@ export function Alerts() {
     });
   });
 
-  // Reload email config when switching to destinations tab
+  // Reload email and apprise config when switching to destinations tab.
+  // Error is only cleared after both fetches complete successfully to avoid a
+  // timing window where Save is enabled while the reload is still in flight.
+  // A version counter prevents stale responses from overwriting fresh state.
+  let destReloadVersion = 0;
   createEffect(() => {
     if (activeTab() === 'destinations') {
-      // Reload email config from server when switching to destinations tab
-      NotificationsAPI.getEmailConfig()
-        .then((emailConfigData) => {
-          setEmailConfig(normalizeEmailConfigFromAPI(emailConfigData));
-        })
-        .catch((err) => {
-          logger.error('Failed to reload email configuration:', err);
-        });
+      const thisVersion = ++destReloadVersion;
+      setIsLoadingDestinations(true);
 
-      NotificationsAPI.getAppriseConfig()
-        .then((appriseData) => {
+      const emailPromise = NotificationsAPI.getEmailConfig().then((emailConfigData) => {
+        if (thisVersion === destReloadVersion) {
+          setEmailConfig(normalizeEmailConfigFromAPI(emailConfigData));
+        }
+      });
+
+      const apprisePromise = NotificationsAPI.getAppriseConfig().then((appriseData) => {
+        if (thisVersion === destReloadVersion) {
           setAppriseConfig({
             enabled: appriseData.enabled ?? false,
             mode: appriseData.mode === 'http' ? 'http' : 'cli',
@@ -1151,10 +1201,27 @@ export function Alerts() {
             apiKeyHeader: appriseData.apiKeyHeader || 'X-API-KEY',
             skipTlsVerify: Boolean(appriseData.skipTlsVerify),
           });
-        })
-        .catch((err) => {
-          logger.error('Failed to reload Apprise configuration:', err);
-        });
+        }
+      });
+
+      void Promise.allSettled([emailPromise, apprisePromise]).then((results) => {
+        if (thisVersion !== destReloadVersion) return;
+        const failed = results.some((r) => r.status === 'rejected');
+        if (failed) {
+          const reasons = results
+            .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+            .map((r) => r.reason);
+          for (const reason of reasons) {
+            logger.error('Failed to reload notification configuration:', reason);
+          }
+          setDestConfigLoadError(
+            'Failed to load notification configuration. Your existing settings could not be retrieved.',
+          );
+        } else {
+          setDestConfigLoadError(null);
+        }
+        setIsLoadingDestinations(false);
+      });
     }
   });
 
@@ -1314,7 +1381,6 @@ export function Alerts() {
     setSnapshotDefaults({ ...FACTORY_SNAPSHOT_DEFAULTS });
     setHasUnsavedChanges(true);
   };
-  const [timeThreshold, setTimeThreshold] = createSignal(DEFAULT_DELAY_SECONDS); // Legacy
   const [timeThresholds, setTimeThresholds] = createSignal({
     guest: DEFAULT_DELAY_SECONDS,
     node: DEFAULT_DELAY_SECONDS,
@@ -1477,7 +1543,7 @@ export function Alerts() {
             <div class="flex w-full gap-2 sm:w-auto">
               <button
                 class="flex-1 px-4 py-2 text-sm text-white transition-colors sm:flex-initial bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                disabled={isReloadingConfig()}
+                disabled={isReloadingConfig() || !!destConfigLoadError()}
                 onClick={async () => {
                   try {
                     // Save alert configuration with hysteresis format
@@ -1619,7 +1685,6 @@ export function Alerts() {
                       minimumDelta: 2.0,
                       suppressionWindow: 5,
                       hysteresisMargin: 5.0,
-                      timeThreshold: timeThreshold() || 0, // Legacy
                       timeThresholds: timeThresholds(),
                       metricTimeThresholds: normalizeMetricDelayMap(metricTimeThresholds()),
                       snapshotDefaults: {
@@ -1644,7 +1709,6 @@ export function Alerts() {
                       schedule: {
                         quietHours: scheduleQuietHours(),
                         cooldown: normalizedCooldownMinutes,
-                        groupingWindow: groupingWindowSeconds,
                         notifyOnResolve: notifyOnResolve(),
                         maxAlertsHour: normalizedMaxAlertsHour,
                         escalation: scheduleEscalation(),
@@ -1883,9 +1947,10 @@ export function Alerts() {
                   rawOverridesConfig={rawOverridesConfig}
                   setRawOverridesConfig={setRawOverridesConfig}
                   allGuests={allGuests}
-                  state={state}
+                  pbsInstances={pbsInstances()}
+                  pmgInstances={pmgInstances()}
                   nodes={byType('node')}
-                  hosts={byType('host')}
+                  hosts={hostAgentResources()}
                   storage={allResources().filter(
                     (r) => r.type === 'storage' || r.type === 'datastore',
                   )}
@@ -1991,6 +2056,10 @@ export function Alerts() {
                   setEmailConfig={setEmailConfig}
                   appriseConfig={appriseConfig}
                   setAppriseConfig={setAppriseConfig}
+                  configLoadError={destConfigLoadError}
+                  isRetrying={isReloadingConfig}
+                  isLoadingDestinations={isLoadingDestinations}
+                  onRetryLoad={() => void loadAlertConfiguration()}
                 />
               </Show>
 
@@ -2031,7 +2100,8 @@ export function Alerts() {
 // Thresholds Tab - Improved design
 interface ThresholdsTabProps {
   allGuests: () => Resource[];
-  state: State;
+  pbsInstances: PBSInstance[];
+  pmgInstances: PMGInstance[];
   nodes: Resource[];
   hosts: Resource[];
   storage: Resource[];
@@ -2217,8 +2287,8 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       storage={props.storage}
       dockerHosts={props.dockerHosts}
       allResources={props.allResources}
-      pbsInstances={props.state.pbs || []}
-      pmgInstances={props.state.pmg || []}
+      pbsInstances={props.pbsInstances}
+      pmgInstances={props.pmgInstances}
       pmgThresholds={props.pmgThresholds}
       setPMGThresholds={props.setPMGThresholds}
       guestDefaults={props.guestDefaults()}
@@ -2319,13 +2389,21 @@ interface DestinationsTabProps {
   setEmailConfig: (config: UIEmailConfig) => void;
   appriseConfig: () => UIAppriseConfig;
   setAppriseConfig: (config: UIAppriseConfig) => void;
+  configLoadError: () => string | null;
+  isRetrying: () => boolean;
+  isLoadingDestinations: () => boolean;
+  onRetryLoad: () => void;
 }
 
 function DestinationsTab(props: DestinationsTabProps) {
   const [webhooks, setWebhooks] = createSignal<Webhook[]>([]);
+  const [webhookLoadError, setWebhookLoadError] = createSignal<string | null>(null);
+  const [isLoadingWebhooks, setIsLoadingWebhooks] = createSignal(true);
   const [testingEmail, setTestingEmail] = createSignal(false);
   const [testingApprise, setTestingApprise] = createSignal(false);
   const [testingWebhook, setTestingWebhook] = createSignal<string | null>(null);
+  const isLoading = () =>
+    props.isLoadingDestinations() || isLoadingWebhooks() || props.isRetrying();
   const appriseState = () => props.appriseConfig();
   const updateApprise = (partial: Partial<UIAppriseConfig>) => {
     props.setAppriseConfig({ ...props.appriseConfig(), ...partial });
@@ -2348,7 +2426,9 @@ function DestinationsTab(props: DestinationsTabProps) {
     };
   };
   // Load webhooks on mount (email config is now loaded in parent)
-  onMount(async () => {
+  const loadWebhooks = async () => {
+    setWebhookLoadError(null);
+    setIsLoadingWebhooks(true);
     try {
       const hooks = await NotificationsAPI.getWebhooks();
       // Map to local Webhook type - preserve the service type from backend
@@ -2360,7 +2440,13 @@ function DestinationsTab(props: DestinationsTabProps) {
       );
     } catch (err) {
       logger.error('Failed to load webhooks:', err);
+      setWebhookLoadError('Failed to load webhook configuration.');
+    } finally {
+      setIsLoadingWebhooks(false);
     }
+  };
+  onMount(() => {
+    void loadWebhooks();
   });
 
   const testEmailConfig = async () => {
@@ -2436,289 +2522,372 @@ function DestinationsTab(props: DestinationsTabProps) {
     }
   };
 
+  const hasLoadError = () => props.configLoadError() || webhookLoadError();
+
+  const handleRetry = () => {
+    props.onRetryLoad();
+    void loadWebhooks();
+  };
+
   return (
     <div class="flex w-full max-w-full flex-col gap-6 md:gap-8">
-      <SettingsPanel
-        title="Email notifications"
-        description="Configure SMTP delivery for alert emails."
-        action={
-          <Toggle
-            checked={props.emailConfig().enabled}
-            onChange={(e) => {
-              props.setEmailConfig({ ...props.emailConfig(), enabled: e.currentTarget.checked });
-              props.setHasUnsavedChanges(true);
-            }}
-            containerClass="sm:self-start"
-            label={
-              <span class="text-xs font-medium text-muted">
-                {props.emailConfig().enabled ? 'Enabled' : 'Disabled'}
-              </span>
-            }
-          />
+      <Show
+        when={!isLoading()}
+        fallback={
+          <div class="flex w-full flex-col gap-6 md:gap-8 animate-pulse pointer-events-none select-none">
+            {/* Email skeleton */}
+            <div class="rounded-lg border border-border bg-surface p-6 space-y-4">
+              <div class="flex items-center justify-between">
+                <div class="space-y-2">
+                  <div class="h-5 w-40 rounded bg-surface-hover" />
+                  <div class="h-3 w-64 rounded bg-surface-hover" />
+                </div>
+                <div class="h-6 w-12 rounded-full bg-surface-hover" />
+              </div>
+              <div class="space-y-3">
+                <div class="h-4 w-24 rounded bg-surface-hover" />
+                <div class="h-10 w-full rounded bg-surface-hover" />
+                <div class="h-4 w-32 rounded bg-surface-hover" />
+                <div class="h-10 w-full rounded bg-surface-hover" />
+              </div>
+            </div>
+            {/* Apprise skeleton */}
+            <div class="rounded-lg border border-border bg-surface p-6 space-y-4">
+              <div class="flex items-center justify-between">
+                <div class="space-y-2">
+                  <div class="h-5 w-44 rounded bg-surface-hover" />
+                  <div class="h-3 w-72 rounded bg-surface-hover" />
+                </div>
+                <div class="h-6 w-12 rounded-full bg-surface-hover" />
+              </div>
+              <div class="space-y-3">
+                <div class="h-4 w-28 rounded bg-surface-hover" />
+                <div class="h-10 w-full rounded bg-surface-hover" />
+              </div>
+            </div>
+            {/* Webhooks skeleton */}
+            <div class="rounded-lg border border-border bg-surface p-6 space-y-4">
+              <div class="flex items-center justify-between">
+                <div class="space-y-2">
+                  <div class="h-5 w-28 rounded bg-surface-hover" />
+                  <div class="h-3 w-56 rounded bg-surface-hover" />
+                </div>
+                <div class="h-4 w-20 rounded bg-surface-hover" />
+              </div>
+              <div class="h-10 w-full rounded bg-surface-hover" />
+            </div>
+          </div>
         }
-        class="min-w-0"
-        bodyClass=""
       >
-        <div
-          class={`${!props.emailConfig().enabled ? 'pointer-events-none opacity-50 transition-opacity' : 'transition-opacity'}`}
-        >
-          <EmailProviderSelect
-            config={props.emailConfig()}
-            onChange={(config) => {
-              props.setEmailConfig(config);
-              props.setHasUnsavedChanges(true);
-            }}
-            onTest={testEmailConfig}
-            testing={testingEmail()}
-          />
-        </div>
-      </SettingsPanel>
+        <Show when={hasLoadError()}>
+          <Card tone="danger" padding="sm" class="border-red-200 dark:border-red-800 sm:p-4">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div class="flex items-center gap-2 text-red-800 dark:text-red-200">
+                <AlertTriangleIcon class="h-4 w-4 flex-shrink-0" />
+                <span class="text-sm font-medium">
+                  {props.configLoadError() || webhookLoadError()} Saving now may overwrite your
+                  existing settings with defaults.
+                </span>
+              </div>
+              <button
+                class="flex-shrink-0 rounded-md border border-red-300 dark:border-red-700 bg-transparent px-3 py-1.5 text-sm font-medium text-red-800 dark:text-red-200 transition hover:bg-red-100 dark:hover:bg-red-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={props.isRetrying()}
+                onClick={handleRetry}
+              >
+                {props.isRetrying() ? 'Retrying\u2026' : 'Retry'}
+              </button>
+            </div>
+          </Card>
+        </Show>
 
-      <SettingsPanel
-        title="Apprise notifications"
-        description="Relay grouped alerts through Apprise via CLI or remote API."
-        action={
-          <div class="flex items-center gap-3 sm:self-start">
+        <SettingsPanel
+          title="Email notifications"
+          description="Configure SMTP delivery for alert emails."
+          action={
             <Toggle
-              checked={appriseState().enabled}
+              checked={props.emailConfig().enabled}
               onChange={(e) => {
-                updateApprise({ enabled: e.currentTarget.checked });
+                props.setEmailConfig({ ...props.emailConfig(), enabled: e.currentTarget.checked });
                 props.setHasUnsavedChanges(true);
               }}
-              containerClass=""
+              containerClass="sm:self-start"
               label={
                 <span class="text-xs font-medium text-muted">
-                  {appriseState().enabled ? 'Enabled' : 'Disabled'}
+                  {props.emailConfig().enabled ? 'Enabled' : 'Disabled'}
                 </span>
               }
             />
-            <button
-              class="rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!appriseState().enabled || testingApprise()}
-              onClick={testApprise}
-            >
-              {testingApprise() ? 'Testing...' : 'Send test'}
-            </button>
-          </div>
-        }
-        class="min-w-0"
-        bodyClass="space-y-4"
-      >
-        <div class="space-y-4">
-          <div class={formField}>
-            <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Delivery mode</label>
-            <select
-              class={formControl}
-              value={appriseState().mode}
-              onInput={(e) => {
-                updateApprise({ mode: e.currentTarget.value as 'cli' | 'http' });
+          }
+          class="min-w-0"
+          bodyClass=""
+        >
+          <div
+            class={`${!props.emailConfig().enabled ? 'pointer-events-none opacity-50 transition-opacity' : 'transition-opacity'}`}
+          >
+            <EmailProviderSelect
+              config={props.emailConfig()}
+              onChange={(config) => {
+                props.setEmailConfig(config);
                 props.setHasUnsavedChanges(true);
               }}
-            >
-              <option value="cli">Local Apprise CLI</option>
-              <option value="http">Remote Apprise API</option>
-            </select>
-            <p class={formHelpText}>Choose how Pulse should execute Apprise notifications.</p>
-          </div>
-
-          <div class={formField}>
-            <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-              Delivery targets
-            </label>
-            <textarea
-              rows={4}
-              class={`${formControl} font-mono min-h-[120px]`}
-              value={appriseState().targetsText}
-              placeholder={`discord://token
-mailto://alerts@example.com`}
-              onInput={(e) => {
-                updateApprise({ targetsText: e.currentTarget.value });
-                props.setHasUnsavedChanges(true);
-              }}
+              onTest={testEmailConfig}
+              testing={testingEmail()}
             />
-            <p class={formHelpText}>
-              {appriseState().mode === 'http'
-                ? 'Optional: override the URLs defined on your Apprise API instance. Leave blank to use the server defaults.'
-                : 'Enter one Apprise URL per line. Commas are also supported.'}
-            </p>
           </div>
-          <Show when={appriseState().mode === 'cli'}>
+        </SettingsPanel>
+
+        <SettingsPanel
+          title="Apprise notifications"
+          description="Relay grouped alerts through Apprise via CLI or remote API."
+          action={
+            <div class="flex items-center gap-3 sm:self-start">
+              <Toggle
+                checked={appriseState().enabled}
+                onChange={(e) => {
+                  updateApprise({ enabled: e.currentTarget.checked });
+                  props.setHasUnsavedChanges(true);
+                }}
+                containerClass=""
+                label={
+                  <span class="text-xs font-medium text-muted">
+                    {appriseState().enabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                }
+              />
+              <button
+                class="rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!appriseState().enabled || testingApprise()}
+                onClick={testApprise}
+              >
+                {testingApprise() ? 'Testing...' : 'Send test'}
+              </button>
+            </div>
+          }
+          class="min-w-0"
+          bodyClass="space-y-4"
+        >
+          <div class="space-y-4">
             <div class={formField}>
-              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>CLI path</label>
-              <input
-                type="text"
-                value={appriseState().cliPath}
+              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Delivery mode</label>
+              <select
                 class={formControl}
-                placeholder="apprise"
+                value={appriseState().mode}
                 onInput={(e) => {
-                  updateApprise({ cliPath: e.currentTarget.value });
+                  updateApprise({ mode: e.currentTarget.value as 'cli' | 'http' });
+                  props.setHasUnsavedChanges(true);
+                }}
+              >
+                <option value="cli">Local Apprise CLI</option>
+                <option value="http">Remote Apprise API</option>
+              </select>
+              <p class={formHelpText}>Choose how Pulse should execute Apprise notifications.</p>
+            </div>
+
+            <div class={formField}>
+              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                Delivery targets
+              </label>
+              <textarea
+                rows={4}
+                class={`${formControl} font-mono min-h-[120px]`}
+                value={appriseState().targetsText}
+                placeholder={`discord://token
+mailto://alerts@example.com`}
+                onInput={(e) => {
+                  updateApprise({ targetsText: e.currentTarget.value });
                   props.setHasUnsavedChanges(true);
                 }}
               />
-              <p class={formHelpText}>Leave blank to use the default `apprise` executable.</p>
+              <p class={formHelpText}>
+                {appriseState().mode === 'http'
+                  ? 'Optional: override the URLs defined on your Apprise API instance. Leave blank to use the server defaults.'
+                  : 'Enter one Apprise URL per line. Commas are also supported.'}
+              </p>
             </div>
-          </Show>
+            <Show when={appriseState().mode === 'cli'}>
+              <div class={formField}>
+                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>CLI path</label>
+                <input
+                  type="text"
+                  value={appriseState().cliPath}
+                  class={formControl}
+                  placeholder="apprise"
+                  onInput={(e) => {
+                    updateApprise({ cliPath: e.currentTarget.value });
+                    props.setHasUnsavedChanges(true);
+                  }}
+                />
+                <p class={formHelpText}>Leave blank to use the default `apprise` executable.</p>
+              </div>
+            </Show>
 
-          <Show when={appriseState().mode === 'http'}>
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div class={`${formField} sm:col-span-2`}>
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Server URL</label>
-                <input
-                  type="text"
-                  value={appriseState().serverUrl}
-                  class={formControl}
-                  placeholder="https://apprise-api.internal:8000"
-                  onInput={(e) => {
-                    updateApprise({ serverUrl: e.currentTarget.value });
-                    props.setHasUnsavedChanges(true);
-                  }}
-                />
-                <p class={formHelpText}>
-                  Point to an Apprise API endpoint such as https://host:8000.
-                </p>
-              </div>
-              <div class={formField}>
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                  Config key (optional)
-                </label>
-                <input
-                  type="text"
-                  value={appriseState().configKey}
-                  class={formControl}
-                  placeholder="default"
-                  onInput={(e) => {
-                    updateApprise({ configKey: e.currentTarget.value });
-                    props.setHasUnsavedChanges(true);
-                  }}
-                />
-                <p class={formHelpText}>Targets the /notify/&lt;key&gt; endpoint when provided.</p>
-              </div>
-              <div class={formField}>
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>API key</label>
-                <input
-                  type="password"
-                  value={appriseState().apiKey}
-                  class={formControl}
-                  placeholder="Optional API key"
-                  onInput={(e) => {
-                    updateApprise({ apiKey: e.currentTarget.value });
-                    props.setHasUnsavedChanges(true);
-                  }}
-                />
-                <p class={formHelpText}>
-                  Included with each request when your Apprise API requires authentication.
-                </p>
-              </div>
-              <div class={formField}>
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                  API key header
-                </label>
-                <input
-                  type="text"
-                  value={appriseState().apiKeyHeader}
-                  class={formControl}
-                  placeholder="X-API-KEY"
-                  onInput={(e) => {
-                    updateApprise({ apiKeyHeader: e.currentTarget.value });
-                    props.setHasUnsavedChanges(true);
-                  }}
-                />
-                <p class={formHelpText}>Defaults to X-API-KEY for Apprise API deployments.</p>
-              </div>
-              <div class={`${formField} sm:col-span-2`}>
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                  TLS verification
-                </label>
-                <label class="inline-flex items-center gap-2">
+            <Show when={appriseState().mode === 'http'}>
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div class={`${formField} sm:col-span-2`}>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                    Server URL
+                  </label>
                   <input
-                    type="checkbox"
-                    class="h-4 w-4 rounded border border-border"
-                    checked={appriseState().skipTlsVerify}
-                    onChange={(e) => {
-                      updateApprise({ skipTlsVerify: e.currentTarget.checked });
+                    type="text"
+                    value={appriseState().serverUrl}
+                    class={formControl}
+                    placeholder="https://apprise-api.internal:8000"
+                    onInput={(e) => {
+                      updateApprise({ serverUrl: e.currentTarget.value });
                       props.setHasUnsavedChanges(true);
                     }}
                   />
-                  <span class="text-sm text-muted">Allow self-signed certificates</span>
-                </label>
-                <p class={formHelpText}>
-                  Enable only when the Apprise API uses a self-signed certificate.
-                </p>
+                  <p class={formHelpText}>
+                    Point to an Apprise API endpoint such as https://host:8000.
+                  </p>
+                </div>
+                <div class={formField}>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                    Config key (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={appriseState().configKey}
+                    class={formControl}
+                    placeholder="default"
+                    onInput={(e) => {
+                      updateApprise({ configKey: e.currentTarget.value });
+                      props.setHasUnsavedChanges(true);
+                    }}
+                  />
+                  <p class={formHelpText}>
+                    Targets the /notify/&lt;key&gt; endpoint when provided.
+                  </p>
+                </div>
+                <div class={formField}>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>API key</label>
+                  <input
+                    type="password"
+                    value={appriseState().apiKey}
+                    class={formControl}
+                    placeholder="Optional API key"
+                    onInput={(e) => {
+                      updateApprise({ apiKey: e.currentTarget.value });
+                      props.setHasUnsavedChanges(true);
+                    }}
+                  />
+                  <p class={formHelpText}>
+                    Included with each request when your Apprise API requires authentication.
+                  </p>
+                </div>
+                <div class={formField}>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                    API key header
+                  </label>
+                  <input
+                    type="text"
+                    value={appriseState().apiKeyHeader}
+                    class={formControl}
+                    placeholder="X-API-KEY"
+                    onInput={(e) => {
+                      updateApprise({ apiKeyHeader: e.currentTarget.value });
+                      props.setHasUnsavedChanges(true);
+                    }}
+                  />
+                  <p class={formHelpText}>Defaults to X-API-KEY for Apprise API deployments.</p>
+                </div>
+                <div class={`${formField} sm:col-span-2`}>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                    TLS verification
+                  </label>
+                  <label class="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      class="h-4 w-4 rounded border border-border"
+                      checked={appriseState().skipTlsVerify}
+                      onChange={(e) => {
+                        updateApprise({ skipTlsVerify: e.currentTarget.checked });
+                        props.setHasUnsavedChanges(true);
+                      }}
+                    />
+                    <span class="text-sm text-muted">Allow self-signed certificates</span>
+                  </label>
+                  <p class={formHelpText}>
+                    Enable only when the Apprise API uses a self-signed certificate.
+                  </p>
+                </div>
               </div>
+            </Show>
+
+            <div class={formField}>
+              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                Timeout (seconds)
+              </label>
+              <input
+                type="number"
+                min="5"
+                max="120"
+                value={appriseState().timeoutSeconds}
+                class={formControl}
+                onInput={(e) => {
+                  const raw = e.currentTarget.valueAsNumber;
+                  const safe = Number.isNaN(raw) ? 15 : Math.min(120, Math.max(5, Math.trunc(raw)));
+                  updateApprise({ timeoutSeconds: safe });
+                  props.setHasUnsavedChanges(true);
+                }}
+              />
+              <p class={formHelpText}>Maximum time to wait for Apprise to respond.</p>
             </div>
-          </Show>
-
-          <div class={formField}>
-            <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-              Timeout (seconds)
-            </label>
-            <input
-              type="number"
-              min="5"
-              max="120"
-              value={appriseState().timeoutSeconds}
-              class={formControl}
-              onInput={(e) => {
-                const raw = e.currentTarget.valueAsNumber;
-                const safe = Number.isNaN(raw) ? 15 : Math.min(120, Math.max(5, Math.trunc(raw)));
-                updateApprise({ timeoutSeconds: safe });
-                props.setHasUnsavedChanges(true);
-              }}
-            />
-            <p class={formHelpText}>Maximum time to wait for Apprise to respond.</p>
           </div>
-        </div>
-      </SettingsPanel>
+        </SettingsPanel>
 
-      <SettingsPanel
-        title="Webhooks"
-        description="Push alerts to chat apps or automation systems."
-        action={
-          <span class="text-xs text-muted whitespace-nowrap">{webhooks().length} configured</span>
-        }
-        class="min-w-0"
-        bodyClass="space-y-4"
-      >
-        <WebhookConfig
-          webhooks={webhooks()}
-          onAdd={async (webhook) => {
-            try {
-              const created = await NotificationsAPI.createWebhook(webhook);
-              setWebhooks([...webhooks(), created]);
-              notificationStore.success('Webhook added successfully');
-            } catch (err) {
-              logger.error('Failed to add webhook:', err);
-              notificationStore.error(err instanceof Error ? err.message : 'Failed to add webhook');
-            }
-          }}
-          onUpdate={async (webhook) => {
-            try {
-              const updated = await NotificationsAPI.updateWebhook(webhook.id!, webhook);
-              setWebhooks(webhooks().map((w) => (w.id === webhook.id ? updated : w)));
-              notificationStore.success('Webhook updated successfully');
-            } catch (err) {
-              logger.error('Failed to update webhook:', err);
-              notificationStore.error(
-                err instanceof Error ? err.message : 'Failed to update webhook',
-              );
-            }
-          }}
-          onDelete={async (id) => {
-            try {
-              await NotificationsAPI.deleteWebhook(id);
-              setWebhooks(webhooks().filter((w) => w.id !== id));
-              notificationStore.success('Webhook deleted successfully');
-            } catch (err) {
-              logger.error('Failed to delete webhook:', err);
-              notificationStore.error(
-                err instanceof Error ? err.message : 'Failed to delete webhook',
-              );
-            }
-          }}
-          onTest={testWebhook}
-          testing={testingWebhook()}
-        />
-      </SettingsPanel>
+        <SettingsPanel
+          title="Webhooks"
+          description="Push alerts to chat apps or automation systems."
+          action={
+            <span class="text-xs text-muted whitespace-nowrap">{webhooks().length} configured</span>
+          }
+          class="min-w-0"
+          bodyClass="space-y-4"
+        >
+          <WebhookConfig
+            webhooks={webhooks()}
+            onAdd={async (webhook) => {
+              try {
+                const created = await NotificationsAPI.createWebhook(webhook);
+                setWebhooks([...webhooks(), created]);
+                notificationStore.success('Webhook added successfully');
+              } catch (err) {
+                logger.error('Failed to add webhook:', err);
+                notificationStore.error(
+                  err instanceof Error ? err.message : 'Failed to add webhook',
+                );
+              }
+            }}
+            onUpdate={async (webhook) => {
+              try {
+                const updated = await NotificationsAPI.updateWebhook(webhook.id!, webhook);
+                setWebhooks(webhooks().map((w) => (w.id === webhook.id ? updated : w)));
+                notificationStore.success('Webhook updated successfully');
+              } catch (err) {
+                logger.error('Failed to update webhook:', err);
+                notificationStore.error(
+                  err instanceof Error ? err.message : 'Failed to update webhook',
+                );
+              }
+            }}
+            onDelete={async (id) => {
+              try {
+                await NotificationsAPI.deleteWebhook(id);
+                setWebhooks(webhooks().filter((w) => w.id !== id));
+                notificationStore.success('Webhook deleted successfully');
+              } catch (err) {
+                logger.error('Failed to delete webhook:', err);
+                notificationStore.error(
+                  err instanceof Error ? err.message : 'Failed to delete webhook',
+                );
+              }
+            }}
+            onTest={testWebhook}
+            testing={testingWebhook()}
+          />
+        </SettingsPanel>
+      </Show>
     </div>
   );
 }
@@ -3645,6 +3814,7 @@ function HistoryTab(props: {
     {},
   );
   const [incidentLoading, setIncidentLoading] = createSignal<Record<string, boolean>>({});
+  const [incidentErrors, setIncidentErrors] = createSignal<Record<string, boolean>>({});
   const [expandedIncidents, setExpandedIncidents] = createSignal<Set<string>>(new Set());
   const [incidentNoteDrafts, setIncidentNoteDrafts] = createSignal<Record<string, string>>({});
   const [incidentNoteSaving, setIncidentNoteSaving] = createSignal<Set<string>>(new Set());
@@ -3754,6 +3924,7 @@ function HistoryTab(props: {
       setExpandedResourceIncidentIds(new Set<string>());
       setIncidentTimelines({});
       setIncidentLoading({});
+      setIncidentErrors({});
       setExpandedIncidents(new Set<string>());
       setIncidentNoteDrafts({});
       setIncidentNoteSaving(new Set<string>());
@@ -3952,10 +4123,6 @@ function HistoryTab(props: {
     node?: string;
     nodeDisplayName?: string;
     severity: string; // warning, critical for alerts; severity for findings
-    // Aliases for backward compat with existing rendering code
-    level: string; // same as severity
-    type: string; // same as title
-    message?: string; // same as description
     title: string;
     description?: string;
     acknowledged?: boolean;
@@ -3980,9 +4147,6 @@ function HistoryTab(props: {
         node: alert.node,
         nodeDisplayName: alert.nodeDisplayName,
         severity: alert.level,
-        level: alert.level,
-        type: alert.type,
-        message: alert.message,
         title: alert.type,
         description: alert.message,
         acknowledged: false,
@@ -4009,9 +4173,6 @@ function HistoryTab(props: {
         node: alert.node,
         nodeDisplayName: alert.nodeDisplayName,
         severity: alert.level,
-        level: alert.level,
-        type: alert.type,
-        message: alert.message,
         title: alert.type,
         description: alert.message,
         acknowledged: alert.acknowledged,
@@ -4269,9 +4430,11 @@ function HistoryTab(props: {
     try {
       const timeline = await AlertsAPI.getIncidentTimeline(alertId, startedAt);
       setIncidentTimelines((prev) => ({ ...prev, [rowKey]: timeline }));
+      setIncidentErrors((prev) => ({ ...prev, [rowKey]: false }));
     } catch (error) {
       logger.error('Failed to load incident timeline', error);
       notificationStore.error('Failed to load incident timeline');
+      setIncidentErrors((prev) => ({ ...prev, [rowKey]: true }));
     } finally {
       setIncidentLoading((prev) => ({ ...prev, [rowKey]: false }));
     }
@@ -4503,11 +4666,11 @@ function HistoryTab(props: {
               <div class="flex items-center gap-2 text-xs text-muted">
                 <span class="flex items-center gap-1">
                   <div class="h-2 w-2 rounded-full bg-yellow-500"></div>
-                  {alertData().filter((a) => a.level === 'warning').length} warnings
+                  {alertData().filter((a) => a.severity === 'warning').length} warnings
                 </span>
                 <span class="flex items-center gap-1">
                   <div class="h-2 w-2 rounded-full bg-red-500"></div>
-                  {alertData().filter((a) => a.level === 'critical').length} critical
+                  {alertData().filter((a) => a.severity === 'critical').length} critical
                 </span>
               </div>
             </div>
@@ -5057,7 +5220,7 @@ function HistoryTab(props: {
                                                   : 'bg-surface-hover text-base-content'
                                         }`}
                                       >
-                                        {alert.type}
+                                        {alert.resourceType}
                                       </span>
                                     </TableCell>
 
@@ -5065,21 +5228,21 @@ function HistoryTab(props: {
                                     <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
                                       <span
                                         class={`text-xs px-2 py-0.5 rounded font-medium ${
-                                          alert.level === 'critical'
+                                          alert.severity === 'critical'
                                             ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
                                             : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
                                         }`}
                                       >
-                                        {alert.level}
+                                        {alert.severity}
                                       </span>
                                     </TableCell>
 
                                     {/* Message */}
                                     <TableCell
                                       class="p-1 sm:p-1.5 px-1 sm:px-2 text-base-content truncate max-w-[300px]"
-                                      title={alert.message}
+                                      title={alert.description}
                                     >
-                                      {alert.message}
+                                      {alert.description}
                                     </TableCell>
 
                                     {/* Duration */}
@@ -5150,14 +5313,14 @@ function HistoryTab(props: {
                                           <InvestigateAlertButton
                                             alert={{
                                               id: alert.id,
-                                              type: alert.type,
-                                              level: alert.level as 'warning' | 'critical',
+                                              type: alert.title,
+                                              level: alert.severity as 'warning' | 'critical',
                                               resourceId: alert.resourceId || '',
                                               resourceName: alert.resourceName,
                                               node: alert.node || '',
                                               nodeDisplayName: alert.nodeDisplayName,
                                               instance: '',
-                                              message: alert.message || '',
+                                              message: alert.description || '',
                                               value: 0,
                                               threshold: 0,
                                               startTime: alert.startTime,
@@ -5369,9 +5532,32 @@ function HistoryTab(props: {
                                             )}
                                           </Show>
                                           <Show when={!incidentTimelines()[rowKey]}>
-                                            <p class="text-xs text-muted">
-                                              No incident timeline available.
-                                            </p>
+                                            <Show
+                                              when={incidentErrors()[rowKey]}
+                                              fallback={
+                                                <p class="text-xs text-muted">
+                                                  No incident timeline available.
+                                                </p>
+                                              }
+                                            >
+                                              <div class="flex items-center gap-2">
+                                                <p class="text-xs text-error">
+                                                  Failed to load timeline.
+                                                </p>
+                                                <button
+                                                  class="text-xs text-primary hover:underline"
+                                                  onClick={() =>
+                                                    loadIncidentTimeline(
+                                                      rowKey,
+                                                      alert.id,
+                                                      alert.startTime,
+                                                    )
+                                                  }
+                                                >
+                                                  Retry
+                                                </button>
+                                              </div>
+                                            </Show>
                                           </Show>
                                         </Show>
                                       </TableCell>

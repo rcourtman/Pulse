@@ -12,7 +12,6 @@ func TestSynologyRAIDSuppression(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 
@@ -76,7 +75,6 @@ func TestSynologyRAIDClearing(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 
@@ -122,7 +120,6 @@ func TestHostDisableClearsRAID(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 
@@ -163,7 +160,6 @@ func TestHostDisableClearsRAID(t *testing.T) {
 	}
 	m.UpdateConfig(cfg)
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 

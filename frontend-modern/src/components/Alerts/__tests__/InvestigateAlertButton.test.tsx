@@ -6,23 +6,19 @@ import type { Alert } from '@/types/api';
 // Mocks — vi.hoisted ensures these are available before vi.mock factories run
 // ---------------------------------------------------------------------------
 
-const {
-  openWithPromptMock,
-  trackUpgradeClickedMock,
-  formatAlertValueMock,
-  mockAiChatStore,
-} = vi.hoisted(() => {
-  const openWithPromptMock = vi.fn();
-  const trackUpgradeClickedMock = vi.fn();
-  const formatAlertValueMock = vi.fn(
-    (value?: number, _type?: string) => (value !== undefined ? `${value.toFixed(1)}%` : 'N/A'),
-  );
-  const mockAiChatStore = {
-    enabled: true as boolean | null,
-    openWithPrompt: (...args: unknown[]) => openWithPromptMock(...args),
-  };
-  return { openWithPromptMock, trackUpgradeClickedMock, formatAlertValueMock, mockAiChatStore };
-});
+const { openWithPromptMock, trackUpgradeClickedMock, formatAlertValueMock, mockAiChatStore } =
+  vi.hoisted(() => {
+    const openWithPromptMock = vi.fn();
+    const trackUpgradeClickedMock = vi.fn();
+    const formatAlertValueMock = vi.fn((value?: number, _type?: string) =>
+      value !== undefined ? `${value.toFixed(1)}%` : 'N/A',
+    );
+    const mockAiChatStore = {
+      enabled: true as boolean | null,
+      openWithPrompt: (...args: unknown[]) => openWithPromptMock(...args),
+    };
+    return { openWithPromptMock, trackUpgradeClickedMock, formatAlertValueMock, mockAiChatStore };
+  });
 
 vi.mock('@/stores/aiChat', () => ({
   aiChatStore: mockAiChatStore,
@@ -90,17 +86,13 @@ describe('InvestigateAlertButton', () => {
   describe('rendering and visibility', () => {
     it('renders nothing when AI is not enabled', () => {
       mockAiChatStore.enabled = false;
-      const { container } = render(() => (
-        <InvestigateAlertButton alert={makeAlert()} />
-      ));
+      const { container } = render(() => <InvestigateAlertButton alert={makeAlert()} />);
       expect(container.innerHTML).toBe('');
     });
 
     it('renders nothing when AI enabled is null', () => {
       mockAiChatStore.enabled = null;
-      const { container } = render(() => (
-        <InvestigateAlertButton alert={makeAlert()} />
-      ));
+      const { container } = render(() => <InvestigateAlertButton alert={makeAlert()} />);
       expect(container.innerHTML).toBe('');
     });
 
@@ -160,9 +152,7 @@ describe('InvestigateAlertButton', () => {
   // ---------------------------------------------------------------------------
   describe('custom class', () => {
     it('appends custom class to button', () => {
-      render(() => (
-        <InvestigateAlertButton alert={makeAlert()} class="my-custom-class" />
-      ));
+      render(() => <InvestigateAlertButton alert={makeAlert()} class="my-custom-class" />);
       const button = screen.getByRole('button');
       expect(button.className).toContain('my-custom-class');
     });
@@ -173,17 +163,13 @@ describe('InvestigateAlertButton', () => {
   // ---------------------------------------------------------------------------
   describe('license-locked state', () => {
     it('sets aria-disabled when licenseLocked is true', () => {
-      render(() => (
-        <InvestigateAlertButton alert={makeAlert()} licenseLocked={true} />
-      ));
+      render(() => <InvestigateAlertButton alert={makeAlert()} licenseLocked={true} />);
       const button = screen.getByRole('button');
       expect(button).toHaveAttribute('aria-disabled', 'true');
     });
 
     it('shows locked title when licenseLocked', () => {
-      render(() => (
-        <InvestigateAlertButton alert={makeAlert()} licenseLocked={true} />
-      ));
+      render(() => <InvestigateAlertButton alert={makeAlert()} licenseLocked={true} />);
       const button = screen.getByRole('button');
       expect(button).toHaveAttribute(
         'title',
@@ -194,39 +180,27 @@ describe('InvestigateAlertButton', () => {
     it('shows unlocked title when not licenseLocked', () => {
       render(() => <InvestigateAlertButton alert={makeAlert()} />);
       const button = screen.getByRole('button');
-      expect(button).toHaveAttribute(
-        'title',
-        'Ask Pulse Assistant to investigate this alert',
-      );
+      expect(button).toHaveAttribute('title', 'Ask Pulse Assistant to investigate this alert');
     });
 
     it('applies opacity class when locked', () => {
-      render(() => (
-        <InvestigateAlertButton alert={makeAlert()} licenseLocked={true} />
-      ));
+      render(() => <InvestigateAlertButton alert={makeAlert()} licenseLocked={true} />);
       const button = screen.getByRole('button');
       expect(button.className).toContain('opacity-60');
     });
 
     it('opens upgrade URL and tracks click when locked and clicked', async () => {
-      render(() => (
-        <InvestigateAlertButton alert={makeAlert()} licenseLocked={true} />
-      ));
+      render(() => <InvestigateAlertButton alert={makeAlert()} licenseLocked={true} />);
       const button = screen.getByRole('button');
       await fireEvent.click(button);
 
-      expect(trackUpgradeClickedMock).toHaveBeenCalledWith(
-        'investigate_alert_button',
-        'ai_alerts',
-      );
+      expect(trackUpgradeClickedMock).toHaveBeenCalledWith('investigate_alert_button', 'ai_alerts');
       expect(window.open).toHaveBeenCalledWith('/pricing?feature=ai_alerts', '_blank');
       expect(openWithPromptMock).not.toHaveBeenCalled();
     });
 
     it('still stops propagation when locked and clicked', () => {
-      render(() => (
-        <InvestigateAlertButton alert={makeAlert()} licenseLocked={true} />
-      ));
+      render(() => <InvestigateAlertButton alert={makeAlert()} licenseLocked={true} />);
       const button = screen.getByRole('button');
 
       const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
@@ -251,7 +225,10 @@ describe('InvestigateAlertButton', () => {
       await fireEvent.click(button);
 
       expect(openWithPromptMock).toHaveBeenCalledTimes(1);
-      const [prompt, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
+      const [prompt, context] = openWithPromptMock.mock.calls[0] as [
+        string,
+        Record<string, unknown>,
+      ];
 
       // Verify prompt contains key alert details
       expect(prompt).toContain('WARNING');

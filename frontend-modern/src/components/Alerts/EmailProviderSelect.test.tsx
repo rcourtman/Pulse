@@ -114,11 +114,7 @@ describe('EmailProviderSelect', () => {
 
   it('renders the provider select and form fields', async () => {
     render(() => (
-      <EmailProviderSelect
-        config={makeConfig()}
-        onChange={onChangeMock}
-        onTest={onTestMock}
-      />
+      <EmailProviderSelect config={makeConfig()} onChange={onChangeMock} onTest={onTestMock} />
     ));
 
     await waitFor(() => {
@@ -136,11 +132,7 @@ describe('EmailProviderSelect', () => {
 
   it('loads providers from the API and populates the select', async () => {
     render(() => (
-      <EmailProviderSelect
-        config={makeConfig()}
-        onChange={onChangeMock}
-        onTest={onTestMock}
-      />
+      <EmailProviderSelect config={makeConfig()} onChange={onChangeMock} onTest={onTestMock} />
     ));
 
     await waitFor(() => {
@@ -157,15 +149,14 @@ describe('EmailProviderSelect', () => {
     const { logger } = await import('@/utils/logger');
 
     render(() => (
-      <EmailProviderSelect
-        config={makeConfig()}
-        onChange={onChangeMock}
-        onTest={onTestMock}
-      />
+      <EmailProviderSelect config={makeConfig()} onChange={onChangeMock} onTest={onTestMock} />
     ));
 
     await waitFor(() => {
-      expect(logger.error).toHaveBeenCalledWith('Failed to load email providers', expect.any(Error));
+      expect(logger.error).toHaveBeenCalledWith(
+        'Failed to load email providers',
+        expect.any(Error),
+      );
     });
 
     // Should still have the manual option
@@ -176,11 +167,7 @@ describe('EmailProviderSelect', () => {
 
   it('applies provider settings when selecting a provider', async () => {
     render(() => (
-      <EmailProviderSelect
-        config={makeConfig()}
-        onChange={onChangeMock}
-        onTest={onTestMock}
-      />
+      <EmailProviderSelect config={makeConfig()} onChange={onChangeMock} onTest={onTestMock} />
     ));
 
     await waitFor(() => {
@@ -197,7 +184,7 @@ describe('EmailProviderSelect', () => {
         port: 587,
         tls: false,
         startTLS: true,
-      })
+      }),
     );
   });
 
@@ -221,7 +208,7 @@ describe('EmailProviderSelect', () => {
       expect.objectContaining({
         provider: 'SendGrid',
         username: 'apikey',
-      })
+      }),
     );
   });
 
@@ -245,7 +232,7 @@ describe('EmailProviderSelect', () => {
       expect.objectContaining({
         provider: 'Gmail',
         username: 'myuser@example.com',
-      })
+      }),
     );
   });
 
@@ -268,7 +255,7 @@ describe('EmailProviderSelect', () => {
     expect(onChangeMock).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: '',
-      })
+      }),
     );
   });
 
@@ -276,19 +263,13 @@ describe('EmailProviderSelect', () => {
 
   it('updates SMTP server on input', async () => {
     render(() => (
-      <EmailProviderSelect
-        config={makeConfig()}
-        onChange={onChangeMock}
-        onTest={onTestMock}
-      />
+      <EmailProviderSelect config={makeConfig()} onChange={onChangeMock} onTest={onTestMock} />
     ));
 
     const serverInput = screen.getByPlaceholderText('smtp.example.com');
     fireEvent.input(serverInput, { target: { value: 'mail.test.com' } });
 
-    expect(onChangeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ server: 'mail.test.com' })
-    );
+    expect(onChangeMock).toHaveBeenCalledWith(expect.objectContaining({ server: 'mail.test.com' }));
   });
 
   it('updates port on input and defaults to 587 on blur if empty', async () => {
@@ -304,79 +285,57 @@ describe('EmailProviderSelect', () => {
 
     // Type a valid port
     fireEvent.input(portInput, { target: { value: '465' } });
-    expect(onChangeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ port: 465 })
-    );
+    expect(onChangeMock).toHaveBeenCalledWith(expect.objectContaining({ port: 465 }));
 
     // Clear the port and blur — should default to 587
     onChangeMock.mockClear();
     fireEvent.input(portInput, { target: { value: '' } });
-    expect(onChangeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ port: 0 })
-    );
+    expect(onChangeMock).toHaveBeenCalledWith(expect.objectContaining({ port: 0 }));
 
     onChangeMock.mockClear();
     fireEvent.blur(portInput);
-    expect(onChangeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ port: 587 })
-    );
+    expect(onChangeMock).toHaveBeenCalledWith(expect.objectContaining({ port: 587 }));
   });
 
   it('updates from address on input', async () => {
     render(() => (
-      <EmailProviderSelect
-        config={makeConfig()}
-        onChange={onChangeMock}
-        onTest={onTestMock}
-      />
+      <EmailProviderSelect config={makeConfig()} onChange={onChangeMock} onTest={onTestMock} />
     ));
 
     const fromInput = screen.getByPlaceholderText('noreply@example.com');
     fireEvent.input(fromInput, { target: { value: 'alerts@myco.com' } });
 
-    expect(onChangeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ from: 'alerts@myco.com' })
-    );
+    expect(onChangeMock).toHaveBeenCalledWith(expect.objectContaining({ from: 'alerts@myco.com' }));
   });
 
   it('updates reply-to on input', async () => {
     render(() => (
-      <EmailProviderSelect
-        config={makeConfig()}
-        onChange={onChangeMock}
-        onTest={onTestMock}
-      />
+      <EmailProviderSelect config={makeConfig()} onChange={onChangeMock} onTest={onTestMock} />
     ));
 
     const replyToInput = screen.getByPlaceholderText('admin@example.com');
     fireEvent.input(replyToInput, { target: { value: 'help@myco.com' } });
 
     expect(onChangeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ replyTo: 'help@myco.com' })
+      expect.objectContaining({ replyTo: 'help@myco.com' }),
     );
   });
 
   it('updates username on input', async () => {
     render(() => (
-      <EmailProviderSelect
-        config={makeConfig()}
-        onChange={onChangeMock}
-        onTest={onTestMock}
-      />
+      <EmailProviderSelect config={makeConfig()} onChange={onChangeMock} onTest={onTestMock} />
     ));
 
     // Username placeholder depends on provider — when no provider, it's generic
     const usernameInputs = screen.getAllByRole('textbox');
     // Find the one after "Username" label
     const usernameInput = usernameInputs.find(
-      (el) => (el as HTMLInputElement).placeholder === 'username@example.com'
+      (el) => (el as HTMLInputElement).placeholder === 'username@example.com',
     );
     expect(usernameInput).toBeTruthy();
 
     fireEvent.input(usernameInput!, { target: { value: 'me@test.com' } });
-    expect(onChangeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ username: 'me@test.com' })
-    );
+    expect(onChangeMock).toHaveBeenCalledWith(expect.objectContaining({ username: 'me@test.com' }));
   });
 
   it('parses recipients textarea into array', async () => {
@@ -397,7 +356,7 @@ describe('EmailProviderSelect', () => {
     expect(onChangeMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: ['alice@test.com', 'bob@test.com', 'charlie@test.com'],
-      })
+      }),
     );
   });
 
@@ -416,20 +375,14 @@ describe('EmailProviderSelect', () => {
       target: { value: '\n\n  \n' },
     });
 
-    expect(onChangeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ to: [] })
-    );
+    expect(onChangeMock).toHaveBeenCalledWith(expect.objectContaining({ to: [] }));
   });
 
   // --- Advanced Options ---
 
   it('toggles advanced options section', async () => {
     render(() => (
-      <EmailProviderSelect
-        config={makeConfig()}
-        onChange={onChangeMock}
-        onTest={onTestMock}
-      />
+      <EmailProviderSelect config={makeConfig()} onChange={onChangeMock} onTest={onTestMock} />
     ));
 
     // Advanced options hidden by default
@@ -470,14 +423,14 @@ describe('EmailProviderSelect', () => {
     // Change to TLS
     fireEvent.change(securitySelect!, { target: { value: 'tls' } });
     expect(onChangeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ tls: true, startTLS: false })
+      expect.objectContaining({ tls: true, startTLS: false }),
     );
 
     // Change to none
     onChangeMock.mockClear();
     fireEvent.change(securitySelect!, { target: { value: 'none' } });
     expect(onChangeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ tls: false, startTLS: false })
+      expect.objectContaining({ tls: false, startTLS: false }),
     );
   });
 
@@ -494,15 +447,11 @@ describe('EmailProviderSelect', () => {
 
     // Rate limit input — find by current value
     const numberInputs = screen.getAllByRole('spinbutton');
-    const rateLimitInput = numberInputs.find(
-      (el) => (el as HTMLInputElement).value === '60'
-    );
+    const rateLimitInput = numberInputs.find((el) => (el as HTMLInputElement).value === '60');
     expect(rateLimitInput).toBeTruthy();
 
     fireEvent.input(rateLimitInput!, { target: { value: '120' } });
-    expect(onChangeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ rateLimit: 120 })
-    );
+    expect(onChangeMock).toHaveBeenCalledWith(expect.objectContaining({ rateLimit: 120 }));
   });
 
   it('updates max retries via advanced options', async () => {
@@ -517,15 +466,11 @@ describe('EmailProviderSelect', () => {
     fireEvent.click(screen.getByText('Show advanced options'));
 
     const numberInputs = screen.getAllByRole('spinbutton');
-    const retriesInput = numberInputs.find(
-      (el) => (el as HTMLInputElement).value === '3'
-    );
+    const retriesInput = numberInputs.find((el) => (el as HTMLInputElement).value === '3');
     expect(retriesInput).toBeTruthy();
 
     fireEvent.input(retriesInput!, { target: { value: '5' } });
-    expect(onChangeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ maxRetries: 5 })
-    );
+    expect(onChangeMock).toHaveBeenCalledWith(expect.objectContaining({ maxRetries: 5 }));
   });
 
   it('updates retry delay via advanced options', async () => {
@@ -540,15 +485,11 @@ describe('EmailProviderSelect', () => {
     fireEvent.click(screen.getByText('Show advanced options'));
 
     const numberInputs = screen.getAllByRole('spinbutton');
-    const delayInput = numberInputs.find(
-      (el) => (el as HTMLInputElement).value === '5'
-    );
+    const delayInput = numberInputs.find((el) => (el as HTMLInputElement).value === '5');
     expect(delayInput).toBeTruthy();
 
     fireEvent.input(delayInput!, { target: { value: '15' } });
-    expect(onChangeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ retryDelay: 15 })
-    );
+    expect(onChangeMock).toHaveBeenCalledWith(expect.objectContaining({ retryDelay: 15 }));
   });
 
   it('coerces maxRetries=0 to default display value of 3 (known || coercion)', async () => {
@@ -567,9 +508,7 @@ describe('EmailProviderSelect', () => {
 
     const numberInputs = screen.getAllByRole('spinbutton');
     // With maxRetries=0, the input shows "3" due to || coercion
-    const retriesInput = numberInputs.find(
-      (el) => (el as HTMLInputElement).value === '3'
-    );
+    const retriesInput = numberInputs.find((el) => (el as HTMLInputElement).value === '3');
     expect(retriesInput).toBeTruthy();
   });
 
@@ -586,9 +525,7 @@ describe('EmailProviderSelect', () => {
     fireEvent.click(screen.getByText('Show advanced options'));
 
     const numberInputs = screen.getAllByRole('spinbutton');
-    const rateLimitInput = numberInputs.find(
-      (el) => (el as HTMLInputElement).value === '60'
-    );
+    const rateLimitInput = numberInputs.find((el) => (el as HTMLInputElement).value === '60');
     expect(rateLimitInput).toBeTruthy();
   });
 
@@ -665,7 +602,7 @@ describe('EmailProviderSelect', () => {
     fireEvent.click(toggleBtn);
     expect(screen.getByText('Hide setup instructions')).toBeInTheDocument();
     const instructionTexts = screen.getAllByText(
-      'Use an App Password from your Google Account settings.'
+      'Use an App Password from your Google Account settings.',
     );
     // Should have at least 2: one in mobile section, one in desktop section
     expect(instructionTexts.length).toBeGreaterThanOrEqual(2);
@@ -674,9 +611,7 @@ describe('EmailProviderSelect', () => {
     fireEvent.click(screen.getByText('Hide setup instructions'));
     expect(screen.getByText('Show setup instructions')).toBeInTheDocument();
     // Desktop always shows instructions; mobile hides them, so count drops
-    const afterHide = screen.getAllByText(
-      'Use an App Password from your Google Account settings.'
-    );
+    const afterHide = screen.getAllByText('Use an App Password from your Google Account settings.');
     expect(afterHide.length).toBeLessThan(instructionTexts.length);
   });
 
@@ -684,11 +619,7 @@ describe('EmailProviderSelect', () => {
 
   it('renders "Send test email" button', async () => {
     render(() => (
-      <EmailProviderSelect
-        config={makeConfig()}
-        onChange={onChangeMock}
-        onTest={onTestMock}
-      />
+      <EmailProviderSelect config={makeConfig()} onChange={onChangeMock} onTest={onTestMock} />
     ));
 
     const button = screen.getByRole('button', { name: 'Send test email' });
@@ -698,11 +629,7 @@ describe('EmailProviderSelect', () => {
 
   it('calls onTest when test button is clicked', async () => {
     render(() => (
-      <EmailProviderSelect
-        config={makeConfig()}
-        onChange={onChangeMock}
-        onTest={onTestMock}
-      />
+      <EmailProviderSelect config={makeConfig()} onChange={onChangeMock} onTest={onTestMock} />
     ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Send test email' }));
@@ -788,7 +715,7 @@ describe('EmailProviderSelect', () => {
         port: 587,
         tls: false,
         startTLS: true,
-      })
+      }),
     );
   });
 
@@ -809,7 +736,7 @@ describe('EmailProviderSelect', () => {
 
     // Instructions appear in the desktop (sm:block) view
     expect(
-      screen.getByText('Use an App Password from your Google Account settings.')
+      screen.getByText('Use an App Password from your Google Account settings.'),
     ).toBeInTheDocument();
   });
 
@@ -827,7 +754,7 @@ describe('EmailProviderSelect', () => {
     });
 
     expect(
-      screen.queryByText('Use an App Password from your Google Account settings.')
+      screen.queryByText('Use an App Password from your Google Account settings.'),
     ).not.toBeInTheDocument();
   });
 
@@ -844,7 +771,7 @@ describe('EmailProviderSelect', () => {
 
     const usernameInputs = screen.getAllByRole('textbox');
     const usernameInput = usernameInputs.find(
-      (el) => (el as HTMLInputElement).placeholder === 'apikey'
+      (el) => (el as HTMLInputElement).placeholder === 'apikey',
     );
     expect(usernameInput).toBeTruthy();
   });

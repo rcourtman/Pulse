@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -53,41 +52,41 @@ type AlertMonitor interface {
 
 // AlertHandlers handles alert-related HTTP endpoints
 type AlertHandlers struct {
-	stateMu       sync.RWMutex
-	mtMonitor     *monitoring.MultiTenantMonitor
-	legacyMonitor AlertMonitor
-	wsHub         *websocket.Hub
+	stateMu        sync.RWMutex
+	mtMonitor      *monitoring.MultiTenantMonitor
+	defaultMonitor AlertMonitor
+	wsHub          *websocket.Hub
 }
 
 // NewAlertHandlers creates new alert handlers
 func NewAlertHandlers(mtm *monitoring.MultiTenantMonitor, monitor AlertMonitor, wsHub *websocket.Hub) *AlertHandlers {
-	// If mtm is provided, try to populate legacyMonitor from "default" org if not provided
+	// If mtm is provided, try to populate defaultMonitor from "default" org if not provided.
 	if monitor == nil && mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {
 			monitor = NewAlertMonitorWrapper(m)
 		}
 	}
 	return &AlertHandlers{
-		mtMonitor:     mtm,
-		legacyMonitor: monitor,
-		wsHub:         wsHub,
+		mtMonitor:      mtm,
+		defaultMonitor: monitor,
+		wsHub:          wsHub,
 	}
 }
 
 // SetMultiTenantMonitor updates the multi-tenant monitor reference
 func (h *AlertHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
-	var legacy AlertMonitor
+	var defaultMonitor AlertMonitor
 	if mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {
-			legacy = NewAlertMonitorWrapper(m)
+			defaultMonitor = NewAlertMonitorWrapper(m)
 		}
 	}
 
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	h.mtMonitor = mtm
-	if legacy != nil {
-		h.legacyMonitor = legacy
+	if defaultMonitor != nil {
+		h.defaultMonitor = defaultMonitor
 	}
 }
 
@@ -95,13 +94,13 @@ func (h *AlertHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor
 func (h *AlertHandlers) SetMonitor(m AlertMonitor) {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	h.legacyMonitor = m
+	h.defaultMonitor = m
 }
 
 func (h *AlertHandlers) getMonitor(ctx context.Context) AlertMonitor {
 	h.stateMu.RLock()
 	mtMonitor := h.mtMonitor
-	legacyMonitor := h.legacyMonitor
+	defaultMonitor := h.defaultMonitor
 	h.stateMu.RUnlock()
 
 	orgID := GetOrgID(ctx)
@@ -110,7 +109,7 @@ func (h *AlertHandlers) getMonitor(ctx context.Context) AlertMonitor {
 			return NewAlertMonitorWrapper(m)
 		}
 	}
-	return legacyMonitor
+	return defaultMonitor
 }
 
 func (h *AlertHandlers) broadcastStateForContext(ctx context.Context) {
@@ -178,28 +177,13 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Migrate deprecated GroupingWindow to Grouping.Window if needed before applying.
-	groupWindow := config.Schedule.Grouping.Window
-	if groupWindow == 0 && config.Schedule.GroupingWindow != 0 {
-		groupWindow = config.Schedule.GroupingWindow
-		config.Schedule.Grouping.Window = groupWindow
-		config.Schedule.GroupingWindow = 0 // Clear deprecated field
-		log.Info().
-			Int("window", groupWindow).
-			Msg("Migrated deprecated GroupingWindow to Grouping.Window")
-	}
-
 	h.getMonitor(r.Context()).GetAlertManager().UpdateConfig(config)
 	updatedConfig := h.getMonitor(r.Context()).GetAlertManager().GetConfig()
 
 	// Update notification manager with schedule settings
 	h.getMonitor(r.Context()).GetNotificationManager().SetCooldown(updatedConfig.Schedule.Cooldown)
 
-	groupWindow = updatedConfig.Schedule.Grouping.Window
-	if groupWindow == 0 && updatedConfig.Schedule.GroupingWindow != 0 {
-		groupWindow = updatedConfig.Schedule.GroupingWindow
-	}
-	h.getMonitor(r.Context()).GetNotificationManager().SetGroupingWindow(groupWindow)
+	h.getMonitor(r.Context()).GetNotificationManager().SetGroupingWindow(updatedConfig.Schedule.Grouping.Window)
 	h.getMonitor(r.Context()).GetNotificationManager().SetGroupingOptions(
 		updatedConfig.Schedule.Grouping.ByNode,
 		updatedConfig.Schedule.Grouping.ByGuest,
@@ -592,157 +576,6 @@ func (h *AlertHandlers) ClearAlertHistory(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// UnacknowledgeAlert removes acknowledged status from an alert
-func (h *AlertHandlers) UnacknowledgeAlert(w http.ResponseWriter, r *http.Request) {
-	// Extract alert ID from URL path: /api/alerts/{id}/unacknowledge
-	path := strings.TrimPrefix(r.URL.Path, "/api/alerts/")
-
-	const suffix = "/unacknowledge"
-	if !strings.HasSuffix(path, suffix) {
-		log.Error().
-			Str("path", r.URL.Path).
-			Msg("Path does not end with /unacknowledge")
-		http.Error(w, "Invalid URL", http.StatusBadRequest)
-		return
-	}
-
-	// Extract alert ID by removing the suffix and decoding encoded characters
-	encodedID := strings.TrimSuffix(path, suffix)
-	alertID, err := url.PathUnescape(encodedID)
-	if err != nil {
-		log.Error().Err(err).Str("encodedID", encodedID).Msg("Failed to decode alert ID")
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
-		return
-	}
-
-	if !validateAlertID(alertID) {
-		log.Error().
-			Str("path", r.URL.Path).
-			Str("alertID", alertID).
-			Msg("Invalid alert ID")
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
-		return
-	}
-
-	// Log the unacknowledge attempt
-	log.Debug().
-		Str("alertID", alertID).
-		Str("path", r.URL.Path).
-		Msg("Attempting to unacknowledge alert")
-
-	if err := h.getMonitor(r.Context()).GetAlertManager().UnacknowledgeAlert(alertID); err != nil {
-		log.Error().
-			Err(err).
-			Str("alertID", alertID).
-			Msg("Failed to unacknowledge alert")
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-
-	h.getMonitor(r.Context()).SyncAlertState()
-
-	log.Info().
-		Str("alertID", alertID).
-		Msg("Alert unacknowledged successfully")
-
-	// Send response immediately
-	if err := utils.WriteJSONResponse(w, map[string]bool{"success": true}); err != nil {
-		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to write unacknowledge response")
-	}
-
-	// Broadcast updated state to all WebSocket clients after response
-	// Do this in a goroutine to avoid blocking the HTTP response
-	if h.wsHub != nil {
-		ctx := r.Context()
-		go func() {
-			h.broadcastStateForContext(ctx)
-			log.Debug().Msg("Broadcasted state after alert unacknowledgment")
-		}()
-	}
-}
-
-// AcknowledgeAlert acknowledges an alert
-func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request) {
-	// Extract alert ID from URL path: /api/alerts/{id}/acknowledge
-	// Alert IDs can contain slashes (e.g., "pve1:qemu/101-cpu")
-	// So we need to find the /acknowledge suffix and extract everything before it
-	path := strings.TrimPrefix(r.URL.Path, "/api/alerts/")
-
-	const suffix = "/acknowledge"
-	if !strings.HasSuffix(path, suffix) {
-		log.Error().
-			Str("path", r.URL.Path).
-			Msg("Path does not end with /acknowledge")
-		http.Error(w, "Invalid URL", http.StatusBadRequest)
-		return
-	}
-
-	// Extract alert ID by removing the suffix and decoding encoded characters
-	encodedID := strings.TrimSuffix(path, suffix)
-	alertID, err := url.PathUnescape(encodedID)
-	if err != nil {
-		log.Error().Err(err).Str("encodedID", encodedID).Msg("Failed to decode alert ID")
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
-		return
-	}
-
-	if !validateAlertID(alertID) {
-		log.Error().
-			Str("path", r.URL.Path).
-			Str("alertID", alertID).
-			Msg("Invalid alert ID")
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
-		return
-	}
-
-	// Log the acknowledge attempt
-	log.Debug().
-		Str("alertID", alertID).
-		Str("path", r.URL.Path).
-		Msg("Attempting to acknowledge alert")
-
-	// Get the authenticated user from the auth middleware (set in X-Authenticated-User header)
-	user := w.Header().Get("X-Authenticated-User")
-	if user == "" {
-		user = "unknown" // Fallback if auth header not set (shouldn't happen in normal flow)
-	}
-
-	log.Debug().
-		Str("alertID", alertID).
-		Msg("About to call AcknowledgeAlert on manager")
-
-	if err := h.getMonitor(r.Context()).GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
-		log.Error().
-			Err(err).
-			Str("alertID", alertID).
-			Msg("Failed to acknowledge alert")
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-
-	h.getMonitor(r.Context()).SyncAlertState()
-
-	log.Info().
-		Str("alertID", alertID).
-		Str("user", user).
-		Msg("Alert acknowledged successfully")
-
-	// Send response immediately
-	if err := utils.WriteJSONResponse(w, map[string]bool{"success": true}); err != nil {
-		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to write acknowledge response")
-	}
-
-	// Broadcast updated state to all WebSocket clients after response
-	// Do this in a goroutine to avoid blocking the HTTP response
-	if h.wsHub != nil {
-		ctx := r.Context()
-		go func() {
-			h.broadcastStateForContext(ctx)
-			log.Debug().Msg("Broadcasted state after alert acknowledgment")
-		}()
-	}
-}
-
 // alertIDRequest is used for endpoints that accept alert ID in request body
 // This avoids URL encoding issues with alert IDs containing special characters (/, :)
 type alertIDRequest struct {
@@ -883,62 +716,6 @@ func (h *AlertHandlers) ClearAlertByBody(w http.ResponseWriter, r *http.Request)
 		ctx := r.Context()
 		go func() {
 			h.broadcastStateForContext(ctx)
-		}()
-	}
-}
-
-// ClearAlert manually clears an alert
-func (h *AlertHandlers) ClearAlert(w http.ResponseWriter, r *http.Request) {
-	// Extract alert ID from URL path: /api/alerts/{id}/clear
-	// Alert IDs can contain slashes (e.g., "pve1:qemu/101-cpu")
-	// So we need to find the /clear suffix and extract everything before it
-	path := strings.TrimPrefix(r.URL.Path, "/api/alerts/")
-
-	const suffix = "/clear"
-	if !strings.HasSuffix(path, suffix) {
-		log.Error().
-			Str("path", r.URL.Path).
-			Msg("Path does not end with /clear")
-		http.Error(w, "Invalid URL", http.StatusBadRequest)
-		return
-	}
-
-	// Extract alert ID by removing the suffix and decoding encoded characters
-	encodedID := strings.TrimSuffix(path, suffix)
-	alertID, err := url.PathUnescape(encodedID)
-	if err != nil {
-		log.Error().Err(err).Str("encodedID", encodedID).Msg("Failed to decode alert ID")
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
-		return
-	}
-
-	if !validateAlertID(alertID) {
-		log.Error().
-			Str("path", r.URL.Path).
-			Str("alertID", alertID).
-			Msg("Invalid alert ID")
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
-		return
-	}
-
-	if !h.getMonitor(r.Context()).GetAlertManager().ClearAlert(alertID) {
-		http.Error(w, "Alert not found", http.StatusNotFound)
-		return
-	}
-	h.getMonitor(r.Context()).SyncAlertState()
-
-	// Send response immediately
-	if err := utils.WriteJSONResponse(w, map[string]bool{"success": true}); err != nil {
-		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to write clear alert response")
-	}
-
-	// Broadcast updated state to all WebSocket clients after response
-	// Do this in a goroutine to avoid blocking the HTTP response
-	if h.wsHub != nil {
-		ctx := r.Context()
-		go func() {
-			h.broadcastStateForContext(ctx)
-			log.Debug().Msg("Broadcasted state after alert clear")
 		}()
 	}
 }
@@ -1145,22 +922,6 @@ func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.ClearAlertByBody(w, r)
-	// Legacy path-based endpoints (kept for backwards compatibility)
-	case strings.HasSuffix(path, "/acknowledge") && r.Method == http.MethodPost:
-		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
-			return
-		}
-		h.AcknowledgeAlert(w, r)
-	case strings.HasSuffix(path, "/unacknowledge") && r.Method == http.MethodPost:
-		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
-			return
-		}
-		h.UnacknowledgeAlert(w, r)
-	case strings.HasSuffix(path, "/clear") && r.Method == http.MethodPost:
-		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
-			return
-		}
-		h.ClearAlert(w, r)
 	default:
 		http.Error(w, "Not found", http.StatusNotFound)
 	}

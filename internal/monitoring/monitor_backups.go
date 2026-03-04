@@ -119,7 +119,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 					strings.Contains(errStr, "permission") || strings.Contains(errStr, "forbidden") {
 					hadPermissionError = true
 					m.mu.Lock()
-					m.backupPermissionWarnings[instanceName] = "Missing PVEDatastoreAdmin permission on /storage. Run: pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin"
+					m.backupPermissionWarnings[instanceName] = "Missing PVEDatastoreAdmin permission on /storage. Run: pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin"
 					m.mu.Unlock()
 					log.Warn().
 						Str("instance", instanceName).

@@ -32,7 +32,6 @@ func unifiedEvalBaseConfig() AlertConfig {
 		Overrides:      map[string]ThresholdConfig{},
 
 		// Keep these explicit to make test intent obvious; final values are forced in configureUnifiedEvalManager.
-		TimeThreshold:     0,
 		TimeThresholds:    map[string]int{},
 		SuppressionWindow: 0,
 		MinimumDelta:      0,
@@ -46,7 +45,6 @@ func configureUnifiedEvalManager(t *testing.T, m *Manager, cfg AlertConfig) {
 
 	// UpdateConfig normalizes zero values back to defaults; force immediate alerting in tests.
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.config.MetricTimeThresholds = nil
 	m.config.SuppressionWindow = 0

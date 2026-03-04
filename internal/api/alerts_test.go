@@ -187,44 +187,6 @@ func TestGetActiveAlerts(t *testing.T) {
 	assert.Equal(t, "a1", resp[0].ID)
 }
 
-func TestAcknowledgeAlert(t *testing.T) {
-	mockMonitor := new(MockAlertMonitor)
-	mockManager := new(MockAlertManager)
-	mockMonitor.On("GetAlertManager").Return(mockManager)
-	mockMonitor.On("SyncAlertState").Return()
-
-	h := NewAlertHandlers(nil, mockMonitor, nil)
-
-	mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(nil)
-
-	req := httptest.NewRequest("POST", "/api/alerts/a1/acknowledge", nil)
-	req.SetPathValue("id", "a1")
-	w := httptest.NewRecorder()
-
-	h.AcknowledgeAlert(w, req)
-
-	assert.Equal(t, 200, w.Code)
-}
-
-func TestClearAlert(t *testing.T) {
-	mockMonitor := new(MockAlertMonitor)
-	mockManager := new(MockAlertManager)
-	mockMonitor.On("GetAlertManager").Return(mockManager)
-	mockMonitor.On("SyncAlertState").Return()
-
-	h := NewAlertHandlers(nil, mockMonitor, nil)
-
-	mockManager.On("ClearAlert", "a1").Return(true)
-
-	req := httptest.NewRequest("POST", "/api/alerts/a1/clear", nil)
-	req.SetPathValue("id", "a1")
-	w := httptest.NewRecorder()
-
-	h.ClearAlert(w, req)
-
-	assert.Equal(t, 200, w.Code)
-}
-
 func TestValidateAlertID(t *testing.T) {
 	testCases := []struct {
 		name  string
@@ -251,9 +213,9 @@ func TestAlertHandlers_SetMonitor(t *testing.T) {
 	mockMonitor1 := new(MockAlertMonitor)
 	mockMonitor2 := new(MockAlertMonitor)
 	h := NewAlertHandlers(nil, mockMonitor1, nil)
-	assert.Equal(t, mockMonitor1, h.legacyMonitor)
+	assert.Equal(t, mockMonitor1, h.defaultMonitor)
 	h.SetMonitor(mockMonitor2)
-	assert.Equal(t, mockMonitor2, h.legacyMonitor)
+	assert.Equal(t, mockMonitor2, h.defaultMonitor)
 }
 
 func TestAlertHandlers_SetMonitorConcurrentAccess(t *testing.T) {
@@ -299,23 +261,6 @@ func TestGetAlertHistory(t *testing.T) {
 	assert.Len(t, resp, 1)
 }
 
-func TestUnacknowledgeAlert(t *testing.T) {
-	mockMonitor := new(MockAlertMonitor)
-	mockManager := new(MockAlertManager)
-	mockMonitor.On("GetAlertManager").Return(mockManager)
-	mockMonitor.On("SyncAlertState").Return()
-	h := NewAlertHandlers(nil, mockMonitor, nil)
-
-	mockManager.On("UnacknowledgeAlert", "a1").Return(nil)
-
-	req := httptest.NewRequest("POST", "/api/alerts/a1/unacknowledge", nil)
-	req.SetPathValue("id", "a1")
-	w := httptest.NewRecorder()
-	h.UnacknowledgeAlert(w, req)
-
-	assert.Equal(t, 200, w.Code)
-}
-
 func TestClearAlertHistory(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	mockManager := new(MockAlertManager)
@@ -327,54 +272,6 @@ func TestClearAlertHistory(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/alerts/history/clear", nil)
 	w := httptest.NewRecorder()
 	h.ClearAlertHistory(w, req)
-
-	assert.Equal(t, 200, w.Code)
-}
-
-func TestAcknowledgeAlertURL_Success(t *testing.T) {
-	mockMonitor := new(MockAlertMonitor)
-	mockManager := new(MockAlertManager)
-	mockMonitor.On("GetAlertManager").Return(mockManager)
-	mockMonitor.On("SyncAlertState").Return()
-	h := NewAlertHandlers(nil, mockMonitor, nil)
-
-	mockManager.On("AcknowledgeAlert", "a/b", testifymock.Anything).Return(nil).Once()
-
-	req := httptest.NewRequest("POST", "/api/alerts/a%2Fb/acknowledge", nil)
-	w := httptest.NewRecorder()
-	h.AcknowledgeAlert(w, req)
-
-	assert.Equal(t, 200, w.Code)
-}
-
-func TestUnacknowledgeAlertURL_Success(t *testing.T) {
-	mockMonitor := new(MockAlertMonitor)
-	mockManager := new(MockAlertManager)
-	mockMonitor.On("GetAlertManager").Return(mockManager)
-	mockMonitor.On("SyncAlertState").Return()
-	h := NewAlertHandlers(nil, mockMonitor, nil)
-
-	mockManager.On("UnacknowledgeAlert", "a/b").Return(nil).Once()
-
-	req := httptest.NewRequest("POST", "/api/alerts/a%2Fb/unacknowledge", nil)
-	w := httptest.NewRecorder()
-	h.UnacknowledgeAlert(w, req)
-
-	assert.Equal(t, 200, w.Code)
-}
-
-func TestClearAlertURL_Success(t *testing.T) {
-	mockMonitor := new(MockAlertMonitor)
-	mockManager := new(MockAlertManager)
-	mockMonitor.On("GetAlertManager").Return(mockManager)
-	mockMonitor.On("SyncAlertState").Return()
-	h := NewAlertHandlers(nil, mockMonitor, nil)
-
-	mockManager.On("ClearAlert", "a/b").Return(true).Once()
-
-	req := httptest.NewRequest("POST", "/api/alerts/a%2Fb/clear", nil)
-	w := httptest.NewRecorder()
-	h.ClearAlert(w, req)
 
 	assert.Equal(t, 200, w.Code)
 }
@@ -466,18 +363,6 @@ func TestHandleAlerts(t *testing.T) {
 			mockMonitor.On("SyncAlertState").Return()
 		}},
 		{"POST", "/api/alerts/clear", func() {
-			mockManager.On("ClearAlert", "a1").Return(true).Once()
-			mockMonitor.On("SyncAlertState").Return()
-		}},
-		{"POST", "/api/alerts/a1/acknowledge", func() {
-			mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(nil).Once()
-			mockMonitor.On("SyncAlertState").Return()
-		}},
-		{"POST", "/api/alerts/a1/unacknowledge", func() {
-			mockManager.On("UnacknowledgeAlert", "a1").Return(nil).Once()
-			mockMonitor.On("SyncAlertState").Return()
-		}},
-		{"POST", "/api/alerts/a1/clear", func() {
 			mockManager.On("ClearAlert", "a1").Return(true).Once()
 			mockMonitor.On("SyncAlertState").Return()
 		}},
@@ -740,71 +625,5 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 		w := httptest.NewRecorder()
 		h.ClearAlertHistory(w, req)
 		assert.Equal(t, 500, w.Code)
-	})
-
-	t.Run("AcknowledgeAlert_InvalidURL", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/a/notack", nil)
-		w := httptest.NewRecorder()
-		h.AcknowledgeAlert(w, req)
-		assert.Equal(t, 400, w.Code)
-	})
-
-	t.Run("AcknowledgeAlert_InvalidID", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/bad%01/acknowledge", nil)
-		w := httptest.NewRecorder()
-		h.AcknowledgeAlert(w, req)
-		assert.Equal(t, 400, w.Code)
-	})
-
-	t.Run("AcknowledgeAlert_Error", func(t *testing.T) {
-		mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(errors.New("not found")).Once()
-		req := httptest.NewRequest("POST", "/api/alerts/a1/acknowledge", nil)
-		w := httptest.NewRecorder()
-		h.AcknowledgeAlert(w, req)
-		assert.Equal(t, 404, w.Code)
-	})
-
-	t.Run("UnacknowledgeAlert_InvalidURL", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/a/notunack", nil)
-		w := httptest.NewRecorder()
-		h.UnacknowledgeAlert(w, req)
-		assert.Equal(t, 400, w.Code)
-	})
-
-	t.Run("UnacknowledgeAlert_InvalidID", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/bad%01/unacknowledge", nil)
-		w := httptest.NewRecorder()
-		h.UnacknowledgeAlert(w, req)
-		assert.Equal(t, 400, w.Code)
-	})
-
-	t.Run("UnacknowledgeAlert_Error", func(t *testing.T) {
-		mockManager.On("UnacknowledgeAlert", "a1").Return(errors.New("not found")).Once()
-		req := httptest.NewRequest("POST", "/api/alerts/a1/unacknowledge", nil)
-		w := httptest.NewRecorder()
-		h.UnacknowledgeAlert(w, req)
-		assert.Equal(t, 404, w.Code)
-	})
-
-	t.Run("ClearAlert_InvalidURL", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/a/notclear", nil)
-		w := httptest.NewRecorder()
-		h.ClearAlert(w, req)
-		assert.Equal(t, 400, w.Code)
-	})
-
-	t.Run("ClearAlert_InvalidID", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/bad%01/clear", nil)
-		w := httptest.NewRecorder()
-		h.ClearAlert(w, req)
-		assert.Equal(t, 400, w.Code)
-	})
-
-	t.Run("ClearAlert_NotFound", func(t *testing.T) {
-		mockManager.On("ClearAlert", "none").Return(false).Once()
-		req := httptest.NewRequest("POST", "/api/alerts/none/clear", nil)
-		w := httptest.NewRecorder()
-		h.ClearAlert(w, req)
-		assert.Equal(t, 404, w.Code)
 	})
 }

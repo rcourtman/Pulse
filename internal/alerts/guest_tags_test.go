@@ -13,7 +13,6 @@ func TestIgnoredGuestPrefixesSkipsAlerts(t *testing.T) {
 	m.mu.Lock()
 	m.config.IgnoredGuestPrefixes = []string{"ignore-", "test-"}
 	m.config.GuestDefaults = ThresholdConfig{CPU: &HysteresisThreshold{Trigger: 80, Clear: 70}}
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 
@@ -55,7 +54,6 @@ func TestGuestTagBlacklistSkipsAlerts(t *testing.T) {
 	m.mu.Lock()
 	m.config.GuestTagBlacklist = []string{"maintenance", "backup"}
 	m.config.GuestDefaults = ThresholdConfig{CPU: &HysteresisThreshold{Trigger: 80, Clear: 70}}
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 
@@ -97,7 +95,6 @@ func TestGuestTagWhitelistSkipsAlertsIfTagMissing(t *testing.T) {
 	m.mu.Lock()
 	m.config.GuestTagWhitelist = []string{"monitor-me", "production"}
 	m.config.GuestDefaults = ThresholdConfig{CPU: &HysteresisThreshold{Trigger: 80, Clear: 70}}
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 
@@ -140,7 +137,6 @@ func TestGuestIgnoredPrefixClearsActiveAlerts(t *testing.T) {
 
 	m.mu.Lock()
 	m.config.GuestDefaults = ThresholdConfig{CPU: &HysteresisThreshold{Trigger: 80, Clear: 70}}
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 

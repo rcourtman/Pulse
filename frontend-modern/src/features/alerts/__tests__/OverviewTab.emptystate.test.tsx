@@ -58,9 +58,7 @@ describe('OverviewTab empty state', () => {
     render(() => <OverviewTab {...defaultProps({ alertsDisabled: () => true })} />);
 
     expect(screen.getByText('Alerting is paused')).toBeInTheDocument();
-    expect(
-      screen.getByText('Toggle alerts on to resume monitoring'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Toggle alerts on to resume monitoring')).toBeInTheDocument();
     expect(screen.queryByText('No active alerts')).not.toBeInTheDocument();
   });
 });

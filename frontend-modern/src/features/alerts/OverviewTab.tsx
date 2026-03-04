@@ -99,6 +99,7 @@ export function OverviewTab(props: {
     {},
   );
   const [incidentLoading, setIncidentLoading] = createSignal<Record<string, boolean>>({});
+  const [incidentErrors, setIncidentErrors] = createSignal<Record<string, boolean>>({});
   const [expandedIncidents, setExpandedIncidents] = createSignal<Set<string>>(new Set());
   const [incidentNoteDrafts, setIncidentNoteDrafts] = createSignal<Record<string, string>>({});
   const [incidentNoteSaving, setIncidentNoteSaving] = createSignal<Set<string>>(new Set());
@@ -127,9 +128,11 @@ export function OverviewTab(props: {
     try {
       const timeline = await AlertsAPI.getIncidentTimeline(alertId, startedAt);
       setIncidentTimelines((prev) => ({ ...prev, [alertId]: timeline }));
+      setIncidentErrors((prev) => ({ ...prev, [alertId]: false }));
     } catch (error) {
       logger.error('Failed to load incident timeline', error);
       notificationStore.error('Failed to load incident timeline');
+      setIncidentErrors((prev) => ({ ...prev, [alertId]: true }));
     } finally {
       setIncidentLoading((prev) => ({ ...prev, [alertId]: false }));
     }
@@ -354,7 +357,14 @@ export function OverviewTab(props: {
                         viewBox="0 0 24 24"
                       >
                         <circle cx="12" cy="12" r="10" stroke-width="2" />
-                        <line x1="4" y1="4" x2="20" y2="20" stroke-width="2" stroke-linecap="round" />
+                        <line
+                          x1="4"
+                          y1="4"
+                          x2="20"
+                          y2="20"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                        />
                       </svg>
                     </div>
                     <p class="text-sm">Alerting is paused</p>
@@ -772,7 +782,22 @@ export function OverviewTab(props: {
                           )}
                         </Show>
                         <Show when={!incidentTimelines()[alert.id]}>
-                          <p class="text-xs text-muted">No incident timeline available.</p>
+                          <Show
+                            when={incidentErrors()[alert.id]}
+                            fallback={
+                              <p class="text-xs text-muted">No incident timeline available.</p>
+                            }
+                          >
+                            <div class="flex items-center gap-2">
+                              <p class="text-xs text-error">Failed to load timeline.</p>
+                              <button
+                                class="text-xs text-primary hover:underline"
+                                onClick={() => loadIncidentTimeline(alert.id, alert.startTime)}
+                              >
+                                Retry
+                              </button>
+                            </div>
+                          </Show>
                         </Show>
                       </Show>
                     </div>

@@ -84,7 +84,6 @@ func TestAcknowledgePersistsThroughCheckMetric(t *testing.T) {
 	m.ClearActiveAlerts()
 	// Set config fields directly to bypass UpdateConfig's default value enforcement
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.config.SuppressionWindow = 0
 	m.config.MinimumDelta = 0
@@ -119,7 +118,6 @@ func TestCheckMetricClearsAlertWhenThresholdDisabled(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.config.SuppressionWindow = 0
 	m.config.MinimumDelta = 0
@@ -180,7 +178,6 @@ func TestCheckGuestSkipsAlertsWhenMetricDisabled(t *testing.T) {
 		GuestDefaults: ThresholdConfig{
 			CPU: &HysteresisThreshold{Trigger: 80, Clear: 75},
 		},
-		TimeThreshold:  0,
 		TimeThresholds: map[string]int{},
 		NodeDefaults: ThresholdConfig{
 			CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
@@ -192,7 +189,6 @@ func TestCheckGuestSkipsAlertsWhenMetricDisabled(t *testing.T) {
 	}
 	m.UpdateConfig(initialConfig)
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.config.ActivationState = ActivationActive
 	m.mu.Unlock()
@@ -249,11 +245,9 @@ func TestCheckGuestSkipsAlertsWhenMetricDisabled(t *testing.T) {
 			CPU: &HysteresisThreshold{Trigger: -1, Clear: 0},
 		},
 	}
-	disabledConfig.TimeThreshold = 0
 	disabledConfig.TimeThresholds = map[string]int{}
 	m.UpdateConfig(disabledConfig)
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.config.ActivationState = ActivationActive
 	m.mu.Unlock()
@@ -300,7 +294,6 @@ func TestPulseNoAlertsSuppressesGuestAlerts(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.config.ActivationState = ActivationActive
 	m.mu.Unlock()
@@ -341,7 +334,6 @@ func TestPulseMonitorOnlySkipsDispatchButRetainsAlert(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.config.ActivationState = ActivationActive
 	m.mu.Unlock()
@@ -383,7 +375,6 @@ func TestPulseRelaxedThresholdsIncreaseCpuTrigger(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 
@@ -417,7 +408,6 @@ func TestClearAlertMarksResolutionAndReturnsStatus(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 
@@ -502,7 +492,6 @@ func TestCheckHostGeneratesMetricAlerts(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 
@@ -606,7 +595,6 @@ func TestCheckHostDisabledOverrideClearsAlerts(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 
@@ -646,7 +634,6 @@ func TestCheckHostDisabledOverrideClearsAlerts(t *testing.T) {
 	}
 	m.UpdateConfig(cfg)
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 
@@ -677,7 +664,6 @@ func TestCheckSnapshotsForInstanceCreatesAndClearsAlerts(t *testing.T) {
 	}
 	m.UpdateConfig(cfg)
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 
@@ -737,7 +723,6 @@ func TestCheckSnapshotsRespectsOverrides(t *testing.T) {
 	}
 	m.UpdateConfig(cfg)
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.mu.Unlock()
 
 	now := time.Now()
@@ -804,7 +789,6 @@ func TestCheckSnapshotsForInstanceTriggersOnSnapshotSize(t *testing.T) {
 	}
 	m.UpdateConfig(cfg)
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 
@@ -885,7 +869,6 @@ func TestCheckSnapshotsForInstanceIncludesAgeAndSizeReasons(t *testing.T) {
 	}
 	m.UpdateConfig(cfg)
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 
@@ -946,7 +929,6 @@ func TestCheckBackupsCreatesAndClearsAlerts(t *testing.T) {
 		WarningDays:  7,
 		CriticalDays: 14,
 	}
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 
@@ -1016,7 +998,6 @@ func TestCheckBackupsRespectsOverrides(t *testing.T) {
 		WarningDays:  7,
 		CriticalDays: 14,
 	}
-	m.config.TimeThreshold = 0
 	m.mu.Unlock()
 
 	now := time.Now()
@@ -1981,7 +1962,6 @@ func TestDockerContainerDiskUsageAlert(t *testing.T) {
 
 	cfg := m.GetConfig()
 	cfg.Enabled = true
-	cfg.TimeThreshold = 0
 	if cfg.TimeThresholds == nil {
 		cfg.TimeThresholds = make(map[string]int)
 	}
@@ -3138,7 +3118,6 @@ func TestDisableAllStorageClearsExistingAlerts(t *testing.T) {
 		Enabled:           true,
 		DisableAllStorage: false,
 		StorageDefault:    HysteresisThreshold{Trigger: 80, Clear: 75},
-		TimeThreshold:     0,
 		TimeThresholds:    map[string]int{},
 		NodeDefaults: ThresholdConfig{
 			CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
@@ -3152,7 +3131,6 @@ func TestDisableAllStorageClearsExistingAlerts(t *testing.T) {
 	}
 	m.UpdateConfig(initialConfig)
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.config.ActivationState = ActivationActive
 	m.mu.Unlock()
@@ -3199,7 +3177,6 @@ func TestDisableAllStorageClearsExistingAlerts(t *testing.T) {
 	disabledConfig.DisableAllStorage = true
 	m.UpdateConfig(disabledConfig)
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.config.ActivationState = ActivationActive
 	m.mu.Unlock()
@@ -3751,23 +3728,20 @@ func TestGetBaseTimeThreshold(t *testing.T) {
 	tests := []struct {
 		name           string
 		timeThresholds map[string]int
-		timeThreshold  int // global fallback
 		resourceType   string
 		wantDelay      int
 		wantFound      bool
 	}{
 		{
-			name:           "nil TimeThresholds returns global TimeThreshold",
+			name:           "nil TimeThresholds returns no fallback delay",
 			timeThresholds: nil,
-			timeThreshold:  60,
 			resourceType:   "guest",
-			wantDelay:      60,
+			wantDelay:      0,
 			wantFound:      false,
 		},
 		{
 			name:           "direct resource type match",
 			timeThresholds: map[string]int{"guest": 120, "node": 90},
-			timeThreshold:  60,
 			resourceType:   "guest",
 			wantDelay:      120,
 			wantFound:      true,
@@ -3775,7 +3749,6 @@ func TestGetBaseTimeThreshold(t *testing.T) {
 		{
 			name:           "canonical key match for vm",
 			timeThresholds: map[string]int{"guest": 120},
-			timeThreshold:  60,
 			resourceType:   "vm",
 			wantDelay:      120,
 			wantFound:      true,
@@ -3783,7 +3756,6 @@ func TestGetBaseTimeThreshold(t *testing.T) {
 		{
 			name:           "canonical key match for container",
 			timeThresholds: map[string]int{"guest": 120},
-			timeThreshold:  60,
 			resourceType:   "container",
 			wantDelay:      120,
 			wantFound:      true,
@@ -3791,7 +3763,6 @@ func TestGetBaseTimeThreshold(t *testing.T) {
 		{
 			name:           "all fallback when no specific match",
 			timeThresholds: map[string]int{"all": 45},
-			timeThreshold:  60,
 			resourceType:   "storage",
 			wantDelay:      45,
 			wantFound:      false, // "all" returns found=false
@@ -3799,25 +3770,22 @@ func TestGetBaseTimeThreshold(t *testing.T) {
 		{
 			name:           "specific match takes precedence over all",
 			timeThresholds: map[string]int{"storage": 30, "all": 45},
-			timeThreshold:  60,
 			resourceType:   "storage",
 			wantDelay:      30,
 			wantFound:      true,
 		},
 		{
-			name:           "no match and no all returns global threshold",
+			name:           "no match and no all returns no fallback delay",
 			timeThresholds: map[string]int{"guest": 120},
-			timeThreshold:  60,
 			resourceType:   "storage",
-			wantDelay:      60,
+			wantDelay:      0,
 			wantFound:      false,
 		},
 		{
-			name:           "empty TimeThresholds returns global threshold",
+			name:           "empty TimeThresholds returns no fallback delay",
 			timeThresholds: map[string]int{},
-			timeThreshold:  60,
 			resourceType:   "guest",
-			wantDelay:      60,
+			wantDelay:      0,
 			wantFound:      false,
 		},
 	}
@@ -3829,7 +3797,6 @@ func TestGetBaseTimeThreshold(t *testing.T) {
 			m := newTestManager(t)
 			m.mu.Lock()
 			m.config.TimeThresholds = tt.timeThresholds
-			m.config.TimeThreshold = tt.timeThreshold
 			m.mu.Unlock()
 
 			m.mu.RLock()
@@ -9871,85 +9838,6 @@ func TestCleanup(t *testing.T) {
 	})
 }
 
-func TestConvertLegacyThreshold(t *testing.T) {
-	// t.Parallel()
-
-	t.Run("nil input returns nil", func(t *testing.T) {
-		// t.Parallel()
-		m := newTestManager(t)
-
-		result := m.convertLegacyThreshold(nil)
-
-		if result != nil {
-			t.Error("expected nil result for nil input")
-		}
-	})
-
-	t.Run("zero value returns nil", func(t *testing.T) {
-		// t.Parallel()
-		m := newTestManager(t)
-
-		zero := 0.0
-		result := m.convertLegacyThreshold(&zero)
-
-		if result != nil {
-			t.Error("expected nil result for zero value")
-		}
-	})
-
-	t.Run("negative value returns nil", func(t *testing.T) {
-		// t.Parallel()
-		m := newTestManager(t)
-
-		neg := -5.0
-		result := m.convertLegacyThreshold(&neg)
-
-		if result != nil {
-			t.Error("expected nil result for negative value")
-		}
-	})
-
-	t.Run("positive value with default margin", func(t *testing.T) {
-		// t.Parallel()
-		m := newTestManager(t)
-
-		threshold := 80.0
-		result := m.convertLegacyThreshold(&threshold)
-
-		if result == nil {
-			t.Fatal("expected non-nil result")
-		}
-		if result.Trigger != 80.0 {
-			t.Errorf("expected trigger 80.0, got %f", result.Trigger)
-		}
-		if result.Clear != 75.0 { // 80 - 5 (default margin)
-			t.Errorf("expected clear 75.0, got %f", result.Clear)
-		}
-	})
-
-	t.Run("positive value with custom margin", func(t *testing.T) {
-		// t.Parallel()
-		m := newTestManager(t)
-
-		m.mu.Lock()
-		m.config.HysteresisMargin = 10.0
-		m.mu.Unlock()
-
-		threshold := 80.0
-		result := m.convertLegacyThreshold(&threshold)
-
-		if result == nil {
-			t.Fatal("expected non-nil result")
-		}
-		if result.Trigger != 80.0 {
-			t.Errorf("expected trigger 80.0, got %f", result.Trigger)
-		}
-		if result.Clear != 70.0 { // 80 - 10 (custom margin)
-			t.Errorf("expected clear 70.0, got %f", result.Clear)
-		}
-	})
-}
-
 func TestCheckEscalations(t *testing.T) {
 	// t.Parallel()
 
@@ -12089,42 +11977,6 @@ func TestApplyThresholdOverride(t *testing.T) {
 		}
 	})
 
-	t.Run("legacy CPU threshold conversion", func(t *testing.T) {
-		m := newTestManager(t)
-		m.config.HysteresisMargin = 5.0
-		base := ThresholdConfig{}
-		legacyVal := 85.0
-		override := ThresholdConfig{
-			CPULegacy: &legacyVal,
-		}
-		result := m.applyThresholdOverride(base, override)
-
-		if result.CPU == nil {
-			t.Fatal("expected CPU to be converted from legacy")
-		}
-		if result.CPU.Trigger != 85.0 {
-			t.Errorf("expected Trigger=85, got %v", result.CPU.Trigger)
-		}
-		if result.CPU.Clear != 80.0 {
-			t.Errorf("expected Clear=80 (85-5 margin), got %v", result.CPU.Clear)
-		}
-	})
-
-	t.Run("modern CPU takes precedence over legacy", func(t *testing.T) {
-		m := newTestManager(t)
-		legacyVal := 70.0
-		base := ThresholdConfig{}
-		override := ThresholdConfig{
-			CPU:       &HysteresisThreshold{Trigger: 95, Clear: 90},
-			CPULegacy: &legacyVal,
-		}
-		result := m.applyThresholdOverride(base, override)
-
-		if result.CPU.Trigger != 95 {
-			t.Errorf("expected modern CPU to take precedence, got Trigger=%v", result.CPU.Trigger)
-		}
-	})
-
 	t.Run("multiple metrics override", func(t *testing.T) {
 		m := newTestManager(t)
 		base := ThresholdConfig{
@@ -12205,45 +12057,6 @@ func TestApplyThresholdOverride(t *testing.T) {
 
 		if result.Note != nil {
 			t.Errorf("expected whitespace-only Note to become nil, got %v", *result.Note)
-		}
-	})
-
-	t.Run("all metric types with legacy conversion", func(t *testing.T) {
-		m := newTestManager(t)
-		m.config.HysteresisMargin = 5.0
-		base := ThresholdConfig{}
-
-		val80 := 80.0
-		val90 := 90.0
-		val100 := 100.0
-		val200 := 200.0
-		override := ThresholdConfig{
-			MemoryLegacy:     &val80,
-			DiskLegacy:       &val90,
-			DiskReadLegacy:   &val100,
-			DiskWriteLegacy:  &val100,
-			NetworkInLegacy:  &val200,
-			NetworkOutLegacy: &val200,
-		}
-		result := m.applyThresholdOverride(base, override)
-
-		if result.Memory == nil || result.Memory.Trigger != 80 {
-			t.Errorf("expected Memory converted, got %+v", result.Memory)
-		}
-		if result.Disk == nil || result.Disk.Trigger != 90 {
-			t.Errorf("expected Disk converted, got %+v", result.Disk)
-		}
-		if result.DiskRead == nil || result.DiskRead.Trigger != 100 {
-			t.Errorf("expected DiskRead converted, got %+v", result.DiskRead)
-		}
-		if result.DiskWrite == nil || result.DiskWrite.Trigger != 100 {
-			t.Errorf("expected DiskWrite converted, got %+v", result.DiskWrite)
-		}
-		if result.NetworkIn == nil || result.NetworkIn.Trigger != 200 {
-			t.Errorf("expected NetworkIn converted, got %+v", result.NetworkIn)
-		}
-		if result.NetworkOut == nil || result.NetworkOut.Trigger != 200 {
-			t.Errorf("expected NetworkOut converted, got %+v", result.NetworkOut)
 		}
 	})
 
@@ -12807,7 +12620,6 @@ func TestCheckNode(t *testing.T) {
 
 		// Set thresholds that will trigger and disable time threshold
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.NodeDefaults = ThresholdConfig{
 			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -12900,7 +12712,6 @@ func TestCheckNode(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.NodeDefaults = ThresholdConfig{
 			Temperature: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -12934,7 +12745,6 @@ func TestCheckNode(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.NodeDefaults = ThresholdConfig{
 			Temperature: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -13059,7 +12869,6 @@ func TestCheckNode(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.NodeDefaults = ThresholdConfig{
 			Memory: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -13091,7 +12900,6 @@ func TestCheckNode(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.NodeDefaults = ThresholdConfig{
 			Disk: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -13178,7 +12986,6 @@ func TestCheckGuest(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.GuestDefaults = ThresholdConfig{
 			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -13208,7 +13015,6 @@ func TestCheckGuest(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.GuestDefaults = ThresholdConfig{
 			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -13483,7 +13289,6 @@ func TestCheckGuest(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.GuestDefaults = ThresholdConfig{
 			Memory: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -13513,7 +13318,6 @@ func TestCheckGuest(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.GuestDefaults = ThresholdConfig{
 			Disk: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -13543,7 +13347,6 @@ func TestCheckGuest(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.GuestDefaults = ThresholdConfig{
 			Disk: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -13583,7 +13386,6 @@ func TestCheckGuest(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.GuestDefaults = ThresholdConfig{
 			Disk: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -13621,7 +13423,6 @@ func TestCheckGuest(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.GuestDefaults = ThresholdConfig{
 			Disk: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -13659,7 +13460,6 @@ func TestCheckGuest(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.GuestDefaults = ThresholdConfig{
 			DiskRead: &HysteresisThreshold{Trigger: 100.0, Clear: 80.0}, // MB/s
@@ -13689,7 +13489,6 @@ func TestCheckGuest(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.GuestDefaults = ThresholdConfig{
 			DiskWrite: &HysteresisThreshold{Trigger: 100.0, Clear: 80.0}, // MB/s
@@ -13719,7 +13518,6 @@ func TestCheckGuest(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.GuestDefaults = ThresholdConfig{
 			NetworkIn: &HysteresisThreshold{Trigger: 100.0, Clear: 80.0}, // MB/s
@@ -13749,7 +13547,6 @@ func TestCheckGuest(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.GuestDefaults = ThresholdConfig{
 			NetworkOut: &HysteresisThreshold{Trigger: 100.0, Clear: 80.0}, // MB/s
@@ -13779,7 +13576,6 @@ func TestCheckGuest(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.GuestDefaults = ThresholdConfig{
 			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -13811,7 +13607,6 @@ func TestCheckGuest(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.GuestDefaults = ThresholdConfig{
 			Disk: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -13849,7 +13644,6 @@ func TestCheckGuest(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.GuestDefaults = ThresholdConfig{
 			Disk: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -13891,7 +13685,6 @@ func TestCheckHostComprehensive(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.HostDefaults = ThresholdConfig{
 			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -14301,7 +14094,6 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.HostDefaults = ThresholdConfig{
 			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -14335,7 +14127,6 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.HostDefaults = ThresholdConfig{
 			Disk: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -14406,7 +14197,6 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.HostDefaults = ThresholdConfig{
 			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -14585,7 +14375,6 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.NodeDefaults = ThresholdConfig{
 			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -14616,7 +14405,6 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.NodeDefaults = ThresholdConfig{
 			Memory: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -14647,7 +14435,6 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.NodeDefaults = ThresholdConfig{
 			CPU:    &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -14683,7 +14470,6 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.NodeDefaults = ThresholdConfig{
 			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
@@ -14801,7 +14587,6 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m.ClearActiveAlerts()
 
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.activeAlerts["pbs1-cpu"] = &Alert{ID: "pbs1-cpu", Type: "cpu"}
 		m.activeAlerts["pbs1-memory"] = &Alert{ID: "pbs1-memory", Type: "memory"}
@@ -15310,7 +15095,6 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.StorageDefault = HysteresisThreshold{Trigger: 80.0, Clear: 70.0}
 		m.mu.Unlock()
@@ -15339,7 +15123,6 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.StorageDefault = HysteresisThreshold{Trigger: 80.0, Clear: 70.0}
 		overrideThreshold := HysteresisThreshold{Trigger: 99.0, Clear: 95.0}
@@ -15371,7 +15154,6 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.StorageDefault = HysteresisThreshold{Trigger: 80.0, Clear: 70.0}
 		m.mu.Unlock()
@@ -15399,7 +15181,6 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.StorageDefault = HysteresisThreshold{Trigger: 80.0, Clear: 70.0}
 		m.mu.Unlock()
@@ -15509,7 +15290,6 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.config.TimeThreshold = 0
 		m.config.TimeThresholds = map[string]int{}
 		m.config.StorageDefault = HysteresisThreshold{Trigger: 80.0, Clear: 70.0}
 		m.mu.Unlock()

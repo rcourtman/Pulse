@@ -27,7 +27,6 @@ func newUnifiedEvalParityManager(t *testing.T) *Manager {
 func disableTestTimeThresholds(m *Manager) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.config.MetricTimeThresholds = nil
 }

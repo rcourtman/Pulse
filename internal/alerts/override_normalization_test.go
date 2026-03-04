@@ -13,7 +13,6 @@ func configureOverrideNormalizationTestManager(t *testing.T, m *Manager, cfg Ale
 
 	// Force immediate alerting behavior for deterministic threshold tests.
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.config.MetricTimeThresholds = nil
 	m.config.SuppressionWindow = 0

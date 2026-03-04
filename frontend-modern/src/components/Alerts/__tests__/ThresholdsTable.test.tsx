@@ -232,21 +232,10 @@ describe('ThresholdsTable navigation and redirection', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/proxmox', { replace: true });
   });
 
-  it('redirects legacy docker path to containers', () => {
-    setPathname('/alerts/thresholds/docker');
-    render(() => <ThresholdsTable {...(baseProps() as any)} />);
-    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/containers', {
-      replace: true,
-      scroll: false,
-    });
-  });
-
   it('navigates to correct route when tabs are clicked', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} />);
 
-    const hostsTab = screen
-      .getAllByRole('button')
-      .find((el) => el.textContent?.includes('Host Agents'));
+    const hostsTab = screen.getAllByRole('button').find((el) => el.textContent?.includes('Agents'));
     if (hostsTab) fireEvent.click(hostsTab);
     expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/hosts');
 
@@ -259,7 +248,7 @@ describe('ThresholdsTable navigation and redirection', () => {
 });
 
 describe('ThresholdsTable Resource Rendering', () => {
-  it('renders host agents correctly', async () => {
+  it('renders agents correctly', async () => {
     setPathname('/alerts/thresholds/hosts');
     const host: Host = {
       id: 'h1',
@@ -273,10 +262,10 @@ describe('ThresholdsTable Resource Rendering', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} hosts={[host]} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('resource-table-Host Agents')).toBeInTheDocument();
+      expect(screen.getByTestId('resource-table-Agents')).toBeInTheDocument();
     });
 
-    expect(screen.getByTestId('resource-count-Host Agents')).toHaveTextContent('1');
+    expect(screen.getByTestId('resource-count-Agents')).toHaveTextContent('1');
     expect(screen.getByTestId('resource-name-h1')).toHaveTextContent('Host 1');
   });
 

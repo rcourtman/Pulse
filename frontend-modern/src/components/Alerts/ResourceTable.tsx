@@ -30,7 +30,7 @@ const COLUMN_TOOLTIP_LOOKUP: Record<string, string> = {
   'temp °c': 'CPU temperature limit for node alerts.',
   'temperature °c': 'CPU temperature limit for node alerts.',
   temperature: 'CPU temperature limit for node alerts.',
-  'disk temp °c': 'Individual disk temperature threshold for host agents.',
+  'disk temp °c': 'Individual disk temperature threshold for agents.',
   'restart count': 'Maximum container restarts within the evaluation window.',
   'restart window': 'Time window used to evaluate the restart count threshold.',
   'restart window (s)': 'Time window used to evaluate the restart count threshold.',

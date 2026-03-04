@@ -186,14 +186,6 @@ type ThresholdConfig struct {
 	Backup              *BackupAlertConfig   `json:"backup,omitempty"`
 	Snapshot            *SnapshotAlertConfig `json:"snapshot,omitempty"`
 	Note                *string              `json:"note,omitempty"`
-	// Legacy thresholds for backwards compatibility
-	CPULegacy        *float64 `json:"cpuLegacy,omitempty"`
-	MemoryLegacy     *float64 `json:"memoryLegacy,omitempty"`
-	DiskLegacy       *float64 `json:"diskLegacy,omitempty"`
-	DiskReadLegacy   *float64 `json:"diskReadLegacy,omitempty"`
-	DiskWriteLegacy  *float64 `json:"diskWriteLegacy,omitempty"`
-	NetworkInLegacy  *float64 `json:"networkInLegacy,omitempty"`
-	NetworkOutLegacy *float64 `json:"networkOutLegacy,omitempty"`
 }
 
 // QuietHours represents quiet hours configuration
@@ -236,10 +228,9 @@ type GroupingConfig struct {
 // ScheduleConfig represents alerting schedule configuration
 type ScheduleConfig struct {
 	QuietHours      QuietHours       `json:"quietHours"`
-	Cooldown        int              `json:"cooldown"`                 // minutes
-	GroupingWindow  int              `json:"groupingWindow,omitempty"` // Deprecated: use Grouping.Window instead. Will be auto-migrated on config update.
-	MaxAlertsHour   int              `json:"maxAlertsHour"`            // max alerts per hour per resource
-	NotifyOnResolve bool             `json:"notifyOnResolve"`          // Send notification when alert clears
+	Cooldown        int              `json:"cooldown"`        // minutes
+	MaxAlertsHour   int              `json:"maxAlertsHour"`   // max alerts per hour per resource
+	NotifyOnResolve bool             `json:"notifyOnResolve"` // Send notification when alert clears
 	Escalation      EscalationConfig `json:"escalation"`
 	Grouping        GroupingConfig   `json:"grouping"`
 }
@@ -392,7 +383,6 @@ type AlertConfig struct {
 	MinimumDelta         float64                   `json:"minimumDelta"`         // Minimum % change to trigger new alert
 	SuppressionWindow    int                       `json:"suppressionWindow"`    // Minutes to suppress duplicate alerts
 	HysteresisMargin     float64                   `json:"hysteresisMargin"`     // Default margin for legacy thresholds
-	TimeThreshold        int                       `json:"timeThreshold"`        // Legacy: Seconds that threshold must be exceeded before triggering
 	TimeThresholds       map[string]int            `json:"timeThresholds"`       // Per-type delays: guest, node, storage, pbs
 	MetricTimeThresholds map[string]map[string]int `json:"metricTimeThresholds"` // Optional per-metric delays keyed by resource type
 	// Alert TTL and auto-cleanup
@@ -666,7 +656,6 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 			MinimumDelta:      2.0, // 2% minimum change
 			SuppressionWindow: 5,   // 5 minutes
 			HysteresisMargin:  5.0, // 5% default margin
-			TimeThreshold:     5,
 			TimeThresholds: map[string]int{
 				"guest":   5,
 				"node":    5,
@@ -691,9 +680,8 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 					},
 					Suppress: QuietHoursSuppression{},
 				},
-				Cooldown:      5,  // ON - 5 minutes prevents spam
-				MaxAlertsHour: 10, // ON - 10 alerts/hour prevents flooding
-				// Note: GroupingWindow is deprecated - use Grouping.Window instead
+				Cooldown:        5,  // ON - 5 minutes prevents spam
+				MaxAlertsHour:   10, // ON - 10 alerts/hour prevents flooding
 				NotifyOnResolve: true,
 				Escalation: EscalationConfig{
 					Enabled: false, // OFF - requires user configuration
@@ -1526,9 +1514,6 @@ func normalizeTimeThresholds(config *AlertConfig) {
 	config.MetricTimeThresholds = normalizeMetricTimeThresholds(config.MetricTimeThresholds)
 
 	const defaultDelaySeconds = 5
-	if config.TimeThreshold <= 0 {
-		config.TimeThreshold = defaultDelaySeconds
-	}
 	if config.TimeThresholds == nil {
 		config.TimeThresholds = make(map[string]int)
 	}
@@ -2988,8 +2973,6 @@ func (m *Manager) CheckHost(host models.Host) {
 			// Use disk-specific threshold if set
 			if diskOverride.Disk != nil {
 				effectiveDiskThreshold = ensureHysteresisThreshold(diskOverride.Disk)
-			} else if diskOverride.DiskLegacy != nil {
-				effectiveDiskThreshold = m.convertLegacyThreshold(diskOverride.DiskLegacy)
 			}
 		}
 		// Fall back to host-level threshold
@@ -6112,7 +6095,7 @@ func (m *Manager) getBaseTimeThreshold(resourceType string) (int, bool) {
 		}
 	}
 
-	return m.config.TimeThreshold, false
+	return 0, false
 }
 
 func (m *Manager) getGlobalMetricTimeThreshold(metricType string) (int, bool) {
@@ -8607,21 +8590,6 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 	}
 }
 
-// convertLegacyThreshold converts a legacy float64 threshold to HysteresisThreshold
-func (m *Manager) convertLegacyThreshold(legacy *float64) *HysteresisThreshold {
-	if legacy == nil || *legacy <= 0 {
-		return nil
-	}
-	margin := m.config.HysteresisMargin
-	if margin <= 0 {
-		margin = 5.0 // Default 5% margin
-	}
-	return &HysteresisThreshold{
-		Trigger: *legacy,
-		Clear:   *legacy - margin,
-	}
-}
-
 func cloneThreshold(threshold *HysteresisThreshold) *HysteresisThreshold {
 	if threshold == nil {
 		return nil
@@ -8666,44 +8634,30 @@ func (m *Manager) applyThresholdOverride(base ThresholdConfig, override Threshol
 
 	if override.CPU != nil {
 		result.CPU = ensureHysteresisThreshold(cloneThreshold(override.CPU))
-	} else if override.CPULegacy != nil {
-		result.CPU = m.convertLegacyThreshold(override.CPULegacy)
 	}
 
 	if override.Memory != nil {
 		result.Memory = ensureHysteresisThreshold(cloneThreshold(override.Memory))
-	} else if override.MemoryLegacy != nil {
-		result.Memory = m.convertLegacyThreshold(override.MemoryLegacy)
 	}
 
 	if override.Disk != nil {
 		result.Disk = ensureHysteresisThreshold(cloneThreshold(override.Disk))
-	} else if override.DiskLegacy != nil {
-		result.Disk = m.convertLegacyThreshold(override.DiskLegacy)
 	}
 
 	if override.DiskRead != nil {
 		result.DiskRead = ensureHysteresisThreshold(cloneThreshold(override.DiskRead))
-	} else if override.DiskReadLegacy != nil {
-		result.DiskRead = m.convertLegacyThreshold(override.DiskReadLegacy)
 	}
 
 	if override.DiskWrite != nil {
 		result.DiskWrite = ensureHysteresisThreshold(cloneThreshold(override.DiskWrite))
-	} else if override.DiskWriteLegacy != nil {
-		result.DiskWrite = m.convertLegacyThreshold(override.DiskWriteLegacy)
 	}
 
 	if override.NetworkIn != nil {
 		result.NetworkIn = ensureHysteresisThreshold(cloneThreshold(override.NetworkIn))
-	} else if override.NetworkInLegacy != nil {
-		result.NetworkIn = m.convertLegacyThreshold(override.NetworkInLegacy)
 	}
 
 	if override.NetworkOut != nil {
 		result.NetworkOut = ensureHysteresisThreshold(cloneThreshold(override.NetworkOut))
-	} else if override.NetworkOutLegacy != nil {
-		result.NetworkOut = m.convertLegacyThreshold(override.NetworkOutLegacy)
 	}
 
 	if override.Temperature != nil {

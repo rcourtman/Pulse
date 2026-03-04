@@ -177,7 +177,6 @@ func TestCheckMetricInvokesAICallbackWhenNotificationsSuppressed(t *testing.T) {
 
 	m.mu.Lock()
 	m.config.ActivationState = ActivationPending
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.config.SuppressionWindow = 0
 	m.config.MinimumDelta = 0

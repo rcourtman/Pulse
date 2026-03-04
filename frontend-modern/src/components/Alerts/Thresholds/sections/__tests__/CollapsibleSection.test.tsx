@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import {
-  CollapsibleSection,
-  SectionActionButton,
-  NestedGroupHeader,
-} from '../CollapsibleSection';
+import { CollapsibleSection, SectionActionButton, NestedGroupHeader } from '../CollapsibleSection';
 
 afterEach(() => {
   cleanup();
@@ -253,12 +249,7 @@ describe('CollapsibleSection', () => {
 
   it('shows children when resourceCount > 0', () => {
     render(() => (
-      <CollapsibleSection
-        id="test"
-        title="Title"
-        resourceCount={3}
-        emptyMessage="No resources"
-      >
+      <CollapsibleSection id="test" title="Title" resourceCount={3} emptyMessage="No resources">
         <span>Actual content</span>
       </CollapsibleSection>
     ));
@@ -281,9 +272,12 @@ describe('CollapsibleSection', () => {
     const onToggle = vi.fn();
     const actionClick = vi.fn();
     render(() => (
-      <CollapsibleSection id="test" title="Title" onToggle={onToggle} headerActions={
-        <button onClick={actionClick}>Edit</button>
-      }>
+      <CollapsibleSection
+        id="test"
+        title="Title"
+        onToggle={onToggle}
+        headerActions={<button onClick={actionClick}>Edit</button>}
+      >
         <span />
       </CollapsibleSection>
     ));
@@ -519,9 +513,7 @@ describe('NestedGroupHeader', () => {
   });
 
   it('applies hover class when onToggle is provided', () => {
-    const { container } = render(() => (
-      <NestedGroupHeader title="Node" onToggle={() => {}} />
-    ));
+    const { container } = render(() => <NestedGroupHeader title="Node" onToggle={() => {}} />);
 
     const wrapper = container.firstElementChild!;
     expect(wrapper.className).toContain('cursor-pointer');

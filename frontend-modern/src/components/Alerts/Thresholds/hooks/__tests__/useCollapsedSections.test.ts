@@ -132,10 +132,7 @@ describe('useCollapsedSections', () => {
     });
 
     it('handles malformed object values in localStorage (non-boolean values)', () => {
-      localStorageMock.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ storage: 'yes', backups: 0 }),
-      );
+      localStorageMock.setItem(STORAGE_KEY, JSON.stringify({ storage: 'yes', backups: 0 }));
 
       const { isCollapsed } = useCollapsedSections();
 

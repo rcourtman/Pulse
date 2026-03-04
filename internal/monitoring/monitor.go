@@ -1317,11 +1317,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		m.alertManager.UpdateConfig(*alertConfig)
 		// Apply schedule settings to notification manager
 		m.notificationMgr.SetCooldown(alertConfig.Schedule.Cooldown)
-		groupWindow := alertConfig.Schedule.Grouping.Window
-		if groupWindow == 0 && alertConfig.Schedule.GroupingWindow != 0 {
-			groupWindow = alertConfig.Schedule.GroupingWindow
-		}
-		m.notificationMgr.SetGroupingWindow(groupWindow)
+		m.notificationMgr.SetGroupingWindow(alertConfig.Schedule.Grouping.Window)
 		m.notificationMgr.SetGroupingOptions(
 			alertConfig.Schedule.Grouping.ByNode,
 			alertConfig.Schedule.Grouping.ByGuest,

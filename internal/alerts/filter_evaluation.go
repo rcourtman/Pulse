@@ -218,38 +218,24 @@ func (m *Manager) getGuestThresholds(guest any, guestID string) ThresholdConfig 
 	if applicableRule != nil {
 		if applicableRule.Thresholds.CPU != nil {
 			thresholds.CPU = ensureHysteresisThreshold(applicableRule.Thresholds.CPU)
-		} else if applicableRule.Thresholds.CPULegacy != nil {
-			thresholds.CPU = m.convertLegacyThreshold(applicableRule.Thresholds.CPULegacy)
 		}
 		if applicableRule.Thresholds.Memory != nil {
 			thresholds.Memory = ensureHysteresisThreshold(applicableRule.Thresholds.Memory)
-		} else if applicableRule.Thresholds.MemoryLegacy != nil {
-			thresholds.Memory = m.convertLegacyThreshold(applicableRule.Thresholds.MemoryLegacy)
 		}
 		if applicableRule.Thresholds.Disk != nil {
 			thresholds.Disk = ensureHysteresisThreshold(applicableRule.Thresholds.Disk)
-		} else if applicableRule.Thresholds.DiskLegacy != nil {
-			thresholds.Disk = m.convertLegacyThreshold(applicableRule.Thresholds.DiskLegacy)
 		}
 		if applicableRule.Thresholds.DiskRead != nil {
 			thresholds.DiskRead = ensureHysteresisThreshold(applicableRule.Thresholds.DiskRead)
-		} else if applicableRule.Thresholds.DiskReadLegacy != nil {
-			thresholds.DiskRead = m.convertLegacyThreshold(applicableRule.Thresholds.DiskReadLegacy)
 		}
 		if applicableRule.Thresholds.DiskWrite != nil {
 			thresholds.DiskWrite = ensureHysteresisThreshold(applicableRule.Thresholds.DiskWrite)
-		} else if applicableRule.Thresholds.DiskWriteLegacy != nil {
-			thresholds.DiskWrite = m.convertLegacyThreshold(applicableRule.Thresholds.DiskWriteLegacy)
 		}
 		if applicableRule.Thresholds.NetworkIn != nil {
 			thresholds.NetworkIn = ensureHysteresisThreshold(applicableRule.Thresholds.NetworkIn)
-		} else if applicableRule.Thresholds.NetworkInLegacy != nil {
-			thresholds.NetworkIn = m.convertLegacyThreshold(applicableRule.Thresholds.NetworkInLegacy)
 		}
 		if applicableRule.Thresholds.NetworkOut != nil {
 			thresholds.NetworkOut = ensureHysteresisThreshold(applicableRule.Thresholds.NetworkOut)
-		} else if applicableRule.Thresholds.NetworkOutLegacy != nil {
-			thresholds.NetworkOut = m.convertLegacyThreshold(applicableRule.Thresholds.NetworkOutLegacy)
 		}
 		if applicableRule.Thresholds.DisableConnectivity {
 			thresholds.DisableConnectivity = true
@@ -272,11 +258,6 @@ func (m *Manager) getGuestThresholds(guest any, guestID string) ThresholdConfig 
 	// First try the new stable ID format (instance-VMID)
 	override, exists := m.config.Overrides[guestID]
 
-	// If not found, try legacy ID formats for migration
-	if !exists {
-		override, exists = m.tryLegacyOverrideMigration(guest, guestID)
-	}
-
 	if exists {
 		// Apply the disabled flag if set
 		if override.Disabled {
@@ -288,38 +269,24 @@ func (m *Manager) getGuestThresholds(guest any, guestID string) ThresholdConfig 
 
 		if override.CPU != nil {
 			thresholds.CPU = ensureHysteresisThreshold(override.CPU)
-		} else if override.CPULegacy != nil {
-			thresholds.CPU = m.convertLegacyThreshold(override.CPULegacy)
 		}
 		if override.Memory != nil {
 			thresholds.Memory = ensureHysteresisThreshold(override.Memory)
-		} else if override.MemoryLegacy != nil {
-			thresholds.Memory = m.convertLegacyThreshold(override.MemoryLegacy)
 		}
 		if override.Disk != nil {
 			thresholds.Disk = ensureHysteresisThreshold(override.Disk)
-		} else if override.DiskLegacy != nil {
-			thresholds.Disk = m.convertLegacyThreshold(override.DiskLegacy)
 		}
 		if override.DiskRead != nil {
 			thresholds.DiskRead = ensureHysteresisThreshold(override.DiskRead)
-		} else if override.DiskReadLegacy != nil {
-			thresholds.DiskRead = m.convertLegacyThreshold(override.DiskReadLegacy)
 		}
 		if override.DiskWrite != nil {
 			thresholds.DiskWrite = ensureHysteresisThreshold(override.DiskWrite)
-		} else if override.DiskWriteLegacy != nil {
-			thresholds.DiskWrite = m.convertLegacyThreshold(override.DiskWriteLegacy)
 		}
 		if override.NetworkIn != nil {
 			thresholds.NetworkIn = ensureHysteresisThreshold(override.NetworkIn)
-		} else if override.NetworkInLegacy != nil {
-			thresholds.NetworkIn = m.convertLegacyThreshold(override.NetworkInLegacy)
 		}
 		if override.NetworkOut != nil {
 			thresholds.NetworkOut = ensureHysteresisThreshold(override.NetworkOut)
-		} else if override.NetworkOutLegacy != nil {
-			thresholds.NetworkOut = m.convertLegacyThreshold(override.NetworkOutLegacy)
 		}
 		if override.Backup != nil {
 			thresholds.Backup = override.Backup
@@ -330,53 +297,4 @@ func (m *Manager) getGuestThresholds(guest any, guestID string) ThresholdConfig 
 	}
 
 	return thresholds
-}
-
-// tryLegacyOverrideMigration attempts to find and migrate legacy override formats.
-// Returns the override and true if found, or zero value and false otherwise.
-func (m *Manager) tryLegacyOverrideMigration(guest any, guestID string) (ThresholdConfig, bool) {
-	snapshot, ok := extractGuestSnapshot(guest)
-	if !ok {
-		// Not a VM or container, no legacy migration possible
-		return ThresholdConfig{}, false
-	}
-	node := snapshot.Node
-	vmID := snapshot.VMID
-	instance := snapshot.Instance
-
-	// Try legacy format: instance-node-VMID
-	if instance != node {
-		legacyID := fmt.Sprintf("%s-%s-%d", instance, node, vmID)
-		if legacyOverride, legacyExists := m.config.Overrides[legacyID]; legacyExists {
-			log.Info().
-				Str("legacyID", legacyID).
-				Str("newID", guestID).
-				Msg("Migrating guest override from legacy ID format")
-
-			// Move to new ID
-			m.config.Overrides[guestID] = legacyOverride
-			delete(m.config.Overrides, legacyID)
-
-			return legacyOverride, true
-		}
-	}
-
-	// Try standalone format: node-VMID
-	if instance == node {
-		legacyID := fmt.Sprintf("%s-%d", node, vmID)
-		if legacyOverride, legacyExists := m.config.Overrides[legacyID]; legacyExists {
-			log.Info().
-				Str("legacyID", legacyID).
-				Str("newID", guestID).
-				Msg("Migrating guest override from legacy standalone ID format")
-
-			// Move to new ID
-			m.config.Overrides[guestID] = legacyOverride
-			delete(m.config.Overrides, legacyID)
-
-			return legacyOverride, true
-		}
-	}
-
-	return ThresholdConfig{}, false
 }

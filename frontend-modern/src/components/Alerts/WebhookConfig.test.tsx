@@ -110,8 +110,20 @@ describe('WebhookConfig', () => {
 
   it('renders webhook list with names, services, methods, IDs, and URLs', () => {
     const webhooks = [
-      makeWebhook({ id: 'wh-1', name: 'Discord Alert', service: 'discord', method: 'POST', url: 'https://discord.com/api/webhooks/123' }),
-      makeWebhook({ id: 'wh-2', name: 'Slack Alert', service: 'slack', method: 'PUT', url: 'https://hooks.slack.com/services/abc' }),
+      makeWebhook({
+        id: 'wh-1',
+        name: 'Discord Alert',
+        service: 'discord',
+        method: 'POST',
+        url: 'https://discord.com/api/webhooks/123',
+      }),
+      makeWebhook({
+        id: 'wh-2',
+        name: 'Slack Alert',
+        service: 'slack',
+        method: 'PUT',
+        url: 'https://hooks.slack.com/services/abc',
+      }),
     ];
 
     render(() => (
@@ -177,9 +189,7 @@ describe('WebhookConfig', () => {
   });
 
   it('falls back to "Generic" for webhooks with no service', () => {
-    const webhooks = [
-      makeWebhook({ id: 'wh-1', service: undefined }),
-    ];
+    const webhooks = [makeWebhook({ id: 'wh-1', service: undefined })];
 
     render(() => (
       <WebhookConfig
@@ -195,9 +205,7 @@ describe('WebhookConfig', () => {
   });
 
   it('displays "—" for webhook with no id', () => {
-    const webhooks = [
-      makeWebhook({ id: '' }),
-    ];
+    const webhooks = [makeWebhook({ id: '' })];
 
     render(() => (
       <WebhookConfig
@@ -253,8 +261,12 @@ describe('WebhookConfig', () => {
     fireEvent.click(screen.getByText('Enable All'));
 
     expect(onUpdateMock).toHaveBeenCalledTimes(2);
-    expect(onUpdateMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'wh-1', enabled: true }));
-    expect(onUpdateMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'wh-2', enabled: true }));
+    expect(onUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'wh-1', enabled: true }),
+    );
+    expect(onUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'wh-2', enabled: true }),
+    );
   });
 
   it('"Disable All" calls onUpdate for each webhook with enabled=false', () => {
@@ -276,8 +288,12 @@ describe('WebhookConfig', () => {
     fireEvent.click(screen.getByText('Disable All'));
 
     expect(onUpdateMock).toHaveBeenCalledTimes(2);
-    expect(onUpdateMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'wh-1', enabled: false }));
-    expect(onUpdateMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'wh-2', enabled: false }));
+    expect(onUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'wh-1', enabled: false }),
+    );
+    expect(onUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'wh-2', enabled: false }),
+    );
   });
 
   it('"Enable All" is disabled when all webhooks are already enabled', () => {

@@ -288,10 +288,6 @@ describe('unifiedTypeToAlertDisplayType', () => {
     expect(unifiedTypeToAlertDisplayType('node')).toBe('Node');
   });
 
-  it('maps host to Host', () => {
-    expect(unifiedTypeToAlertDisplayType('host')).toBe('Host');
-  });
-
   it('maps docker-host to Container Host', () => {
     expect(unifiedTypeToAlertDisplayType('docker-host')).toBe('Container Host');
   });
@@ -322,7 +318,6 @@ describe('Unified selector parity', () => {
   it('maps all unified resource types to display types', () => {
     const cases: Array<[ResourceType, string]> = [
       ['node', 'Node'],
-      ['host', 'Host'],
       ['docker-host', 'Container Host'],
       ['k8s-cluster', 'K8s'],
       ['k8s-node', 'k8s-node'],

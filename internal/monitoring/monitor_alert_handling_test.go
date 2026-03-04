@@ -75,8 +75,7 @@ func TestMonitor_HandleAlertResolved_QuietHoursSuppressesRecovery(t *testing.T) 
 	mgr := alerts.NewManager()
 	// Configure quiet hours to be always active, alerts enabled, no time delay
 	mgr.UpdateConfig(alerts.AlertConfig{
-		Enabled:       true,
-		TimeThreshold: 1,
+		Enabled: true,
 		TimeThresholds: map[string]int{
 			"guest": 0, "node": 0, "storage": 0, "pbs": 0, "host": 0,
 		},
@@ -177,8 +176,7 @@ func TestMonitor_HandleAlertResolved_NoQuietHoursSendsNotification(t *testing.T)
 	mgr := alerts.NewManager()
 	// No quiet hours, but alerts enabled with no time delay
 	mgr.UpdateConfig(alerts.AlertConfig{
-		Enabled:       true,
-		TimeThreshold: 1,
+		Enabled: true,
 		TimeThresholds: map[string]int{
 			"guest": 0, "node": 0, "storage": 0, "pbs": 0, "host": 0,
 		},

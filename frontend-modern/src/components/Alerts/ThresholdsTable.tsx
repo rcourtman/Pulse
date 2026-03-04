@@ -16,6 +16,7 @@ import Users from 'lucide-solid/icons/users';
 import Boxes from 'lucide-solid/icons/boxes';
 import { unwrap } from 'solid-js/store';
 import type { Resource } from '@/types/resource';
+import { getAgentDiscoveryResourceId } from '@/utils/discoveryTarget';
 
 // Workaround for eslint false-positive when `For` is used only in JSX
 const __ensureForUsage = For;
@@ -83,9 +84,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const platformData = pd(resource);
     const agent = asRecord(platformData?.agent);
     return uniqueIds(
-      resource.discoveryTarget?.resourceType === 'host'
-        ? resource.discoveryTarget.resourceId
-        : undefined,
+      getAgentDiscoveryResourceId(resource.discoveryTarget),
       resource.discoveryTarget?.hostId,
       resource.agent?.agentId,
       agent?.agentId,
@@ -187,7 +186,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const getActiveTabFromRoute = (): 'proxmox' | 'pmg' | 'hosts' | 'docker' => {
     const path = location.pathname;
     if (path.includes('/thresholds/containers')) return 'docker';
-    if (path.includes('/thresholds/docker')) return 'docker'; // Legacy support
     if (path.includes('/thresholds/hosts')) return 'hosts';
     if (path.includes('/thresholds/mail-gateway')) return 'pmg';
     return 'proxmox'; // default
@@ -205,15 +203,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   createEffect(() => {
     if (location.pathname === '/alerts/thresholds') {
       navigate('/alerts/thresholds/proxmox', { replace: true });
-    }
-  });
-
-  createEffect(() => {
-    if (location.pathname.startsWith('/alerts/thresholds/docker')) {
-      navigate(
-        location.pathname.replace('/alerts/thresholds/docker', '/alerts/thresholds/containers'),
-        { replace: true, scroll: false },
-      );
     }
   });
 
@@ -505,6 +494,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       const displayName =
         host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
       const status = host.status;
+      const data = pd(host);
+      const agentData = asRecord(data?.agent);
 
       seen.add(resourceId);
 
@@ -514,9 +505,14 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         displayName,
         rawName: host.identity?.hostname ?? host.name,
         type: 'hostAgent' as const,
-        resourceType: 'Host Agent',
+        resourceType: 'Agent',
         node: host.identity?.hostname ?? host.name,
-        instance: (pd(host)?.platform as string) || (pd(host)?.osName as string) || '',
+        instance:
+          asString(agentData?.platform) ||
+          asString(agentData?.osName) ||
+          asString(data?.platform) ||
+          asString(data?.osName) ||
+          '',
         status,
         hasOverride:
           hasCustomThresholds ||
@@ -539,7 +535,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           displayName: name,
           rawName: name,
           type: 'hostAgent' as const,
-          resourceType: 'Host Agent',
+          resourceType: 'Agent',
           node: '',
           instance: '',
           status: 'unknown',
@@ -588,8 +584,18 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
       const hostIdCandidates = hostOverrideIdCandidates(host);
       const hostIdForActions = hostActionId(host);
+      const platformData = pd(host);
+      const platformAgent = asRecord(platformData?.agent);
+      const disksFromPlatformRoot = Array.isArray(platformData?.disks) ? platformData.disks : null;
+      const disksFromPlatformAgent = Array.isArray(platformAgent?.disks)
+        ? platformAgent.disks
+        : null;
+      const disksFromResourceAgent = Array.isArray(host.agent?.disks) ? host.agent.disks : null;
 
-      const disksForHost = (pd(host)?.disks ?? []) as Array<{
+      const disksForHost = (disksFromPlatformRoot ||
+        disksFromPlatformAgent ||
+        disksFromResourceAgent ||
+        []) as Array<{
         mountpoint?: string;
         device?: string;
         used?: number;
@@ -1531,7 +1537,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         },
         {
           key: 'hostAgents' as const,
-          label: 'Host Agents',
+          label: 'Agents',
           total: props.hosts?.length ?? 0,
           overrides: countOverrides(hostAgentsWithOverrides()),
           tab: 'hosts' as const,
@@ -2606,8 +2612,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
             class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'hosts' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300'}`}
           >
             <Users class="w-4 h-4" />
-            <span class="hidden sm:inline">Host Agents</span>
-            <span class="sm:hidden">Hosts</span>
+            <span>Agents</span>
           </button>
           <button
             type="button"
@@ -3277,11 +3282,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('hostAgents')}>
             <div ref={registerSection('hostAgents')} class="scroll-mt-24">
               <ResourceTable
-                title="Host Agents"
+                title="Agents"
                 resources={hostAgentsWithOverrides()}
                 columns={['CPU %', 'Memory %', 'Disk %', 'Disk Temp °C']}
                 activeAlerts={props.activeAlerts}
-                emptyMessage="No host agents match the current filters."
+                emptyMessage="No agents match the current filters."
                 onEdit={startEditing}
                 onSaveEdit={saveEdit}
                 onCancelEdit={cancelEdit}
@@ -3327,7 +3332,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               onToggle={() => toggleSection('hostDisks')}
               icon={<HardDrive class="w-5 h-5" />}
               isGloballyDisabled={props.disableAllHosts()}
-              emptyMessage="No host disks found. Host agents with mounted filesystems will appear here."
+              emptyMessage="No host disks found. Agents with mounted filesystems will appear here."
             >
               <div ref={registerSection('hostDisks')} class="scroll-mt-24">
                 <ResourceTable

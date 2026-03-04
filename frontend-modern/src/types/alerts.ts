@@ -17,14 +17,6 @@ export interface AlertThresholds {
   diskTemperature?: HysteresisThreshold;
   disableConnectivity?: boolean; // Disable connectivity/powered-off alerts
   poweredOffSeverity?: 'warning' | 'critical';
-  // Legacy support for backward compatibility
-  cpuLegacy?: number;
-  memoryLegacy?: number;
-  diskLegacy?: number;
-  diskReadLegacy?: number;
-  diskWriteLegacy?: number;
-  networkInLegacy?: number;
-  networkOutLegacy?: number;
   // Allow indexing with string
   [key: string]:
     | HysteresisThreshold
@@ -146,7 +138,6 @@ export interface AlertConfig {
   minimumDelta?: number;
   suppressionWindow?: number;
   hysteresisMargin?: number;
-  timeThreshold?: number; // Legacy single global delay
   timeThresholds?: {
     guest?: number;
     node?: number;
@@ -204,7 +195,6 @@ export interface AlertConfig {
       };
     };
     cooldown?: number;
-    groupingWindow?: number;
     maxAlertsHour?: number;
     notifyOnResolve?: boolean;
     grouping?: {
