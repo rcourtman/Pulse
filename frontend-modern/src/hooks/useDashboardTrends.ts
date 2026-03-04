@@ -114,6 +114,7 @@ function asHistoryResourceType(type: string): HistoryResourceType | null {
     'docker',
     'dockerHost',
     'k8s',
+    'agent',
     'host',
     'disk',
   ];
@@ -215,7 +216,7 @@ export function mapUnifiedTypeToHistoryType(type: string): string | null {
     case 'node':
       return 'node';
     case 'host':
-      return 'host';
+      return 'node';
     case 'docker-host':
       return 'dockerHost';
     case 'k8s-node':

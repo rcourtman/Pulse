@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -79,43 +78,21 @@ func TestSaveSSOConfig_ErrorPaths(t *testing.T) {
 	})
 }
 
-func TestLoadSSOConfig_MigratesLegacyOIDC(t *testing.T) {
+func TestLoadSSOConfig_DoesNotMigrateLegacyOIDC(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := NewConfigPersistence(tempDir)
 	cp.crypto = nil
 
-	legacy := OIDCConfig{
-		Enabled:       true,
-		IssuerURL:     "https://issuer.example.com",
-		ClientID:      "client-id",
-		ClientSecret:  "secret-value",
-		RedirectURL:   "https://pulse.example.com/api/oidc/callback",
-		AllowedGroups: []string{"ops"},
-	}
-
-	data, err := json.Marshal(legacy)
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "oidc.enc"), data, 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "oidc.enc"), []byte(`{"enabled":true}`), 0600))
 
 	cfg, err := cp.LoadSSOConfig()
 	require.NoError(t, err)
-	require.NotNil(t, cfg)
-	require.Len(t, cfg.Providers, 1)
-
-	provider := cfg.Providers[0]
-	assert.Equal(t, "legacy-oidc", provider.ID)
-	assert.Equal(t, SSOProviderTypeOIDC, provider.Type)
-	require.NotNil(t, provider.OIDC)
-	assert.Equal(t, legacy.ClientID, provider.OIDC.ClientID)
-	assert.Equal(t, legacy.IssuerURL, provider.OIDC.IssuerURL)
-	assert.True(t, provider.OIDC.ClientSecretSet)
-	assert.Equal(t, "legacy-oidc", cfg.DefaultProviderID)
-
-	assert.FileExists(t, filepath.Join(tempDir, "sso.enc"))
+	assert.Nil(t, cfg)
+	assert.NoFileExists(t, filepath.Join(tempDir, "sso.enc"))
 }
 
 func TestLoadSSOConfig_FallbackAndErrors(t *testing.T) {
-	t.Run("missing sso and oidc returns nil config", func(t *testing.T) {
+	t.Run("missing sso returns nil config", func(t *testing.T) {
 		cp := NewConfigPersistence(t.TempDir())
 		cp.crypto = nil
 
@@ -124,31 +101,12 @@ func TestLoadSSOConfig_FallbackAndErrors(t *testing.T) {
 		assert.Nil(t, cfg)
 	})
 
-	t.Run("legacy oidc present but not configured returns nil config", func(t *testing.T) {
+	t.Run("legacy oidc present still returns nil config", func(t *testing.T) {
 		tempDir := t.TempDir()
 		cp := NewConfigPersistence(tempDir)
 		cp.crypto = nil
 
-		legacy := OIDCConfig{
-			Enabled:   true,
-			IssuerURL: "https://issuer.example.com",
-			// Missing ClientID means "not configured" and should skip migration.
-		}
-		data, err := json.Marshal(legacy)
-		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(filepath.Join(tempDir, "oidc.enc"), data, 0600))
-
-		cfg, err := cp.LoadSSOConfig()
-		require.NoError(t, err)
-		assert.Nil(t, cfg)
-	})
-
-	t.Run("legacy oidc read error is ignored", func(t *testing.T) {
-		tempDir := t.TempDir()
-		cp := NewConfigPersistence(tempDir)
-		cp.crypto = nil
-
-		require.NoError(t, os.Mkdir(filepath.Join(tempDir, "oidc.enc"), 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(tempDir, "oidc.enc"), []byte(`{"enabled":true}`), 0600))
 
 		cfg, err := cp.LoadSSOConfig()
 		require.NoError(t, err)

@@ -15,7 +15,6 @@ func getValidConfig() *Config {
 		AdaptivePollingMinInterval:  10 * time.Second,
 		AdaptivePollingBaseInterval: 30 * time.Second,
 		AdaptivePollingMaxInterval:  5 * time.Minute,
-		OIDC:                        &OIDCConfig{Enabled: false},
 	}
 }
 
@@ -133,14 +132,6 @@ func TestConfig_Validate(t *testing.T) {
 				c.PVEInstances = []PVEInstance{{Host: "https://host", Password: "pass"}}
 			},
 			isValid: true,
-		},
-		{
-			name: "Invalid OIDC",
-			mutate: func(c *Config) {
-				c.OIDC = &OIDCConfig{Enabled: true, IssuerURL: ""}
-			},
-			isValid: false,
-			errMsg:  "issuer url is required", // OIDC.Validate error
 		},
 	}
 

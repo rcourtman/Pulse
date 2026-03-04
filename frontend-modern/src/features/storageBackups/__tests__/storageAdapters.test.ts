@@ -5,15 +5,8 @@ import { buildStorageRecords } from '@/features/storageBackups/storageAdapters';
 
 const baseState = (overrides: Partial<State> = {}): State =>
   ({
-    nodes: [],
-    vms: [],
-    containers: [],
-    dockerHosts: [],
-    hosts: [],
-    replicationJobs: [],
-    storage: [],
-    pbs: [],
-    pmg: [],
+    removedDockerHosts: [],
+    removedKubernetesClusters: [],
     metrics: [],
     performance: {
       apiCallDuration: {},
@@ -55,50 +48,13 @@ const makeResourceStorage = (overrides: Partial<Resource> = {}): Resource =>
   }) as Resource;
 
 describe('storageAdapters', () => {
-  it('does not emit records from legacy state when unified resources are absent', () => {
-    const state = baseState({
-      storage: [
-        {
-          id: 'legacy-storage-1',
-          name: 'local-zfs',
-          node: 'pve1',
-          instance: 'cluster-a',
-          type: 'zfspool',
-          status: 'available',
-          total: 1000,
-          used: 900,
-          free: 100,
-          usage: 90,
-          content: 'images',
-          shared: true,
-          enabled: true,
-          active: true,
-        } as any,
-      ],
-      pbs: [
-        {
-          id: 'pbs-1',
-          name: 'pbs-main',
-          datastores: [
-            {
-              name: 'primary',
-              total: 1000,
-              used: 250,
-              free: 750,
-              usage: 25,
-              status: 'available',
-              namespaces: [],
-            },
-          ],
-        } as any,
-      ],
-    });
-
+  it('returns no records when unified resources are absent', () => {
+    const state = baseState();
     const records = buildStorageRecords({ state, resources: [] });
     expect(records).toHaveLength(0);
   });
 
-  it('prefers enriched storage metadata over legacy platformData inference', () => {
+  it('prefers enriched storage metadata over platformData inference', () => {
     const enriched = {
       ...makeResourceStorage({
         platformData: {

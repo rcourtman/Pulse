@@ -1,5 +1,4 @@
 import type { Resource } from '@/types/resource';
-import { STORAGE_DATA_ORIGIN_PRECEDENCE } from './models';
 import type {
   CapacitySnapshot,
   NormalizedHealth,
@@ -58,15 +57,11 @@ const resolvePlatformFamily = (platform: StorageBackupPlatform): PlatformFamily 
   return 'onprem';
 };
 
-const fromSource = (
-  platform: StorageBackupPlatform,
-  adapterId: string,
-  origin: SourceDescriptor['origin'],
-): SourceDescriptor => ({
+const fromSource = (platform: StorageBackupPlatform, adapterId: string): SourceDescriptor => ({
   platform,
   family: resolvePlatformFamily(platform),
   adapterId,
-  origin,
+  origin: 'resource',
 });
 
 const capacity = (
@@ -233,8 +228,8 @@ const resolveStorageContent = (
   const directContent = (storageMeta?.content || '').trim();
   if (directContent) return directContent;
   if (storageMeta?.contentTypes?.length) return storageMeta.contentTypes.join(',');
-  const legacyContent = (platformData.content as string | undefined)?.trim();
-  return legacyContent || fallback;
+  const platformContent = (platformData.content as string | undefined)?.trim();
+  return platformContent || fallback;
 };
 
 const capabilitiesForStorage = (
@@ -303,7 +298,7 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
     capabilities: isDatastore
       ? dedupe(['capacity', 'health', 'backup-repository', 'deduplication', 'namespaces'])
       : capabilitiesForStorage(storageType, storageMeta),
-    source: fromSource(platform, adapterId, 'resource'),
+    source: fromSource(platform, adapterId),
     observedAt:
       typeof resource.lastSeen === 'number' && Number.isFinite(resource.lastSeen)
         ? resource.lastSeen
@@ -339,10 +334,8 @@ const resourceStorageAdapter: StorageAdapter = {
 export const DEFAULT_STORAGE_ADAPTERS: StorageAdapter[] = [resourceStorageAdapter];
 
 const mergeStorageRecords = (current: StorageRecord, incoming: StorageRecord): StorageRecord => {
-  const currentRank = STORAGE_DATA_ORIGIN_PRECEDENCE[current.source.origin];
-  const incomingRank = STORAGE_DATA_ORIGIN_PRECEDENCE[incoming.source.origin];
-  const preferred = incomingRank > currentRank ? incoming : current;
-  const secondary = preferred === current ? incoming : current;
+  const preferred = current;
+  const secondary = incoming;
 
   return {
     ...secondary,

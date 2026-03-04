@@ -118,17 +118,6 @@ func TestSaveAlertConfig_WriteError(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestSaveOIDCConfig_WriteError(t *testing.T) {
-	tempDir := t.TempDir()
-	cp := NewConfigPersistence(tempDir)
-
-	mfs := &mockFSError{FileSystem: defaultFileSystem{}, writeError: errors.New("write error")}
-	cp.SetFileSystem(mfs)
-
-	err := cp.SaveOIDCConfig(OIDCConfig{})
-	assert.Error(t, err)
-}
-
 func TestSaveEmailConfig_WriteError(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := NewConfigPersistence(tempDir)

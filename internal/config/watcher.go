@@ -5,16 +5,13 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/google/uuid"
 	"github.com/joho/godotenv"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
 
@@ -405,11 +402,6 @@ func (cw *ConfigWatcher) reloadConfig() {
 	// Update auth settings
 	oldAuthUser := cw.config.AuthUser
 	oldAuthPass := cw.config.AuthPass
-	oldTokenHashes := cw.config.ActiveAPITokenHashes()
-	existingByHash := make(map[string]APITokenRecord, len(cw.config.APITokens))
-	for _, record := range cw.config.APITokens {
-		existingByHash[record.Hash] = record.Clone()
-	}
 
 	// Apply auth user
 	Mu.Lock()
@@ -438,86 +430,6 @@ func (cw *ConfigWatcher) reloadConfig() {
 		} else {
 			changes = append(changes, "auth password updated")
 		}
-	}
-
-	// Legacy env token support: only process if api_tokens.json is empty
-	// This prevents .env changes from overwriting UI-managed tokens (fixes #685)
-	rawTokens := make([]string, 0, 4)
-	if raw, ok := envMap["API_TOKENS"]; ok {
-		raw = strings.Trim(raw, "'\"")
-		if raw != "" {
-			parts := strings.Split(raw, ",")
-			for _, part := range parts {
-				token := strings.TrimSpace(part)
-				if token != "" {
-					rawTokens = append(rawTokens, token)
-				}
-			}
-		}
-	}
-	if raw, ok := envMap["API_TOKEN"]; ok {
-		raw = strings.Trim(raw, "'\"")
-		if raw != "" {
-			rawTokens = append(rawTokens, raw)
-		}
-	}
-
-	// Only reload tokens from .env if NO tokens exist in api_tokens.json
-	// This makes api_tokens.json the authoritative source once it has records
-	if len(rawTokens) > 0 && len(cw.config.APITokens) == 0 {
-		log.Debug().Msg("No existing API tokens found - loading from .env (legacy)")
-		seen := make(map[string]struct{}, len(rawTokens))
-		newRecords := make([]APITokenRecord, 0, len(rawTokens))
-		for _, tokenValue := range rawTokens {
-			tokenValue = strings.TrimSpace(tokenValue)
-			if tokenValue == "" {
-				continue
-			}
-
-			hashed := tokenValue
-			prefix := tokenPrefix(tokenValue)
-			suffix := tokenSuffix(tokenValue)
-			if !auth.IsAPITokenHashed(tokenValue) {
-				hashed = auth.HashAPIToken(tokenValue)
-				prefix = tokenPrefix(tokenValue)
-				suffix = tokenSuffix(tokenValue)
-			}
-
-			if _, exists := seen[hashed]; exists {
-				continue
-			}
-			seen[hashed] = struct{}{}
-
-			newRecords = append(newRecords, APITokenRecord{
-				ID:        uuid.NewString(),
-				Name:      "Environment token",
-				Hash:      hashed,
-				Prefix:    prefix,
-				Suffix:    suffix,
-				CreatedAt: time.Now().UTC(),
-				Scopes:    []string{ScopeWildcard},
-				OrgID:     "default",
-			})
-		}
-
-		cw.config.APITokens = newRecords
-		cw.config.SortAPITokens()
-
-		newHashes := cw.config.ActiveAPITokenHashes()
-		if !reflect.DeepEqual(oldTokenHashes, newHashes) {
-			changes = append(changes, "API tokens added")
-
-			if globalPersistence != nil {
-				if err := globalPersistence.SaveAPITokens(cw.config.APITokens); err != nil {
-					log.Error().
-						Err(err).
-						Str("api_tokens_path", cw.apiTokensPath).
-						Msg("Failed to persist API tokens from .env reload")
-				}
-			}
-		}
-	} else if len(rawTokens) > 0 && len(cw.config.APITokens) > 0 {
-		log.Debug().Msg("Ignoring API_TOKEN/API_TOKENS from .env - api_tokens.json is authoritative")
 	}
 
 	// REMOVED: POLLING_INTERVAL from .env - now ONLY in system.json
@@ -589,18 +501,29 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 		return
 	}
 
+	persistMutations := false
+	if migrated := bindMissingAPITokenIDs(tokens); migrated > 0 {
+		persistMutations = true
+		log.Warn().
+			Int("count", migrated).
+			Str("api_tokens_path", cw.apiTokensPath).
+			Msg("Migrated API tokens missing IDs during reload")
+	}
+
 	if migrated := bindLegacyAPITokensToDefault(tokens); migrated > 0 {
+		persistMutations = true
+		log.Warn().
+			Int("count", migrated).
+			Str("api_tokens_path", cw.apiTokensPath).
+			Msg("Migrated legacy API tokens to default organization binding during reload")
+	}
+
+	if persistMutations {
 		if err := globalPersistence.SaveAPITokens(tokens); err != nil {
 			log.Error().
 				Err(err).
-				Int("count", migrated).
 				Str("api_tokens_path", cw.apiTokensPath).
-				Msg("Failed to persist legacy API token org binding migration during reload")
-		} else {
-			log.Warn().
-				Int("count", migrated).
-				Str("api_tokens_path", cw.apiTokensPath).
-				Msg("Migrated legacy API tokens to default organization binding during reload")
+				Msg("Failed to persist API token migrations during reload")
 		}
 	}
 

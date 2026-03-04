@@ -144,7 +144,7 @@ func TestLoadAlertConfig_Normalization(t *testing.T) {
 			},
 		},
 		{
-			name: "TimeThreshold and TimeThresholds",
+			name: "TimeThresholds defaults",
 			input: map[string]interface{}{
 				"timeThreshold": 0,
 				"timeThresholds": map[string]interface{}{
@@ -153,7 +153,6 @@ func TestLoadAlertConfig_Normalization(t *testing.T) {
 				},
 			},
 			verify: func(t *testing.T, cfg *alerts.AlertConfig) {
-				assert.Equal(t, 5, cfg.TimeThreshold)
 				assert.Equal(t, 5, cfg.TimeThresholds["guest"])
 				assert.Equal(t, 5, cfg.TimeThresholds["all"])
 			},

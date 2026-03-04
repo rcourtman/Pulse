@@ -23,7 +23,6 @@ func TestNoPersistenceBoilerplate(t *testing.T) {
 		"SaveNodesConfig":           true, // wipe guard, multi-type
 		"SaveNodesConfigAllowEmpty": true, // wipe guard variant
 		"SaveSystemSettings":        true, // .env file update
-		"SaveOIDCConfig":            true, // clears EnvOverrides
 		"SaveSSOConfig":             true, // nil guard, clone, clear overrides
 		"SaveAppriseConfig":         true, // normalize config
 		"SaveOrganization":          true, // uses fs.WriteFile directly
@@ -88,8 +87,7 @@ func TestNoPersistenceLoadBoilerplate(t *testing.T) {
 		"LoadAPITokens":        true, // ensureScopes post-processing
 		"LoadNodesConfig":      true, // multi-type
 		"LoadSystemSettings":   true, // complex with defaults
-		"LoadOIDCConfig":       true, // complex with defaults
-		"LoadSSOConfig":        true, // legacy migration
+		"LoadSSOConfig":        true, // nil fallback + encrypted payload handling
 		"LoadAppriseConfig":    true, // complex with defaults
 		"LoadEmailConfig":      true, // complex with defaults
 		"LoadWebhooks":         true, // legacy migration

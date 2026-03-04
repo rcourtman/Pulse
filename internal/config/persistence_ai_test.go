@@ -94,14 +94,14 @@ func TestPersistence_AIConfig(t *testing.T) {
 
 	// Save
 	cfg := NewDefaultAIConfig()
-	cfg.APIKey = "testkey"
+	cfg.AnthropicAPIKey = "testkey"
 	err = p.SaveAIConfig(*cfg)
 	require.NoError(t, err)
 
 	// Reload
 	loaded, err = p.LoadAIConfig()
 	require.NoError(t, err)
-	assert.Equal(t, "testkey", loaded.APIKey)
+	assert.Equal(t, "testkey", loaded.AnthropicAPIKey)
 
 	// Corrupt file
 	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "ai.enc"), []byte("{invalid"), 0644))

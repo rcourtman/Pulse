@@ -1,9 +1,10 @@
 import type { Component } from 'solid-js';
 import { For, Show, createMemo, createSignal } from 'solid-js';
-import { getGlobalWebSocketStore } from '@/stores/websocket-global';
-import type { PBSDatastore, PBSInstance } from '@/types/api';
+import { useWebSocket } from '@/App';
+import type { PBSDatastore } from '@/types/api';
 import type { RecoveryExternalRef, RecoveryPoint } from '@/types/recovery';
 import { formatAbsoluteTime, formatBytes, formatUptime } from '@/utils/format';
+import { pbsInstanceFromResource } from '@/utils/resourceStateAdapters';
 
 interface RecoveryPointDetailsProps {
   point: RecoveryPoint;
@@ -56,6 +57,7 @@ const usageBarColorClass = (usagePercent: number): string => {
 };
 
 export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props) => {
+  const { state } = useWebSocket();
   const point = () => props.point;
   const isPbsProvider = createMemo(
     () =>
@@ -93,7 +95,10 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
         typeof repositoryRef?.name === 'string' ? repositoryRef.name.trim() : '';
       if (!instanceName || !datastoreName) return null;
 
-      const instances = (getGlobalWebSocketStore().state.pbs || []) as PBSInstance[];
+      const instances = (state.resources || [])
+        .filter((resource) => resource.type === 'pbs')
+        .map(pbsInstanceFromResource)
+        .filter((instance): instance is NonNullable<typeof instance> => Boolean(instance));
       const instance = instances.find((item) => item.name === instanceName);
       if (!instance) return null;
 

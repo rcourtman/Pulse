@@ -41,7 +41,7 @@ function resourceLink(pr: ProblemResource): string {
 function formatType(type: string): string {
   const labels: Record<string, string> = {
     node: 'Node',
-    host: 'Host',
+    host: 'Agent',
     'docker-host': 'Docker Host',
     'k8s-cluster': 'K8s Cluster',
     'k8s-node': 'K8s Node',

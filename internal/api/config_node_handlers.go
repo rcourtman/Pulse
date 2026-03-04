@@ -505,13 +505,8 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 				// Fallback to password auth
 				pbsPassword = req.Password
 			} else {
-				// Generate a unique token name
 				hostname, _ := os.Hostname()
-				if hostname == "" {
-					hostname = "pulse"
-				}
-				timestamp := time.Now().Unix()
-				tokenName := fmt.Sprintf("pulse-%s-%d", hostname, timestamp)
+				tokenName := buildPulseMonitorTokenName(r.Host, hostname)
 
 				tokenID, tokenSecret, err := pbsClient.SetupMonitoringAccess(context.Background(), tokenName)
 				if err != nil {

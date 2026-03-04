@@ -794,12 +794,12 @@ func TestService_LicenseGating(t *testing.T) {
 
 func TestService_IsAutonomous(t *testing.T) {
 	svc := NewService(nil, nil)
-	svc.cfg = &config.AIConfig{AutonomousMode: true}
+	svc.cfg = &config.AIConfig{ControlLevel: config.ControlLevelAutonomous}
 	if !svc.IsAutonomous() {
 		t.Error("Expected true")
 	}
 
-	svc.cfg.AutonomousMode = false
+	svc.cfg.ControlLevel = config.ControlLevelReadOnly
 	if svc.IsAutonomous() {
 		t.Error("Expected false")
 	}

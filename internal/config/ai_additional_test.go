@@ -22,14 +22,9 @@ func TestAIConfig_DiscoveryAndControl(t *testing.T) {
 		t.Fatalf("default control level = %q", got)
 	}
 
-	cfg.AutonomousMode = true
-	if got := cfg.GetControlLevel(); got != ControlLevelAutonomous {
-		t.Fatalf("legacy autonomous mode = %q", got)
-	}
-
 	cfg.ControlLevel = "suggest"
-	if got := cfg.GetControlLevel(); got != ControlLevelControlled {
-		t.Fatalf("suggest control level = %q", got)
+	if got := cfg.GetControlLevel(); got != ControlLevelReadOnly {
+		t.Fatalf("invalid control level should fall back to read_only, got %q", got)
 	}
 
 	cfg.ControlLevel = "invalid"

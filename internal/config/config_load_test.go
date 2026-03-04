@@ -21,7 +21,7 @@ func TestLoad_Defaults(t *testing.T) {
 
 	// Clear env vars that might affect defaults
 	os.Unsetenv("PULSE_DATA_DIR")
-	os.Unsetenv("PORT")
+	os.Unsetenv("FRONTEND_PORT")
 
 	cfg, err := Load()
 	require.NoError(t, err)
@@ -32,7 +32,7 @@ func TestLoad_Defaults(t *testing.T) {
 
 func TestLoad_EnvOverrides(t *testing.T) {
 	// Set some env vars
-	t.Setenv("PORT", "8080")
+	t.Setenv("FRONTEND_PORT", "8080")
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
 	t.Setenv("HTTPS_ENABLED", "true")
@@ -69,37 +69,27 @@ func TestLoad_DotEnv(t *testing.T) {
 	assert.Equal(t, "dotenvuser", cfg.AuthUser)
 }
 
-func TestLoad_APITokens_Migration(t *testing.T) {
-	// Ensure clean state
+func TestLoad_APITokensEnvIgnored(t *testing.T) {
 	os.Unsetenv("API_TOKEN")
 	t.Setenv("API_TOKENS", "token1,token2")
-
-	// Create temp dir to allow persistence
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 
 	cfg, err := Load()
 	require.NoError(t, err)
 
-	// We might get duplicates if token hashing is non-deterministic and we process same token twice?
-	// But we only have token1, token2 in list.
-	// If getting 3, something is weird. We assert >= 2.
-	assert.GreaterOrEqual(t, len(cfg.APITokens), 2)
-	assert.True(t, cfg.HasAPITokens())
-
-	// Verify hashed
-	assert.NotEqual(t, "token1", cfg.APITokens[0].Hash)
+	assert.Len(t, cfg.APITokens, 0)
+	assert.False(t, cfg.HasAPITokens())
 }
 
-func TestLoad_LegacyAPIToken(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
+func TestLoad_LegacyAPITokenEnvIgnored(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	t.Setenv("API_TOKEN", "legacytoken")
 
 	cfg, err := Load()
 	require.NoError(t, err)
 
-	assert.GreaterOrEqual(t, len(cfg.APITokens), 1)
+	assert.Len(t, cfg.APITokens, 0)
+	assert.False(t, cfg.HasAPITokens())
 }
 
 func TestLoad_APITokens_LegacyOrgBindingMigrated(t *testing.T) {
@@ -131,6 +121,38 @@ func TestLoad_APITokens_LegacyOrgBindingMigrated(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, persisted, 1)
 	assert.Equal(t, "default", persisted[0].OrgID)
+}
+
+func TestLoad_APITokens_MissingIDMigrated(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+	os.Unsetenv("API_TOKEN")
+	os.Unsetenv("API_TOKENS")
+
+	p := NewConfigPersistence(tempDir)
+	legacy := []APITokenRecord{
+		{
+			ID:        "",
+			Name:      "Legacy Missing ID",
+			Hash:      "legacy-hash",
+			Prefix:    "legacy",
+			Suffix:    "hash",
+			CreatedAt: time.Now().UTC(),
+			Scopes:    []string{ScopeWildcard},
+			OrgID:     "default",
+		},
+	}
+	require.NoError(t, p.SaveAPITokens(legacy))
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Len(t, cfg.APITokens, 1)
+	assert.NotEmpty(t, cfg.APITokens[0].ID)
+
+	persisted, err := p.LoadAPITokens()
+	require.NoError(t, err)
+	require.Len(t, persisted, 1)
+	assert.NotEmpty(t, persisted[0].ID)
 }
 
 func TestLoad_MockEnv(t *testing.T) {
@@ -168,7 +190,7 @@ func TestLoad_ProxyAuth(t *testing.T) {
 	assert.Equal(t, "X-User", cfg.ProxyAuthUserHeader)
 }
 
-func TestLoad_OIDC(t *testing.T) {
+func TestLoad_OIDCEnvIgnored(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	t.Setenv("OIDC_ENABLED", "true")
 	t.Setenv("OIDC_ISSUER_URL", "https://issuer.com")
@@ -177,10 +199,7 @@ func TestLoad_OIDC(t *testing.T) {
 
 	cfg, err := Load()
 	require.NoError(t, err)
-
-	require.NotNil(t, cfg.OIDC)
-	assert.True(t, cfg.OIDC.Enabled)
-	assert.Equal(t, "https://issuer.com", cfg.OIDC.IssuerURL)
+	require.NotNil(t, cfg)
 }
 
 func TestLoad_AuthPass_AutoHash(t *testing.T) {

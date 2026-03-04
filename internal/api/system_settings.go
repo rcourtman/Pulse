@@ -46,12 +46,12 @@ type SystemSettingsHandler struct {
 	mtMonitor                interface {
 		GetMonitor(string) (*monitoring.Monitor, error)
 	}
-	legacyMonitor SystemSettingsMonitor
+	defaultMonitor SystemSettingsMonitor
 }
 
 // NewSystemSettingsHandler creates a new system settings handler
 func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPersistence, wsHub *websocket.Hub, mtm *monitoring.MultiTenantMonitor, monitor SystemSettingsMonitor, reloadSystemSettingsFunc func(), reloadMonitorFunc func() error) *SystemSettingsHandler {
-	// If mtm is provided, try to populate legacyMonitor from "default" org if not provided
+	// If mtm is provided, try to populate defaultMonitor from "default" org if not provided.
 	if monitor == nil && mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {
 			monitor = m
@@ -62,7 +62,7 @@ func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPers
 		persistence:              persistence,
 		wsHub:                    wsHub,
 		mtMonitor:                mtm,
-		legacyMonitor:            monitor,
+		defaultMonitor:           monitor,
 		reloadSystemSettingsFunc: reloadSystemSettingsFunc,
 		reloadMonitorFunc:        reloadMonitorFunc,
 	}
@@ -78,30 +78,30 @@ func (h *SystemSettingsHandler) SetTelemetryToggleFunc(fn func(enabled bool)) {
 func (h *SystemSettingsHandler) SetMonitor(m SystemSettingsMonitor) {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	h.legacyMonitor = m
+	h.defaultMonitor = m
 }
 
 // SetMultiTenantMonitor updates the multi-tenant monitor reference
 func (h *SystemSettingsHandler) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
-	var legacy SystemSettingsMonitor
+	var defaultMonitor SystemSettingsMonitor
 	if mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {
-			legacy = m
+			defaultMonitor = m
 		}
 	}
 
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	h.mtMonitor = mtm
-	if legacy != nil {
-		h.legacyMonitor = legacy
+	if defaultMonitor != nil {
+		h.defaultMonitor = defaultMonitor
 	}
 }
 
 func (h *SystemSettingsHandler) getMonitor(ctx context.Context) SystemSettingsMonitor {
 	h.stateMu.RLock()
 	mtMonitor := h.mtMonitor
-	legacyMonitor := h.legacyMonitor
+	defaultMonitor := h.defaultMonitor
 	h.stateMu.RUnlock()
 
 	if mtMonitor != nil {
@@ -110,7 +110,7 @@ func (h *SystemSettingsHandler) getMonitor(ctx context.Context) SystemSettingsMo
 			return m
 		}
 	}
-	return legacyMonitor
+	return defaultMonitor
 }
 
 // SetConfig updates the configuration reference used by the handler.
@@ -121,35 +121,11 @@ func (h *SystemSettingsHandler) SetConfig(cfg *config.Config) {
 	h.config = cfg
 }
 
-func firstValueForKeys(m map[string]interface{}, keys ...string) (interface{}, bool) {
-	for _, key := range keys {
-		if val, ok := m[key]; ok {
-			return val, true
-		}
-	}
-	return nil, false
-}
-
-func hasAnyKey(m map[string]interface{}, keys ...string) bool {
-	for _, key := range keys {
-		if _, ok := m[key]; ok {
-			return true
-		}
-	}
-	return false
-}
-
 func discoveryConfigMap(raw map[string]interface{}) (map[string]interface{}, bool) {
 	if raw == nil {
 		return nil, false
 	}
 	if val, ok := raw["discoveryConfig"]; ok {
-		if cfgMap, ok := val.(map[string]interface{}); ok {
-			return cfgMap, true
-		}
-		return nil, true
-	}
-	if val, ok := raw["discovery_config"]; ok {
 		if cfgMap, ok := val.(map[string]interface{}); ok {
 			return cfgMap, true
 		}
@@ -255,12 +231,6 @@ func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]inte
 		}
 	}
 
-	if val, ok := rawRequest["disableLegacyRouteRedirects"]; ok {
-		if _, ok := val.(bool); !ok {
-			return fmt.Errorf("disableLegacyRouteRedirects must be a boolean")
-		}
-	}
-
 	if val, ok := rawRequest["disableLocalUpgradeMetrics"]; ok {
 		if _, ok := val.(bool); !ok {
 			return fmt.Errorf("disableLocalUpgradeMetrics must be a boolean")
@@ -295,97 +265,114 @@ func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]inte
 			return fmt.Errorf("discoveryConfig must be an object")
 		}
 
-		if envVal, exists := firstValueForKeys(cfgMap, "environment_override", "environmentOverride"); exists {
+		allowedDiscoveryConfigFields := map[string]struct{}{
+			"environmentOverride": {},
+			"subnetAllowlist":     {},
+			"subnetBlocklist":     {},
+			"maxHostsPerScan":     {},
+			"maxConcurrent":       {},
+			"enableReverseDns":    {},
+			"scanGateways":        {},
+			"dialTimeoutMs":       {},
+			"httpTimeoutMs":       {},
+		}
+		for key := range cfgMap {
+			if _, ok := allowedDiscoveryConfigFields[key]; !ok {
+				return fmt.Errorf("discoveryConfig.%s is not supported", key)
+			}
+		}
+
+		if envVal, exists := cfgMap["environmentOverride"]; exists {
 			envStr, ok := envVal.(string)
 			if !ok {
-				return fmt.Errorf("discoveryConfig.environment_override must be a string")
+				return fmt.Errorf("discoveryConfig.environmentOverride must be a string")
 			}
 			if !config.IsValidDiscoveryEnvironment(envStr) {
 				return fmt.Errorf("invalid discovery environment override: %s", envStr)
 			}
 		}
 
-		if allowVal, exists := firstValueForKeys(cfgMap, "subnet_allowlist", "subnetAllowlist"); exists {
+		if allowVal, exists := cfgMap["subnetAllowlist"]; exists {
 			items, ok := allowVal.([]interface{})
 			if !ok {
-				return fmt.Errorf("discoveryConfig.subnet_allowlist must be an array of CIDR strings")
+				return fmt.Errorf("discoveryConfig.subnetAllowlist must be an array of CIDR strings")
 			}
 			for _, item := range items {
 				cidr, ok := item.(string)
 				if !ok {
-					return fmt.Errorf("discoveryConfig.subnet_allowlist entries must be strings")
+					return fmt.Errorf("discoveryConfig.subnetAllowlist entries must be strings")
 				}
 				if _, _, err := net.ParseCIDR(cidr); err != nil {
-					return fmt.Errorf("invalid CIDR in discoveryConfig.subnet_allowlist: %s", cidr)
+					return fmt.Errorf("invalid CIDR in discoveryConfig.subnetAllowlist: %s", cidr)
 				}
 			}
 		}
 
-		if blockVal, exists := firstValueForKeys(cfgMap, "subnet_blocklist", "subnetBlocklist"); exists {
+		if blockVal, exists := cfgMap["subnetBlocklist"]; exists {
 			items, ok := blockVal.([]interface{})
 			if !ok {
-				return fmt.Errorf("discoveryConfig.subnet_blocklist must be an array of CIDR strings")
+				return fmt.Errorf("discoveryConfig.subnetBlocklist must be an array of CIDR strings")
 			}
 			for _, item := range items {
 				cidr, ok := item.(string)
 				if !ok {
-					return fmt.Errorf("discoveryConfig.subnet_blocklist entries must be strings")
+					return fmt.Errorf("discoveryConfig.subnetBlocklist entries must be strings")
 				}
 				if _, _, err := net.ParseCIDR(cidr); err != nil {
-					return fmt.Errorf("invalid CIDR in discoveryConfig.subnet_blocklist: %s", cidr)
+					return fmt.Errorf("invalid CIDR in discoveryConfig.subnetBlocklist: %s", cidr)
 				}
 			}
 		}
 
-		if hostsVal, exists := firstValueForKeys(cfgMap, "max_hosts_per_scan", "maxHostsPerScan"); exists {
+		if hostsVal, exists := cfgMap["maxHostsPerScan"]; exists {
 			value, ok := hostsVal.(float64)
 			if !ok {
-				return fmt.Errorf("discoveryConfig.max_hosts_per_scan must be a number")
+				return fmt.Errorf("discoveryConfig.maxHostsPerScan must be a number")
 			}
 			if value <= 0 {
-				return fmt.Errorf("discoveryConfig.max_hosts_per_scan must be greater than zero")
+				return fmt.Errorf("discoveryConfig.maxHostsPerScan must be greater than zero")
 			}
 		}
 
-		if concurrentVal, exists := firstValueForKeys(cfgMap, "max_concurrent", "maxConcurrent"); exists {
+		if concurrentVal, exists := cfgMap["maxConcurrent"]; exists {
 			value, ok := concurrentVal.(float64)
 			if !ok {
-				return fmt.Errorf("discoveryConfig.max_concurrent must be a number")
+				return fmt.Errorf("discoveryConfig.maxConcurrent must be a number")
 			}
 			if value <= 0 || value > 1000 || value != float64(int(value)) {
-				return fmt.Errorf("discoveryConfig.max_concurrent must be a whole number between 1 and 1000")
+				return fmt.Errorf("discoveryConfig.maxConcurrent must be a whole number between 1 and 1000")
 			}
 		}
 
-		if val, exists := firstValueForKeys(cfgMap, "enable_reverse_dns", "enableReverseDns"); exists {
+		if val, exists := cfgMap["enableReverseDns"]; exists {
 			if _, ok := val.(bool); !ok {
-				return fmt.Errorf("discoveryConfig.enable_reverse_dns must be a boolean")
+				return fmt.Errorf("discoveryConfig.enableReverseDns must be a boolean")
 			}
 		}
 
-		if val, exists := firstValueForKeys(cfgMap, "scan_gateways", "scanGateways"); exists {
+		if val, exists := cfgMap["scanGateways"]; exists {
 			if _, ok := val.(bool); !ok {
-				return fmt.Errorf("discoveryConfig.scan_gateways must be a boolean")
+				return fmt.Errorf("discoveryConfig.scanGateways must be a boolean")
 			}
 		}
 
-		if val, exists := firstValueForKeys(cfgMap, "dial_timeout_ms", "dialTimeoutMs"); exists {
+		if val, exists := cfgMap["dialTimeoutMs"]; exists {
 			timeout, ok := val.(float64)
 			if !ok {
-				return fmt.Errorf("discoveryConfig.dial_timeout_ms must be a number")
+				return fmt.Errorf("discoveryConfig.dialTimeoutMs must be a number")
 			}
 			if timeout <= 0 {
-				return fmt.Errorf("discoveryConfig.dial_timeout_ms must be greater than zero")
+				return fmt.Errorf("discoveryConfig.dialTimeoutMs must be greater than zero")
 			}
 		}
 
-		if val, exists := firstValueForKeys(cfgMap, "http_timeout_ms", "httpTimeoutMs"); exists {
+		if val, exists := cfgMap["httpTimeoutMs"]; exists {
 			timeout, ok := val.(float64)
 			if !ok {
-				return fmt.Errorf("discoveryConfig.http_timeout_ms must be a number")
+				return fmt.Errorf("discoveryConfig.httpTimeoutMs must be a number")
 			}
 			if timeout <= 0 {
-				return fmt.Errorf("discoveryConfig.http_timeout_ms must be greater than zero")
+				return fmt.Errorf("discoveryConfig.httpTimeoutMs must be greater than zero")
 			}
 		}
 	}
@@ -468,8 +455,6 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 		settings.TemperatureMonitoringEnabled = h.config.TemperatureMonitoringEnabled
 		// Expose Docker update actions setting (respects env override)
 		settings.DisableDockerUpdateActions = h.config.DisableDockerUpdateActions
-		// Expose legacy route redirect setting (respects env override)
-		settings.DisableLegacyRouteRedirects = h.config.DisableLegacyRouteRedirects
 		// Expose effective telemetry value (respects env override)
 		effectiveTelemetry := h.config.TelemetryEnabled
 		settings.TelemetryEnabled = &effectiveTelemetry
@@ -549,13 +534,6 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		return
 	}
 
-	// Provide backwards compatibility for clients sending discovery_config instead of discoveryConfig.
-	if rawCfg, ok := rawRequest["discovery_config"]; ok {
-		if _, exists := rawRequest["discoveryConfig"]; !exists {
-			rawRequest["discoveryConfig"] = rawCfg
-		}
-	}
-
 	// Convert the map back to JSON for decoding into struct
 	jsonBytes, err := json.Marshal(rawRequest)
 	if err != nil {
@@ -626,31 +604,31 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if cfgMap, ok := discoveryConfigMap(rawRequest); ok && cfgMap != nil {
 		current := config.CloneDiscoveryConfig(settings.DiscoveryConfig)
 
-		if hasAnyKey(cfgMap, "environment_override", "environmentOverride") {
+		if _, ok := cfgMap["environmentOverride"]; ok {
 			current.EnvironmentOverride = updates.DiscoveryConfig.EnvironmentOverride
 		}
-		if hasAnyKey(cfgMap, "subnet_allowlist", "subnetAllowlist") {
+		if _, ok := cfgMap["subnetAllowlist"]; ok {
 			current.SubnetAllowlist = append([]string(nil), updates.DiscoveryConfig.SubnetAllowlist...)
 		}
-		if hasAnyKey(cfgMap, "subnet_blocklist", "subnetBlocklist") {
+		if _, ok := cfgMap["subnetBlocklist"]; ok {
 			current.SubnetBlocklist = append([]string(nil), updates.DiscoveryConfig.SubnetBlocklist...)
 		}
-		if hasAnyKey(cfgMap, "max_hosts_per_scan", "maxHostsPerScan") {
+		if _, ok := cfgMap["maxHostsPerScan"]; ok {
 			current.MaxHostsPerScan = updates.DiscoveryConfig.MaxHostsPerScan
 		}
-		if hasAnyKey(cfgMap, "max_concurrent", "maxConcurrent") {
+		if _, ok := cfgMap["maxConcurrent"]; ok {
 			current.MaxConcurrent = updates.DiscoveryConfig.MaxConcurrent
 		}
-		if hasAnyKey(cfgMap, "enable_reverse_dns", "enableReverseDns") {
+		if _, ok := cfgMap["enableReverseDns"]; ok {
 			current.EnableReverseDNS = updates.DiscoveryConfig.EnableReverseDNS
 		}
-		if hasAnyKey(cfgMap, "scan_gateways", "scanGateways") {
+		if _, ok := cfgMap["scanGateways"]; ok {
 			current.ScanGateways = updates.DiscoveryConfig.ScanGateways
 		}
-		if hasAnyKey(cfgMap, "dial_timeout_ms", "dialTimeoutMs") {
+		if _, ok := cfgMap["dialTimeoutMs"]; ok {
 			current.DialTimeout = updates.DiscoveryConfig.DialTimeout
 		}
-		if hasAnyKey(cfgMap, "http_timeout_ms", "httpTimeoutMs") {
+		if _, ok := cfgMap["httpTimeoutMs"]; ok {
 			current.HTTPTimeout = updates.DiscoveryConfig.HTTPTimeout
 		}
 
@@ -692,9 +670,6 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 	if _, ok := rawRequest["disableDockerUpdateActions"]; ok {
 		settings.DisableDockerUpdateActions = updates.DisableDockerUpdateActions
-	}
-	if _, ok := rawRequest["disableLegacyRouteRedirects"]; ok {
-		settings.DisableLegacyRouteRedirects = updates.DisableLegacyRouteRedirects
 	}
 	if _, ok := rawRequest["disableLocalUpgradeMetrics"]; ok {
 		settings.DisableLocalUpgradeMetrics = updates.DisableLocalUpgradeMetrics
@@ -796,7 +771,6 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		h.config.TemperatureMonitoringEnabled = settings.TemperatureMonitoringEnabled
 	}
 	h.config.DisableDockerUpdateActions = settings.DisableDockerUpdateActions
-	h.config.DisableLegacyRouteRedirects = settings.DisableLegacyRouteRedirects
 	h.config.DisableLocalUpgradeMetrics = settings.DisableLocalUpgradeMetrics
 	if _, ok := rawRequest["telemetryEnabled"]; ok && settings.TelemetryEnabled != nil {
 		h.config.TelemetryEnabled = *settings.TelemetryEnabled

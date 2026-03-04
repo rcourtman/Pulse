@@ -146,12 +146,15 @@ func (s *Service) Evaluator() *Evaluator {
 }
 
 // Activate validates and activates a license key.
-// It auto-detects activation keys (ppk_live_...) and routes them to ActivateWithKey.
-// Everything else is treated as a legacy JWT.
+// Activation keys (ppk_live_...) are routed to ActivateWithKey.
+// Legacy JWT activation is only allowed in explicit dev mode for test fixtures.
 func (s *Service) Activate(licenseKey string) (*License, error) {
 	licenseKey = strings.TrimSpace(licenseKey)
 	if strings.HasPrefix(licenseKey, ActivationKeyPrefix) {
 		return s.ActivateWithKey(licenseKey)
+	}
+	if !isLicenseValidationDevMode() {
+		return nil, fmt.Errorf("legacy JWT activation is not supported in v6; use /api/license/exchange with existing_jwt")
 	}
 
 	license, err := ValidateLicense(licenseKey)

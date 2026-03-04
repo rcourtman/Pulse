@@ -273,7 +273,7 @@ const Recovery: Component = () => {
 
   const kioskMode = useKioskMode();
 
-  const storageBackupsResources = useStorageRecoveryResources();
+  const storageRecoveryResources = useStorageRecoveryResources();
   const recoveryRollups = useRecoveryRollups();
 
   const [view, setView] = createSignal<RecoveryView>('events');
@@ -404,7 +404,7 @@ const Recovery: Component = () => {
 
   const resourcesById = createMemo(() => {
     const map = new Map<string, Resource>();
-    for (const r of storageBackupsResources.resources() || []) {
+    for (const r of storageRecoveryResources.resources() || []) {
       if (r?.id) map.set(r.id, r);
     }
     return map;

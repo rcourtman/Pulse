@@ -342,37 +342,25 @@ func TestConfigWatcher_PollForChanges(t *testing.T) {
 	assert.Len(t, cfg.APITokens, 1)
 }
 
-func TestConfigWatcher_ReloadConfig_APITokens(t *testing.T) {
+func TestConfigWatcher_ReloadConfig_APITokensIgnored(t *testing.T) {
 	tempDir := t.TempDir()
 	envPath := filepath.Join(tempDir, ".env")
 	// Ensure temp dir is used
 	t.Setenv("PULSE_AUTH_CONFIG_DIR", tempDir)
 
 	cfg := &Config{
-		APITokens: []APITokenRecord{},
+		APITokens: []APITokenRecord{{ID: "id", Hash: "hash"}},
 	}
 	cw, err := NewConfigWatcher(cfg)
 	require.NoError(t, err)
 
-	// Scenario 1: Add tokens via .env (when APITokens empty)
+	// API_TOKEN/API_TOKENS are ignored by watcher reloads in strict v6 mode.
 	envContent := `API_TOKEN="token1"
 API_TOKENS="token2,token3"`
 	require.NoError(t, os.WriteFile(envPath, []byte(envContent), 0644))
 
 	cw.reloadConfig()
 
-	assert.Len(t, cfg.APITokens, 3)
-	assert.True(t, cfg.HasAPITokens())
-
-	// Scenario 2: Legacy tokens ignored if APITokens not empty (manually added via UI/Persistence)
-	// Let's simulate that by adding a token directly to config
-	cfg.APITokens = []APITokenRecord{{ID: "id", Hash: "hash"}}
-
-	envContentUpdated := `API_TOKEN="tokenRefused"`
-	require.NoError(t, os.WriteFile(envPath, []byte(envContentUpdated), 0644))
-
-	cw.reloadConfig()
-	// Should still match manual config, ignoring .env
 	assert.Len(t, cfg.APITokens, 1)
 	assert.Equal(t, "hash", cfg.APITokens[0].Hash)
 }

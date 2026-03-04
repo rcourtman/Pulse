@@ -47,9 +47,9 @@ type AISettingsHandler struct {
 	stateMu                 sync.RWMutex
 	mtPersistence           *config.MultiTenantPersistence
 	mtMonitor               *monitoring.MultiTenantMonitor
-	legacyConfig            *config.Config
-	legacyPersistence       *config.ConfigPersistence
-	legacyAIService         *ai.Service
+	defaultConfig           *config.Config
+	defaultPersistence      *config.ConfigPersistence
+	defaultAIService        *ai.Service
 	aiServices              map[string]*ai.Service
 	aiServicesMu            sync.RWMutex
 	agentServer             *agentexec.Server
@@ -126,11 +126,11 @@ func (h *AISettingsHandler) stateRefs() (
 ) {
 	h.stateMu.RLock()
 	defer h.stateMu.RUnlock()
-	return h.mtPersistence, h.mtMonitor, h.legacyConfig, h.legacyPersistence, h.readState, h.unifiedResourceProvider
+	return h.mtPersistence, h.mtMonitor, h.defaultConfig, h.defaultPersistence, h.readState, h.unifiedResourceProvider
 }
 
 type aiSettingsProviderSnapshot struct {
-	legacyAIService         *ai.Service
+	defaultAIService        *ai.Service
 	stateProvider           ai.StateProvider
 	metadataProvider        ai.MetadataProvider
 	patrolThresholdProvider ai.ThresholdProvider
@@ -177,7 +177,7 @@ func (h *AISettingsHandler) providerSnapshot() aiSettingsProviderSnapshot {
 	h.stateMu.RLock()
 	defer h.stateMu.RUnlock()
 	return aiSettingsProviderSnapshot{
-		legacyAIService:         h.legacyAIService,
+		defaultAIService:        h.defaultAIService,
 		stateProvider:           h.stateProvider,
 		metadataProvider:        h.metadataProvider,
 		patrolThresholdProvider: h.patrolThresholdProvider,
@@ -246,9 +246,9 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 	return &AISettingsHandler{
 		mtPersistence:        mtp,
 		mtMonitor:            mtm,
-		legacyConfig:         defaultConfig,
-		legacyPersistence:    defaultPersistence,
-		legacyAIService:      defaultAIService,
+		defaultConfig:        defaultConfig,
+		defaultPersistence:   defaultPersistence,
+		defaultAIService:     defaultAIService,
 		aiServices:           make(map[string]*ai.Service),
 		agentServer:          agentServer,
 		proxmoxCorrelators:   make(map[string]*proxmox.EventCorrelator),
@@ -270,18 +270,18 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	mtPersistence, mtMonitor, _, _, _, _ := h.stateRefs()
 	providers := h.providerSnapshot()
-	legacyAIService := providers.legacyAIService
+	defaultAIService := providers.defaultAIService
 
 	orgID := GetOrgID(ctx)
 	if orgID == "default" || orgID == "" {
-		return legacyAIService
+		return defaultAIService
 	}
 	if mtPersistence == nil {
 		if mtMonitor != nil {
 			log.Warn().Str("orgID", orgID).Msg("Failed to get persistence manager for tenant AI service")
 			return h.newFailClosedTenantService(orgID)
 		}
-		return legacyAIService
+		return defaultAIService
 	}
 
 	h.aiServicesMu.RLock()
@@ -426,10 +426,10 @@ func (h *AISettingsHandler) RemoveTenantService(orgID string) {
 
 // getConfig returns the config for the current context
 func (h *AISettingsHandler) getConfig(ctx context.Context) *config.Config {
-	_, mtMonitor, legacyConfig, _, _, _ := h.stateRefs()
+	_, mtMonitor, defaultConfig, _, _, _ := h.stateRefs()
 	orgID := strings.TrimSpace(GetOrgID(ctx))
 	if orgID == "" || orgID == "default" {
-		return legacyConfig
+		return defaultConfig
 	}
 	if mtMonitor != nil {
 		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
@@ -438,15 +438,15 @@ func (h *AISettingsHandler) getConfig(ctx context.Context) *config.Config {
 		// Security: never fall back to default config for non-default orgs.
 		return nil
 	}
-	return legacyConfig
+	return defaultConfig
 }
 
 // GetPersistence returns the persistence for the current context
 func (h *AISettingsHandler) getPersistence(ctx context.Context) *config.ConfigPersistence {
-	mtPersistence, _, _, legacyPersistence, _, _ := h.stateRefs()
+	mtPersistence, _, _, defaultPersistence, _, _ := h.stateRefs()
 	orgID := strings.TrimSpace(GetOrgID(ctx))
 	if orgID == "" || orgID == "default" {
-		return legacyPersistence
+		return defaultPersistence
 	}
 	if mtPersistence != nil {
 		if p, err := mtPersistence.GetPersistence(orgID); err == nil && p != nil {
@@ -455,7 +455,7 @@ func (h *AISettingsHandler) getPersistence(ctx context.Context) *config.ConfigPe
 		// Security: never fall back to default persistence for non-default orgs.
 		return nil
 	}
-	return legacyPersistence
+	return defaultPersistence
 }
 
 // SetMultiTenantPersistence updates the persistence manager
@@ -479,7 +479,7 @@ func (h *AISettingsHandler) SetConfig(cfg *config.Config) {
 	}
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	h.legacyConfig = cfg
+	h.defaultConfig = cfg
 }
 
 // setSSECORSHeaders validates the request origin against the configured AllowedOrigins
@@ -507,10 +507,10 @@ func (h *AISettingsHandler) setSSECORSHeaders(w http.ResponseWriter, r *http.Req
 func (h *AISettingsHandler) SetStateProvider(sp ai.StateProvider) {
 	h.stateMu.Lock()
 	h.stateProvider = sp
-	legacyAIService := h.legacyAIService
+	defaultAIService := h.defaultAIService
 	h.stateMu.Unlock()
-	if legacyAIService != nil {
-		legacyAIService.SetStateProvider(sp)
+	if defaultAIService != nil {
+		defaultAIService.SetStateProvider(sp)
 	}
 
 	h.aiServicesMu.Lock()
@@ -525,8 +525,8 @@ func (h *AISettingsHandler) SetStateProvider(sp ai.StateProvider) {
 	// Try to set up the investigation orchestrator if chat handler is ready.
 	// Note: This usually fails because chat service isn't started yet.
 	// The orchestrator will be wired via WireOrchestratorAfterChatStart() instead.
-	if legacyAIService != nil && isAIInvestigationEnabled() {
-		h.setupInvestigationOrchestrator("default", legacyAIService)
+	if defaultAIService != nil && isAIInvestigationEnabled() {
+		h.setupInvestigationOrchestrator("default", defaultAIService)
 		h.aiServicesMu.RLock()
 		for orgID, svc := range h.aiServices {
 			h.setupInvestigationOrchestrator(orgID, svc)
@@ -616,11 +616,11 @@ func (h *AISettingsHandler) SetReadState(rs unifiedresources.ReadState) {
 	}
 	h.stateMu.Lock()
 	h.readState = rs
-	legacyAIService := h.legacyAIService
+	defaultAIService := h.defaultAIService
 	h.stateMu.Unlock()
 
-	if legacyAIService != nil {
-		legacyAIService.SetReadState(h.readStateForOrg("default"))
+	if defaultAIService != nil {
+		defaultAIService.SetReadState(h.readStateForOrg("default"))
 	}
 
 	h.aiServicesMu.Lock()
@@ -639,11 +639,11 @@ func (h *AISettingsHandler) SetUnifiedResourceProvider(urp ai.UnifiedResourcePro
 	}
 	h.stateMu.Lock()
 	h.unifiedResourceProvider = urp
-	legacyAIService := h.legacyAIService
+	defaultAIService := h.defaultAIService
 	h.stateMu.Unlock()
 
-	if legacyAIService != nil {
-		legacyAIService.SetUnifiedResourceProvider(h.unifiedResourceProviderForOrg("default"))
+	if defaultAIService != nil {
+		defaultAIService.SetUnifiedResourceProvider(h.unifiedResourceProviderForOrg("default"))
 	}
 
 	h.aiServicesMu.Lock()
@@ -659,10 +659,10 @@ func (h *AISettingsHandler) SetUnifiedResourceProvider(urp ai.UnifiedResourcePro
 func (h *AISettingsHandler) SetMetadataProvider(mp ai.MetadataProvider) {
 	h.stateMu.Lock()
 	h.metadataProvider = mp
-	legacyAIService := h.legacyAIService
+	defaultAIService := h.defaultAIService
 	h.stateMu.Unlock()
-	if legacyAIService != nil {
-		legacyAIService.SetMetadataProvider(mp)
+	if defaultAIService != nil {
+		defaultAIService.SetMetadataProvider(mp)
 	}
 
 	h.aiServicesMu.Lock()
@@ -686,17 +686,17 @@ func (h *AISettingsHandler) IsAIEnabled(ctx context.Context) bool {
 func (h *AISettingsHandler) SetPatrolThresholdProvider(provider ai.ThresholdProvider) {
 	h.stateMu.Lock()
 	h.patrolThresholdProvider = provider
-	legacyAIService := h.legacyAIService
+	defaultAIService := h.defaultAIService
 	h.stateMu.Unlock()
-	if legacyAIService != nil {
-		legacyAIService.SetPatrolThresholdProvider(provider)
+	if defaultAIService != nil {
+		defaultAIService.SetPatrolThresholdProvider(provider)
 	}
 }
 
 // SetPatrolFindingsPersistence enables findings persistence for the patrol service
 func (h *AISettingsHandler) SetPatrolFindingsPersistence(persistence ai.FindingsPersistence) error {
 	var firstErr error
-	if patrol := h.legacyAIService.GetPatrolService(); patrol != nil {
+	if patrol := h.defaultAIService.GetPatrolService(); patrol != nil {
 		if err := patrol.SetFindingsPersistence(persistence); err != nil {
 			firstErr = err
 		}
@@ -720,7 +720,7 @@ func (h *AISettingsHandler) SetPatrolFindingsPersistence(persistence ai.Findings
 // SetPatrolRunHistoryPersistence enables patrol run history persistence for the patrol service
 func (h *AISettingsHandler) SetPatrolRunHistoryPersistence(persistence ai.PatrolHistoryPersistence) error {
 	var firstErr error
-	if patrol := h.legacyAIService.GetPatrolService(); patrol != nil {
+	if patrol := h.defaultAIService.GetPatrolService(); patrol != nil {
 		if err := patrol.SetRunHistoryPersistence(persistence); err != nil {
 			firstErr = err
 		}
@@ -745,10 +745,10 @@ func (h *AISettingsHandler) SetPatrolRunHistoryPersistence(persistence ai.Patrol
 func (h *AISettingsHandler) SetMetricsHistoryProvider(provider ai.MetricsHistoryProvider) {
 	h.stateMu.Lock()
 	h.metricsHistoryProvider = provider
-	legacyAIService := h.legacyAIService
+	defaultAIService := h.defaultAIService
 	h.stateMu.Unlock()
-	if legacyAIService != nil {
-		legacyAIService.SetMetricsHistoryProvider(provider)
+	if defaultAIService != nil {
+		defaultAIService.SetMetricsHistoryProvider(provider)
 	}
 }
 
@@ -756,10 +756,10 @@ func (h *AISettingsHandler) SetMetricsHistoryProvider(provider ai.MetricsHistory
 func (h *AISettingsHandler) SetBaselineStore(store *ai.BaselineStore) {
 	h.stateMu.Lock()
 	h.baselineStore = store
-	legacyAIService := h.legacyAIService
+	defaultAIService := h.defaultAIService
 	h.stateMu.Unlock()
-	if legacyAIService != nil {
-		legacyAIService.SetBaselineStore(store)
+	if defaultAIService != nil {
+		defaultAIService.SetBaselineStore(store)
 	}
 }
 
@@ -767,10 +767,10 @@ func (h *AISettingsHandler) SetBaselineStore(store *ai.BaselineStore) {
 func (h *AISettingsHandler) SetChangeDetector(detector *ai.ChangeDetector) {
 	h.stateMu.Lock()
 	h.changeDetector = detector
-	legacyAIService := h.legacyAIService
+	defaultAIService := h.defaultAIService
 	h.stateMu.Unlock()
-	if legacyAIService != nil {
-		legacyAIService.SetChangeDetector(detector)
+	if defaultAIService != nil {
+		defaultAIService.SetChangeDetector(detector)
 	}
 }
 
@@ -778,10 +778,10 @@ func (h *AISettingsHandler) SetChangeDetector(detector *ai.ChangeDetector) {
 func (h *AISettingsHandler) SetRemediationLog(remLog *ai.RemediationLog) {
 	h.stateMu.Lock()
 	h.remediationLog = remLog
-	legacyAIService := h.legacyAIService
+	defaultAIService := h.defaultAIService
 	h.stateMu.Unlock()
-	if legacyAIService != nil {
-		legacyAIService.SetRemediationLog(remLog)
+	if defaultAIService != nil {
+		defaultAIService.SetRemediationLog(remLog)
 	}
 }
 
@@ -807,10 +807,10 @@ func (h *AISettingsHandler) SetIncidentStoreForOrg(orgID string, store *memory.I
 	if orgID == "default" {
 		h.stateMu.Lock()
 		h.incidentStore = store
-		legacyAIService := h.legacyAIService
+		defaultAIService := h.defaultAIService
 		h.stateMu.Unlock()
-		if legacyAIService != nil {
-			legacyAIService.SetIncidentStore(store)
+		if defaultAIService != nil {
+			defaultAIService.SetIncidentStore(store)
 		}
 	}
 
@@ -847,10 +847,10 @@ func (h *AISettingsHandler) GetIncidentStoreForOrg(orgID string) *memory.Inciden
 func (h *AISettingsHandler) SetPatternDetector(detector *ai.PatternDetector) {
 	h.stateMu.Lock()
 	h.patternDetector = detector
-	legacyAIService := h.legacyAIService
+	defaultAIService := h.defaultAIService
 	h.stateMu.Unlock()
-	if legacyAIService != nil {
-		legacyAIService.SetPatternDetector(detector)
+	if defaultAIService != nil {
+		defaultAIService.SetPatternDetector(detector)
 	}
 }
 
@@ -858,10 +858,10 @@ func (h *AISettingsHandler) SetPatternDetector(detector *ai.PatternDetector) {
 func (h *AISettingsHandler) SetCorrelationDetector(detector *ai.CorrelationDetector) {
 	h.stateMu.Lock()
 	h.correlationDetector = detector
-	legacyAIService := h.legacyAIService
+	defaultAIService := h.defaultAIService
 	h.stateMu.Unlock()
-	if legacyAIService != nil {
-		legacyAIService.SetCorrelationDetector(detector)
+	if defaultAIService != nil {
+		defaultAIService.SetCorrelationDetector(detector)
 	}
 }
 
@@ -1217,10 +1217,10 @@ func (h *AISettingsHandler) SetDiscoveryStoreForOrg(orgID string, store *service
 	if orgID == "default" {
 		h.stateMu.Lock()
 		h.discoveryStore = store
-		legacyAIService := h.legacyAIService
+		defaultAIService := h.defaultAIService
 		h.stateMu.Unlock()
-		if legacyAIService != nil {
-			legacyAIService.SetDiscoveryStore(store)
+		if defaultAIService != nil {
+			defaultAIService.SetDiscoveryStore(store)
 		}
 	}
 
@@ -1543,8 +1543,8 @@ func (h *AISettingsHandler) ListIncidentRecorders() map[string]*metrics.Incident
 
 // StopPatrol stops the background AI patrol service
 func (h *AISettingsHandler) StopPatrol() {
-	if h.legacyAIService != nil {
-		h.legacyAIService.StopPatrol()
+	if h.defaultAIService != nil {
+		h.defaultAIService.StopPatrol()
 	}
 	h.aiServicesMu.RLock()
 	services := make([]*ai.Service, 0, len(h.aiServices))
@@ -1563,8 +1563,8 @@ func (h *AISettingsHandler) StopPatrol() {
 func (h *AISettingsHandler) StopPatrolForOrg(orgID string) {
 	orgID = normalizeAIIntelligenceOrgID(orgID)
 	if orgID == "default" {
-		if h.legacyAIService != nil {
-			h.legacyAIService.StopPatrol()
+		if h.defaultAIService != nil {
+			h.defaultAIService.StopPatrol()
 		}
 		return
 	}
@@ -1633,17 +1633,16 @@ func (h *AISettingsHandler) GetAlertTriggeredAnalyzer(ctx context.Context) aicon
 func (h *AISettingsHandler) SetLicenseHandlers(handlers *LicenseHandlers) {
 	h.stateMu.Lock()
 	h.licenseHandlers = handlers
-	legacyAIService := h.legacyAIService
+	defaultAIService := h.defaultAIService
 	h.stateMu.Unlock()
 	if handlers == nil {
 		return
 	}
-	// Update legacy service?
-	// legacy service needs a legacy/default license checker?
-	// We can try to get it using background context (default tenant)
+	// Update default-org service with the current license checker.
+	// We can try to get it using background context (default tenant).
 	if svc, _, err := handlers.getTenantComponents(context.Background()); err == nil {
-		if legacyAIService != nil {
-			legacyAIService.SetLicenseChecker(svc)
+		if defaultAIService != nil {
+			defaultAIService.SetLicenseChecker(svc)
 		}
 	}
 }
@@ -1665,7 +1664,7 @@ func (h *AISettingsHandler) SetOnControlSettingsChange(callback func()) {
 func (h *AISettingsHandler) SetChatHandler(chatHandler *AIHandler) {
 	h.stateMu.Lock()
 	h.chatHandler = chatHandler
-	legacyAIService := h.legacyAIService
+	defaultAIService := h.defaultAIService
 	h.stateMu.Unlock()
 	h.investigationMu.Lock()
 	if h.investigationStores == nil {
@@ -1673,11 +1672,11 @@ func (h *AISettingsHandler) SetChatHandler(chatHandler *AIHandler) {
 	}
 	h.investigationMu.Unlock()
 
-	// Wire up orchestrator for the legacy service
+	// Wire up orchestrator for the default-org service.
 	// Note: This usually fails because chat service isn't started yet.
 	// The orchestrator will be wired via WireOrchestratorAfterChatStart() instead.
-	if legacyAIService != nil && isAIInvestigationEnabled() {
-		h.setupInvestigationOrchestrator("default", legacyAIService)
+	if defaultAIService != nil && isAIInvestigationEnabled() {
+		h.setupInvestigationOrchestrator("default", defaultAIService)
 	}
 
 	// Wire up orchestrator for any existing services
@@ -1701,16 +1700,16 @@ func (h *AISettingsHandler) WireOrchestratorAfterChatStart() {
 
 	h.stateMu.RLock()
 	hasChatHandler := h.chatHandler != nil
-	legacyAIService := h.legacyAIService
+	defaultAIService := h.defaultAIService
 	h.stateMu.RUnlock()
 	if !hasChatHandler {
 		log.Warn().Msg("WireOrchestratorAfterChatStart called but chatHandler is nil")
 		return
 	}
 
-	// Wire up orchestrator for the legacy service
-	if legacyAIService != nil {
-		h.setupInvestigationOrchestrator("default", legacyAIService)
+	// Wire up orchestrator for the default-org service.
+	if defaultAIService != nil {
+		h.setupInvestigationOrchestrator("default", defaultAIService)
 	}
 
 	// Wire up orchestrator for any existing services
@@ -1755,9 +1754,9 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 	if !exists {
 		// Get data directory from persistence
 		var dataDir string
-		mtPersistence, _, _, legacyPersistence, _, _ := h.stateRefs()
-		if legacyPersistence != nil && orgID == "default" {
-			dataDir = legacyPersistence.DataDir()
+		mtPersistence, _, _, defaultPersistence, _, _ := h.stateRefs()
+		if defaultPersistence != nil && orgID == "default" {
+			dataDir = defaultPersistence.DataDir()
 		} else if mtPersistence != nil {
 			if p, err := mtPersistence.GetPersistence(orgID); err == nil {
 				dataDir = p.DataDir()
@@ -2139,22 +2138,17 @@ func (a *autonomyLevelProviderAdapter) IsFullModeUnlocked() bool {
 // AISettingsResponse is returned by GET /api/settings/ai
 // API keys are masked for security
 type AISettingsResponse struct {
-	Enabled        bool   `json:"enabled"`
-	Provider       string `json:"provider"`    // DEPRECATED: legacy single provider
-	APIKeySet      bool   `json:"api_key_set"` // DEPRECATED: true if legacy API key is configured
-	Model          string `json:"model"`
-	ChatModel      string `json:"chat_model,omitempty"`     // Model for interactive chat (empty = use default)
-	PatrolModel    string `json:"patrol_model,omitempty"`   // Model for patrol (empty = use default)
-	AutoFixModel   string `json:"auto_fix_model,omitempty"` // Model for auto-fix (empty = use patrol model)
-	BaseURL        string `json:"base_url,omitempty"`       // DEPRECATED: legacy base URL
-	Configured     bool   `json:"configured"`               // true if AI is ready to use
-	AutonomousMode bool   `json:"autonomous_mode"`          // true if AI can execute without approval
-	CustomContext  string `json:"custom_context"`           // user-provided infrastructure context
+	Enabled       bool   `json:"enabled"`
+	Model         string `json:"model"`
+	ChatModel     string `json:"chat_model,omitempty"`     // Model for interactive chat (empty = use default)
+	PatrolModel   string `json:"patrol_model,omitempty"`   // Model for patrol (empty = use default)
+	AutoFixModel  string `json:"auto_fix_model,omitempty"` // Model for auto-fix (empty = use patrol model)
+	Configured    bool   `json:"configured"`               // true if AI is ready to use
+	CustomContext string `json:"custom_context"`           // user-provided infrastructure context
 	// OAuth fields for Claude Pro/Max subscription authentication
 	AuthMethod     string `json:"auth_method"`     // "api_key" or "oauth"
 	OAuthConnected bool   `json:"oauth_connected"` // true if OAuth tokens are configured
 	// Patrol settings for token efficiency
-	PatrolSchedulePreset       string                `json:"patrol_schedule_preset"`        // DEPRECATED: legacy preset
 	PatrolIntervalMinutes      int                   `json:"patrol_interval_minutes"`       // Patrol interval in minutes (0 = disabled)
 	PatrolEnabled              bool                  `json:"patrol_enabled"`                // true if patrol is enabled
 	PatrolAutoFix              bool                  `json:"patrol_auto_fix"`               // true if patrol can auto-fix issues
@@ -2192,25 +2186,20 @@ type AISettingsResponse struct {
 
 // AISettingsUpdateRequest is the request body for PUT /api/settings/ai
 type AISettingsUpdateRequest struct {
-	Enabled        *bool   `json:"enabled,omitempty"`
-	Provider       *string `json:"provider,omitempty"` // DEPRECATED: use model selection instead
-	APIKey         *string `json:"api_key,omitempty"`  // DEPRECATED: use per-provider keys
-	Model          *string `json:"model,omitempty"`
-	ChatModel      *string `json:"chat_model,omitempty"`     // Model for interactive chat
-	PatrolModel    *string `json:"patrol_model,omitempty"`   // Model for background patrol
-	AutoFixModel   *string `json:"auto_fix_model,omitempty"` // Model for auto-fix remediation
-	BaseURL        *string `json:"base_url,omitempty"`       // DEPRECATED: use per-provider URLs
-	AutonomousMode *bool   `json:"autonomous_mode,omitempty"`
-	CustomContext  *string `json:"custom_context,omitempty"` // user-provided infrastructure context
-	AuthMethod     *string `json:"auth_method,omitempty"`    // "api_key" or "oauth"
+	Enabled       *bool   `json:"enabled,omitempty"`
+	Model         *string `json:"model,omitempty"`
+	ChatModel     *string `json:"chat_model,omitempty"`     // Model for interactive chat
+	PatrolModel   *string `json:"patrol_model,omitempty"`   // Model for background patrol
+	AutoFixModel  *string `json:"auto_fix_model,omitempty"` // Model for auto-fix remediation
+	CustomContext *string `json:"custom_context,omitempty"` // user-provided infrastructure context
+	AuthMethod    *string `json:"auth_method,omitempty"`    // "api_key" or "oauth"
 	// Patrol settings for token efficiency
-	PatrolSchedulePreset       *string `json:"patrol_schedule_preset,omitempty"`        // DEPRECATED: use patrol_interval_minutes
-	PatrolIntervalMinutes      *int    `json:"patrol_interval_minutes,omitempty"`       // Custom interval in minutes (0 = disabled, minimum 10)
-	PatrolEnabled              *bool   `json:"patrol_enabled,omitempty"`                // true if patrol is enabled
-	PatrolAutoFix              *bool   `json:"patrol_auto_fix,omitempty"`               // true if patrol can auto-fix issues
-	AlertTriggeredAnalysis     *bool   `json:"alert_triggered_analysis,omitempty"`      // true if AI analyzes when alerts fire
-	PatrolEventTriggersEnabled *bool   `json:"patrol_event_triggers_enabled,omitempty"` // true if event-driven patrol triggers (alerts, anomalies) are enabled
-	UseProactiveThresholds     *bool   `json:"use_proactive_thresholds,omitempty"`      // true if patrol warns before thresholds (default: false = exact thresholds)
+	PatrolIntervalMinutes      *int  `json:"patrol_interval_minutes,omitempty"`       // Custom interval in minutes (0 = disabled, minimum 10)
+	PatrolEnabled              *bool `json:"patrol_enabled,omitempty"`                // true if patrol is enabled
+	PatrolAutoFix              *bool `json:"patrol_auto_fix,omitempty"`               // true if patrol can auto-fix issues
+	AlertTriggeredAnalysis     *bool `json:"alert_triggered_analysis,omitempty"`      // true if AI analyzes when alerts fire
+	PatrolEventTriggersEnabled *bool `json:"patrol_event_triggers_enabled,omitempty"` // true if event-driven patrol triggers (alerts, anomalies) are enabled
+	UseProactiveThresholds     *bool `json:"use_proactive_thresholds,omitempty"`      // true if patrol warns before thresholds (default: false = exact thresholds)
 	// Multi-provider credentials
 	AnthropicAPIKey  *string `json:"anthropic_api_key,omitempty"`  // Set Anthropic API key
 	OpenAIAPIKey     *string `json:"openai_api_key,omitempty"`     // Set OpenAI API key
@@ -2290,20 +2279,15 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 
 	response := AISettingsResponse{
 		Enabled:        settings.Enabled || isDemo,
-		Provider:       settings.Provider,
-		APIKeySet:      settings.APIKey != "",
 		Model:          settings.GetModel(),
 		ChatModel:      settings.ChatModel,
 		PatrolModel:    settings.PatrolModel,
 		AutoFixModel:   settings.AutoFixModel,
-		BaseURL:        settings.BaseURL,
 		Configured:     settings.IsConfigured() || isDemo,
-		AutonomousMode: settings.IsAutonomous(), // Derived from control_level
 		CustomContext:  settings.CustomContext,
 		AuthMethod:     authMethod,
 		OAuthConnected: settings.OAuthAccessToken != "",
 		// Patrol settings
-		PatrolSchedulePreset:       settings.PatrolSchedulePreset,
 		PatrolIntervalMinutes:      settings.PatrolIntervalMinutes,
 		PatrolEnabled:              settings.PatrolEnabled,
 		PatrolAutoFix:              settings.PatrolAutoFix,
@@ -2392,22 +2376,6 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	}
 
 	// Validate and apply updates
-	if req.Provider != nil {
-		provider := strings.ToLower(strings.TrimSpace(*req.Provider))
-		switch provider {
-		case config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderOpenRouter, config.AIProviderOllama, config.AIProviderDeepSeek, config.AIProviderGemini:
-			settings.Provider = provider
-		default:
-			http.Error(w, "Invalid provider. Must be 'anthropic', 'openai', 'openrouter', 'ollama', 'deepseek', or 'gemini'", http.StatusBadRequest)
-			return
-		}
-	}
-
-	if req.APIKey != nil {
-		// Empty string clears the API key
-		settings.APIKey = strings.TrimSpace(*req.APIKey)
-	}
-
 	if req.Model != nil {
 		settings.Model = strings.TrimSpace(*req.Model)
 	}
@@ -2435,28 +2403,6 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 
 	if req.UseProactiveThresholds != nil {
 		settings.UseProactiveThresholds = *req.UseProactiveThresholds
-	}
-
-	if req.BaseURL != nil {
-		settings.BaseURL = strings.TrimSpace(*req.BaseURL)
-	}
-
-	if req.AutonomousMode != nil {
-		// Legacy: autonomous_mode now maps to control_level for backwards compatibility
-		if *req.AutonomousMode {
-			// Autonomous mode requires Pro license with ai_autofix feature
-			if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
-				WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Autonomous Mode requires Pulse Pro")
-				return
-			}
-			settings.ControlLevel = config.ControlLevelAutonomous
-			settings.AutonomousMode = true
-		} else if settings.GetControlLevel() == config.ControlLevelAutonomous {
-			// Only downgrade from autonomous to controlled; preserve other levels
-			// (e.g., don't change read_only to controlled)
-			settings.ControlLevel = config.ControlLevelControlled
-			settings.AutonomousMode = false
-		}
 	}
 
 	if req.CustomContext != nil {
@@ -2506,9 +2452,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		// Only allow enabling if at least one provider is configured OR quickstart credits are available
 		if *req.Enabled {
 			configuredProviders := settings.GetConfiguredProviders()
-			// Also check legacy single-provider credentials (Provider + APIKey fields).
-			hasLegacyBYOK := (settings.Provider != "" && settings.APIKey != "") || settings.Provider == config.AIProviderOllama
-			if len(configuredProviders) == 0 && !hasLegacyBYOK {
+			if len(configuredProviders) == 0 {
 				// Check if quickstart credits can bridge the gap
 				aiSvc := h.GetAIService(r.Context())
 				hasQuickstart := false
@@ -2563,37 +2507,16 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		}
 
 		settings.PatrolIntervalMinutes = minutes
-		settings.PatrolSchedulePreset = "" // Clear preset when using custom minutes
 		if minutes > 0 {
 			settings.PatrolEnabled = true // Enable patrol when setting custom interval
 		} else {
 			settings.PatrolEnabled = false // Disable patrol when setting interval to 0
 		}
-	} else if req.PatrolSchedulePreset != nil {
-		// Legacy preset support
-		preset := strings.ToLower(strings.TrimSpace(*req.PatrolSchedulePreset))
-		switch preset {
-		case "15min", "1hr", "6hr", "12hr", "daily":
-			settings.PatrolSchedulePreset = preset
-			settings.PatrolIntervalMinutes = config.PresetToMinutes(preset)
-			settings.PatrolEnabled = true // Enable patrol when setting schedule preset
-		case "disabled":
-			settings.PatrolSchedulePreset = preset
-			settings.PatrolIntervalMinutes = 0
-			settings.PatrolEnabled = false // Disable patrol when using disabled preset
-		default:
-			http.Error(w, "Invalid patrol_schedule_preset. Must be '15min', '1hr', '6hr', '12hr', 'daily', or 'disabled'", http.StatusBadRequest)
-			return
-		}
 	}
 
-	if req.PatrolEnabled != nil && req.PatrolIntervalMinutes == nil && req.PatrolSchedulePreset == nil {
+	if req.PatrolEnabled != nil && req.PatrolIntervalMinutes == nil {
 		settings.PatrolEnabled = *req.PatrolEnabled
 		if *req.PatrolEnabled {
-			// Re-enable if legacy preset was disabled
-			if strings.EqualFold(settings.PatrolSchedulePreset, "disabled") {
-				settings.PatrolSchedulePreset = ""
-			}
 			// Ensure we have a sane default interval when turning on
 			if settings.PatrolIntervalMinutes <= 0 {
 				settings.PatrolIntervalMinutes = 360
@@ -2640,14 +2563,11 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	// Handle infrastructure control settings
 	if req.ControlLevel != nil {
 		level := strings.TrimSpace(*req.ControlLevel)
-		if level == "suggest" {
-			level = config.ControlLevelControlled
-		}
 		if !config.IsValidControlLevel(level) {
 			http.Error(w, "invalid control_level: must be read_only, controlled, or autonomous", http.StatusBadRequest)
 			return
 		}
-		// "autonomous" requires Pro license (same as autonomous_mode)
+		// "autonomous" requires Pro license
 		if level == config.ControlLevelAutonomous {
 			if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
 				WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Autonomous control requires Pulse Pro")
@@ -2655,8 +2575,6 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 			}
 		}
 		settings.ControlLevel = level
-		// Keep legacy AutonomousMode in sync to prevent fallback issues
-		settings.AutonomousMode = (level == config.ControlLevelAutonomous)
 	}
 
 	// Handle protected guests (nil = don't update)
@@ -2723,21 +2641,20 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 
 	// Update MCP control settings if control level or protected guests changed
 	// This updates tool visibility without restarting AI chat
-	// Note: req.AutonomousMode also maps to control_level for backwards compatibility
-	if h.onControlSettingsChange != nil && (req.ControlLevel != nil || req.ProtectedGuests != nil || req.AutonomousMode != nil) {
+	if h.onControlSettingsChange != nil && (req.ControlLevel != nil || req.ProtectedGuests != nil) {
 		h.onControlSettingsChange()
 	}
 
+	providerName, _ := config.ParseModelString(settings.GetModel())
 	LogAuditEventForTenant(GetOrgID(r.Context()), "ai_settings_updated", getAuthUsername(h.getConfig(r.Context()), r), GetClientIP(r), r.URL.Path, true,
-		fmt.Sprintf("AI settings updated: enabled=%t provider=%s model=%s", settings.Enabled, settings.Provider, settings.GetModel()))
+		fmt.Sprintf("AI settings updated: enabled=%t provider=%s model=%s", settings.Enabled, providerName, settings.GetModel()))
 
 	log.Info().
 		Bool("enabled", settings.Enabled).
-		Str("provider", settings.Provider).
+		Str("provider", providerName).
 		Str("model", settings.GetModel()).
 		Str("chatModel", settings.ChatModel).
 		Str("patrolModel", settings.PatrolModel).
-		Str("patrolPreset", settings.PatrolSchedulePreset).
 		Bool("alertTriggeredAnalysis", settings.AlertTriggeredAnalysis).
 		Msg("AI settings updated")
 
@@ -2750,19 +2667,14 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	// Return updated settings
 	response := AISettingsResponse{
 		Enabled:                    settings.Enabled,
-		Provider:                   settings.Provider,
-		APIKeySet:                  settings.APIKey != "",
 		Model:                      settings.GetModel(),
 		ChatModel:                  settings.ChatModel,
 		PatrolModel:                settings.PatrolModel,
 		AutoFixModel:               settings.AutoFixModel,
-		BaseURL:                    settings.BaseURL,
 		Configured:                 settings.IsConfigured(),
-		AutonomousMode:             settings.IsAutonomous(), // Derived from control_level
 		CustomContext:              settings.CustomContext,
 		AuthMethod:                 authMethod,
 		OAuthConnected:             settings.OAuthAccessToken != "",
-		PatrolSchedulePreset:       settings.PatrolSchedulePreset,
 		PatrolIntervalMinutes:      settings.PatrolIntervalMinutes,
 		PatrolEnabled:              settings.PatrolEnabled,
 		PatrolAutoFix:              settings.PatrolAutoFix,
@@ -4292,9 +4204,9 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 }
 
 // SetAlertProvider sets the alert provider for AI context
-// Sets on both the legacy service and all tenant services to ensure multi-tenant support.
+// Sets on both the default-org service and all tenant services to ensure multi-tenant support.
 func (h *AISettingsHandler) SetAlertProvider(ap ai.AlertProvider) {
-	h.legacyAIService.SetAlertProvider(ap)
+	h.defaultAIService.SetAlertProvider(ap)
 
 	h.aiServicesMu.RLock()
 	defer h.aiServicesMu.RUnlock()
@@ -4304,9 +4216,9 @@ func (h *AISettingsHandler) SetAlertProvider(ap ai.AlertProvider) {
 }
 
 // SetAlertResolver sets the alert resolver for AI Patrol autonomous alert management
-// Sets on both the legacy service and all tenant services to ensure multi-tenant support.
+// Sets on both the default-org service and all tenant services to ensure multi-tenant support.
 func (h *AISettingsHandler) SetAlertResolver(resolver ai.AlertResolver) {
-	h.legacyAIService.SetAlertResolver(resolver)
+	h.defaultAIService.SetAlertResolver(resolver)
 
 	h.aiServicesMu.RLock()
 	defer h.aiServicesMu.RUnlock()
@@ -4510,7 +4422,6 @@ func (h *AISettingsHandler) HandleOAuthExchange(w http.ResponseWriter, r *http.R
 	}
 
 	// Update settings
-	settings.Provider = config.AIProviderAnthropic
 	settings.AuthMethod = config.AuthMethodOAuth
 	settings.OAuthAccessToken = tokens.AccessToken
 	settings.OAuthRefreshToken = tokens.RefreshToken
@@ -4519,7 +4430,7 @@ func (h *AISettingsHandler) HandleOAuthExchange(w http.ResponseWriter, r *http.R
 
 	// If we got an API key, use it; otherwise use OAuth tokens directly
 	if apiKey != "" {
-		settings.APIKey = apiKey
+		settings.AnthropicAPIKey = apiKey
 	} else {
 		// Pro/Max users: clear any old API key, will use OAuth client
 		settings.ClearAPIKey()
@@ -4620,7 +4531,6 @@ func (h *AISettingsHandler) HandleOAuthCallback(w http.ResponseWriter, r *http.R
 	}
 
 	// Update settings with OAuth tokens
-	settings.Provider = config.AIProviderAnthropic
 	settings.AuthMethod = config.AuthMethodOAuth
 	settings.OAuthAccessToken = tokens.AccessToken
 	settings.OAuthRefreshToken = tokens.RefreshToken
@@ -6191,236 +6101,6 @@ func (h *AISettingsHandler) HandleGetDismissedFindings(w http.ResponseWriter, r 
 	if err := utils.WriteJSONResponse(w, dismissed); err != nil {
 		log.Error().Err(err).Msg("Failed to write dismissed findings response")
 	}
-}
-
-// ============================================
-// AI Chat Sessions API
-// ============================================
-
-// HandleListAIChatSessions lists all chat sessions for the current user (GET /api/ai/chat/sessions)
-func (h *AISettingsHandler) HandleListAIChatSessions(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
-		return
-	}
-
-	// Get username from auth context
-	username := getAuthUsername(h.getConfig(r.Context()), r)
-
-	sessions, err := h.getPersistence(r.Context()).GetAIChatSessionsForUser(username)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to load chat sessions")
-		http.Error(w, "Failed to load chat sessions", http.StatusInternalServerError)
-		return
-	}
-
-	// Return summary (without full messages) for list view
-	type sessionSummary struct {
-		ID           string    `json:"id"`
-		Title        string    `json:"title"`
-		MessageCount int       `json:"message_count"`
-		CreatedAt    time.Time `json:"created_at"`
-		UpdatedAt    time.Time `json:"updated_at"`
-	}
-
-	summaries := make([]sessionSummary, 0, len(sessions))
-	for _, s := range sessions {
-		summaries = append(summaries, sessionSummary{
-			ID:           s.ID,
-			Title:        s.Title,
-			MessageCount: len(s.Messages),
-			CreatedAt:    s.CreatedAt,
-			UpdatedAt:    s.UpdatedAt,
-		})
-	}
-
-	if err := utils.WriteJSONResponse(w, summaries); err != nil {
-		log.Error().Err(err).Msg("Failed to write chat sessions response")
-	}
-}
-
-// HandleGetAIChatSession returns a specific chat session (GET /api/ai/chat/sessions/{id})
-func (h *AISettingsHandler) HandleGetAIChatSession(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
-		return
-	}
-
-	// Extract session ID from URL
-	sessionID := strings.TrimPrefix(r.URL.Path, "/api/ai/chat/sessions/")
-	if sessionID == "" {
-		http.Error(w, "Session ID required", http.StatusBadRequest)
-		return
-	}
-
-	username := getAuthUsername(h.getConfig(r.Context()), r)
-
-	sessionsData, err := h.getPersistence(r.Context()).LoadAIChatSessions()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to load chat sessions")
-		http.Error(w, "Failed to load chat sessions", http.StatusInternalServerError)
-		return
-	}
-
-	session, exists := sessionsData.Sessions[sessionID]
-	if !exists {
-		http.Error(w, "Session not found", http.StatusNotFound)
-		return
-	}
-
-	// Check ownership (allow access if single-user or username matches)
-	if session.Username != "" && session.Username != username {
-		http.Error(w, "Access denied", http.StatusForbidden)
-		return
-	}
-
-	if err := utils.WriteJSONResponse(w, session); err != nil {
-		log.Error().Err(err).Msg("Failed to write chat session response")
-	}
-}
-
-// HandleSaveAIChatSession creates or updates a chat session (PUT /api/ai/chat/sessions/{id})
-func (h *AISettingsHandler) HandleSaveAIChatSession(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
-		return
-	}
-
-	// Extract session ID from URL
-	sessionID := strings.TrimPrefix(r.URL.Path, "/api/ai/chat/sessions/")
-	if sessionID == "" {
-		http.Error(w, "Session ID required", http.StatusBadRequest)
-		return
-	}
-
-	username := getAuthUsername(h.getConfig(r.Context()), r)
-
-	// Parse request body
-	var session config.AIChatSession
-	if err := json.NewDecoder(r.Body).Decode(&session); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Ensure session ID matches URL
-	session.ID = sessionID
-
-	// Check ownership if session exists
-	existingData, err := h.getPersistence(r.Context()).LoadAIChatSessions()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to load chat sessions")
-		http.Error(w, "Failed to load chat sessions", http.StatusInternalServerError)
-		return
-	}
-
-	if existing, exists := existingData.Sessions[sessionID]; exists {
-		// Check ownership
-		if existing.Username != "" && existing.Username != username {
-			http.Error(w, "Access denied", http.StatusForbidden)
-			return
-		}
-		// Preserve original creation time and username
-		session.CreatedAt = existing.CreatedAt
-		session.Username = existing.Username
-	} else {
-		// New session - set creation time and username
-		session.CreatedAt = time.Now()
-		session.Username = username
-	}
-
-	// Auto-generate title from first user message if not set
-	if session.Title == "" && len(session.Messages) > 0 {
-		for _, msg := range session.Messages {
-			if msg.Role == "user" {
-				title := msg.Content
-				if len(title) > 50 {
-					title = title[:47] + "..."
-				}
-				session.Title = title
-				break
-			}
-		}
-	}
-	if session.Title == "" {
-		session.Title = "New conversation"
-	}
-
-	if err := h.getPersistence(r.Context()).SaveAIChatSession(&session); err != nil {
-		log.Error().Err(err).Msg("Failed to save chat session")
-		http.Error(w, "Failed to save chat session", http.StatusInternalServerError)
-		return
-	}
-
-	log.Debug().
-		Str("session_id", sessionID).
-		Str("username", username).
-		Int("messages", len(session.Messages)).
-		Msg("Chat session saved")
-
-	if err := utils.WriteJSONResponse(w, session); err != nil {
-		log.Error().Err(err).Msg("Failed to write save chat session response")
-	}
-}
-
-// HandleDeleteAIChatSession deletes a chat session (DELETE /api/ai/chat/sessions/{id})
-func (h *AISettingsHandler) HandleDeleteAIChatSession(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
-		return
-	}
-
-	// Extract session ID from URL
-	sessionID := strings.TrimPrefix(r.URL.Path, "/api/ai/chat/sessions/")
-	if sessionID == "" {
-		http.Error(w, "Session ID required", http.StatusBadRequest)
-		return
-	}
-
-	username := getAuthUsername(h.getConfig(r.Context()), r)
-
-	// Check ownership
-	existingData, err := h.getPersistence(r.Context()).LoadAIChatSessions()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to load chat sessions")
-		http.Error(w, "Failed to load chat sessions", http.StatusInternalServerError)
-		return
-	}
-
-	if existing, exists := existingData.Sessions[sessionID]; exists {
-		if existing.Username != "" && existing.Username != username {
-			http.Error(w, "Access denied", http.StatusForbidden)
-			return
-		}
-	}
-
-	if err := h.getPersistence(r.Context()).DeleteAIChatSession(sessionID); err != nil {
-		log.Error().Err(err).Msg("Failed to delete chat session")
-		http.Error(w, "Failed to delete chat session", http.StatusInternalServerError)
-		return
-	}
-
-	log.Info().
-		Str("session_id", sessionID).
-		Str("username", username).
-		Msg("Chat session deleted")
-
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // getAuthUsername extracts the username from the current auth context

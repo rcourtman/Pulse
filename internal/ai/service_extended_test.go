@@ -703,7 +703,7 @@ func TestService_ExecuteTool_RunCommand(t *testing.T) {
 
 	// 3. Approval required (non-autonomous)
 	mockPolicy.decision = agentexec.PolicyRequireApproval
-	svc.cfg = &config.AIConfig{AutonomousMode: false}
+	svc.cfg = &config.AIConfig{ControlLevel: config.ControlLevelReadOnly}
 	result, exec = svc.executeTool(ctx, req, tc)
 	if !exec.Success {
 		t.Errorf("Expected success (not an error to need approval), got: %s", result)
@@ -1860,7 +1860,7 @@ func TestService_ExecuteStream_ResultTruncation(t *testing.T) {
 			}, nil
 		},
 	})
-	svc.cfg = &config.AIConfig{Enabled: true, AutonomousMode: true, Model: "anthropic:test"}
+	svc.cfg = &config.AIConfig{Enabled: true, ControlLevel: config.ControlLevelAutonomous, Model: "anthropic:test"}
 
 	iteration := 0
 	mock := &mockProvider{
@@ -2154,8 +2154,8 @@ func TestService_LoadConfig_SmartFallback(t *testing.T) {
 	}
 }
 
-func TestService_LoadConfig_LegacyMigration(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "pulse-loadconfig-legacy-*")
+func TestService_LoadConfig_WithoutConfiguredProviderLeavesNil(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pulse-loadconfig-unconfigured-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -2163,42 +2163,10 @@ func TestService_LoadConfig_LegacyMigration(t *testing.T) {
 
 	persistence := config.NewConfigPersistence(tmpDir)
 
-	// Config with legacy fields but no provider credentials in new format
+	// Config selects Anthropic model but has no provider credentials.
 	cfg := config.AIConfig{
-		Enabled:  true,
-		Provider: "openai",
-		APIKey:   "legacy-key",
-		Model:    "anthropic:claude-3-5-sonnet",
-	}
-	_ = persistence.SaveAIConfig(cfg)
-
-	svc := NewService(persistence, nil)
-	err = svc.LoadConfig()
-	if err != nil {
-		t.Fatalf("LoadConfig failed: %v", err)
-	}
-
-	// Should initialize via migration path
-	if svc.provider == nil {
-		t.Error("Expected provider to be initialized via legacy config")
-	}
-}
-
-func TestService_LoadConfig_LegacyMigration_Failure(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "pulse-loadconfig-legacy-fail-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	persistence := config.NewConfigPersistence(tmpDir)
-
-	// Legacy config with unknown provider to force NewFromConfig to fail
-	cfg := config.AIConfig{
-		Enabled:  true,
-		Provider: "unknown-provider",
-		APIKey:   "key",
-		Model:    "anthropic:claude-opus",
+		Enabled: true,
+		Model:   "anthropic:claude-3-5-sonnet",
 	}
 	_ = persistence.SaveAIConfig(cfg)
 
@@ -2209,7 +2177,38 @@ func TestService_LoadConfig_LegacyMigration_Failure(t *testing.T) {
 	}
 
 	if svc.provider != nil {
-		t.Error("Expected provider to be nil on migration failure")
+		t.Error("Expected provider to remain nil when no provider credentials are configured")
+	}
+}
+
+func TestService_LoadConfig_UnknownModelWithOllamaConfigured(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pulse-loadconfig-unknown-model-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	persistence := config.NewConfigPersistence(tmpDir)
+
+	// Unknown model names should resolve to ollama when ollama is configured.
+	cfg := config.AIConfig{
+		Enabled:       true,
+		Model:         "totally-unknown-model",
+		OllamaBaseURL: "http://localhost:11434",
+	}
+	_ = persistence.SaveAIConfig(cfg)
+
+	svc := NewService(persistence, nil)
+	err = svc.LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if svc.provider == nil {
+		t.Fatal("Expected provider to be initialized")
+	}
+	if svc.provider.Name() != "ollama" {
+		t.Errorf("Expected ollama provider for unknown model, got %s", svc.provider.Name())
 	}
 }
 
@@ -2395,10 +2394,10 @@ func TestService_IsAutonomous_Variations(t *testing.T) {
 
 	persistence := config.NewConfigPersistence(tmpDir)
 
-	// Test with AutonomousMode = false
+	// Test with read_only control level
 	cfg := config.AIConfig{
-		Enabled:        true,
-		AutonomousMode: false,
+		Enabled:      true,
+		ControlLevel: config.ControlLevelReadOnly,
 	}
 	_ = persistence.SaveAIConfig(cfg)
 
@@ -2409,8 +2408,8 @@ func TestService_IsAutonomous_Variations(t *testing.T) {
 		t.Error("Expected not autonomous when mode is false")
 	}
 
-	// Test with AutonomousMode = true
-	cfg.AutonomousMode = true
+	// Test with autonomous control level
+	cfg.ControlLevel = config.ControlLevelAutonomous
 	_ = persistence.SaveAIConfig(cfg)
 	_ = svc.LoadConfig()
 

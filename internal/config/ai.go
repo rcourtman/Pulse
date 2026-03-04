@@ -19,14 +19,10 @@ const (
 // This is stored in ai.enc (encrypted) in the config directory
 type AIConfig struct {
 	Enabled        bool   `json:"enabled"`
-	Provider       string `json:"provider"`                  // DEPRECATED: legacy single provider field, kept for migration
-	APIKey         string `json:"api_key"`                   // DEPRECATED: legacy single API key, kept for migration
 	Model          string `json:"model"`                     // Currently selected default model (format: "provider:model-name")
 	ChatModel      string `json:"chat_model,omitempty"`      // Model for interactive chat (defaults to Model)
 	PatrolModel    string `json:"patrol_model,omitempty"`    // Model for background patrol (defaults to Model, can be cheaper)
 	DiscoveryModel string `json:"discovery_model,omitempty"` // Model for infrastructure discovery (defaults to cheapest available, e.g., haiku)
-	BaseURL        string `json:"base_url"`                  // DEPRECATED: legacy base URL, kept for migration
-	AutonomousMode bool   `json:"autonomous_mode"`           // when true, AI executes commands without approval
 	CustomContext  string `json:"custom_context"`            // user-provided context about their infrastructure
 
 	// Multi-provider credentials - each provider can be configured independently
@@ -47,7 +43,6 @@ type AIConfig struct {
 	// Patrol settings for background AI monitoring
 	PatrolEnabled          bool   `json:"patrol_enabled"`                     // Enable background AI health patrol
 	PatrolIntervalMinutes  int    `json:"patrol_interval_minutes"`            // How often to run quick patrols (default: 360 = 6 hours)
-	PatrolSchedulePreset   string `json:"patrol_schedule_preset"`             // User-friendly preset: "15min", "1hr", "6hr", "12hr", "daily", "disabled"
 	PatrolAnalyzeNodes     bool   `json:"patrol_analyze_nodes"`               // Include Proxmox nodes in patrol
 	PatrolAnalyzeGuests    bool   `json:"patrol_analyze_guests"`              // Include VMs/containers in patrol
 	PatrolAnalyzeDocker    bool   `json:"patrol_analyze_docker"`              // Include Docker hosts in patrol
@@ -146,14 +141,12 @@ const (
 func NewDefaultAIConfig() *AIConfig {
 	return &AIConfig{
 		Enabled:    false,
-		Provider:   AIProviderAnthropic,
 		Model:      DefaultAIModelAnthropic,
 		AuthMethod: AuthMethodAPIKey,
 		// Patrol defaults - enabled when AI is enabled
 		// Default to 6 hour intervals (much more token-efficient than 15 min)
 		PatrolEnabled:         true,
 		PatrolIntervalMinutes: 360, // 6 hours - balance between coverage and token efficiency
-		PatrolSchedulePreset:  "6hr",
 		PatrolAnalyzeNodes:    true,
 		PatrolAnalyzeGuests:   true,
 		PatrolAnalyzeDocker:   true,
@@ -172,27 +165,13 @@ func (c *AIConfig) IsConfigured() bool {
 		return false
 	}
 
-	// Check multi-provider credentials first (new format)
 	if c.HasProvider(AIProviderAnthropic) || c.HasProvider(AIProviderOpenAI) ||
 		c.HasProvider(AIProviderOpenRouter) || c.HasProvider(AIProviderDeepSeek) || c.HasProvider(AIProviderOllama) ||
 		c.HasProvider(AIProviderGemini) {
 		return true
 	}
 
-	// Fall back to legacy single-provider check for backward compatibility
-	switch c.Provider {
-	case AIProviderAnthropic:
-		if c.AuthMethod == AuthMethodOAuth {
-			return c.OAuthAccessToken != ""
-		}
-		return c.APIKey != ""
-	case AIProviderOpenAI, AIProviderOpenRouter, AIProviderDeepSeek:
-		return c.APIKey != ""
-	case AIProviderOllama:
-		return true
-	default:
-		return false
-	}
+	return false
 }
 
 // HasProvider returns true if the specified provider has credentials configured
@@ -251,37 +230,21 @@ func (c *AIConfig) GetAPIKeyForProvider(provider string) string {
 		if c.AnthropicAPIKey != "" {
 			return c.AnthropicAPIKey
 		}
-		// Fall back to legacy API key if provider matches
-		if c.Provider == AIProviderAnthropic {
-			return c.APIKey
-		}
 	case AIProviderOpenAI:
 		if c.OpenAIAPIKey != "" {
 			return c.OpenAIAPIKey
-		}
-		if c.Provider == AIProviderOpenAI {
-			return c.APIKey
 		}
 	case AIProviderOpenRouter:
 		if c.OpenRouterAPIKey != "" {
 			return c.OpenRouterAPIKey
 		}
-		if c.Provider == AIProviderOpenRouter {
-			return c.APIKey
-		}
 	case AIProviderDeepSeek:
 		if c.DeepSeekAPIKey != "" {
 			return c.DeepSeekAPIKey
 		}
-		if c.Provider == AIProviderDeepSeek {
-			return c.APIKey
-		}
 	case AIProviderGemini:
 		if c.GeminiAPIKey != "" {
 			return c.GeminiAPIKey
-		}
-		if c.Provider == AIProviderGemini {
-			return c.APIKey
 		}
 	}
 	return ""
@@ -293,10 +256,6 @@ func (c *AIConfig) GetBaseURLForProvider(provider string) string {
 	case AIProviderOllama:
 		if c.OllamaBaseURL != "" {
 			return c.OllamaBaseURL
-		}
-		// Fall back to legacy BaseURL if provider matches
-		if c.Provider == AIProviderOllama && c.BaseURL != "" {
-			return c.BaseURL
 		}
 		return DefaultOllamaBaseURL
 	case AIProviderOpenAI:
@@ -377,25 +336,6 @@ func DefaultModelForProvider(provider string) string {
 	}
 }
 
-// GetBaseURL returns the base URL, using defaults where appropriate
-// DEPRECATED: Use GetBaseURLForProvider instead
-func (c *AIConfig) GetBaseURL() string {
-	if c.BaseURL != "" {
-		return c.BaseURL
-	}
-	switch c.Provider {
-	case AIProviderOllama:
-		return DefaultOllamaBaseURL
-	case AIProviderOpenRouter:
-		return DefaultOpenRouterBaseURL
-	case AIProviderDeepSeek:
-		return DefaultDeepSeekBaseURL
-	case AIProviderGemini:
-		return DefaultGeminiBaseURL
-	}
-	return ""
-}
-
 // GetModel returns the model, using defaults where appropriate
 func (c *AIConfig) GetModel() string {
 	if c.Model != "" {
@@ -422,23 +362,7 @@ func (c *AIConfig) GetModel() string {
 		}
 	}
 
-	// Fall back to legacy Provider field for backwards compatibility
-	switch c.Provider {
-	case AIProviderAnthropic:
-		return DefaultAIModelAnthropic
-	case AIProviderOpenAI:
-		return DefaultAIModelOpenAI
-	case AIProviderOpenRouter:
-		return DefaultAIModelOpenRouter
-	case AIProviderOllama:
-		return DefaultAIModelOllama
-	case AIProviderDeepSeek:
-		return DefaultAIModelDeepSeek
-	case AIProviderGemini:
-		return DefaultAIModelGemini
-	default:
-		return ""
-	}
+	return ""
 }
 
 // GetChatModel returns the model for interactive chat conversations
@@ -486,62 +410,19 @@ func (c *AIConfig) ClearOAuthTokens() {
 	c.OAuthExpiresAt = time.Time{}
 }
 
-// ClearAPIKey clears the API key (used when switching to OAuth auth)
+// ClearAPIKey clears the Anthropic API key (used when switching to OAuth auth)
 func (c *AIConfig) ClearAPIKey() {
-	c.APIKey = ""
+	c.AnthropicAPIKey = ""
 }
 
-// GetPatrolInterval returns the patrol interval as a duration
-// Uses the preset if set, otherwise falls back to custom minutes
+// GetPatrolInterval returns the patrol interval as a duration.
 func (c *AIConfig) GetPatrolInterval() time.Duration {
-	// If preset is set, use it
-	if c.PatrolSchedulePreset != "" {
-		switch c.PatrolSchedulePreset {
-		case "15min":
-			return 15 * time.Minute
-		case "1hr":
-			return 1 * time.Hour
-		case "6hr":
-			return 6 * time.Hour
-		case "12hr":
-			return 12 * time.Hour
-		case "daily":
-			return 24 * time.Hour
-		case "disabled":
-			return 0 // Signal that scheduled patrol is disabled
-		}
-	}
-
-	// Fall back to custom minutes if set
-	// BUT: If PatrolIntervalMinutes is the old default (15), migrate to new default (360 = 6hr)
-	// This provides better token efficiency for existing installations
+	// Use configured custom minutes when set.
 	if c.PatrolIntervalMinutes > 0 {
-		// Migrate old 15-minute default to new 6-hour default
-
 		return time.Duration(c.PatrolIntervalMinutes) * time.Minute
 	}
 
 	return 6 * time.Hour // default to 6 hours
-}
-
-// PresetToMinutes converts a patrol schedule preset to minutes
-func PresetToMinutes(preset string) int {
-	switch preset {
-	case "15min":
-		return 15
-	case "1hr":
-		return 60
-	case "6hr":
-		return 360
-	case "12hr":
-		return 720
-	case "daily":
-		return 1440
-	case "disabled":
-		return 0
-	default:
-		return 360 // default 6hr
-	}
 }
 
 // IsPatrolEnabled returns true if patrol should run
@@ -550,10 +431,6 @@ func PresetToMinutes(preset string) int {
 func (c *AIConfig) IsPatrolEnabled() bool {
 	// If AI is disabled globally, patrol is disabled
 	if !c.Enabled {
-		return false
-	}
-	// If preset is "disabled", patrol is disabled
-	if c.PatrolSchedulePreset == "disabled" {
 		return false
 	}
 	return c.PatrolEnabled
@@ -586,21 +463,13 @@ func (c *AIConfig) GetRequestTimeout() time.Duration {
 }
 
 // GetControlLevel returns the AI control level, defaulting to read_only if not set.
-// For backwards compatibility, if ControlLevel is empty but legacy AutonomousMode is true,
-// returns autonomous to preserve existing behavior.
 func (c *AIConfig) GetControlLevel() string {
 	if c.ControlLevel == "" {
-		// Legacy migration: honor old autonomous_mode field if set
-		if c.AutonomousMode {
-			return ControlLevelAutonomous
-		}
 		return ControlLevelReadOnly
 	}
 	switch c.ControlLevel {
 	case ControlLevelReadOnly, ControlLevelControlled, ControlLevelAutonomous:
 		return c.ControlLevel
-	case "suggest":
-		return ControlLevelControlled
 	default:
 		return ControlLevelReadOnly
 	}

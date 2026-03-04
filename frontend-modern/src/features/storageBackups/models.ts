@@ -23,11 +23,6 @@ export type KnownStorageBackupPlatform = (typeof KNOWN_STORAGE_BACKUP_PLATFORMS)
 export type StorageBackupPlatform = KnownStorageBackupPlatform | (string & {});
 
 export type PlatformFamily = 'onprem' | 'container' | 'virtualization' | 'cloud' | 'generic';
-export type DataOrigin = 'resource' | 'legacy';
-export const STORAGE_DATA_ORIGIN_PRECEDENCE: Record<DataOrigin, number> = {
-  legacy: 0,
-  resource: 1,
-};
 
 export type NormalizedHealth = 'healthy' | 'warning' | 'critical' | 'offline' | 'unknown';
 
@@ -60,7 +55,7 @@ export type StorageCapability =
 export interface SourceDescriptor {
   platform: StorageBackupPlatform;
   family: PlatformFamily;
-  origin: DataOrigin;
+  origin: 'resource';
   adapterId: string;
 }
 
@@ -88,7 +83,6 @@ export interface StorageRecord {
   observedAt: number;
   refs?: {
     resourceId?: string;
-    legacyStorageId?: string;
     platformEntityId?: string;
   };
   details?: Record<string, unknown>;

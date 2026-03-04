@@ -18,10 +18,6 @@ func TestLoad_EnvOverrides_Comprehensive(t *testing.T) {
 		"ENABLE_TEMPERATURE_MONITORING",
 		"PULSE_AUTH_HIDE_LOCAL_LOGIN",
 		"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS",
-		"DISABLE_DOCKER_UPDATE_ACTIONS",
-		"PULSE_HIDE_DOCKER_UPDATE_ACTIONS",
-		"HIDE_DOCKER_UPDATE_ACTIONS",
-		"PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS",
 		"ENABLE_BACKUP_POLLING",
 		"ADAPTIVE_POLLING_ENABLED",
 		"ADAPTIVE_POLLING_BASE_INTERVAL",
@@ -44,7 +40,6 @@ func TestLoad_EnvOverrides_Comprehensive(t *testing.T) {
 	t.Setenv("ENABLE_TEMPERATURE_MONITORING", "false")
 	t.Setenv("PULSE_AUTH_HIDE_LOCAL_LOGIN", "true")
 	t.Setenv("PULSE_DISABLE_DOCKER_UPDATE_ACTIONS", "true")
-	t.Setenv("PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS", "true")
 	t.Setenv("ENABLE_BACKUP_POLLING", "false")
 	t.Setenv("ADAPTIVE_POLLING_ENABLED", "true")
 	t.Setenv("ADAPTIVE_POLLING_BASE_INTERVAL", "20s")
@@ -62,7 +57,6 @@ func TestLoad_EnvOverrides_Comprehensive(t *testing.T) {
 	assert.False(t, cfg.TemperatureMonitoringEnabled)
 	assert.True(t, cfg.HideLocalLogin)
 	assert.True(t, cfg.DisableDockerUpdateActions)
-	assert.True(t, cfg.DisableLegacyRouteRedirects)
 	assert.False(t, cfg.EnableBackupPolling)
 	assert.True(t, cfg.AdaptivePollingEnabled)
 	assert.Equal(t, 20*time.Second, cfg.AdaptivePollingBaseInterval)
@@ -145,35 +139,32 @@ func TestLoad_EnvOverrides_PBSAndPMG(t *testing.T) {
 	assert.Equal(t, 120*time.Second, cfg.PMGPollingInterval)
 }
 
-func TestLoad_EnvOverrides_DockerUpdateActionsAliases(t *testing.T) {
-	cases := []struct {
-		name   string
-		envVar string
-		value  string
-		want   bool
-	}{
-		{name: "canonical", envVar: "PULSE_DISABLE_DOCKER_UPDATE_ACTIONS", value: "true", want: true},
-		{name: "legacy disable", envVar: "DISABLE_DOCKER_UPDATE_ACTIONS", value: "true", want: true},
-		{name: "legacy pulse hide", envVar: "PULSE_HIDE_DOCKER_UPDATE_ACTIONS", value: "true", want: true},
-		{name: "legacy hide", envVar: "HIDE_DOCKER_UPDATE_ACTIONS", value: "true", want: true},
-	}
+func TestLoad_EnvOverrides_DockerUpdateActionsCanonicalOnly(t *testing.T) {
+	t.Run("canonical env var", func(t *testing.T) {
+		tempDir := t.TempDir()
+		t.Setenv("PULSE_DATA_DIR", tempDir)
+		t.Setenv("PULSE_DISABLE_DOCKER_UPDATE_ACTIONS", "true")
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			tempDir := t.TempDir()
-			t.Setenv("PULSE_DATA_DIR", tempDir)
-			t.Setenv("PULSE_DISABLE_DOCKER_UPDATE_ACTIONS", "")
-			t.Setenv("DISABLE_DOCKER_UPDATE_ACTIONS", "")
-			t.Setenv("PULSE_HIDE_DOCKER_UPDATE_ACTIONS", "")
-			t.Setenv("HIDE_DOCKER_UPDATE_ACTIONS", "")
-			t.Setenv(tc.envVar, tc.value)
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.True(t, cfg.DisableDockerUpdateActions)
+		assert.True(t, cfg.EnvOverrides["disableDockerUpdateActions"])
+		assert.True(t, cfg.EnvOverrides["PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"])
+	})
 
-			cfg, err := Load()
-			require.NoError(t, err)
-			assert.Equal(t, tc.want, cfg.DisableDockerUpdateActions)
-			assert.True(t, cfg.EnvOverrides["disableDockerUpdateActions"])
-		})
-	}
+	t.Run("legacy aliases ignored", func(t *testing.T) {
+		tempDir := t.TempDir()
+		t.Setenv("PULSE_DATA_DIR", tempDir)
+		t.Setenv("DISABLE_DOCKER_UPDATE_ACTIONS", "true")
+		t.Setenv("PULSE_HIDE_DOCKER_UPDATE_ACTIONS", "true")
+		t.Setenv("HIDE_DOCKER_UPDATE_ACTIONS", "true")
+
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.False(t, cfg.DisableDockerUpdateActions)
+		assert.False(t, cfg.EnvOverrides["disableDockerUpdateActions"])
+		assert.False(t, cfg.EnvOverrides["PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"])
+	})
 }
 
 func TestLoad_EnvOverrides_InvalidFrontendPortIgnored(t *testing.T) {
@@ -186,9 +177,9 @@ func TestLoad_EnvOverrides_InvalidFrontendPortIgnored(t *testing.T) {
 		assert.Equal(t, 7655, cfg.FrontendPort)
 	})
 
-	t.Run("invalid legacy PORT", func(t *testing.T) {
+	t.Run("legacy PORT ignored", func(t *testing.T) {
 		t.Setenv("PULSE_DATA_DIR", t.TempDir())
-		t.Setenv("PORT", "70000")
+		t.Setenv("PORT", "8080")
 
 		cfg, err := Load()
 		require.NoError(t, err)

@@ -1,7 +1,7 @@
 // Package config manages Pulse configuration from multiple sources.
 //
 // Configuration File Separation:
-//   - .env: Authentication credentials ONLY (PULSE_AUTH_USER, PULSE_AUTH_PASS, API_TOKEN/API_TOKENS)
+//   - .env: Authentication credentials ONLY (PULSE_AUTH_USER, PULSE_AUTH_PASS)
 //   - system.json: Application settings (polling interval, timeouts, update settings, etc.)
 //   - nodes.enc: Encrypted node credentials (PVE/PBS passwords and tokens)
 //
@@ -22,7 +22,6 @@ import (
 
 	"sync"
 
-	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
@@ -134,22 +133,19 @@ type Config struct {
 	LogCompress bool   `envconfig:"LOG_COMPRESS" default:"true"`
 
 	// Security settings
-	APIToken                    string           `envconfig:"API_TOKEN"`
-	APITokens                   []APITokenRecord `json:"-"`
-	SuppressedEnvMigrations     []string         `json:"-"` // Hashes of env tokens deleted by user (prevent re-migration)
-	AuthUser                    string           `envconfig:"PULSE_AUTH_USER"`
-	AuthPass                    string           `envconfig:"PULSE_AUTH_PASS"`
-	DisableAuthEnvDetected      bool             `json:"-"`
-	DemoMode                    bool             `envconfig:"DEMO_MODE" default:"false"` // Read-only demo mode
-	AllowedOrigins              string           `envconfig:"ALLOWED_ORIGINS" default:"*"`
-	HideLocalLogin              bool             `envconfig:"PULSE_AUTH_HIDE_LOCAL_LOGIN" default:"false"`
-	DisableDockerUpdateActions  bool             `envconfig:"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS" default:"false"`  // Hide Docker update buttons (read-only mode for containers)
-	DisableLegacyRouteRedirects bool             `envconfig:"PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS" default:"false"` // Disable frontend legacy URL redirects globally
-	DisableLocalUpgradeMetrics  bool             `envconfig:"PULSE_DISABLE_LOCAL_UPGRADE_METRICS" default:"false"`  // Disable local-only upgrade UX metrics collection
-	TelemetryEnabled            bool             `envconfig:"PULSE_TELEMETRY" default:"true"`                       // Anonymous telemetry enabled by default (install ID, version, resource counts, feature flags — opt out any time)
-	MultiTenantEnabled          bool             `envconfig:"PULSE_MULTI_TENANT_ENABLED" default:"false"`           // Enable multi-tenant support
-	MetricsToken                string           `envconfig:"PULSE_METRICS_TOKEN" default:"" json:"-"`              // Bearer token for /metrics endpoint (empty = unauthenticated)
-	ProTrialSignupURL           string           `envconfig:"PULSE_PRO_TRIAL_SIGNUP_URL" default:""`                // Hosted signup/checkout URL for starting Pulse Pro trials
+	APIToken                   string
+	APITokens                  []APITokenRecord `json:"-"`
+	AuthUser                   string           `envconfig:"PULSE_AUTH_USER"`
+	AuthPass                   string           `envconfig:"PULSE_AUTH_PASS"`
+	DemoMode                   bool             `envconfig:"DEMO_MODE" default:"false"` // Read-only demo mode
+	AllowedOrigins             string           `envconfig:"ALLOWED_ORIGINS" default:"*"`
+	HideLocalLogin             bool             `envconfig:"PULSE_AUTH_HIDE_LOCAL_LOGIN" default:"false"`
+	DisableDockerUpdateActions bool             `envconfig:"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS" default:"false"` // Hide Docker update buttons (read-only mode for containers)
+	DisableLocalUpgradeMetrics bool             `envconfig:"PULSE_DISABLE_LOCAL_UPGRADE_METRICS" default:"false"` // Disable local-only upgrade UX metrics collection
+	TelemetryEnabled           bool             `envconfig:"PULSE_TELEMETRY" default:"true"`                      // Anonymous telemetry enabled by default (install ID, version, resource counts, feature flags — opt out any time)
+	MultiTenantEnabled         bool             `envconfig:"PULSE_MULTI_TENANT_ENABLED" default:"false"`          // Enable multi-tenant support
+	MetricsToken               string           `envconfig:"PULSE_METRICS_TOKEN" default:"" json:"-"`             // Bearer token for /metrics endpoint (empty = unauthenticated)
+	ProTrialSignupURL          string           `envconfig:"PULSE_PRO_TRIAL_SIGNUP_URL" default:""`               // Hosted signup/checkout URL for starting Pulse Pro trials
 
 	// Proxy authentication settings
 	ProxyAuthSecret        string `envconfig:"PROXY_AUTH_SECRET"`
@@ -159,8 +155,6 @@ type Config struct {
 	ProxyAuthAdminRole     string `envconfig:"PROXY_AUTH_ADMIN_ROLE" default:"admin"`
 	ProxyAuthLogoutURL     string `envconfig:"PROXY_AUTH_LOGOUT_URL"`
 
-	// OIDC configuration
-	OIDC *OIDCConfig `json:"-"`
 	// HTTPS/TLS settings
 	HTTPSEnabled     bool   `envconfig:"HTTPS_ENABLED" default:"false"`
 	TLSCertFile      string `envconfig:"TLS_CERT_FILE" default:""`
@@ -263,12 +257,6 @@ func (c *Config) DeepCopy() *Config {
 		}
 	}
 
-	// Deep copy SuppressedEnvMigrations slice
-	if len(c.SuppressedEnvMigrations) > 0 {
-		clone.SuppressedEnvMigrations = make([]string, len(c.SuppressedEnvMigrations))
-		copy(clone.SuppressedEnvMigrations, c.SuppressedEnvMigrations)
-	}
-
 	// Deep copy EnvOverrides map
 	if len(c.EnvOverrides) > 0 {
 		clone.EnvOverrides = make(map[string]bool, len(c.EnvOverrides))
@@ -279,12 +267,6 @@ func (c *Config) DeepCopy() *Config {
 
 	// Deep copy Discovery config
 	clone.Discovery = CloneDiscoveryConfig(c.Discovery)
-
-	// Deep copy OIDC config if present using the Clone method
-	// which properly deep copies all slices and maps
-	if c.OIDC != nil {
-		clone.OIDC = c.OIDC.Clone()
-	}
 
 	return &clone
 }
@@ -355,9 +337,9 @@ func sanitizeCIDRList(values []string) []string {
 	return cleaned
 }
 
-// UnmarshalJSON supports both legacy camelCase and new snake_case field names.
+// UnmarshalJSON decodes the persisted snake_case discovery config format.
 func (d *DiscoveryConfig) UnmarshalJSON(data []byte) error {
-	type modern struct {
+	type payload struct {
 		EnvironmentOverride *string   `json:"environment_override"`
 		SubnetAllowlist     *[]string `json:"subnet_allowlist"`
 		SubnetBlocklist     *[]string `json:"subnet_blocklist"`
@@ -368,86 +350,52 @@ func (d *DiscoveryConfig) UnmarshalJSON(data []byte) error {
 		DialTimeout         *int      `json:"dial_timeout_ms"`
 		HTTPTimeout         *int      `json:"http_timeout_ms"`
 	}
-	type legacy struct {
-		EnvironmentOverride *string   `json:"environmentOverride"`
-		SubnetAllowlist     *[]string `json:"subnetAllowlist"`
-		SubnetBlocklist     *[]string `json:"subnetBlocklist"`
-		MaxHostsPerScan     *int      `json:"maxHostsPerScan"`
-		MaxConcurrent       *int      `json:"maxConcurrent"`
-		EnableReverseDNS    *bool     `json:"enableReverseDns"`
-		ScanGateways        *bool     `json:"scanGateways"`
-		DialTimeout         *int      `json:"dialTimeoutMs"`
-		HTTPTimeout         *int      `json:"httpTimeoutMs"`
-	}
 
-	var modernPayload modern
-	if err := json.Unmarshal(data, &modernPayload); err != nil {
-		return fmt.Errorf("unmarshal discovery config (modern): %w", err)
-	}
-
-	var legacyPayload legacy
-	if err := json.Unmarshal(data, &legacyPayload); err != nil {
-		return fmt.Errorf("unmarshal discovery config (legacy): %w", err)
+	var in payload
+	if err := json.Unmarshal(data, &in); err != nil {
+		return fmt.Errorf("unmarshal discovery config: %w", err)
 	}
 
 	cfg := DefaultDiscoveryConfig()
 
-	if modernPayload.EnvironmentOverride != nil {
-		cfg.EnvironmentOverride = strings.TrimSpace(*modernPayload.EnvironmentOverride)
-	} else if legacyPayload.EnvironmentOverride != nil {
-		cfg.EnvironmentOverride = strings.TrimSpace(*legacyPayload.EnvironmentOverride)
+	if in.EnvironmentOverride != nil {
+		cfg.EnvironmentOverride = strings.TrimSpace(*in.EnvironmentOverride)
 	}
 
 	switch {
-	case modernPayload.SubnetAllowlist != nil:
-		cfg.SubnetAllowlist = sanitizeCIDRList(*modernPayload.SubnetAllowlist)
-	case legacyPayload.SubnetAllowlist != nil:
-		cfg.SubnetAllowlist = sanitizeCIDRList(*legacyPayload.SubnetAllowlist)
+	case in.SubnetAllowlist != nil:
+		cfg.SubnetAllowlist = sanitizeCIDRList(*in.SubnetAllowlist)
 	default:
 		cfg.SubnetAllowlist = []string{}
 	}
 
 	switch {
-	case modernPayload.SubnetBlocklist != nil:
-		cfg.SubnetBlocklist = sanitizeCIDRList(*modernPayload.SubnetBlocklist)
-	case legacyPayload.SubnetBlocklist != nil:
-		cfg.SubnetBlocklist = sanitizeCIDRList(*legacyPayload.SubnetBlocklist)
+	case in.SubnetBlocklist != nil:
+		cfg.SubnetBlocklist = sanitizeCIDRList(*in.SubnetBlocklist)
 	}
 
-	if modernPayload.MaxHostsPerScan != nil {
-		cfg.MaxHostsPerScan = *modernPayload.MaxHostsPerScan
-	} else if legacyPayload.MaxHostsPerScan != nil {
-		cfg.MaxHostsPerScan = *legacyPayload.MaxHostsPerScan
+	if in.MaxHostsPerScan != nil {
+		cfg.MaxHostsPerScan = *in.MaxHostsPerScan
 	}
 
-	if modernPayload.MaxConcurrent != nil {
-		cfg.MaxConcurrent = *modernPayload.MaxConcurrent
-	} else if legacyPayload.MaxConcurrent != nil {
-		cfg.MaxConcurrent = *legacyPayload.MaxConcurrent
+	if in.MaxConcurrent != nil {
+		cfg.MaxConcurrent = *in.MaxConcurrent
 	}
 
-	if modernPayload.EnableReverseDNS != nil {
-		cfg.EnableReverseDNS = *modernPayload.EnableReverseDNS
-	} else if legacyPayload.EnableReverseDNS != nil {
-		cfg.EnableReverseDNS = *legacyPayload.EnableReverseDNS
+	if in.EnableReverseDNS != nil {
+		cfg.EnableReverseDNS = *in.EnableReverseDNS
 	}
 
-	if modernPayload.ScanGateways != nil {
-		cfg.ScanGateways = *modernPayload.ScanGateways
-	} else if legacyPayload.ScanGateways != nil {
-		cfg.ScanGateways = *legacyPayload.ScanGateways
+	if in.ScanGateways != nil {
+		cfg.ScanGateways = *in.ScanGateways
 	}
 
-	if modernPayload.DialTimeout != nil {
-		cfg.DialTimeout = *modernPayload.DialTimeout
-	} else if legacyPayload.DialTimeout != nil {
-		cfg.DialTimeout = *legacyPayload.DialTimeout
+	if in.DialTimeout != nil {
+		cfg.DialTimeout = *in.DialTimeout
 	}
 
-	if modernPayload.HTTPTimeout != nil {
-		cfg.HTTPTimeout = *modernPayload.HTTPTimeout
-	} else if legacyPayload.HTTPTimeout != nil {
-		cfg.HTTPTimeout = *legacyPayload.HTTPTimeout
+	if in.HTTPTimeout != nil {
+		cfg.HTTPTimeout = *in.HTTPTimeout
 	}
 
 	*d = NormalizeDiscoveryConfig(cfg)
@@ -746,7 +694,6 @@ func Load() (*Config, error) {
 		ProTrialSignupURL:               pkglicensing.DefaultProTrialSignupURL,
 		EnvOverrides:                    make(map[string]bool),
 		AgentConnectURL:                 "",
-		OIDC:                            NewOIDCConfig(),
 		// Metrics retention defaults (tiered)
 		MetricsRetentionRawHours:    2,  // 2 hours of raw ~5s data
 		MetricsRetentionMinuteHours: 24, // 24 hours of minute averages
@@ -849,8 +796,6 @@ func Load() (*Config, error) {
 			cfg.HideLocalLogin = systemSettings.HideLocalLogin
 			// Load DisableDockerUpdateActions (hide Docker update buttons)
 			cfg.DisableDockerUpdateActions = systemSettings.DisableDockerUpdateActions
-			// Load DisableLegacyRouteRedirects (sunset legacy frontend route aliases)
-			cfg.DisableLegacyRouteRedirects = systemSettings.DisableLegacyRouteRedirects
 			// Load DisableLocalUpgradeMetrics (privacy: local-only upgrade UX metrics)
 			cfg.DisableLocalUpgradeMetrics = systemSettings.DisableLocalUpgradeMetrics
 			// Load TelemetryEnabled (enabled by default; nil means true for upgrading users)
@@ -878,7 +823,7 @@ func Load() (*Config, error) {
 				cfg.MetricsRetentionDailyDays = systemSettings.MetricsRetentionDailyDays
 			}
 
-			// APIToken no longer loaded from system.json - only from .env
+			// APIToken is not loaded from system.json; it is kept in sync from APITokens.
 			log.Info().
 				Str("updateChannel", cfg.UpdateChannel).
 				Str("logLevel", cfg.LogLevel).
@@ -895,15 +840,17 @@ func Load() (*Config, error) {
 			}
 		}
 
-		if oidcSettings, err := persistence.LoadOIDCConfig(); err == nil && oidcSettings != nil {
-			cfg.OIDC = oidcSettings
-		} else if err != nil {
-			log.Warn().Err(err).Msg("Failed to load OIDC configuration")
-		}
 	}
 
 	// Load API tokens
 	if tokens, err := persistence.LoadAPITokens(); err == nil {
+		if migrated := bindMissingAPITokenIDs(tokens); migrated > 0 {
+			if err := persistence.SaveAPITokens(tokens); err != nil {
+				log.Error().Err(err).Int("count", migrated).Msg("Failed to persist API token ID migration")
+			} else {
+				log.Warn().Int("count", migrated).Msg("Migrated API tokens missing IDs")
+			}
+		}
 		if migrated := bindLegacyAPITokensToDefault(tokens); migrated > 0 {
 			if err := persistence.SaveAPITokens(tokens); err != nil {
 				log.Error().Err(err).Int("count", migrated).Msg("Failed to persist legacy API token org binding migration")
@@ -916,16 +863,6 @@ func Load() (*Config, error) {
 		log.Info().Int("count", len(tokens)).Msg("Loaded API tokens from persistence")
 	} else {
 		log.Warn().Err(err).Msg("Failed to load API tokens from persistence")
-	}
-
-	// Load suppressed env token migrations (tokens user deleted that came from .env)
-	if suppressions, err := persistence.LoadEnvTokenSuppressions(); err == nil {
-		cfg.SuppressedEnvMigrations = suppressions
-		if len(suppressions) > 0 {
-			log.Debug().Int("count", len(suppressions)).Msg("Loaded env token suppression list")
-		}
-	} else {
-		log.Warn().Err(err).Msg("Failed to load env token suppressions")
 	}
 
 	// Ensure polling intervals have sane defaults if not set
@@ -1020,48 +957,16 @@ func Load() (*Config, error) {
 		}
 	}
 
-	// Support legacy aliases so existing env files continue to work.
-	// Canonical key remains PULSE_DISABLE_DOCKER_UPDATE_ACTIONS.
-	dockerUpdateActionsEnvVars := []string{
-		"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS",
-		"DISABLE_DOCKER_UPDATE_ACTIONS",
-		"PULSE_HIDE_DOCKER_UPDATE_ACTIONS",
-		"HIDE_DOCKER_UPDATE_ACTIONS",
-	}
-	for _, envVar := range dockerUpdateActionsEnvVars {
-		value := utils.GetenvTrim(envVar)
-		if value == "" {
-			continue
-		}
-
-		disabled, err := strconv.ParseBool(value)
-		if err != nil {
-			log.Warn().
-				Str("env", envVar).
-				Str("value", value).
-				Msg("Invalid Docker update actions env var value, ignoring")
-			break
-		}
-
-		cfg.DisableDockerUpdateActions = disabled
-		cfg.EnvOverrides[envVar] = true
-		cfg.EnvOverrides["PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"] = true
-		cfg.EnvOverrides["disableDockerUpdateActions"] = true
-		log.Info().
-			Str("env", envVar).
-			Bool("disabled", disabled).
-			Msg("Overriding Docker update actions setting from environment")
-		break
-	}
-
-	if disableLegacyRouteRedirectsStr := utils.GetenvTrim("PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS"); disableLegacyRouteRedirectsStr != "" {
-		if disabled, err := strconv.ParseBool(disableLegacyRouteRedirectsStr); err == nil {
-			cfg.DisableLegacyRouteRedirects = disabled
-			cfg.EnvOverrides["PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS"] = true
-			cfg.EnvOverrides["disableLegacyRouteRedirects"] = true
-			log.Info().Bool("disabled", disabled).Msg("Overriding legacy route redirects setting from environment")
+	if disableDockerUpdateActionsStr := utils.GetenvTrim("PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"); disableDockerUpdateActionsStr != "" {
+		if disabled, err := strconv.ParseBool(disableDockerUpdateActionsStr); err == nil {
+			cfg.DisableDockerUpdateActions = disabled
+			cfg.EnvOverrides["PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"] = true
+			cfg.EnvOverrides["disableDockerUpdateActions"] = true
+			log.Info().Bool("disabled", disabled).Msg("Overriding Docker update actions setting from environment")
 		} else {
-			log.Warn().Str("value", disableLegacyRouteRedirectsStr).Msg("Invalid PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS value, ignoring")
+			log.Warn().
+				Str("value", disableDockerUpdateActionsStr).
+				Msg("Invalid PULSE_DISABLE_DOCKER_UPDATE_ACTIONS value, ignoring")
 		}
 	}
 
@@ -1261,11 +1166,6 @@ func Load() (*Config, error) {
 	if bindAddr := utils.GetenvTrim("BIND_ADDRESS"); bindAddr != "" {
 		cfg.BindAddress = bindAddr
 		cfg.EnvOverrides["BIND_ADDRESS"] = true
-	} else if backendHost := utils.GetenvTrim("BACKEND_HOST"); backendHost != "" {
-		// Deprecated: BACKEND_HOST is the old name for BIND_ADDRESS
-		log.Warn().Msg("BACKEND_HOST is deprecated, use BIND_ADDRESS instead")
-		cfg.BindAddress = backendHost
-		cfg.EnvOverrides["BIND_ADDRESS"] = true
 	}
 
 	if sshPort := utils.GetenvTrim("SSH_PORT"); sshPort != "" {
@@ -1282,7 +1182,6 @@ func Load() (*Config, error) {
 		}
 	}
 
-	// Support both FRONTEND_PORT (preferred) and PORT (legacy) env vars
 	if frontendPort := utils.GetenvTrim("FRONTEND_PORT"); frontendPort != "" {
 		if p, err := parsePortOverride("FRONTEND_PORT", frontendPort); err == nil {
 			cfg.FrontendPort = p
@@ -1291,105 +1190,11 @@ func Load() (*Config, error) {
 		} else {
 			log.Warn().Str("value", frontendPort).Msg("Ignoring invalid FRONTEND_PORT from environment")
 		}
-	} else if port := utils.GetenvTrim("PORT"); port != "" {
-		// Fall back to PORT for backwards compatibility
-		if p, err := parsePortOverride("PORT", port); err == nil {
-			cfg.FrontendPort = p
-			cfg.EnvOverrides["PORT"] = true
-			log.Info().Int("port", p).Msg("Overriding frontend port from PORT env var (legacy)")
-		} else {
-			log.Warn().Str("value", port).Msg("Ignoring invalid PORT from environment")
-		}
-	}
-	envTokens := make([]string, 0, 4)
-	if list := utils.GetenvTrim("API_TOKENS"); list != "" {
-		for _, part := range strings.Split(list, ",") {
-			part = strings.TrimSpace(part)
-			if part != "" {
-				envTokens = append(envTokens, part)
-			}
-		}
-	}
-	if token := utils.GetenvTrim("API_TOKEN"); token != "" {
-		envTokens = append(envTokens, token)
 	}
 
-	if len(envTokens) > 0 {
-		cfg.EnvOverrides["API_TOKEN"] = true
-		cfg.EnvOverrides["API_TOKENS"] = true
-
-		// Track if we migrated any new tokens from env to persistence
-		migratedCount := 0
-		needsPersist := false
-
-		for _, tokenValue := range envTokens {
-			if tokenValue == "" {
-				continue
-			}
-
-			hashed := tokenValue
-			prefix := tokenPrefix(tokenValue)
-			suffix := tokenSuffix(tokenValue)
-
-			if !auth.IsAPITokenHashed(tokenValue) {
-				hashed = auth.HashAPIToken(tokenValue)
-				prefix = tokenPrefix(tokenValue)
-				suffix = tokenSuffix(tokenValue)
-				log.Debug().Msg("Auto-hashed plain text API token from environment variable")
-			}
-
-			// Check if this token already exists in api_tokens.json
-			if cfg.HasAPITokenHash(hashed) {
-				continue
-			}
-
-			// Check if user previously deleted this migrated token (prevent re-migration)
-			if cfg.IsEnvMigrationSuppressed(hashed) {
-				continue
-			}
-
-			// Migrate env token to api_tokens.json
-			record := APITokenRecord{
-				ID:        uuid.NewString(),
-				Name:      "Migrated from .env (" + prefix + ")",
-				Hash:      hashed,
-				Prefix:    prefix,
-				Suffix:    suffix,
-				CreatedAt: time.Now().UTC(),
-				Scopes:    []string{ScopeWildcard},
-				OrgID:     "default",
-			}
-			cfg.APITokens = append(cfg.APITokens, record)
-			migratedCount++
-			needsPersist = true
-		}
-
-		cfg.SortAPITokens()
-
-		// Persist migrated tokens to api_tokens.json
-		if needsPersist && persistence != nil {
-			if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
-				log.Error().Err(err).Msg("Failed to persist migrated API tokens from environment")
-			} else {
-				log.Warn().
-					Int("count", migratedCount).
-					Msg("Migrated API tokens from .env to api_tokens.json - API_TOKEN/API_TOKENS in .env are deprecated and will be ignored in future releases. Manage tokens via the UI instead.")
-			}
-		}
-	}
-
-	// Legacy migration: if a single token is present without metadata, wrap it.
-	if !cfg.HasAPITokens() && cfg.APIToken != "" {
-		if record, err := NewHashedAPITokenRecord(cfg.APIToken, "Legacy token", time.Now().UTC(), nil); err == nil {
-			cfg.APITokens = []APITokenRecord{*record}
-			cfg.SortAPITokens()
-			log.Info().Msg("Migrated legacy API token into token record store")
-		}
-	}
 	// Detect deprecated DISABLE_AUTH flag and strip it from the runtime env so downstream
 	// components behave as if it were never set.
 	if disableAuthEnv := os.Getenv("DISABLE_AUTH"); disableAuthEnv != "" {
-		cfg.DisableAuthEnvDetected = true
 		if err := os.Unsetenv("DISABLE_AUTH"); err != nil {
 			log.Warn().
 				Str("DISABLE_AUTH", disableAuthEnv).
@@ -1439,56 +1244,6 @@ func Load() (*Config, error) {
 		}
 	}
 
-	oidcEnv := make(map[string]string)
-	if val := os.Getenv("OIDC_ENABLED"); val != "" {
-		oidcEnv["OIDC_ENABLED"] = val
-	}
-	if val := os.Getenv("OIDC_ISSUER_URL"); val != "" {
-		oidcEnv["OIDC_ISSUER_URL"] = val
-	}
-	if val := os.Getenv("OIDC_CLIENT_ID"); val != "" {
-		oidcEnv["OIDC_CLIENT_ID"] = val
-	}
-	if val := os.Getenv("OIDC_CLIENT_SECRET"); val != "" {
-		oidcEnv["OIDC_CLIENT_SECRET"] = val
-	}
-	if val := os.Getenv("OIDC_REDIRECT_URL"); val != "" {
-		oidcEnv["OIDC_REDIRECT_URL"] = val
-	}
-	if val := os.Getenv("OIDC_LOGOUT_URL"); val != "" {
-		oidcEnv["OIDC_LOGOUT_URL"] = val
-	}
-	if val := os.Getenv("OIDC_SCOPES"); val != "" {
-		oidcEnv["OIDC_SCOPES"] = val
-	}
-	if val := os.Getenv("OIDC_USERNAME_CLAIM"); val != "" {
-		oidcEnv["OIDC_USERNAME_CLAIM"] = val
-	}
-	if val := os.Getenv("OIDC_EMAIL_CLAIM"); val != "" {
-		oidcEnv["OIDC_EMAIL_CLAIM"] = val
-	}
-	if val := os.Getenv("OIDC_GROUPS_CLAIM"); val != "" {
-		oidcEnv["OIDC_GROUPS_CLAIM"] = val
-	}
-	if val := os.Getenv("OIDC_ALLOWED_GROUPS"); val != "" {
-		oidcEnv["OIDC_ALLOWED_GROUPS"] = val
-	}
-	if val := os.Getenv("OIDC_ALLOWED_DOMAINS"); val != "" {
-		oidcEnv["OIDC_ALLOWED_DOMAINS"] = val
-	}
-	if val := os.Getenv("OIDC_ALLOWED_EMAILS"); val != "" {
-		oidcEnv["OIDC_ALLOWED_EMAILS"] = val
-	}
-	if val := os.Getenv("OIDC_CA_BUNDLE"); val != "" {
-		oidcEnv["OIDC_CA_BUNDLE"] = val
-	}
-	if len(oidcEnv) > 0 {
-		// Ensure cfg.OIDC is initialized before merging env vars
-		if cfg.OIDC == nil {
-			cfg.OIDC = NewOIDCConfig()
-		}
-		cfg.OIDC.MergeFromEnv(oidcEnv)
-	}
 	if authUser := os.Getenv("PULSE_AUTH_USER"); authUser != "" {
 		cfg.AuthUser = authUser
 		log.Info().Msg("Overriding auth user from env var")
@@ -1753,14 +1508,6 @@ func Load() (*Config, error) {
 		log.Info().Str("origins", allowedOrigins).Msg("Allowed origins overridden by ALLOWED_ORIGINS env var")
 	}
 
-	// Hosted mode: prefer an explicit canonical URL for external links.
-	// PULSE_HOSTED_URL is an alias for PULSE_PUBLIC_URL, intended for hosted deployments.
-	if hostedURL := utils.GetenvTrim("PULSE_HOSTED_URL"); hostedURL != "" && utils.GetenvTrim("PULSE_PUBLIC_URL") == "" {
-		cfg.PublicURL = hostedURL
-		cfg.EnvOverrides["publicURL"] = true
-		log.Info().Str("url", hostedURL).Msg("Public URL configured from PULSE_HOSTED_URL env var")
-	}
-
 	if publicURL := os.Getenv("PULSE_PUBLIC_URL"); publicURL != "" {
 		cfg.PublicURL = publicURL
 		cfg.EnvOverrides["publicURL"] = true
@@ -1768,7 +1515,7 @@ func Load() (*Config, error) {
 	} else {
 		// In hosted mode, fail closed unless explicitly configured.
 		if os.Getenv("PULSE_HOSTED_MODE") == "true" {
-			log.Warn().Msg("Hosted mode enabled: public URL not configured; external links (e.g., magic links) will be disabled. Set PULSE_HOSTED_URL or PULSE_PUBLIC_URL.")
+			log.Warn().Msg("Hosted mode enabled: public URL not configured; external links (e.g., magic links) will be disabled. Set PULSE_PUBLIC_URL.")
 		} else {
 			// Try to auto-detect public URL if not explicitly configured
 			if detectedURL := detectPublicURL(cfg.FrontendPort); detectedURL != "" {
@@ -1777,8 +1524,6 @@ func Load() (*Config, error) {
 			}
 		}
 	}
-
-	cfg.OIDC.ApplyDefaults(cfg.PublicURL)
 
 	// Initialize logging with configuration values
 	logging.Init(logging.Config{
@@ -1801,27 +1546,6 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
-}
-
-// SaveOIDCConfig persists OIDC settings using the shared config persistence layer.
-func SaveOIDCConfig(settings *OIDCConfig) error {
-	if globalPersistence == nil {
-		return fmt.Errorf("config persistence not initialized")
-	}
-	if settings == nil {
-		return fmt.Errorf("oidc settings cannot be nil")
-	}
-
-	clone := settings.Clone()
-	if clone == nil {
-		return fmt.Errorf("failed to clone oidc settings")
-	}
-
-	if err := globalPersistence.SaveOIDCConfig(*clone); err != nil {
-		return fmt.Errorf("save oidc config: %w", err)
-	}
-
-	return nil
 }
 
 // Validate checks if the configuration is valid
@@ -1902,10 +1626,6 @@ func (c *Config) Validate() error {
 		validPBS = append(validPBS, pbs)
 	}
 	c.PBSInstances = validPBS
-
-	if err := c.OIDC.Validate(); err != nil {
-		return fmt.Errorf("validate oidc config: %w", err)
-	}
 
 	return nil
 }

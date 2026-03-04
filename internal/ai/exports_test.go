@@ -13,8 +13,8 @@ func TestNewDefaultConfig(t *testing.T) {
 	}
 
 	// Verify some default values
-	if cfg.Provider != "" && cfg.Provider != ProviderAnthropic && cfg.Provider != ProviderOpenAI && cfg.Provider != ProviderOllama && cfg.Provider != ProviderDeepSeek {
-		t.Errorf("Unexpected provider: %s", cfg.Provider)
+	if cfg.Model == "" {
+		t.Error("Expected a default model")
 	}
 }
 

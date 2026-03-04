@@ -86,6 +86,12 @@ type APITokenRecord struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
+func (r *APITokenRecord) ensureID() {
+	if strings.TrimSpace(r.ID) == "" {
+		r.ID = uuid.NewString()
+	}
+}
+
 // ensureScopes normalizes the scope slice, applying legacy defaults.
 func (r *APITokenRecord) ensureScopes() {
 	if len(r.Scopes) == 0 {
@@ -125,6 +131,7 @@ func (r *APITokenRecord) Clone() APITokenRecord {
 		clone.OrgIDs = make([]string, len(r.OrgIDs))
 		copy(clone.OrgIDs, r.OrgIDs)
 	}
+	clone.ensureID()
 
 	return clone
 }
@@ -223,6 +230,17 @@ func bindLegacyAPITokensToDefault(tokens []APITokenRecord) int {
 	return migrated
 }
 
+func bindMissingAPITokenIDs(tokens []APITokenRecord) int {
+	migrated := 0
+	for i := range tokens {
+		if strings.TrimSpace(tokens[i].ID) == "" {
+			tokens[i].ID = uuid.NewString()
+			migrated++
+		}
+	}
+	return migrated
+}
+
 // tokenPrefix returns the first six characters suitable for hints.
 func tokenPrefix(value string) string {
 	if len(value) >= 6 {
@@ -270,25 +288,6 @@ func (c *Config) HasAPITokenHash(hash string) bool {
 	return false
 }
 
-// IsEnvMigrationSuppressed returns true if the given hash was a migrated env token
-// that the user explicitly deleted (and should not be re-migrated on restart).
-func (c *Config) IsEnvMigrationSuppressed(hash string) bool {
-	for _, h := range c.SuppressedEnvMigrations {
-		if h == hash {
-			return true
-		}
-	}
-	return false
-}
-
-// SuppressEnvMigration adds a hash to the suppression list to prevent re-migration.
-func (c *Config) SuppressEnvMigration(hash string) {
-	if c.IsEnvMigrationSuppressed(hash) {
-		return
-	}
-	c.SuppressedEnvMigrations = append(c.SuppressedEnvMigrations, hash)
-}
-
 // PrimaryAPITokenHash returns the newest token hash, if any.
 func (c *Config) PrimaryAPITokenHash() string {
 	if len(c.APITokens) == 0 {
@@ -323,6 +322,7 @@ func (c *Config) ValidateAPIToken(rawToken string) (*APITokenRecord, bool) {
 			if c.APITokens[idx].IsExpired() {
 				return nil, false
 			}
+			c.APITokens[idx].ensureID()
 			now := time.Now().UTC()
 			c.APITokens[idx].LastUsedAt = &now
 			c.APITokens[idx].ensureScopes()
@@ -353,6 +353,7 @@ func (c *Config) IsValidAPIToken(rawToken string) bool {
 
 // UpsertAPIToken inserts or replaces a record by ID.
 func (c *Config) UpsertAPIToken(record APITokenRecord) {
+	record.ensureID()
 	record.ensureScopes()
 	for idx, existing := range c.APITokens {
 		if existing.ID == record.ID {
@@ -380,6 +381,7 @@ func (c *Config) RemoveAPIToken(tokenID string) *APITokenRecord {
 // SortAPITokens keeps tokens ordered newest-first and syncs the legacy APIToken field.
 func (c *Config) SortAPITokens() {
 	for i := range c.APITokens {
+		c.APITokens[i].ensureID()
 		c.APITokens[i].ensureScopes()
 	}
 	sort.SliceStable(c.APITokens, func(i, j int) bool {

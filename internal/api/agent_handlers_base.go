@@ -11,10 +11,10 @@ import (
 // baseAgentHandlers provides the shared monitor-management and broadcast logic
 // for Docker, Kubernetes, and Host agent handler types.
 type baseAgentHandlers struct {
-	stateMu       sync.RWMutex
-	mtMonitor     *monitoring.MultiTenantMonitor
-	legacyMonitor *monitoring.Monitor
-	wsHub         *websocket.Hub
+	stateMu        sync.RWMutex
+	mtMonitor      *monitoring.MultiTenantMonitor
+	defaultMonitor *monitoring.Monitor
+	wsHub          *websocket.Hub
 }
 
 // newBaseAgentHandlers constructs the shared base, resolving the default org
@@ -25,40 +25,40 @@ func newBaseAgentHandlers(mtm *monitoring.MultiTenantMonitor, m *monitoring.Moni
 			m = mon
 		}
 	}
-	return baseAgentHandlers{mtMonitor: mtm, legacyMonitor: m, wsHub: hub}
+	return baseAgentHandlers{mtMonitor: mtm, defaultMonitor: m, wsHub: hub}
 }
 
 // SetMonitor updates the single-tenant monitor reference.
 func (b *baseAgentHandlers) SetMonitor(m *monitoring.Monitor) {
 	b.stateMu.Lock()
 	defer b.stateMu.Unlock()
-	b.legacyMonitor = m
+	b.defaultMonitor = m
 }
 
 // SetMultiTenantMonitor updates the multi-tenant monitor manager and
-// refreshes the legacy monitor from the "default" organization.
+// refreshes the default-org monitor fallback.
 func (b *baseAgentHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
-	var legacy *monitoring.Monitor
+	var defaultMonitor *monitoring.Monitor
 	if mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {
-			legacy = m
+			defaultMonitor = m
 		}
 	}
 
 	b.stateMu.Lock()
 	defer b.stateMu.Unlock()
 	b.mtMonitor = mtm
-	if legacy != nil {
-		b.legacyMonitor = legacy
+	if defaultMonitor != nil {
+		b.defaultMonitor = defaultMonitor
 	}
 }
 
 // getMonitor returns the monitor for the organization in the request context,
-// falling back to the legacy single-tenant monitor.
+// falling back to the default-org monitor.
 func (b *baseAgentHandlers) getMonitor(ctx context.Context) *monitoring.Monitor {
 	b.stateMu.RLock()
 	mtMonitor := b.mtMonitor
-	legacyMonitor := b.legacyMonitor
+	defaultMonitor := b.defaultMonitor
 	b.stateMu.RUnlock()
 
 	orgID := GetOrgID(ctx)
@@ -67,11 +67,11 @@ func (b *baseAgentHandlers) getMonitor(ctx context.Context) *monitoring.Monitor 
 			return m
 		}
 	}
-	return legacyMonitor
+	return defaultMonitor
 }
 
 // broadcastState pushes monitor state to tenant-scoped WebSocket clients when
-// context includes an org ID, falling back to global broadcast for legacy paths.
+// context includes an org ID, falling back to global broadcast for default paths.
 func (b *baseAgentHandlers) broadcastState(ctx context.Context) {
 	if b.wsHub == nil {
 		return

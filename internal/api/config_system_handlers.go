@@ -56,7 +56,6 @@ func (h *ConfigHandlers) handleGetSystemSettings(w http.ResponseWriter, r *http.
 		settings.HideLocalLogin = cfg.HideLocalLogin
 		settings.PublicURL = cfg.PublicURL
 		settings.DisableDockerUpdateActions = cfg.DisableDockerUpdateActions
-		settings.DisableLegacyRouteRedirects = cfg.DisableLegacyRouteRedirects
 		backupEnabled := cfg.EnableBackupPolling
 		settings.BackupPollingEnabled = &backupEnabled
 	}

@@ -746,7 +746,7 @@ func TestDiscoveryConfigUnmarshalJSON_ModernFields(t *testing.T) {
 	}
 }
 
-func TestDiscoveryConfigUnmarshalJSON_LegacyFields(t *testing.T) {
+func TestDiscoveryConfigUnmarshalJSON_LegacyFieldsIgnored(t *testing.T) {
 	var cfg DiscoveryConfig
 	data := `{
 		"environmentOverride": "lxc_privileged",
@@ -760,14 +760,18 @@ func TestDiscoveryConfigUnmarshalJSON_LegacyFields(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if cfg.EnvironmentOverride != "lxc_privileged" {
-		t.Errorf("EnvironmentOverride = %q, want 'lxc_privileged'", cfg.EnvironmentOverride)
+	defaults := DefaultDiscoveryConfig()
+	if cfg.EnvironmentOverride != defaults.EnvironmentOverride {
+		t.Errorf("EnvironmentOverride = %q, want %q", cfg.EnvironmentOverride, defaults.EnvironmentOverride)
 	}
-	if len(cfg.SubnetAllowlist) != 1 || cfg.SubnetAllowlist[0] != "172.16.0.0/12" {
-		t.Errorf("SubnetAllowlist = %v, want ['172.16.0.0/12']", cfg.SubnetAllowlist)
+	if len(cfg.SubnetAllowlist) != 0 {
+		t.Errorf("SubnetAllowlist = %v, want empty default", cfg.SubnetAllowlist)
 	}
-	if cfg.MaxHostsPerScan != 50 {
-		t.Errorf("MaxHostsPerScan = %d, want 50", cfg.MaxHostsPerScan)
+	if cfg.MaxHostsPerScan != defaults.MaxHostsPerScan {
+		t.Errorf("MaxHostsPerScan = %d, want default %d", cfg.MaxHostsPerScan, defaults.MaxHostsPerScan)
+	}
+	if cfg.EnableReverseDNS != defaults.EnableReverseDNS {
+		t.Errorf("EnableReverseDNS = %v, want default %v", cfg.EnableReverseDNS, defaults.EnableReverseDNS)
 	}
 }
 
@@ -810,7 +814,6 @@ func TestConfigDeepCopy_IndependentMutableState(t *testing.T) {
 				OrgIDs: []string{"org-a"},
 			},
 		},
-		SuppressedEnvMigrations: []string{"hash-1"},
 		EnvOverrides: map[string]bool{
 			"PULSE_AUTH_USER": true,
 		},
@@ -819,19 +822,6 @@ func TestConfigDeepCopy_IndependentMutableState(t *testing.T) {
 			SubnetAllowlist:     []string{"10.0.0.0/8"},
 			SubnetBlocklist:     []string{"169.254.0.0/16"},
 			IPBlocklist:         []string{"10.0.0.99"},
-		},
-		OIDC: &OIDCConfig{
-			Enabled:        true,
-			Scopes:         []string{"openid"},
-			AllowedGroups:  []string{"admins"},
-			AllowedDomains: []string{"example.com"},
-			AllowedEmails:  []string{"admin@example.com"},
-			GroupRoleMappings: map[string]string{
-				"admins": "admin",
-			},
-			EnvOverrides: map[string]bool{
-				"OIDC_ISSUER_URL": true,
-			},
 		},
 	}
 
@@ -845,17 +835,10 @@ func TestConfigDeepCopy_IndependentMutableState(t *testing.T) {
 	clone.PMGInstances[0].Host = "https://changed-pmg.local"
 	clone.APITokens[0].Scopes[0] = ScopeSettingsWrite
 	clone.APITokens[0].OrgIDs[0] = "org-b"
-	clone.SuppressedEnvMigrations[0] = "hash-2"
 	clone.EnvOverrides["PULSE_AUTH_USER"] = false
 	clone.Discovery.SubnetAllowlist[0] = "172.16.0.0/12"
 	clone.Discovery.SubnetBlocklist[0] = "10.0.0.0/8"
 	clone.Discovery.IPBlocklist[0] = "10.0.0.100"
-	clone.OIDC.Scopes[0] = "email"
-	clone.OIDC.AllowedGroups[0] = "ops"
-	clone.OIDC.AllowedDomains[0] = "changed.example.com"
-	clone.OIDC.AllowedEmails[0] = "ops@example.com"
-	clone.OIDC.GroupRoleMappings["admins"] = "viewer"
-	clone.OIDC.EnvOverrides["OIDC_ISSUER_URL"] = false
 
 	if got := original.PVEInstances[0].Host; got != "https://pve-a.local" {
 		t.Fatalf("original PVEInstances mutated: %q", got)
@@ -872,9 +855,6 @@ func TestConfigDeepCopy_IndependentMutableState(t *testing.T) {
 	if got := original.APITokens[0].OrgIDs[0]; got != "org-a" {
 		t.Fatalf("original APIToken org IDs mutated: %q", got)
 	}
-	if got := original.SuppressedEnvMigrations[0]; got != "hash-1" {
-		t.Fatalf("original suppressed migrations mutated: %q", got)
-	}
 	if got := original.EnvOverrides["PULSE_AUTH_USER"]; got != true {
 		t.Fatalf("original env override mutated: %v", got)
 	}
@@ -886,24 +866,6 @@ func TestConfigDeepCopy_IndependentMutableState(t *testing.T) {
 	}
 	if got := original.Discovery.IPBlocklist[0]; got != "10.0.0.99" {
 		t.Fatalf("original IP blocklist mutated: %q", got)
-	}
-	if got := original.OIDC.Scopes[0]; got != "openid" {
-		t.Fatalf("original OIDC scopes mutated: %q", got)
-	}
-	if got := original.OIDC.AllowedGroups[0]; got != "admins" {
-		t.Fatalf("original OIDC allowed groups mutated: %q", got)
-	}
-	if got := original.OIDC.AllowedDomains[0]; got != "example.com" {
-		t.Fatalf("original OIDC allowed domains mutated: %q", got)
-	}
-	if got := original.OIDC.AllowedEmails[0]; got != "admin@example.com" {
-		t.Fatalf("original OIDC allowed emails mutated: %q", got)
-	}
-	if got := original.OIDC.GroupRoleMappings["admins"]; got != "admin" {
-		t.Fatalf("original OIDC group role mapping mutated: %q", got)
-	}
-	if got := original.OIDC.EnvOverrides["OIDC_ISSUER_URL"]; got != true {
-		t.Fatalf("original OIDC env override mutated: %v", got)
 	}
 }
 

@@ -24,31 +24,29 @@ import (
 
 // ConfigPersistence handles saving and loading configuration
 type ConfigPersistence struct {
-	mu                       sync.RWMutex
-	tx                       *importTransaction
-	configDir                string
-	alertFile                string
-	emailFile                string
-	webhookFile              string
-	appriseFile              string
-	nodesFile                string
-	trueNASFile              string
-	systemFile               string
-	oidcFile                 string
-	ssoFile                  string
-	apiTokensFile            string
-	envTokenSuppressionsFile string
-	aiFile                   string
-	aiFindingsFile           string
-	aiPatrolRunsFile         string
-	aiUsageHistoryFile       string
-	agentProfilesFile        string
-	agentAssignmentsFile     string
-	aiChatSessionsFile       string
-	orgFile                  string
-	relayFile                string
-	crypto                   *crypto.CryptoManager
-	fs                       FileSystem
+	mu                   sync.RWMutex
+	tx                   *importTransaction
+	configDir            string
+	alertFile            string
+	emailFile            string
+	webhookFile          string
+	appriseFile          string
+	nodesFile            string
+	trueNASFile          string
+	systemFile           string
+	ssoFile              string
+	apiTokensFile        string
+	aiFile               string
+	aiFindingsFile       string
+	aiPatrolRunsFile     string
+	aiUsageHistoryFile   string
+	agentProfilesFile    string
+	agentAssignmentsFile string
+	aiChatSessionsFile   string
+	orgFile              string
+	relayFile            string
+	crypto               *crypto.CryptoManager
+	fs                   FileSystem
 
 	// Lazy loaded metadata stores
 	guestMetadataStore  *GuestMetadataStore
@@ -120,29 +118,27 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 	}
 
 	cp := &ConfigPersistence{
-		configDir:                configDir,
-		alertFile:                filepath.Join(configDir, "alerts.json"),
-		emailFile:                filepath.Join(configDir, "email.enc"),
-		webhookFile:              filepath.Join(configDir, "webhooks.enc"),
-		appriseFile:              filepath.Join(configDir, "apprise.enc"),
-		nodesFile:                filepath.Join(configDir, "nodes.enc"),
-		trueNASFile:              filepath.Join(configDir, "truenas.enc"),
-		systemFile:               filepath.Join(configDir, "system.json"),
-		oidcFile:                 filepath.Join(configDir, "oidc.enc"),
-		ssoFile:                  filepath.Join(configDir, "sso.enc"),
-		apiTokensFile:            filepath.Join(configDir, "api_tokens.json"),
-		envTokenSuppressionsFile: filepath.Join(configDir, "env_token_suppressions.json"),
-		aiFile:                   filepath.Join(configDir, "ai.enc"),
-		aiFindingsFile:           filepath.Join(configDir, "ai_findings.json"),
-		aiPatrolRunsFile:         filepath.Join(configDir, "ai_patrol_runs.json"),
-		aiUsageHistoryFile:       filepath.Join(configDir, "ai_usage_history.json"),
-		agentProfilesFile:        filepath.Join(configDir, "agent_profiles.json"),
-		agentAssignmentsFile:     filepath.Join(configDir, "agent_profile_assignments.json"),
-		aiChatSessionsFile:       filepath.Join(configDir, "ai_chat_sessions.json"),
-		orgFile:                  filepath.Join(configDir, "org.json"),
-		relayFile:                filepath.Join(configDir, "relay.enc"),
-		crypto:                   cryptoMgr,
-		fs:                       defaultFileSystem{},
+		configDir:            configDir,
+		alertFile:            filepath.Join(configDir, "alerts.json"),
+		emailFile:            filepath.Join(configDir, "email.enc"),
+		webhookFile:          filepath.Join(configDir, "webhooks.enc"),
+		appriseFile:          filepath.Join(configDir, "apprise.enc"),
+		nodesFile:            filepath.Join(configDir, "nodes.enc"),
+		trueNASFile:          filepath.Join(configDir, "truenas.enc"),
+		systemFile:           filepath.Join(configDir, "system.json"),
+		ssoFile:              filepath.Join(configDir, "sso.enc"),
+		apiTokensFile:        filepath.Join(configDir, "api_tokens.json"),
+		aiFile:               filepath.Join(configDir, "ai.enc"),
+		aiFindingsFile:       filepath.Join(configDir, "ai_findings.json"),
+		aiPatrolRunsFile:     filepath.Join(configDir, "ai_patrol_runs.json"),
+		aiUsageHistoryFile:   filepath.Join(configDir, "ai_usage_history.json"),
+		agentProfilesFile:    filepath.Join(configDir, "agent_profiles.json"),
+		agentAssignmentsFile: filepath.Join(configDir, "agent_profile_assignments.json"),
+		aiChatSessionsFile:   filepath.Join(configDir, "ai_chat_sessions.json"),
+		orgFile:              filepath.Join(configDir, "org.json"),
+		relayFile:            filepath.Join(configDir, "relay.enc"),
+		crypto:               cryptoMgr,
+		fs:                   defaultFileSystem{},
 	}
 
 	log.Debug().
@@ -397,20 +393,11 @@ func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
 	}
 
 	for i := range tokens {
+		tokens[i].ensureID()
 		tokens[i].ensureScopes()
 	}
 
 	return tokens, nil
-}
-
-// LoadEnvTokenSuppressions loads the list of suppressed env token hashes.
-func (c *ConfigPersistence) LoadEnvTokenSuppressions() ([]string, error) {
-	return loadSlice[string](c, c.envTokenSuppressionsFile, false)
-}
-
-// SaveEnvTokenSuppressions persists the suppressed env token hashes to disk.
-func (c *ConfigPersistence) SaveEnvTokenSuppressions(hashes []string) error {
-	return saveJSON(c, c.envTokenSuppressionsFile, hashes, false)
 }
 
 // SaveTrueNASConfig persists TrueNAS instance configuration to encrypted storage.
@@ -442,6 +429,7 @@ func (c *ConfigPersistence) SaveAPITokens(tokens []APITokenRecord) error {
 	sanitized := make([]APITokenRecord, len(tokens))
 	for i := range tokens {
 		record := tokens[i]
+		record.ensureID()
 		record.ensureScopes()
 		sanitized[i] = record
 	}
@@ -523,15 +511,13 @@ func normalizeAlertDefaults(config *alerts.AlertConfig) {
 
 	// Time thresholds
 	config.MetricTimeThresholds = alerts.NormalizeMetricTimeThresholds(config.MetricTimeThresholds)
-	if config.TimeThreshold <= 0 {
-		config.TimeThreshold = 5
-	}
 	if config.TimeThresholds == nil {
 		config.TimeThresholds = make(map[string]int)
 	}
+	defaultDelay := 5
 	ensureDelay := func(key string) {
 		if delay, ok := config.TimeThresholds[key]; !ok || delay <= 0 {
-			config.TimeThresholds[key] = config.TimeThreshold
+			config.TimeThresholds[key] = defaultDelay
 		}
 	}
 	ensureDelay("guest")
@@ -539,7 +525,7 @@ func normalizeAlertDefaults(config *alerts.AlertConfig) {
 	ensureDelay("storage")
 	ensureDelay("pbs")
 	if delay, ok := config.TimeThresholds["all"]; ok && delay <= 0 {
-		config.TimeThresholds["all"] = config.TimeThreshold
+		config.TimeThresholds["all"] = defaultDelay
 	}
 
 	// Snapshot defaults
@@ -676,7 +662,6 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 					NotifyOnResolve: true,
 				},
 				StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
-				TimeThreshold:  5,
 				TimeThresholds: map[string]int{
 					"guest":   5,
 					"node":    5,
@@ -1118,8 +1103,7 @@ type SystemSettings struct {
 	// Docker update control - server-wide settings
 	// These allow admins to control Docker update features globally, addressing concerns
 	// about Pulse being a "monitoring-first" tool vs an orchestration tool.
-	DisableDockerUpdateActions  bool `json:"disableDockerUpdateActions"`            // Hide update buttons while still detecting updates
-	DisableLegacyRouteRedirects bool `json:"disableLegacyRouteRedirects,omitempty"` // Disable legacy frontend route redirects globally
+	DisableDockerUpdateActions bool `json:"disableDockerUpdateActions"` // Hide update buttons while still detecting updates
 
 	// UX + privacy knobs (server-wide)
 	ReduceProUpsellNoise       bool `json:"reduceProUpsellNoise,omitempty"`       // Hide proactive Pro prompts; paywalls still appear when accessing gated features
@@ -1128,7 +1112,7 @@ type SystemSettings struct {
 	// Telemetry (enabled by default, opt-out)
 	TelemetryEnabled *bool `json:"telemetryEnabled,omitempty"` // Send anonymous usage telemetry (install ID, version, resource counts, feature flags — no PII)
 
-	// APIToken removed - now handled via .env file only
+	// APIToken is not persisted in system settings; API tokens are managed in api_tokens.json.
 }
 
 // DefaultSystemSettings returns a SystemSettings struct populated with sane defaults.
@@ -1575,69 +1559,6 @@ func (c *ConfigPersistence) SaveSystemSettings(settings SystemSettings) error {
 	return nil
 }
 
-// SaveOIDCConfig stores OIDC settings, encrypting them when a crypto manager is available.
-func (c *ConfigPersistence) SaveOIDCConfig(settings OIDCConfig) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if err := c.EnsureConfigDir(); err != nil {
-		return fmt.Errorf("prepare config directory for oidc config: %w", err)
-	}
-
-	// Do not persist runtime-only flags.
-	settings.EnvOverrides = nil
-
-	data, err := json.Marshal(settings)
-	if err != nil {
-		return fmt.Errorf("marshal oidc config: %w", err)
-	}
-
-	if c.crypto != nil {
-		encrypted, err := c.crypto.Encrypt(data)
-		if err != nil {
-			return fmt.Errorf("encrypt oidc config: %w", err)
-		}
-		data = encrypted
-	}
-
-	if err := c.writeConfigFileLocked(c.oidcFile, data, 0600); err != nil {
-		return fmt.Errorf("persist oidc config: %w", err)
-	}
-
-	log.Info().Str("file", c.oidcFile).Msg("OIDC configuration saved")
-	return nil
-}
-
-// LoadOIDCConfig retrieves the persisted OIDC settings. It returns nil when no configuration exists yet.
-func (c *ConfigPersistence) LoadOIDCConfig() (*OIDCConfig, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	data, err := c.fs.ReadFile(c.oidcFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	if c.crypto != nil {
-		decrypted, err := c.crypto.Decrypt(data)
-		if err != nil {
-			return nil, err
-		}
-		data = decrypted
-	}
-
-	var settings OIDCConfig
-	if err := json.Unmarshal(data, &settings); err != nil {
-		return nil, err
-	}
-
-	log.Info().Str("file", c.oidcFile).Msg("OIDC configuration loaded")
-	return &settings, nil
-}
-
 // SaveSSOConfig stores SSO settings, encrypting them when a crypto manager is available.
 func (c *ConfigPersistence) SaveSSOConfig(settings *SSOConfig) error {
 	c.mu.Lock()
@@ -1683,15 +1604,13 @@ func (c *ConfigPersistence) SaveSSOConfig(settings *SSOConfig) error {
 }
 
 // LoadSSOConfig retrieves the persisted SSO settings. It returns nil when no configuration exists yet.
-// If no SSO config exists but legacy OIDC config does, it will automatically migrate the configuration.
 func (c *ConfigPersistence) LoadSSOConfig() (*SSOConfig, error) {
 	c.mu.RLock()
 	data, err := c.fs.ReadFile(c.ssoFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			c.mu.RUnlock()
-			// Check if we should migrate from legacy OIDC config
-			return c.migrateFromLegacyOIDCConfig()
+			return nil, nil
 		}
 		c.mu.RUnlock()
 		return nil, err
@@ -1715,68 +1634,6 @@ func (c *ConfigPersistence) LoadSSOConfig() (*SSOConfig, error) {
 	c.mu.RUnlock()
 	log.Info().Str("file", c.ssoFile).Int("providers", len(settings.Providers)).Msg("SSO configuration loaded")
 	return &settings, nil
-}
-
-// migrateFromLegacyOIDCConfig checks for a legacy OIDC config file and migrates it to the new SSO format.
-// This function should be called WITHOUT any lock held.
-func (c *ConfigPersistence) migrateFromLegacyOIDCConfig() (*SSOConfig, error) {
-	c.mu.RLock()
-	// Check if legacy OIDC config exists
-	data, err := c.fs.ReadFile(c.oidcFile)
-	if err != nil {
-		c.mu.RUnlock()
-		if os.IsNotExist(err) {
-			// No legacy config either, return nil
-			return nil, nil
-		}
-		// Error reading file
-		return nil, nil // Don't fail the startup, just return nil
-	}
-
-	// Decrypt if needed
-	if c.crypto != nil {
-		decrypted, err := c.crypto.Decrypt(data)
-		if err != nil {
-			c.mu.RUnlock()
-			log.Warn().Err(err).Msg("Failed to decrypt legacy OIDC config for migration")
-			return nil, nil
-		}
-		data = decrypted
-	}
-	c.mu.RUnlock()
-
-	var oidcConfig OIDCConfig
-	if err := json.Unmarshal(data, &oidcConfig); err != nil {
-		log.Warn().Err(err).Msg("Failed to parse legacy OIDC config for migration")
-		return nil, nil
-	}
-
-	// Only migrate if OIDC was actually configured
-	if oidcConfig.IssuerURL == "" || oidcConfig.ClientID == "" {
-		log.Debug().Msg("Legacy OIDC config not configured, skipping migration")
-		return nil, nil
-	}
-
-	// Migrate to new SSO format
-	ssoConfig := MigrateFromOIDCConfig(&oidcConfig)
-
-	log.Info().
-		Str("issuer", oidcConfig.IssuerURL).
-		Str("clientId", oidcConfig.ClientID).
-		Bool("enabled", oidcConfig.Enabled).
-		Msg("Migrating legacy OIDC configuration to new SSO format")
-
-	// Save the migrated config
-	if err := c.SaveSSOConfig(ssoConfig); err != nil {
-		log.Error().Err(err).Msg("Failed to save migrated SSO configuration")
-		return ssoConfig, nil // Return the migrated config even if save failed
-	}
-
-	log.Info().
-		Int("providers", len(ssoConfig.Providers)).
-		Msg("Successfully migrated legacy OIDC config to new SSO format")
-
-	return ssoConfig, nil
 }
 
 // SaveAIConfig stores AI settings, encrypting them when a crypto manager is available.
@@ -1842,7 +1699,7 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 	// Migration: Ensure patrol settings have sensible defaults for existing configs
 	// PatrolIntervalMinutes=0 means it was never set - use default
 	if settings.PatrolIntervalMinutes <= 0 {
-		if !settings.PatrolEnabled || strings.EqualFold(settings.PatrolSchedulePreset, "disabled") {
+		if !settings.PatrolEnabled {
 			settings.PatrolIntervalMinutes = 0
 		} else {
 			settings.PatrolIntervalMinutes = 360

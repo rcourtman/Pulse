@@ -74,15 +74,6 @@ func TestAIConfig_IsConfigured(t *testing.T) {
 			expected: false,
 		},
 		{
-			name: "legacy provider with api key",
-			config: AIConfig{
-				Enabled:  true,
-				Provider: AIProviderAnthropic,
-				APIKey:   "legacy-key",
-			},
-			expected: true,
-		},
-		{
 			name: "enabled with deepseek key",
 			config: AIConfig{
 				Enabled:        true,
@@ -91,34 +82,9 @@ func TestAIConfig_IsConfigured(t *testing.T) {
 			expected: true,
 		},
 		{
-			name: "enabled with ollama (always configured if enabled)",
+			name: "enabled with ollama but no URL configured",
 			config: AIConfig{
-				Enabled:  true,
-				Provider: AIProviderOllama,
-			},
-			expected: true,
-		},
-		{
-			name: "enabled with unknown provider",
-			config: AIConfig{
-				Enabled:  true,
-				Provider: "unknown",
-			},
-			expected: false,
-		},
-		{
-			name: "anthropic legacy needs key",
-			config: AIConfig{
-				Enabled:  true,
-				Provider: AIProviderAnthropic,
-			},
-			expected: false,
-		},
-		{
-			name: "openai legacy needs key",
-			config: AIConfig{
-				Enabled:  true,
-				Provider: AIProviderOpenAI,
+				Enabled: true,
 			},
 			expected: false,
 		},
@@ -126,7 +92,6 @@ func TestAIConfig_IsConfigured(t *testing.T) {
 			name: "anthropic oauth needs token",
 			config: AIConfig{
 				Enabled:    true,
-				Provider:   AIProviderAnthropic,
 				AuthMethod: AuthMethodOAuth,
 			},
 			expected: false,
@@ -288,41 +253,6 @@ func TestAIConfig_GetAPIKeyForProvider(t *testing.T) {
 			}
 		})
 	}
-
-	t.Run("legacy fallback anthropic", func(t *testing.T) {
-		cfg := AIConfig{APIKey: "legacy", Provider: AIProviderAnthropic}
-		if key := cfg.GetAPIKeyForProvider(AIProviderAnthropic); key != "legacy" {
-			t.Errorf("want legacy, got %q", key)
-		}
-	})
-
-	t.Run("legacy fallback openai", func(t *testing.T) {
-		cfg := AIConfig{APIKey: "legacy", Provider: AIProviderOpenAI}
-		if key := cfg.GetAPIKeyForProvider(AIProviderOpenAI); key != "legacy" {
-			t.Errorf("want legacy, got %q", key)
-		}
-	})
-
-	t.Run("legacy fallback deepseek", func(t *testing.T) {
-		cfg := AIConfig{APIKey: "legacy", Provider: AIProviderDeepSeek}
-		if key := cfg.GetAPIKeyForProvider(AIProviderDeepSeek); key != "legacy" {
-			t.Errorf("want legacy, got %q", key)
-		}
-	})
-
-	t.Run("legacy fallback openrouter", func(t *testing.T) {
-		cfg := AIConfig{APIKey: "legacy", Provider: AIProviderOpenRouter}
-		if key := cfg.GetAPIKeyForProvider(AIProviderOpenRouter); key != "legacy" {
-			t.Errorf("want legacy, got %q", key)
-		}
-	})
-
-	t.Run("legacy fallback gemini", func(t *testing.T) {
-		cfg := AIConfig{APIKey: "legacy", Provider: AIProviderGemini}
-		if key := cfg.GetAPIKeyForProvider(AIProviderGemini); key != "legacy" {
-			t.Errorf("want legacy, got %q", key)
-		}
-	})
 }
 
 func TestAIConfig_GetBaseURLForProvider(t *testing.T) {
@@ -363,15 +293,6 @@ func TestAIConfig_GetBaseURLForProvider(t *testing.T) {
 		}
 	})
 
-	t.Run("legacy base url fallback", func(t *testing.T) {
-		cfg := AIConfig{
-			Provider: AIProviderOllama,
-			BaseURL:  "http://legacy:11434",
-		}
-		if url := cfg.GetBaseURLForProvider(AIProviderOllama); url != "http://legacy:11434" {
-			t.Errorf("got %q, want legacy url", url)
-		}
-	})
 }
 
 func TestAIConfig_IsUsingOAuth(t *testing.T) {
@@ -457,66 +378,6 @@ func TestFormatModelString(t *testing.T) {
 	}
 }
 
-func TestAIConfig_GetBaseURL(t *testing.T) {
-	tests := []struct {
-		name     string
-		config   AIConfig
-		expected string
-	}{
-		{
-			name: "custom base url",
-			config: AIConfig{
-				BaseURL: "https://custom.url",
-			},
-			expected: "https://custom.url",
-		},
-		{
-			name: "ollama default",
-			config: AIConfig{
-				Provider: AIProviderOllama,
-			},
-			expected: DefaultOllamaBaseURL,
-		},
-		{
-			name: "openrouter default",
-			config: AIConfig{
-				Provider: AIProviderOpenRouter,
-			},
-			expected: DefaultOpenRouterBaseURL,
-		},
-		{
-			name: "deepseek default",
-			config: AIConfig{
-				Provider: AIProviderDeepSeek,
-			},
-			expected: DefaultDeepSeekBaseURL,
-		},
-		{
-			name: "gemini default",
-			config: AIConfig{
-				Provider: AIProviderGemini,
-			},
-			expected: DefaultGeminiBaseURL,
-		},
-		{
-			name: "anthropic no URL",
-			config: AIConfig{
-				Provider: AIProviderAnthropic,
-			},
-			expected: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.config.GetBaseURL()
-			if result != tt.expected {
-				t.Errorf("GetBaseURL() = %q, want %q", result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestAIConfig_GetModel(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -576,52 +437,7 @@ func TestAIConfig_GetModel(t *testing.T) {
 				AnthropicAPIKey: "key",
 				OpenAIAPIKey:    "key",
 			},
-			// Fallback to legacy Provider logic
 			expected: "",
-		},
-		{
-			name: "multiple providers configured with legacy provider set",
-			config: AIConfig{
-				AnthropicAPIKey: "key",
-				OpenAIAPIKey:    "key",
-				Provider:        AIProviderOpenAI,
-			},
-			expected: DefaultAIModelOpenAI,
-		},
-		{
-			name: "legacy provider fallback - anthropic",
-			config: AIConfig{
-				Provider: AIProviderAnthropic,
-			},
-			expected: DefaultAIModelAnthropic,
-		},
-		{
-			name: "legacy provider fallback - openrouter",
-			config: AIConfig{
-				Provider: AIProviderOpenRouter,
-			},
-			expected: DefaultAIModelOpenRouter,
-		},
-		{
-			name: "legacy provider fallback - deepseek",
-			config: AIConfig{
-				Provider: AIProviderDeepSeek,
-			},
-			expected: DefaultAIModelDeepSeek,
-		},
-		{
-			name: "legacy provider fallback - gemini",
-			config: AIConfig{
-				Provider: AIProviderGemini,
-			},
-			expected: DefaultAIModelGemini,
-		},
-		{
-			name: "legacy provider fallback - ollama",
-			config: AIConfig{
-				Provider: AIProviderOllama,
-			},
-			expected: DefaultAIModelOllama,
 		},
 		{
 			name: "ollama fallback (configured provider)",
@@ -730,10 +546,10 @@ func TestAIConfig_ClearOAuthTokens(t *testing.T) {
 }
 
 func TestAIConfig_ClearAPIKey(t *testing.T) {
-	config := AIConfig{APIKey: "key"}
+	config := AIConfig{AnthropicAPIKey: "key"}
 	config.ClearAPIKey()
-	if config.APIKey != "" {
-		t.Error("APIKey should be cleared")
+	if config.AnthropicAPIKey != "" {
+		t.Error("AnthropicAPIKey should be cleared")
 	}
 }
 
@@ -743,36 +559,6 @@ func TestAIConfig_GetPatrolInterval(t *testing.T) {
 		config   AIConfig
 		expected time.Duration
 	}{
-		{
-			name:     "15min preset",
-			config:   AIConfig{PatrolSchedulePreset: "15min"},
-			expected: 15 * time.Minute,
-		},
-		{
-			name:     "1hr preset",
-			config:   AIConfig{PatrolSchedulePreset: "1hr"},
-			expected: 1 * time.Hour,
-		},
-		{
-			name:     "6hr preset",
-			config:   AIConfig{PatrolSchedulePreset: "6hr"},
-			expected: 6 * time.Hour,
-		},
-		{
-			name:     "12hr preset",
-			config:   AIConfig{PatrolSchedulePreset: "12hr"},
-			expected: 12 * time.Hour,
-		},
-		{
-			name:     "daily preset",
-			config:   AIConfig{PatrolSchedulePreset: "daily"},
-			expected: 24 * time.Hour,
-		},
-		{
-			name:     "disabled preset",
-			config:   AIConfig{PatrolSchedulePreset: "disabled"},
-			expected: 0,
-		},
 		{
 			name:     "custom minutes",
 			config:   AIConfig{PatrolIntervalMinutes: 30},
@@ -801,13 +587,9 @@ func TestAIConfig_GetPatrolInterval(t *testing.T) {
 }
 
 func TestAIConfig_IntervalSurvivesRoundTrip(t *testing.T) {
-	// This test catches the bug where setting patrol_interval_minutes via the API
-	// clears PatrolSchedulePreset to "", but omitempty caused "" to be dropped
-	// from the JSON. On reload, NewDefaultAIConfig() re-introduced "6hr" as the
-	// preset, which took priority over the custom minutes.
+	// Custom patrol intervals must survive JSON round-trips.
 	cfg := NewDefaultAIConfig()
 	cfg.PatrolIntervalMinutes = 15
-	cfg.PatrolSchedulePreset = "" // Cleared by API handler when user sets custom minutes
 
 	// Simulate save → load round-trip via JSON
 	data, err := json.Marshal(cfg)
@@ -820,39 +602,10 @@ func TestAIConfig_IntervalSurvivesRoundTrip(t *testing.T) {
 		t.Fatalf("unmarshal: %v", err)
 	}
 
-	// The preset must be empty after round-trip, not the default "6hr"
-	if loaded.PatrolSchedulePreset != "" {
-		t.Errorf("PatrolSchedulePreset should be empty after round-trip, got %q", loaded.PatrolSchedulePreset)
-	}
-
 	// The interval must be the user's 15 minutes, not the default 6 hours
 	interval := loaded.GetPatrolInterval()
 	if interval != 15*time.Minute {
 		t.Errorf("GetPatrolInterval() = %v after round-trip, want 15m", interval)
-	}
-}
-
-func TestPresetToMinutes(t *testing.T) {
-	tests := []struct {
-		preset   string
-		expected int
-	}{
-		{"15min", 15},
-		{"1hr", 60},
-		{"6hr", 360},
-		{"12hr", 720},
-		{"daily", 1440},
-		{"disabled", 0},
-		{"unknown", 360}, // default
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.preset, func(t *testing.T) {
-			result := PresetToMinutes(tt.preset)
-			if result != tt.expected {
-				t.Errorf("PresetToMinutes(%q) = %d, want %d", tt.preset, result, tt.expected)
-			}
-		})
 	}
 }
 
@@ -865,11 +618,6 @@ func TestAIConfig_IsPatrolEnabled(t *testing.T) {
 		{
 			name:     "patrol disabled when AI disabled",
 			config:   AIConfig{Enabled: false, PatrolEnabled: true},
-			expected: false,
-		},
-		{
-			name:     "patrol disabled by preset",
-			config:   AIConfig{Enabled: true, PatrolEnabled: true, PatrolSchedulePreset: "disabled"},
 			expected: false,
 		},
 		{
@@ -922,9 +670,6 @@ func TestNewDefaultAIConfig(t *testing.T) {
 
 	if config.Enabled {
 		t.Error("Default should not be enabled")
-	}
-	if config.Provider != AIProviderAnthropic {
-		t.Errorf("Default provider should be anthropic, got %q", config.Provider)
 	}
 	if config.PatrolIntervalMinutes != 360 {
 		t.Errorf("Default patrol interval should be 360, got %d", config.PatrolIntervalMinutes)

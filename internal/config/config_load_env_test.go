@@ -14,21 +14,6 @@ func TestLoad_EnvOverrides_Detailed(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", tempDir)
 
 	envVars := map[string]string{
-		"OIDC_ENABLED":         "true",
-		"OIDC_ISSUER_URL":      "https://oidc.com",
-		"OIDC_CLIENT_ID":       "cid",
-		"OIDC_CLIENT_SECRET":   "sec",
-		"OIDC_REDIRECT_URL":    "https://pulse.com/callback",
-		"OIDC_LOGOUT_URL":      "https://oidc.com/logout",
-		"OIDC_SCOPES":          "openid profile email",
-		"OIDC_USERNAME_CLAIM":  "preferred_username",
-		"OIDC_EMAIL_CLAIM":     "mail",
-		"OIDC_GROUPS_CLAIM":    "roles",
-		"OIDC_ALLOWED_GROUPS":  "admin,dev",
-		"OIDC_ALLOWED_DOMAINS": "example.com",
-		"OIDC_ALLOWED_EMAILS":  "user@example.com",
-		"OIDC_CA_BUNDLE":       "/path/to/ca",
-
 		"PULSE_AUTH_PASS": "plainpass",
 		"TLS_CERT_FILE":   "/etc/cert.pem",
 		"TLS_KEY_FILE":    "/etc/key.pem",
@@ -56,22 +41,6 @@ func TestLoad_EnvOverrides_Detailed(t *testing.T) {
 
 	cfg, err := Load()
 	require.NoError(t, err)
-
-	// OIDC
-	assert.True(t, cfg.OIDC.Enabled)
-	assert.Equal(t, "https://oidc.com", cfg.OIDC.IssuerURL)
-	assert.Equal(t, "cid", cfg.OIDC.ClientID)
-	assert.Equal(t, "sec", cfg.OIDC.ClientSecret)
-	assert.Equal(t, "https://pulse.com/callback", cfg.OIDC.RedirectURL)
-	assert.Equal(t, "https://oidc.com/logout", cfg.OIDC.LogoutURL)
-	assert.Equal(t, []string{"openid", "profile", "email"}, cfg.OIDC.Scopes)
-	assert.Equal(t, "preferred_username", cfg.OIDC.UsernameClaim)
-	assert.Equal(t, "mail", cfg.OIDC.EmailClaim)
-	assert.Equal(t, "roles", cfg.OIDC.GroupsClaim)
-	assert.Equal(t, []string{"admin", "dev"}, cfg.OIDC.AllowedGroups)
-	assert.Equal(t, []string{"example.com"}, cfg.OIDC.AllowedDomains)
-	assert.Equal(t, []string{"user@example.com"}, cfg.OIDC.AllowedEmails)
-	assert.Equal(t, "/path/to/ca", cfg.OIDC.CABundle)
 
 	// Auth
 	assert.NotEqual(t, "plainpass", cfg.AuthPass)

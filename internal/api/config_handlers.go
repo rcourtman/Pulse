@@ -26,6 +26,7 @@ import (
 var (
 	setupAuthTokenPattern   = regexp.MustCompile(`^[A-Fa-f0-9]{32,128}$`)
 	installerURLHostPattern = regexp.MustCompile(`^[A-Za-z0-9.-]+$`)
+	pulseTokenSlugPattern   = regexp.MustCompile(`[^a-z0-9]+`)
 )
 
 func sanitizeInstallerURL(raw string) (string, error) {
@@ -100,6 +101,77 @@ func sanitizeSetupAuthToken(token string) (string, error) {
 	return trimmed, nil
 }
 
+// buildPulseMonitorTokenName returns a deterministic Pulse-managed token name.
+// The result is stable across reruns for the same Pulse instance.
+func buildPulseMonitorTokenName(candidates ...string) string {
+	return "pulse-" + pulseTokenSuffix(candidates...)
+}
+
+func pulseTokenSuffix(candidates ...string) string {
+	for _, candidate := range candidates {
+		host := pulseTokenHostCandidate(candidate)
+		if host == "" {
+			continue
+		}
+		slug := pulseTokenSlug(host)
+		if slug != "" {
+			return slug
+		}
+	}
+	return "server"
+}
+
+func pulseTokenHostCandidate(candidate string) string {
+	raw := strings.TrimSpace(candidate)
+	if raw == "" {
+		return ""
+	}
+
+	if strings.Contains(raw, "://") {
+		if parsed, err := url.Parse(raw); err == nil && parsed.Hostname() != "" {
+			return parsed.Hostname()
+		}
+	}
+
+	if host, _, err := net.SplitHostPort(raw); err == nil {
+		return strings.Trim(host, "[]")
+	}
+
+	if parsed, err := url.Parse("https://" + raw); err == nil && parsed.Hostname() != "" {
+		return parsed.Hostname()
+	}
+
+	return strings.Trim(raw, "[]")
+}
+
+func pulseTokenSlug(raw string) string {
+	trimmed := strings.Trim(strings.ToLower(strings.TrimSpace(raw)), ".")
+	if trimmed == "" {
+		return ""
+	}
+
+	slug := pulseTokenSlugPattern.ReplaceAllString(trimmed, "-")
+	slug = strings.Trim(slug, "-")
+	if slug == "" {
+		return ""
+	}
+
+	const maxSlugLen = 48
+	if len(slug) > maxSlugLen {
+		slug = strings.Trim(slug[:maxSlugLen], "-")
+	}
+
+	return slug
+}
+
+// isPulseAgentToken returns true if the token ID was created by the Pulse agent.
+// Agent tokens follow "pulse-monitor@pve!pulse-<scope>" (PVE) or
+// "pulse-monitor@pbs!pulse-<scope>" (PBS). Legacy tokens may include a timestamp suffix.
+func isPulseAgentToken(tokenID string) bool {
+	return strings.HasPrefix(tokenID, "pulse-monitor@pve!pulse-") ||
+		strings.HasPrefix(tokenID, "pulse-monitor@pbs!pulse-")
+}
+
 // SetupCode represents a one-time setup code for secure node registration
 type SetupCode struct {
 	ExpiresAt time.Time
@@ -114,10 +186,10 @@ type ConfigHandlers struct {
 	stateMu       sync.RWMutex
 	mtPersistence *config.MultiTenantPersistence
 	mtMonitor     *monitoring.MultiTenantMonitor
-	// Legacy fields - to be removed or used as fallback
-	legacyConfig      *config.Config
-	legacyPersistence *config.ConfigPersistence
-	legacyMonitor     *monitoring.Monitor
+	// Default-org runtime fields used when tenant-specific state is unavailable.
+	defaultConfig      *config.Config
+	defaultPersistence *config.ConfigPersistence
+	defaultMonitor     *monitoring.Monitor
 
 	reloadFunc               func() error
 	reloadSystemSettingsFunc func() // Function to reload cached system settings
@@ -134,8 +206,7 @@ type ConfigHandlers struct {
 
 // NewConfigHandlers creates a new ConfigHandlers instance
 func NewConfigHandlers(mtp *config.MultiTenantPersistence, mtm *monitoring.MultiTenantMonitor, reloadFunc func() error, wsHub *websocket.Hub, guestMetadataHandler *GuestMetadataHandler, reloadSystemSettingsFunc func()) *ConfigHandlers {
-	// Initialize with default (legacy) values if available, for backward compat during migration
-	// Ideally we fetch them from mtp/mtm for "default" org.
+	// Initialize with default-org values from multi-tenant managers when available.
 	var defaultConfig *config.Config
 	var defaultMonitor *monitoring.Monitor
 	var defaultPersistence *config.ConfigPersistence
@@ -157,9 +228,9 @@ func NewConfigHandlers(mtp *config.MultiTenantPersistence, mtm *monitoring.Multi
 	h := &ConfigHandlers{
 		mtPersistence:            mtp,
 		mtMonitor:                mtm,
-		legacyConfig:             defaultConfig,
-		legacyMonitor:            defaultMonitor,
-		legacyPersistence:        defaultPersistence,
+		defaultConfig:            defaultConfig,
+		defaultMonitor:           defaultMonitor,
+		defaultPersistence:       defaultPersistence,
 		reloadFunc:               reloadFunc,
 		reloadSystemSettingsFunc: reloadSystemSettingsFunc,
 		wsHub:                    wsHub,
@@ -178,13 +249,13 @@ func NewConfigHandlers(mtp *config.MultiTenantPersistence, mtm *monitoring.Multi
 
 // SetMultiTenantMonitor updates the monitor reference used by the config handlers.
 func (h *ConfigHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
-	var legacyMonitor *monitoring.Monitor
-	var legacyConfig *config.Config
+	var defaultMonitor *monitoring.Monitor
+	var defaultConfig *config.Config
 	if mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {
-			legacyMonitor = m
+			defaultMonitor = m
 			if m != nil {
-				legacyConfig = m.GetConfig()
+				defaultConfig = m.GetConfig()
 			}
 		}
 	}
@@ -192,19 +263,19 @@ func (h *ConfigHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonito
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	h.mtMonitor = mtm
-	if legacyMonitor != nil {
-		h.legacyMonitor = legacyMonitor
-		h.legacyConfig = legacyConfig
+	if defaultMonitor != nil {
+		h.defaultMonitor = defaultMonitor
+		h.defaultConfig = defaultConfig
 	}
 }
 
-// SetMonitor updates the monitor reference used by the config handlers (legacy support).
+// SetMonitor updates the default-org monitor reference used by the config handlers.
 func (h *ConfigHandlers) SetMonitor(m *monitoring.Monitor) {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	h.legacyMonitor = m
+	h.defaultMonitor = m
 	if m != nil {
-		h.legacyConfig = m.GetConfig()
+		h.defaultConfig = m.GetConfig()
 	}
 }
 
@@ -216,7 +287,7 @@ func (h *ConfigHandlers) SetConfig(cfg *config.Config) {
 
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	h.legacyConfig = cfg
+	h.defaultConfig = cfg
 }
 
 // getContextState helper to retrieve tenant-specific state
@@ -224,9 +295,9 @@ func (h *ConfigHandlers) getContextState(ctx context.Context) (*config.Config, *
 	h.stateMu.RLock()
 	mtMonitor := h.mtMonitor
 	mtPersistence := h.mtPersistence
-	legacyConfig := h.legacyConfig
-	legacyPersistence := h.legacyPersistence
-	legacyMonitor := h.legacyMonitor
+	defaultConfig := h.defaultConfig
+	defaultPersistence := h.defaultPersistence
+	defaultMonitor := h.defaultMonitor
 	h.stateMu.RUnlock()
 
 	orgID := "default"
@@ -236,7 +307,7 @@ func (h *ConfigHandlers) getContextState(ctx context.Context) (*config.Config, *
 		}
 	}
 
-	// Try to get from multi-tenant managers first
+	// Resolve from multi-tenant managers first.
 	if mtMonitor != nil {
 		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
 			cfg := m.GetConfig()
@@ -246,12 +317,12 @@ func (h *ConfigHandlers) getContextState(ctx context.Context) (*config.Config, *
 			}
 			return cfg, p, m
 		} else if err != nil {
-			log.Warn().Str("orgID", orgID).Err(err).Msg("Falling back to legacy config - failed to get tenant monitor")
+			log.Warn().Str("orgID", orgID).Err(err).Msg("Falling back to default-org config after tenant monitor lookup failure")
 		}
 	}
 
-	// Fallback to legacy (should mostly happen for "default" or initialization)
-	return legacyConfig, legacyPersistence, legacyMonitor
+	// Fallback to default-org state (primarily for "default" org or initialization).
+	return defaultConfig, defaultPersistence, defaultMonitor
 }
 
 func (h *ConfigHandlers) getConfig(ctx context.Context) *config.Config {

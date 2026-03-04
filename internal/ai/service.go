@@ -1399,9 +1399,6 @@ func (s *Service) LoadConfig() error {
 		configuredProviders := cfg.GetConfiguredProviders()
 		if len(configuredProviders) > 0 {
 			byokDefault = config.DefaultModelForProvider(configuredProviders[0])
-		} else if cfg.Provider != "" {
-			// Legacy single-provider credentials
-			byokDefault = config.DefaultModelForProvider(cfg.Provider)
 		}
 		if byokDefault != "" {
 			log.Info().
@@ -1418,74 +1415,58 @@ func (s *Service) LoadConfig() error {
 
 	providerClient, err := providers.NewForModel(cfg, selectedModel)
 	if err != nil {
-		// Only fall back to legacy config if no multi-provider credentials are set.
-		if len(cfg.GetConfiguredProviders()) == 0 && (cfg.Provider != "" || cfg.APIKey != "") {
-			if legacyClient, legacyErr := providers.NewFromConfig(cfg); legacyErr == nil {
-				providerClient = legacyClient
-				selectedProvider = providerClient.Name()
-				log.Info().
-					Str("provider", selectedProvider).
-					Str("model", cfg.GetModel()).
-					Msg("AI service initialized via legacy config (migration path)")
-			} else {
-				log.Warn().Err(legacyErr).Msg("failed to initialize legacy AI provider")
-				s.provider = nil
-				return nil
-			}
-		} else {
-			// Smart fallback: if selected provider isn't configured but OTHER providers are,
-			// automatically switch to a model from a configured provider.
-			// This prevents confusing errors when the user has e.g. DeepSeek configured
-			// but the model is still set to an Anthropic model.
-			configuredProviders := cfg.GetConfiguredProviders()
-			if len(configuredProviders) > 0 {
-				fallbackProvider := configuredProviders[0]
-				var fallbackModel string
-				switch fallbackProvider {
-				case config.AIProviderAnthropic:
-					fallbackModel = config.AIProviderAnthropic + ":" + config.DefaultAIModelAnthropic
-				case config.AIProviderOpenAI:
-					fallbackModel = config.AIProviderOpenAI + ":" + config.DefaultAIModelOpenAI
-				case config.AIProviderOpenRouter:
-					fallbackModel = config.AIProviderOpenRouter + ":" + config.DefaultAIModelOpenRouter
-				case config.AIProviderDeepSeek:
-					fallbackModel = config.AIProviderDeepSeek + ":" + config.DefaultAIModelDeepSeek
-				case config.AIProviderGemini:
-					fallbackModel = config.AIProviderGemini + ":" + config.DefaultAIModelGemini
-				case config.AIProviderOllama:
-					fallbackModel = config.AIProviderOllama + ":" + config.DefaultAIModelOllama
-				}
-
-				if fallbackModel != "" {
-					log.Warn().
-						Str("selected_model", selectedModel).
-						Str("selected_provider", selectedProvider).
-						Str("fallback_model", fallbackModel).
-						Str("fallback_provider", fallbackProvider).
-						Msg("Selected provider not configured - automatically falling back to configured provider")
-
-					providerClient, err = providers.NewForModel(cfg, fallbackModel)
-					if err == nil {
-						selectedModel = fallbackModel
-						selectedProvider = fallbackProvider
-					} else {
-						log.Error().Err(err).Str("fallback_model", fallbackModel).Msg("failed to create fallback provider")
-						s.provider = nil
-						return nil
-					}
-				}
+		// Smart fallback: if selected provider isn't configured but OTHER providers are,
+		// automatically switch to a model from a configured provider.
+		// This prevents confusing errors when the user has e.g. DeepSeek configured
+		// but the model is still set to an Anthropic model.
+		configuredProviders := cfg.GetConfiguredProviders()
+		if len(configuredProviders) > 0 {
+			fallbackProvider := configuredProviders[0]
+			var fallbackModel string
+			switch fallbackProvider {
+			case config.AIProviderAnthropic:
+				fallbackModel = config.AIProviderAnthropic + ":" + config.DefaultAIModelAnthropic
+			case config.AIProviderOpenAI:
+				fallbackModel = config.AIProviderOpenAI + ":" + config.DefaultAIModelOpenAI
+			case config.AIProviderOpenRouter:
+				fallbackModel = config.AIProviderOpenRouter + ":" + config.DefaultAIModelOpenRouter
+			case config.AIProviderDeepSeek:
+				fallbackModel = config.AIProviderDeepSeek + ":" + config.DefaultAIModelDeepSeek
+			case config.AIProviderGemini:
+				fallbackModel = config.AIProviderGemini + ":" + config.DefaultAIModelGemini
+			case config.AIProviderOllama:
+				fallbackModel = config.AIProviderOllama + ":" + config.DefaultAIModelOllama
 			}
 
-			if providerClient == nil {
+			if fallbackModel != "" {
 				log.Warn().
-					Err(err).
 					Str("selected_model", selectedModel).
 					Str("selected_provider", selectedProvider).
-					Strs("configured_providers", cfg.GetConfiguredProviders()).
-					Msg("AI enabled but no providers configured")
-				s.provider = nil
-				return nil
+					Str("fallback_model", fallbackModel).
+					Str("fallback_provider", fallbackProvider).
+					Msg("Selected provider not configured - automatically falling back to configured provider")
+
+				providerClient, err = providers.NewForModel(cfg, fallbackModel)
+				if err == nil {
+					selectedModel = fallbackModel
+					selectedProvider = fallbackProvider
+				} else {
+					log.Error().Err(err).Str("fallback_model", fallbackModel).Msg("failed to create fallback provider")
+					s.provider = nil
+					return nil
+				}
 			}
+		}
+
+		if providerClient == nil {
+			log.Warn().
+				Err(err).
+				Str("selected_model", selectedModel).
+				Str("selected_provider", selectedProvider).
+				Strs("configured_providers", cfg.GetConfiguredProviders()).
+				Msg("AI enabled but no providers configured")
+			s.provider = nil
+			return nil
 		}
 	}
 

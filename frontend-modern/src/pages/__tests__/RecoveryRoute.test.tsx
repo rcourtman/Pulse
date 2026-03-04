@@ -29,30 +29,8 @@ describe('RecoveryRoute', () => {
 
   afterEach(() => cleanup());
 
-  it('redirects legacy query params to the canonical v6 Recovery URL and does not render the page during redirect', async () => {
-    mockLocationSearch =
-      '?view=artifacts&backupType=remote&group=guest&search=vm-101&source=pbs&type=vm';
-    render(() => <RecoveryRoute />);
-
-    await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledTimes(1);
-    });
-
-    const [target, opts] = navigateSpy.mock.calls[0] as [string, { replace?: boolean }];
-    expect(target).toContain('/recovery?');
-    expect(target).toContain('view=events');
-    expect(target).toContain('mode=remote');
-    expect(target).toContain('scope=workload');
-    expect(target).toContain('provider=proxmox-pbs');
-    expect(target).toContain('q=vm-101');
-    expect(target).not.toContain('type=');
-    expect(opts?.replace).toBe(true);
-
-    expect(screen.queryByTestId('recovery-component')).not.toBeInTheDocument();
-  });
-
-  it('renders Recovery when query params are already canonical', async () => {
-    mockLocationSearch = '?view=events&mode=remote&scope=workload&q=vm-101';
+  it('renders Recovery without query rewrite redirects', async () => {
+    mockLocationSearch = '?view=artifacts&backupType=remote&group=guest&search=vm-101&source=pbs';
     render(() => <RecoveryRoute />);
 
     await waitFor(() => {

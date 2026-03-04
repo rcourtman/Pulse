@@ -61,8 +61,3 @@ export function useDashboardRecovery() {
     };
   });
 }
-
-// Backwards-compat shim for older call sites (the data is now "recovery", not "backups").
-export function useDashboardBackups() {
-  return useDashboardRecovery();
-}

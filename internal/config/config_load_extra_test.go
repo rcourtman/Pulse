@@ -75,17 +75,9 @@ func TestLoad_Errors(t *testing.T) {
 	systemPath := filepath.Join(tempDir, "system.json")
 	require.NoError(t, os.WriteFile(systemPath, []byte("{invalid}"), 0644))
 
-	// 3. Corrupted OIDC
-	oidcPath := filepath.Join(tempDir, "oidc.enc")
-	require.NoError(t, os.WriteFile(oidcPath, []byte("corrupted"), 0644))
-
-	// 4. Corrupted Tokens
+	// 3. Corrupted Tokens
 	tokensPath := filepath.Join(tempDir, "api_tokens.json")
 	require.NoError(t, os.WriteFile(tokensPath, []byte("{invalid}"), 0644))
-
-	// 5. Corrupted Suppressions
-	suppressionsPath := filepath.Join(tempDir, "env_token_suppressions.json")
-	require.NoError(t, os.WriteFile(suppressionsPath, []byte("{invalid}"), 0644))
 
 	// Load should still proceed with defaults and log warnings
 	cfg, err := Load()

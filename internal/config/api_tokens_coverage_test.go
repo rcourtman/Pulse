@@ -17,18 +17,6 @@ func TestConfigAPITokenHelpersAndMutations(t *testing.T) {
 		t.Fatalf("PrimaryAPITokenHint() = %q, want empty", cfg.PrimaryAPITokenHint())
 	}
 
-	cfg.SuppressEnvMigration("hash-a")
-	cfg.SuppressEnvMigration("hash-a") // duplicate should be ignored
-	if !cfg.IsEnvMigrationSuppressed("hash-a") {
-		t.Fatalf("expected hash-a to be suppressed")
-	}
-	if cfg.IsEnvMigrationSuppressed("hash-b") {
-		t.Fatalf("expected hash-b to not be suppressed")
-	}
-	if len(cfg.SuppressedEnvMigrations) != 1 {
-		t.Fatalf("SuppressedEnvMigrations len = %d, want 1", len(cfg.SuppressedEnvMigrations))
-	}
-
 	base := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
 	cfg.UpsertAPIToken(APITokenRecord{
 		ID:        "old-id",

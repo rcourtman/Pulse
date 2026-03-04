@@ -164,3 +164,49 @@ func TestBindLegacyAPITokensToDefault(t *testing.T) {
 		t.Fatalf("tokens[3].OrgID = %q, want default", tokens[3].OrgID)
 	}
 }
+
+func TestBindMissingAPITokenIDs(t *testing.T) {
+	tokens := []APITokenRecord{
+		{ID: ""},
+		{ID: "token-2"},
+		{ID: "   "},
+	}
+
+	migrated := bindMissingAPITokenIDs(tokens)
+	if migrated != 2 {
+		t.Fatalf("migrated = %d, want 2", migrated)
+	}
+	if tokens[0].ID == "" || tokens[0].ID == "   " {
+		t.Fatalf("tokens[0].ID should be assigned")
+	}
+	if tokens[1].ID != "token-2" {
+		t.Fatalf("tokens[1].ID = %q, want token-2", tokens[1].ID)
+	}
+	if tokens[2].ID == "" || tokens[2].ID == "   " {
+		t.Fatalf("tokens[2].ID should be assigned")
+	}
+}
+
+func TestValidateAPIToken_AssignsMissingTokenID(t *testing.T) {
+	raw := "token-with-missing-id"
+	record, err := NewAPITokenRecord(raw, "name", nil)
+	if err != nil {
+		t.Fatalf("NewAPITokenRecord error: %v", err)
+	}
+	record.ID = ""
+
+	cfg := &Config{
+		APITokens: []APITokenRecord{*record},
+	}
+
+	validated, ok := cfg.ValidateAPIToken(raw)
+	if !ok || validated == nil {
+		t.Fatalf("expected token to validate")
+	}
+	if validated.ID == "" || validated.ID == "   " {
+		t.Fatalf("expected ValidateAPIToken to assign a missing token ID")
+	}
+	if cfg.APITokens[0].ID == "" || cfg.APITokens[0].ID == "   " {
+		t.Fatalf("expected in-memory token record to have assigned ID")
+	}
+}
