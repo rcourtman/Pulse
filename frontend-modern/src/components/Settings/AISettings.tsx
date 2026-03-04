@@ -149,6 +149,7 @@ export const AISettings: Component = () => {
   const navigate = useNavigate();
   const [settings, setSettings] = createSignal<AISettingsType | null>(null);
   const [loading, setLoading] = createSignal(false);
+  const [loadError, setLoadError] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
   const [testing, setTesting] = createSignal(false);
 
@@ -505,6 +506,7 @@ export const AISettings: Component = () => {
 
   const loadSettings = async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const data = await AIAPI.getSettings();
       setSettings(data);
@@ -516,7 +518,7 @@ export const AISettings: Component = () => {
       void runProviderPreflight(data);
     } catch (error) {
       logger.error('[AISettings] Failed to load settings:', error);
-      notificationStore.error('Failed to load Pulse Assistant settings');
+      setLoadError(true);
       setSettings(null);
       resetForm(null);
       setProviderHealth(createInitialProviderHealth());
@@ -656,6 +658,12 @@ export const AISettings: Component = () => {
 
   const handleSave = async (event?: Event) => {
     event?.preventDefault();
+
+    // Guard: do not save if settings failed to load (form has stale defaults)
+    if (settings() === null) {
+      notificationStore.error('Cannot save: settings failed to load. Please retry loading first.');
+      return;
+    }
 
     // Frontend validation: warn if model's provider isn't configured
     const selectedModel = form.model.trim();
@@ -983,7 +991,7 @@ export const AISettings: Component = () => {
                   notificationStore.error(message);
                 }
               }}
-              disabled={loading() || saving()}
+              disabled={loading() || saving() || loadError()}
               containerClass="items-center gap-2"
               label={
                 <span class="text-xs font-medium text-muted">
@@ -1003,7 +1011,25 @@ export const AISettings: Component = () => {
             </div>
           </Show>
 
-          <Show when={!loading()}>
+          <Show when={!loading() && loadError()}>
+            <div class="flex items-center justify-between gap-3 p-4 sm:p-6 bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800">
+              <div class="flex items-center gap-2 text-sm text-red-700 dark:text-red-300">
+                <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+                <span>Failed to load Pulse Assistant settings. Your configuration could not be retrieved.</span>
+              </div>
+              <button
+                type="button"
+                class="flex-shrink-0 px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50"
+                onClick={() => loadSettings()}
+              >
+                Retry
+              </button>
+            </div>
+          </Show>
+
+          <Show when={!loading() && !loadError()}>
             <Show when={form.enabled}>
               <div class="p-4 sm:p-6">
                 <div class="flex items-start gap-2 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md p-3">

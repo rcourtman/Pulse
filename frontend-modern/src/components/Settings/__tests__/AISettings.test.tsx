@@ -265,6 +265,71 @@ describe('AISettings model loading error states', () => {
   });
 });
 
+describe('AISettings load failure error state', () => {
+  beforeEach(() => {
+    resetAllMocks();
+    setupDefaultMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('shows persistent error banner and hides form when settings fail to load', async () => {
+    getSettingsMock.mockRejectedValue(new Error('Network error'));
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Failed to load Pulse Assistant settings/),
+      ).toBeInTheDocument();
+    });
+
+    // Retry button should be present
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+
+    // Save button should NOT be present (form is hidden)
+    expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument();
+  });
+
+  it('clears error and shows form after successful retry', async () => {
+    getSettingsMock.mockRejectedValueOnce(new Error('Network error'));
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Failed to load Pulse Assistant settings/),
+      ).toBeInTheDocument();
+    });
+
+    // Now mock a successful response for retry
+    getSettingsMock.mockResolvedValueOnce({
+      ...baseSettings(),
+      configured: true,
+      anthropic_configured: true,
+      configured_providers: ['anthropic'],
+    });
+    getModelsMock.mockResolvedValueOnce({ models: [] });
+
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+
+    // Wait for the form to fully render after successful retry (not just banner disappearing during loading)
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument();
+    });
+
+    // Error banner should be gone
+    expect(
+      screen.queryByText(/Failed to load Pulse Assistant settings/),
+    ).not.toBeInTheDocument();
+
+    // Verify retry actually called getSettings again
+    expect(getSettingsMock).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('AISettings OpenRouter flow', () => {
   beforeEach(() => {
     resetAllMocks();
