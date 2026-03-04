@@ -83,8 +83,7 @@ export async function getDiscovery(
         (d) =>
           d.resource_type === 'agent' &&
           (d.resource_id === resourceId || d.resource_id === hostId || d.host_id === hostId),
-      ) ??
-      agentList.discoveries.find((d) => d.resource_type === 'agent');
+      ) ?? agentList.discoveries.find((d) => d.resource_type === 'agent');
 
     if (!resolvedAgentDiscovery) {
       return null;
