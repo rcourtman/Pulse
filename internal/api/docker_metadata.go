@@ -239,12 +239,12 @@ func (h *DockerMetadataHandler) HandleUpdateHostMetadata(w http.ResponseWriter, 
 	}
 
 	if err := store.SetHostMetadata(hostID, &meta); err != nil {
-		log.Error().Err(err).Str("hostID", hostID).Msg("Failed to save Docker host metadata")
+		log.Error().Err(err).Str("hostID", hostID).Msg("Failed to save container runtime metadata")
 		http.Error(w, metadataSaveErrorMessage(err), http.StatusInternalServerError)
 		return
 	}
 
-	log.Info().Str("hostID", hostID).Str("url", meta.CustomURL).Msg("Updated Docker host metadata")
+	log.Info().Str("hostID", hostID).Str("url", meta.CustomURL).Msg("Updated container runtime metadata")
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(&meta)
@@ -263,12 +263,12 @@ func (h *DockerMetadataHandler) HandleDeleteHostMetadata(w http.ResponseWriter, 
 	}
 	store := h.getStore(r.Context())
 	if err := store.SetHostMetadata(hostID, nil); err != nil {
-		log.Error().Err(err).Str("hostID", hostID).Msg("Failed to delete Docker host metadata")
+		log.Error().Err(err).Str("hostID", hostID).Msg("Failed to delete container runtime metadata")
 		http.Error(w, "Failed to delete metadata", http.StatusInternalServerError)
 		return
 	}
 
-	log.Info().Str("hostID", hostID).Msg("Deleted Docker host metadata")
+	log.Info().Str("hostID", hostID).Msg("Deleted container runtime metadata")
 
 	w.WriteHeader(http.StatusNoContent)
 }
