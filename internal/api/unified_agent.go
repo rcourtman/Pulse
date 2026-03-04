@@ -1,8 +1,13 @@
 package api
 
 import (
+	"archive/tar"
+	"archive/zip"
+	"bytes"
+	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -203,35 +208,189 @@ func (r *Router) proxyAgentBinaryFromGitHub(w http.ResponseWriter, req *http.Req
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode == http.StatusOK {
+		content, checksum, readErr := readBinaryWithChecksum(resp.Body)
+		if readErr != nil {
+			log.Error().Err(readErr).Msg("Failed to read agent binary from GitHub")
+			http.Error(w, "Failed to read agent binary", http.StatusInternalServerError)
+			return
+		}
+		serveProxiedAgentBinary(w, content, checksum, "github-proxy")
+		return
+	}
+
+	if resp.StatusCode != http.StatusNotFound {
 		log.Error().Int("status", resp.StatusCode).Str("url", githubURL).Msg("GitHub returned non-200 status for agent binary")
 		http.Error(w, "Agent binary not found on GitHub", http.StatusNotFound)
 		return
 	}
 
-	// Read the binary with size limit (100 MB)
-	const maxAgentBinarySize = 100 * 1024 * 1024
-	limitedReader := io.LimitReader(resp.Body, maxAgentBinarySize+1)
+	archiveContent, checksum, archiveErr := r.fetchAgentBinaryFromReleaseArchive(client, normalized)
+	if archiveErr != nil {
+		log.Error().Err(archiveErr).Str("arch", normalized).Msg("Failed archive fallback for agent binary")
+		http.Error(w, "Agent binary not found on GitHub", http.StatusNotFound)
+		return
+	}
+	serveProxiedAgentBinary(w, archiveContent, checksum, "github-proxy-archive")
+}
 
+const maxAgentBinarySize = 100 * 1024 * 1024
+
+func readBinaryWithChecksum(body io.Reader) ([]byte, string, error) {
+	limitedReader := io.LimitReader(body, maxAgentBinarySize+1)
 	hasher := sha256.New()
 	content, err := io.ReadAll(io.TeeReader(limitedReader, hasher))
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to read agent binary from GitHub")
-		http.Error(w, "Failed to read agent binary", http.StatusInternalServerError)
-		return
+		return nil, "", err
 	}
 	if int64(len(content)) > maxAgentBinarySize {
-		log.Error().Int64("size", int64(len(content))).Msg("Agent binary from GitHub exceeds size limit")
-		http.Error(w, "Agent binary too large", http.StatusInternalServerError)
-		return
+		return nil, "", fmt.Errorf("binary exceeds size limit")
 	}
+	return content, hex.EncodeToString(hasher.Sum(nil)), nil
+}
 
-	checksum := hex.EncodeToString(hasher.Sum(nil))
-
+func serveProxiedAgentBinary(w http.ResponseWriter, content []byte, checksum, servedFrom string) {
 	w.Header().Set("X-Checksum-Sha256", checksum)
-	w.Header().Set("X-Served-From", "github-proxy")
+	w.Header().Set("X-Served-From", servedFrom)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Write(content)
+}
+
+func (r *Router) fetchAgentBinaryFromReleaseArchive(client *http.Client, normalized string) ([]byte, string, error) {
+	tag, err := fetchLatestReleaseTag(client)
+	if err != nil {
+		return nil, "", err
+	}
+	version := strings.TrimPrefix(tag, "v")
+
+	archiveName := fmt.Sprintf("pulse-agent-v%s-%s.tar.gz", version, normalized)
+	entryName := "pulse-agent-" + normalized
+	isWindows := strings.HasPrefix(normalized, "windows-")
+	if isWindows {
+		archiveName = fmt.Sprintf("pulse-agent-v%s-%s.zip", version, normalized)
+		entryName += ".exe"
+	}
+
+	archiveURL := fmt.Sprintf("https://github.com/rcourtman/Pulse/releases/download/%s/%s", tag, archiveName)
+	resp, err := client.Get(archiveURL)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to fetch release archive: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("release archive returned status %d", resp.StatusCode)
+	}
+
+	archiveReader := io.LimitReader(resp.Body, maxAgentBinarySize+1)
+	archiveBytes, err := io.ReadAll(archiveReader)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed reading release archive: %w", err)
+	}
+	if int64(len(archiveBytes)) > maxAgentBinarySize {
+		return nil, "", fmt.Errorf("release archive exceeded size limit")
+	}
+
+	var binary []byte
+	if isWindows {
+		binary, err = extractFromZip(archiveBytes, entryName)
+	} else {
+		binary, err = extractFromTarGz(archiveBytes, entryName)
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	if int64(len(binary)) > maxAgentBinarySize {
+		return nil, "", fmt.Errorf("extracted binary exceeded size limit")
+	}
+	sum := sha256.Sum256(binary)
+	return binary, hex.EncodeToString(sum[:]), nil
+}
+
+func fetchLatestReleaseTag(client *http.Client) (string, error) {
+	req, err := http.NewRequest(http.MethodGet, "https://api.github.com/repos/rcourtman/Pulse/releases/latest", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "pulse-agent-download-proxy")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("latest release lookup returned status %d", resp.StatusCode)
+	}
+
+	var payload struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&payload); err != nil {
+		return "", fmt.Errorf("failed decoding latest release payload: %w", err)
+	}
+	tag := strings.TrimSpace(payload.TagName)
+	if tag == "" {
+		return "", fmt.Errorf("latest release payload missing tag_name")
+	}
+	return tag, nil
+}
+
+func extractFromTarGz(archive []byte, entryName string) ([]byte, error) {
+	gzReader, err := gzip.NewReader(bytes.NewReader(archive))
+	if err != nil {
+		return nil, fmt.Errorf("failed to open tar.gz: %w", err)
+	}
+	defer gzReader.Close()
+
+	tr := tar.NewReader(gzReader)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed reading tar entry: %w", err)
+		}
+		if filepath.Base(header.Name) != entryName {
+			continue
+		}
+		content, err := io.ReadAll(io.LimitReader(tr, maxAgentBinarySize+1))
+		if err != nil {
+			return nil, fmt.Errorf("failed reading binary from tar.gz: %w", err)
+		}
+		if int64(len(content)) > maxAgentBinarySize {
+			return nil, fmt.Errorf("binary from tar.gz exceeded size limit")
+		}
+		return content, nil
+	}
+	return nil, fmt.Errorf("binary %q not found in tar.gz", entryName)
+}
+
+func extractFromZip(archive []byte, entryName string) ([]byte, error) {
+	zr, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to open zip: %w", err)
+	}
+	for _, file := range zr.File {
+		if filepath.Base(file.Name) != entryName {
+			continue
+		}
+		rc, err := file.Open()
+		if err != nil {
+			return nil, fmt.Errorf("failed opening binary in zip: %w", err)
+		}
+		content, readErr := io.ReadAll(io.LimitReader(rc, maxAgentBinarySize+1))
+		rc.Close()
+		if readErr != nil {
+			return nil, fmt.Errorf("failed reading binary from zip: %w", readErr)
+		}
+		if int64(len(content)) > maxAgentBinarySize {
+			return nil, fmt.Errorf("binary from zip exceeded size limit")
+		}
+		return content, nil
+	}
+	return nil, fmt.Errorf("binary %q not found in zip", entryName)
 }
 
 // proxyInstallScriptFromGitHub fetches an install script from GitHub releases

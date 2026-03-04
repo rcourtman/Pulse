@@ -12,6 +12,13 @@ import (
 	"time"
 )
 
+func setupTempPulseBin(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("PULSE_BIN_DIR", dir)
+	return dir
+}
+
 func TestHandleDownloadUnifiedAgentSetsChecksumAndInvalidatesOnChange(t *testing.T) {
 	binDir := setupTempPulseBin(t)
 	filePath := filepath.Join(binDir, "pulse-agent-linux-amd64")

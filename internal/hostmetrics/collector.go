@@ -3,7 +3,6 @@ package hostmetrics
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -78,28 +77,26 @@ func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 	freeBytes := memStats.Free
 	usedPercent := memStats.UsedPercent
 
-	if runtime.GOOS == "freebsd" {
-		// ZFS ARC is counted as "wired" by FreeBSD but is reclaimable under pressure.
-		// Subtract it from Used to match actual memory pressure (same as how Linux
-		// classifies ZFS ARC as SReclaimable in /proc/meminfo). Refs: #1264/#1051
-		if arcSize, err := readFreeBSDARCSize(); err == nil && arcSize > 0 {
-			if arcSize < usedBytes {
-				usedBytes -= arcSize
-			} else {
-				usedBytes = 0
+	// ZFS ARC memory is reclaimable under pressure but is counted as "used" by
+	// both FreeBSD (wired memory) and Linux (not in MemAvailable, openzfs/zfs#10255).
+	// Subtract it from Used to reflect actual memory pressure. Refs: #1264/#1051
+	if arcSize, err := readARCSize(); err == nil && arcSize > 0 {
+		if arcSize < usedBytes {
+			usedBytes -= arcSize
+		} else {
+			usedBytes = 0
+		}
+		if memStats.Total > 0 {
+			usedPercent = float64(usedBytes) / float64(memStats.Total) * 100.0
+			if usedPercent < 0 {
+				usedPercent = 0
 			}
-			if memStats.Total > 0 {
-				usedPercent = float64(usedBytes) / float64(memStats.Total) * 100.0
-				if usedPercent < 0 {
-					usedPercent = 0
-				}
-				if usedPercent > 100 {
-					usedPercent = 100
-				}
+			if usedPercent > 100 {
+				usedPercent = 100
 			}
-			if memStats.Total >= usedBytes {
-				freeBytes = memStats.Total - usedBytes
-			}
+		}
+		if memStats.Total >= usedBytes {
+			freeBytes = memStats.Total - usedBytes
 		}
 	}
 

@@ -195,13 +195,6 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 					writeJSONError(w, http.StatusForbidden, "access_denied", result.Reason)
 					return
 				}
-
-				// Log warning for legacy tokens accessing non-default orgs
-				if result.IsLegacyToken {
-					log.Warn().
-						Str("org_id", orgID).
-						Msg("Legacy token with wildcard access used - consider binding to specific org")
-				}
 			}
 		}
 

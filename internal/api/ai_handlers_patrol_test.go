@@ -42,10 +42,6 @@ func TestAISettingsHandler_PatrolInterval_SpecificCheck(t *testing.T) {
 			t.Fatalf("expected PatrolIntervalMinutes=15, got %d. Did the migration logic override the user setting?", resp.PatrolIntervalMinutes)
 		}
 
-		// Check that the preset is cleared as expected when setting explicit minutes
-		if resp.PatrolSchedulePreset != "" {
-			t.Fatalf("expected PatrolSchedulePreset to be empty, got %q", resp.PatrolSchedulePreset)
-		}
 	}
 
 	// Step 2: Verify persistence by fetching settings again

@@ -71,11 +71,11 @@ func (r *Router) initializeBootstrapToken() {
 
 	// If any authentication mechanism is already configured, purge stale bootstrap tokens.
 	// In hosted mode, auth is handled by the cloud handoff — no bootstrap needed.
-	if r.config.AuthUser != "" || r.config.AuthPass != "" || r.config.HasAPITokens() || r.config.ProxyAuthSecret != "" || r.hostedMode {
-		r.clearBootstrapToken()
-		return
+	hasEnabledSSO := false
+	if ssoCfg := r.ensureSSOConfig(); ssoCfg != nil {
+		hasEnabledSSO = ssoCfg.HasEnabledProviders()
 	}
-	if r.config.OIDC != nil && r.config.OIDC.Enabled {
+	if r.config.AuthUser != "" || r.config.AuthPass != "" || r.config.HasAPITokens() || r.config.ProxyAuthSecret != "" || r.hostedMode || hasEnabledSSO {
 		r.clearBootstrapToken()
 		return
 	}

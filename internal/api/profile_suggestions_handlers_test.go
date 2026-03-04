@@ -35,7 +35,7 @@ func TestProfileSuggestionHandler_MethodNotAllowed(t *testing.T) {
 func TestProfileSuggestionHandler_ServiceUnavailable(t *testing.T) {
 	mockSvc := new(MockAIService)
 	mockSvc.On("IsRunning").Return(false)
-	aiHandler := &AIHandler{legacyService: mockSvc}
+	aiHandler := &AIHandler{defaultService: mockSvc}
 
 	handler := NewProfileSuggestionHandler(config.NewMultiTenantPersistence(t.TempDir()), aiHandler)
 	req := withOrgContext(httptest.NewRequest(http.MethodPost, "/api/admin/profiles/suggestions", bytes.NewReader([]byte(`{"prompt":"test"}`))))
@@ -51,7 +51,7 @@ func TestProfileSuggestionHandler_ServiceUnavailable(t *testing.T) {
 func TestProfileSuggestionHandler_InvalidRequest(t *testing.T) {
 	mockSvc := new(MockAIService)
 	mockSvc.On("IsRunning").Return(true)
-	aiHandler := &AIHandler{legacyService: mockSvc}
+	aiHandler := &AIHandler{defaultService: mockSvc}
 	handler := NewProfileSuggestionHandler(config.NewMultiTenantPersistence(t.TempDir()), aiHandler)
 
 	req := withOrgContext(httptest.NewRequest(http.MethodPost, "/api/admin/profiles/suggestions", bytes.NewReader([]byte("{bad"))))
@@ -86,7 +86,7 @@ func TestProfileSuggestionHandler_SuccessAndParseFailure(t *testing.T) {
 		"content": `{"name":"Suggested","description":"desc","config":{"interval":"30s"},"rationale":["reason"]}`,
 	}, nil).Once()
 
-	aiHandler := &AIHandler{legacyService: mockSvc}
+	aiHandler := &AIHandler{defaultService: mockSvc}
 	handler := NewProfileSuggestionHandler(mtPersistence, aiHandler)
 
 	req := withOrgContext(httptest.NewRequest(http.MethodPost, "/api/admin/profiles/suggestions", bytes.NewReader([]byte(`{"prompt":"build a profile"}`))))

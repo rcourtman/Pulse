@@ -463,7 +463,7 @@ func TestFindInstanceNameByHost(t *testing.T) {
 				{Name: "pve-node3", Host: "https://pve3.example.com:8006"},
 			},
 		}
-		h := &ConfigHandlers{legacyConfig: cfg}
+		h := &ConfigHandlers{defaultConfig: cfg}
 
 		tests := []struct {
 			name     string
@@ -520,7 +520,7 @@ func TestFindInstanceNameByHost(t *testing.T) {
 				{Name: "pbs-backup2", Host: "https://backup.example.com:8007"},
 			},
 		}
-		h := &ConfigHandlers{legacyConfig: cfg}
+		h := &ConfigHandlers{defaultConfig: cfg}
 
 		tests := []struct {
 			name     string
@@ -567,7 +567,7 @@ func TestFindInstanceNameByHost(t *testing.T) {
 				{Name: "pbs-backup1", Host: "https://192.168.1.20:8007"},
 			},
 		}
-		h := &ConfigHandlers{legacyConfig: cfg}
+		h := &ConfigHandlers{defaultConfig: cfg}
 
 		tests := []struct {
 			name     string
@@ -607,7 +607,7 @@ func TestFindInstanceNameByHost(t *testing.T) {
 
 	t.Run("empty config", func(t *testing.T) {
 		cfg := &config.Config{}
-		h := &ConfigHandlers{legacyConfig: cfg}
+		h := &ConfigHandlers{defaultConfig: cfg}
 
 		got := h.findInstanceNameByHost(context.Background(), "pve", "https://192.168.1.10:8006")
 		if got != "" {

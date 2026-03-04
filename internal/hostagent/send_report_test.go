@@ -1,9 +1,11 @@
 package hostagent
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -33,8 +35,19 @@ func TestAgentSendReport_SetsHeadersAndPostsJSON(t *testing.T) {
 	)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var bodyReader io.Reader = r.Body
+		if r.Header.Get("Content-Encoding") == "gzip" {
+			gz, gzErr := gzip.NewReader(r.Body)
+			if gzErr != nil {
+				http.Error(w, "bad gzip", http.StatusBadRequest)
+				return
+			}
+			defer gz.Close()
+			bodyReader = gz
+		}
+
 		var report agentshost.Report
-		if err := json.NewDecoder(r.Body).Decode(&report); err != nil {
+		if err := json.NewDecoder(bodyReader).Decode(&report); err != nil {
 			http.Error(w, "bad json", http.StatusBadRequest)
 			return
 		}

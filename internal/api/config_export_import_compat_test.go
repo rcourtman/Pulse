@@ -59,7 +59,7 @@ func TestHandleImportConfigAcceptsLegacyVersion40Bundle(t *testing.T) {
 
 	// Seed target with baseline values and API tokens to verify 4.0 token preservation.
 	targetPersistence := config.NewConfigPersistence(targetDir)
-	handler.legacyPersistence = targetPersistence
+	handler.defaultPersistence = targetPersistence
 	if err := targetPersistence.SaveNodesConfig([]config.PVEInstance{
 		{
 			Name: "pve-baseline",

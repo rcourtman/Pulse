@@ -559,7 +559,7 @@ func TestCSRFTokenStore_Load_InvalidJSON(t *testing.T) {
 	}
 }
 
-func TestCSRFTokenStore_Load_LegacyFormat(t *testing.T) {
+func TestCSRFTokenStore_Load_RejectsLegacyFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create legacy format JSON (map[sessionID]tokenData) with snake_case fields
@@ -580,19 +580,8 @@ func TestCSRFTokenStore_Load_LegacyFormat(t *testing.T) {
 
 	store.load()
 
-	// Should load the two non-expired tokens (session-1 and session-2)
-	// The expired one (session-expired) should be skipped
-	if len(store.tokens) != 2 {
-		t.Errorf("expected 2 tokens from legacy format, got %d", len(store.tokens))
-	}
-
-	// Verify tokens are hashed and can be validated
-	// The legacy format stores raw tokens, which get hashed during migration
-	if !store.ValidateCSRFToken("session-1", "token-value-1") {
-		t.Error("should validate token for session-1 after legacy migration")
-	}
-	if !store.ValidateCSRFToken("session-2", "token-value-2") {
-		t.Error("should validate token for session-2 after legacy migration")
+	if len(store.tokens) != 0 {
+		t.Errorf("store should reject legacy format, got %d tokens", len(store.tokens))
 	}
 }
 

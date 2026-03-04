@@ -6,8 +6,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
-// NewFromConfig creates a Provider based on the AIConfig settings
-// DEPRECATED: Use NewForModel or NewForProvider for multi-provider support
+// NewFromConfig creates a Provider based on the configured default model.
 func NewFromConfig(cfg *config.AIConfig) (Provider, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("Pulse Assistant config is nil")
@@ -17,66 +16,11 @@ func NewFromConfig(cfg *config.AIConfig) (Provider, error) {
 		return nil, fmt.Errorf("Pulse Assistant is not enabled")
 	}
 
-	// Try multi-provider format first (uses per-provider API keys)
-	provider, model := config.ParseModelString(cfg.Model)
-	if providerClient, err := NewForProvider(cfg, provider, model); err == nil {
-		return providerClient, nil
+	model := cfg.GetModel()
+	if model == "" {
+		return nil, fmt.Errorf("Pulse Assistant model is not configured")
 	}
-
-	// Get the configured timeout
-	timeout := cfg.GetRequestTimeout()
-
-	// Fall back to legacy single-provider format
-	switch cfg.Provider {
-	case config.AIProviderAnthropic:
-		// If we have an API key (from direct entry or OAuth-created), use regular client
-		if cfg.APIKey != "" {
-			return NewAnthropicClient(cfg.APIKey, cfg.GetModel(), timeout), nil
-		}
-		// Pro/Max users without org:create_api_key will use OAuth tokens directly
-		if cfg.IsUsingOAuth() && cfg.OAuthAccessToken != "" {
-			client := NewAnthropicOAuthClient(
-				cfg.OAuthAccessToken,
-				cfg.OAuthRefreshToken,
-				cfg.OAuthExpiresAt,
-				cfg.GetModel(),
-				timeout,
-			)
-			return client, nil
-		}
-		return nil, fmt.Errorf("Anthropic API key is required (or use OAuth login for Pro/Max subscription)")
-
-	case config.AIProviderOpenAI:
-		if cfg.APIKey == "" {
-			return nil, fmt.Errorf("OpenAI API key is required")
-		}
-		return NewOpenAIClient(cfg.APIKey, cfg.GetModel(), cfg.GetBaseURL(), timeout), nil
-
-	case config.AIProviderOpenRouter:
-		if cfg.APIKey == "" {
-			return nil, fmt.Errorf("OpenRouter API key is required")
-		}
-		return NewOpenAIClient(cfg.APIKey, cfg.GetModel(), cfg.GetBaseURL(), timeout), nil
-
-	case config.AIProviderOllama:
-		return NewOllamaClient(cfg.GetModel(), cfg.GetBaseURL(), timeout), nil
-
-	case config.AIProviderDeepSeek:
-		if cfg.APIKey == "" {
-			return nil, fmt.Errorf("DeepSeek API key is required")
-		}
-		// DeepSeek uses OpenAI-compatible API
-		return NewOpenAIClient(cfg.APIKey, cfg.GetModel(), cfg.GetBaseURL(), timeout), nil
-
-	case config.AIProviderGemini:
-		if cfg.APIKey == "" {
-			return nil, fmt.Errorf("Gemini API key is required")
-		}
-		return NewGeminiClient(cfg.APIKey, cfg.GetModel(), cfg.GetBaseURL(), timeout), nil
-
-	default:
-		return nil, fmt.Errorf("unknown provider: %s", cfg.Provider)
-	}
+	return NewForModel(cfg, model)
 }
 
 // NewForProvider creates a Provider for a specific provider using multi-provider credentials

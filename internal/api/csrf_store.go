@@ -47,12 +47,6 @@ type CSRFTokenData struct {
 	ExpiresAt  time.Time `json:"expires_at"`
 }
 
-type legacyCSRFTokenData struct {
-	Token     string    `json:"token"`
-	SessionID string    `json:"session_id"`
-	ExpiresAt time.Time `json:"expires_at"`
-}
-
 var (
 	csrfStore     *CSRFTokenStore
 	csrfStoreOnce sync.Once
@@ -248,28 +242,5 @@ func (c *CSRFTokenStore) load() {
 			Msg("CSRF tokens loaded from disk (hashed format)")
 		return
 	}
-
-	var legacy map[string]*legacyCSRFTokenData
-	if err := json.Unmarshal(data, &legacy); err != nil {
-		log.Error().Err(err).Msg("Failed to unmarshal CSRF tokens")
-		return
-	}
-
-	now := time.Now()
-	loaded := 0
-	for sessionID, tokenData := range legacy {
-		if now.Before(tokenData.ExpiresAt) {
-			key := csrfSessionKey(sessionID)
-			c.tokens[key] = &CSRFToken{
-				Hash:    csrfTokenHash(tokenData.Token),
-				Expires: tokenData.ExpiresAt,
-			}
-			loaded++
-		}
-	}
-
-	log.Info().
-		Int("loaded", loaded).
-		Int("total", len(legacy)).
-		Msg("CSRF tokens loaded from disk (legacy format migrated)")
+	log.Error().Msg("Failed to decode CSRF tokens file; unsupported format")
 }

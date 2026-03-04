@@ -164,6 +164,8 @@ func TestParseResourceTypesNodeAlias(t *testing.T) {
 		{name: "node", input: "node", want: map[unified.ResourceType]struct{}{unified.ResourceTypeHost: {}}},
 		{name: "nodes", input: "nodes", want: map[unified.ResourceType]struct{}{unified.ResourceTypeHost: {}}},
 		{name: "docker-host", input: "docker-host", want: map[unified.ResourceType]struct{}{unified.ResourceTypeHost: {}}},
+		{name: "agent", input: "agent", want: map[unified.ResourceType]struct{}{unified.ResourceTypeHost: {}}},
+		{name: "agents", input: "agents", want: map[unified.ResourceType]struct{}{unified.ResourceTypeHost: {}}},
 		{name: "host", input: "host", want: map[unified.ResourceType]struct{}{unified.ResourceTypeHost: {}}},
 		{name: "container", input: "container", want: map[unified.ResourceType]struct{}{unified.ResourceTypeSystemContainer: {}}},
 		{name: "pool", input: "pool", want: map[unified.ResourceType]struct{}{unified.ResourceTypeCeph: {}}},
@@ -314,6 +316,24 @@ func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 	}
 	if typeSet["docker-host"] != 1 {
 		t.Fatalf("expected 1 'docker-host' in ?type=node response, got %d (types=%v)", typeSet["docker-host"], typeSet)
+	}
+
+	// Agent-backed host resources should publish agent metrics targets.
+	var foundAgentHost *unified.Resource
+	for i := range resp.Data {
+		if resp.Data[i].Type == "host" {
+			foundAgentHost = &resp.Data[i]
+			break
+		}
+	}
+	if foundAgentHost == nil {
+		t.Fatalf("expected host resource in response")
+	}
+	if foundAgentHost.MetricsTarget == nil {
+		t.Fatalf("expected metrics target on host resource")
+	}
+	if foundAgentHost.MetricsTarget.ResourceType != "agent" {
+		t.Fatalf("host metrics target resourceType = %q, want %q", foundAgentHost.MetricsTarget.ResourceType, "agent")
 	}
 
 	// Find the Proxmox node resource specifically and verify its metadata.

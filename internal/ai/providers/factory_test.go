@@ -1,7 +1,6 @@
 package providers
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -30,49 +29,39 @@ func TestNewFromConfig_DisabledAI(t *testing.T) {
 	}
 }
 
-func TestNewFromConfig_UnknownProvider(t *testing.T) {
+func TestNewFromConfig_UnknownProviderPrefixDefaultsToOllama(t *testing.T) {
 	cfg := &config.AIConfig{
-		Enabled:  true,
-		Provider: "unknown-provider",
-		APIKey:   "test-key",
-		Model:    "", // No model - need to force the legacy path
+		Enabled: true,
+		Model:   "unknown-provider:some-model",
 	}
-	// The code tries multi-provider format first, which parses "" as Ollama
-	// So this actually succeeds with Ollama provider
-	// To test the error path, we need to make sure there's no fallback
 	provider, err := NewFromConfig(cfg)
 	if err != nil {
-		// If it errors, that's expected for unknown provider
-		return
+		t.Fatalf("Unexpected error: %v", err)
 	}
-	// If it doesn't error, it must have parsed as some valid provider
-	// (likely Ollama as the default for unrecognized models)
-	if provider != nil && provider.Name() != "ollama" {
-		t.Errorf("For unknown provider without API key, expected either error or Ollama fallback, got %s", provider.Name())
+	if provider == nil || provider.Name() != "ollama" {
+		t.Fatalf("expected ollama provider for unknown prefix model")
 	}
 }
 
-func TestNewFromConfig_LegacyUnknownProvider(t *testing.T) {
+func TestNewFromConfig_UnknownProviderWithoutPrefixDefaultsToOllama(t *testing.T) {
 	cfg := &config.AIConfig{
-		Enabled:  true,
-		Model:    "anthropic:claude-3-5-sonnet", // Forces multi-provider to fail if AnthropicAPIKey is missing
-		Provider: "unknown",
+		Enabled: true,
+		Model:   "my-local-model",
 	}
-	_, err := NewFromConfig(cfg)
-	if err == nil {
-		t.Fatal("Expected error for unknown legacy provider")
+	provider, err := NewFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "unknown provider: unknown") {
-		t.Errorf("Unexpected error: %v", err)
+	if provider == nil || provider.Name() != "ollama" {
+		t.Fatalf("expected ollama provider for unprefixed unknown model")
 	}
 }
 
 func TestNewFromConfig_AnthropicWithAPIKey(t *testing.T) {
 	cfg := &config.AIConfig{
-		Enabled:  true,
-		Provider: config.AIProviderAnthropic,
-		APIKey:   "test-api-key",
-		Model:    "claude-3-5-sonnet-20241022",
+		Enabled:         true,
+		AnthropicAPIKey: "test-api-key",
+		Model:           "anthropic:claude-3-5-sonnet-20241022",
 	}
 	provider, err := NewFromConfig(cfg)
 	if err != nil {
@@ -88,10 +77,8 @@ func TestNewFromConfig_AnthropicWithAPIKey(t *testing.T) {
 
 func TestNewFromConfig_AnthropicNoAPIKey(t *testing.T) {
 	cfg := &config.AIConfig{
-		Enabled:  true,
-		Provider: config.AIProviderAnthropic,
-		APIKey:   "",
-		Model:    "claude-3-5-sonnet-20241022",
+		Enabled: true,
+		Model:   "anthropic:claude-3-5-sonnet-20241022",
 	}
 	_, err := NewFromConfig(cfg)
 	if err == nil {
@@ -101,10 +88,9 @@ func TestNewFromConfig_AnthropicNoAPIKey(t *testing.T) {
 
 func TestNewFromConfig_OpenAIWithAPIKey(t *testing.T) {
 	cfg := &config.AIConfig{
-		Enabled:  true,
-		Provider: config.AIProviderOpenAI,
-		APIKey:   "test-api-key",
-		Model:    "gpt-4o",
+		Enabled:      true,
+		OpenAIAPIKey: "test-api-key",
+		Model:        "openai:gpt-4o",
 	}
 	provider, err := NewFromConfig(cfg)
 	if err != nil {
@@ -120,10 +106,8 @@ func TestNewFromConfig_OpenAIWithAPIKey(t *testing.T) {
 
 func TestNewFromConfig_OpenAINoAPIKey(t *testing.T) {
 	cfg := &config.AIConfig{
-		Enabled:  true,
-		Provider: config.AIProviderOpenAI,
-		APIKey:   "",
-		Model:    "gpt-4o",
+		Enabled: true,
+		Model:   "openai:gpt-4o",
 	}
 	_, err := NewFromConfig(cfg)
 	if err == nil {
@@ -133,10 +117,9 @@ func TestNewFromConfig_OpenAINoAPIKey(t *testing.T) {
 
 func TestNewFromConfig_OpenRouterWithAPIKey(t *testing.T) {
 	cfg := &config.AIConfig{
-		Enabled:  true,
-		Provider: config.AIProviderOpenRouter,
-		APIKey:   "test-api-key",
-		Model:    "openai/gpt-4o-mini",
+		Enabled:          true,
+		OpenRouterAPIKey: "test-api-key",
+		Model:            "openrouter:openai/gpt-4o-mini",
 	}
 	provider, err := NewFromConfig(cfg)
 	if err != nil {
@@ -153,10 +136,8 @@ func TestNewFromConfig_OpenRouterWithAPIKey(t *testing.T) {
 
 func TestNewFromConfig_OpenRouterNoAPIKey(t *testing.T) {
 	cfg := &config.AIConfig{
-		Enabled:  true,
-		Provider: config.AIProviderOpenRouter,
-		APIKey:   "",
-		Model:    "openai/gpt-4o-mini",
+		Enabled: true,
+		Model:   "openrouter:openai/gpt-4o-mini",
 	}
 	_, err := NewFromConfig(cfg)
 	if err == nil {
@@ -166,9 +147,8 @@ func TestNewFromConfig_OpenRouterNoAPIKey(t *testing.T) {
 
 func TestNewFromConfig_Ollama(t *testing.T) {
 	cfg := &config.AIConfig{
-		Enabled:  true,
-		Provider: config.AIProviderOllama,
-		Model:    "llama2",
+		Enabled: true,
+		Model:   "ollama:llama2",
 	}
 	provider, err := NewFromConfig(cfg)
 	if err != nil {
@@ -184,10 +164,9 @@ func TestNewFromConfig_Ollama(t *testing.T) {
 
 func TestNewFromConfig_DeepSeekWithAPIKey(t *testing.T) {
 	cfg := &config.AIConfig{
-		Enabled:  true,
-		Provider: config.AIProviderDeepSeek,
-		APIKey:   "test-api-key",
-		Model:    "deepseek-chat",
+		Enabled:        true,
+		DeepSeekAPIKey: "test-api-key",
+		Model:          "deepseek:deepseek-chat",
 	}
 	provider, err := NewFromConfig(cfg)
 	if err != nil {
@@ -204,10 +183,8 @@ func TestNewFromConfig_DeepSeekWithAPIKey(t *testing.T) {
 
 func TestNewFromConfig_DeepSeekNoAPIKey(t *testing.T) {
 	cfg := &config.AIConfig{
-		Enabled:  true,
-		Provider: config.AIProviderDeepSeek,
-		APIKey:   "",
-		Model:    "deepseek-chat",
+		Enabled: true,
+		Model:   "deepseek:deepseek-chat",
 	}
 	_, err := NewFromConfig(cfg)
 	if err == nil {
@@ -217,10 +194,9 @@ func TestNewFromConfig_DeepSeekNoAPIKey(t *testing.T) {
 
 func TestNewFromConfig_GeminiWithAPIKey(t *testing.T) {
 	cfg := &config.AIConfig{
-		Enabled:  true,
-		Provider: config.AIProviderGemini,
-		APIKey:   "test-api-key",
-		Model:    "gemini-1.5-pro",
+		Enabled:      true,
+		GeminiAPIKey: "test-api-key",
+		Model:        "gemini:gemini-1.5-pro",
 	}
 	provider, err := NewFromConfig(cfg)
 	if err != nil {
@@ -236,10 +212,8 @@ func TestNewFromConfig_GeminiWithAPIKey(t *testing.T) {
 
 func TestNewFromConfig_GeminiNoAPIKey(t *testing.T) {
 	cfg := &config.AIConfig{
-		Enabled:  true,
-		Provider: config.AIProviderGemini,
-		APIKey:   "",
-		Model:    "gemini-1.5-pro",
+		Enabled: true,
+		Model:   "gemini:gemini-1.5-pro",
 	}
 	_, err := NewFromConfig(cfg)
 	if err == nil {
@@ -250,8 +224,7 @@ func TestNewFromConfig_GeminiNoAPIKey(t *testing.T) {
 func TestNewFromConfig_AnthropicOAuth(t *testing.T) {
 	cfg := &config.AIConfig{
 		Enabled:           true,
-		Provider:          config.AIProviderAnthropic,
-		Model:             "claude-3-5-sonnet-20241022",
+		Model:             "anthropic:claude-3-5-sonnet-20241022",
 		AuthMethod:        config.AuthMethodOAuth,
 		OAuthAccessToken:  "test-token",
 		OAuthRefreshToken: "test-refresh",

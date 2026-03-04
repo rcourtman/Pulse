@@ -422,12 +422,17 @@ func (s *SessionStore) load() {
 				continue
 			}
 			refreshToken := entry.OIDCRefreshToken
-			// Decrypt refresh token if needed (handles migration from plaintext)
+			// Refresh tokens must be encrypted at rest in v6.
 			if refreshToken != "" && s.crypto != nil {
 				if decrypted, err := s.crypto.DecryptString(refreshToken); err == nil {
 					refreshToken = decrypted
+				} else {
+					log.Warn().
+						Err(err).
+						Str("session_key", entry.Key).
+						Msg("Skipping invalid OIDC refresh token; encrypted format required")
+					refreshToken = ""
 				}
-				// If decryption fails, assume it's legacy plaintext and leave as is
 			}
 
 			s.sessions[entry.Key] = &SessionData{
@@ -449,25 +454,5 @@ func (s *SessionStore) load() {
 		log.Info().Int("loaded", len(s.sessions)).Int("total", len(persisted)).Msg("Sessions loaded from disk (hashed format)")
 		return
 	}
-
-	// Legacy map format fallback (keys stored as raw tokens)
-	var legacy map[string]*SessionData
-	if err := json.Unmarshal(data, &legacy); err != nil {
-		log.Error().Err(err).Msg("Failed to unmarshal legacy sessions")
-		return
-	}
-
-	loaded := 0
-	for token, session := range legacy {
-		if now.After(session.ExpiresAt) {
-			continue
-		}
-		s.sessions[sessionHash(token)] = session
-		loaded++
-	}
-
-	log.Info().
-		Int("loaded", loaded).
-		Int("total", len(legacy)).
-		Msg("Sessions loaded from disk (legacy format migrated)")
+	log.Error().Msg("Failed to decode sessions file; unsupported format")
 }

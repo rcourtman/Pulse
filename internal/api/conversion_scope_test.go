@@ -15,7 +15,7 @@ func TestConversionConfigReadRequiresSettingsReadScope(t *testing.T) {
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/conversion/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/upgrade-metrics/config", nil)
 	req.Header.Set("X-API-Token", rawToken)
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
@@ -29,7 +29,7 @@ func TestConversionConfigWriteRequiresSettingsWriteScope(t *testing.T) {
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
-	req := httptest.NewRequest(http.MethodPut, "/api/conversion/config", strings.NewReader(`{"enabled":false}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/upgrade-metrics/config", strings.NewReader(`{"enabled":false}`))
 	req.Header.Set("X-API-Token", rawToken)
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)

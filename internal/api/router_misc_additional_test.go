@@ -360,7 +360,7 @@ func TestHandleCharts_StatsDebugMetadata(t *testing.T) {
 	}
 }
 
-func TestHandleInfrastructureSummaryCharts_Lightweight(t *testing.T) {
+func TestHandleInfrastructureCharts_Lightweight(t *testing.T) {
 	monitor, state, _ := newTestMonitor(t)
 	state.Nodes = []models.Node{{
 		ID:     "node-1",
@@ -389,10 +389,10 @@ func TestHandleInfrastructureSummaryCharts_Lightweight(t *testing.T) {
 	syncTestResourceStore(t, monitor, state)
 	router := &Router{monitor: monitor}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/charts/infrastructure-summary?range=5m", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/charts/infrastructure?range=5m", nil)
 	rec := httptest.NewRecorder()
 
-	router.handleInfrastructureSummaryCharts(rec, req)
+	router.handleInfrastructureCharts(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)

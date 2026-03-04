@@ -26,7 +26,7 @@ func TestHandleGetIntelligence_MethodNotAllowed(t *testing.T) {
 
 func TestHandleGetIntelligence_NilAIService(t *testing.T) {
 	t.Parallel()
-	// handler with no legacyAIService — GetAIService returns nil
+	// handler with no defaultAIService — GetAIService returns nil
 	handler := &AISettingsHandler{}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence", nil)
@@ -49,7 +49,7 @@ func TestHandleGetIntelligence_NilAIService(t *testing.T) {
 func TestHandleGetIntelligence_PatrolUnavailable(t *testing.T) {
 	persistence := config.NewConfigPersistence(t.TempDir())
 	handler := &AISettingsHandler{
-		legacyAIService: ai.NewService(persistence, nil),
+		defaultAIService: ai.NewService(persistence, nil),
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence", nil)
@@ -72,7 +72,7 @@ func TestHandleGetIntelligence_PatrolUnavailable(t *testing.T) {
 func TestHandleGetIntelligence_ResourceIDTooLong(t *testing.T) {
 	t.Parallel()
 	svc := newEnabledAIService(t)
-	handler := &AISettingsHandler{legacyAIService: svc}
+	handler := &AISettingsHandler{defaultAIService: svc}
 
 	longID := strings.Repeat("x", 501)
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence?resource_id="+longID, nil)
@@ -87,7 +87,7 @@ func TestHandleGetIntelligence_ResourceIDTooLong(t *testing.T) {
 func TestHandleGetIntelligence_WithPatrolService(t *testing.T) {
 	t.Parallel()
 	svc := newEnabledAIService(t)
-	handler := &AISettingsHandler{legacyAIService: svc}
+	handler := &AISettingsHandler{defaultAIService: svc}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence", nil)
 	rr := httptest.NewRecorder()
@@ -110,7 +110,7 @@ func TestHandleGetIntelligence_WithPatrolService(t *testing.T) {
 func TestHandleGetIntelligence_WithResourceID(t *testing.T) {
 	t.Parallel()
 	svc := newEnabledAIService(t)
-	handler := &AISettingsHandler{legacyAIService: svc}
+	handler := &AISettingsHandler{defaultAIService: svc}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence?resource_id=vm-1", nil)
 	rr := httptest.NewRecorder()
@@ -132,7 +132,7 @@ func TestHandleGetIntelligence_WithResourceID(t *testing.T) {
 func TestHandleGetIntelligence_ResourceIDAtLimit(t *testing.T) {
 	t.Parallel()
 	svc := newEnabledAIService(t)
-	handler := &AISettingsHandler{legacyAIService: svc}
+	handler := &AISettingsHandler{defaultAIService: svc}
 
 	// Exactly 500 chars should be accepted
 	exactID := strings.Repeat("a", 500)
@@ -148,7 +148,7 @@ func TestHandleGetIntelligence_ResourceIDAtLimit(t *testing.T) {
 func TestHandlePatrolStream_PatrolUnavailable(t *testing.T) {
 	persistence := config.NewConfigPersistence(t.TempDir())
 	handler := &AISettingsHandler{
-		legacyAIService: ai.NewService(persistence, nil),
+		defaultAIService: ai.NewService(persistence, nil),
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/stream", nil)

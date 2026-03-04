@@ -563,6 +563,9 @@ func (h *DiscoveryHandlers) HandleListByHost(w http.ResponseWriter, r *http.Requ
 
 	// Parse path
 	hostID := strings.TrimPrefix(r.URL.Path, "/api/discovery/host/")
+	if hostID == r.URL.Path {
+		hostID = strings.TrimPrefix(r.URL.Path, "/api/discovery/agent/")
+	}
 
 	discoveries, err := h.service.ListDiscoveriesByHost(hostID)
 	if err != nil {

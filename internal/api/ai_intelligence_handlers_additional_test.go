@@ -40,7 +40,7 @@ func newEnabledAIService(t *testing.T) *ai.Service {
 }
 
 func TestHandleGetRecentChanges_NoChangeDetector(t *testing.T) {
-	handler := &AISettingsHandler{legacyAIService: newEnabledAIService(t)}
+	handler := &AISettingsHandler{defaultAIService: newEnabledAIService(t)}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/changes", nil)
 	rec := httptest.NewRecorder()
 
@@ -60,7 +60,7 @@ func TestHandleGetRecentChanges_NoChangeDetector(t *testing.T) {
 }
 
 func TestHandleGetBaselines_NoBaselineStore(t *testing.T) {
-	handler := &AISettingsHandler{legacyAIService: newEnabledAIService(t)}
+	handler := &AISettingsHandler{defaultAIService: newEnabledAIService(t)}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/baselines", nil)
 	rec := httptest.NewRecorder()
 
@@ -80,7 +80,7 @@ func TestHandleGetBaselines_NoBaselineStore(t *testing.T) {
 }
 
 func TestHandleGetAnomalies_NoBaselineStore(t *testing.T) {
-	handler := &AISettingsHandler{legacyAIService: newEnabledAIService(t)}
+	handler := &AISettingsHandler{defaultAIService: newEnabledAIService(t)}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/anomalies", nil)
 	rec := httptest.NewRecorder()
 
@@ -100,7 +100,7 @@ func TestHandleGetAnomalies_NoBaselineStore(t *testing.T) {
 }
 
 func TestHandleGetLearningStatus_NoBaselineStore(t *testing.T) {
-	handler := &AISettingsHandler{legacyAIService: newEnabledAIService(t)}
+	handler := &AISettingsHandler{defaultAIService: newEnabledAIService(t)}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/learning", nil)
 	rec := httptest.NewRecorder()
 
@@ -120,7 +120,7 @@ func TestHandleGetLearningStatus_NoBaselineStore(t *testing.T) {
 }
 
 func TestHandleGetRemediations_NoRemediationLog(t *testing.T) {
-	handler := &AISettingsHandler{legacyAIService: newEnabledAIService(t)}
+	handler := &AISettingsHandler{defaultAIService: newEnabledAIService(t)}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/remediations", nil)
 	rec := httptest.NewRecorder()
 

@@ -109,7 +109,7 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 }
 
 // HandleConversionFunnel returns conversion funnel counts for admin reporting.
-// GET /api/admin/conversion-funnel?org_id=...&from=...&to=...
+// GET /api/admin/upgrade-metrics-funnel?org_id=...&from=...&to=...
 func (h *ConversionHandlers) HandleConversionFunnel(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

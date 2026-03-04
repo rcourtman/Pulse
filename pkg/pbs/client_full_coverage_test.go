@@ -285,6 +285,55 @@ func TestClient_SetupMonitoringAccess_Errors(t *testing.T) {
 	}
 }
 
+func TestClient_SetupMonitoringAccess_RotatesExistingToken(t *testing.T) {
+	createTokenCalls := 0
+	deleteCalled := false
+
+	client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api2/json/access/users":
+			w.WriteHeader(http.StatusOK)
+		case r.URL.Path == "/api2/json/access/acl":
+			w.WriteHeader(http.StatusOK)
+		case r.URL.Path == "/api2/json/access/users/pulse-monitor@pbs/token/monitor1" && r.Method == http.MethodPost:
+			createTokenCalls++
+			if createTokenCalls == 1 {
+				http.Error(w, "already exists", http.StatusBadRequest)
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]string{
+					"tokenid": "pulse-monitor@pbs!monitor1",
+					"value":   "rotated-secret",
+				},
+			})
+		case r.URL.Path == "/api2/json/access/users/pulse-monitor@pbs/token/monitor1" && r.Method == http.MethodDelete:
+			deleteCalled = true
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.Error(w, "unknown path "+r.URL.Path, http.StatusNotFound)
+		}
+	})
+	defer server.Close()
+
+	id, value, err := client.SetupMonitoringAccess(context.Background(), "monitor1")
+	if err != nil {
+		t.Fatalf("SetupMonitoringAccess failed: %v", err)
+	}
+	if id != "pulse-monitor@pbs!monitor1" {
+		t.Fatalf("token ID = %q, want pulse-monitor@pbs!monitor1", id)
+	}
+	if value != "rotated-secret" {
+		t.Fatalf("token value = %q, want rotated-secret", value)
+	}
+	if createTokenCalls != 2 {
+		t.Fatalf("create token calls = %d, want 2", createTokenCalls)
+	}
+	if !deleteCalled {
+		t.Fatal("expected existing token delete to be called")
+	}
+}
+
 func TestClient_GetVersion_Error(t *testing.T) {
 	client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "fail", http.StatusInternalServerError)

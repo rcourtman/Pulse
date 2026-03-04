@@ -61,7 +61,6 @@ func TestHandleGetSystemSettings(t *testing.T) {
 		BackupPollingInterval:        1 * time.Hour,
 		EnableBackupPolling:          true,
 		TemperatureMonitoringEnabled: true,
-		DisableLegacyRouteRedirects:  true,
 	}
 	persistence := config.NewConfigPersistence(tempDir)
 	monitor := &mockMonitor{}
@@ -84,8 +83,7 @@ func TestHandleGetSystemSettings(t *testing.T) {
 	}
 
 	var response struct {
-		Theme                       string `json:"theme"`
-		DisableLegacyRouteRedirects bool   `json:"disableLegacyRouteRedirects"`
+		Theme string `json:"theme"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
@@ -93,9 +91,6 @@ func TestHandleGetSystemSettings(t *testing.T) {
 
 	if response.Theme != "dark" {
 		t.Errorf("Expected theme 'dark', got '%s'", response.Theme)
-	}
-	if !response.DisableLegacyRouteRedirects {
-		t.Error("Expected disableLegacyRouteRedirects to be true")
 	}
 }
 
@@ -147,9 +142,8 @@ func TestHandleUpdateSystemSettings_Basic(t *testing.T) {
 	}
 
 	updates := map[string]interface{}{
-		"theme":                       "light",
-		"pvePollingInterval":          60,
-		"disableLegacyRouteRedirects": true,
+		"theme":              "light",
+		"pvePollingInterval": 60,
 	}
 	body, _ := json.Marshal(updates)
 
@@ -175,16 +169,9 @@ func TestHandleUpdateSystemSettings_Basic(t *testing.T) {
 	if loaded.PVEPollingInterval != 60 {
 		t.Errorf("Expected PVEPollingInterval 60, got %d", loaded.PVEPollingInterval)
 	}
-	if !loaded.DisableLegacyRouteRedirects {
-		t.Error("Expected DisableLegacyRouteRedirects to be true")
-	}
-
 	// Verify config update
 	if cfg.PVEPollingInterval != 60*time.Second {
 		t.Errorf("Config was not updated. Expected 60s, got %v", cfg.PVEPollingInterval)
-	}
-	if !cfg.DisableLegacyRouteRedirects {
-		t.Error("Config DisableLegacyRouteRedirects was not updated")
 	}
 }
 
@@ -242,12 +229,12 @@ func TestHandleUpdateSystemSettings_Validation(t *testing.T) {
 
 func TestSystemSettingsHandler_GetMonitor_UsesTenantMonitorInterface(t *testing.T) {
 	tenantMonitor := &monitoring.Monitor{}
-	legacyMonitor := &mockMonitor{}
+	defaultMonitor := &mockMonitor{}
 	provider := &mockTenantMonitorProvider{monitor: tenantMonitor}
 
 	handler := &SystemSettingsHandler{
-		mtMonitor:     provider,
-		legacyMonitor: legacyMonitor,
+		mtMonitor:      provider,
+		defaultMonitor: defaultMonitor,
 	}
 
 	got := handler.getMonitor(context.Background())
@@ -260,16 +247,16 @@ func TestSystemSettingsHandler_GetMonitor_UsesTenantMonitorInterface(t *testing.
 }
 
 func TestSystemSettingsHandler_GetMonitor_FallsBackToLegacyOnTenantError(t *testing.T) {
-	legacyMonitor := &mockMonitor{}
+	defaultMonitor := &mockMonitor{}
 	provider := &mockTenantMonitorProvider{err: errors.New("boom")}
 
 	handler := &SystemSettingsHandler{
-		mtMonitor:     provider,
-		legacyMonitor: legacyMonitor,
+		mtMonitor:      provider,
+		defaultMonitor: defaultMonitor,
 	}
 
 	got := handler.getMonitor(context.WithValue(context.Background(), OrgIDContextKey, "acme"))
-	if got != legacyMonitor {
+	if got != defaultMonitor {
 		t.Fatalf("expected legacy monitor fallback, got %#v", got)
 	}
 	if provider.orgID != "acme" {

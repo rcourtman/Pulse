@@ -698,12 +698,26 @@ func TestCheckAuth_ProxyAuthNoUsernameHeader(t *testing.T) {
 }
 
 func TestCheckAuth_OIDCEnabledWithoutCredentials(t *testing.T) {
+	dataDir := t.TempDir()
 	cfg := &config.Config{
-		OIDC: &config.OIDCConfig{
-			Enabled: true,
-		},
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
 		// No AuthUser, AuthPass, or APITokens
 	}
+	setSSOAuthSnapshot(cfg, &config.SSOConfig{
+		Providers: []config.SSOProvider{
+			{
+				ID:      "test-oidc",
+				Name:    "Test OIDC",
+				Type:    config.SSOProviderTypeOIDC,
+				Enabled: true,
+				OIDC: &config.OIDCProviderConfig{
+					IssuerURL: "https://issuer.example.com",
+					ClientID:  "client-id",
+				},
+			},
+		},
+	})
 	req := httptest.NewRequest("GET", "/api/test", nil)
 	w := httptest.NewRecorder()
 
@@ -721,14 +735,29 @@ func TestCheckAuth_OIDCSessionValid(t *testing.T) {
 	// Create a session and track it for a user
 	store := GetSessionStore()
 	sessionToken := generateSessionToken()
-	store.CreateSession(sessionToken, 24*time.Hour, "test-agent", "127.0.0.1", "testuser")
-	TrackUserSession("oidcuser", sessionToken)
+	store.CreateOIDCSession(sessionToken, 24*time.Hour, "test-agent", "127.0.0.1", "oidcuser", &OIDCTokenInfo{
+		Issuer:   "https://issuer.example.com",
+		ClientID: "client-id",
+	})
 
 	cfg := &config.Config{
-		OIDC: &config.OIDCConfig{
-			Enabled: true,
-		},
+		DataPath:   dir,
+		ConfigPath: dir,
 	}
+	setSSOAuthSnapshot(cfg, &config.SSOConfig{
+		Providers: []config.SSOProvider{
+			{
+				ID:      "test-oidc",
+				Name:    "Test OIDC",
+				Type:    config.SSOProviderTypeOIDC,
+				Enabled: true,
+				OIDC: &config.OIDCProviderConfig{
+					IssuerURL: "https://issuer.example.com",
+					ClientID:  "client-id",
+				},
+			},
+		},
+	})
 	req := httptest.NewRequest("GET", "/api/test", nil)
 	req.AddCookie(&http.Cookie{
 		Name:  "pulse_session",
@@ -753,10 +782,23 @@ func TestCheckAuth_OIDCSessionInvalid(t *testing.T) {
 	InitSessionStore(dir)
 
 	cfg := &config.Config{
-		OIDC: &config.OIDCConfig{
-			Enabled: true,
-		},
+		DataPath:   dir,
+		ConfigPath: dir,
 	}
+	setSSOAuthSnapshot(cfg, &config.SSOConfig{
+		Providers: []config.SSOProvider{
+			{
+				ID:      "test-oidc",
+				Name:    "Test OIDC",
+				Type:    config.SSOProviderTypeOIDC,
+				Enabled: true,
+				OIDC: &config.OIDCProviderConfig{
+					IssuerURL: "https://issuer.example.com",
+					ClientID:  "client-id",
+				},
+			},
+		},
+	})
 	req := httptest.NewRequest("GET", "/api/test", nil)
 	req.AddCookie(&http.Cookie{
 		Name:  "pulse_session",

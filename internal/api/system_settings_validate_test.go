@@ -337,7 +337,7 @@ func TestValidateSystemSettings(t *testing.T) {
 		},
 		{
 			name:        "discoveryConfig: snake_case field name is valid",
-			input:       map[string]interface{}{"discovery_config": map[string]interface{}{"max_hosts_per_scan": float64(100)}},
+			input:       map[string]interface{}{"discoveryConfig": map[string]interface{}{"maxHostsPerScan": float64(100)}},
 			expectError: false,
 		},
 		{
@@ -370,56 +370,56 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.environment_override: empty string is valid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"environment_override": ""},
+				"discoveryConfig": map[string]interface{}{"environmentOverride": ""},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.environment_override: 'auto' is valid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"environment_override": "auto"},
+				"discoveryConfig": map[string]interface{}{"environmentOverride": "auto"},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.environment_override: 'native' is valid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"environment_override": "native"},
+				"discoveryConfig": map[string]interface{}{"environmentOverride": "native"},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.environment_override: 'docker_host' is valid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"environment_override": "docker_host"},
+				"discoveryConfig": map[string]interface{}{"environmentOverride": "docker_host"},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.environment_override: 'docker_bridge' is valid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"environment_override": "docker_bridge"},
+				"discoveryConfig": map[string]interface{}{"environmentOverride": "docker_bridge"},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.environment_override: 'lxc_privileged' is valid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"environment_override": "lxc_privileged"},
+				"discoveryConfig": map[string]interface{}{"environmentOverride": "lxc_privileged"},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.environment_override: 'lxc_unprivileged' is valid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"environment_override": "lxc_unprivileged"},
+				"discoveryConfig": map[string]interface{}{"environmentOverride": "lxc_unprivileged"},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.environment_override: invalid value",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"environment_override": "invalid_env"},
+				"discoveryConfig": map[string]interface{}{"environmentOverride": "invalid_env"},
 			},
 			expectError: true,
 			errorText:   "invalid discovery environment",
@@ -427,7 +427,7 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.environment_override: number instead of string",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"environment_override": float64(123)},
+				"discoveryConfig": map[string]interface{}{"environmentOverride": float64(123)},
 			},
 			expectError: true,
 			errorText:   "string",
@@ -446,28 +446,28 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.subnet_allowlist: empty array is valid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"subnet_allowlist": []interface{}{}},
+				"discoveryConfig": map[string]interface{}{"subnetAllowlist": []interface{}{}},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.subnet_allowlist: valid CIDR",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"subnet_allowlist": []interface{}{"192.168.1.0/24"}},
+				"discoveryConfig": map[string]interface{}{"subnetAllowlist": []interface{}{"192.168.1.0/24"}},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.subnet_allowlist: multiple valid CIDRs",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"subnet_allowlist": []interface{}{"192.168.1.0/24", "10.0.0.0/8"}},
+				"discoveryConfig": map[string]interface{}{"subnetAllowlist": []interface{}{"192.168.1.0/24", "10.0.0.0/8"}},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.subnet_allowlist: invalid CIDR format",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"subnet_allowlist": []interface{}{"192.168.1.0"}},
+				"discoveryConfig": map[string]interface{}{"subnetAllowlist": []interface{}{"192.168.1.0"}},
 			},
 			expectError: true,
 			errorText:   "invalid CIDR",
@@ -475,7 +475,7 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.subnet_allowlist: invalid CIDR in array",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"subnet_allowlist": []interface{}{"192.168.1.0/24", "not-a-cidr"}},
+				"discoveryConfig": map[string]interface{}{"subnetAllowlist": []interface{}{"192.168.1.0/24", "not-a-cidr"}},
 			},
 			expectError: true,
 			errorText:   "invalid CIDR",
@@ -483,7 +483,7 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.subnet_allowlist: number in array instead of string",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"subnet_allowlist": []interface{}{float64(123)}},
+				"discoveryConfig": map[string]interface{}{"subnetAllowlist": []interface{}{float64(123)}},
 			},
 			expectError: true,
 			errorText:   "string",
@@ -491,7 +491,7 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.subnet_allowlist: not an array",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"subnet_allowlist": "192.168.1.0/24"},
+				"discoveryConfig": map[string]interface{}{"subnetAllowlist": "192.168.1.0/24"},
 			},
 			expectError: true,
 			errorText:   "array",
@@ -510,28 +510,28 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.subnet_blocklist: empty array is valid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"subnet_blocklist": []interface{}{}},
+				"discoveryConfig": map[string]interface{}{"subnetBlocklist": []interface{}{}},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.subnet_blocklist: valid CIDR",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"subnet_blocklist": []interface{}{"169.254.0.0/16"}},
+				"discoveryConfig": map[string]interface{}{"subnetBlocklist": []interface{}{"169.254.0.0/16"}},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.subnet_blocklist: multiple valid CIDRs",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"subnet_blocklist": []interface{}{"169.254.0.0/16", "127.0.0.0/8"}},
+				"discoveryConfig": map[string]interface{}{"subnetBlocklist": []interface{}{"169.254.0.0/16", "127.0.0.0/8"}},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.subnet_blocklist: invalid CIDR format",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"subnet_blocklist": []interface{}{"169.254.0.0"}},
+				"discoveryConfig": map[string]interface{}{"subnetBlocklist": []interface{}{"169.254.0.0"}},
 			},
 			expectError: true,
 			errorText:   "invalid CIDR",
@@ -539,7 +539,7 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.subnet_blocklist: number in array instead of string",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"subnet_blocklist": []interface{}{float64(456)}},
+				"discoveryConfig": map[string]interface{}{"subnetBlocklist": []interface{}{float64(456)}},
 			},
 			expectError: true,
 			errorText:   "string",
@@ -547,7 +547,7 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.subnet_blocklist: not an array",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"subnet_blocklist": "169.254.0.0/16"},
+				"discoveryConfig": map[string]interface{}{"subnetBlocklist": "169.254.0.0/16"},
 			},
 			expectError: true,
 			errorText:   "array",
@@ -566,21 +566,21 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.max_hosts_per_scan: valid positive value",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"max_hosts_per_scan": float64(100)},
+				"discoveryConfig": map[string]interface{}{"maxHostsPerScan": float64(100)},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.max_hosts_per_scan: large value",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"max_hosts_per_scan": float64(10000)},
+				"discoveryConfig": map[string]interface{}{"maxHostsPerScan": float64(10000)},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.max_hosts_per_scan: zero is invalid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"max_hosts_per_scan": float64(0)},
+				"discoveryConfig": map[string]interface{}{"maxHostsPerScan": float64(0)},
 			},
 			expectError: true,
 			errorText:   "greater than zero",
@@ -588,7 +588,7 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.max_hosts_per_scan: negative is invalid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"max_hosts_per_scan": float64(-1)},
+				"discoveryConfig": map[string]interface{}{"maxHostsPerScan": float64(-1)},
 			},
 			expectError: true,
 			errorText:   "greater than zero",
@@ -596,7 +596,7 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.max_hosts_per_scan: string instead of number",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"max_hosts_per_scan": "100"},
+				"discoveryConfig": map[string]interface{}{"maxHostsPerScan": "100"},
 			},
 			expectError: true,
 			errorText:   "number",
@@ -615,28 +615,28 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.max_concurrent: valid minimum (1)",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"max_concurrent": float64(1)},
+				"discoveryConfig": map[string]interface{}{"maxConcurrent": float64(1)},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.max_concurrent: valid maximum (1000)",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"max_concurrent": float64(1000)},
+				"discoveryConfig": map[string]interface{}{"maxConcurrent": float64(1000)},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.max_concurrent: valid middle value (50)",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"max_concurrent": float64(50)},
+				"discoveryConfig": map[string]interface{}{"maxConcurrent": float64(50)},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.max_concurrent: zero is invalid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"max_concurrent": float64(0)},
+				"discoveryConfig": map[string]interface{}{"maxConcurrent": float64(0)},
 			},
 			expectError: true,
 			errorText:   "between 1 and 1000",
@@ -644,7 +644,7 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.max_concurrent: negative is invalid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"max_concurrent": float64(-1)},
+				"discoveryConfig": map[string]interface{}{"maxConcurrent": float64(-1)},
 			},
 			expectError: true,
 			errorText:   "between 1 and 1000",
@@ -652,7 +652,7 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.max_concurrent: above maximum (1001)",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"max_concurrent": float64(1001)},
+				"discoveryConfig": map[string]interface{}{"maxConcurrent": float64(1001)},
 			},
 			expectError: true,
 			errorText:   "between 1 and 1000",
@@ -660,7 +660,7 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.max_concurrent: string instead of number",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"max_concurrent": "50"},
+				"discoveryConfig": map[string]interface{}{"maxConcurrent": "50"},
 			},
 			expectError: true,
 			errorText:   "number",
@@ -679,21 +679,21 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.enable_reverse_dns: true is valid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"enable_reverse_dns": true},
+				"discoveryConfig": map[string]interface{}{"enableReverseDns": true},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.enable_reverse_dns: false is valid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"enable_reverse_dns": false},
+				"discoveryConfig": map[string]interface{}{"enableReverseDns": false},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.enable_reverse_dns: string instead of bool",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"enable_reverse_dns": "true"},
+				"discoveryConfig": map[string]interface{}{"enableReverseDns": "true"},
 			},
 			expectError: true,
 			errorText:   "boolean",
@@ -712,21 +712,21 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.scan_gateways: true is valid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"scan_gateways": true},
+				"discoveryConfig": map[string]interface{}{"scanGateways": true},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.scan_gateways: false is valid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"scan_gateways": false},
+				"discoveryConfig": map[string]interface{}{"scanGateways": false},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.scan_gateways: string instead of bool",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"scan_gateways": "true"},
+				"discoveryConfig": map[string]interface{}{"scanGateways": "true"},
 			},
 			expectError: true,
 			errorText:   "boolean",
@@ -745,21 +745,21 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.dial_timeout_ms: valid positive value (1000)",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"dial_timeout_ms": float64(1000)},
+				"discoveryConfig": map[string]interface{}{"dialTimeoutMs": float64(1000)},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.dial_timeout_ms: minimum positive (1)",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"dial_timeout_ms": float64(1)},
+				"discoveryConfig": map[string]interface{}{"dialTimeoutMs": float64(1)},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.dial_timeout_ms: zero is invalid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"dial_timeout_ms": float64(0)},
+				"discoveryConfig": map[string]interface{}{"dialTimeoutMs": float64(0)},
 			},
 			expectError: true,
 			errorText:   "greater than zero",
@@ -767,7 +767,7 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.dial_timeout_ms: negative is invalid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"dial_timeout_ms": float64(-1)},
+				"discoveryConfig": map[string]interface{}{"dialTimeoutMs": float64(-1)},
 			},
 			expectError: true,
 			errorText:   "greater than zero",
@@ -775,7 +775,7 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.dial_timeout_ms: string instead of number",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"dial_timeout_ms": "1000"},
+				"discoveryConfig": map[string]interface{}{"dialTimeoutMs": "1000"},
 			},
 			expectError: true,
 			errorText:   "number",
@@ -794,21 +794,21 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.http_timeout_ms: valid positive value (2000)",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"http_timeout_ms": float64(2000)},
+				"discoveryConfig": map[string]interface{}{"httpTimeoutMs": float64(2000)},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.http_timeout_ms: minimum positive (1)",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"http_timeout_ms": float64(1)},
+				"discoveryConfig": map[string]interface{}{"httpTimeoutMs": float64(1)},
 			},
 			expectError: false,
 		},
 		{
 			name: "discoveryConfig.http_timeout_ms: zero is invalid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"http_timeout_ms": float64(0)},
+				"discoveryConfig": map[string]interface{}{"httpTimeoutMs": float64(0)},
 			},
 			expectError: true,
 			errorText:   "greater than zero",
@@ -816,7 +816,7 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.http_timeout_ms: negative is invalid",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"http_timeout_ms": float64(-1)},
+				"discoveryConfig": map[string]interface{}{"httpTimeoutMs": float64(-1)},
 			},
 			expectError: true,
 			errorText:   "greater than zero",
@@ -824,7 +824,7 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "discoveryConfig.http_timeout_ms: string instead of number",
 			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"http_timeout_ms": "2000"},
+				"discoveryConfig": map[string]interface{}{"httpTimeoutMs": "2000"},
 			},
 			expectError: true,
 			errorText:   "number",
@@ -969,15 +969,15 @@ func TestValidateSystemSettings(t *testing.T) {
 			name: "complex discoveryConfig with multiple valid fields",
 			input: map[string]interface{}{
 				"discoveryConfig": map[string]interface{}{
-					"environment_override": "docker_host",
-					"subnet_allowlist":     []interface{}{"192.168.1.0/24", "10.0.0.0/8"},
-					"subnet_blocklist":     []interface{}{"169.254.0.0/16"},
-					"max_hosts_per_scan":   float64(500),
-					"max_concurrent":       float64(100),
-					"enable_reverse_dns":   true,
-					"scan_gateways":        false,
-					"dial_timeout_ms":      float64(1500),
-					"http_timeout_ms":      float64(3000),
+					"environmentOverride": "docker_host",
+					"subnetAllowlist":     []interface{}{"192.168.1.0/24", "10.0.0.0/8"},
+					"subnetBlocklist":     []interface{}{"169.254.0.0/16"},
+					"maxHostsPerScan":     float64(500),
+					"maxConcurrent":       float64(100),
+					"enableReverseDns":    true,
+					"scanGateways":        false,
+					"dialTimeoutMs":       float64(1500),
+					"httpTimeoutMs":       float64(3000),
 				},
 			},
 			expectError: false,
@@ -986,10 +986,10 @@ func TestValidateSystemSettings(t *testing.T) {
 			name: "discoveryConfig: mixing camelCase and snake_case fields",
 			input: map[string]interface{}{
 				"discoveryConfig": map[string]interface{}{
-					"environment_override": "native",
-					"maxHostsPerScan":      float64(1024),
-					"subnet_allowlist":     []interface{}{"192.168.0.0/16"},
-					"enableReverseDns":     true,
+					"environmentOverride": "native",
+					"maxHostsPerScan":     float64(1024),
+					"subnetAllowlist":     []interface{}{"192.168.0.0/16"},
+					"enableReverseDns":    true,
 				},
 			},
 			expectError: false,
@@ -1071,17 +1071,17 @@ func TestValidateSystemSettings_BoundaryConditions(t *testing.T) {
 		// Max concurrent boundaries - fractional values are rejected since it's a goroutine count
 		{
 			name:        "max_concurrent: 0.999 fractional rejected",
-			input:       map[string]interface{}{"discoveryConfig": map[string]interface{}{"max_concurrent": 0.999}},
+			input:       map[string]interface{}{"discoveryConfig": map[string]interface{}{"maxConcurrent": 0.999}},
 			expectError: true,
 		},
 		{
 			name:        "max_concurrent: 1000.001 fractional rejected",
-			input:       map[string]interface{}{"discoveryConfig": map[string]interface{}{"max_concurrent": 1000.001}},
+			input:       map[string]interface{}{"discoveryConfig": map[string]interface{}{"maxConcurrent": 1000.001}},
 			expectError: true,
 		},
 		{
 			name:        "max_concurrent: 5.5 fractional rejected",
-			input:       map[string]interface{}{"discoveryConfig": map[string]interface{}{"max_concurrent": 5.5}},
+			input:       map[string]interface{}{"discoveryConfig": map[string]interface{}{"maxConcurrent": 5.5}},
 			expectError: true,
 		},
 	}

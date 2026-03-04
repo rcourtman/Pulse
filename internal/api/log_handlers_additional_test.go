@@ -91,14 +91,13 @@ func TestLogHandlers_HandleDownloadBundle(t *testing.T) {
 	t.Setenv("TEST_SECRET", "super-secret")
 
 	cfg := &config.Config{
-		LogFile:                 logFile,
-		AuthPass:                "password",
-		APIToken:                "token",
-		ProxyAuthSecret:         "proxy-secret",
-		PVEInstances:            []config.PVEInstance{{Password: "pve-pass", TokenValue: "pve-token"}},
-		PBSInstances:            []config.PBSInstance{{Password: "pbs-pass", TokenValue: "pbs-token"}},
-		PMGInstances:            []config.PMGInstance{{Password: "pmg-pass", TokenValue: "pmg-token"}},
-		SuppressedEnvMigrations: []string{"hash"},
+		LogFile:         logFile,
+		AuthPass:        "password",
+		APIToken:        "token",
+		ProxyAuthSecret: "proxy-secret",
+		PVEInstances:    []config.PVEInstance{{Password: "pve-pass", TokenValue: "pve-token"}},
+		PBSInstances:    []config.PBSInstance{{Password: "pbs-pass", TokenValue: "pbs-token"}},
+		PMGInstances:    []config.PMGInstance{{Password: "pmg-pass", TokenValue: "pmg-token"}},
 	}
 
 	handler := NewLogHandlers(cfg, nil)

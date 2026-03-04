@@ -15,7 +15,7 @@ func TestDockerAgentHandlers_SetMonitorAndTenant(t *testing.T) {
 	handler := &DockerAgentHandlers{}
 	monitor := &monitoring.Monitor{}
 	handler.SetMonitor(monitor)
-	if handler.legacyMonitor != monitor {
+	if handler.defaultMonitor != monitor {
 		t.Fatalf("expected legacy monitor to be set")
 	}
 
@@ -28,14 +28,14 @@ func TestDockerAgentHandlers_SetMonitorAndTenant(t *testing.T) {
 	if handler.mtMonitor != mtm {
 		t.Fatalf("expected multi-tenant monitor to be set")
 	}
-	if handler.legacyMonitor != monitor {
+	if handler.defaultMonitor != monitor {
 		t.Fatalf("expected legacy monitor to be set from multi-tenant default")
 	}
 }
 
 func TestDockerAgentHandlers_GetMonitorFallback(t *testing.T) {
 	legacy := &monitoring.Monitor{}
-	handler := &DockerAgentHandlers{baseAgentHandlers: baseAgentHandlers{legacyMonitor: legacy}}
+	handler := &DockerAgentHandlers{baseAgentHandlers: baseAgentHandlers{defaultMonitor: legacy}}
 
 	if got := handler.getMonitor(context.Background()); got != legacy {
 		t.Fatalf("expected legacy monitor fallback")

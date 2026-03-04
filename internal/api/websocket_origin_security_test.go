@@ -78,31 +78,6 @@ func TestWebSocketOriginAllowedWhenConfigured(t *testing.T) {
 	conn.Close()
 }
 
-func TestSocketIOWebSocketOriginRejected(t *testing.T) {
-	rawToken := "socket-origin-reject-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
-
-	server, cleanup := newWebSocketRouter(t, []string{"https://allowed.example.com"}, record)
-	defer cleanup()
-
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/socket.io/?transport=websocket&org_id=default"
-	headers := http.Header{}
-	headers.Set("X-API-Token", rawToken)
-	headers.Set("Origin", "https://evil.example.com")
-
-	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, headers)
-	if err == nil {
-		conn.Close()
-		t.Fatalf("expected websocket origin rejection for socket.io")
-	}
-	if resp == nil {
-		t.Fatalf("expected HTTP response for rejected socket.io origin")
-	}
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, resp.StatusCode)
-	}
-}
-
 func TestWebSocketOriginRejectedWhenNoAllowedOriginsAndPublicOrigin(t *testing.T) {
 	rawToken := "ws-origin-default-reject-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)

@@ -26,24 +26,16 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 	r.mux.HandleFunc("/api/health", r.handleHealth)
 	r.mux.HandleFunc("/api/state", r.handleState)
 	r.mux.HandleFunc("/api/version", r.handleVersion)
-	r.mux.HandleFunc("/api/install/install-docker.sh", r.handleDownloadDockerInstallerScript)
-	r.mux.HandleFunc("/api/install/install.sh", r.handleDownloadUnifiedInstallScript)
-	r.mux.HandleFunc("/api/install/install.ps1", r.handleDownloadUnifiedInstallScriptPS)
 	r.mux.HandleFunc("/api/security/validate-bootstrap-token", r.handleValidateBootstrapToken)
 	// Security routes
 	r.mux.HandleFunc("/api/security/change-password", r.handleChangePassword)
 	r.mux.HandleFunc("/api/logout", r.handleLogout)
 	r.mux.HandleFunc("/api/login", r.handleLogin)
 	r.mux.HandleFunc("/api/security/reset-lockout", r.handleResetLockout)
-	r.mux.HandleFunc("/api/security/oidc", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleOIDCConfig)))
-	r.mux.HandleFunc("/api/oidc/login", r.handleOIDCLogin)
-	r.mux.HandleFunc(config.DefaultOIDCCallbackPath, r.handleOIDCCallback)
 	ssoAdminEndpoints := resolveSSOAdminEndpoints(ssoAdminEndpointAdapter{router: r}, newSSOAdminRuntime(r))
 	// Per-provider SSO OIDC routes: /api/oidc/{providerID}/login and /api/oidc/{providerID}/callback
 	// Use a prefix handler since Go 1.x ServeMux doesn't support path params.
-	// Requests matching /api/oidc/{something}/ are dispatched here; the legacy
-	// /api/oidc/login and /api/oidc/callback routes registered above take priority
-	// because ServeMux prefers longer exact matches over prefix patterns.
+	// Requests matching /api/oidc/{something}/ are dispatched here.
 	r.mux.HandleFunc("/api/oidc/", func(w http.ResponseWriter, req *http.Request) {
 		// Determine which sub-endpoint was requested
 		parts := strings.Split(strings.TrimPrefix(req.URL.Path, "/"), "/")
@@ -163,17 +155,27 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 
 			// Check for basic auth configuration
 			// Check both environment variables and loaded config
-			oidcCfg := r.ensureOIDCConfig()
 			ssoCfg := r.ensureSSOConfig()
+			enabledProviders := []config.SSOProvider{}
+			if ssoCfg != nil {
+				enabledProviders = ssoCfg.GetEnabledProviders()
+			}
+			hasEnabledSSO := len(enabledProviders) > 0
+			var primaryOIDCConfig *config.OIDCProviderConfig
+			for i := range enabledProviders {
+				if enabledProviders[i].Type == config.SSOProviderTypeOIDC && enabledProviders[i].OIDC != nil {
+					primaryOIDCConfig = enabledProviders[i].OIDC
+					break
+				}
+			}
 			hasAuthentication := os.Getenv("PULSE_AUTH_USER") != "" ||
 				os.Getenv("REQUIRE_AUTH") == "true" ||
 				r.config.AuthUser != "" ||
 				r.config.AuthPass != "" ||
-				(oidcCfg != nil && oidcCfg.Enabled) ||
 				r.config.HasAPITokens() ||
 				r.config.ProxyAuthSecret != "" ||
 				r.hostedMode ||
-				(ssoCfg != nil && ssoCfg.HasEnabledProviders())
+				hasEnabledSSO
 
 			// Check if .env file exists but hasn't been loaded yet (pending restart)
 			configuredButPendingRestart := false
@@ -242,21 +244,20 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 				}
 			}
 
-			// Check for OIDC session
-			oidcUsername := ""
-			if oidcCfg != nil && oidcCfg.Enabled {
+			// Check for SSO-backed session
+			ssoSessionUsername := ""
+			if hasEnabledSSO {
 				if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" {
 					if ValidateSession(cookie.Value) {
-						oidcUsername = GetSessionUsername(cookie.Value)
+						ssoSessionUsername = GetSessionUsername(cookie.Value)
 					}
 				}
 			}
 
 			requiresAuth := r.config.HasAPITokens() ||
 				(r.config.AuthUser != "" && r.config.AuthPass != "") ||
-				(r.config.OIDC != nil && r.config.OIDC.Enabled) ||
 				r.config.ProxyAuthSecret != "" ||
-				(ssoCfg != nil && ssoCfg.HasEnabledProviders())
+				hasEnabledSSO
 
 			// Resolve the public URL for agent install commands
 			// If PULSE_PUBLIC_URL is configured, use that; otherwise derive from request
@@ -283,7 +284,8 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 				"proxyAuthIsAdmin":            proxyAuthIsAdmin,
 				"authUsername":                "",
 				"authLastModified":            "",
-				"oidcUsername":                oidcUsername,
+				"ssoEnabled":                  hasEnabledSSO,
+				"ssoSessionUsername":          ssoSessionUsername,
 				"hideLocalLogin":              r.config.HideLocalLogin,
 				"agentUrl":                    agentURL,
 			}
@@ -298,54 +300,45 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 				status["tokenScopes"] = tokenScopes
 			}
 
-			if oidcCfg != nil {
-				status["oidcEnabled"] = oidcCfg.Enabled
-				status["oidcIssuer"] = oidcCfg.IssuerURL
-				status["oidcClientId"] = oidcCfg.ClientID
-				status["oidcLogoutURL"] = oidcCfg.LogoutURL
-				if len(oidcCfg.EnvOverrides) > 0 {
-					status["oidcEnvOverrides"] = oidcCfg.EnvOverrides
-				}
+			if primaryOIDCConfig != nil {
+				status["ssoLogoutURL"] = primaryOIDCConfig.LogoutURL
 			}
 
 			// Include SSO providers for login page discovery
-			if ssoConfig := r.ensureSSOConfig(); ssoConfig != nil {
-				enabledProviders := ssoConfig.GetEnabledProviders()
-				if len(enabledProviders) > 0 {
-					baseURL := r.config.PublicURL
-					if baseURL == "" {
-						baseURL = ""
-					}
-					type ssoProviderInfo struct {
-						ID          string `json:"id"`
-						Name        string `json:"name"`
-						Type        string `json:"type"`
-						DisplayName string `json:"displayName,omitempty"`
-						IconURL     string `json:"iconUrl,omitempty"`
-						LoginURL    string `json:"loginUrl"`
-					}
-					var ssoProviders []ssoProviderInfo
-					for _, p := range enabledProviders {
-						info := ssoProviderInfo{
-							ID:          p.ID,
-							Name:        p.Name,
-							Type:        string(p.Type),
-							DisplayName: p.DisplayName,
-							IconURL:     p.IconURL,
-						}
-						if info.DisplayName == "" {
-							info.DisplayName = p.Name
-						}
-						switch p.Type {
-						case config.SSOProviderTypeOIDC:
-							info.LoginURL = "/api/oidc/" + p.ID + "/login"
-						case config.SSOProviderTypeSAML:
-							info.LoginURL = "/api/saml/" + p.ID + "/login"
-						}
-						ssoProviders = append(ssoProviders, info)
-					}
-					status["ssoProviders"] = ssoProviders
+			if len(enabledProviders) > 0 {
+				baseURL := r.config.PublicURL
+				if baseURL == "" {
+					baseURL = ""
 				}
+				type ssoProviderInfo struct {
+					ID          string `json:"id"`
+					Name        string `json:"name"`
+					Type        string `json:"type"`
+					DisplayName string `json:"displayName,omitempty"`
+					IconURL     string `json:"iconUrl,omitempty"`
+					LoginURL    string `json:"loginUrl"`
+				}
+				var ssoProviders []ssoProviderInfo
+				for _, p := range enabledProviders {
+					info := ssoProviderInfo{
+						ID:          p.ID,
+						Name:        p.Name,
+						Type:        string(p.Type),
+						DisplayName: p.DisplayName,
+						IconURL:     p.IconURL,
+					}
+					if info.DisplayName == "" {
+						info.DisplayName = p.Name
+					}
+					switch p.Type {
+					case config.SSOProviderTypeOIDC:
+						info.LoginURL = "/api/oidc/" + p.ID + "/login"
+					case config.SSOProviderTypeSAML:
+						info.LoginURL = "/api/saml/" + p.ID + "/login"
+					}
+					ssoProviders = append(ssoProviders, info)
+				}
+				status["ssoProviders"] = ssoProviders
 			}
 
 			// Add bootstrap token location for first-run setup UI
@@ -362,11 +355,6 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 				if containerName := system.DetectDockerContainerName(); containerName != "" {
 					status["dockerContainerName"] = containerName
 				}
-			}
-
-			if r.config.DisableAuthEnvDetected {
-				status["deprecatedDisableAuth"] = true
-				status["message"] = "DISABLE_AUTH is deprecated and no longer disables authentication. Remove the environment variable and restart Pulse to manage authentication from the UI."
 			}
 
 			json.NewEncoder(w).Encode(status)
@@ -393,7 +381,10 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			authConfigured := (r.config.AuthUser != "" && r.config.AuthPass != "") ||
 				r.config.HasAPITokens() ||
 				r.config.ProxyAuthSecret != "" ||
-				(r.config.OIDC != nil && r.config.OIDC.Enabled)
+				(func() bool {
+					ssoCfg := r.ensureSSOConfig()
+					return ssoCfg != nil && ssoCfg.HasEnabledProviders()
+				})()
 			if authConfigured {
 				if !CheckAuth(r.config, w, req) {
 					log.Warn().
@@ -598,19 +589,6 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 	// Agent WebSocket for AI command execution
 	r.mux.HandleFunc("/api/agent/ws", r.handleAgentWebSocket)
 
-	// Docker agent download endpoints (public but rate limited)
-	r.mux.HandleFunc("/install-docker-agent.sh", r.downloadLimiter.Middleware(r.handleDownloadInstallScript)) // Serves the Docker agent install script
-	r.mux.HandleFunc("/install-container-agent.sh", r.downloadLimiter.Middleware(r.handleDownloadContainerAgentInstallScript))
-	r.mux.HandleFunc("/download/pulse-docker-agent", r.downloadLimiter.Middleware(r.handleDownloadAgent))
-
-	// Host agent download endpoints (public but rate limited)
-	r.mux.HandleFunc("/install-host-agent.sh", r.downloadLimiter.Middleware(r.handleDownloadHostAgentInstallScript))
-	r.mux.HandleFunc("/install-host-agent.ps1", r.downloadLimiter.Middleware(r.handleDownloadHostAgentInstallScriptPS))
-	r.mux.HandleFunc("/uninstall-host-agent.sh", r.downloadLimiter.Middleware(r.handleDownloadHostAgentUninstallScript))
-	r.mux.HandleFunc("/uninstall-host-agent.ps1", r.downloadLimiter.Middleware(r.handleDownloadHostAgentUninstallScriptPS))
-	r.mux.HandleFunc("/download/pulse-host-agent", r.downloadLimiter.Middleware(r.handleDownloadHostAgent))
-	r.mux.HandleFunc("/download/pulse-host-agent.sha256", r.downloadLimiter.Middleware(r.handleDownloadHostAgent))
-
 	// Unified Agent endpoints (public but rate limited)
 	r.mux.HandleFunc("/install.sh", r.downloadLimiter.Middleware(r.handleDownloadUnifiedInstallScript))
 	r.mux.HandleFunc("/install.ps1", r.downloadLimiter.Middleware(r.handleDownloadUnifiedInstallScriptPS))
@@ -621,9 +599,6 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 
 	// WebSocket endpoint
 	r.mux.HandleFunc("/ws", r.handleWebSocket)
-
-	// Socket.io compatibility endpoints
-	r.mux.HandleFunc("/socket.io/", r.handleSocketIO)
 
 	// Simple stats page - requires authentication
 	r.mux.HandleFunc("/simple-stats", RequireAuth(r.config, r.handleSimpleStats))

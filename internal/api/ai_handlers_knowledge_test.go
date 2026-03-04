@@ -51,7 +51,7 @@ func TestHandleGetGuestKnowledge_HappyPath(t *testing.T) {
 	handler := newTestAISettingsHandlerWithService(t)
 
 	// Save a note first
-	if err := handler.legacyAIService.SaveGuestNote("vm-200", "Web Server", "vm", "service", "Nginx", "Running on port 80"); err != nil {
+	if err := handler.defaultAIService.SaveGuestNote("vm-200", "Web Server", "vm", "service", "Nginx", "Running on port 80"); err != nil {
 		t.Fatalf("save note: %v", err)
 	}
 
@@ -144,7 +144,7 @@ func TestHandleSaveGuestNote_HappyPath(t *testing.T) {
 	}
 
 	// Verify the note was actually saved
-	gk, err := handler.legacyAIService.GetGuestKnowledge("vm-300")
+	gk, err := handler.defaultAIService.GetGuestKnowledge("vm-300")
 	if err != nil {
 		t.Fatalf("get knowledge: %v", err)
 	}
@@ -258,7 +258,7 @@ func TestHandleSaveGuestNote_VerifySavedFields(t *testing.T) {
 		t.Fatalf("expected %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
 	}
 
-	gk, err := handler.legacyAIService.GetGuestKnowledge("vm-verify")
+	gk, err := handler.defaultAIService.GetGuestKnowledge("vm-verify")
 	if err != nil {
 		t.Fatalf("get knowledge: %v", err)
 	}
@@ -308,7 +308,7 @@ func TestHandleSaveGuestNote_MultipleNotes(t *testing.T) {
 		}
 	}
 
-	gk, err := handler.legacyAIService.GetGuestKnowledge("vm-multi")
+	gk, err := handler.defaultAIService.GetGuestKnowledge("vm-multi")
 	if err != nil {
 		t.Fatalf("get knowledge: %v", err)
 	}
@@ -431,11 +431,11 @@ func TestHandleDeleteGuestNote_HappyPath(t *testing.T) {
 	handler := newTestAISettingsHandlerWithService(t)
 
 	// Save a note first
-	if err := handler.legacyAIService.SaveGuestNote("vm-400", "VM", "vm", "service", "Redis", "Port 6379"); err != nil {
+	if err := handler.defaultAIService.SaveGuestNote("vm-400", "VM", "vm", "service", "Redis", "Port 6379"); err != nil {
 		t.Fatalf("save note: %v", err)
 	}
 
-	gk, err := handler.legacyAIService.GetGuestKnowledge("vm-400")
+	gk, err := handler.defaultAIService.GetGuestKnowledge("vm-400")
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
@@ -459,14 +459,14 @@ func TestHandleDeleteGuestNote_VerifyDeletion(t *testing.T) {
 	handler := newTestAISettingsHandlerWithService(t)
 
 	// Save two notes
-	if err := handler.legacyAIService.SaveGuestNote("vm-del-verify", "VM", "vm", "service", "Redis", "Port 6379"); err != nil {
+	if err := handler.defaultAIService.SaveGuestNote("vm-del-verify", "VM", "vm", "service", "Redis", "Port 6379"); err != nil {
 		t.Fatalf("save note: %v", err)
 	}
-	if err := handler.legacyAIService.SaveGuestNote("vm-del-verify", "VM", "vm", "service", "Nginx", "Port 80"); err != nil {
+	if err := handler.defaultAIService.SaveGuestNote("vm-del-verify", "VM", "vm", "service", "Nginx", "Port 80"); err != nil {
 		t.Fatalf("save note: %v", err)
 	}
 
-	gk, err := handler.legacyAIService.GetGuestKnowledge("vm-del-verify")
+	gk, err := handler.defaultAIService.GetGuestKnowledge("vm-del-verify")
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
@@ -485,7 +485,7 @@ func TestHandleDeleteGuestNote_VerifyDeletion(t *testing.T) {
 	}
 
 	// Verify the note was actually removed and the other remains
-	gk, err = handler.legacyAIService.GetGuestKnowledge("vm-del-verify")
+	gk, err = handler.defaultAIService.GetGuestKnowledge("vm-del-verify")
 	if err != nil {
 		t.Fatalf("get after delete: %v", err)
 	}
@@ -549,7 +549,7 @@ func TestHandleDeleteGuestNote_NonExistentNote(t *testing.T) {
 	handler := newTestAISettingsHandlerWithService(t)
 
 	// Save a note so the guest exists in the cache
-	if err := handler.legacyAIService.SaveGuestNote("vm-noexist", "VM", "vm", "service", "Redis", "Port 6379"); err != nil {
+	if err := handler.defaultAIService.SaveGuestNote("vm-noexist", "VM", "vm", "service", "Redis", "Port 6379"); err != nil {
 		t.Fatalf("save note: %v", err)
 	}
 
@@ -713,7 +713,7 @@ func TestHandleExportGuestKnowledge_MaliciousGuestID(t *testing.T) {
 
 	// Save a note with a guest ID containing injection characters
 	maliciousID := `vm"inject`
-	if err := handler.legacyAIService.SaveGuestNote(maliciousID, "VM", "vm", "ops", "Note", "Content"); err != nil {
+	if err := handler.defaultAIService.SaveGuestNote(maliciousID, "VM", "vm", "ops", "Note", "Content"); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 
@@ -739,7 +739,7 @@ func TestHandleExportGuestKnowledge_SanitizedFilename(t *testing.T) {
 	t.Parallel()
 	handler := newTestAISettingsHandlerWithService(t)
 
-	if err := handler.legacyAIService.SaveGuestNote("vm-500", "VM", "vm", "ops", "Note", "Content"); err != nil {
+	if err := handler.defaultAIService.SaveGuestNote("vm-500", "VM", "vm", "ops", "Note", "Content"); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 
@@ -828,10 +828,10 @@ func TestHandleClearGuestKnowledge_HappyPath(t *testing.T) {
 	handler := newTestAISettingsHandlerWithService(t)
 
 	// Save notes
-	if err := handler.legacyAIService.SaveGuestNote("vm-700", "VM", "vm", "ops", "A", "A content"); err != nil {
+	if err := handler.defaultAIService.SaveGuestNote("vm-700", "VM", "vm", "ops", "A", "A content"); err != nil {
 		t.Fatalf("save: %v", err)
 	}
-	if err := handler.legacyAIService.SaveGuestNote("vm-700", "VM", "vm", "ops", "B", "B content"); err != nil {
+	if err := handler.defaultAIService.SaveGuestNote("vm-700", "VM", "vm", "ops", "B", "B content"); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 
@@ -979,7 +979,7 @@ func TestHandleImportGuestKnowledge_ReplaceMode(t *testing.T) {
 	handler := newTestAISettingsHandlerWithService(t)
 
 	// Save an existing note
-	if err := handler.legacyAIService.SaveGuestNote("vm-replace", "VM", "vm", "ops", "Old", "Old content"); err != nil {
+	if err := handler.defaultAIService.SaveGuestNote("vm-replace", "VM", "vm", "ops", "Old", "Old content"); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 
@@ -1002,7 +1002,7 @@ func TestHandleImportGuestKnowledge_ReplaceMode(t *testing.T) {
 	}
 
 	// With merge=false, only the new note should exist
-	gk, err := handler.legacyAIService.GetGuestKnowledge("vm-replace")
+	gk, err := handler.defaultAIService.GetGuestKnowledge("vm-replace")
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
@@ -1077,7 +1077,7 @@ func TestHandleImportGuestKnowledge_MergeMode(t *testing.T) {
 	handler := newTestAISettingsHandlerWithService(t)
 
 	// Save an existing note
-	if err := handler.legacyAIService.SaveGuestNote("vm-800", "VM", "vm", "ops", "Existing", "Existing content"); err != nil {
+	if err := handler.defaultAIService.SaveGuestNote("vm-800", "VM", "vm", "ops", "Existing", "Existing content"); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 
@@ -1100,7 +1100,7 @@ func TestHandleImportGuestKnowledge_MergeMode(t *testing.T) {
 	}
 
 	// With merge=true, both old and new notes should exist
-	gk, err := handler.legacyAIService.GetGuestKnowledge("vm-800")
+	gk, err := handler.defaultAIService.GetGuestKnowledge("vm-800")
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
@@ -1114,7 +1114,7 @@ func TestHandleImportGuestKnowledge_AllNotesOversized(t *testing.T) {
 	handler := newTestAISettingsHandlerWithService(t)
 
 	// Save an existing note — replace mode should NOT delete it when all imports are invalid
-	if err := handler.legacyAIService.SaveGuestNote("vm-oversized-import", "VM", "vm", "ops", "Existing", "Keep me"); err != nil {
+	if err := handler.defaultAIService.SaveGuestNote("vm-oversized-import", "VM", "vm", "ops", "Existing", "Keep me"); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 
@@ -1141,7 +1141,7 @@ func TestHandleImportGuestKnowledge_AllNotesOversized(t *testing.T) {
 	}
 
 	// Verify existing note is preserved
-	gk, err := handler.legacyAIService.GetGuestKnowledge("vm-oversized-import")
+	gk, err := handler.defaultAIService.GetGuestKnowledge("vm-oversized-import")
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}

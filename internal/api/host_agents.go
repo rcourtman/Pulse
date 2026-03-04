@@ -50,8 +50,16 @@ func (h *HostAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Request)
 	r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
 	defer r.Body.Close()
 
+	// Support gzip-compressed reports from agents (backward compatible with uncompressed)
+	body, err := utils.DecompressBodyIfGzipped(r, 10*1024*1024)
+	if err != nil {
+		writeErrorResponse(w, http.StatusUnsupportedMediaType, "unsupported_encoding", err.Error(), nil)
+		return
+	}
+	defer body.Close()
+
 	var report agentshost.Report
-	if err := json.NewDecoder(r.Body).Decode(&report); err != nil {
+	if err := json.NewDecoder(body).Decode(&report); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Failed to decode request body", map[string]string{"error": err.Error()})
 		return
 	}

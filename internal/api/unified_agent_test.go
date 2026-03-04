@@ -1,13 +1,18 @@
 package api
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -40,7 +45,7 @@ func TestDownloadInstallScript_Local(t *testing.T) {
 	err := os.WriteFile(scriptPath, []byte(scriptContent), 0644)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/install/install.sh", nil)
+	req := httptest.NewRequest(http.MethodGet, "/install.sh", nil)
 	w := httptest.NewRecorder()
 
 	router.handleDownloadUnifiedInstallScript(w, req)
@@ -59,7 +64,7 @@ func TestDownloadInstallScriptPS_Local(t *testing.T) {
 	err := os.WriteFile(scriptPath, []byte(scriptContent), 0644)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/install/install.ps1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/install.ps1", nil)
 	w := httptest.NewRecorder()
 
 	router.handleDownloadUnifiedInstallScriptPS(w, req)
@@ -166,6 +171,60 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub_Windows(t *testing.T) {
 	assert.NotEmpty(t, w.Header().Get("X-Checksum-Sha256"))
 }
 
+func TestDownloadUnifiedAgent_ProxyFromGitHub_ArchiveFallback_Darwin(t *testing.T) {
+	router, _ := setupUnifiedAgentRouter(t)
+
+	binaryContent := []byte("darwin arm64 binary payload")
+	archivePayload := buildTestTarGz(t, "pulse-agent-darwin-arm64", binaryContent)
+	binaryURL := "https://github.com/rcourtman/Pulse/releases/latest/download/pulse-agent-darwin-arm64"
+	latestURL := "https://api.github.com/repos/rcourtman/Pulse/releases/latest"
+	archiveURL := "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/pulse-agent-v9.9.9-darwin-arm64.tar.gz"
+
+	router.installScriptClient = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			switch req.URL.String() {
+			case binaryURL:
+				return &http.Response{
+					StatusCode: http.StatusNotFound,
+					Status:     "404 Not Found",
+					Header:     make(http.Header),
+					Body:       io.NopCloser(strings.NewReader("not found")),
+				}, nil
+			case latestURL:
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Status:     "200 OK",
+					Header:     make(http.Header),
+					Body:       io.NopCloser(strings.NewReader(`{"tag_name":"v9.9.9"}`)),
+				}, nil
+			case archiveURL:
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Status:     "200 OK",
+					Header:     make(http.Header),
+					Body:       io.NopCloser(bytes.NewReader(archivePayload)),
+				}, nil
+			default:
+				t.Fatalf("unexpected URL: %s", req.URL.String())
+				return nil, nil
+			}
+		}),
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=darwin-arm64", nil)
+	w := httptest.NewRecorder()
+
+	router.handleDownloadUnifiedAgent(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "github-proxy-archive", w.Header().Get("X-Served-From"))
+	assert.Equal(t, string(binaryContent), w.Body.String())
+
+	hash := sha256.Sum256(binaryContent)
+	expectedChecksum := hex.EncodeToString(hash[:])
+	assert.Equal(t, expectedChecksum, w.Header().Get("X-Checksum-Sha256"))
+}
+
 func TestDownloadUnifiedAgent_ProxyFromGitHub_NotFound(t *testing.T) {
 	router, _ := setupUnifiedAgentRouter(t)
 
@@ -215,4 +274,24 @@ func TestNormalizeUnifiedAgentArch(t *testing.T) {
 			assert.Equal(t, tt.expected, normalizeUnifiedAgentArch(tt.input))
 		})
 	}
+}
+
+func buildTestTarGz(t *testing.T, name string, payload []byte) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	gzw := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gzw)
+
+	header := &tar.Header{
+		Name: name,
+		Mode: 0o755,
+		Size: int64(len(payload)),
+	}
+	require.NoError(t, tw.WriteHeader(header))
+	_, err := tw.Write(payload)
+	require.NoError(t, err)
+	require.NoError(t, tw.Close())
+	require.NoError(t, gzw.Close())
+	return buf.Bytes()
 }

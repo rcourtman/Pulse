@@ -51,7 +51,8 @@ func newOIDCTestServer(t *testing.T, tokenStatus int, tokenBody map[string]inter
 }
 
 func TestRefreshOIDCSessionTokens_Success(t *testing.T) {
-	InitSessionStore(t.TempDir())
+	dataDir := t.TempDir()
+	InitSessionStore(dataDir)
 	store := GetSessionStore()
 
 	tokenResp := map[string]interface{}{
@@ -64,15 +65,26 @@ func TestRefreshOIDCSessionTokens_Success(t *testing.T) {
 	defer server.Close()
 
 	cfg := &config.Config{
-		OIDC: &config.OIDCConfig{
-			Enabled:      true,
-			IssuerURL:    server.URL,
-			ClientID:     "client",
-			ClientSecret: "secret",
-			RedirectURL:  "http://localhost/callback",
-			Scopes:       []string{"openid"},
-		},
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
 	}
+	setSSOAuthSnapshot(cfg, &config.SSOConfig{
+		Providers: []config.SSOProvider{
+			{
+				ID:      "test-oidc",
+				Name:    "Test OIDC",
+				Type:    config.SSOProviderTypeOIDC,
+				Enabled: true,
+				OIDC: &config.OIDCProviderConfig{
+					IssuerURL:    server.URL,
+					ClientID:     "client",
+					ClientSecret: "secret",
+					RedirectURL:  "http://localhost/callback",
+					Scopes:       []string{"openid"},
+				},
+			},
+		},
+	})
 
 	sessionToken := "oidc-session-success"
 	store.CreateOIDCSession(sessionToken, time.Hour, "agent", "127.0.0.1", "user", &OIDCTokenInfo{
@@ -102,15 +114,28 @@ func TestRefreshOIDCSessionTokens_Success(t *testing.T) {
 }
 
 func TestRefreshOIDCSessionTokens_IssuerMismatchSkipsRefresh(t *testing.T) {
-	InitSessionStore(t.TempDir())
+	dataDir := t.TempDir()
+	InitSessionStore(dataDir)
 	store := GetSessionStore()
 
 	cfg := &config.Config{
-		OIDC: &config.OIDCConfig{
-			Enabled:   true,
-			IssuerURL: "https://issuer.example",
-		},
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
 	}
+	setSSOAuthSnapshot(cfg, &config.SSOConfig{
+		Providers: []config.SSOProvider{
+			{
+				ID:      "test-oidc",
+				Name:    "Test OIDC",
+				Type:    config.SSOProviderTypeOIDC,
+				Enabled: true,
+				OIDC: &config.OIDCProviderConfig{
+					IssuerURL: "https://issuer.example",
+					ClientID:  "client",
+				},
+			},
+		},
+	})
 
 	sessionToken := "oidc-session-mismatch"
 	store.CreateOIDCSession(sessionToken, time.Hour, "agent", "127.0.0.1", "user", &OIDCTokenInfo{
@@ -135,7 +160,8 @@ func TestRefreshOIDCSessionTokens_IssuerMismatchSkipsRefresh(t *testing.T) {
 }
 
 func TestRefreshOIDCSessionTokens_RefreshFailureInvalidates(t *testing.T) {
-	InitSessionStore(t.TempDir())
+	dataDir := t.TempDir()
+	InitSessionStore(dataDir)
 	store := GetSessionStore()
 
 	tokenResp := map[string]interface{}{
@@ -146,15 +172,26 @@ func TestRefreshOIDCSessionTokens_RefreshFailureInvalidates(t *testing.T) {
 	defer server.Close()
 
 	cfg := &config.Config{
-		OIDC: &config.OIDCConfig{
-			Enabled:      true,
-			IssuerURL:    server.URL,
-			ClientID:     "client",
-			ClientSecret: "secret",
-			RedirectURL:  "http://localhost/callback",
-			Scopes:       []string{"openid"},
-		},
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
 	}
+	setSSOAuthSnapshot(cfg, &config.SSOConfig{
+		Providers: []config.SSOProvider{
+			{
+				ID:      "test-oidc",
+				Name:    "Test OIDC",
+				Type:    config.SSOProviderTypeOIDC,
+				Enabled: true,
+				OIDC: &config.OIDCProviderConfig{
+					IssuerURL:    server.URL,
+					ClientID:     "client",
+					ClientSecret: "secret",
+					RedirectURL:  "http://localhost/callback",
+					Scopes:       []string{"openid"},
+				},
+			},
+		},
+	})
 
 	sessionToken := "oidc-session-failure"
 	store.CreateOIDCSession(sessionToken, time.Hour, "agent", "127.0.0.1", "user", &OIDCTokenInfo{
@@ -177,14 +214,15 @@ func TestRefreshOIDCSessionTokens_RefreshFailureInvalidates(t *testing.T) {
 }
 
 func TestRefreshOIDCSessionTokens_OIDCDisabledDoesNotInvalidate(t *testing.T) {
-	InitSessionStore(t.TempDir())
+	dataDir := t.TempDir()
+	InitSessionStore(dataDir)
 	store := GetSessionStore()
 
 	cfg := &config.Config{
-		OIDC: &config.OIDCConfig{
-			Enabled: false,
-		},
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
 	}
+	setSSOAuthSnapshot(cfg, config.NewSSOConfig())
 
 	sessionToken := "oidc-session-disabled"
 	store.CreateOIDCSession(sessionToken, time.Hour, "agent", "127.0.0.1", "user", &OIDCTokenInfo{

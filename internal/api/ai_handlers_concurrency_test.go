@@ -104,8 +104,8 @@ func TestAIHandler_SetTenantPointersConcurrentAccess(t *testing.T) {
 	mtp, mtm := newTestMultiTenantRuntime(t)
 	h := NewAIHandler(nil, nil, nil)
 	legacyDir := t.TempDir()
-	h.legacyConfig = &config.Config{DataPath: legacyDir, ConfigPath: legacyDir}
-	h.legacyPersistence = staticAIPersistence{
+	h.defaultConfig = &config.Config{DataPath: legacyDir, ConfigPath: legacyDir}
+	h.defaultPersistence = staticAIPersistence{
 		cfg:     &config.AIConfig{},
 		dataDir: t.TempDir(),
 	}

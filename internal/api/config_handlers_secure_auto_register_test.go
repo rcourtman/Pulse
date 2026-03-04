@@ -57,10 +57,10 @@ func TestHandleSecureAutoRegister_PVE(t *testing.T) {
 		t.Fatalf("action = %v, want create_token", resp["action"])
 	}
 
-	if len(handler.legacyConfig.PVEInstances) != 1 {
-		t.Fatalf("expected 1 PVE instance, got %d", len(handler.legacyConfig.PVEInstances))
+	if len(handler.defaultConfig.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance, got %d", len(handler.defaultConfig.PVEInstances))
 	}
-	instance := handler.legacyConfig.PVEInstances[0]
+	instance := handler.defaultConfig.PVEInstances[0]
 	if !strings.Contains(instance.Host, "https://") {
 		t.Fatalf("expected normalized host, got %q", instance.Host)
 	}

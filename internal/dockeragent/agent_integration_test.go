@@ -1,6 +1,7 @@
 package dockeragent
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -33,7 +34,17 @@ func TestSendReportIntegration(t *testing.T) {
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
 
-		body, err := io.ReadAll(r.Body)
+		var bodyReader io.Reader = r.Body
+		if r.Header.Get("Content-Encoding") == "gzip" {
+			gz, gzErr := gzip.NewReader(r.Body)
+			if gzErr != nil {
+				t.Fatalf("failed to create gzip reader: %v", gzErr)
+			}
+			defer gz.Close()
+			bodyReader = gz
+		}
+
+		body, err := io.ReadAll(bodyReader)
 		if err != nil {
 			t.Fatalf("failed to read request body: %v", err)
 		}

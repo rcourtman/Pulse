@@ -9,7 +9,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func readFreeBSDARCSize() (uint64, error) {
+func readARCSize() (uint64, error) {
 	// kstat.zfs.misc.arcstats.size holds the current ARC size in bytes.
 	// This is a uint64 sysctl on FreeBSD.
 	raw, err := unix.SysctlRaw("kstat.zfs.misc.arcstats.size")

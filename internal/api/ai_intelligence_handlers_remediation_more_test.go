@@ -33,7 +33,7 @@ func TestHandleGetRemediations_WithLog(t *testing.T) {
 	patrol := svc.GetPatrolService()
 	setUnexportedField(t, patrol, "remediationLog", log)
 
-	handler := &AISettingsHandler{legacyAIService: svc}
+	handler := &AISettingsHandler{defaultAIService: svc}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/remediations?hours=1", nil)
 	rec := httptest.NewRecorder()
 
@@ -77,7 +77,7 @@ func TestHandleGetRemediations_FilterFinding(t *testing.T) {
 	patrol := svc.GetPatrolService()
 	setUnexportedField(t, patrol, "remediationLog", log)
 
-	handler := &AISettingsHandler{legacyAIService: svc}
+	handler := &AISettingsHandler{defaultAIService: svc}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/remediations?finding_id=finding-2", nil)
 	rec := httptest.NewRecorder()
 

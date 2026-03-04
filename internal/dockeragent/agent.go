@@ -838,11 +838,16 @@ func (a *Agent) sendReport(ctx context.Context, report agentsdocker.Report) erro
 		return fmt.Errorf("marshal report: %w", err)
 	}
 
+	compressed, err := utils.CompressJSON(payload)
+	if err != nil {
+		return fmt.Errorf("compress report: %w", err)
+	}
+
 	var errs []error
 	containerCount := len(report.Containers)
 
 	for _, target := range a.targets {
-		err := a.sendReportToTarget(ctx, target, payload, containerCount)
+		err := a.sendReportToTarget(ctx, target, compressed, containerCount)
 		if err == nil {
 			continue
 		}
@@ -883,6 +888,7 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 	}
 
 	setAgentHeaders(req, target.Token)
+	req.Header.Set("Content-Encoding", "gzip")
 
 	client := a.httpClientFor(target)
 	resp, err := client.Do(req)

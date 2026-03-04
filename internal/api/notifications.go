@@ -59,23 +59,23 @@ type NotificationMonitor interface {
 
 // NotificationHandlers handles notification-related HTTP endpoints
 type NotificationHandlers struct {
-	stateMu       sync.RWMutex
-	mtMonitor     *monitoring.MultiTenantMonitor
-	legacyMonitor NotificationMonitor
-	readState     unifiedresources.ReadState
+	stateMu        sync.RWMutex
+	mtMonitor      *monitoring.MultiTenantMonitor
+	defaultMonitor NotificationMonitor
+	readState      unifiedresources.ReadState
 }
 
 // NewNotificationHandlers creates new notification handlers
 func NewNotificationHandlers(mtm *monitoring.MultiTenantMonitor, monitor NotificationMonitor) *NotificationHandlers {
-	// If mtm is provided, try to populate legacyMonitor from "default" org if not provided
+	// If mtm is provided, try to populate defaultMonitor from "default" org if not provided.
 	if monitor == nil && mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {
 			monitor = NewNotificationMonitorWrapper(m)
 		}
 	}
 	return &NotificationHandlers{
-		mtMonitor:     mtm,
-		legacyMonitor: monitor,
+		mtMonitor:      mtm,
+		defaultMonitor: monitor,
 	}
 }
 
@@ -83,23 +83,23 @@ func NewNotificationHandlers(mtm *monitoring.MultiTenantMonitor, monitor Notific
 func (h *NotificationHandlers) SetMonitor(m NotificationMonitor) {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	h.legacyMonitor = m
+	h.defaultMonitor = m
 }
 
 // SetMultiTenantMonitor updates the multi-tenant monitor reference
 func (h *NotificationHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
-	var legacy NotificationMonitor
+	var defaultMonitor NotificationMonitor
 	if mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {
-			legacy = NewNotificationMonitorWrapper(m)
+			defaultMonitor = NewNotificationMonitorWrapper(m)
 		}
 	}
 
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	h.mtMonitor = mtm
-	if legacy != nil {
-		h.legacyMonitor = legacy
+	if defaultMonitor != nil {
+		h.defaultMonitor = defaultMonitor
 	}
 }
 
@@ -113,7 +113,7 @@ func (h *NotificationHandlers) SetReadState(rs unifiedresources.ReadState) {
 func (h *NotificationHandlers) getMonitor(ctx context.Context) NotificationMonitor {
 	h.stateMu.RLock()
 	mtMonitor := h.mtMonitor
-	legacyMonitor := h.legacyMonitor
+	defaultMonitor := h.defaultMonitor
 	h.stateMu.RUnlock()
 
 	orgID := GetOrgID(ctx)
@@ -122,7 +122,7 @@ func (h *NotificationHandlers) getMonitor(ctx context.Context) NotificationMonit
 			return NewNotificationMonitorWrapper(m)
 		}
 	}
-	return legacyMonitor
+	return defaultMonitor
 }
 
 // getReadState returns the tenant-scoped ReadState for the request context.

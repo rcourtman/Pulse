@@ -27,7 +27,7 @@ func TestConversionHandleRecordEventValidPOST(t *testing.T) {
 		"idempotency_key":"paywall_viewed:history_chart:long_term_metrics:1"
 	}`, time.Now().UnixMilli()))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/conversion/events", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/upgrade-metrics/events", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	handlers.HandleRecordEvent(rec, req)
@@ -48,7 +48,7 @@ func TestConversionHandleRecordEventValidPOST(t *testing.T) {
 func TestConversionHandleRecordEventInvalidBody(t *testing.T) {
 	handlers := NewConversionHandlers(nil, nil, nil, nil, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/conversion/events", bytes.NewReader([]byte("{")))
+	req := httptest.NewRequest(http.MethodPost, "/api/upgrade-metrics/events", bytes.NewReader([]byte("{")))
 	rec := httptest.NewRecorder()
 
 	handlers.HandleRecordEvent(rec, req)
@@ -76,7 +76,7 @@ func TestConversionHandleRecordEventMissingRequiredFields(t *testing.T) {
 		"idempotency_key":"paywall_viewed:history_chart::1"
 	}`, time.Now().UnixMilli()))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/conversion/events", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/upgrade-metrics/events", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	handlers.HandleRecordEvent(rec, req)
@@ -97,7 +97,7 @@ func TestConversionHandleRecordEventMissingRequiredFields(t *testing.T) {
 func TestConversionHandleRecordEventNonPOST(t *testing.T) {
 	handlers := NewConversionHandlers(nil, nil, nil, nil, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/conversion/events", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/upgrade-metrics/events", nil)
 	rec := httptest.NewRecorder()
 
 	handlers.HandleRecordEvent(rec, req)
@@ -143,7 +143,7 @@ func TestConversionHandleGetStats(t *testing.T) {
 		}
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/conversion/stats", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/upgrade-metrics/stats", nil)
 	rec := httptest.NewRecorder()
 
 	handlers.HandleGetStats(rec, req)
@@ -229,7 +229,7 @@ func TestConversionHandleGetStats(t *testing.T) {
 func TestConversionHandleGetStatsNonGET(t *testing.T) {
 	handlers := NewConversionHandlers(nil, nil, nil, nil, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/conversion/stats", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/upgrade-metrics/stats", nil)
 	rec := httptest.NewRecorder()
 
 	handlers.HandleGetStats(rec, req)
@@ -243,7 +243,7 @@ func TestConversionHandleGetHealth(t *testing.T) {
 	health := pkglicensing.NewPipelineHealth()
 	handlers := NewConversionHandlers(nil, health, nil, nil, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/conversion/health", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/upgrade-metrics/health", nil)
 	rec := httptest.NewRecorder()
 
 	handlers.HandleGetHealth(rec, req)
@@ -271,7 +271,7 @@ func TestConversionHandleGetHealth(t *testing.T) {
 func TestConversionHandleGetHealthNonGET(t *testing.T) {
 	handlers := NewConversionHandlers(nil, nil, nil, nil, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/conversion/health", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/upgrade-metrics/health", nil)
 	rec := httptest.NewRecorder()
 
 	handlers.HandleGetHealth(rec, req)
@@ -296,7 +296,7 @@ func TestConversionHandleRecordEventUpdatesHealth(t *testing.T) {
 		"idempotency_key":"paywall_viewed:history_chart:long_term_metrics:health"
 	}`, time.Now().UnixMilli()))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/conversion/events", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/upgrade-metrics/events", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	handlers.HandleRecordEvent(rec, req)
@@ -305,7 +305,7 @@ func TestConversionHandleRecordEventUpdatesHealth(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusAccepted)
 	}
 
-	healthReq := httptest.NewRequest(http.MethodGet, "/api/conversion/health", nil)
+	healthReq := httptest.NewRequest(http.MethodGet, "/api/upgrade-metrics/health", nil)
 	healthRec := httptest.NewRecorder()
 	handlers.HandleGetHealth(healthRec, healthReq)
 	if healthRec.Code != http.StatusOK {
@@ -327,7 +327,7 @@ func TestConversionHandleRecordEventUpdatesHealth(t *testing.T) {
 func TestConversionHandleGetConfigDefaults(t *testing.T) {
 	handlers := NewConversionHandlers(nil, nil, pkglicensing.NewCollectionConfig(), nil, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/conversion/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/upgrade-metrics/config", nil)
 	rec := httptest.NewRecorder()
 
 	handlers.HandleGetConfig(rec, req)
@@ -353,7 +353,7 @@ func TestConversionHandleUpdateConfigDisablesCollection(t *testing.T) {
 	handlers := NewConversionHandlers(nil, nil, config, nil, nil)
 
 	body := []byte(`{"enabled":false,"disabled_surfaces":["history_chart"]}`)
-	req := httptest.NewRequest(http.MethodPut, "/api/conversion/config", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/upgrade-metrics/config", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	handlers.HandleUpdateConfig(rec, req)
@@ -390,7 +390,7 @@ func TestConversionHandleRecordEventReturnsAcceptedWhenCollectionDisabled(t *tes
 		"idempotency_key":"paywall_viewed:history_chart:long_term_metrics:disabled"
 	}`, time.Now().UnixMilli()))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/conversion/events", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/upgrade-metrics/events", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	handlers.HandleRecordEvent(rec, req)
@@ -426,7 +426,7 @@ func TestConversionHandleRecordEventRejectsCrossTenantOrgIDSpoof(t *testing.T) {
 		"idempotency_key":"org-spoof-attempt-1"
 	}`, time.Now().UnixMilli()))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/conversion/events", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/upgrade-metrics/events", bytes.NewReader(body))
 	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-a"))
 	rec := httptest.NewRecorder()
 
@@ -482,7 +482,7 @@ func TestConversionHandleRecordEventAllowsMatchingOrgID(t *testing.T) {
 		"idempotency_key":"org-matching-1"
 	}`, time.Now().UnixMilli()))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/conversion/events", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/upgrade-metrics/events", bytes.NewReader(body))
 	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-a"))
 	rec := httptest.NewRecorder()
 
@@ -504,14 +504,14 @@ func TestConversionHandleRecordEventAllowsMatchingOrgID(t *testing.T) {
 func TestConversionHandleConfigMethodNotAllowed(t *testing.T) {
 	handlers := NewConversionHandlers(nil, nil, pkglicensing.NewCollectionConfig(), nil, nil)
 
-	getReq := httptest.NewRequest(http.MethodPost, "/api/conversion/config", nil)
+	getReq := httptest.NewRequest(http.MethodPost, "/api/upgrade-metrics/config", nil)
 	getRec := httptest.NewRecorder()
 	handlers.HandleGetConfig(getRec, getReq)
 	if getRec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("GET handler status = %d, want %d", getRec.Code, http.StatusMethodNotAllowed)
 	}
 
-	putReq := httptest.NewRequest(http.MethodGet, "/api/conversion/config", nil)
+	putReq := httptest.NewRequest(http.MethodGet, "/api/upgrade-metrics/config", nil)
 	putRec := httptest.NewRecorder()
 	handlers.HandleUpdateConfig(putRec, putReq)
 	if putRec.Code != http.StatusMethodNotAllowed {
@@ -533,7 +533,7 @@ func TestConversionHandleConversionFunnelAggregatesPerOrg(t *testing.T) {
 	now := time.Now().UTC()
 	post := func(orgID string, payload string) {
 		t.Helper()
-		req := httptest.NewRequest(http.MethodPost, "/api/conversion/events", bytes.NewReader([]byte(payload)))
+		req := httptest.NewRequest(http.MethodPost, "/api/upgrade-metrics/events", bytes.NewReader([]byte(payload)))
 		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
 		rec := httptest.NewRecorder()
 		handlers.HandleRecordEvent(rec, req)
@@ -551,7 +551,7 @@ func TestConversionHandleConversionFunnelAggregatesPerOrg(t *testing.T) {
 	from := now.Add(-1 * time.Hour)
 	to := now.Add(1 * time.Hour)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/admin/conversion-funnel", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/upgrade-metrics-funnel", nil)
 	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-a"))
 	q := req.URL.Query()
 	q.Set("org_id", "org-a")
@@ -581,7 +581,7 @@ func TestConversionHandleConversionFunnelAggregatesPerOrg(t *testing.T) {
 		t.Fatalf("CheckoutCompleted = %d, want 1", summary.CheckoutCompleted)
 	}
 
-	reqAll := httptest.NewRequest(http.MethodGet, "/api/admin/conversion-funnel", nil)
+	reqAll := httptest.NewRequest(http.MethodGet, "/api/admin/upgrade-metrics-funnel", nil)
 	reqAll = reqAll.WithContext(context.WithValue(reqAll.Context(), OrgIDContextKey, "org-a"))
 	qAll := reqAll.URL.Query()
 	qAll.Set("from", from.Format(time.RFC3339Nano))
@@ -610,7 +610,7 @@ func TestConversionHandleConversionFunnelRejectsCrossTenantOrgOverride(t *testin
 	defer store.Close()
 
 	handlers := NewConversionHandlers(nil, nil, nil, store, nil)
-	req := httptest.NewRequest(http.MethodGet, "/api/admin/conversion-funnel?org_id=org-b", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/upgrade-metrics-funnel?org_id=org-b", nil)
 	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-a"))
 	rec := httptest.NewRecorder()
 
@@ -630,7 +630,7 @@ func TestConversionConversionFunnelRouteRequiresAdminProxyRole(t *testing.T) {
 
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/admin/conversion-funnel", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/upgrade-metrics-funnel", nil)
 	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
 	req.Header.Set(cfg.ProxyAuthUserHeader, "alice")
 	req.Header.Set(cfg.ProxyAuthRoleHeader, "viewer|user")

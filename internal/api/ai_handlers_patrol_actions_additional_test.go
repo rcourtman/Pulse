@@ -22,9 +22,9 @@ func setupAIHandlerWithPatrol(t *testing.T) (*AISettingsHandler, *ai.PatrolServi
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
-	handler.legacyAIService.SetStateProvider(&stubStateProvider{})
+	handler.defaultAIService.SetStateProvider(&stubStateProvider{})
 
-	patrol := handler.legacyAIService.GetPatrolService()
+	patrol := handler.defaultAIService.GetPatrolService()
 	if patrol == nil {
 		t.Fatalf("expected patrol service to be initialized")
 	}

@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -293,17 +292,13 @@ type SystemDiagnostic struct {
 
 // APITokenDiagnostic reports on the state of the multi-token authentication system.
 type APITokenDiagnostic struct {
-	Enabled                bool              `json:"enabled"`
-	TokenCount             int               `json:"tokenCount"`
-	HasEnvTokens           bool              `json:"hasEnvTokens"`
-	HasLegacyToken         bool              `json:"hasLegacyToken"`
-	RecommendTokenSetup    bool              `json:"recommendTokenSetup"`
-	RecommendTokenRotation bool              `json:"recommendTokenRotation"`
-	LegacyDockerHostCount  int               `json:"legacyDockerHostCount,omitempty"`
-	UnusedTokenCount       int               `json:"unusedTokenCount,omitempty"`
-	Notes                  []string          `json:"notes,omitempty"`
-	Tokens                 []APITokenSummary `json:"tokens,omitempty"`
-	Usage                  []APITokenUsage   `json:"usage,omitempty"`
+	Enabled             bool              `json:"enabled"`
+	TokenCount          int               `json:"tokenCount"`
+	RecommendTokenSetup bool              `json:"recommendTokenSetup"`
+	UnusedTokenCount    int               `json:"unusedTokenCount,omitempty"`
+	Notes               []string          `json:"notes,omitempty"`
+	Tokens              []APITokenSummary `json:"tokens,omitempty"`
+	Usage               []APITokenUsage   `json:"usage,omitempty"`
 }
 
 // APITokenSummary provides sanitized token metadata for diagnostics display.
@@ -353,12 +348,9 @@ type DockerAgentAttention struct {
 
 // AlertsDiagnostic summarises alert configuration migration state.
 type AlertsDiagnostic struct {
-	LegacyThresholdsDetected bool     `json:"legacyThresholdsDetected"`
-	LegacyThresholdSources   []string `json:"legacyThresholdSources,omitempty"`
-	LegacyScheduleSettings   []string `json:"legacyScheduleSettings,omitempty"`
-	MissingCooldown          bool     `json:"missingCooldown"`
-	MissingGroupingWindow    bool     `json:"missingGroupingWindow"`
-	Notes                    []string `json:"notes,omitempty"`
+	MissingCooldown       bool     `json:"missingCooldown"`
+	MissingGroupingWindow bool     `json:"missingGroupingWindow"`
+	Notes                 []string `json:"notes,omitempty"`
 }
 
 // AIChatDiagnostic reports on the AI chat service status.
@@ -731,25 +723,7 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *A
 		diag.Notes = append(diag.Notes, note)
 	}
 
-	envTokens := false
-	if cfg.EnvOverrides != nil && (cfg.EnvOverrides["API_TOKEN"] || cfg.EnvOverrides["API_TOKENS"]) {
-		envTokens = true
-	}
-
-	legacyToken := false
-	for _, record := range cfg.APITokens {
-		if strings.EqualFold(record.Name, "Environment token") {
-			envTokens = true
-		}
-		if strings.EqualFold(record.Name, "Legacy token") {
-			legacyToken = true
-		}
-	}
-
-	diag.HasEnvTokens = envTokens
-	diag.HasLegacyToken = legacyToken
 	diag.RecommendTokenSetup = len(cfg.APITokens) == 0
-	diag.RecommendTokenRotation = envTokens || legacyToken
 
 	if diag.RecommendTokenSetup {
 		appendNote("No API tokens are configured. Open Settings → Security to generate dedicated tokens for each automation or agent.")
@@ -782,14 +756,7 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *A
 			summary.Hint = "…" + record.Suffix
 		}
 
-		switch {
-		case strings.EqualFold(record.Name, "Environment token"):
-			summary.Source = "environment"
-		case strings.EqualFold(record.Name, "Legacy token"):
-			summary.Source = "legacy"
-		default:
-			summary.Source = "user"
-		}
+		summary.Source = "user"
 
 		tokens = append(tokens, summary)
 	}
@@ -806,22 +773,15 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *A
 	}
 
 	tokenUsage := make(map[string][]string)
-	legacyHosts := 0
 	if monitor != nil {
 		for _, host := range monitor.GetDockerHosts() {
 			name := preferredDockerHostName(host)
 			if strings.TrimSpace(host.TokenID) == "" {
-				legacyHosts++
 				continue
 			}
 			tokenID := strings.TrimSpace(host.TokenID)
 			tokenUsage[tokenID] = append(tokenUsage[tokenID], name)
 		}
-	}
-
-	diag.LegacyDockerHostCount = legacyHosts
-	if legacyHosts > 0 {
-		appendNote(fmt.Sprintf("%d Docker host(s) still rely on the shared API token. Generate dedicated tokens and rerun the installer from Settings → Docker Agents.", legacyHosts))
 	}
 
 	if len(tokenUsage) > 0 {
@@ -841,13 +801,6 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *A
 				Hosts:     hosts,
 			})
 		}
-	}
-
-	if envTokens {
-		appendNote("Environment-based API token detected. Migrate to tokens created in the UI for per-token tracking and safer rotation.")
-	}
-	if legacyToken {
-		appendNote("Legacy token detected. Generate new API tokens and update integrations to benefit from per-token management.")
 	}
 
 	return diag
@@ -1013,52 +966,6 @@ func buildAlertsDiagnostic(m *monitoring.Monitor) *AlertsDiagnostic {
 		diag.Notes = append(diag.Notes, note)
 	}
 
-	legacySources := make([]string, 0, 4)
-	if hasLegacyThresholds(config.GuestDefaults) {
-		diag.LegacyThresholdsDetected = true
-		legacySources = append(legacySources, "guest-defaults")
-	}
-	if hasLegacyThresholds(config.NodeDefaults) {
-		diag.LegacyThresholdsDetected = true
-		legacySources = append(legacySources, "node-defaults")
-	}
-
-	overrideIndex := 0
-	for _, override := range config.Overrides {
-		overrideIndex++
-		if hasLegacyThresholds(override) {
-			diag.LegacyThresholdsDetected = true
-			legacySources = append(legacySources, fmt.Sprintf("override-%d", overrideIndex))
-		}
-	}
-
-	for idx, rule := range config.CustomRules {
-		if hasLegacyThresholds(rule.Thresholds) {
-			diag.LegacyThresholdsDetected = true
-			legacySources = append(legacySources, fmt.Sprintf("custom-%d", idx+1))
-		}
-	}
-
-	if len(legacySources) > 0 {
-		sort.Strings(legacySources)
-		diag.LegacyThresholdSources = legacySources
-		appendNote("Some alert rules still rely on legacy single-value thresholds. Edit and save them to enable hysteresis-based alerts.")
-	}
-
-	legacySchedule := make([]string, 0, 2)
-	if config.TimeThreshold > 0 {
-		legacySchedule = append(legacySchedule, "timeThreshold")
-		appendNote("Global alert delay still uses the legacy timeThreshold setting. Save the alerts configuration to migrate to per-metric delays.")
-	}
-	if config.Schedule.GroupingWindow > 0 && config.Schedule.Grouping.Window == 0 {
-		legacySchedule = append(legacySchedule, "groupingWindow")
-		appendNote("Alert grouping uses the deprecated groupingWindow value. Update the schedule to use the new grouping options.")
-	}
-	if len(legacySchedule) > 0 {
-		sort.Strings(legacySchedule)
-		diag.LegacyScheduleSettings = legacySchedule
-	}
-
 	if config.Schedule.Cooldown <= 0 {
 		diag.MissingCooldown = true
 		appendNote("Alert cooldown is not configured. Set a cooldown under Alerts → Schedule to prevent alert storms.")
@@ -1118,16 +1025,6 @@ func countLegacySSHKeys(dir string) (int, error) {
 		}
 	}
 	return count, nil
-}
-
-func hasLegacyThresholds(th alerts.ThresholdConfig) bool {
-	return th.CPULegacy != nil ||
-		th.MemoryLegacy != nil ||
-		th.DiskLegacy != nil ||
-		th.DiskReadLegacy != nil ||
-		th.DiskWriteLegacy != nil ||
-		th.NetworkInLegacy != nil ||
-		th.NetworkOutLegacy != nil
 }
 
 func preferredDockerHostName(host models.DockerHost) string {

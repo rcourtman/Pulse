@@ -100,8 +100,8 @@ func runPatrolResumeReplayScenario(t *testing.T, buildResumeURL func(baseURL, la
 	persistence := config.NewConfigPersistence(tmp)
 
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
-	handler.legacyAIService.SetStateProvider(&stubStateProvider{})
-	patrol := handler.legacyAIService.GetPatrolService()
+	handler.defaultAIService.SetStateProvider(&stubStateProvider{})
+	patrol := handler.defaultAIService.GetPatrolService()
 	if patrol == nil {
 		t.Fatalf("expected patrol service to be initialized")
 	}
@@ -257,8 +257,8 @@ func TestHandlePatrolStream_LastEventIDHeaderTakesPrecedenceOverQueryFallback(t 
 	persistence := config.NewConfigPersistence(tmp)
 
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
-	handler.legacyAIService.SetStateProvider(&stubStateProvider{})
-	patrol := handler.legacyAIService.GetPatrolService()
+	handler.defaultAIService.SetStateProvider(&stubStateProvider{})
+	patrol := handler.defaultAIService.GetPatrolService()
 	if patrol == nil {
 		t.Fatalf("expected patrol service to be initialized")
 	}
@@ -400,8 +400,8 @@ func TestHandlePatrolStream_ReturnsOnInitialWriteError(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
-	handler.legacyAIService.SetStateProvider(&stubStateProvider{})
-	patrol := handler.legacyAIService.GetPatrolService()
+	handler.defaultAIService.SetStateProvider(&stubStateProvider{})
+	patrol := handler.defaultAIService.GetPatrolService()
 	if patrol == nil {
 		t.Fatalf("expected patrol service to be initialized")
 	}
@@ -445,8 +445,8 @@ func TestHandlePatrolStream_ResumeWithStaleLastEventIDQuery_EmitsBufferRotatedSn
 	persistence := config.NewConfigPersistence(tmp)
 
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
-	handler.legacyAIService.SetStateProvider(&stubStateProvider{})
-	patrol := handler.legacyAIService.GetPatrolService()
+	handler.defaultAIService.SetStateProvider(&stubStateProvider{})
+	patrol := handler.defaultAIService.GetPatrolService()
 	if patrol == nil {
 		t.Fatalf("expected patrol service to be initialized")
 	}

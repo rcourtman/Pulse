@@ -98,13 +98,13 @@ func TestRouteExecuteStream_WrongScope(t *testing.T) {
 	}
 
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.legacyConfig = cfg
-	router.aiSettingsHandler.legacyPersistence = persistence
+	router.aiSettingsHandler.defaultConfig = cfg
+	router.aiSettingsHandler.defaultPersistence = persistence
 	svc := ai.NewService(persistence, nil)
 	if err := svc.LoadConfig(); err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	router.aiSettingsHandler.legacyAIService = svc
+	router.aiSettingsHandler.defaultAIService = svc
 
 	body := `{"prompt":"hi"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
@@ -195,13 +195,13 @@ func TestRouteExecuteStream_AIDisabled(t *testing.T) {
 	}
 
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.legacyConfig = cfg
-	router.aiSettingsHandler.legacyPersistence = persistence
+	router.aiSettingsHandler.defaultConfig = cfg
+	router.aiSettingsHandler.defaultPersistence = persistence
 	svc := ai.NewService(persistence, nil)
 	if err := svc.LoadConfig(); err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	router.aiSettingsHandler.legacyAIService = svc
+	router.aiSettingsHandler.defaultAIService = svc
 
 	body := `{"prompt":"hi"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
@@ -224,7 +224,7 @@ func TestRouteExecuteStream_AutofixLicenseRequired(t *testing.T) {
 	defer ollama.Close()
 
 	router, token := setupExecuteRouter(t, ollama.URL)
-	router.aiSettingsHandler.legacyAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
+	router.aiSettingsHandler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
 
 	body := `{"prompt":"fix the issue","use_case":"autofix"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
@@ -247,7 +247,7 @@ func TestRouteExecuteStream_RemediationLicenseRequired(t *testing.T) {
 	defer ollama.Close()
 
 	router, token := setupExecuteRouter(t, ollama.URL)
-	router.aiSettingsHandler.legacyAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
+	router.aiSettingsHandler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
 
 	body := `{"prompt":"remediate the issue","use_case":"remediation"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
@@ -292,7 +292,7 @@ func TestRouteExecuteStream_UseCaseCaseInsensitive(t *testing.T) {
 	defer ollama.Close()
 
 	router, token := setupExecuteRouter(t, ollama.URL)
-	router.aiSettingsHandler.legacyAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
+	router.aiSettingsHandler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
 
 	for _, uc := range []string{"AutoFix", "  REMEDIATION  ", "Autofix", "AUTOFIX"} {
 		t.Run(uc, func(t *testing.T) {

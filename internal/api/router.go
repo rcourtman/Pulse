@@ -2,7 +2,6 @@ package api
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -19,7 +18,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -451,10 +449,6 @@ func (r *Router) setupRoutes() {
 
 			return true
 		}
-		// Fall back to legacy single token if set (legacy tokens have wildcard access)
-		if r.config.APIToken != "" {
-			return auth.CompareAPIToken(token, r.config.APIToken)
-		}
 		return false
 	})
 
@@ -847,19 +841,6 @@ func (r *Router) handleSSHConfig(w http.ResponseWriter, req *http.Request) {
 	}
 
 	r.systemSettingsHandler.HandleSSHConfig(w, req)
-}
-
-// handleSSHConfigUnauthorized logs an unauthorized access attempt (legacy helper, no longer used)
-func (r *Router) handleSSHConfigUnauthorized(w http.ResponseWriter, req *http.Request) {
-	log.Warn().
-		Str("ip", req.RemoteAddr).
-		Str("path", req.URL.Path).
-		Str("method", req.Method).
-		Msg("Unauthorized access attempt (ssh-config)")
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusUnauthorized)
-	w.Write([]byte(`{"error":"Authentication required"}`))
 }
 
 func extractSetupToken(req *http.Request) string {
@@ -3078,11 +3059,6 @@ func (r *Router) reloadSystemSettings() {
 		if !r.config.EnvOverrides["PULSE_AUTH_HIDE_LOCAL_LOGIN"] {
 			r.config.HideLocalLogin = systemSettings.HideLocalLogin
 		}
-		// Update DisableLegacyRouteRedirects so frontend sunset behavior applies immediately
-		// BUT respect environment variable override if present
-		if !r.config.EnvOverrides["PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS"] {
-			r.config.DisableLegacyRouteRedirects = systemSettings.DisableLegacyRouteRedirects
-		}
 
 		// Update webhook allowed private CIDRs in notification manager
 		if r.monitor != nil {
@@ -3223,29 +3199,18 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/security/validate-bootstrap-token",
 				"/api/security/quick-setup", // Handler does its own auth (bootstrap token or session)
 				"/api/version",
-				"/api/login", // Add login endpoint as public
-				"/api/oidc/login",
+				"/api/login",                     // Add login endpoint as public
 				"/api/public/signup",             // Hosted mode: public signup
 				"/api/public/magic-link/request", // Hosted mode: request magic link
 				"/api/public/magic-link/verify",  // Hosted mode: verify magic link
 				"/api/cloud/handoff/exchange",    // Hosted mode: control-plane workspace handoff (token-authenticated)
 				"/api/webhooks/stripe",           // Hosted mode: Stripe webhook (signature verification is auth)
-				config.DefaultOIDCCallbackPath,
-				"/install-docker-agent.sh",       // Docker agent bootstrap script must be public
-				"/install-container-agent.sh",    // Container agent bootstrap script must be public
-				"/download/pulse-docker-agent",   // Agent binary download should not require auth
-				"/install-host-agent.sh",         // Host agent bootstrap script must be public
-				"/install-host-agent.ps1",        // Host agent PowerShell script must be public
-				"/uninstall-host-agent.sh",       // Host agent uninstall script must be public
-				"/uninstall-host-agent.ps1",      // Host agent uninstall script must be public
-				"/download/pulse-host-agent",     // Host agent binary download should not require auth
 				"/install.sh",                    // Unified agent installer
 				"/install.ps1",                   // Unified agent Windows installer
 				"/download/pulse-agent",          // Unified agent binary
 				"/api/agent/version",             // Agent update checks need to work before auth
 				"/api/agent/ws",                  // Agent WebSocket has its own auth via registration
 				"/api/server/info",               // Server info for installer script
-				"/api/install/install-docker.sh", // Docker turnkey installer
 				"/api/ai/oauth/callback",         // OAuth callback from Anthropic for Claude subscription auth
 				"/auth/cloud-handoff",            // Cloud control plane handoff (token-authenticated)
 				"/auth/trial-activate",           // Hosted trial signup callback (token-authenticated)
@@ -3257,15 +3222,8 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			// because authentication is handled by the frontend after page load
 			isFrontendRoute := !strings.HasPrefix(req.URL.Path, "/api/") &&
 				!strings.HasPrefix(req.URL.Path, "/ws") &&
-				!strings.HasPrefix(req.URL.Path, "/socket.io/") &&
 				!strings.HasPrefix(req.URL.Path, "/download/") &&
 				req.URL.Path != "/simple-stats" &&
-				req.URL.Path != "/install-docker-agent.sh" &&
-				req.URL.Path != "/install-container-agent.sh" &&
-				req.URL.Path != "/install-host-agent.sh" &&
-				req.URL.Path != "/install-host-agent.ps1" &&
-				req.URL.Path != "/uninstall-host-agent.sh" &&
-				req.URL.Path != "/uninstall-host-agent.ps1" &&
 				req.URL.Path != "/install.sh" &&
 				req.URL.Path != "/install.ps1"
 
@@ -3373,7 +3331,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		authConfigured := (r.config.AuthUser != "" && r.config.AuthPass != "") ||
 			r.config.HasAPITokens() ||
 			r.config.ProxyAuthSecret != "" ||
-			(r.config.OIDC != nil && r.config.OIDC.Enabled)
+			(func() bool {
+				ssoCfg := r.ensureSSOConfig()
+				return ssoCfg != nil && ssoCfg.HasEnabledProviders()
+			})()
 		validRecoveryToken := false
 		if recoveryToken := strings.TrimSpace(req.Header.Get("X-Recovery-Token")); recoveryToken != "" {
 			validRecoveryToken = GetRecoveryTokenStore().IsRecoveryTokenValidConstantTime(recoveryToken)
@@ -3463,17 +3424,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 		if strings.HasPrefix(req.URL.Path, "/api/") ||
 			strings.HasPrefix(req.URL.Path, "/ws") ||
-			strings.HasPrefix(req.URL.Path, "/socket.io/") ||
 			strings.HasPrefix(req.URL.Path, "/download/") ||
 			strings.HasPrefix(req.URL.Path, "/auth/") ||
 			strings.HasPrefix(req.URL.Path, "/debug/pprof") ||
 			req.URL.Path == "/simple-stats" ||
-			req.URL.Path == "/install-docker-agent.sh" ||
-			req.URL.Path == "/install-container-agent.sh" ||
-			path.Clean(req.URL.Path) == "/install-host-agent.sh" ||
-			path.Clean(req.URL.Path) == "/install-host-agent.ps1" ||
-			path.Clean(req.URL.Path) == "/uninstall-host-agent.sh" ||
-			path.Clean(req.URL.Path) == "/uninstall-host-agent.ps1" ||
 			path.Clean(req.URL.Path) == "/install.sh" ||
 			path.Clean(req.URL.Path) == "/install.ps1" {
 			// Use the mux for API and special routes
@@ -4061,16 +4015,6 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 PULSE_AUTH_USER='%s'
 PULSE_AUTH_PASS='%s'
 `, time.Now().Format(time.RFC3339), r.config.AuthUser, hashedPassword)
-
-			// Include API token if configured
-			if r.config.HasAPITokens() {
-				hashes := make([]string, len(r.config.APITokens))
-				for i, t := range r.config.APITokens {
-					hashes[i] = t.Hash
-				}
-				envContent += fmt.Sprintf("API_TOKEN='%s'\n", r.config.PrimaryAPITokenHash())
-				envContent += fmt.Sprintf("API_TOKENS='%s'\n", strings.Join(hashes, ","))
-			}
 		}
 
 		// Write the updated .env file
@@ -4132,15 +4076,6 @@ PULSE_AUTH_PASS='%s'
 PULSE_AUTH_USER='%s'
 PULSE_AUTH_PASS='%s'
 `, time.Now().Format(time.RFC3339), r.config.AuthUser, hashedPassword)
-
-			if r.config.HasAPITokens() {
-				hashes := make([]string, len(r.config.APITokens))
-				for i, t := range r.config.APITokens {
-					hashes[i] = t.Hash
-				}
-				envContent += fmt.Sprintf("API_TOKEN='%s'\n", r.config.PrimaryAPITokenHash())
-				envContent += fmt.Sprintf("API_TOKENS='%s'\n", strings.Join(hashes, ","))
-			}
 		}
 
 		// Try to write the .env file
@@ -5992,12 +5927,6 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 	}
 }
 
-// handleInfrastructureSummaryCharts is a compatibility endpoint for older UIs.
-// It currently serves the same payload as handleInfrastructureCharts.
-func (r *Router) handleInfrastructureSummaryCharts(w http.ResponseWriter, req *http.Request) {
-	r.handleInfrastructureCharts(w, req)
-}
-
 type workloadSummaryBuckets struct {
 	cpu     []float64
 	memory  []float64
@@ -6931,7 +6860,7 @@ func (r *Router) handleMetricsStoreStats(w http.ResponseWriter, req *http.Reques
 
 // handleMetricsHistory returns historical metrics from the persistent SQLite store
 // Query params:
-//   - resourceType: "node", "guest", "storage", "docker", "dockerHost" (required)
+//   - resourceType: "node", "guest", "storage", "docker", "dockerHost", "agent" (required)
 //   - resourceId: the resource identifier (required)
 //   - metric: "cpu", "memory", "disk", etc. (optional, omit for all metrics)
 //   - range: time range like "1h", "24h", "7d", "30d", "90d" (optional, default "24h")
@@ -6963,6 +6892,8 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	switch resourceType {
 	case "docker":
 		resourceType = "dockerContainer"
+	case "agent":
+		resourceType = "host"
 	}
 
 	// Parse time range
@@ -8030,57 +7961,6 @@ func (r *Router) handleSimpleStats(w http.ResponseWriter, req *http.Request) {
 	w.Write([]byte(html))
 }
 
-// handleSocketIO handles socket.io requests
-func (r *Router) handleSocketIO(w http.ResponseWriter, req *http.Request) {
-	// SECURITY: Ensure authentication is checked for socket.io transport upgrades
-	if !CheckAuth(r.config, w, req) {
-		return
-	}
-	// SECURITY: Ensure monitoring:read scope for socket.io connections
-	if !ensureScope(w, req, config.ScopeMonitoringRead) {
-		return
-	}
-	// For socket.io.js, redirect to CDN
-	if strings.Contains(req.URL.Path, "socket.io.js") {
-		http.Redirect(w, req, "https://cdn.socket.io/4.8.1/socket.io.min.js", http.StatusFound)
-		return
-	}
-
-	// For other socket.io endpoints, use our WebSocket
-	// This provides basic compatibility
-	if strings.Contains(req.URL.RawQuery, "transport=websocket") {
-		boundReq, ok := bindWebSocketOrgToTenantContext(w, req)
-		if !ok {
-			return
-		}
-		r.wsHub.HandleWebSocket(w, boundReq)
-		return
-	}
-
-	// For polling transport, return proper socket.io response
-	// Socket.io v4 expects specific format
-	if strings.Contains(req.URL.RawQuery, "transport=polling") {
-		if strings.Contains(req.URL.RawQuery, "sid=") {
-			// Already connected, return empty poll
-			w.Header().Set("Content-Type", "text/plain; charset=UTF-8")
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("6"))
-		} else {
-			// Initial handshake
-			w.Header().Set("Content-Type", "text/plain; charset=UTF-8")
-			w.WriteHeader(http.StatusOK)
-			// Send open packet with session ID and config
-			sessionID := fmt.Sprintf("%d", time.Now().UnixNano())
-			response := fmt.Sprintf(`0{"sid":"%s","upgrades":["websocket"],"pingInterval":25000,"pingTimeout":60000}`, sessionID)
-			w.Write([]byte(response))
-		}
-		return
-	}
-
-	// Default: redirect to WebSocket
-	http.Redirect(w, req, "/ws", http.StatusFound)
-}
-
 func resolveExplicitWebSocketOrgID(req *http.Request) (string, bool) {
 	if req == nil {
 		return "", false
@@ -8195,355 +8075,6 @@ func (r *Router) backgroundUpdateChecker(ctx context.Context) {
 			}
 		}
 	}
-}
-
-// handleDownloadInstallScript serves the Docker agent installation script
-func (r *Router) handleDownloadInstallScript(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet && req.Method != http.MethodHead {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Prevent caching - always serve the latest version
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
-
-	scriptPath := "/opt/pulse/scripts/install-docker-agent.sh"
-	content, err := os.ReadFile(scriptPath)
-	if err != nil {
-		// Fallback to project root (dev environment)
-		scriptPath = filepath.Join(r.projectRoot, "scripts", "install-docker-agent.sh")
-		content, err = os.ReadFile(scriptPath)
-		if err != nil {
-			log.Error().Err(err).Str("path", scriptPath).Msg("Failed to read Docker agent installer script")
-			http.Error(w, "Failed to read installer script", http.StatusInternalServerError)
-			return
-		}
-	}
-
-	http.ServeContent(w, req, "install-docker-agent.sh", time.Now(), bytes.NewReader(content))
-}
-
-// handleDownloadContainerAgentInstallScript serves the container agent install script
-func (r *Router) handleDownloadContainerAgentInstallScript(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet && req.Method != http.MethodHead {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Prevent caching - always serve the latest version
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
-
-	scriptPath := "/opt/pulse/scripts/install-container-agent.sh"
-	http.ServeFile(w, req, scriptPath)
-}
-
-// handleDownloadAgent serves the Docker agent binary
-func (r *Router) handleDownloadAgent(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet && req.Method != http.MethodHead {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Prevent caching - always serve the latest version
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
-
-	archParam := strings.TrimSpace(req.URL.Query().Get("arch"))
-	searchPaths := make([]string, 0, 6)
-
-	if normalized := normalizeDockerAgentArch(archParam); normalized != "" {
-		searchPaths = append(searchPaths,
-			filepath.Join(pulseBinDir(), "pulse-docker-agent-"+normalized),
-			filepath.Join("/opt/pulse", "pulse-docker-agent-"+normalized),
-			filepath.Join("/app", "pulse-docker-agent-"+normalized),               // legacy Docker image layout
-			filepath.Join(r.projectRoot, "bin", "pulse-docker-agent-"+normalized), // dev environment
-		)
-	}
-
-	// Default locations (host architecture)
-	searchPaths = append(searchPaths,
-		filepath.Join(pulseBinDir(), "pulse-docker-agent"),
-		"/opt/pulse/pulse-docker-agent",
-		filepath.Join("/app", "pulse-docker-agent"),               // legacy Docker image layout
-		filepath.Join(r.projectRoot, "bin", "pulse-docker-agent"), // dev environment
-	)
-
-	for _, candidate := range searchPaths {
-		if candidate == "" {
-			continue
-		}
-
-		info, err := os.Stat(candidate)
-		if err != nil || info.IsDir() {
-			continue
-		}
-
-		checksum, err := r.cachedSHA256(candidate, info)
-		if err != nil {
-			log.Error().Err(err).Str("path", candidate).Msg("Failed to compute docker agent checksum")
-			continue
-		}
-
-		file, err := os.Open(candidate)
-		if err != nil {
-			log.Error().Err(err).Str("path", candidate).Msg("Failed to open docker agent binary for download")
-			continue
-		}
-		defer file.Close()
-
-		w.Header().Set("X-Checksum-Sha256", checksum)
-		http.ServeContent(w, req, filepath.Base(candidate), info.ModTime(), file)
-		return
-	}
-
-	http.Error(w, "Agent binary not found", http.StatusNotFound) // Agent binary not found
-}
-
-// handleDownloadHostAgentInstallScript serves the Host agent installation script
-func (r *Router) handleDownloadHostAgentInstallScript(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet && req.Method != http.MethodHead {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Prevent caching - always serve the latest version
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
-
-	// Serve the unified install.sh script (backwards compatible with install-host-agent.sh URL)
-	scriptPath := "/opt/pulse/scripts/install.sh"
-	content, err := os.ReadFile(scriptPath)
-	if err != nil {
-		// Fallback to project root (dev environment)
-		scriptPath = filepath.Join(r.projectRoot, "scripts", "install.sh")
-		content, err = os.ReadFile(scriptPath)
-		if err != nil {
-			log.Error().Err(err).Str("path", scriptPath).Msg("Failed to read unified agent installer script")
-			http.Error(w, "Failed to read installer script", http.StatusInternalServerError)
-			return
-		}
-	}
-
-	http.ServeContent(w, req, "install.sh", time.Now(), bytes.NewReader(content))
-}
-
-// handleDownloadHostAgentInstallScriptPS serves the PowerShell installation script for Windows
-func (r *Router) handleDownloadHostAgentInstallScriptPS(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet && req.Method != http.MethodHead {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Prevent caching - always serve the latest version
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-
-	scriptPath := "/opt/pulse/scripts/install-host-agent.ps1"
-	http.ServeFile(w, req, scriptPath)
-}
-
-// handleDownloadHostAgentUninstallScript serves the bash uninstallation script for Linux/macOS
-func (r *Router) handleDownloadHostAgentUninstallScript(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet && req.Method != http.MethodHead {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Prevent caching - always serve the latest version
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
-
-	scriptPath := "/opt/pulse/scripts/uninstall-host-agent.sh"
-	http.ServeFile(w, req, scriptPath)
-}
-
-// handleDownloadHostAgentUninstallScriptPS serves the PowerShell uninstallation script for Windows
-func (r *Router) handleDownloadHostAgentUninstallScriptPS(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet && req.Method != http.MethodHead {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Prevent caching - always serve the latest version
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-
-	scriptPath := "/opt/pulse/scripts/uninstall-host-agent.ps1"
-	http.ServeFile(w, req, scriptPath)
-}
-
-// handleDownloadHostAgent serves the Host agent binary
-func (r *Router) handleDownloadHostAgent(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet && req.Method != http.MethodHead {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Prevent caching - always serve the latest version
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
-
-	platformParam := strings.TrimSpace(req.URL.Query().Get("platform"))
-	archParam := strings.TrimSpace(req.URL.Query().Get("arch"))
-
-	// Validate platform and arch to prevent path traversal attacks
-	// Only allow alphanumeric characters and hyphens
-	validPattern := regexp.MustCompile(`^[a-zA-Z0-9\-]+$`)
-	if platformParam != "" && !validPattern.MatchString(platformParam) {
-		http.Error(w, "Invalid platform parameter", http.StatusBadRequest)
-		return
-	}
-	if archParam != "" && !validPattern.MatchString(archParam) {
-		http.Error(w, "Invalid arch parameter", http.StatusBadRequest)
-		return
-	}
-
-	checkedPaths, served := r.tryServeHostAgentBinary(w, req, platformParam, archParam)
-	if served {
-		return
-	}
-
-	remainingMissing := updates.EnsureHostAgentBinaries(r.serverVersion)
-
-	afterRestorePaths, served := r.tryServeHostAgentBinary(w, req, platformParam, archParam)
-	checkedPaths = append(checkedPaths, afterRestorePaths...)
-	if served {
-		return
-	}
-
-	// Build detailed error message with troubleshooting guidance
-	var errorMsg strings.Builder
-	errorMsg.WriteString(fmt.Sprintf("Host agent binary not found for %s/%s\n\n", platformParam, archParam))
-	errorMsg.WriteString("Troubleshooting:\n")
-	errorMsg.WriteString("1. If running in Docker: Rebuild the Docker image to include all platform binaries\n")
-	errorMsg.WriteString("2. If running from source: Run 'scripts/build-release.sh' to build all platform binaries\n")
-	errorMsg.WriteString("3. Build from source:\n")
-	errorMsg.WriteString(fmt.Sprintf("   GOOS=%s GOARCH=%s go build -o pulse-host-agent-%s-%s ./cmd/pulse-host-agent\n", platformParam, archParam, platformParam, archParam))
-	errorMsg.WriteString(fmt.Sprintf("   sudo mv pulse-host-agent-%s-%s /opt/pulse/bin/\n\n", platformParam, archParam))
-
-	if len(remainingMissing) > 0 {
-		errorMsg.WriteString("Automatic repair attempted but the following binaries are still missing:\n")
-		for _, key := range sortedHostAgentKeys(remainingMissing) {
-			errorMsg.WriteString(fmt.Sprintf("  - %s\n", key))
-		}
-		if r.serverVersion != "" {
-			errorMsg.WriteString(fmt.Sprintf("Release bundle used: %s\n\n", strings.TrimSpace(r.serverVersion)))
-		} else {
-			errorMsg.WriteString("\n")
-		}
-	}
-
-	errorMsg.WriteString("Searched locations:\n")
-	for _, path := range dedupeStrings(checkedPaths) {
-		errorMsg.WriteString(fmt.Sprintf("  - %s\n", path))
-	}
-
-	http.Error(w, errorMsg.String(), http.StatusNotFound)
-}
-
-func (r *Router) tryServeHostAgentBinary(w http.ResponseWriter, req *http.Request, platformParam, archParam string) ([]string, bool) {
-	searchPaths := hostAgentSearchCandidates(platformParam, archParam)
-	checkedPaths := make([]string, 0, len(searchPaths)*2)
-
-	shouldCheckWindowsExe := func(path string) bool {
-		base := strings.ToLower(filepath.Base(path))
-		return strings.Contains(base, "windows") && !strings.HasSuffix(base, ".exe")
-	}
-
-	for _, candidate := range searchPaths {
-		if candidate == "" {
-			continue
-		}
-		pathsToCheck := []string{candidate}
-		if shouldCheckWindowsExe(candidate) {
-			pathsToCheck = append(pathsToCheck, candidate+".exe")
-		}
-
-		for _, path := range pathsToCheck {
-			checkedPaths = append(checkedPaths, path)
-			if info, err := os.Stat(path); err == nil && !info.IsDir() {
-				if strings.HasSuffix(req.URL.Path, ".sha256") {
-					r.serveChecksum(w, path)
-					return checkedPaths, true
-				}
-				http.ServeFile(w, req, path)
-				return checkedPaths, true
-			}
-		}
-	}
-
-	return checkedPaths, false
-}
-
-func hostAgentSearchCandidates(platformParam, archParam string) []string {
-	searchPaths := make([]string, 0, 12)
-	strictMode := platformParam != "" && archParam != ""
-
-	if strictMode {
-		searchPaths = append(searchPaths,
-			filepath.Join(pulseBinDir(), fmt.Sprintf("pulse-host-agent-%s-%s", platformParam, archParam)),
-			filepath.Join("/opt/pulse", fmt.Sprintf("pulse-host-agent-%s-%s", platformParam, archParam)),
-			filepath.Join("/app", fmt.Sprintf("pulse-host-agent-%s-%s", platformParam, archParam)),
-		)
-	}
-
-	if platformParam != "" && !strictMode {
-		searchPaths = append(searchPaths,
-			filepath.Join(pulseBinDir(), "pulse-host-agent-"+platformParam),
-			filepath.Join("/opt/pulse", "pulse-host-agent-"+platformParam),
-			filepath.Join("/app", "pulse-host-agent-"+platformParam),
-		)
-	}
-
-	if !strictMode && platformParam == "" {
-		searchPaths = append(searchPaths,
-			filepath.Join(pulseBinDir(), "pulse-host-agent"),
-			"/opt/pulse/pulse-host-agent",
-			filepath.Join("/app", "pulse-host-agent"),
-		)
-	}
-
-	return searchPaths
-}
-
-func dedupeStrings(values []string) []string {
-	seen := make(map[string]struct{}, len(values))
-	result := make([]string, 0, len(values))
-	for _, value := range values {
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		result = append(result, value)
-	}
-	return result
-}
-
-func sortedHostAgentKeys(missing map[string]updates.HostAgentBinary) []string {
-	if len(missing) == 0 {
-		return nil
-	}
-	keys := make([]string, 0, len(missing))
-	for key := range missing {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
 }
 
 type checksumCacheEntry struct {
@@ -8730,14 +8261,14 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 	config.Mu.Unlock()
 
 	baseURL := strings.TrimRight(r.resolvePublicURL(req), "/")
-	installScriptURL := baseURL + "/install-docker-agent.sh"
+	installScriptURL := baseURL + "/install.sh"
 	installCommand := fmt.Sprintf(
-		"curl -fSL %s -o /tmp/pulse-install-docker-agent.sh && sudo bash /tmp/pulse-install-docker-agent.sh --url %s --token %s && rm -f /tmp/pulse-install-docker-agent.sh",
+		"curl -fSL %s | sudo bash -s -- --url %s --token %s --enable-docker --interval 30s",
 		posixShellQuote(installScriptURL),
 		posixShellQuote(baseURL),
 		posixShellQuote(rawToken),
 	)
-	systemdSnippet := fmt.Sprintf("[Service]\nType=simple\nEnvironment=\"PULSE_URL=%s\"\nEnvironment=\"PULSE_TOKEN=%s\"\nExecStart=/usr/local/bin/pulse-docker-agent --url %s --interval 30s\nRestart=always\nRestartSec=5s\nUser=root", baseURL, rawToken, baseURL)
+	systemdSnippet := fmt.Sprintf("[Service]\nType=simple\nEnvironment=\"PULSE_URL=%s\"\nEnvironment=\"PULSE_TOKEN=%s\"\nExecStart=/usr/local/bin/pulse-agent --url %s --token %s --enable-docker --interval 30s\nRestart=always\nRestartSec=5s\nUser=root", baseURL, rawToken, baseURL, rawToken)
 
 	response := map[string]any{
 		"success": true,
@@ -8754,33 +8285,6 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker token migration response")
-	}
-}
-
-func (r *Router) handleDownloadDockerInstallerScript(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet && req.Method != http.MethodHead {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
-		return
-	}
-
-	// Try pre-built location first (in container)
-	scriptPath := "/opt/pulse/scripts/install-docker.sh"
-	content, err := os.ReadFile(scriptPath)
-	if err != nil {
-		// Fallback to project root (dev environment)
-		scriptPath = filepath.Join(r.projectRoot, "scripts", "install-docker.sh")
-		content, err = os.ReadFile(scriptPath)
-		if err != nil {
-			log.Error().Err(err).Str("path", scriptPath).Msg("Failed to read Docker installer script")
-			writeErrorResponse(w, http.StatusInternalServerError, "read_error", "Failed to read Docker installer script", nil)
-			return
-		}
-	}
-
-	w.Header().Set("Content-Type", "text/x-shellscript")
-	w.Header().Set("Content-Disposition", "attachment; filename=install-docker.sh")
-	if _, err := w.Write(content); err != nil {
-		log.Error().Err(err).Msg("Failed to write Docker installer script to client")
 	}
 }
 
@@ -8832,28 +8336,6 @@ func (r *Router) resolvePublicURL(req *http.Request) string {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
-}
-
-func normalizeDockerAgentArch(arch string) string {
-	if arch == "" {
-		return ""
-	}
-
-	arch = strings.ToLower(strings.TrimSpace(arch))
-	switch arch {
-	case "linux-amd64", "amd64", "x86_64", "x86-64":
-		return "linux-amd64"
-	case "linux-arm64", "arm64", "aarch64":
-		return "linux-arm64"
-	case "linux-armv7", "armv7", "armv7l", "armhf":
-		return "linux-armv7"
-	case "linux-armv6", "armv6", "armv6l":
-		return "linux-armv6"
-	case "linux-386", "386", "i386", "i686":
-		return "linux-386"
-	default:
-		return ""
-	}
 }
 
 // knowledgeStoreProviderWrapper adapts knowledge.Store to tools.KnowledgeStoreProvider.

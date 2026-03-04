@@ -18,9 +18,9 @@ func setupAIHandlerWithIntelligence(t *testing.T) (*AISettingsHandler, *ai.Patro
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
-	handler.legacyAIService.SetStateProvider(&stubStateProvider{})
+	handler.defaultAIService.SetStateProvider(&stubStateProvider{})
 
-	patrol := handler.legacyAIService.GetPatrolService()
+	patrol := handler.defaultAIService.GetPatrolService()
 	if patrol == nil {
 		t.Fatalf("expected patrol service to be initialized")
 	}
@@ -83,8 +83,8 @@ func TestHandleGetPatterns_UnlockedWithData(t *testing.T) {
 	t.Setenv("PULSE_MOCK_MODE", "true")
 	handler, _ := setupAIHandlerWithIntelligence(t)
 
-	handler.legacyAIService.SetPatternDetector(seedPatternDetector(time.Now()))
-	handler.legacyAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
+	handler.defaultAIService.SetPatternDetector(seedPatternDetector(time.Now()))
+	handler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/patterns", nil)
 	rec := httptest.NewRecorder()
@@ -121,7 +121,7 @@ func TestHandleGetPredictions_WithData(t *testing.T) {
 	t.Setenv("PULSE_MOCK_MODE", "true")
 	handler, _ := setupAIHandlerWithIntelligence(t)
 
-	handler.legacyAIService.SetPatternDetector(seedPatternDetector(time.Now()))
+	handler.defaultAIService.SetPatternDetector(seedPatternDetector(time.Now()))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/predictions?resource_id=vm-1", nil)
 	rec := httptest.NewRecorder()
@@ -157,7 +157,7 @@ func TestHandleGetCorrelations_WithData(t *testing.T) {
 	t.Setenv("PULSE_MOCK_MODE", "true")
 	handler, _ := setupAIHandlerWithIntelligence(t)
 
-	handler.legacyAIService.SetCorrelationDetector(seedCorrelationDetector(time.Now()))
+	handler.defaultAIService.SetCorrelationDetector(seedCorrelationDetector(time.Now()))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/correlations?resource_id=vm-1", nil)
 	rec := httptest.NewRecorder()

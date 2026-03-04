@@ -66,7 +66,7 @@ func TestHandleGetAnomalies_NoStateProvider(t *testing.T) {
 	store := ai.NewBaselineStore(ai.BaselineConfig{MinSamples: 1})
 	svc.SetBaselineStore(store)
 
-	handler := &AISettingsHandler{legacyAIService: svc}
+	handler := &AISettingsHandler{defaultAIService: svc}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/anomalies", nil)
 	rec := httptest.NewRecorder()
 
@@ -140,7 +140,7 @@ func TestHandleGetAnomalies_MixedResources(t *testing.T) {
 	addBaseline(t, store, nodeID, "node", "memory", 10)
 	svc.SetBaselineStore(store)
 
-	handler := &AISettingsHandler{legacyAIService: svc}
+	handler := &AISettingsHandler{defaultAIService: svc}
 	handler.SetReadState(rs)
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/anomalies", nil)
 	rec := httptest.NewRecorder()
@@ -179,7 +179,7 @@ func TestHandleGetLearningStatus_WaitingAndActive(t *testing.T) {
 		store := ai.NewBaselineStore(ai.BaselineConfig{MinSamples: 1})
 		svc.SetBaselineStore(store)
 
-		handler := &AISettingsHandler{legacyAIService: svc}
+		handler := &AISettingsHandler{defaultAIService: svc}
 		req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/learning", nil)
 		rec := httptest.NewRecorder()
 
@@ -206,7 +206,7 @@ func TestHandleGetLearningStatus_WaitingAndActive(t *testing.T) {
 		}
 		svc.SetBaselineStore(store)
 
-		handler := &AISettingsHandler{legacyAIService: svc}
+		handler := &AISettingsHandler{defaultAIService: svc}
 		req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/learning", nil)
 		rec := httptest.NewRecorder()
 

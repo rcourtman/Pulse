@@ -190,8 +190,7 @@ func serveFrontendHandler() http.HandlerFunc {
 
 		// For SPA routing, serve index.html for non-API routes
 		if !strings.HasPrefix(p, "/api/") &&
-			!strings.HasPrefix(p, "/ws") &&
-			!strings.HasPrefix(p, "/socket.io/") {
+			!strings.HasPrefix(p, "/ws") {
 			// Serve index.html for client-side routing
 			indexFile, err := fsys.Open("index.html")
 			if err == nil {

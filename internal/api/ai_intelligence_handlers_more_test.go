@@ -55,7 +55,7 @@ func TestHandleGetRecentChanges_WithDetector(t *testing.T) {
 	setUnexportedField(t, detector, "changes", []ai.Change{change})
 	svc.SetChangeDetector(detector)
 
-	handler := &AISettingsHandler{legacyAIService: svc}
+	handler := &AISettingsHandler{defaultAIService: svc}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/changes?hours=1", nil)
 	rec := httptest.NewRecorder()
 
@@ -82,7 +82,7 @@ func TestHandleGetBaselines_WithStore(t *testing.T) {
 	store := buildBaselineStore(t)
 	svc.SetBaselineStore(store)
 
-	handler := &AISettingsHandler{legacyAIService: svc}
+	handler := &AISettingsHandler{defaultAIService: svc}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/baselines?resource_id=vm-1", nil)
 	rec := httptest.NewRecorder()
 
@@ -105,7 +105,7 @@ func TestHandleGetLearningStatus_WithBaselines(t *testing.T) {
 	store := buildBaselineStore(t)
 	svc.SetBaselineStore(store)
 
-	handler := &AISettingsHandler{legacyAIService: svc}
+	handler := &AISettingsHandler{defaultAIService: svc}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/learning", nil)
 	rec := httptest.NewRecorder()
 
@@ -156,7 +156,7 @@ func TestHandleGetAnomalies_WithBaseline(t *testing.T) {
 	}
 	svc.SetBaselineStore(store)
 
-	handler := &AISettingsHandler{legacyAIService: svc}
+	handler := &AISettingsHandler{defaultAIService: svc}
 	handler.SetReadState(rs)
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/anomalies?resource_id="+vmID, nil)
 	rec := httptest.NewRecorder()

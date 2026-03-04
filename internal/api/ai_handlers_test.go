@@ -29,11 +29,11 @@ func (m *mockAlertAnalyzerForTest) Stop()                                 {}
 
 func newTestAISettingsHandler(cfg *config.Config, persistence *config.ConfigPersistence, agentServer *agentexec.Server) *AISettingsHandler {
 	handler := NewAISettingsHandler(nil, nil, agentServer)
-	handler.legacyConfig = cfg
-	handler.legacyPersistence = persistence
+	handler.defaultConfig = cfg
+	handler.defaultPersistence = persistence
 	if persistence != nil {
-		handler.legacyAIService = ai.NewService(persistence, agentServer)
-		_ = handler.legacyAIService.LoadConfig()
+		handler.defaultAIService = ai.NewService(persistence, agentServer)
+		_ = handler.defaultAIService.LoadConfig()
 	}
 	return handler
 }
@@ -70,7 +70,6 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 	{
 		body, _ := json.Marshal(AISettingsUpdateRequest{
 			Enabled:       ptr(true),
-			Provider:      ptr("ollama"),
 			Model:         ptr("ollama:llama3"),
 			OllamaBaseURL: ptr("http://localhost:11434"),
 		})
@@ -818,7 +817,7 @@ func TestHandleGetAICostSummary_NoService_InvalidDays(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	// Pass nil persistence so legacyAIService is nil — exercises the no-service stub path
+	// Pass nil persistence so defaultAIService is nil — exercises the no-service stub path
 	handler := newTestAISettingsHandler(cfg, nil, nil)
 
 	tests := []struct {
@@ -861,7 +860,7 @@ func TestHandleGetAICostSummary_NoService_ResponseShape(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	// nil persistence → nil legacyAIService → exercises no-service stub
+	// nil persistence → nil defaultAIService → exercises no-service stub
 	handler := newTestAISettingsHandler(cfg, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary", nil)
@@ -1461,12 +1460,12 @@ func TestAISettingsHandler_SetConfig(t *testing.T) {
 
 	// SetConfig with nil should be a no-op
 	handler.SetConfig(nil)
-	require.Same(t, cfg, handler.legacyConfig)
+	require.Same(t, cfg, handler.defaultConfig)
 
 	// SetConfig with new config should update the handler's config
 	newCfg := &config.Config{DataPath: tmp}
 	handler.SetConfig(newCfg)
-	require.Same(t, newCfg, handler.legacyConfig)
+	require.Same(t, newCfg, handler.defaultConfig)
 }
 
 func TestAISettingsHandler_GetAlertTriggeredAnalyzer(t *testing.T) {
@@ -1481,7 +1480,7 @@ func TestAISettingsHandler_GetAlertTriggeredAnalyzer(t *testing.T) {
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
-	handler.legacyAIService.SetAlertAnalyzerFactory(getCreateAlertAnalyzer())
+	handler.defaultAIService.SetAlertAnalyzerFactory(getCreateAlertAnalyzer())
 
 	handler.SetStateProvider(&MockStateProvider{})
 
@@ -1505,9 +1504,8 @@ func TestAISettingsHandler_StartPatrol(t *testing.T) {
 	aiCfg.OllamaBaseURL = "http://localhost:11434"
 	aiCfg.Model = "ollama:llama3"
 	aiCfg.PatrolEnabled = true
-	aiCfg.PatrolSchedulePreset = "6hr"
 	require.NoError(t, persistence.SaveAIConfig(*aiCfg))
-	require.NoError(t, handler.legacyAIService.LoadConfig())
+	require.NoError(t, handler.defaultAIService.LoadConfig())
 
 	handler.SetStateProvider(&MockStateProvider{})
 
@@ -1515,7 +1513,7 @@ func TestAISettingsHandler_StartPatrol(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	handler.StartPatrol(ctx)
 
-	patrol := handler.legacyAIService.GetPatrolService()
+	patrol := handler.defaultAIService.GetPatrolService()
 	require.NotNil(t, patrol)
 	status := patrol.GetStatus()
 	require.True(t, status.Enabled)
@@ -1683,49 +1681,4 @@ func TestAISettingsHandler_Approvals_RejectCrossOrgAccess(t *testing.T) {
 	denyApp, ok := store.GetApproval("cross-org-deny")
 	require.True(t, ok)
 	require.Equal(t, approval.StatusPending, denyApp.Status)
-}
-func TestAISettingsHandler_ChatSessions(t *testing.T) {
-	t.Parallel()
-
-	tmp := t.TempDir()
-	cfg := &config.Config{DataPath: tmp}
-	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, nil)
-
-	t.Run("HandleSaveAndGetSession", func(t *testing.T) {
-		sessionID := "sess-123"
-		body, _ := json.Marshal(map[string]interface{}{
-			"id":    sessionID,
-			"title": "Test Session",
-		})
-		req := httptest.NewRequest(http.MethodPut, "/api/ai/chat/sessions/"+sessionID, bytes.NewReader(body))
-		rec := httptest.NewRecorder()
-		handler.HandleSaveAIChatSession(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-
-		// GET session
-		req = httptest.NewRequest(http.MethodGet, "/api/ai/chat/sessions/"+sessionID, nil)
-		rec = httptest.NewRecorder()
-		handler.HandleGetAIChatSession(rec, req)
-		assert.Equal(t, http.StatusOK, rec.Code)
-	})
-
-	t.Run("HandleListSessions", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/ai/chat/sessions", nil)
-		rec := httptest.NewRecorder()
-		handler.HandleListAIChatSessions(rec, req)
-		assert.Equal(t, http.StatusOK, rec.Code)
-	})
-
-	t.Run("HandleDeleteSession", func(t *testing.T) {
-		sessionID := "sess-delete"
-		body, _ := json.Marshal(map[string]interface{}{"id": sessionID})
-		handler.HandleSaveAIChatSession(httptest.NewRecorder(), httptest.NewRequest(http.MethodPut, "/api/ai/chat/sessions/"+sessionID, bytes.NewReader(body)))
-
-		req := httptest.NewRequest(http.MethodDelete, "/api/ai/chat/sessions/"+sessionID, nil)
-		rec := httptest.NewRecorder()
-		handler.HandleDeleteAIChatSession(rec, req)
-		assert.Equal(t, http.StatusNoContent, rec.Code)
-	})
 }

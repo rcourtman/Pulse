@@ -24,8 +24,8 @@ func newTestConfigHandlers(t *testing.T, cfg *config.Config) *ConfigHandlers {
 		cfg.DataPath = t.TempDir()
 	}
 	h := NewConfigHandlers(nil, nil, func() error { return nil }, nil, nil, func() {})
-	h.legacyConfig = cfg
-	h.legacyPersistence = config.NewConfigPersistence(cfg.DataPath)
+	h.defaultConfig = cfg
+	h.defaultPersistence = config.NewConfigPersistence(cfg.DataPath)
 
 	return h
 }
@@ -44,7 +44,7 @@ func TestHandleAutoRegisterRejectsWithoutAuth(t *testing.T) {
 	reqBody := AutoRegisterRequest{
 		Type:       "pve",
 		Host:       "https://pve.local:8006",
-		TokenID:    "pulse-monitor@pam!token",
+		TokenID:    "pulse-monitor@pve!token",
 		TokenValue: "secret-token",
 		ServerName: "pve.local",
 	}
@@ -87,7 +87,7 @@ func TestHandleAutoRegisterAcceptsWithSetupToken(t *testing.T) {
 	reqBody := AutoRegisterRequest{
 		Type:       "pve",
 		Host:       "https://pve.local:8006",
-		TokenID:    "pulse-monitor@pam!token",
+		TokenID:    "pulse-monitor@pve!token",
 		TokenValue: "secret-token",
 		ServerName: "pve.local",
 		AuthToken:  tokenValue,
@@ -145,7 +145,7 @@ func TestHandleAutoRegister_NoLimitForConfigRegistration(t *testing.T) {
 	reqBody := AutoRegisterRequest{
 		Type:       "pve",
 		Host:       "https://pve-new.local:8006",
-		TokenID:    "pulse-monitor@pam!token",
+		TokenID:    "pulse-monitor@pve!token",
 		TokenValue: "secret-token",
 		ServerName: "pve-new.local",
 		AuthToken:  tokenValue,
@@ -186,7 +186,7 @@ func TestHandleAutoRegisterRejectsBodyAPITokenOrgMismatch(t *testing.T) {
 	reqBody := AutoRegisterRequest{
 		Type:       "pve",
 		Host:       "https://pve.local:8006",
-		TokenID:    "pulse-monitor@pam!token",
+		TokenID:    "pulse-monitor@pve!token",
 		TokenValue: "secret-token",
 		ServerName: "pve.local",
 		AuthToken:  "org-bound-body-token-123.12345678",
@@ -232,7 +232,7 @@ func TestHandleAutoRegisterRejectsHeaderAPITokenOrgMismatch(t *testing.T) {
 	reqBody := AutoRegisterRequest{
 		Type:       "pve",
 		Host:       "https://pve.local:8006",
-		TokenID:    "pulse-monitor@pam!token",
+		TokenID:    "pulse-monitor@pve!token",
 		TokenValue: "secret-token",
 		ServerName: "pve.local",
 	}
@@ -356,7 +356,7 @@ func TestAutoRegisterDuplicateHostnameSeparateNodes(t *testing.T) {
 	reqBody1 := AutoRegisterRequest{
 		Type:       "pve",
 		Host:       "https://10.0.1.100:8006",
-		TokenID:    "pulse-monitor@pam!token1",
+		TokenID:    "pulse-monitor@pve!token1",
 		TokenValue: "secret-token-1",
 		ServerName: "px1",
 		AuthToken:  tokenValue,
@@ -382,7 +382,7 @@ func TestAutoRegisterDuplicateHostnameSeparateNodes(t *testing.T) {
 	reqBody2 := AutoRegisterRequest{
 		Type:       "pve",
 		Host:       "https://10.0.2.224:8006",
-		TokenID:    "pulse-monitor@pam!token2",
+		TokenID:    "pulse-monitor@pve!token2",
 		TokenValue: "secret-token-2",
 		ServerName: "px1", // Same hostname as first node
 		AuthToken:  tokenValue,

@@ -159,20 +159,17 @@ func TestBuildAPITokenDiagnostic_WithDockerUsage(t *testing.T) {
 	lastUsed := now.Add(-time.Hour)
 	cfg := &config.Config{
 		DataPath: t.TempDir(),
-		EnvOverrides: map[string]bool{
-			"API_TOKEN": true,
-		},
 		APITokens: []config.APITokenRecord{
 			{
 				ID:        "token-1",
-				Name:      "Environment token",
+				Name:      "Primary token",
 				Prefix:    "pre",
 				Suffix:    "suf",
 				CreatedAt: now,
 			},
 			{
 				ID:         "token-2",
-				Name:       "Legacy token",
+				Name:       "Secondary token",
 				CreatedAt:  now,
 				LastUsedAt: &lastUsed,
 			},
@@ -210,12 +207,6 @@ func TestBuildAPITokenDiagnostic_WithDockerUsage(t *testing.T) {
 	}
 	if diag.TokenCount != 2 {
 		t.Fatalf("token count = %d, want 2", diag.TokenCount)
-	}
-	if !diag.HasEnvTokens || !diag.HasLegacyToken {
-		t.Fatalf("expected env and legacy tokens to be detected")
-	}
-	if diag.LegacyDockerHostCount != 1 {
-		t.Fatalf("legacy docker host count = %d, want 1", diag.LegacyDockerHostCount)
 	}
 	if diag.UnusedTokenCount != 1 {
 		t.Fatalf("unused token count = %d, want 1", diag.UnusedTokenCount)
@@ -282,10 +273,6 @@ func TestBuildAlertsDiagnostic_LegacySettings(t *testing.T) {
 
 	manager := monitor.GetAlertManager()
 	alertCfg := manager.GetConfig()
-	legacy := 90.0
-	alertCfg.GuestDefaults.CPULegacy = &legacy
-	alertCfg.TimeThreshold = 5
-	alertCfg.Schedule.GroupingWindow = 10
 	alertCfg.Schedule.Grouping.Window = 0
 	alertCfg.Schedule.Cooldown = 0
 	manager.UpdateConfig(alertCfg)
@@ -293,9 +280,6 @@ func TestBuildAlertsDiagnostic_LegacySettings(t *testing.T) {
 	diag := buildAlertsDiagnostic(monitor)
 	if diag == nil {
 		t.Fatalf("expected diagnostics")
-	}
-	if !diag.LegacyThresholdsDetected {
-		t.Fatalf("expected legacy thresholds to be detected")
 	}
 	if !diag.MissingCooldown || !diag.MissingGroupingWindow {
 		t.Fatalf("expected missing schedule settings")
@@ -332,17 +316,16 @@ func TestBuildDiscoveryDiagnostic_ConfigOnly(t *testing.T) {
 func TestBuildAIChatDiagnostic_WithService(t *testing.T) {
 	aiCfg := &config.AIConfig{
 		Enabled:   true,
-		Provider:  config.AIProviderOllama,
 		ChatModel: "ollama:llama3",
 	}
 	handler := &AIHandler{
-		legacyPersistence: stubAIPersistence{cfg: aiCfg, dataDir: t.TempDir()},
+		defaultPersistence: stubAIPersistence{cfg: aiCfg, dataDir: t.TempDir()},
 	}
 
 	mockSvc := new(MockAIService)
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("GetBaseURL").Return("http://localhost:1234")
-	handler.legacyService = mockSvc
+	handler.defaultService = mockSvc
 
 	diag := buildAIChatDiagnostic(&config.Config{}, handler)
 	if diag == nil || !diag.Enabled {

@@ -26,16 +26,17 @@ func revocationFeedToken() string {
 }
 
 // LicenseHandlers handles license management API endpoints.
-// LicenseHandlers handles license management API endpoints.
 type LicenseHandlers struct {
-	mtPersistence *config.MultiTenantPersistence
-	hostedMode    bool
-	cfg           *config.Config
-	services      sync.Map // map[string]*licenseService
-	trialLimiter  *RateLimiter
-	trialReplay   *jtiReplayStore
-	monitor       *monitoring.Monitor
-	mtMonitor     *monitoring.MultiTenantMonitor
+	mtPersistence      *config.MultiTenantPersistence
+	hostedMode         bool
+	cfg                *config.Config
+	services           sync.Map // map[string]*licenseService
+	trialLimiter       *RateLimiter
+	trialReplay        *jtiReplayStore
+	monitor            *monitoring.Monitor
+	mtMonitor          *monitoring.MultiTenantMonitor
+	conversionRecorder *conversionRecorder
+	conversionHealth   *conversionPipelineHealth
 }
 
 // NewLicenseHandlers creates a new license handlers instance.
@@ -74,6 +75,46 @@ func (h *LicenseHandlers) SetConfig(cfg *config.Config) {
 		return
 	}
 	h.cfg = cfg
+}
+
+// SetConversionRecorder wires the conversion event recorder for backend-emitted
+// conversion events (trial_started, license_activated, license_activation_failed).
+func (h *LicenseHandlers) SetConversionRecorder(rec *conversionRecorder, health *conversionPipelineHealth) {
+	if h == nil {
+		return
+	}
+	h.conversionRecorder = rec
+	h.conversionHealth = health
+}
+
+// emitConversionEvent is a fire-and-forget helper that records a backend-emitted
+// conversion event. Respects the DisableLocalUpgradeMetrics config flag.
+// Errors are logged but never propagated to callers.
+func (h *LicenseHandlers) emitConversionEvent(orgID string, event conversionEvent) {
+	if h == nil || h.conversionRecorder == nil {
+		return
+	}
+	if h.cfg != nil && h.cfg.DisableLocalUpgradeMetrics {
+		return
+	}
+	if orgID == "" {
+		orgID = "default"
+	}
+	event.OrgID = orgID
+	if event.Timestamp <= 0 {
+		event.Timestamp = time.Now().UnixMilli()
+	}
+	if event.IdempotencyKey == "" {
+		event.IdempotencyKey = fmt.Sprintf("backend:%s:%s:%s:%d", orgID, event.Type, event.Surface, event.Timestamp)
+	}
+	if err := h.conversionRecorder.Record(event); err != nil {
+		log.Warn().Err(err).Str("event_type", event.Type).Str("org_id", orgID).Msg("Failed to record backend conversion event")
+	} else {
+		recordConversionEventMetric(event.Type, event.Surface)
+		if h.conversionHealth != nil {
+			h.conversionHealth.RecordEvent(event.Type)
+		}
+	}
 }
 
 // StopAllBackgroundLoops stops grant refresh and revocation poll loops for all tenant services.
@@ -175,8 +216,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 		log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to initialize license evaluator for org")
 	}
 
-	// Try to restore activation state first (takes priority over legacy JWT).
-	activationRestored := false
+	// Restore activation state from v6 grant persistence when present.
 	if persistence != nil {
 		activationState, loadErr := persistence.LoadActivationState()
 		if loadErr != nil {
@@ -185,7 +225,6 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 			if err := service.RestoreActivation(activationState); err != nil {
 				log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to restore activation")
 			} else {
-				activationRestored = true
 				// Start the background refresh loop for the restored grant.
 				service.StartGrantRefresh(context.Background())
 				// Start revocation polling if a feed token is configured.
@@ -193,28 +232,6 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 					service.StartRevocationPoll(context.Background(), feedToken)
 				}
 				log.Info().Str("org_id", orgID).Str("license_id", activationState.LicenseID).Msg("Restored license activation")
-			}
-		}
-	}
-
-	// Fall back to legacy JWT if no activation state was restored.
-	// Load the legacy JWT synchronously (fast, local I/O only) so the user
-	// has Pro features immediately. The v5→v6 exchange is deferred to a
-	// background goroutine after the service is stored (see below).
-	legacyJWTKey := ""
-	if !activationRestored && persistence != nil {
-		persisted, err := persistence.LoadWithMetadata()
-		if err == nil && persisted.LicenseKey != "" {
-			lic, err := service.Activate(persisted.LicenseKey)
-			if err != nil {
-				log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to load saved license")
-			} else {
-				if persisted.GracePeriodEnd != nil && lic != nil {
-					gracePeriodEnd := time.Unix(*persisted.GracePeriodEnd, 0)
-					lic.GracePeriodEnd = &gracePeriodEnd
-				}
-				legacyJWTKey = strings.TrimSpace(persisted.LicenseKey)
-				log.Info().Str("org_id", orgID).Msg("Loaded saved Pulse Pro license")
 			}
 		}
 	}
@@ -230,62 +247,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 		return svc, p, pErr
 	}
 
-	// We won the LoadOrStore race — this service is the canonical one for this org.
-	// If a legacy JWT was loaded, try to auto-migrate it to a v6 activation-key
-	// license in the background. This avoids blocking startup (the exchange endpoint
-	// has a 15s timeout if the server is unreachable) and eliminates race conditions
-	// since only the winning service instance performs the exchange.
-	if legacyJWTKey != "" && lsClient != nil {
-		go h.tryAutoMigrateLegacy(orgID, service, legacyJWTKey)
-	}
-
 	return service, persistence, nil
-}
-
-// tryAutoMigrateLegacy attempts to exchange a legacy JWT for a v6 activation-key
-// license in the background. If it succeeds, the service seamlessly upgrades to
-// grant-based licensing with background refresh. If it fails, the legacy JWT
-// continues to work — the exchange will be retried on the next restart.
-//
-// Safety: if the user activates a different license or clears the license while
-// the exchange is in-flight, the result is discarded to avoid overwriting the
-// user's intent.
-func (h *LicenseHandlers) tryAutoMigrateLegacy(orgID string, service *licenseService, legacyJWT string) {
-	// Check: if the service was already changed (e.g., user activated a key
-	// via the API between getTenantComponents and this goroutine starting),
-	// skip the exchange.
-	currentLic := service.Current()
-	if currentLic == nil || currentLic.Raw != legacyJWT {
-		return
-	}
-
-	lic, err := service.ExchangeLegacyLicenseIfCurrent(legacyJWT)
-	if err != nil {
-		log.Warn().
-			Str("org_id", orgID).
-			Err(err).
-			Msg("Background legacy license exchange failed, will retry on next restart")
-		return
-	}
-	if lic == nil {
-		// License was changed by the user while exchange was in-flight — silently skip.
-		log.Info().
-			Str("org_id", orgID).
-			Msg("Legacy exchange completed but license was changed concurrently, discarding result")
-		return
-	}
-
-	// Exchange succeeded — start background loops.
-	service.StartGrantRefresh(context.Background())
-	if feedToken := revocationFeedToken(); feedToken != "" {
-		service.StartRevocationPoll(context.Background(), feedToken)
-	}
-
-	log.Info().
-		Str("org_id", orgID).
-		Str("tier", string(lic.Claims.Tier)).
-		Str("license_id", lic.Claims.LicenseID).
-		Msg("Auto-migrated legacy license to activation-key license")
 }
 
 func (h *LicenseHandlers) ensureEvaluatorForOrg(orgID string, service *licenseService) error {
@@ -426,6 +388,11 @@ func (h *LicenseHandlers) HandleStartTrial(w http.ResponseWriter, r *http.Reques
 		svc.SetEvaluator(eval)
 	}
 
+	h.emitConversionEvent(orgID, conversionEvent{
+		Type:    conversionEventTrialStarted,
+		Surface: "license_api",
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(state)
 }
@@ -556,6 +523,11 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 		MaxAge:   int((24 * time.Hour).Seconds()),
 	})
 
+	h.emitConversionEvent(orgID, conversionEvent{
+		Type:    conversionEventTrialStarted,
+		Surface: "hosted_signup",
+	})
+
 	log.Info().
 		Str("org_id", orgID).
 		Str("email", strings.TrimSpace(claims.Email)).
@@ -657,9 +629,16 @@ func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	orgID := GetOrgID(r.Context())
+
 	lic, err := service.Activate(req.LicenseKey)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to activate license")
+
+		h.emitConversionEvent(orgID, conversionEvent{
+			Type:    conversionEventLicenseActivationFailed,
+			Surface: "license_api",
+		})
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -685,23 +664,18 @@ func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.R
 			Str("tier", string(lic.Claims.Tier)).
 			Msg("Pulse license activated via activation key")
 	} else {
-		// Legacy JWT: persist the license with grace period if applicable.
-		if persistence != nil {
-			var gracePeriodEnd *int64
-			if lic.GracePeriodEnd != nil {
-				ts := lic.GracePeriodEnd.Unix()
-				gracePeriodEnd = &ts
-			}
-			if err := persistence.SaveWithGracePeriod(req.LicenseKey, gracePeriodEnd); err != nil {
-				log.Warn().Err(err).Msg("Failed to persist license, it won't survive restarts")
-			}
-		}
+		// Strict v6: legacy JWT activation is only possible in explicit dev mode.
 		log.Info().
 			Str("email", lic.Claims.Email).
 			Str("tier", string(lic.Claims.Tier)).
 			Bool("lifetime", lic.IsLifetime()).
-			Msg("Pulse Pro license activated")
+			Msg("Pulse license activated in development JWT mode")
 	}
+
+	h.emitConversionEvent(orgID, conversionEvent{
+		Type:    conversionEventLicenseActivated,
+		Surface: "license_api",
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(ActivateLicenseResponse{
@@ -712,7 +686,7 @@ func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.R
 }
 
 // HandleExchangeLicense handles POST /api/license/exchange
-// Exchanges a legacy JWT for a v6 activation-key license via the license server.
+// Exchanges an existing JWT license for a v6 activation-key license via the license server.
 func (h *LicenseHandlers) HandleExchangeLicense(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -720,10 +694,16 @@ func (h *LicenseHandlers) HandleExchangeLicense(w http.ResponseWriter, r *http.R
 	}
 
 	var req struct {
-		LegacyJWT string `json:"legacy_jwt"`
+		ExistingJWT string `json:"existing_jwt"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.LegacyJWT == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "legacy_jwt is required", nil)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "existing_jwt is required", nil)
+		return
+	}
+
+	existingJWT := strings.TrimSpace(req.ExistingJWT)
+	if existingJWT == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "existing_jwt is required", nil)
 		return
 	}
 
@@ -734,9 +714,15 @@ func (h *LicenseHandlers) HandleExchangeLicense(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	lic, err := service.ExchangeLegacyLicense(req.LegacyJWT)
+	orgID := GetOrgID(r.Context())
+
+	lic, err := service.ExchangeLegacyLicense(existingJWT)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to exchange legacy license")
+		h.emitConversionEvent(orgID, conversionEvent{
+			Type:    conversionEventLicenseActivationFailed,
+			Surface: "license_exchange",
+		})
 		writeErrorResponse(w, http.StatusBadRequest, "exchange_failed", err.Error(), nil)
 		return
 	}
@@ -751,6 +737,11 @@ func (h *LicenseHandlers) HandleExchangeLicense(w http.ResponseWriter, r *http.R
 	if persistence != nil {
 		_ = persistence.Delete()
 	}
+
+	h.emitConversionEvent(orgID, conversionEvent{
+		Type:    conversionEventLicenseActivated,
+		Surface: "license_exchange",
+	})
 
 	log.Info().
 		Str("tier", string(lic.Claims.Tier)).

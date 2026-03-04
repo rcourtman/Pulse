@@ -290,8 +290,8 @@ func TestHandleOAuthExchange_APIKeyCreatedSuccessfully(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	if cfg.APIKey != "sk-ant-generated-key" {
-		t.Fatalf("expected API key 'sk-ant-generated-key', got %q", cfg.APIKey)
+	if cfg.AnthropicAPIKey != "sk-ant-generated-key" {
+		t.Fatalf("expected API key 'sk-ant-generated-key', got %q", cfg.AnthropicAPIKey)
 	}
 	if cfg.AuthMethod != config.AuthMethodOAuth {
 		t.Fatalf("expected auth method OAuth, got %q", cfg.AuthMethod)

@@ -69,18 +69,11 @@ func setIntersection(a, b map[string]struct{}) map[string]struct{} {
 }
 
 var downloadRouteAllowlist = []string{
-	"/download/pulse-docker-agent",
-	"/download/pulse-host-agent",
-	"/download/pulse-host-agent.sha256",
 	"/download/pulse-agent",
 }
 
 var publicDownloadAllowlist = []string{
-	"/download/pulse-docker-agent",
-	"/download/pulse-host-agent",
 	"/download/pulse-agent",
 }
 
-var protectedDownloadAllowlist = []string{
-	"/download/pulse-host-agent.sha256",
-}
+var protectedDownloadAllowlist = []string{}

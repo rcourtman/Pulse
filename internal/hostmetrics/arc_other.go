@@ -1,9 +1,8 @@
-//go:build !freebsd
+//go:build !freebsd && !linux
 
 package hostmetrics
 
-import "fmt"
-
-func readFreeBSDARCSize() (uint64, error) {
-	return 0, fmt.Errorf("freebsd ARC sysctl not supported on this platform")
+// readARCSize returns 0 on platforms where ZFS ARC adjustment is not needed.
+func readARCSize() (uint64, error) {
+	return 0, nil
 }

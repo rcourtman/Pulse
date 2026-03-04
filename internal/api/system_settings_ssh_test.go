@@ -129,7 +129,7 @@ func TestSetMonitor(t *testing.T) {
 	monitor := &mockMonitor{} // mockMonitor is defined in system_settings_handlers_test.go (same package)
 
 	handler.SetMonitor(monitor)
-	assert.Equal(t, monitor, handler.legacyMonitor)
+	assert.Equal(t, monitor, handler.defaultMonitor)
 }
 
 func TestSetConfig(t *testing.T) {

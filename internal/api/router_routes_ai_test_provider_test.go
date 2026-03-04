@@ -32,13 +32,13 @@ func setupTestProviderRouter(t *testing.T, ollamaURL string) (*Router, string) {
 	}
 
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.legacyConfig = cfg
-	router.aiSettingsHandler.legacyPersistence = persistence
+	router.aiSettingsHandler.defaultConfig = cfg
+	router.aiSettingsHandler.defaultPersistence = persistence
 	svc := ai.NewService(persistence, nil)
 	if err := svc.LoadConfig(); err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	router.aiSettingsHandler.legacyAIService = svc
+	router.aiSettingsHandler.defaultAIService = svc
 
 	return router, rawToken
 }

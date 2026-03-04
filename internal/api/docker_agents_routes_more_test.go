@@ -18,7 +18,7 @@ func TestNewDockerAgentHandlers_DefaultMonitorFromMultiTenant(t *testing.T) {
 	})
 
 	handler := NewDockerAgentHandlers(mtm, nil, nil, nil)
-	if handler.legacyMonitor != monitor {
+	if handler.defaultMonitor != monitor {
 		t.Fatalf("expected legacy monitor to be set from multi-tenant default")
 	}
 }

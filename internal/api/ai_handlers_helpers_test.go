@@ -26,8 +26,8 @@ type fakeChatWrapper struct {
 
 func newTestAISettingsHandlerLite() *AISettingsHandler {
 	return &AISettingsHandler{
-		legacyAIService: ai.NewService(nil, nil),
-		aiServices:      make(map[string]*ai.Service),
+		defaultAIService: ai.NewService(nil, nil),
+		aiServices:       make(map[string]*ai.Service),
 	}
 }
 
@@ -117,7 +117,7 @@ func TestMCPToolAdapter_Errors(t *testing.T) {
 		t.Fatalf("expected error when chat service is missing")
 	}
 
-	adapter.handler.chatHandler.legacyService = &fakeChatWrapper{}
+	adapter.handler.chatHandler.defaultService = &fakeChatWrapper{}
 	if _, _, err := adapter.ExecuteMCPTool(context.Background(), "pulse_control_guest()", ""); err == nil {
 		t.Fatalf("expected error for chat service type mismatch")
 	}

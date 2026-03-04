@@ -7,20 +7,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
-func deprecatedV2ResourceHandler(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Back-compat shim for older clients. Canonical unified resources API is /api/resources.
-		w.Header().Set("Deprecation", "true")
-
-		// Rewrite /api/v2/resources/... -> /api/resources/...
-		if strings.HasPrefix(r.URL.Path, "/api/v2/") {
-			r.URL.Path = "/api/" + strings.TrimPrefix(r.URL.Path, "/api/v2/")
-		}
-
-		next(w, r)
-	}
-}
-
 func (r *Router) registerMonitoringResourceRoutes(
 	guestMetadataHandler *GuestMetadataHandler,
 	dockerMetadataHandler *DockerMetadataHandler,
@@ -33,7 +19,6 @@ func (r *Router) registerMonitoringResourceRoutes(
 	r.mux.HandleFunc("/api/charts", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleCharts)))
 	r.mux.HandleFunc("/api/charts/workloads", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleWorkloadCharts)))
 	r.mux.HandleFunc("/api/charts/infrastructure", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleInfrastructureCharts)))
-	r.mux.HandleFunc("/api/charts/infrastructure-summary", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleInfrastructureSummaryCharts)))
 	r.mux.HandleFunc("/api/charts/workloads-summary", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleWorkloadsSummaryCharts)))
 	r.mux.HandleFunc("/api/metrics-store/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsStoreStats)))
 	r.mux.HandleFunc("/api/metrics-store/history", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsHistory)))
@@ -47,10 +32,6 @@ func (r *Router) registerMonitoringResourceRoutes(
 	r.mux.HandleFunc("/api/resources/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleStats)))
 	r.mux.HandleFunc("/api/resources/k8s/namespaces", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleK8sNamespaces)))
 	r.mux.HandleFunc("/api/resources/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleResourceRoutes)))
-	// Deprecated v2 alias for unified resources (temporary compatibility shim).
-	r.mux.HandleFunc("/api/v2/resources", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, deprecatedV2ResourceHandler(r.resourceHandlers.HandleListResources))))
-	r.mux.HandleFunc("/api/v2/resources/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, deprecatedV2ResourceHandler(r.resourceHandlers.HandleStats))))
-	r.mux.HandleFunc("/api/v2/resources/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, deprecatedV2ResourceHandler(r.resourceHandlers.HandleResourceRoutes))))
 	// Guest metadata routes
 	r.mux.HandleFunc("/api/guests/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, guestMetadataHandler.HandleGetMetadata)))
 	r.mux.HandleFunc("/api/guests/metadata/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
@@ -123,9 +104,8 @@ func (r *Router) registerMonitoringResourceRoutes(
 		}
 	}))
 
-	// Host metadata routes
-	r.mux.HandleFunc("/api/hosts/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, hostMetadataHandler.HandleGetMetadata)))
-	r.mux.HandleFunc("/api/hosts/metadata/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+	// Agent metadata routes (preferred v6 naming) + host metadata compatibility aliases.
+	handleAgentMetadataWriteRoute := func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
 			if !ensureScope(w, req, config.ScopeMonitoringRead) {
@@ -145,7 +125,11 @@ func (r *Router) registerMonitoringResourceRoutes(
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	}))
+	}
+	r.mux.HandleFunc("/api/agents/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, hostMetadataHandler.HandleGetMetadata)))
+	r.mux.HandleFunc("/api/agents/metadata/", RequireAuth(r.config, handleAgentMetadataWriteRoute))
+	r.mux.HandleFunc("/api/hosts/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, hostMetadataHandler.HandleGetMetadata)))
+	r.mux.HandleFunc("/api/hosts/metadata/", RequireAuth(r.config, handleAgentMetadataWriteRoute))
 
 	// Infrastructure update detection routes (Docker containers, packages, etc.)
 	r.mux.HandleFunc("/api/infra-updates", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, infraUpdateHandlers.HandleGetInfraUpdates)))
@@ -217,59 +201,63 @@ func (r *Router) registerMonitoringResourceRoutes(
 	r.mux.HandleFunc("/api/discovery/settings", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, r.discoveryHandlers.HandleUpdateSettings)))
 	r.mux.HandleFunc("/api/discovery/info/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleGetInfo)))
 	r.mux.HandleFunc("/api/discovery/type/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleListByType)))
-	r.mux.HandleFunc("/api/discovery/host/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
-		// Route based on method and path depth:
-		// GET /api/discovery/host/{hostId} → list discoveries for host
-		// GET /api/discovery/host/{hostId}/{resourceId} → get specific discovery
-		// GET /api/discovery/host/{hostId}/{resourceId}/progress → get scan progress
-		// POST /api/discovery/host/{hostId}/{resourceId} → trigger discovery
-		// PUT /api/discovery/host/{hostId}/{resourceId}/notes → update notes
-		// DELETE /api/discovery/host/{hostId}/{resourceId} → delete discovery
-		path := strings.TrimPrefix(req.URL.Path, "/api/discovery/host/")
-		pathParts := strings.Split(strings.TrimSuffix(path, "/"), "/")
+	handleDiscoveryHostLikeRoute := func(pathPrefix string) http.HandlerFunc {
+		return func(w http.ResponseWriter, req *http.Request) {
+			// Route based on method and path depth:
+			// GET /api/discovery/{host|agent}/{hostId} → list discoveries for host/agent
+			// GET /api/discovery/{host|agent}/{hostId}/{resourceId} → get specific discovery
+			// GET /api/discovery/{host|agent}/{hostId}/{resourceId}/progress → get scan progress
+			// POST /api/discovery/{host|agent}/{hostId}/{resourceId} → trigger discovery
+			// PUT /api/discovery/{host|agent}/{hostId}/{resourceId}/notes → update notes
+			// DELETE /api/discovery/{host|agent}/{hostId}/{resourceId} → delete discovery
+			path := strings.TrimPrefix(req.URL.Path, pathPrefix)
+			pathParts := strings.Split(strings.TrimSuffix(path, "/"), "/")
 
-		switch req.Method {
-		case http.MethodGet:
-			if !ensureScope(w, req, config.ScopeMonitoringRead) {
-				return
-			}
-			if len(pathParts) == 1 && pathParts[0] != "" {
-				// GET /api/discovery/host/{hostId} → list by host
-				r.discoveryHandlers.HandleListByHost(w, req)
-			} else if len(pathParts) >= 2 {
-				if strings.HasSuffix(req.URL.Path, "/progress") {
-					r.discoveryHandlers.HandleGetProgress(w, req)
-				} else {
-					// GET /api/discovery/host/{hostId}/{resourceId} → get specific discovery
-					r.discoveryHandlers.HandleGetDiscovery(w, req)
+			switch req.Method {
+			case http.MethodGet:
+				if !ensureScope(w, req, config.ScopeMonitoringRead) {
+					return
 				}
-			} else {
-				http.Error(w, "Invalid path", http.StatusBadRequest)
+				if len(pathParts) == 1 && pathParts[0] != "" {
+					// GET /api/discovery/{host|agent}/{id} → list by host
+					r.discoveryHandlers.HandleListByHost(w, req)
+				} else if len(pathParts) >= 2 {
+					if strings.HasSuffix(req.URL.Path, "/progress") {
+						r.discoveryHandlers.HandleGetProgress(w, req)
+					} else {
+						// GET /api/discovery/{host|agent}/{hostId}/{resourceId} → get specific discovery
+						r.discoveryHandlers.HandleGetDiscovery(w, req)
+					}
+				} else {
+					http.Error(w, "Invalid path", http.StatusBadRequest)
+				}
+			case http.MethodPost:
+				if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+					return
+				}
+				// POST /api/discovery/{host|agent}/{hostId}/{resourceId} → trigger discovery
+				r.discoveryHandlers.HandleTriggerDiscovery(w, req)
+			case http.MethodPut:
+				if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+					return
+				}
+				if strings.HasSuffix(req.URL.Path, "/notes") {
+					r.discoveryHandlers.HandleUpdateNotes(w, req)
+				} else {
+					http.Error(w, "Not found", http.StatusNotFound)
+				}
+			case http.MethodDelete:
+				if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+					return
+				}
+				r.discoveryHandlers.HandleDeleteDiscovery(w, req)
+			default:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			}
-		case http.MethodPost:
-			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
-				return
-			}
-			// POST /api/discovery/host/{hostId}/{resourceId} → trigger discovery
-			r.discoveryHandlers.HandleTriggerDiscovery(w, req)
-		case http.MethodPut:
-			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
-				return
-			}
-			if strings.HasSuffix(req.URL.Path, "/notes") {
-				r.discoveryHandlers.HandleUpdateNotes(w, req)
-			} else {
-				http.Error(w, "Not found", http.StatusNotFound)
-			}
-		case http.MethodDelete:
-			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
-				return
-			}
-			r.discoveryHandlers.HandleDeleteDiscovery(w, req)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	}))
+	}
+	r.mux.HandleFunc("/api/discovery/agent/", RequireAuth(r.config, handleDiscoveryHostLikeRoute("/api/discovery/agent/")))
+	r.mux.HandleFunc("/api/discovery/host/", RequireAuth(r.config, handleDiscoveryHostLikeRoute("/api/discovery/host/")))
 	r.mux.HandleFunc("/api/discovery/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
 		path := req.URL.Path
 		switch req.Method {

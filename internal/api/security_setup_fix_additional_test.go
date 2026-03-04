@@ -43,7 +43,7 @@ func TestResponseCaptureWrites(t *testing.T) {
 	}
 }
 
-func TestHandleRegenerateAPIToken_MissingEnvFile(t *testing.T) {
+func TestHandleRegenerateAPIToken_DoesNotRequireEnvFile(t *testing.T) {
 	dataDir := t.TempDir()
 	cfg := &config.Config{
 		DataPath:   dataDir,
@@ -61,8 +61,19 @@ func TestHandleRegenerateAPIToken_MissingEnvFile(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["success"] != true {
+		t.Fatalf("expected success=true, got %#v", payload["success"])
+	}
+	if token, ok := payload["token"].(string); !ok || strings.TrimSpace(token) == "" {
+		t.Fatalf("expected non-empty token in response, got %#v", payload["token"])
 	}
 }
 

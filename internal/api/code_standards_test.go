@@ -128,20 +128,19 @@ var paidDomainFiles = map[string]string{
 	// Audit handlers (1 file)
 	"activity_audit_handlers.go": "Audit",
 
-	// SSO/OIDC/SAML handlers and services (6 files)
+	// SSO/OIDC/SAML handlers and services (5 files)
 	"identity_sso_handlers.go": "SSO",
 	"oidc_handlers.go":         "SSO",
 	"oidc_service.go":          "SSO",
 	"saml_handlers.go":         "SSO",
 	"saml_service.go":          "SSO",
-	"security_oidc.go":         "SSO",
 
 	// Reporting handlers (2 files)
 	"metrics_reporting_handlers.go": "Reporting",
 	"reporting_runtime_snapshot.go": "Reporting",
 }
 
-const paidDomainFileCeiling = 14
+const paidDomainFileCeiling = 13
 
 // TestPaidDomainBoundaryAudit enforces two rules:
 //
@@ -188,7 +187,6 @@ func TestPaidDomainBoundaryAudit(t *testing.T) {
 		regexp.MustCompile(`^(?:oidc|saml)_`),         // SSO protocol impls
 		regexp.MustCompile(`^identity_sso`),           // SSO identity handlers
 		regexp.MustCompile(`^sso_`),                   // SSO handlers (sso_*)
-		regexp.MustCompile(`^security_oidc`),          // OIDC security
 		regexp.MustCompile(`^(?:metrics_)?reporting`), // Reporting handlers
 		regexp.MustCompile(`^reporting_runtime`),      // Reporting runtime
 	}

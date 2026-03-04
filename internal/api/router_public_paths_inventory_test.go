@@ -102,9 +102,7 @@ func parsePublicPaths(t *testing.T) ([]string, []string) {
 	return literalPaths, dynamicPaths
 }
 
-var publicPathsDynamicAllowlist = []string{
-	"config.DefaultOIDCCallbackPath",
-}
+var publicPathsDynamicAllowlist = []string{}
 
 var publicPathsAllowlist = []string{
 	"/api/health",
@@ -113,27 +111,17 @@ var publicPathsAllowlist = []string{
 	"/api/security/quick-setup",
 	"/api/version",
 	"/api/login",
-	"/api/oidc/login",
 	"/api/public/signup",
 	"/api/public/magic-link/request",
 	"/api/public/magic-link/verify",
 	"/api/cloud/handoff/exchange",
 	"/api/webhooks/stripe",
-	"/install-docker-agent.sh",
-	"/install-container-agent.sh",
-	"/download/pulse-docker-agent",
-	"/install-host-agent.sh",
-	"/install-host-agent.ps1",
-	"/uninstall-host-agent.sh",
-	"/uninstall-host-agent.ps1",
-	"/download/pulse-host-agent",
 	"/install.sh",
 	"/install.ps1",
 	"/download/pulse-agent",
 	"/api/agent/version",
 	"/api/agent/ws",
 	"/api/server/info",
-	"/api/install/install-docker.sh",
 	"/api/ai/oauth/callback",
 	"/auth/cloud-handoff",
 	"/auth/trial-activate",

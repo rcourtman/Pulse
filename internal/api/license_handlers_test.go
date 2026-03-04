@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -286,6 +287,37 @@ func TestHandleActivateLicense_InvalidKey(t *testing.T) {
 	}
 }
 
+func TestHandleActivateLicense_RejectsLegacyJWTInStrictV6(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+
+	handler := createTestHandler(t)
+	licenseKey, err := license.GenerateLicenseForTesting("legacy-jwt@example.com", license.TierPro, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("failed to generate test license: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]string{"license_key": licenseKey})
+	req := httptest.NewRequest(http.MethodPost, "/api/license/activate", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleActivateLicense(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+
+	var resp ActivateLicenseResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if resp.Success {
+		t.Fatalf("expected Success=false for legacy JWT in strict v6 mode")
+	}
+	if !strings.Contains(resp.Message, "/api/license/exchange") {
+		t.Fatalf("expected exchange guidance in error message, got %q", resp.Message)
+	}
+}
+
 func TestHandleActivateLicense_InvalidBody(t *testing.T) {
 	handler := createTestHandler(t)
 
@@ -342,6 +374,82 @@ func TestHandleActivateLicense_ValidKey(t *testing.T) {
 	}
 	if resp.Status.Email != "pro@example.com" {
 		t.Fatalf("expected email %q, got %q", "pro@example.com", resp.Status.Email)
+	}
+}
+
+// ========================================
+// HandleExchangeLicense tests
+// ========================================
+
+func TestHandleExchangeLicense_RequiresExistingJWT(t *testing.T) {
+	handler := createTestHandler(t)
+
+	body := []byte(`{}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/license/exchange", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleExchangeLicense(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+
+	var apiErr APIError
+	if err := json.Unmarshal(rec.Body.Bytes(), &apiErr); err != nil {
+		t.Fatalf("failed to unmarshal error response: %v", err)
+	}
+	if apiErr.Code != "invalid_request" {
+		t.Fatalf("expected code invalid_request, got %q", apiErr.Code)
+	}
+	if apiErr.ErrorMessage != "existing_jwt is required" {
+		t.Fatalf("expected existing_jwt validation error, got %q", apiErr.ErrorMessage)
+	}
+}
+
+func TestHandleExchangeLicense_AcceptsExistingJWTField(t *testing.T) {
+	handler := createTestHandler(t)
+
+	body := []byte(`{"existing_jwt":"not-a-valid-license"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/license/exchange", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleExchangeLicense(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+
+	var apiErr APIError
+	if err := json.Unmarshal(rec.Body.Bytes(), &apiErr); err != nil {
+		t.Fatalf("failed to unmarshal error response: %v", err)
+	}
+	if apiErr.Code == "invalid_request" {
+		t.Fatalf("expected exchange path to be executed, got invalid_request: %q", apiErr.ErrorMessage)
+	}
+}
+
+func TestHandleExchangeLicense_RejectsLegacyJWTField(t *testing.T) {
+	handler := createTestHandler(t)
+
+	body := []byte(`{"legacy_jwt":"not-a-valid-license"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/license/exchange", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleExchangeLicense(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+
+	var apiErr APIError
+	if err := json.Unmarshal(rec.Body.Bytes(), &apiErr); err != nil {
+		t.Fatalf("failed to unmarshal error response: %v", err)
+	}
+	if apiErr.Code != "invalid_request" {
+		t.Fatalf("expected invalid_request for legacy_jwt payload, got %q", apiErr.Code)
+	}
+	if apiErr.ErrorMessage != "existing_jwt is required" {
+		t.Fatalf("expected existing_jwt validation error, got %q", apiErr.ErrorMessage)
 	}
 }
 

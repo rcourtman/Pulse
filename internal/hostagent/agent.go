@@ -602,13 +602,19 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 		return fmt.Errorf("marshal report: %w", err)
 	}
 
+	compressed, err := utils.CompressJSON(payload)
+	if err != nil {
+		return fmt.Errorf("compress report: %w", err)
+	}
+
 	url := fmt.Sprintf("%s%s", a.trimmedPulseURL, hostReportEndpoint)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(compressed))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("Authorization", "Bearer "+a.cfg.APIToken)
 	req.Header.Set("X-API-Token", a.cfg.APIToken)
 	req.Header.Set("User-Agent", "pulse-host-agent/"+Version)

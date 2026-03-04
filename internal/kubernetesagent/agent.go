@@ -1889,13 +1889,19 @@ func (a *Agent) sendReport(ctx context.Context, report agentsk8s.Report) (retErr
 		return fmt.Errorf("marshal report: %w", err)
 	}
 
+	compressed, err := utils.CompressJSON(payload)
+	if err != nil {
+		return fmt.Errorf("compress report: %w", err)
+	}
+
 	reportURL := fmt.Sprintf("%s/api/agents/kubernetes/report", a.pulseURL)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reportURL, bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reportURL, bytes.NewReader(compressed))
 	if err != nil {
 		return fmt.Errorf("create request for %s: %w", reportURL, err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("Authorization", "Bearer "+a.cfg.APIToken)
 	req.Header.Set("X-API-Token", a.cfg.APIToken)
 	req.Header.Set("User-Agent", reportUserAgent+a.agentVersion)

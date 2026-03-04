@@ -33,13 +33,13 @@ func setupExecuteRouter(t *testing.T, ollamaURL string) (*Router, string) {
 	}
 
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.legacyConfig = cfg
-	router.aiSettingsHandler.legacyPersistence = persistence
+	router.aiSettingsHandler.defaultConfig = cfg
+	router.aiSettingsHandler.defaultPersistence = persistence
 	svc := ai.NewService(persistence, nil)
 	if err := svc.LoadConfig(); err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	router.aiSettingsHandler.legacyAIService = svc
+	router.aiSettingsHandler.defaultAIService = svc
 
 	return router, rawToken
 }
@@ -154,13 +154,13 @@ func TestRouteExecute_WrongScope(t *testing.T) {
 	}
 
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.legacyConfig = cfg
-	router.aiSettingsHandler.legacyPersistence = persistence
+	router.aiSettingsHandler.defaultConfig = cfg
+	router.aiSettingsHandler.defaultPersistence = persistence
 	svc := ai.NewService(persistence, nil)
 	if err := svc.LoadConfig(); err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	router.aiSettingsHandler.legacyAIService = svc
+	router.aiSettingsHandler.defaultAIService = svc
 
 	body := `{"prompt":"hi"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute", strings.NewReader(body))
@@ -244,13 +244,13 @@ func TestRouteExecute_AIDisabled(t *testing.T) {
 	}
 
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.legacyConfig = cfg
-	router.aiSettingsHandler.legacyPersistence = persistence
+	router.aiSettingsHandler.defaultConfig = cfg
+	router.aiSettingsHandler.defaultPersistence = persistence
 	svc := ai.NewService(persistence, nil)
 	if err := svc.LoadConfig(); err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	router.aiSettingsHandler.legacyAIService = svc
+	router.aiSettingsHandler.defaultAIService = svc
 
 	body := `{"prompt":"hi"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute", strings.NewReader(body))
@@ -355,7 +355,7 @@ func TestRouteExecute_AutofixLicenseRequired(t *testing.T) {
 
 	router, token := setupExecuteRouter(t, ollama.URL)
 	// Inject a license checker that denies all features
-	router.aiSettingsHandler.legacyAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
+	router.aiSettingsHandler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
 
 	body := `{"prompt":"fix the issue","use_case":"autofix"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute", strings.NewReader(body))
@@ -376,7 +376,7 @@ func TestRouteExecute_RemediationLicenseRequired(t *testing.T) {
 	defer ollama.Close()
 
 	router, token := setupExecuteRouter(t, ollama.URL)
-	router.aiSettingsHandler.legacyAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
+	router.aiSettingsHandler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
 
 	body := `{"prompt":"remediate the issue","use_case":"remediation"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute", strings.NewReader(body))
@@ -471,7 +471,7 @@ func TestRouteExecute_UseCaseCaseInsensitive(t *testing.T) {
 	defer ollama.Close()
 
 	router, token := setupExecuteRouter(t, ollama.URL)
-	router.aiSettingsHandler.legacyAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
+	router.aiSettingsHandler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
 
 	// Mixed case with leading/trailing whitespace should still trigger license gate
 	for _, uc := range []string{"AutoFix", "  REMEDIATION  ", "Autofix", "AUTOFIX"} {

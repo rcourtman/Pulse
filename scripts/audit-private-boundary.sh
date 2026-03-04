@@ -15,7 +15,7 @@ if ! command -v rg >/dev/null 2>&1; then
 fi
 
 NAME_PATTERN='^(internal/license/|internal/api/(license_|entitlement_|billing_|stripe_|hosted_|rbac_|audit_|reporting_|sso_|conversion_|router_routes_org_license\.go$|router_routes_hosted\.go$|router_routes_licensing\.go$|router_routes_cloud\.go$))'
-SEMANTIC_API_PATTERN='/api/license|/api/conversion|/api/upgrade-metrics|/api/webhooks/stripe|/api/public/signup|/api/public/magic-link|/api/hosted/|/api/admin/orgs/\{id\}/billing-state|/api/security/sso|/api/admin/rbac|/api/audit|"github\.com/rcourtman/pulse-go-rewrite/pkg/licensing'
+SEMANTIC_API_PATTERN='/api/license|/api/upgrade-metrics|/api/webhooks/stripe|/api/public/signup|/api/public/magic-link|/api/hosted/|/api/admin/orgs/\{id\}/billing-state|/api/security/sso|/api/admin/rbac|/api/audit|"github\.com/rcourtman/pulse-go-rewrite/pkg/licensing'
 
 NAME_MATCHES="$(rg --files internal/license internal/api 2>/dev/null | rg "${NAME_PATTERN}" || true)"
 SEMANTIC_API_MATCHES="$(rg -l --glob 'internal/api/*.go' --glob '!internal/api/*_test.go' "${SEMANTIC_API_PATTERN}" internal/api 2>/dev/null || true)"

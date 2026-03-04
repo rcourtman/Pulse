@@ -7,12 +7,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
-	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 )
 
 func TestExtractBearerToken(t *testing.T) {
@@ -97,32 +95,6 @@ func TestExtractSetupToken(t *testing.T) {
 			t.Fatalf("expected empty token, got %q", got)
 		}
 	})
-}
-
-func TestDedupeStrings(t *testing.T) {
-	input := []string{"alpha", "beta", "alpha", "", "gamma", "beta", " "}
-	want := []string{"alpha", "beta", "gamma", " "}
-
-	if got := dedupeStrings(input); !reflect.DeepEqual(got, want) {
-		t.Fatalf("dedupeStrings() = %v, want %v", got, want)
-	}
-}
-
-func TestSortedHostAgentKeys(t *testing.T) {
-	if got := sortedHostAgentKeys(nil); got != nil {
-		t.Fatalf("expected nil result for nil map, got %v", got)
-	}
-
-	missing := map[string]updates.HostAgentBinary{
-		"zeta":  {},
-		"alpha": {},
-		"beta":  {},
-	}
-
-	want := []string{"alpha", "beta", "zeta"}
-	if got := sortedHostAgentKeys(missing); !reflect.DeepEqual(got, want) {
-		t.Fatalf("sortedHostAgentKeys() = %v, want %v", got, want)
-	}
 }
 
 func TestFileExists(t *testing.T) {

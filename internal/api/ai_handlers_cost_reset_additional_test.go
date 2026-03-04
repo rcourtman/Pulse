@@ -16,9 +16,9 @@ func TestHandleResetAICostHistory_ServiceUnavailable(t *testing.T) {
 	t.Parallel()
 
 	handler := newTestAISettingsHandler(&config.Config{DataPath: t.TempDir()}, nil, nil)
-	// Force legacyAIService to nil — the constructor creates a minimal
+	// Force defaultAIService to nil — the constructor creates a minimal
 	// service even with nil persistence, but we want the nil-service path.
-	handler.legacyAIService = nil
+	handler.defaultAIService = nil
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/cost/reset", nil)
 	rec := httptest.NewRecorder()

@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -174,42 +172,6 @@ func TestHandleDiagnosticsDockerPrepareToken_Success(t *testing.T) {
 	}
 	if len(router.config.APITokens) == 0 {
 		t.Fatalf("expected API token to be recorded")
-	}
-}
-
-func TestHandleDownloadDockerInstallerScript_MethodNotAllowed(t *testing.T) {
-	router := &Router{}
-	req := httptest.NewRequest(http.MethodPost, "/download/install-docker.sh", nil)
-	rec := httptest.NewRecorder()
-
-	router.handleDownloadDockerInstallerScript(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
-	}
-}
-
-func TestHandleDownloadDockerInstallerScript_ServesFile(t *testing.T) {
-	root := t.TempDir()
-	scriptPath := filepath.Join(root, "scripts", "install-docker.sh")
-	if err := os.MkdirAll(filepath.Dir(scriptPath), 0o755); err != nil {
-		t.Fatalf("mkdir scripts dir: %v", err)
-	}
-	if err := os.WriteFile(scriptPath, []byte("#!/bin/sh\necho docker\n"), 0o644); err != nil {
-		t.Fatalf("write script: %v", err)
-	}
-
-	router := &Router{projectRoot: root}
-	req := httptest.NewRequest(http.MethodGet, "/download/install-docker.sh", nil)
-	rec := httptest.NewRecorder()
-
-	router.handleDownloadDockerInstallerScript(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if ct := rec.Header().Get("Content-Type"); ct != "text/x-shellscript" {
-		t.Fatalf("expected text/x-shellscript, got %q", ct)
 	}
 }
 

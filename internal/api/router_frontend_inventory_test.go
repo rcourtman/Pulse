@@ -119,18 +119,11 @@ func matchAll(block, pattern string) []string {
 var frontendRoutePrefixExclusionAllowlist = []string{
 	"/api/",
 	"/ws",
-	"/socket.io/",
 	"/download/",
 }
 
 var frontendRouteExactExclusionAllowlist = []string{
 	"/simple-stats",
-	"/install-docker-agent.sh",
-	"/install-container-agent.sh",
-	"/install-host-agent.sh",
-	"/install-host-agent.ps1",
-	"/uninstall-host-agent.sh",
-	"/uninstall-host-agent.ps1",
 	"/install.sh",
 	"/install.ps1",
 }

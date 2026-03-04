@@ -37,7 +37,7 @@ func TestHandleGetNodes_MockMode_UsesReadState(t *testing.T) {
 	syncTestResourceStore(t, monitor, state)
 
 	h := &ConfigHandlers{
-		legacyMonitor: monitor,
+		defaultMonitor: monitor,
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/config/nodes", nil)
@@ -112,7 +112,7 @@ func TestHandleGetNodes_MockMode_NilReadState(t *testing.T) {
 	setUnexportedField(t, monitor, "state", state)
 
 	h := &ConfigHandlers{
-		legacyMonitor: monitor,
+		defaultMonitor: monitor,
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/config/nodes", nil)
@@ -134,11 +134,11 @@ func TestHandleGetNodes_MockMode_NilReadState(t *testing.T) {
 	}
 }
 
-// Ensure ConfigHandlers.getMonitor falls back to legacyMonitor when no
+// Ensure ConfigHandlers.getMonitor falls back to defaultMonitor when no
 // multi-tenant monitor is configured (used by mock-mode tests above).
 func TestConfigHandlers_getMonitor_Legacy(t *testing.T) {
 	monitor := &monitoring.Monitor{}
-	h := &ConfigHandlers{legacyMonitor: monitor}
+	h := &ConfigHandlers{defaultMonitor: monitor}
 
 	got := h.getMonitor(context.Background())
 	if got != monitor {
@@ -173,7 +173,7 @@ func TestHandleGetNodes_MockMode_ReadStateTakesPriority(t *testing.T) {
 	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(adapter))
 
 	h := &ConfigHandlers{
-		legacyMonitor: monitor,
+		defaultMonitor: monitor,
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/config/nodes", nil)

@@ -139,7 +139,7 @@ func TestRequirePermission(t *testing.T) {
 		}
 	})
 
-	t.Run("APITokenMissingIDFallback", func(t *testing.T) {
+	t.Run("APITokenMissingIDAutoAssigned", func(t *testing.T) {
 		cfg := &config.Config{}
 		// Setup a token without an ID
 		rawToken := "legacy-token"
@@ -163,8 +163,11 @@ func TestRequirePermission(t *testing.T) {
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 
-		if !strings.HasPrefix(capturedSubject, "token:legacy-") {
-			t.Errorf("Expected fallback legacy principal, got %q", capturedSubject)
+		if !strings.HasPrefix(capturedSubject, "token:") || capturedSubject == "token:" {
+			t.Errorf("Expected token principal with assigned ID, got %q", capturedSubject)
+		}
+		if strings.HasPrefix(capturedSubject, "token:legacy-") {
+			t.Errorf("Expected non-legacy token principal format, got %q", capturedSubject)
 		}
 	})
 

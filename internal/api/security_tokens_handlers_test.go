@@ -105,7 +105,7 @@ func TestSecurityTokens_ListCreateDelete(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rr.Code)
 	}
 
-	// Test deletion of migrated env token suppression
+	// Deleting an existing token should succeed.
 	record := config.APITokenRecord{
 		ID:        "migrated",
 		Name:      "Migrated from .env token",
@@ -120,9 +120,6 @@ func TestSecurityTokens_ListCreateDelete(t *testing.T) {
 	router.handleDeleteAPIToken(rr, req)
 	if rr.Code != http.StatusNoContent {
 		t.Fatalf("expected status %d, got %d", http.StatusNoContent, rr.Code)
-	}
-	if !cfg.IsEnvMigrationSuppressed("hash-migrated") {
-		t.Fatalf("expected env migration suppression to be recorded")
 	}
 
 	events, err := capture.Query(audit.QueryFilter{})

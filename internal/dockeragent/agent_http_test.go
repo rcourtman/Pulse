@@ -485,6 +485,7 @@ func TestHandleCommand(t *testing.T) {
 				false: server.Client(),
 			},
 		}
+		t.Cleanup(func() { _ = agent.Close() })
 
 		err := agent.handleCommand(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, agentsdocker.Command{ID: "cmd", Type: agentsdocker.CommandTypeStop})
 		if !errors.Is(err, ErrStopRequested) {
@@ -646,6 +647,7 @@ func TestHandleStopCommand(t *testing.T) {
 				false: server.Client(),
 			},
 		}
+		t.Cleanup(func() { _ = agent.Close() })
 
 		if err := agent.handleStopCommand(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, agentsdocker.Command{ID: "cmd"}); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -662,6 +664,7 @@ func TestHandleStopCommand(t *testing.T) {
 			logger: zerolog.Nop(),
 			hostID: "host1",
 		}
+		t.Cleanup(func() { _ = agent.Close() })
 
 		if err := agent.handleStopCommand(context.Background(), TargetConfig{URL: "http://example.com/\x7f", Token: "token"}, agentsdocker.Command{ID: "cmd"}); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -687,6 +690,7 @@ func TestHandleStopCommand(t *testing.T) {
 				false: server.Client(),
 			},
 		}
+		t.Cleanup(func() { _ = agent.Close() })
 
 		if err := agent.handleStopCommand(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, agentsdocker.Command{ID: "cmd"}); !errors.Is(err, ErrStopRequested) {
 			t.Fatalf("expected ErrStopRequested, got %v", err)
@@ -709,6 +713,7 @@ func TestHandleStopCommand(t *testing.T) {
 				})},
 			},
 		}
+		t.Cleanup(func() { _ = agent.Close() })
 
 		if err := agent.handleStopCommand(context.Background(), TargetConfig{URL: "http://example", Token: "token"}, agentsdocker.Command{ID: "cmd"}); err == nil {
 			t.Fatal("expected error")
@@ -734,6 +739,8 @@ func TestHandleStopCommand(t *testing.T) {
 				false: server.Client(),
 			},
 		}
+		// Close agent BEFORE swap restores globals (t.Cleanup is LIFO)
+		t.Cleanup(func() { _ = agent.Close() })
 
 		if err := agent.handleStopCommand(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, agentsdocker.Command{ID: "cmd"}); !errors.Is(err, ErrStopRequested) {
 			t.Fatalf("expected ErrStopRequested, got %v", err)

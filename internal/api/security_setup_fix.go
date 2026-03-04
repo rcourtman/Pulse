@@ -160,9 +160,6 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			}
 		}()
 		forceRequested := setupRequest.Force
-		if r.config.DisableAuthEnvDetected && !authConfigured {
-			forceRequested = true
-		}
 
 		clientIP = GetClientIP(req)
 		recoveryToken := strings.TrimSpace(req.Header.Get("X-Recovery-Token"))
@@ -183,8 +180,6 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		authorized := recoveryAuthorized
 
 		// Only require authentication if credentials are already configured.
-		// When DISABLE_AUTH is detected but no auth exists (upgrade path from legacy),
-		// allow bootstrap token flow instead of demanding credentials that don't exist.
 		if !authorized && authConfigured {
 			wrapped := &responseCapture{ResponseWriter: w}
 			if CheckAuth(r.config, wrapped, req) {
@@ -312,7 +307,6 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			http.Error(w, "Failed to process API token", http.StatusInternalServerError)
 			return
 		}
-		primaryTokenHash := tokenRecord.Hash
 
 		if r.config.HasAPITokens() && r.config.AuthUser == "" && r.config.AuthPass == "" {
 			// We had API-only access before, now replacing with full security
@@ -378,10 +372,8 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 # IMPORTANT: Do not remove the single quotes around the password hash!
 PULSE_AUTH_USER='%s'
 PULSE_AUTH_PASS='%s'
-API_TOKEN='%s'
-API_TOKENS='%s'
 PULSE_AUDIT_LOG=true
-`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, primaryTokenHash, primaryTokenHash)
+`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword)
 
 			// Ensure directory exists
 			if err := os.MkdirAll(r.config.ConfigPath, 0755); err != nil {
@@ -420,10 +412,8 @@ PULSE_AUDIT_LOG=true
 # Generated on %s
 PULSE_AUTH_USER='%s'
 PULSE_AUTH_PASS='%s'
-API_TOKEN='%s'
-API_TOKENS='%s'
 PULSE_AUDIT_LOG=true
-`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, primaryTokenHash, primaryTokenHash)
+`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword)
 
 			// Save to config directory (usually /etc/pulse)
 			if err := os.MkdirAll(r.config.ConfigPath, 0755); err != nil {
@@ -481,10 +471,8 @@ PULSE_AUDIT_LOG=true
 [Service]
 Environment="PULSE_AUTH_USER=%s"
 Environment="PULSE_AUTH_PASS=%s"
-Environment="API_TOKEN=%s"
-Environment="API_TOKENS=%s"
 Environment="PULSE_AUDIT_LOG=true"
-`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, primaryTokenHash, primaryTokenHash)
+`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword)
 
 			if err := os.WriteFile(overridePath, []byte(overrideContent), 0644); err != nil {
 				log.Error().Err(err).Msg("Failed to write systemd override")
@@ -523,10 +511,8 @@ Environment="PULSE_AUDIT_LOG=true"
 # Generated on %s
 PULSE_AUTH_USER='%s'
 PULSE_AUTH_PASS='%s'
-API_TOKEN='%s'
-API_TOKENS='%s'
 PULSE_AUDIT_LOG=true
-`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, primaryTokenHash, primaryTokenHash)
+`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword)
 
 			// Try to create directory if needed
 			if err := os.MkdirAll(filepath.Dir(envPath), 0755); err != nil {
@@ -559,7 +545,7 @@ PULSE_AUDIT_LOG=true
 	}
 }
 
-// HandleRegenerateAPIToken generates a new API token and updates the .env file
+// HandleRegenerateAPIToken generates and persists a new API token.
 func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Request) {
 	if rq.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -619,56 +605,6 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
 			log.Warn().Err(err).Msg("Failed to persist regenerated API token")
 		}
-	}
-
-	// Determine env file path
-	envPath := filepath.Join(r.config.ConfigPath, ".env")
-	if r.config.ConfigPath == "" {
-		envPath = "/etc/pulse/.env"
-	}
-
-	// Docker uses /data/.env
-	if _, err := os.Stat("/data/.env"); err == nil {
-		envPath = "/data/.env"
-	}
-
-	// Read existing .env file
-	content, err := os.ReadFile(envPath)
-	if err != nil {
-		log.Error().Err(err).Str("path", envPath).Msg("Failed to read .env file")
-		http.Error(w, "Security configuration not found", http.StatusNotFound)
-		return
-	}
-
-	// Update the API_TOKEN / API_TOKENS lines with the hashed token
-	lines := strings.Split(string(content), "\n")
-	var updatedPrimary bool
-	var updatedList bool
-	for i, line := range lines {
-		if strings.HasPrefix(line, "API_TOKEN=") {
-			lines[i] = fmt.Sprintf("API_TOKEN=%s", tokenRecord.Hash)
-			updatedPrimary = true
-		}
-		if strings.HasPrefix(line, "API_TOKENS=") {
-			lines[i] = fmt.Sprintf("API_TOKENS=%s", tokenRecord.Hash)
-			updatedList = true
-		}
-	}
-
-	if !updatedPrimary {
-		// API_TOKEN line not found, add it
-		lines = append(lines, fmt.Sprintf("API_TOKEN=%s", tokenRecord.Hash))
-	}
-	if !updatedList {
-		lines = append(lines, fmt.Sprintf("API_TOKENS=%s", tokenRecord.Hash))
-	}
-
-	// Write updated content back
-	newContent := strings.Join(lines, "\n")
-	if err := os.WriteFile(envPath, []byte(newContent), 0600); err != nil {
-		log.Error().Err(err).Msg("Failed to update .env file")
-		http.Error(w, "Failed to save new token", http.StatusInternalServerError)
-		return
 	}
 
 	log.Info().Msg("API token regenerated successfully")

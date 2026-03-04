@@ -194,12 +194,12 @@ func TestAlertAcknowledge_AllowsPrintableAlertIDs(t *testing.T) {
 	// validation. The request should make it to the alert manager, which returns 404 because
 	// the alert does not exist in this test environment.
 	alertID := "docker(host)-container-unhealthy"
-	escaped := url.PathEscape(alertID)
-
-	req, err := http.NewRequest(http.MethodPost, srv.server.URL+"/api/alerts/"+escaped+"/acknowledge", nil)
+	body := bytes.NewBufferString(`{"id":"` + alertID + `"}`)
+	req, err := http.NewRequest(http.MethodPost, srv.server.URL+"/api/alerts/acknowledge", body)
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}
+	req.Header.Set("Content-Type", "application/json")
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -840,9 +840,11 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 		t.Fatalf("expected initialState message, got %q", msgType)
 	}
 
-	nodesVal, ok := payload["nodes"].([]any)
-	if !ok || len(nodesVal) == 0 {
-		t.Fatalf("initial state missing nodes: %v", payload["nodes"])
+	if _, ok := payload["nodes"]; !ok {
+		t.Fatalf("initial state missing nodes key")
+	}
+	if payload["nodes"] != nil {
+		t.Fatalf("initial state should not include legacy nodes array data: %v", payload["nodes"])
 	}
 
 	// Broadcast an additional state update and ensure clients receive it
@@ -853,26 +855,8 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 	if msgType != "rawData" {
 		t.Fatalf("expected rawData broadcast, got %q", msgType)
 	}
-	if _, ok := payload["nodes"].([]any); !ok {
-		t.Fatalf("broadcast payload missing nodes: %v", payload)
-	}
-
-	nodes := payload["nodes"].([]any)
-	firstNode := nodes[0].(map[string]any)
-	requiredNodeKeys := []string{"id", "displayName", "cpu", "memory", "status"}
-	for _, key := range requiredNodeKeys {
-		if _, ok := firstNode[key]; !ok {
-			t.Fatalf("node payload missing key %q: %v", key, firstNode)
-		}
-	}
-
-	dockerHosts, ok := payload["dockerHosts"].([]any)
-	if !ok || len(dockerHosts) == 0 {
-		t.Fatalf("expected dockerHosts slice in payload: %v", payload["dockerHosts"])
-	}
-	firstHost := dockerHosts[0].(map[string]any)
-	if _, ok := firstHost["containers"].([]any); !ok {
-		t.Fatalf("docker host missing containers array: %v", firstHost)
+	if payload["nodes"] != nil {
+		t.Fatalf("broadcast payload should not include legacy nodes array data: %v", payload["nodes"])
 	}
 }
 
@@ -951,18 +935,7 @@ func TestWebsocketPayloadContractShape(t *testing.T) {
 	srv.hub.BroadcastState(contractState)
 	payload := readType("rawData")
 
-	requiredArrayKeys := []string{
-		"nodes",
-		"vms",
-		"containers",
-		"dockerHosts",
-		"removedDockerHosts",
-		"hosts",
-		"storage",
-		"resources",
-		"pbs",
-		"pmg",
-	}
+	requiredArrayKeys := []string{"resources", "pbs", "pmg"}
 	for _, key := range requiredArrayKeys {
 		val, ok := payload[key]
 		if !ok {
@@ -973,12 +946,31 @@ func TestWebsocketPayloadContractShape(t *testing.T) {
 		}
 	}
 
+	strippedLegacyKeys := []string{
+		"nodes",
+		"vms",
+		"containers",
+		"dockerHosts",
+		"removedDockerHosts",
+		"hosts",
+		"storage",
+	}
+	for _, key := range strippedLegacyKeys {
+		val, ok := payload[key]
+		if !ok {
+			t.Fatalf("expected websocket payload to include %q key", key)
+		}
+		if val != nil {
+			t.Fatalf("expected %q to be nil in unified-resources payload, got %v", key, val)
+		}
+	}
+
 	if _, ok := payload["backups"]; ok {
 		t.Fatalf("websocket payload must not include legacy backups map")
 	}
 }
 
-func TestWebsocketLegacyCompatMode(t *testing.T) {
+func TestWebsocketPayloadStripsLegacyArrays(t *testing.T) {
 	srv := newIntegrationServer(t)
 
 	wsURL := "ws" + strings.TrimPrefix(srv.server.URL, "http") + "/ws?org_id=default"
@@ -1023,10 +1015,7 @@ func TestWebsocketLegacyCompatMode(t *testing.T) {
 	}
 
 	readType("welcome")
-	initialPayload := readType("initialState")
-	if _, ok := initialPayload["nodes"].([]any); !ok {
-		t.Fatalf("initialState payload missing legacy nodes array in default compat mode: %v", initialPayload["nodes"])
-	}
+	readType("initialState")
 
 	testState := models.StateFrontend{
 		Nodes:              []models.NodeFrontend{{ID: "node-1", DisplayName: "Node 1"}},
@@ -1053,18 +1042,6 @@ func TestWebsocketLegacyCompatMode(t *testing.T) {
 		},
 	}
 
-	srv.hub.BroadcastState(testState)
-	compatPayload := readType("rawData")
-
-	legacyCompatKeys := []string{"nodes", "vms", "containers", "dockerHosts"}
-	for _, key := range legacyCompatKeys {
-		values, ok := compatPayload[key].([]any)
-		if !ok || len(values) == 0 {
-			t.Fatalf("expected non-empty %s array in compat mode payload: %v", key, compatPayload[key])
-		}
-	}
-
-	srv.hub.SetLegacyPayloadCompat(false)
 	srv.hub.BroadcastState(testState)
 	strippedPayload := readType("rawData")
 
