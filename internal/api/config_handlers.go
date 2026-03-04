@@ -5316,7 +5316,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	// Create a node configuration
 	boolFalse := false
 	boolTrue := true
-	verifySSL := true
+	verifySSL := fingerprint != "" // Only enforce strict TLS when we have a fingerprint to verify against
 	nodeConfig := NodeConfigRequest{
 		Type:               req.Type,
 		Name:               req.ServerName,
@@ -5501,6 +5501,11 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			if nodeConfig.Fingerprint != "" {
 				instance.Fingerprint = nodeConfig.Fingerprint
 			}
+			// Fix broken state: verifySSL=true with no fingerprint can never connect
+			// to self-signed Proxmox certs. Downgrade to insecure if no fingerprint. Refs: #1303
+			if instance.VerifySSL && instance.Fingerprint == "" {
+				instance.VerifySSL = false
+			}
 			// Update source if provided (allows upgrade from script to agent)
 			if req.Source != "" {
 				instance.Source = req.Source
@@ -5544,6 +5549,11 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			// FetchFingerprint must not erase a previously valid pin. Refs: #1303
 			if nodeConfig.Fingerprint != "" {
 				instance.Fingerprint = nodeConfig.Fingerprint
+			}
+			// Fix broken state: verifySSL=true with no fingerprint can never connect
+			// to self-signed Proxmox certs. Downgrade to insecure if no fingerprint. Refs: #1303
+			if instance.VerifySSL && instance.Fingerprint == "" {
+				instance.VerifySSL = false
 			}
 			// Update source if provided (allows upgrade from script to agent)
 			if req.Source != "" {
@@ -5860,7 +5870,7 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 	} else {
 		fingerprint = fp
 	}
-	verifySSL := true
+	verifySSL := fingerprint != "" // Only enforce strict TLS when we have a fingerprint to verify against
 
 	existingTokenID := ""
 	existingTokenValue := ""
