@@ -14,7 +14,7 @@ const (
 	hostMetadataAgentBasePath = "/api/agents/metadata"
 )
 
-func hostMetadataPathParts(path string) (hostID string, isCollection bool, ok bool) {
+func hostMetadataPathParts(path string) (agentID string, isCollection bool, ok bool) {
 	switch {
 	case path == hostMetadataAgentBasePath || path == hostMetadataAgentBasePath+"/":
 		return "", true, true
@@ -25,7 +25,7 @@ func hostMetadataPathParts(path string) (hostID string, isCollection bool, ok bo
 	}
 }
 
-// HostMetadataHandler handles host metadata operations
+// HostMetadataHandler handles agent metadata operations.
 type HostMetadataHandler struct {
 	mtPersistence *config.MultiTenantPersistence
 }
@@ -53,7 +53,7 @@ func (h *HostMetadataHandler) Store() *config.HostMetadataStore {
 	return h.getStore(context.Background())
 }
 
-// HandleGetMetadata retrieves metadata for a specific host or all hosts
+// HandleGetMetadata retrieves metadata for a specific agent or all agents.
 func (h *HostMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -67,7 +67,7 @@ func (h *HostMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.R
 	}
 
 	if isCollection {
-		// Get all metadata
+		// Get all metadata.
 		w.Header().Set("Content-Type", "application/json")
 		store := h.getStore(r.Context())
 		allMeta := store.GetAll()
@@ -83,7 +83,7 @@ func (h *HostMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.R
 	w.Header().Set("Content-Type", "application/json")
 
 	if hostID != "" {
-		// Get specific host metadata
+		// Get specific agent metadata.
 		store := h.getStore(r.Context())
 		meta := store.Get(hostID)
 		if meta == nil {
@@ -98,7 +98,7 @@ func (h *HostMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.R
 	}
 }
 
-// HandleUpdateMetadata updates metadata for a host
+// HandleUpdateMetadata updates metadata for an agent.
 func (h *HostMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut && r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -107,7 +107,7 @@ func (h *HostMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *htt
 
 	hostID, isCollection, ok := hostMetadataPathParts(r.URL.Path)
 	if !ok || isCollection || hostID == "" || hostID == "metadata" {
-		http.Error(w, "Host ID required", http.StatusBadRequest)
+		http.Error(w, "Agent ID required", http.StatusBadRequest)
 		return
 	}
 
@@ -139,7 +139,7 @@ func (h *HostMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *htt
 	json.NewEncoder(w).Encode(&meta)
 }
 
-// HandleDeleteMetadata removes metadata for a host
+// HandleDeleteMetadata removes metadata for an agent.
 func (h *HostMetadataHandler) HandleDeleteMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -148,7 +148,7 @@ func (h *HostMetadataHandler) HandleDeleteMetadata(w http.ResponseWriter, r *htt
 
 	hostID, isCollection, ok := hostMetadataPathParts(r.URL.Path)
 	if !ok || isCollection || hostID == "" || hostID == "metadata" {
-		http.Error(w, "Host ID required", http.StatusBadRequest)
+		http.Error(w, "Agent ID required", http.StatusBadRequest)
 		return
 	}
 	store := h.getStore(r.Context())
