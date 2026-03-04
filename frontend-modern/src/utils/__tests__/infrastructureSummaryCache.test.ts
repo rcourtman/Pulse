@@ -40,7 +40,7 @@ const makeResponse = () => ({
     },
   },
   dockerHostData: {},
-  hostData: {},
+  agentData: {},
   timestamp: Date.now(),
   stats: {
     oldestDataTimestamp: Date.now() - 30_000,
@@ -97,11 +97,11 @@ describe('infrastructureSummaryCache fetch dedupe', () => {
     expect(readInfrastructureSummaryCache('24h')).not.toBeNull();
   });
 
-  it('merges overlapping hostData and dockerHostData keys without dropping richer network series', () => {
+  it('merges overlapping agentData and dockerHostData keys without dropping richer network series', () => {
     const now = Date.now();
     const response = {
       nodeData: {},
-      hostData: {
+      agentData: {
         'shared-host': {
           cpu: [
             { timestamp: now - 60_000, value: 10 },

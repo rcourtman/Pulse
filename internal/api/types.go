@@ -41,7 +41,7 @@ type ChartResponse struct {
 	StorageData    map[string]StorageChartData `json:"storageData"`
 	DockerData     map[string]VMChartData      `json:"dockerData"`     // Docker container metrics (keyed by container ID)
 	DockerHostData map[string]VMChartData      `json:"dockerHostData"` // Docker host metrics (keyed by host ID)
-	HostData       map[string]VMChartData      `json:"hostData"`       // Unified host agent metrics (keyed by host ID)
+	AgentData      map[string]VMChartData      `json:"agentData"`      // Unified agent metrics (keyed by agent ID)
 	GuestTypes     map[string]string           `json:"guestTypes"`     // Maps guest ID to type ("vm", "container", "k8s")
 	Timestamp      int64                       `json:"timestamp"`
 	Stats          ChartStats                  `json:"stats"`
@@ -53,7 +53,7 @@ type ChartResponse struct {
 type InfrastructureChartsResponse struct {
 	NodeData       map[string]NodeChartData `json:"nodeData"`
 	DockerHostData map[string]VMChartData   `json:"dockerHostData,omitempty"` // Docker host metrics (keyed by host ID)
-	HostData       map[string]VMChartData   `json:"hostData,omitempty"`       // Unified host agent metrics (keyed by host ID)
+	AgentData      map[string]VMChartData   `json:"agentData,omitempty"`      // Unified agent metrics (keyed by agent ID)
 	Timestamp      int64                    `json:"timestamp"`
 	Stats          ChartStats               `json:"stats"`
 }
@@ -146,7 +146,7 @@ type ChartPointCounts struct {
 	Storage          int `json:"storage,omitempty"`
 	DockerContainers int `json:"dockerContainers,omitempty"`
 	DockerHosts      int `json:"dockerHosts,omitempty"`
-	Hosts            int `json:"hosts,omitempty"`
+	Agents           int `json:"agents,omitempty"`
 }
 
 // VMChartData represents chart data for a VM

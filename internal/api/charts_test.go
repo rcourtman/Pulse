@@ -402,7 +402,7 @@ func TestChartStatsDebugMetadata(t *testing.T) {
 			Storage:          100,
 			DockerContainers: 250,
 			DockerHosts:      150,
-			Hosts:            200,
+			Agents:           200,
 		},
 	}
 

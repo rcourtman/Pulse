@@ -328,12 +328,12 @@ func TestHandleCharts_StatsDebugMetadata(t *testing.T) {
 	if decoded.Stats.PointCounts.Storage != 1 {
 		t.Fatalf("expected stats.pointCounts.storage=1, got %d", decoded.Stats.PointCounts.Storage)
 	}
-	if decoded.Stats.PointCounts.DockerContainers != 0 || decoded.Stats.PointCounts.DockerHosts != 0 || decoded.Stats.PointCounts.Hosts != 0 {
+	if decoded.Stats.PointCounts.DockerContainers != 0 || decoded.Stats.PointCounts.DockerHosts != 0 || decoded.Stats.PointCounts.Agents != 0 {
 		t.Fatalf(
-			"expected dockerContainers/dockerHosts/hosts all 0, got dc=%d dh=%d hosts=%d",
+			"expected dockerContainers/dockerHosts/agents all 0, got dc=%d dh=%d agents=%d",
 			decoded.Stats.PointCounts.DockerContainers,
 			decoded.Stats.PointCounts.DockerHosts,
-			decoded.Stats.PointCounts.Hosts,
+			decoded.Stats.PointCounts.Agents,
 		)
 	}
 
@@ -342,7 +342,7 @@ func TestHandleCharts_StatsDebugMetadata(t *testing.T) {
 		decoded.Stats.PointCounts.Storage +
 		decoded.Stats.PointCounts.DockerContainers +
 		decoded.Stats.PointCounts.DockerHosts +
-		decoded.Stats.PointCounts.Hosts
+		decoded.Stats.PointCounts.Agents
 	if decoded.Stats.PointCounts.Total != sum {
 		t.Fatalf("expected stats.pointCounts.total=%d, got %d", sum, decoded.Stats.PointCounts.Total)
 	}
@@ -417,17 +417,17 @@ func TestHandleInfrastructureCharts_Lightweight(t *testing.T) {
 	// With no history in the test monitor, handler falls back to synthetic points:
 	// nodes: cpu/memory/disk (3)
 	// dockerHosts: cpu/memory/disk (3)
-	// hosts: cpu/memory/disk (3)
+	// agents: cpu/memory/disk (3)
 	if decoded.Stats.PointCounts.Nodes != 3 {
 		t.Fatalf("expected stats.pointCounts.nodes=3, got %d", decoded.Stats.PointCounts.Nodes)
 	}
 	if decoded.Stats.PointCounts.DockerHosts != 3 {
 		t.Fatalf("expected stats.pointCounts.dockerHosts=3, got %d", decoded.Stats.PointCounts.DockerHosts)
 	}
-	if decoded.Stats.PointCounts.Hosts != 3 {
-		t.Fatalf("expected stats.pointCounts.hosts=3, got %d", decoded.Stats.PointCounts.Hosts)
+	if decoded.Stats.PointCounts.Agents != 3 {
+		t.Fatalf("expected stats.pointCounts.agents=3, got %d", decoded.Stats.PointCounts.Agents)
 	}
-	sum := decoded.Stats.PointCounts.Nodes + decoded.Stats.PointCounts.DockerHosts + decoded.Stats.PointCounts.Hosts
+	sum := decoded.Stats.PointCounts.Nodes + decoded.Stats.PointCounts.DockerHosts + decoded.Stats.PointCounts.Agents
 	if decoded.Stats.PointCounts.Total != sum {
 		t.Fatalf("expected stats.pointCounts.total=%d, got %d", sum, decoded.Stats.PointCounts.Total)
 	}

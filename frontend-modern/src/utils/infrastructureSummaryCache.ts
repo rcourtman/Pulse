@@ -156,8 +156,8 @@ export function extractInfrastructureSummaryChartMap(
       map.set(id, mergeChartData(map.get(id), data));
     }
   }
-  if (response.hostData) {
-    for (const [id, data] of Object.entries(response.hostData)) {
+  if (response.agentData) {
+    for (const [id, data] of Object.entries(response.agentData)) {
       map.set(id, mergeChartData(map.get(id), data));
     }
   }
@@ -179,7 +179,7 @@ export function extractInfrastructureSummaryChartMapFromInfrastructureResponse(
     nodeData: response.nodeData ?? {},
     storageData: {},
     dockerHostData: response.dockerHostData,
-    hostData: response.hostData,
+    agentData: response.agentData,
     dockerData: {},
     guestTypes: {},
     timestamp: response.timestamp,

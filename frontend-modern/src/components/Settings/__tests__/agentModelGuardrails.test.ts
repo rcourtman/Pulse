@@ -28,6 +28,7 @@ import resourceLinksSource from '@/routing/resourceLinks.ts?raw';
 import alertsApiSource from '@/api/alerts.ts?raw';
 import licenseApiSource from '@/api/license.ts?raw';
 import monitoringApiSource from '@/api/monitoring.ts?raw';
+import chartsApiSource from '@/api/charts.ts?raw';
 import resourceStateAdaptersSource from '@/utils/resourceStateAdapters.ts?raw';
 import resourceBadgesSource from '@/components/Infrastructure/resourceBadges.ts?raw';
 import problemResourcesTableSource from '@/pages/DashboardPanels/ProblemResourcesTable.tsx?raw';
@@ -175,6 +176,13 @@ describe('agent model guardrails', () => {
   it('keeps monitoring API container-runtime errors on v6 naming', () => {
     expect(monitoringApiSource).toContain('Container runtime not found');
     expect(monitoringApiSource).not.toContain('Docker host not found');
+  });
+
+  it('keeps chart API contract on canonical agentData naming', () => {
+    expect(chartsApiSource).toContain('agentData?: Record<string, ChartData>');
+    expect(chartsApiSource).not.toContain('hostData?: Record<string, ChartData>');
+    expect(chartsApiSource).toContain('agents?: number;');
+    expect(chartsApiSource).not.toContain('hosts?: number;');
   });
 
   it('keeps login and SSO settings on provider-based flows only', () => {

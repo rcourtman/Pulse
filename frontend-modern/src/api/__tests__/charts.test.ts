@@ -122,6 +122,25 @@ describe('Charts API Types', () => {
       expect(response.dockerHostData!['host-1'].cpu![0].value).toBe(30);
     });
 
+    it('supports optional agentData field', () => {
+      const response: ChartsResponse = {
+        data: {},
+        nodeData: {},
+        storageData: {},
+        agentData: {
+          'agent-1': {
+            cpu: [{ timestamp: 1000, value: 30 }],
+            memory: [{ timestamp: 1000, value: 40 }],
+          },
+        },
+        timestamp: Date.now(),
+        stats: { oldestDataTimestamp: Date.now() },
+      };
+
+      expect(response.agentData).toBeDefined();
+      expect(response.agentData!['agent-1'].cpu![0].value).toBe(30);
+    });
+
     it('supports optional guestTypes field for VM/container type mapping', () => {
       const response: ChartsResponse = {
         data: {

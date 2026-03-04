@@ -5044,8 +5044,8 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// Process unified host agents - get historical data
-	hostData := make(map[string]VMChartData)
+	// Process unified agents - get historical data.
+	agentData := make(map[string]VMChartData)
 	for _, h := range readState.Hosts() {
 		if h == nil {
 			continue
@@ -5055,8 +5055,8 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			continue
 		}
 
-		if hostData[hID] == nil {
-			hostData[hID] = make(VMChartData)
+		if agentData[hID] == nil {
+			agentData[hID] = make(VMChartData)
 		}
 
 		// Get historical metrics using the canonical agent key.
@@ -5068,13 +5068,13 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			if !sparklineMetrics[metricType] {
 				continue
 			}
-			hostData[hID][metricType] = make([]MetricPoint, len(points))
+			agentData[hID][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
 				if ts < oldestTimestamp {
 					oldestTimestamp = ts
 				}
-				hostData[hID][metricType][i] = MetricPoint{
+				agentData[hID][metricType][i] = MetricPoint{
 					Timestamp: ts,
 					Value:     point.Value,
 				}
@@ -5082,10 +5082,10 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		}
 
 		// If no historical data, add current value
-		if len(hostData[hID]["cpu"]) == 0 {
-			hostData[hID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: h.CPUPercent()}}
-			hostData[hID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: h.MemoryPercent()}}
-			hostData[hID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: h.DiskPercent()}}
+		if len(agentData[hID]["cpu"]) == 0 {
+			agentData[hID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: h.CPUPercent()}}
+			agentData[hID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: h.MemoryPercent()}}
+			agentData[hID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: h.DiskPercent()}}
 		}
 	}
 
@@ -5124,7 +5124,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 	storagePoints := countStoragePoints(storageData)
 	dockerContainerPoints := countChartPoints(dockerData)
 	dockerHostPoints := countChartPoints(dockerHostData)
-	hostPoints := countChartPoints(hostData)
+	agentPoints := countChartPoints(agentData)
 
 	response := ChartResponse{
 		ChartData:      chartData,
@@ -5132,7 +5132,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		StorageData:    storageData,
 		DockerData:     dockerData,
 		DockerHostData: dockerHostData,
-		HostData:       hostData,
+		AgentData:      agentData,
 		GuestTypes:     guestTypes,
 		Timestamp:      currentTime,
 		Stats: ChartStats{
@@ -5143,13 +5143,13 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			PrimarySourceHint:     primarySourceHint,
 			InMemoryThresholdSecs: int64(inMemoryChartThreshold / time.Second),
 			PointCounts: ChartPointCounts{
-				Total:            guestPoints + nodePoints + storagePoints + dockerContainerPoints + dockerHostPoints + hostPoints,
+				Total:            guestPoints + nodePoints + storagePoints + dockerContainerPoints + dockerHostPoints + agentPoints,
 				Guests:           guestPoints,
 				Nodes:            nodePoints,
 				Storage:          storagePoints,
 				DockerContainers: dockerContainerPoints,
 				DockerHosts:      dockerHostPoints,
-				Hosts:            hostPoints,
+				Agents:           agentPoints,
 			},
 		},
 	}
@@ -5166,7 +5166,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		Int("nodes", len(nodeData)).
 		Int("storage", len(storageData)).
 		Int("dockerContainers", len(dockerData)).
-		Int("hosts", len(hostData)).
+		Int("agents", len(agentData)).
 		Str("range", timeRange).
 		Msg("Chart data response sent")
 }
@@ -5843,8 +5843,8 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 		}
 	}
 
-	// Unified host agents - cpu/memory/disk
-	hostData := make(map[string]VMChartData)
+	// Unified agents - cpu/memory/disk.
+	agentData := make(map[string]VMChartData)
 	for _, h := range readState.Hosts() {
 		if h == nil {
 			continue
@@ -5853,8 +5853,8 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 		if hID == "" {
 			continue
 		}
-		if hostData[hID] == nil {
-			hostData[hID] = make(VMChartData)
+		if agentData[hID] == nil {
+			agentData[hID] = make(VMChartData)
 		}
 		metricKey := fmt.Sprintf("agent:%s", hID)
 		metrics := monitor.GetGuestMetricsForChart(metricKey, "agent", hID, duration)
@@ -5862,19 +5862,19 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 			if !sparklineMetrics[metricType] {
 				continue
 			}
-			hostData[hID][metricType] = make([]MetricPoint, len(points))
+			agentData[hID][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
 				if ts < oldestTimestamp {
 					oldestTimestamp = ts
 				}
-				hostData[hID][metricType][i] = MetricPoint{Timestamp: ts, Value: point.Value}
+				agentData[hID][metricType][i] = MetricPoint{Timestamp: ts, Value: point.Value}
 			}
 		}
-		if len(hostData[hID]["cpu"]) == 0 {
-			hostData[hID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: h.CPUPercent()}}
-			hostData[hID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: h.MemoryPercent()}}
-			hostData[hID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: h.DiskPercent()}}
+		if len(agentData[hID]["cpu"]) == 0 {
+			agentData[hID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: h.CPUPercent()}}
+			agentData[hID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: h.MemoryPercent()}}
+			agentData[hID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: h.DiskPercent()}}
 		}
 	}
 
@@ -5899,12 +5899,12 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 
 	nodePoints := countNodePoints(nodeData)
 	dockerHostPoints := countChartPoints(dockerHostData)
-	hostPoints := countChartPoints(hostData)
+	agentPoints := countChartPoints(agentData)
 
 	response := InfrastructureChartsResponse{
 		NodeData:       nodeData,
 		DockerHostData: dockerHostData,
-		HostData:       hostData,
+		AgentData:      agentData,
 		Timestamp:      currentTime,
 		Stats: ChartStats{
 			OldestDataTimestamp:   oldestTimestamp,
@@ -5914,10 +5914,10 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 			PrimarySourceHint:     primarySourceHint,
 			InMemoryThresholdSecs: int64(inMemoryChartThreshold / time.Second),
 			PointCounts: ChartPointCounts{
-				Total:       nodePoints + dockerHostPoints + hostPoints,
+				Total:       nodePoints + dockerHostPoints + agentPoints,
 				Nodes:       nodePoints,
 				DockerHosts: dockerHostPoints,
-				Hosts:       hostPoints,
+				Agents:      agentPoints,
 			},
 		},
 	}
