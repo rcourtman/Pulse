@@ -138,7 +138,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 		hostID := strings.TrimPrefix(req.URL.Path, "/api/infra-updates/host/")
 		hostID = strings.TrimSuffix(hostID, "/")
 		if hostID == "" {
-			writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Host ID is required", nil)
+			writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID is required", nil)
 			return
 		}
 		infraUpdateHandlers.HandleGetInfraUpdatesForHost(w, req, hostID)

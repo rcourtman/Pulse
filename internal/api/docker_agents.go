@@ -264,7 +264,7 @@ func (h *DockerAgentHandlers) HandleCommandAck(w http.ResponseWriter, r *http.Re
 	}
 }
 
-// HandleDeleteHost removes or hides a docker host from the shared state.
+// HandleDeleteHost removes or hides a container runtime from the shared state.
 // If query parameter ?hide=true is provided, the host is marked as hidden instead of deleted.
 func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
@@ -275,7 +275,7 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/docker/hosts/")
 	hostID := strings.TrimSpace(trimmedPath)
 	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Docker host ID is required", nil)
+		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID is required", nil)
 		return
 	}
 
@@ -289,7 +289,7 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 
 	if shouldHide {
 		if !hostExists {
-			writeErrorResponse(w, http.StatusNotFound, "docker_host_not_found", "Docker host not found", nil)
+			writeErrorResponse(w, http.StatusNotFound, "docker_host_not_found", "Container runtime not found", nil)
 			return
 		}
 		host, err := h.getMonitor(r.Context()).HideDockerHost(hostID)
@@ -303,7 +303,7 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 		if err := utils.WriteJSONResponse(w, map[string]any{
 			"success": true,
 			"hostId":  host.ID,
-			"message": "Docker host hidden",
+			"message": "Container runtime hidden",
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to serialize docker host operation response")
 		}
@@ -315,14 +315,14 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 			if err := utils.WriteJSONResponse(w, map[string]any{
 				"success": true,
 				"hostId":  hostID,
-				"message": "Docker host already removed",
+				"message": "Container runtime already removed",
 			}); err != nil {
 				log.Error().Err(err).Msg("Failed to serialize docker host operation response")
 			}
 			return
 		}
 
-		writeErrorResponse(w, http.StatusNotFound, "docker_host_not_found", "Docker host not found", nil)
+		writeErrorResponse(w, http.StatusNotFound, "docker_host_not_found", "Container runtime not found", nil)
 		return
 	}
 
@@ -357,13 +357,13 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
 		"hostId":  host.ID,
-		"message": "Docker host removed",
+		"message": "Container runtime removed",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker host operation response")
 	}
 }
 
-// HandleAllowReenroll clears the removal block for a docker host to permit future reports.
+// HandleAllowReenroll clears the removal block for a container runtime to permit future reports.
 func (h *DockerAgentHandlers) HandleAllowReenroll(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
@@ -374,7 +374,7 @@ func (h *DockerAgentHandlers) HandleAllowReenroll(w http.ResponseWriter, r *http
 	trimmedPath = strings.TrimSuffix(trimmedPath, "/allow-reenroll")
 	hostID := strings.TrimSpace(trimmedPath)
 	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Docker host ID is required", nil)
+		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID is required", nil)
 		return
 	}
 
@@ -394,7 +394,7 @@ func (h *DockerAgentHandlers) HandleAllowReenroll(w http.ResponseWriter, r *http
 	}
 }
 
-// HandleUnhideHost unhides a previously hidden docker host.
+// HandleUnhideHost unhides a previously hidden container runtime.
 func (h *DockerAgentHandlers) HandleUnhideHost(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only PUT is allowed", nil)
@@ -405,7 +405,7 @@ func (h *DockerAgentHandlers) HandleUnhideHost(w http.ResponseWriter, r *http.Re
 	trimmedPath = strings.TrimSuffix(trimmedPath, "/unhide")
 	hostID := strings.TrimSpace(trimmedPath)
 	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Docker host ID is required", nil)
+		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID is required", nil)
 		return
 	}
 
@@ -420,13 +420,13 @@ func (h *DockerAgentHandlers) HandleUnhideHost(w http.ResponseWriter, r *http.Re
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
 		"hostId":  host.ID,
-		"message": "Docker host unhidden",
+		"message": "Container runtime unhidden",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker host unhide response")
 	}
 }
 
-// HandleMarkPendingUninstall marks a docker host as pending uninstall.
+// HandleMarkPendingUninstall marks a container runtime as pending uninstall.
 func (h *DockerAgentHandlers) HandleMarkPendingUninstall(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only PUT is allowed", nil)
@@ -437,7 +437,7 @@ func (h *DockerAgentHandlers) HandleMarkPendingUninstall(w http.ResponseWriter, 
 	trimmedPath = strings.TrimSuffix(trimmedPath, "/pending-uninstall")
 	hostID := strings.TrimSpace(trimmedPath)
 	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Docker host ID is required", nil)
+		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID is required", nil)
 		return
 	}
 
@@ -452,13 +452,13 @@ func (h *DockerAgentHandlers) HandleMarkPendingUninstall(w http.ResponseWriter, 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
 		"hostId":  host.ID,
-		"message": "Docker host marked as pending uninstall",
+		"message": "Container runtime marked as pending uninstall",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker host pending uninstall response")
 	}
 }
 
-// HandleSetCustomDisplayName updates the custom display name for a docker host.
+// HandleSetCustomDisplayName updates the custom display name for a container runtime.
 func (h *DockerAgentHandlers) HandleSetCustomDisplayName(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only PUT is allowed", nil)
@@ -469,7 +469,7 @@ func (h *DockerAgentHandlers) HandleSetCustomDisplayName(w http.ResponseWriter, 
 	trimmedPath = strings.TrimSuffix(trimmedPath, "/display-name")
 	hostID := strings.TrimSpace(trimmedPath)
 	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Docker host ID is required", nil)
+		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID is required", nil)
 		return
 	}
 
@@ -498,7 +498,7 @@ func (h *DockerAgentHandlers) HandleSetCustomDisplayName(w http.ResponseWriter, 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
 		"hostId":  host.ID,
-		"message": "Docker host custom display name updated",
+		"message": "Container runtime custom display name updated",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker host custom display name response")
 	}
@@ -527,7 +527,7 @@ func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *ht
 	}
 
 	if req.HostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Host ID is required", nil)
+		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID is required", nil)
 		return
 	}
 	if req.ContainerID == "" {
@@ -566,7 +566,7 @@ func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *ht
 	}
 }
 
-// HandleUpdateAll triggers an update for all containers with updates available on a Docker host.
+// HandleUpdateAll triggers an update for all containers with updates available on a container runtime.
 // POST /api/agents/docker/hosts/{hostId}/update-all
 func (h *DockerAgentHandlers) HandleUpdateAll(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -578,7 +578,7 @@ func (h *DockerAgentHandlers) HandleUpdateAll(w http.ResponseWriter, r *http.Req
 	trimmedPath = strings.TrimSuffix(trimmedPath, "/update-all")
 	hostID := strings.TrimSpace(trimmedPath)
 	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Docker host ID is required", nil)
+		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID is required", nil)
 		return
 	}
 
@@ -608,7 +608,7 @@ func (h *DockerAgentHandlers) HandleUpdateAll(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// HandleCheckUpdates triggers an immediate update check for all containers on a Docker host.
+// HandleCheckUpdates triggers an immediate update check for all containers on a container runtime.
 // POST /api/agents/docker/hosts/{hostId}/check-updates
 func (h *DockerAgentHandlers) HandleCheckUpdates(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -620,7 +620,7 @@ func (h *DockerAgentHandlers) HandleCheckUpdates(w http.ResponseWriter, r *http.
 	trimmedPath = strings.TrimSuffix(trimmedPath, "/check-updates")
 	hostID := strings.TrimSpace(trimmedPath)
 	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Docker host ID is required", nil)
+		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID is required", nil)
 		return
 	}
 

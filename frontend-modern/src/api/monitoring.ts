@@ -66,7 +66,7 @@ export class MonitoringAPI {
 
     if (!response.ok) {
       if (response.status === 404) {
-        // Host already gone; treat as success
+        // Resource already gone; treat as success
         return;
       }
 
@@ -83,7 +83,7 @@ export class MonitoringAPI {
 
     if (!response.ok) {
       if (response.status === 404) {
-        // Host already gone; treat as success
+        // Resource already gone; treat as success
         return;
       }
 
@@ -104,7 +104,7 @@ export class MonitoringAPI {
 
     if (!response.ok) {
       if (response.status === 404) {
-        throw new Error('Docker host not found');
+        throw new Error('Container runtime not found');
       }
 
       throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
@@ -267,7 +267,9 @@ export class MonitoringAPI {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ hostId: agentId }),
+      body: JSON.stringify({
+        agentId,
+      }),
     });
 
     if (!response.ok) {
@@ -306,17 +308,23 @@ export class MonitoringAPI {
     }
 
     const data = JSON.parse(text) as AgentLookupResponse;
-    const lastSeen = data?.host?.lastSeen as unknown;
-    if (typeof lastSeen === 'string') {
-      const parsed = Date.parse(lastSeen);
-      data.host.lastSeen = Number.isFinite(parsed) ? parsed : Date.now();
-    } else if (typeof lastSeen === 'number') {
-      // assume already a timestamp
-      data.host.lastSeen = lastSeen;
-    } else {
-      data.host.lastSeen = Date.now();
+    const identity = data?.agent as AgentLookupResponse['agent'];
+    if (!identity) {
+      return null;
     }
 
+    const lastSeen = identity.lastSeen as unknown;
+    if (typeof lastSeen === 'string') {
+      const parsed = Date.parse(lastSeen);
+      identity.lastSeen = Number.isFinite(parsed) ? parsed : Date.now();
+    } else if (typeof lastSeen === 'number') {
+      // assume already a timestamp
+      identity.lastSeen = lastSeen;
+    } else {
+      identity.lastSeen = Date.now();
+    }
+
+    data.agent = identity;
     return data;
   }
 
@@ -351,7 +359,7 @@ export class MonitoringAPI {
   }
 
   /**
-   * Triggers an immediate update check for all containers on a specific Docker host.
+   * Triggers an immediate update check for all containers on a specific container runtime.
    */
   static async checkDockerUpdates(
     hostId: string,
@@ -370,7 +378,7 @@ export class MonitoringAPI {
   }
 
   /**
-   * Triggers a batch update for all containers with updates available on a specific Docker host.
+   * Triggers a batch update for all containers with updates available on a specific container runtime.
    */
   static async updateAllDockerContainers(
     hostId: string,

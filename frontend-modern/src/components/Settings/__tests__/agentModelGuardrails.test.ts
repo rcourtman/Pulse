@@ -27,6 +27,7 @@ import mentionAutocompleteSource from '@/components/AI/Chat/MentionAutocomplete.
 import resourceLinksSource from '@/routing/resourceLinks.ts?raw';
 import alertsApiSource from '@/api/alerts.ts?raw';
 import licenseApiSource from '@/api/license.ts?raw';
+import monitoringApiSource from '@/api/monitoring.ts?raw';
 import resourceStateAdaptersSource from '@/utils/resourceStateAdapters.ts?raw';
 import resourceBadgesSource from '@/components/Infrastructure/resourceBadges.ts?raw';
 import problemResourcesTableSource from '@/pages/DashboardPanels/ProblemResourcesTable.tsx?raw';
@@ -169,6 +170,11 @@ describe('agent model guardrails', () => {
     expect(licenseApiSource).not.toContain('exchangeLicense(');
     expect(licenseApiSource).not.toContain('/exchange');
     expect(licenseApiSource).not.toContain('existing_jwt');
+  });
+
+  it('keeps monitoring API container-runtime errors on v6 naming', () => {
+    expect(monitoringApiSource).toContain('Container runtime not found');
+    expect(monitoringApiSource).not.toContain('Docker host not found');
   });
 
   it('keeps login and SSO settings on provider-based flows only', () => {

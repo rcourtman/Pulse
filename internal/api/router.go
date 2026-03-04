@@ -6890,24 +6890,11 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, "resourceType and resourceId are required", http.StatusBadRequest)
 		return
 	}
-
-	if resourceTypeInput == "host" {
-		http.Error(w, `resourceType "host" is no longer supported; use "agent"`, http.StatusBadRequest)
+	// Normalize and validate query aliases to runtime/store resource types.
+	responseResourceType, runtimeResourceType, storeResourceTypes, err := normalizeMetricsHistoryResourceType(resourceTypeInput)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
-	}
-
-	// Normalize query aliases to runtime/store resource types.
-	responseResourceType := resourceTypeInput
-	runtimeResourceType := resourceTypeInput
-	storeResourceTypes := []string{resourceTypeInput}
-	switch resourceTypeInput {
-	case "docker":
-		runtimeResourceType = "dockerContainer"
-		storeResourceTypes = []string{"dockerContainer", "docker"}
-	case "agent":
-		responseResourceType = "agent"
-		runtimeResourceType = "agent"
-		storeResourceTypes = []string{"agent"}
 	}
 
 	// Parse time range
@@ -7742,6 +7729,21 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 }
 
+func normalizeMetricsHistoryResourceType(input string) (responseType string, runtimeType string, storeTypes []string, err error) {
+	switch strings.ToLower(strings.TrimSpace(input)) {
+	case "node", "guest", "storage", "agent", "disk", "k8s", "vm", "container":
+		return input, input, []string{input}, nil
+	case "docker":
+		return "docker", "dockerContainer", []string{"dockerContainer", "docker"}, nil
+	case "dockercontainer", "docker-container", "docker_container":
+		return "docker", "dockerContainer", []string{"dockerContainer", "docker"}, nil
+	case "dockerhost", "docker-host":
+		return "dockerHost", "dockerHost", []string{"dockerHost"}, nil
+	default:
+		return "", "", nil, fmt.Errorf("unsupported resourceType %q", input)
+	}
+}
+
 // handleConfig handles configuration requests
 func (r *Router) handleConfig(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
@@ -8239,14 +8241,14 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 
 	host, ok := monitor.GetDockerHost(hostID)
 	if !ok {
-		writeErrorResponse(w, http.StatusNotFound, "host_not_found", "Docker host not found", nil)
+		writeErrorResponse(w, http.StatusNotFound, "host_not_found", "Container runtime not found", nil)
 		return
 	}
 
 	name := strings.TrimSpace(payload.TokenName)
 	if name == "" {
 		displayName := preferredDockerHostName(host)
-		name = fmt.Sprintf("Docker host: %s", displayName)
+		name = fmt.Sprintf("Container runtime: %s", displayName)
 	}
 
 	rawToken, err := auth.GenerateAPIToken()

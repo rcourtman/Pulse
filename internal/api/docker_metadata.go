@@ -194,7 +194,7 @@ func (h *DockerMetadataHandler) HandleGetHostMetadata(w http.ResponseWriter, r *
 	}
 }
 
-// HandleUpdateHostMetadata updates metadata for a Docker host
+// HandleUpdateHostMetadata updates metadata for a container runtime
 func (h *DockerMetadataHandler) HandleUpdateHostMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut && r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -203,7 +203,7 @@ func (h *DockerMetadataHandler) HandleUpdateHostMetadata(w http.ResponseWriter, 
 
 	hostID := strings.TrimPrefix(r.URL.Path, "/api/docker/hosts/metadata/")
 	if hostID == "" || hostID == "metadata" {
-		http.Error(w, "Host ID required", http.StatusBadRequest)
+		http.Error(w, "Container runtime ID required", http.StatusBadRequest)
 		return
 	}
 
@@ -250,7 +250,7 @@ func (h *DockerMetadataHandler) HandleUpdateHostMetadata(w http.ResponseWriter, 
 	json.NewEncoder(w).Encode(&meta)
 }
 
-// HandleDeleteHostMetadata removes metadata for a Docker host
+// HandleDeleteHostMetadata removes metadata for a container runtime
 func (h *DockerMetadataHandler) HandleDeleteHostMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -259,7 +259,7 @@ func (h *DockerMetadataHandler) HandleDeleteHostMetadata(w http.ResponseWriter, 
 
 	hostID := strings.TrimPrefix(r.URL.Path, "/api/docker/hosts/metadata/")
 	if hostID == "" || hostID == "metadata" {
-		http.Error(w, "Host ID required", http.StatusBadRequest)
+		http.Error(w, "Container runtime ID required", http.StatusBadRequest)
 	}
 	store := h.getStore(r.Context())
 	if err := store.SetHostMetadata(hostID, nil); err != nil {

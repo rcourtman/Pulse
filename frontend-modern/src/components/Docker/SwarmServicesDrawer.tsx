@@ -253,7 +253,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
                   description={
                     services().length > 0
                       ? 'Try clearing the search.'
-                      : 'Enable Swarm service collection in the Docker agent (includeServices) and wait for the next report.'
+                      : 'Enable Swarm service collection in the container runtime agent (includeServices) and wait for the next report.'
                   }
                 />
               </Card>
