@@ -14,10 +14,7 @@ import type { Host, Node } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { useRecoveryRollups } from '@/hooks/useRecoveryRollups';
 import { nodeFromResource, pbsInstanceFromResource } from '@/utils/resourceStateAdapters';
-import {
-  getAgentDiscoveryResourceId,
-  isAgentDiscoveryResourceType,
-} from '@/utils/discoveryTarget';
+import { getAgentDiscoveryResourceId, isAgentDiscoveryResourceType } from '@/utils/discoveryTarget';
 
 interface UnifiedNodeSelectorProps {
   currentTab: 'dashboard' | 'storage' | 'recovery';

@@ -3992,7 +3992,9 @@ const Settings: Component<SettingsProps> = (props) => {
                 <p class="font-semibold mb-1">
                   Create or rotate API tokens in Settings → Security → API tokens.
                 </p>
-                <p>Tokens are managed in the UI and stored in <code>api_tokens.json</code>.</p>
+                <p>
+                  Tokens are managed in the UI and stored in <code>api_tokens.json</code>.
+                </p>
               </div>
             </div>
 

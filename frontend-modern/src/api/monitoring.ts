@@ -1,4 +1,10 @@
-import type { State, Performance, Stats, DockerHostCommand, AgentLookupResponse } from '@/types/api';
+import type {
+  State,
+  Performance,
+  Stats,
+  DockerHostCommand,
+  AgentLookupResponse,
+} from '@/types/api';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import { parseOptionalJSON, readAPIErrorMessage } from './responseUtils';
 

@@ -11,10 +11,7 @@ import type { Resource } from '@/types/resource';
 import { SecurityAPI } from '@/api/security';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { showSuccess, showError } from '@/utils/toast';
-import {
-  getAgentDiscoveryResourceId,
-  isAgentDiscoveryResourceType,
-} from '@/utils/discoveryTarget';
+import { getAgentDiscoveryResourceId, isAgentDiscoveryResourceType } from '@/utils/discoveryTarget';
 import {
   trackAgentFirstConnected,
   trackAgentInstallCommandCopied,

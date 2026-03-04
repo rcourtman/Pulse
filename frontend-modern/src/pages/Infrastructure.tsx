@@ -339,7 +339,7 @@ export function Infrastructure() {
                 <EmptyState
                   icon={<ServerIcon class="w-6 h-6 text-slate-400" />}
                   title="No infrastructure resources yet"
-                  description="Once resources are reporting, they will appear here."
+                  description="Connect Proxmox nodes or install the Pulse agent on your servers to start monitoring."
                   actions={
                     <button
                       type="button"

@@ -16,10 +16,7 @@ import { aiChatStore } from '@/stores/aiChat';
 import { logger } from '@/utils/logger';
 import { useResources } from '@/hooks/useResources';
 import type { Resource } from '@/types/resource';
-import {
-  getAgentDiscoveryResourceId,
-  isAgentDiscoveryResourceType,
-} from '@/utils/discoveryTarget';
+import { getAgentDiscoveryResourceId, isAgentDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { useChat } from './hooks/useChat';
 import { ChatMessages } from './ChatMessages';
 import { ModelSelector } from './ModelSelector';

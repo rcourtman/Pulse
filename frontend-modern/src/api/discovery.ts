@@ -71,9 +71,7 @@ export async function getDiscovery(
     // Agent discovery is frequently absent before first scan. Resolve via list endpoint
     // first to avoid noisy 404s for expected "not discovered yet" states.
     const collectionBasePath = agentCollectionBasePath(resourceType);
-    const agentListResponse = await apiFetch(
-      `${collectionBasePath}/${encodeURIComponent(hostId)}`,
-    );
+    const agentListResponse = await apiFetch(`${collectionBasePath}/${encodeURIComponent(hostId)}`);
     if (!agentListResponse.ok) {
       throw new Error(
         await readAPIErrorMessage(agentListResponse, 'Failed to list agent discoveries'),
@@ -91,9 +89,7 @@ export async function getDiscovery(
           (d.resource_type === 'host' || d.resource_type === 'agent') &&
           (d.resource_id === resourceId || d.resource_id === hostId || d.host_id === hostId),
       ) ??
-      agentList.discoveries.find(
-        (d) => d.resource_type === 'host' || d.resource_type === 'agent',
-      );
+      agentList.discoveries.find((d) => d.resource_type === 'host' || d.resource_type === 'agent');
 
     if (!resolvedAgentDiscovery) {
       return null;

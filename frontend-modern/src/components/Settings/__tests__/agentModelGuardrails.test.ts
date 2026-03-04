@@ -99,7 +99,9 @@ describe('agent model guardrails', () => {
     expect(aiChatSource).toContain("resource.type === 'truenas'");
     expect(aiChatSource).not.toContain("resource.type === 'host'");
     expect(aiChatSource).toContain("type: 'agent'");
-    expect(aiChatSource).toContain("mention.type === 'agent' ? { ...mention, type: 'host' } : mention");
+    expect(aiChatSource).toContain(
+      "mention.type === 'agent' ? { ...mention, type: 'host' } : mention",
+    );
     expect(mentionAutocompleteSource).toContain("| 'agent'");
     expect(mentionAutocompleteSource).not.toContain("| 'host'");
   });

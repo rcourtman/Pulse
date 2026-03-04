@@ -1,5 +1,1 @@
-export {
-  AgentLimitWarningBanner,
-  HostLimitWarningBanner,
-  default,
-} from './HostLimitWarningBanner';
+export { AgentLimitWarningBanner, HostLimitWarningBanner, default } from './HostLimitWarningBanner';

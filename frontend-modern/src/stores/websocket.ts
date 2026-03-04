@@ -600,11 +600,7 @@ export function createWebSocketStore(url: string) {
     }
   });
 
-  const markTokenRevoked = (
-    key: 'dockerHosts' | 'agents',
-    tokenId: string,
-    hostIds: string[],
-  ) => {
+  const markTokenRevoked = (key: 'dockerHosts' | 'agents', tokenId: string, hostIds: string[]) => {
     if (!hostIds || hostIds.length === 0) return;
     const timestamp = Date.now();
     const targetIds = new Set(hostIds.filter(Boolean));
