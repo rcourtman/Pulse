@@ -60,7 +60,6 @@ func (l *MultiTenantOrganizationLoader) GetOrganization(orgID string) (*models.O
 }
 
 // TokenCanAccessOrg checks if an API token is authorized to access the specified organization.
-// It uses the token's CanAccessOrg method and logs warnings for unbound legacy tokens.
 func (c *DefaultAuthorizationChecker) TokenCanAccessOrg(token *config.APITokenRecord, orgID string) bool {
 	if token == nil {
 		// No token means session-based auth - defer to user membership check
@@ -69,14 +68,6 @@ func (c *DefaultAuthorizationChecker) TokenCanAccessOrg(token *config.APITokenRe
 
 	// Check if token can access the org
 	canAccess := token.CanAccessOrg(orgID)
-
-	if token.IsLegacyToken() {
-		log.Warn().
-			Str("token_id", token.ID).
-			Str("token_name", token.Name).
-			Str("org_id", orgID).
-			Msg("Legacy unbound token attempted organization access and was denied")
-	}
 
 	if !canAccess {
 		log.Debug().
@@ -147,9 +138,6 @@ type AuthorizationResult struct {
 
 	// Reason provides a human-readable reason for the decision.
 	Reason string
-
-	// IsLegacyToken indicates if the access was granted via a legacy wildcard token.
-	IsLegacyToken bool
 }
 
 // CheckAccess performs a comprehensive authorization check for a request.
@@ -157,9 +145,8 @@ func (c *DefaultAuthorizationChecker) CheckAccess(token *config.APITokenRecord, 
 	// The default organization is always accessible to any authenticated principal.
 	if orgID == "default" && (token != nil || userID != "") {
 		return AuthorizationResult{
-			Allowed:       true,
-			Reason:        "Default organization is accessible to all authenticated users",
-			IsLegacyToken: token != nil && token.IsLegacyToken(),
+			Allowed: true,
+			Reason:  "Default organization is accessible to all authenticated users",
 		}
 	}
 
@@ -172,9 +159,8 @@ func (c *DefaultAuthorizationChecker) CheckAccess(token *config.APITokenRecord, 
 			}
 		}
 		return AuthorizationResult{
-			Allowed:       true,
-			Reason:        "Token authorized for organization",
-			IsLegacyToken: token.IsLegacyToken(),
+			Allowed: true,
+			Reason:  "Token authorized for organization",
 		}
 	}
 

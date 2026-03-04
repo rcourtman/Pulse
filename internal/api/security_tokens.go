@@ -252,16 +252,6 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	// If this was a migrated env token, suppress re-migration on restart
-	if strings.HasPrefix(removed.Name, "Migrated from .env") {
-		r.config.SuppressEnvMigration(removed.Hash)
-		if r.persistence != nil {
-			if err := r.persistence.SaveEnvTokenSuppressions(r.config.SuppressedEnvMigrations); err != nil {
-				log.Warn().Err(err).Msg("Failed to persist env token suppression list")
-			}
-		}
-	}
-
 	r.config.SortAPITokens()
 
 	if r.persistence != nil {
@@ -362,16 +352,6 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 	if oldRecord.ExpiresAt != nil {
 		t := *oldRecord.ExpiresAt
 		newRecord.ExpiresAt = &t
-	}
-
-	// If this was a migrated env token, suppress re-migration on restart.
-	if strings.HasPrefix(oldRecord.Name, "Migrated from .env") {
-		r.config.SuppressEnvMigration(oldRecord.Hash)
-		if r.persistence != nil {
-			if err := r.persistence.SaveEnvTokenSuppressions(r.config.SuppressedEnvMigrations); err != nil {
-				log.Warn().Err(err).Msg("Failed to persist env token suppression list")
-			}
-		}
 	}
 
 	// Remove old, add new (rollback if persistence fails)

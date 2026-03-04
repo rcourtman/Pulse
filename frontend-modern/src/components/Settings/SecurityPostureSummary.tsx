@@ -9,7 +9,7 @@ import XCircle from 'lucide-solid/icons/x-circle';
 interface SecurityPostureSummaryProps {
   status: {
     hasAuthentication: boolean;
-    oidcEnabled?: boolean;
+    ssoEnabled?: boolean;
     hasProxyAuth?: boolean;
     apiTokenConfigured: boolean;
     exportProtected: boolean;
@@ -35,8 +35,8 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
     {
       key: 'oidc',
       label: 'Single sign-on',
-      enabled: Boolean(props.status.oidcEnabled),
-      description: props.status.oidcEnabled ? 'OIDC configured' : 'Not configured',
+      enabled: Boolean(props.status.ssoEnabled),
+      description: props.status.ssoEnabled ? 'Provider configured' : 'Not configured',
       critical: false,
     },
     {

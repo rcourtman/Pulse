@@ -53,7 +53,7 @@ describe('Login', () => {
     const securityStatus = {
       hasAuthentication: true,
       hideLocalLogin: false,
-      oidcEnabled: false,
+      ssoEnabled: false,
     };
 
     render(() => (
@@ -66,12 +66,20 @@ describe('Login', () => {
     expect(screen.getByRole('button', { name: /sign in to pulse/i })).toBeInTheDocument();
   });
 
-  it('hides local login form when hideLocalLogin is true and OIDC is enabled', async () => {
+  it('hides local login form when hideLocalLogin is true and an SSO provider is available', async () => {
     const mockOnLogin = vi.fn();
     const securityStatus = {
       hasAuthentication: true,
       hideLocalLogin: true,
-      oidcEnabled: true,
+      ssoProviders: [
+        {
+          id: 'legacy-oidc',
+          name: 'Single Sign-On',
+          type: 'oidc',
+          displayName: 'Single Sign-On',
+          loginUrl: '/api/oidc/legacy-oidc/login',
+        },
+      ],
     };
 
     render(() => (
@@ -106,7 +114,15 @@ describe('Login', () => {
     const securityStatus = {
       hasAuthentication: true,
       hideLocalLogin: true,
-      oidcEnabled: true,
+      ssoProviders: [
+        {
+          id: 'legacy-oidc',
+          name: 'Single Sign-On',
+          type: 'oidc',
+          displayName: 'Single Sign-On',
+          loginUrl: '/api/oidc/legacy-oidc/login',
+        },
+      ],
     };
 
     render(() => (
@@ -125,7 +141,7 @@ describe('Login', () => {
     const securityStatus = {
       hasAuthentication: true,
       hideLocalLogin: false,
-      oidcEnabled: false,
+      ssoEnabled: false,
     };
 
     render(() => (

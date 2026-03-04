@@ -163,11 +163,15 @@ func (r *Router) ensureSSOConfig() *config.SSOConfig {
 			}
 			if cfg != nil {
 				r.ssoConfig = cfg
-				return r.ssoConfig
 			}
 		}
-		r.ssoConfig = config.NewSSOConfig()
+
+		if r.ssoConfig == nil {
+			r.ssoConfig = config.NewSSOConfig()
+		}
 	}
+
+	setSSOAuthSnapshot(r.config, r.ssoConfig)
 	return r.ssoConfig
 }
 
@@ -535,9 +539,14 @@ func (r *Router) handleDeleteSSOProvider(w http.ResponseWriter, req *http.Reques
 
 func (r *Router) saveSSOConfig() error {
 	if r.persistence == nil {
+		setSSOAuthSnapshot(r.config, r.ssoConfig)
 		return nil
 	}
-	return r.persistence.SaveSSOConfig(r.ssoConfig)
+	if err := r.persistence.SaveSSOConfig(r.ssoConfig); err != nil {
+		return err
+	}
+	setSSOAuthSnapshot(r.config, r.ssoConfig)
+	return nil
 }
 
 func providerToResponse(p *config.SSOProvider, publicURL string) SSOProviderResponse {

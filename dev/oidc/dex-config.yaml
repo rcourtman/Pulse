@@ -18,9 +18,9 @@ staticClients:
     name: Pulse Dev
     secret: pulse-secret
     redirectURIs:
-      - http://127.0.0.1:5173/api/oidc/callback
-      - http://127.0.0.1:7655/api/oidc/callback
-      - http://127.0.0.1:8765/api/oidc/callback
+      - http://127.0.0.1:5173/api/oidc/legacy-oidc/callback
+      - http://127.0.0.1:7655/api/oidc/legacy-oidc/callback
+      - http://127.0.0.1:8765/api/oidc/legacy-oidc/callback
 staticPasswords:
   - email: admin@example.com
     hash: "$2a$10$uo8fC/3BtvIULFvS7/NuRe6Bn3NmidSXHHiAchpdZEiBBV3IcJKfy"

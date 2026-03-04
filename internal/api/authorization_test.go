@@ -115,12 +115,10 @@ func TestDefaultAuthorizationChecker_CheckAccess(t *testing.T) {
 		token := &config.APITokenRecord{OrgID: "acme"}
 		res := checker.CheckAccess(token, "user1", "acme")
 		assert.True(t, res.Allowed)
-		assert.False(t, res.IsLegacyToken)
 
 		tokenLegacy := &config.APITokenRecord{OrgID: ""} // Legacy/unbound
 		res = checker.CheckAccess(tokenLegacy, "user1", "acme")
 		assert.False(t, res.Allowed)
-		assert.False(t, res.IsLegacyToken)
 
 		tokenDenied := &config.APITokenRecord{OrgID: "other"}
 		res = checker.CheckAccess(tokenDenied, "user1", "acme")

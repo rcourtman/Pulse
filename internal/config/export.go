@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -29,7 +28,7 @@ type ExportData struct {
 	Apprise       notifications.AppriseConfig   `json:"apprise"`
 	System        SystemSettings                `json:"system"`
 	GuestMetadata map[string]*GuestMetadata     `json:"guestMetadata,omitempty"`
-	OIDC          *OIDCConfig                   `json:"oidc,omitempty"`
+	SSO           *SSOConfig                    `json:"sso,omitempty"`
 	APITokens     []APITokenRecord              `json:"apiTokens,omitempty"`
 }
 
@@ -75,9 +74,9 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 		systemSettings = DefaultSystemSettings()
 	}
 
-	oidcConfig, err := c.LoadOIDCConfig()
+	ssoConfig, err := c.LoadSSOConfig()
 	if err != nil {
-		return "", fmt.Errorf("failed to load oidc configuration: %w", err)
+		return "", fmt.Errorf("failed to load sso configuration: %w", err)
 	}
 
 	apiTokens, err := c.LoadAPITokens()
@@ -93,7 +92,7 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 
 	// Create export data
 	exportData := ExportData{
-		Version:       "4.1",
+		Version:       "4.2",
 		ExportedAt:    time.Now(),
 		Nodes:         *nodes,
 		Alerts:        *alertConfig,
@@ -102,7 +101,7 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 		Apprise:       *appriseConfig,
 		System:        *systemSettings,
 		GuestMetadata: guestMetadata,
-		OIDC:          oidcConfig,
+		SSO:           ssoConfig,
 		APITokens:     apiTokens,
 	}
 
@@ -148,8 +147,10 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 
 	// Check version compatibility (warn but don't fail)
 	switch exportData.Version {
-	case "4.1", "":
+	case "4.2", "":
 		// current version, nothing to do
+	case "4.1":
+		log.Info().Msg("Config was exported from version 4.1. SSO settings were not included in that format.")
 	case "4.0":
 		log.Info().Msg("Config was exported from version 4.0. API tokens were not included in that format.")
 	default:
@@ -197,8 +198,8 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 		return fmt.Errorf("failed to import system settings: %w", err)
 	}
 
-	// Import API tokens for newer export formats
-	if exportData.Version == "4.1" {
+	// Import API tokens for export versions that include them.
+	if exportData.Version != "4.0" {
 		if exportData.APITokens == nil {
 			exportData.APITokens = []APITokenRecord{}
 		}
@@ -207,10 +208,14 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 		}
 	}
 
-	// Import OIDC configuration
-	if exportData.OIDC != nil {
-		if err := c.SaveOIDCConfig(*exportData.OIDC); err != nil {
-			return fmt.Errorf("failed to import oidc configuration: %w", err)
+	// Import SSO configuration
+	if exportData.SSO != nil {
+		if err := c.SaveSSOConfig(exportData.SSO); err != nil {
+			return fmt.Errorf("failed to import sso configuration: %w", err)
+		}
+	} else {
+		if err := c.SaveSSOConfig(NewSSOConfig()); err != nil {
+			return fmt.Errorf("failed to reset sso configuration: %w", err)
 		}
 	}
 
@@ -218,13 +223,6 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 		return fmt.Errorf("failed to commit import transaction: %w", err)
 	}
 	committed = true
-
-	if exportData.OIDC == nil {
-		// Remove existing OIDC config if backup did not include one
-		if err := c.fs.Remove(c.oidcFile); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to remove existing oidc configuration: %w", err)
-		}
-	}
 
 	// Import guest metadata into the active persistence scope.
 	if err := c.GetGuestMetadataStore().ReplaceAll(exportData.GuestMetadata); err != nil {

@@ -33,7 +33,6 @@ export const Login: Component<LoginProps> = (props) => {
   const [oidcError, setOidcError] = createSignal('');
   const [oidcMessage, setOidcMessage] = createSignal('');
 
-  const supportsOIDC = () => Boolean(authStatus()?.oidcEnabled);
   const ssoProviders = () => authStatus()?.ssoProviders || [];
 
   const resolveSSOError = (reason?: string | null) => {
@@ -105,7 +104,7 @@ export const Login: Component<LoginProps> = (props) => {
 
     // If securityStatus was passed from App.tsx, use it directly without making another API call
     // This eliminates the flicker between "Checking authentication..." and the login form
-    // AND ensures hideLocalLogin, oidcEnabled, etc. are properly respected
+    // AND ensures hideLocalLogin and SSO settings are properly respected
     if (props.securityStatus) {
       logger.debug(
         '[Login] Using securityStatus from App.tsx, skipping redundant auth check',
@@ -116,10 +115,10 @@ export const Login: Component<LoginProps> = (props) => {
       return;
     }
 
-    // Legacy fallback: if only hasAuth was passed (without full securityStatus)
+    // Compatibility fallback: if only hasAuth was passed (without full securityStatus)
     if (props.hasAuth !== undefined && !props.securityStatus) {
-      logger.debug('[Login] Using hasAuth from App.tsx (legacy), fetching full security status');
-      // Still need to fetch full status to get hideLocalLogin, OIDC settings, etc.
+      logger.debug('[Login] Using hasAuth from App.tsx fallback, fetching full security status');
+      // Still need to fetch full status to get hideLocalLogin and SSO settings.
     }
 
     logger.debug('[Login] Starting auth check...');
@@ -140,21 +139,6 @@ export const Login: Component<LoginProps> = (props) => {
       setLoadingAuth(false);
     }
   });
-
-  const startOidcLogin = () => {
-    if (!supportsOIDC()) return;
-
-    setOidcError('');
-    setOidcMessage('');
-    setError('');
-    setOidcLoading(true);
-
-    // Navigate directly to the OIDC login endpoint using GET.
-    // The server will respond with an HTTP redirect to the OIDC provider.
-    // This guarantees same-window navigation in all browsers, including Arc.
-    const returnTo = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
-    window.location.href = `/api/oidc/login?returnTo=${returnTo}`;
-  };
 
   // Auto-redirect to OIDC is intentionally disabled to prevent redirect loops
   // when both password and OIDC are configured. Users must manually click OIDC button.
@@ -287,9 +271,8 @@ export const Login: Component<LoginProps> = (props) => {
     }
   };
 
-  const legacyDisableAuth = () => authStatus()?.deprecatedDisableAuth === true;
   const showFirstRunSetup = () =>
-    authStatus()?.hasAuthentication === false || legacyDisableAuth() || hasStoredSetupCredentials();
+    authStatus()?.hasAuthentication === false || hasStoredSetupCredentials();
 
   const shouldShowLocalLogin = () => {
     const params = new URLSearchParams(window.location.search);
@@ -323,8 +306,6 @@ export const Login: Component<LoginProps> = (props) => {
               error,
               loading,
               handleSubmit,
-              supportsOIDC,
-              startOidcLogin,
               oidcLoading,
               oidcError,
               oidcMessage,
@@ -362,8 +343,6 @@ const LoginForm: Component<{
   error: () => string;
   loading: () => boolean;
   handleSubmit: (e: Event) => void;
-  supportsOIDC: () => boolean;
-  startOidcLogin: () => void | Promise<void>;
   oidcLoading: () => boolean;
   oidcError: () => string;
   oidcMessage: () => string;
@@ -380,8 +359,6 @@ const LoginForm: Component<{
     error,
     loading,
     handleSubmit,
-    supportsOIDC,
-    startOidcLogin,
     oidcLoading,
     oidcError,
     oidcMessage,
@@ -491,52 +468,6 @@ const LoginForm: Component<{
                   </button>
                 )}
               </For>
-              <Show when={oidcError()}>
-                <div class="rounded-md bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-300">
-                  {oidcError()}
-                </div>
-              </Show>
-              <Show when={oidcMessage()}>
-                <div class="rounded-md bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-700 px-3 py-2 text-sm text-green-600 dark:text-green-300">
-                  {oidcMessage()}
-                </div>
-              </Show>
-              <Show when={showLocalLogin}>
-                <div class="flex items-center gap-3 pt-2">
-                  <span class="flex-1 h-px bg-surface-hover" />
-                  <span class="text-xs uppercase tracking-wide text-muted">or</span>
-                  <span class="flex-1 h-px bg-surface-hover" />
-                </div>
-                <p class="text-xs text-center text-muted">
-                  Use your admin credentials to sign in below.
-                </p>
-              </Show>
-            </div>
-          </Show>
-          {/* Legacy OIDC fallback (when no multi-provider SSO but legacy OIDC is enabled) */}
-          <Show when={ssoProviders.length === 0 && supportsOIDC()}>
-            <div class="space-y-3">
-              <button
-                type="button"
-                class={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-md border border-blue-500 text-blue-600 hover:bg-blue-50 transition dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-900 ${oidcLoading() ? 'opacity-75 cursor-wait' : ''}`}
-                disabled={oidcLoading()}
-                onClick={() => startOidcLogin()}
-              >
-                <Show
-                  when={!oidcLoading()}
-                  fallback={
-                    <span class="inline-flex items-center gap-2">
-                      <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                      Redirecting…
-                    </span>
-                  }
-                >
-                  <span class="inline-flex items-center gap-2">
-                    <Globe class="w-5 h-5" />
-                    Continue with Single Sign-On
-                  </span>
-                </Show>
-              </button>
               <Show when={oidcError()}>
                 <div class="rounded-md bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-300">
                   {oidcError()}

@@ -8,7 +8,7 @@ import Info from 'lucide-solid/icons/info';
 
 interface SecurityStatusInfo {
   hasAuthentication: boolean;
-  oidcEnabled?: boolean;
+  ssoEnabled?: boolean;
   hasProxyAuth?: boolean;
   apiTokenConfigured: boolean;
   exportProtected: boolean;

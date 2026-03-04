@@ -17,14 +17,12 @@ interface SecurityStatusInfo {
   proxyAuthUsername?: string;
   proxyAuthIsAdmin?: boolean;
   proxyAuthLogoutURL?: string;
-  deprecatedDisableAuth?: boolean;
 }
 
 interface SecurityAuthPanelProps {
   securityStatus: Accessor<SecurityStatusInfo | null>;
   securityStatusLoading: Accessor<boolean>;
   versionInfo: Accessor<VersionInfo | null>;
-  authDisabledByEnv: Accessor<boolean>;
   showQuickSecuritySetup: Accessor<boolean>;
   setShowQuickSecuritySetup: Setter<boolean>;
   showQuickSecurityWizard: Accessor<boolean>;
@@ -67,47 +65,24 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
                 </svg>
               </div>
               <SectionHeader title="Authentication disabled" size="sm" class="flex-1" />
-              <Show
-                when={!props.authDisabledByEnv()}
-                fallback={
-                  <span class="px-3 py-1.5 text-xs font-semibold rounded-md border border-amber-300 text-amber-800 bg-amber-100 dark:border-amber-700 dark:text-amber-100 dark:bg-amber-900 whitespace-nowrap">
-                    Controlled by DISABLE_AUTH
-                  </span>
-                }
+              <button
+                type="button"
+                onClick={() => props.setShowQuickSecuritySetup(!props.showQuickSecuritySetup())}
+                class="px-3 py-1.5 text-xs font-medium rounded-md border border-amber-300 text-amber-800 bg-amber-100 hover:bg-amber-200 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900 dark:hover:bg-amber-800 whitespace-nowrap"
               >
-                <button
-                  type="button"
-                  onClick={() => props.setShowQuickSecuritySetup(!props.showQuickSecuritySetup())}
-                  class="px-3 py-1.5 text-xs font-medium rounded-md border border-amber-300 text-amber-800 bg-amber-100 hover:bg-amber-200 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900 dark:hover:bg-amber-800 whitespace-nowrap"
-                >
-                  Setup
-                </button>
-              </Show>
+                Setup
+              </button>
             </div>
           </div>
 
           {/* Content */}
           <div class="p-6">
             <p class="text-sm text-amber-700 dark:text-amber-300 mb-4">
-              <Show
-                when={props.authDisabledByEnv()}
-                fallback={
-                  <>
-                    Authentication is currently disabled. Set up password authentication to protect
-                    your Pulse instance.
-                  </>
-                }
-              >
-                Authentication settings are locked by the legacy{' '}
-                <code class="font-mono text-xs text-amber-800 dark:text-amber-200">
-                  DISABLE_AUTH
-                </code>{' '}
-                environment variable. Remove it from your deployment and restart Pulse before
-                enabling security from this page.
-              </Show>
+              Authentication is currently disabled. Set up password authentication to protect your
+              Pulse instance.
             </p>
 
-            <Show when={props.showQuickSecuritySetup() && !props.authDisabledByEnv()}>
+            <Show when={props.showQuickSecuritySetup()}>
               <QuickSecuritySetup
                 onConfigured={() => {
                   props.setShowQuickSecuritySetup(false);
@@ -147,22 +122,13 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
               >
                 Change password
               </button>
-              <Show
-                when={!props.authDisabledByEnv()}
-                fallback={
-                  <span class="w-full sm:w-auto min-h-10 sm:min-h-10 inline-flex items-center justify-center px-4 py-2.5 text-sm font-semibold border border-amber-300 text-amber-800 bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900 rounded-md">
-                    Remove DISABLE_AUTH to rotate credentials
-                  </span>
-                }
+              <button
+                type="button"
+                onClick={() => props.setShowQuickSecurityWizard(!props.showQuickSecurityWizard())}
+                class="w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors"
               >
-                <button
-                  type="button"
-                  onClick={() => props.setShowQuickSecurityWizard(!props.showQuickSecurityWizard())}
-                  class="w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors"
-                >
-                  Rotate credentials
-                </button>
-              </Show>
+                Rotate credentials
+              </button>
             </div>
             <div class="text-xs text-muted">
               <span class="font-medium text-base-content">User:</span>{' '}
@@ -184,7 +150,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
             />
           </div>
 
-          <Show when={!props.authDisabledByEnv() && props.showQuickSecurityWizard()}>
+          <Show when={props.showQuickSecurityWizard()}>
             <div class="p-4 sm:p-6">
               <QuickSecuritySetup
                 mode="rotate"

@@ -359,7 +359,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 		"nodes.enc*",
 		"email.enc*",
 		"webhooks.enc*",
-		"oidc.enc*",
+		"sso.enc*",
 	}
 
 	var foundFiles []string

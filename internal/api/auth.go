@@ -32,6 +32,137 @@ var (
 	}
 )
 
+type ssoOIDCProviderAuthSnapshot struct {
+	ProviderID    string
+	IssuerURL     string
+	ClientID      string
+	ClientSecret  string
+	RedirectURL   string
+	Scopes        []string
+	UsernameClaim string
+	EmailClaim    string
+	CABundle      string
+}
+
+type ssoAuthSnapshot struct {
+	HasEnabledProviders bool
+	OIDCProviders       []ssoOIDCProviderAuthSnapshot
+}
+
+var authSSOState = struct {
+	mu         sync.RWMutex
+	byConfigID map[string]ssoAuthSnapshot
+}{
+	byConfigID: make(map[string]ssoAuthSnapshot),
+}
+
+func authConfigID(cfg *config.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	if id := strings.TrimSpace(cfg.DataPath); id != "" {
+		return id
+	}
+	return strings.TrimSpace(cfg.ConfigPath)
+}
+
+func buildSSOAuthSnapshot(ssoCfg *config.SSOConfig) ssoAuthSnapshot {
+	if ssoCfg == nil {
+		return ssoAuthSnapshot{}
+	}
+
+	enabledProviders := ssoCfg.GetEnabledProviders()
+	snapshot := ssoAuthSnapshot{HasEnabledProviders: len(enabledProviders) > 0}
+	for _, provider := range enabledProviders {
+		if provider.Type != config.SSOProviderTypeOIDC || provider.OIDC == nil {
+			continue
+		}
+		scopes := append([]string{}, provider.OIDC.Scopes...)
+		if len(scopes) == 0 {
+			scopes = []string{"openid", "profile", "email"}
+		}
+		snapshot.OIDCProviders = append(snapshot.OIDCProviders, ssoOIDCProviderAuthSnapshot{
+			ProviderID:    provider.ID,
+			IssuerURL:     provider.OIDC.IssuerURL,
+			ClientID:      provider.OIDC.ClientID,
+			ClientSecret:  provider.OIDC.ClientSecret,
+			RedirectURL:   provider.OIDC.RedirectURL,
+			Scopes:        scopes,
+			UsernameClaim: provider.OIDC.UsernameClaim,
+			EmailClaim:    provider.OIDC.EmailClaim,
+			CABundle:      provider.OIDC.CABundle,
+		})
+	}
+
+	return snapshot
+}
+
+func setSSOAuthSnapshot(cfg *config.Config, ssoCfg *config.SSOConfig) {
+	configID := authConfigID(cfg)
+	if configID == "" {
+		return
+	}
+
+	authSSOState.mu.Lock()
+	authSSOState.byConfigID[configID] = buildSSOAuthSnapshot(ssoCfg)
+	authSSOState.mu.Unlock()
+}
+
+func getSSOAuthSnapshot(cfg *config.Config) ssoAuthSnapshot {
+	configID := authConfigID(cfg)
+	if configID == "" {
+		return ssoAuthSnapshot{}
+	}
+
+	authSSOState.mu.RLock()
+	snapshot := authSSOState.byConfigID[configID]
+	authSSOState.mu.RUnlock()
+	return snapshot
+}
+
+func hasEnabledSSOProvidersForAuth(cfg *config.Config) bool {
+	return getSSOAuthSnapshot(cfg).HasEnabledProviders
+}
+
+func resolveOIDCRefreshConfig(cfg *config.Config, session *SessionData) (*config.OIDCConfig, string) {
+	if session == nil {
+		return nil, ""
+	}
+
+	issuer := strings.TrimSpace(session.OIDCIssuer)
+	if issuer == "" {
+		return nil, ""
+	}
+
+	sessionClientID := strings.TrimSpace(session.OIDCClientID)
+	snapshot := getSSOAuthSnapshot(cfg)
+	if !snapshot.HasEnabledProviders {
+		return nil, ""
+	}
+
+	for _, provider := range snapshot.OIDCProviders {
+		if strings.TrimSpace(provider.IssuerURL) != issuer {
+			continue
+		}
+		if sessionClientID != "" && strings.TrimSpace(provider.ClientID) != sessionClientID {
+			continue
+		}
+		return &config.OIDCConfig{
+			Enabled:       true,
+			IssuerURL:     provider.IssuerURL,
+			ClientID:      provider.ClientID,
+			ClientSecret:  provider.ClientSecret,
+			RedirectURL:   provider.RedirectURL,
+			Scopes:        append([]string{}, provider.Scopes...),
+			UsernameClaim: provider.UsernameClaim,
+			EmailClaim:    provider.EmailClaim,
+			CABundle:      provider.CABundle,
+		}, provider.ProviderID
+	}
+
+	return nil, ""
+}
+
 type authContextKey string
 
 const (
@@ -282,33 +413,10 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		}
 	}
 
-	// Check for OIDC session cookie
-	if cfg.OIDC != nil && cfg.OIDC.Enabled {
-		if cookie, err := readSessionCookie(r); err == nil && cookie.Value != "" {
-			if ValidateSession(cookie.Value) {
-				// Check if this is an OIDC session
-				if username := GetSessionUsername(cookie.Value); username != "" {
-					// Check if OIDC tokens need refresh
-					session := GetSessionStore().GetSession(cookie.Value)
-					if session != nil && session.OIDCRefreshToken != "" {
-						// Check if access token is expired or about to expire (5 min buffer)
-						if time.Now().Add(5 * time.Minute).After(session.OIDCAccessTokenExp) {
-							// Token needs refresh - attempt it asynchronously
-							go refreshOIDCSessionTokens(cfg, cookie.Value, session)
-						}
-					}
-					w.Header().Set("X-Authenticated-User", username)
-					w.Header().Set("X-Auth-Method", "oidc")
-					return true
-				}
-			}
-		}
-	}
-
-	// If no auth is configured at all, allow access unless OIDC is enabled
+	// If no auth is configured at all, allow access unless SSO is enabled.
 	if cfg.AuthUser == "" && cfg.AuthPass == "" && !cfg.HasAPITokens() && cfg.ProxyAuthSecret == "" {
-		if cfg.OIDC != nil && cfg.OIDC.Enabled {
-			log.Debug().Msg("OIDC enabled without local credentials, authentication required")
+		if hasEnabledSSOProvidersForAuth(cfg) {
+			log.Debug().Msg("SSO enabled without local credentials, authentication required")
 		} else {
 			log.Debug().Msg("No auth configured, allowing access as 'anonymous'")
 			if w != nil {
@@ -350,11 +458,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 
 			if ok {
 				attachAPITokenRecord(r, record)
-				tokenID := record.ID
-				if tokenID == "" && len(record.Hash) >= 8 {
-					tokenID = "legacy-" + record.Hash[:8] // Fallback for missing IDs
-				}
-				w.Header().Set("X-Authenticated-User", fmt.Sprintf("token:%s", tokenID))
+				w.Header().Set("X-Authenticated-User", fmt.Sprintf("token:%s", record.ID))
 				w.Header().Set("X-Auth-Method", "api_token")
 				return true
 			}
@@ -398,11 +502,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 
 		if ok {
 			attachAPITokenRecord(r, record)
-			tokenID := record.ID
-			if tokenID == "" && len(record.Hash) >= 8 {
-				tokenID = "legacy-" + record.Hash[:8] // Fallback for missing IDs
-			}
-			w.Header().Set("X-Authenticated-User", fmt.Sprintf("token:%s", tokenID))
+			w.Header().Set("X-Authenticated-User", fmt.Sprintf("token:%s", record.ID))
 			w.Header().Set("X-Auth-Method", "api_token")
 			return true
 		}
@@ -436,10 +536,21 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		// Use ValidateAndExtendSession for sliding expiration
 		if ValidateAndExtendSession(cookie.Value) {
 			username := GetSessionUsername(cookie.Value)
+			session := GetSessionStore().GetSession(cookie.Value)
+			if session != nil && session.OIDCRefreshToken != "" && hasEnabledSSOProvidersForAuth(cfg) {
+				// Check if access token is expired or about to expire (5 min buffer)
+				if time.Now().Add(5 * time.Minute).After(session.OIDCAccessTokenExp) {
+					go refreshOIDCSessionTokens(cfg, cookie.Value, session)
+				}
+			}
 			if username != "" {
 				w.Header().Set("X-Authenticated-User", username)
 			}
-			w.Header().Set("X-Auth-Method", "session")
+			if session != nil && strings.TrimSpace(session.OIDCIssuer) != "" {
+				w.Header().Set("X-Auth-Method", "oidc")
+			} else {
+				w.Header().Set("X-Auth-Method", "session")
+			}
 			return true
 		}
 		// Debug logging for failed session validation
@@ -954,17 +1065,6 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 		}
 	}
 
-	// Check OIDC session
-	if cfg.OIDC != nil && cfg.OIDC.Enabled {
-		if cookie, err := readSessionCookie(r); err == nil && cookie.Value != "" {
-			if ValidateSession(cookie.Value) {
-				if username := GetSessionUsername(cookie.Value); username != "" {
-					return attachUserContext(r, username)
-				}
-			}
-		}
-	}
-
 	// Check API tokens
 	// Check API tokens
 	// We need to check if EITHER the global config has tokens OR if we have a tenant monitor (which might have tokens)
@@ -1014,11 +1114,7 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 
 				if ok {
 					attachAPITokenRecord(r, record)
-					tokenID := record.ID
-					if tokenID == "" && len(record.Hash) >= 8 {
-						tokenID = "legacy-" + record.Hash[:8]
-					}
-					return attachUserContext(r, fmt.Sprintf("token:%s", tokenID)), true
+					return attachUserContext(r, fmt.Sprintf("token:%s", record.ID)), true
 				}
 				return nil, false
 			}
@@ -1027,11 +1123,7 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 			// or don't use the global config.Mu
 			if record, ok := targetConfig.ValidateAPIToken(token); ok {
 				attachAPITokenRecord(r, record)
-				tokenID := record.ID
-				if tokenID == "" && len(record.Hash) >= 8 {
-					tokenID = "legacy-" + record.Hash[:8]
-				}
-				return attachUserContext(r, fmt.Sprintf("token:%s", tokenID)), true
+				return attachUserContext(r, fmt.Sprintf("token:%s", record.ID)), true
 			}
 			return nil, false
 		}
@@ -1128,24 +1220,12 @@ func refreshOIDCSessionTokens(cfg *config.Config, sessionToken string, session *
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Get or create OIDC service for this session's issuer
-	oidcCfg := cfg.OIDC
-	if oidcCfg == nil || !oidcCfg.Enabled {
-		// Legacy OIDC not configured — session may be from an SSO OIDC provider.
-		// Skip refresh silently; the session continues until natural expiry.
-		log.Debug().Msg("Legacy OIDC not enabled, skipping token refresh")
-		return
-	}
-
-	// Verify the session's issuer matches our config
-	if oidcCfg.IssuerURL != session.OIDCIssuer {
-		// Issuer mismatch — session was likely created by a different OIDC provider
-		// (e.g., SSO multi-provider). Don't invalidate; skip refresh and let the
-		// session continue until natural expiry.
-		log.Debug().
-			Str("session_issuer", session.OIDCIssuer).
-			Str("config_issuer", oidcCfg.IssuerURL).
-			Msg("OIDC issuer mismatch, skipping token refresh (session may be from SSO provider)")
+	// Resolve OIDC provider config from v6 enabled SSO providers.
+	oidcCfg, providerID := resolveOIDCRefreshConfig(cfg, session)
+	if oidcCfg == nil {
+		// Session may belong to a disabled/removed provider. Skip refresh silently;
+		// the session continues until natural expiry.
+		log.Debug().Msg("No matching enabled SSO OIDC provider for session refresh")
 		return
 	}
 
@@ -1162,6 +1242,7 @@ func refreshOIDCSessionTokens(cfg *config.Config, sessionToken string, session *
 		log.Warn().
 			Err(err).
 			Str("issuer", session.OIDCIssuer).
+			Str("provider_id", providerID).
 			Msg("OIDC token refresh failed - invalidating session")
 
 		// Token refresh failed - this usually means the refresh token was revoked
@@ -1176,6 +1257,7 @@ func refreshOIDCSessionTokens(cfg *config.Config, sessionToken string, session *
 
 	log.Info().
 		Time("new_expiry", result.Expiry).
+		Str("provider_id", providerID).
 		Msg("OIDC token refresh successful - session extended")
 
 	LogAuditEvent("oidc_token_refresh", "", "", "", true, "Token refreshed successfully")
