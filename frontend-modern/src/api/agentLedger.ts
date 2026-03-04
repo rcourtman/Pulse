@@ -9,20 +9,15 @@ export interface AgentLedgerEntry {
 }
 
 export interface AgentLedgerResponse {
-  hosts: AgentLedgerEntry[];
+  agents: AgentLedgerEntry[];
   total: number;
   limit: number; // 0 = unlimited
 }
 
 export class AgentLedgerAPI {
-  private static readonly baseUrl = '/api/license/host-ledger';
+  private static readonly baseUrl = '/api/license/agent-ledger';
 
   static async getLedger(): Promise<AgentLedgerResponse> {
     return apiFetchJSON<AgentLedgerResponse>(this.baseUrl);
   }
 }
-
-// Compatibility aliases while host naming is phased out from call sites.
-export type HostLedgerEntry = AgentLedgerEntry;
-export type HostLedgerResponse = AgentLedgerResponse;
-export class HostLedgerAPI extends AgentLedgerAPI {}

@@ -8,9 +8,6 @@ export interface AgentMetadata {
   notes?: string[]; // User annotations for AI context
 }
 
-// Compatibility alias while call sites migrate from host naming to agent naming.
-export type HostMetadata = AgentMetadata;
-
 export class AgentMetadataAPI {
   private static baseUrl = '/api/agents/metadata';
 
@@ -42,6 +39,3 @@ export class AgentMetadataAPI {
     });
   }
 }
-
-// Compatibility alias while transitioning imports.
-export class HostMetadataAPI extends AgentMetadataAPI {}

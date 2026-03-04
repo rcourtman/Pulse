@@ -84,7 +84,7 @@ func TestHostMetadataHandler(t *testing.T) {
 	mtp := config.NewMultiTenantPersistence(t.TempDir())
 	handler := NewHostMetadataHandler(mtp)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/hosts/metadata", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/metadata", nil)
 	resp := httptest.NewRecorder()
 	handler.HandleGetMetadata(resp, req)
 	if resp.Code != http.StatusOK {
@@ -98,7 +98,7 @@ func TestHostMetadataHandler(t *testing.T) {
 		t.Fatalf("expected empty metadata, got %v", all)
 	}
 
-	req = httptest.NewRequest(http.MethodPut, "/api/hosts/metadata/host1", strings.NewReader(`{"customUrl":"http://host.local"}`))
+	req = httptest.NewRequest(http.MethodPut, "/api/agents/metadata/host1", strings.NewReader(`{"customUrl":"http://host.local"}`))
 	resp = httptest.NewRecorder()
 	handler.HandleUpdateMetadata(resp, req)
 	if resp.Code != http.StatusOK {
@@ -112,7 +112,7 @@ func TestHostMetadataHandler(t *testing.T) {
 		t.Fatalf("unexpected metadata: %+v", meta)
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/api/hosts/metadata/host1", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/api/agents/metadata/host1", nil)
 	resp = httptest.NewRecorder()
 	handler.HandleDeleteMetadata(resp, req)
 	if resp.Code != http.StatusNoContent {

@@ -63,7 +63,7 @@ describe('AgentLedgerPanel', () => {
 
     // Now make API succeed on retry
     getLedgerMock.mockResolvedValue({
-      hosts: [
+      agents: [
         {
           name: 'host-1',
           type: 'agent',
@@ -108,7 +108,7 @@ describe('AgentLedgerPanel', () => {
 
   it('renders ledger data on successful load', async () => {
     getLedgerMock.mockResolvedValue({
-      hosts: [
+      agents: [
         {
           name: 'server-a',
           type: 'agent',

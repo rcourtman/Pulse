@@ -11,18 +11,13 @@ import (
 )
 
 const (
-	hostMetadataLegacyBasePath = "/api/hosts/metadata"
-	hostMetadataAgentBasePath  = "/api/agents/metadata"
+	hostMetadataAgentBasePath = "/api/agents/metadata"
 )
 
 func hostMetadataPathParts(path string) (hostID string, isCollection bool, ok bool) {
 	switch {
-	case path == hostMetadataLegacyBasePath || path == hostMetadataLegacyBasePath+"/":
-		return "", true, true
 	case path == hostMetadataAgentBasePath || path == hostMetadataAgentBasePath+"/":
 		return "", true, true
-	case strings.HasPrefix(path, hostMetadataLegacyBasePath+"/"):
-		return strings.TrimPrefix(path, hostMetadataLegacyBasePath+"/"), false, true
 	case strings.HasPrefix(path, hostMetadataAgentBasePath+"/"):
 		return strings.TrimPrefix(path, hostMetadataAgentBasePath+"/"), false, true
 	default:

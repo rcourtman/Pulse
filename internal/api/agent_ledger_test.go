@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-func TestHostLedgerEntryTypes(t *testing.T) {
-	entry := HostLedgerEntry{
+func TestAgentLedgerEntryTypes(t *testing.T) {
+	entry := AgentLedgerEntry{
 		Name:     "server-1",
 		Type:     "agent",
 		Status:   "online",
@@ -20,7 +20,7 @@ func TestHostLedgerEntryTypes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var decoded HostLedgerEntry
+	var decoded AgentLedgerEntry
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -64,45 +64,45 @@ func TestFormatLastSeen(t *testing.T) {
 	}
 }
 
-func TestHostDisplayName(t *testing.T) {
-	if got := hostDisplayName("Display", "hostname", "id"); got != "Display" {
-		t.Errorf("hostDisplayName = %q", got)
+func TestAgentDisplayName(t *testing.T) {
+	if got := agentDisplayName("Display", "hostname", "id"); got != "Display" {
+		t.Errorf("agentDisplayName = %q", got)
 	}
-	if got := hostDisplayName("", "hostname", "id"); got != "hostname" {
-		t.Errorf("hostDisplayName fallback hostname = %q", got)
+	if got := agentDisplayName("", "hostname", "id"); got != "hostname" {
+		t.Errorf("agentDisplayName fallback hostname = %q", got)
 	}
-	if got := hostDisplayName("", "", "id"); got != "id" {
-		t.Errorf("hostDisplayName fallback id = %q", got)
+	if got := agentDisplayName("", "", "id"); got != "id" {
+		t.Errorf("agentDisplayName fallback id = %q", got)
 	}
 }
 
-func TestHostLedgerResponseEmptyState(t *testing.T) {
-	resp := HostLedgerResponse{
-		Hosts: []HostLedgerEntry{},
-		Total: 0,
-		Limit: 0,
+func TestAgentLedgerResponseEmptyState(t *testing.T) {
+	resp := AgentLedgerResponse{
+		Agents: []AgentLedgerEntry{},
+		Total:  0,
+		Limit:  0,
 	}
 	data, err := json.Marshal(resp)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var decoded HostLedgerResponse
+	var decoded AgentLedgerResponse
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if decoded.Total != 0 || decoded.Limit != 0 || len(decoded.Hosts) != 0 {
+	if decoded.Total != 0 || decoded.Limit != 0 || len(decoded.Agents) != 0 {
 		t.Errorf("unexpected response: %+v", decoded)
 	}
 }
 
-func TestHostLedgerNilHostsBecomesEmptyArray(t *testing.T) {
-	resp := HostLedgerResponse{
-		Hosts: nil,
-		Total: 0,
-		Limit: 5,
+func TestAgentLedgerNilAgentsBecomesEmptyArray(t *testing.T) {
+	resp := AgentLedgerResponse{
+		Agents: nil,
+		Total:  0,
+		Limit:  5,
 	}
-	if resp.Hosts == nil {
-		resp.Hosts = []HostLedgerEntry{}
+	if resp.Agents == nil {
+		resp.Agents = []AgentLedgerEntry{}
 	}
 
 	data, err := json.Marshal(resp)
@@ -111,21 +111,21 @@ func TestHostLedgerNilHostsBecomesEmptyArray(t *testing.T) {
 	}
 	var decoded map[string]interface{}
 	json.Unmarshal(data, &decoded)
-	hosts, ok := decoded["hosts"].([]interface{})
+	agents, ok := decoded["agents"].([]interface{})
 	if !ok {
-		t.Fatalf("hosts is not an array: %T", decoded["hosts"])
+		t.Fatalf("agents is not an array: %T", decoded["agents"])
 	}
-	if len(hosts) != 0 {
-		t.Errorf("expected empty hosts array, got %d entries", len(hosts))
+	if len(agents) != 0 {
+		t.Errorf("expected empty agents array, got %d entries", len(agents))
 	}
 }
 
-func TestHandleHostLedgerHTTP(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/license/host-ledger", nil)
+func TestHandleAgentLedgerHTTP(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/license/agent-ledger", nil)
 	rec := httptest.NewRecorder()
 
-	resp := HostLedgerResponse{
-		Hosts: []HostLedgerEntry{
+	resp := AgentLedgerResponse{
+		Agents: []AgentLedgerEntry{
 			{Name: "test-host", Type: "agent", Status: "online", LastSeen: "2025-01-01T00:00:00Z", Source: "agent"},
 		},
 		Total: 1,
@@ -141,14 +141,14 @@ func TestHandleHostLedgerHTTP(t *testing.T) {
 		t.Errorf("expected 200, got %d", rec.Code)
 	}
 
-	var decoded HostLedgerResponse
+	var decoded AgentLedgerResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if decoded.Total != 1 || decoded.Limit != 5 {
 		t.Errorf("unexpected response: %+v", decoded)
 	}
-	if decoded.Hosts[0].Name != "test-host" || decoded.Hosts[0].Type != "agent" {
-		t.Errorf("unexpected host: %+v", decoded.Hosts[0])
+	if decoded.Agents[0].Name != "test-host" || decoded.Agents[0].Type != "agent" {
+		t.Errorf("unexpected agent: %+v", decoded.Agents[0])
 	}
 }
