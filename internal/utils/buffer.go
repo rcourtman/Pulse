@@ -97,6 +97,18 @@ func (q *Queue[T]) IsEmpty() bool {
 	return len(q.data) == 0
 }
 
+// Items returns a copy of all items in the queue in FIFO order.
+func (q *Queue[T]) Items() []T {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if len(q.data) == 0 {
+		return nil
+	}
+	cp := make([]T, len(q.data))
+	copy(cp, q.data)
+	return cp
+}
+
 func sanitizeCapacity(capacity int) int {
 	if capacity < minQueueCapacity {
 		return minQueueCapacity

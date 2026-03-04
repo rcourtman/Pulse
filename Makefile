@@ -77,7 +77,7 @@ control-plane:
 test:
 	@./scripts/ensure_test_assets.sh
 	@echo "Running backend tests (excluding tmp tooling)..."
-	go test $$(go list ./... | grep -v '/tmp$$')
+	go test -race -timeout 10m $$(go list ./... | grep -v '/tmp$$')
 
 # Run integration tests (requires Ollama at OLLAMA_URL or 127.0.0.1:11434)
 test-integration:

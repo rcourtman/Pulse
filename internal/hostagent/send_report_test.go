@@ -89,8 +89,8 @@ func TestAgentSendReport_SetsHeadersAndPostsJSON(t *testing.T) {
 	if got.method != http.MethodPost {
 		t.Fatalf("method = %q, want %q", got.method, http.MethodPost)
 	}
-	if got.path != "/api/agents/host/report" {
-		t.Fatalf("path = %q, want %q", got.path, "/api/agents/host/report")
+	if got.path != "/api/agents/agent/report" {
+		t.Fatalf("path = %q, want %q", got.path, "/api/agents/agent/report")
 	}
 	if got.authorization != "Bearer test-token" {
 		t.Fatalf("Authorization = %q, want %q", got.authorization, "Bearer test-token")
@@ -140,8 +140,56 @@ func TestAgentSendReport_Non2xxReturnsError(t *testing.T) {
 	if statusErr.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("status code = %d, want %d", statusErr.StatusCode, http.StatusInternalServerError)
 	}
-	if statusErr.Endpoint != hostReportEndpoint {
-		t.Fatalf("endpoint = %q, want %q", statusErr.Endpoint, hostReportEndpoint)
+	if statusErr.Endpoint != agentReportEndpoint {
+		t.Fatalf("endpoint = %q, want %q", statusErr.Endpoint, agentReportEndpoint)
+	}
+}
+
+func TestAgentSendReport_FallsBackToLegacyEndpointOn404(t *testing.T) {
+	t.Parallel()
+
+	var (
+		mu    sync.Mutex
+		paths []string
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		paths = append(paths, r.URL.Path)
+		mu.Unlock()
+
+		if r.URL.Path == agentReportEndpoint {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if r.URL.Path != legacyReportEndpoint {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	agent := &Agent{
+		cfg:             Config{APIToken: "test-token"},
+		httpClient:      server.Client(),
+		trimmedPulseURL: server.URL,
+	}
+
+	if err := agent.sendReport(context.Background(), agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "agent-1"},
+	}); err != nil {
+		t.Fatalf("sendReport: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(paths) != 2 {
+		t.Fatalf("expected 2 requests, got %d (%v)", len(paths), paths)
+	}
+	if paths[0] != agentReportEndpoint || paths[1] != legacyReportEndpoint {
+		t.Fatalf("unexpected request order: %v", paths)
 	}
 }
 

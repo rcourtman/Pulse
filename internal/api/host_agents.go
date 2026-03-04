@@ -21,7 +21,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const configSignatureTTL = 15 * time.Minute
+const (
+	configSignatureTTL    = 15 * time.Minute
+	hostAgentRoutePrefix  = "/api/agents/host/"
+	agentAgentRoutePrefix = "/api/agents/agent/"
+)
 
 var configSigningState struct {
 	once sync.Once
@@ -32,6 +36,16 @@ var configSigningState struct {
 // HostAgentHandlers manages ingest from the pulse-host-agent.
 type HostAgentHandlers struct {
 	baseAgentHandlers
+}
+
+func trimHostAgentRoutePath(path string) string {
+	for _, prefix := range []string{agentAgentRoutePrefix, hostAgentRoutePrefix} {
+		if strings.HasPrefix(path, prefix) {
+			return strings.TrimPrefix(path, prefix)
+		}
+	}
+	// Preserve legacy behavior for unexpected paths.
+	return strings.TrimPrefix(path, hostAgentRoutePrefix)
 }
 
 // NewHostAgentHandlers constructs a new handler set for host agents.
@@ -50,8 +64,9 @@ func (h *HostAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Request)
 	r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
 	defer r.Body.Close()
 
-	// Support gzip-compressed reports from agents (backward compatible with uncompressed)
-	body, err := utils.DecompressBodyIfGzipped(r, 10*1024*1024)
+	// Support gzip-compressed reports from agents (backward compatible with uncompressed).
+	// Cap decompressed size at 1.5MB (6x compressed limit — generous for legitimate payloads).
+	body, err := utils.DecompressBodyIfGzipped(r, 1536*1024)
 	if err != nil {
 		writeErrorResponse(w, http.StatusUnsupportedMediaType, "unsupported_encoding", err.Error(), nil)
 		return
@@ -217,8 +232,8 @@ func (h *HostAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Extract host ID from URL path
-	// Expected format: /api/agents/host/{hostId}
-	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/host/")
+	// Expected format: /api/agents/{agent|host}/{hostId}
+	trimmedPath := trimHostAgentRoutePath(r.URL.Path)
 	hostID := strings.TrimSpace(trimmedPath)
 	if hostID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Host ID is required", nil)
@@ -244,12 +259,12 @@ func (h *HostAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Requ
 }
 
 // HandleConfig handles GET (fetch config) and PATCH (update config) for host agents.
-// GET /api/agents/host/{hostId}/config - Agent fetches its server-side config
-// PATCH /api/agents/host/{hostId}/config - UI updates host config (e.g., commandsEnabled)
+// GET /api/agents/{agent|host}/{hostId}/config - Agent fetches its server-side config
+// PATCH /api/agents/{agent|host}/{hostId}/config - UI updates host config (e.g., commandsEnabled)
 func (h *HostAgentHandlers) HandleConfig(w http.ResponseWriter, r *http.Request) {
 	// Extract host ID from URL path
-	// Expected format: /api/agents/host/{hostId}/config
-	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/host/")
+	// Expected format: /api/agents/{agent|host}/{hostId}/config
+	trimmedPath := trimHostAgentRoutePath(r.URL.Path)
 	trimmedPath = strings.TrimSuffix(trimmedPath, "/config")
 	hostID := strings.TrimSpace(trimmedPath)
 	if hostID == "" {

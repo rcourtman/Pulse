@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -98,7 +99,10 @@ type Agent struct {
 
 const defaultInterval = 30 * time.Second
 const defaultStateDir = "/var/lib/pulse-agent"
-const hostReportEndpoint = "/api/agents/host/report"
+const (
+	agentReportEndpoint  = "/api/agents/agent/report"
+	legacyReportEndpoint = "/api/agents/host/report"
+)
 
 type reportHTTPStatusError struct {
 	Endpoint   string
@@ -370,8 +374,12 @@ func (a *Agent) Run(ctx context.Context) error {
 		a.startCommandClient(commandClient)
 	}
 
+	// Load any reports buffered from a previous shutdown
+	a.loadPersistedBuffer()
+
 	ticker := time.NewTicker(a.interval)
 	defer ticker.Stop()
+	defer a.persistBuffer()
 
 	if err := a.process(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		a.logger.Error().
@@ -467,9 +475,10 @@ func (a *Agent) process(ctx context.Context) error {
 		a.reportBuffer.Push(report)
 		event := a.logger.Warn().
 			Err(err).
-			Str("endpoint", hostReportEndpoint).
+			Str("endpoint", agentReportEndpoint).
 			Int("buffered_reports", a.reportBuffer.Len())
 		if errors.As(err, &statusErr) {
+			event.Str("endpoint", statusErr.Endpoint)
 			event.Int("status_code", statusErr.StatusCode)
 		}
 		event.Msg("Failed to send report, buffering")
@@ -504,9 +513,10 @@ func (a *Agent) flushBuffer(ctx context.Context) {
 			var statusErr *reportHTTPStatusError
 			event := a.logger.Warn().
 				Err(err).
-				Str("endpoint", hostReportEndpoint).
+				Str("endpoint", agentReportEndpoint).
 				Int("remaining_buffered_reports", a.reportBuffer.Len())
 			if errors.As(err, &statusErr) {
+				event.Str("endpoint", statusErr.Endpoint)
 				event.Int("status_code", statusErr.StatusCode)
 			}
 			event.Msg("Failed to flush buffered report, stopping flush")
@@ -516,6 +526,85 @@ func (a *Agent) flushBuffer(ctx context.Context) {
 		// Pop only on success
 		a.reportBuffer.Pop()
 	}
+}
+
+const bufferFileName = "report-buffer.json"
+
+// persistBuffer writes buffered reports to disk on shutdown so they can be
+// retransmitted on the next startup. Uses atomic write (tmp + rename) to
+// prevent corruption if the process is killed mid-write.
+func (a *Agent) persistBuffer() {
+	items := a.reportBuffer.Items()
+	if len(items) == 0 {
+		return
+	}
+
+	if a.stateDir == "" {
+		a.logger.Debug().Msg("No state dir configured, skipping buffer persistence")
+		return
+	}
+
+	data, err := json.Marshal(items)
+	if err != nil {
+		a.logger.Warn().Err(err).Msg("Failed to marshal report buffer for persistence")
+		return
+	}
+
+	if err := os.MkdirAll(a.stateDir, 0700); err != nil {
+		a.logger.Warn().Err(err).Str("dir", a.stateDir).Msg("Failed to create state dir for buffer persistence")
+		return
+	}
+
+	path := filepath.Join(a.stateDir, bufferFileName)
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+		a.logger.Warn().Err(err).Str("path", tmpPath).Msg("Failed to write report buffer temp file")
+		return
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		a.logger.Warn().Err(err).Str("path", path).Msg("Failed to rename report buffer file")
+		_ = os.Remove(tmpPath)
+		return
+	}
+
+	a.logger.Info().Int("count", len(items)).Str("path", path).Msg("Persisted report buffer to disk")
+}
+
+// loadPersistedBuffer loads buffered reports from a previous shutdown and
+// attempts to flush them. The file is deleted after loading regardless of
+// whether the flush succeeds (items are pushed back into the in-memory buffer).
+func (a *Agent) loadPersistedBuffer() {
+	if a.stateDir == "" {
+		return
+	}
+
+	path := filepath.Join(a.stateDir, bufferFileName)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			a.logger.Warn().Err(err).Str("path", path).Msg("Failed to read persisted report buffer")
+		}
+		return
+	}
+
+	// Always delete the file after reading
+	_ = os.Remove(path)
+
+	var items []agentshost.Report
+	if err := json.Unmarshal(data, &items); err != nil {
+		a.logger.Warn().Err(err).Str("path", path).Msg("Corrupt report buffer file, discarding")
+		return
+	}
+
+	if len(items) == 0 {
+		return
+	}
+
+	for _, item := range items {
+		a.reportBuffer.Push(item)
+	}
+
+	a.logger.Info().Int("count", len(items)).Msg("Loaded persisted report buffer from disk")
 }
 
 func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
@@ -607,21 +696,33 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 		return fmt.Errorf("compress report: %w", err)
 	}
 
-	url := fmt.Sprintf("%s%s", a.trimmedPulseURL, hostReportEndpoint)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(compressed))
-	if err != nil {
-		return fmt.Errorf("create request: %w", err)
-	}
+	endpoints := []string{agentReportEndpoint, legacyReportEndpoint}
+	var resp *http.Response
+	var endpoint string
+	for idx, candidate := range endpoints {
+		endpoint = candidate
+		url := fmt.Sprintf("%s%s", a.trimmedPulseURL, endpoint)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(compressed))
+		if err != nil {
+			return fmt.Errorf("create request: %w", err)
+		}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Content-Encoding", "gzip")
-	req.Header.Set("Authorization", "Bearer "+a.cfg.APIToken)
-	req.Header.Set("X-API-Token", a.cfg.APIToken)
-	req.Header.Set("User-Agent", "pulse-host-agent/"+Version)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Encoding", "gzip")
+		req.Header.Set("Authorization", "Bearer "+a.cfg.APIToken)
+		req.Header.Set("X-API-Token", a.cfg.APIToken)
+		req.Header.Set("User-Agent", "pulse-host-agent/"+Version)
 
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("send request: %w", err)
+		resp, err = a.httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("send request: %w", err)
+		}
+
+		if resp.StatusCode == http.StatusNotFound && idx < len(endpoints)-1 {
+			resp.Body.Close()
+			continue
+		}
+		break
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
@@ -631,7 +732,7 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 
 	if resp.StatusCode >= 300 {
 		return &reportHTTPStatusError{
-			Endpoint:   hostReportEndpoint,
+			Endpoint:   endpoint,
 			Status:     resp.Status,
 			StatusCode: resp.StatusCode,
 		}

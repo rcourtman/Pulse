@@ -87,7 +87,7 @@ jobs:
       - name: Go unit tests
         env:
           PULSE_DATA_DIR: /tmp/pulse-test-data
-        run: go test ./...
+        run: go test -race -timeout 10m ./...
 
       - name: Go benchmarks
         env:
@@ -100,6 +100,9 @@ jobs:
             ./internal/api/ \
             ./internal/unifiedresources/ \
             ./internal/dockeragent/ \
+            ./cmd/pulse-agent/ \
+            ./internal/hostagent/ \
+            ./internal/hostmetrics/ \
             | tee bench-results.txt
 
       - name: Upload benchmark results

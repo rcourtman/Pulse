@@ -1690,3 +1690,36 @@ func TestRun_KubeRetry(t *testing.T) {
 		t.Errorf("expected at least 2 calls to newKubeAgent, got %d", calls)
 	}
 }
+
+func TestRetryLogEvent_LevelThrottling(t *testing.T) {
+	// Ensure debug events are not filtered by the global level
+	prev := zerolog.GlobalLevel()
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	t.Cleanup(func() { zerolog.SetGlobalLevel(prev) })
+
+	tests := []struct {
+		attempt   int
+		wantLevel string
+	}{
+		{1, "warn"},
+		{5, "warn"},
+		{10, "warn"},
+		{11, "info"},
+		{25, "info"},
+		{50, "info"},
+		{51, "debug"},
+		{100, "debug"},
+	}
+
+	for _, tt := range tests {
+		var buf strings.Builder
+		logger := zerolog.New(&buf).Level(zerolog.DebugLevel)
+		event := retryLogEvent(&logger, tt.attempt)
+		event.Msg("test")
+
+		output := buf.String()
+		if !strings.Contains(output, `"level":"`+tt.wantLevel+`"`) {
+			t.Errorf("attempt %d: expected level %q in output, got: %s", tt.attempt, tt.wantLevel, output)
+		}
+	}
+}

@@ -208,3 +208,31 @@ func TestPushNormalizesInvalidCapacityState(t *testing.T) {
 		t.Error("expected pop on zero-capacity queue to return false")
 	}
 }
+
+func TestItems(t *testing.T) {
+	q := New[int](5)
+	q.Push(10)
+	q.Push(20)
+	q.Push(30)
+
+	items := q.Items()
+	if len(items) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(items))
+	}
+	if items[0] != 10 || items[1] != 20 || items[2] != 30 {
+		t.Fatalf("unexpected items: %v", items)
+	}
+
+	// Verify Items returns a copy (doesn't drain the queue)
+	if q.Len() != 3 {
+		t.Fatalf("Items should not drain the queue, len=%d", q.Len())
+	}
+}
+
+func TestItems_Empty(t *testing.T) {
+	q := New[int](5)
+	items := q.Items()
+	if items != nil {
+		t.Fatalf("expected nil for empty queue, got %v", items)
+	}
+}

@@ -954,7 +954,7 @@ func initDockerWithRetry(ctx context.Context, cfg dockeragent.Config, logger *ze
 		}
 
 		attempt++
-		logger.Warn().
+		retryLogEvent(logger, attempt).
 			Err(err).
 			Str("component", "docker_agent").
 			Str("action", "retry_connect_failed").
@@ -1004,7 +1004,7 @@ func initKubernetesWithRetry(ctx context.Context, cfg kubernetesagent.Config, lo
 		}
 
 		attempt++
-		logger.Warn().
+		retryLogEvent(logger, attempt).
 			Err(err).
 			Str("component", "kubernetes_agent").
 			Str("action", "retry_connect_failed").
@@ -1044,6 +1044,22 @@ func waitForRetryDelay(ctx context.Context, delay time.Duration) bool {
 		return false
 	case <-timer.C:
 		return true
+	}
+}
+
+// retryLogEvent returns a zerolog event at a level that decreases with attempt count
+// to avoid flooding logs on misconfigured systems with unbounded retries.
+//   - Attempts 1-10:  Warn  (initial visibility)
+//   - Attempts 11-50: Info  (still visible, less noisy)
+//   - Attempts 51+:   Debug (effectively silent unless debug logging enabled)
+func retryLogEvent(logger *zerolog.Logger, attempt int) *zerolog.Event {
+	switch {
+	case attempt <= 10:
+		return logger.Warn()
+	case attempt <= 50:
+		return logger.Info()
+	default:
+		return logger.Debug()
 	}
 }
 
