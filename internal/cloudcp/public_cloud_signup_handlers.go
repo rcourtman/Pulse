@@ -22,6 +22,36 @@ import (
 
 const publicCloudSignupRequestBodyLimit = 64 * 1024
 
+// cloudTier represents a Cloud plan tier for public signup.
+type cloudTier string
+
+const (
+	cloudTierStarter cloudTier = "starter"
+	cloudTierPower   cloudTier = "power"
+	cloudTierMax     cloudTier = "max"
+)
+
+// validCloudTiers is the set of accepted tier values.
+var validCloudTiers = map[cloudTier]bool{
+	cloudTierStarter: true,
+	cloudTierPower:   true,
+	cloudTierMax:     true,
+}
+
+// parseCloudTier normalizes a tier string from user input. Returns
+// cloudTierStarter if the input is empty (default). Returns ("", false)
+// if the input is a non-empty but unrecognized tier.
+func parseCloudTier(raw string) (cloudTier, bool) {
+	t := cloudTier(strings.ToLower(strings.TrimSpace(raw)))
+	if t == "" {
+		return cloudTierStarter, true
+	}
+	if validCloudTiers[t] {
+		return t, true
+	}
+	return "", false
+}
+
 var publicCloudSignupPageTemplate = template.Must(template.New("public-cloud-signup-page").Parse(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -42,6 +72,9 @@ var publicCloudSignupPageTemplate = template.Must(template.New("public-cloud-sig
     .cta { margin-top: 16px; border: 0; border-radius: 10px; background: #1d4ed8; color: #fff; font-size: 16px; font-weight: 600; padding: 12px 16px; width: 100%; cursor: pointer; }
     .cta:hover { background: #1e40af; }
     .fine { font-size: 12px; color: #64748b; margin-top: 12px; }
+    .tier-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+    .tier-option { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 400; cursor: pointer; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 8px; }
+    .tier-option:has(input:checked) { border-color: #1d4ed8; background: #eff6ff; }
     ol { margin: 0; padding-left: 20px; color: #334155; }
     li { margin-bottom: 8px; }
   </style>
@@ -55,6 +88,19 @@ var publicCloudSignupPageTemplate = template.Must(template.New("public-cloud-sig
       {{if .Cancelled}}<div class="note">Checkout was cancelled. You can start again below.</div>{{end}}
 
       <form method="POST" action="/signup">
+        {{/* Tier labels show monthly pricing for orientation. Stripe checkout
+             displays the actual price from the configured price ID. */}}
+        {{if or .HasPower .HasMax}}
+        <label>Plan</label>
+        <div class="tier-group">
+          <label class="tier-option"><input type="radio" name="tier" value="starter" {{if eq .Tier "starter"}}checked{{end}}> <strong>Starter</strong> — 10 hosts, from $29/mo</label>
+          {{if .HasPower}}<label class="tier-option"><input type="radio" name="tier" value="power" {{if eq .Tier "power"}}checked{{end}}> <strong>Power</strong> — 30 hosts, from $49/mo</label>{{end}}
+          {{if .HasMax}}<label class="tier-option"><input type="radio" name="tier" value="max" {{if eq .Tier "max"}}checked{{end}}> <strong>Max</strong> — 75 hosts, from $79/mo</label>{{end}}
+        </div>
+        {{else}}
+        <input type="hidden" name="tier" value="starter">
+        {{end}}
+
         <label for="email">Work Email</label>
         <input id="email" name="email" type="email" value="{{.Email}}" autocomplete="email" required>
 
@@ -116,9 +162,12 @@ type PublicCloudSignupHandlers struct {
 type publicCloudSignupPageData struct {
 	Email        string
 	OrgName      string
+	Tier         string // selected tier slug ("starter", "power", "max")
 	ErrorMessage string
 	Cancelled    bool
 	Nonce        string
+	HasPower     bool // true if Cloud Power price is configured
+	HasMax       bool // true if Cloud Max price is configured
 }
 
 // publicCloudSignupCompleteData carries nonce for the signup-complete page.
@@ -129,6 +178,7 @@ type publicCloudSignupCompleteData struct {
 type publicCloudSignupRequest struct {
 	Email   string `json:"email"`
 	OrgName string `json:"org_name"`
+	Tier    string `json:"tier"` // "starter" (default), "power", or "max"
 }
 
 type publicMagicLinkRequest struct {
@@ -147,13 +197,44 @@ func NewPublicCloudSignupHandlers(cfg *CPConfig, reg *registry.TenantRegistry, m
 	}
 }
 
+// priceIDForTier returns the Stripe price ID for the given cloud tier.
+// Returns ("", false) if the tier's price ID is not configured or cfg is nil.
+func (h *PublicCloudSignupHandlers) priceIDForTier(tier cloudTier) (string, bool) {
+	if h.cfg == nil {
+		return "", false
+	}
+	switch tier {
+	case cloudTierStarter:
+		id := strings.TrimSpace(h.cfg.TrialSignupPriceID)
+		return id, id != ""
+	case cloudTierPower:
+		id := strings.TrimSpace(h.cfg.CloudPowerPriceID)
+		return id, id != ""
+	case cloudTierMax:
+		id := strings.TrimSpace(h.cfg.CloudMaxPriceID)
+		return id, id != ""
+	default:
+		return "", false
+	}
+}
+
 func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
+		tierStr := strings.TrimSpace(r.URL.Query().Get("tier"))
+		tier, ok := parseCloudTier(tierStr)
+		if !ok {
+			tier = cloudTierStarter // invalid tier on GET → default to starter
+		} else if _, avail := h.priceIDForTier(tier); !avail {
+			tier = cloudTierStarter // valid but unconfigured tier → default to starter
+		}
 		data := publicCloudSignupPageData{
 			Email:     strings.TrimSpace(r.URL.Query().Get("email")),
 			OrgName:   strings.TrimSpace(r.URL.Query().Get("org_name")),
+			Tier:      string(tier),
 			Cancelled: strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("cancelled")), "1"),
+			HasPower:  h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
+			HasMax:    h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
 		}
 		h.renderSignupPage(w, r, http.StatusOK, data)
 	case http.MethodPost:
@@ -163,11 +244,29 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 		}
 		email := strings.TrimSpace(r.FormValue("email"))
 		orgName := strings.TrimSpace(r.FormValue("org_name"))
+		tierStr := strings.TrimSpace(r.FormValue("tier"))
+
+		tier, tierOK := parseCloudTier(tierStr)
+		if !tierOK {
+			h.renderSignupPage(w, r, http.StatusBadRequest, publicCloudSignupPageData{
+				Email:        email,
+				OrgName:      orgName,
+				Tier:         tierStr,
+				ErrorMessage: "Invalid plan tier selected.",
+				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
+				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
+			})
+			return
+		}
+
 		if !isValidCloudSignupEmail(email) {
 			h.renderSignupPage(w, r, http.StatusBadRequest, publicCloudSignupPageData{
 				Email:        email,
 				OrgName:      orgName,
+				Tier:         string(tier),
 				ErrorMessage: "A valid email address is required.",
+				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
+				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
 			})
 			return
 		}
@@ -175,18 +274,35 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 			h.renderSignupPage(w, r, http.StatusBadRequest, publicCloudSignupPageData{
 				Email:        email,
 				OrgName:      orgName,
+				Tier:         string(tier),
 				ErrorMessage: "Organization name must be 3-64 characters and cannot contain slashes.",
+				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
+				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
+			})
+			return
+		}
+		if _, avail := h.priceIDForTier(tier); !avail {
+			h.renderSignupPage(w, r, http.StatusBadRequest, publicCloudSignupPageData{
+				Email:        email,
+				OrgName:      orgName,
+				Tier:         string(tier),
+				ErrorMessage: "The selected plan tier is not currently available.",
+				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
+				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
 			})
 			return
 		}
 
-		checkoutURL, err := h.createCheckout(email, orgName)
+		checkoutURL, err := h.createCheckout(email, orgName, tier)
 		if err != nil {
-			log.Warn().Err(err).Str("email", email).Msg("public cloud signup checkout creation failed")
+			log.Warn().Err(err).Str("email", email).Str("tier", string(tier)).Msg("public cloud signup checkout creation failed")
 			h.renderSignupPage(w, r, http.StatusBadGateway, publicCloudSignupPageData{
 				Email:        email,
 				OrgName:      orgName,
+				Tier:         string(tier),
 				ErrorMessage: "Unable to create checkout session. Please try again.",
+				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
+				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
 			})
 			return
 		}
@@ -224,6 +340,12 @@ func (h *PublicCloudSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r 
 
 	req.Email = strings.TrimSpace(req.Email)
 	req.OrgName = strings.TrimSpace(req.OrgName)
+
+	tier, tierOK := parseCloudTier(req.Tier)
+	if !tierOK {
+		writePublicSignupError(w, http.StatusBadRequest, "invalid_tier", "Invalid plan tier. Must be one of: starter, power, max")
+		return
+	}
 	if !isValidCloudSignupEmail(req.Email) {
 		writePublicSignupError(w, http.StatusBadRequest, "invalid_email", "Invalid email format")
 		return
@@ -232,8 +354,12 @@ func (h *PublicCloudSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r 
 		writePublicSignupError(w, http.StatusBadRequest, "invalid_org_name", "Invalid organization name")
 		return
 	}
+	if _, avail := h.priceIDForTier(tier); !avail {
+		writePublicSignupError(w, http.StatusBadRequest, "tier_unavailable", "The selected plan tier is not currently available")
+		return
+	}
 
-	checkoutURL, err := h.createCheckout(req.Email, req.OrgName)
+	checkoutURL, err := h.createCheckout(req.Email, req.OrgName, tier)
 	if err != nil {
 		log.Warn().Err(err).Str("email", req.Email).Msg("public cloud signup API checkout creation failed")
 		writePublicSignupError(w, http.StatusBadGateway, "checkout_failed", "Unable to create checkout session")
@@ -316,16 +442,16 @@ func (h *PublicCloudSignupHandlers) HandlePublicMagicLinkRequest(w http.Response
 	})
 }
 
-func (h *PublicCloudSignupHandlers) createCheckout(email, orgName string) (string, error) {
+func (h *PublicCloudSignupHandlers) createCheckout(email, orgName string, tier cloudTier) (string, error) {
 	if h.cfg == nil {
 		return "", fmt.Errorf("control plane config is missing")
 	}
 	if strings.TrimSpace(h.cfg.StripeAPIKey) == "" {
 		return "", fmt.Errorf("stripe api key not configured")
 	}
-	priceID := strings.TrimSpace(h.cfg.TrialSignupPriceID)
-	if priceID == "" {
-		return "", fmt.Errorf("trial signup price id not configured")
+	priceID, ok := h.priceIDForTier(tier)
+	if !ok || priceID == "" {
+		return "", fmt.Errorf("price id not configured for tier %q", tier)
 	}
 
 	stripe.Key = strings.TrimSpace(h.cfg.StripeAPIKey)
@@ -334,6 +460,7 @@ func (h *PublicCloudSignupHandlers) createCheckout(email, orgName string) (strin
 		"cancelled": {"1"},
 		"email":     {email},
 		"org_name":  {orgName},
+		"tier":      {string(tier)},
 	})
 	params := &stripe.CheckoutSessionParams{
 		Mode:                    stripe.String(string(stripe.CheckoutSessionModeSubscription)),

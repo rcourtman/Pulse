@@ -34,7 +34,9 @@ type CPConfig struct {
 	AllowDockerlessProvisioning       bool
 	StripeWebhookSecret               string
 	StripeAPIKey                      string
-	TrialSignupPriceID                string
+	TrialSignupPriceID                string // Cloud Starter (default tier) price ID
+	CloudPowerPriceID                 string // Cloud Power tier price ID (optional)
+	CloudMaxPriceID                   string // Cloud Max tier price ID (optional)
 	TrialActivationPrivateKey         string
 	RequireEmailProvider              bool
 	ResendAPIKey                      string // Resend API key (optional — if empty, emails are logged)
@@ -117,6 +119,8 @@ func LoadConfig() (*CPConfig, error) {
 		StripeWebhookSecret:               strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
 		StripeAPIKey:                      strings.TrimSpace(os.Getenv("STRIPE_API_KEY")),
 		TrialSignupPriceID:                strings.TrimSpace(os.Getenv("CP_TRIAL_SIGNUP_PRICE_ID")),
+		CloudPowerPriceID:                 strings.TrimSpace(os.Getenv("CP_CLOUD_POWER_PRICE_ID")),
+		CloudMaxPriceID:                   strings.TrimSpace(os.Getenv("CP_CLOUD_MAX_PRICE_ID")),
 		TrialActivationPrivateKey:         strings.TrimSpace(os.Getenv("CP_TRIAL_ACTIVATION_PRIVATE_KEY")),
 		RequireEmailProvider:              envOrDefaultBool("CP_REQUIRE_EMAIL_PROVIDER", true),
 		ResendAPIKey:                      strings.TrimSpace(os.Getenv("RESEND_API_KEY")),
