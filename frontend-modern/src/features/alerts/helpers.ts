@@ -229,8 +229,6 @@ export function unifiedTypeToAlertDisplayType(type: ResourceType): string {
       return 'Container';
     case 'node':
       return 'Node';
-    case 'host':
-      return 'Host';
     case 'docker-host':
       return 'Container Host';
     case 'storage':
@@ -247,7 +245,7 @@ export function unifiedTypeToAlertDisplayType(type: ResourceType): string {
   }
 }
 
-// Temporary legacy adapters for guest resources used by ThresholdsTable.
+// Shared adapters for guest resource details used by ThresholdsTable.
 export const platformData = (r: Resource): Record<string, unknown> | undefined =>
   r.platformData ? (unwrap(r.platformData) as Record<string, unknown>) : undefined;
 

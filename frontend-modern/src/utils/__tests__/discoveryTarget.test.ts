@@ -1,0 +1,38 @@
+import { describe, expect, it } from 'vitest';
+import { getAgentDiscoveryResourceId, isAgentDiscoveryResourceType } from '@/utils/discoveryTarget';
+
+describe('discoveryTarget utils', () => {
+  it('treats both agent and host resource types as agent discovery types', () => {
+    expect(isAgentDiscoveryResourceType('agent')).toBe(true);
+    expect(isAgentDiscoveryResourceType('host')).toBe(true);
+    expect(isAgentDiscoveryResourceType('docker')).toBe(false);
+  });
+
+  it('prefers resourceId for agent-like discovery targets', () => {
+    expect(
+      getAgentDiscoveryResourceId({
+        resourceType: 'agent',
+        resourceId: 'agent-1',
+        hostId: 'fallback-host-id',
+      }),
+    ).toBe('agent-1');
+
+    expect(
+      getAgentDiscoveryResourceId({
+        resourceType: 'host',
+        resourceId: '',
+        hostId: 'host-1',
+      }),
+    ).toBe('host-1');
+  });
+
+  it('returns undefined for non-agent discovery types', () => {
+    expect(
+      getAgentDiscoveryResourceId({
+        resourceType: 'docker',
+        resourceId: 'docker-host-1',
+        hostId: 'docker-host-1',
+      }),
+    ).toBeUndefined();
+  });
+});

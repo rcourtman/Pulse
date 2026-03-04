@@ -98,6 +98,8 @@ func cloneContainerFingerprint(src *ContainerFingerprint) *ContainerFingerprint 
 // NormalizeResourceType maps legacy resource type strings to their current values.
 func NormalizeResourceType(rt ResourceType) ResourceType {
 	switch rt {
+	case "agent":
+		return ResourceTypeHost
 	case "lxc":
 		return ResourceTypeSystemContainer
 	case "docker_lxc":
@@ -109,6 +111,9 @@ func NormalizeResourceType(rt ResourceType) ResourceType {
 
 // normalizeResourceID replaces legacy type prefixes in resource IDs.
 func normalizeResourceID(id string) string {
+	if strings.HasPrefix(id, "agent:") {
+		return string(ResourceTypeHost) + id[5:]
+	}
 	if strings.HasPrefix(id, "lxc:") {
 		return string(ResourceTypeSystemContainer) + id[3:]
 	}

@@ -54,7 +54,7 @@ describe('useUnifiedResources', () => {
   let apiFetchMock: ReturnType<typeof vi.fn>;
   let setWsState: SetStoreFunction<TestWsState>;
   let useUnifiedResources: UseUnifiedResourcesModule['useUnifiedResources'];
-  let useStorageBackupsResources: UseUnifiedResourcesModule['useStorageBackupsResources'];
+  let useStorageRecoveryResources: UseUnifiedResourcesModule['useStorageRecoveryResources'];
   let resetUnifiedResourcesCacheForTests: UseUnifiedResourcesModule['__resetUnifiedResourcesCacheForTests'];
   let eventBus: (typeof import('@/stores/events'))['eventBus'];
 
@@ -93,7 +93,7 @@ describe('useUnifiedResources', () => {
 
     ({
       useUnifiedResources,
-      useStorageBackupsResources,
+      useStorageRecoveryResources,
       __resetUnifiedResourcesCacheForTests: resetUnifiedResourcesCacheForTests,
     } = await import('@/hooks/useUnifiedResources'));
     ({ eventBus } = await import('@/stores/events'));
@@ -126,7 +126,7 @@ describe('useUnifiedResources', () => {
     await waitForResourceCount(() => result!.resources().length);
     expect(apiFetchMock).toHaveBeenNthCalledWith(
       1,
-      '/api/resources?type=host%2Cpbs%2Cpmg%2Ck8s_cluster%2Ck8s_node&page=1&limit=100',
+      '/api/resources?type=agent%2Cpbs%2Cpmg%2Ck8s_cluster%2Ck8s_node&page=1&limit=100',
       { cache: 'no-store' },
     );
     const originalResourceRef = result!.resources()[0];
@@ -297,7 +297,7 @@ describe('useUnifiedResources', () => {
     const resources = result!.resources();
     expect(resources).toHaveLength(1);
     expect(resources[0].id).toBe('node-1');
-    expect(resources[0].type).toBe('host');
+    expect(resources[0].type).toBe('node');
 
     dispose();
   });
@@ -362,19 +362,19 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
-  it('uses the storage/backups query variant for storage-backups pages', async () => {
+  it('uses the storage/recovery query variant for storage pages', async () => {
     let dispose = () => {};
-    let result: ReturnType<UseUnifiedResourcesModule['useStorageBackupsResources']> | undefined;
+    let result: ReturnType<UseUnifiedResourcesModule['useStorageRecoveryResources']> | undefined;
     createRoot((d) => {
       dispose = d;
-      result = useStorageBackupsResources();
+      result = useStorageRecoveryResources();
     });
 
     await flushAsync();
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
     expect(apiFetchMock).toHaveBeenNthCalledWith(
       1,
-      '/api/resources?type=storage%2Cpbs%2Cpmg%2Cvm%2Clxc%2Ccontainer%2Cpod%2Chost%2Ck8s_cluster%2Ck8s_node%2Cphysical_disk%2Cceph&page=1&limit=100',
+      '/api/resources?type=storage%2Cpbs%2Cpmg%2Cvm%2Clxc%2Ccontainer%2Cpod%2Cagent%2Ck8s_cluster%2Ck8s_node%2Cphysical_disk%2Cceph&page=1&limit=100',
       { cache: 'no-store' },
     );
     expect(result!.resources().length).toBeGreaterThanOrEqual(0);

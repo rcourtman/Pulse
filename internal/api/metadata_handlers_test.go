@@ -118,4 +118,31 @@ func TestHostMetadataHandler(t *testing.T) {
 	if resp.Code != http.StatusNoContent {
 		t.Fatalf("unexpected status: %d", resp.Code)
 	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/agents/metadata", nil)
+	resp = httptest.NewRecorder()
+	handler.HandleGetMetadata(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("unexpected status for agent alias list: %d", resp.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodPut, "/api/agents/metadata/agent1", strings.NewReader(`{"customUrl":"https://agent.local"}`))
+	resp = httptest.NewRecorder()
+	handler.HandleUpdateMetadata(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("unexpected status for agent alias update: %d", resp.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/agents/metadata/agent1", nil)
+	resp = httptest.NewRecorder()
+	handler.HandleGetMetadata(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("unexpected status for agent alias get: %d", resp.Code)
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &meta); err != nil {
+		t.Fatalf("decode host metadata via agent alias: %v", err)
+	}
+	if meta.CustomURL != "https://agent.local" {
+		t.Fatalf("unexpected metadata via agent alias: %+v", meta)
+	}
 }

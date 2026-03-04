@@ -56,14 +56,14 @@ export const API_SCOPE_OPTIONS: APIScopeOption[] = [
   },
   {
     value: HOST_AGENT_SCOPE,
-    label: 'Host agent reporting',
-    description: 'Allow the host agent to send OS, CPU, and disk metrics.',
+    label: 'Agent reporting',
+    description: 'Allow the agent to send OS, CPU, and disk metrics.',
     group: 'Agents',
   },
   {
     value: HOST_AGENT_CONFIG_READ_SCOPE,
-    label: 'Host agent config fetch',
-    description: 'Allow the host agent to retrieve its assigned configuration profile.',
+    label: 'Agent config fetch',
+    description: 'Allow the agent to retrieve its assigned configuration profile.',
     group: 'Agents',
   },
   {

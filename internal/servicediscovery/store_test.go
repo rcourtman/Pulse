@@ -35,6 +35,19 @@ func (errorCrypto) Decrypt(ciphertext []byte) ([]byte, error) {
 	return nil, os.ErrInvalid
 }
 
+func TestNormalizeResourceType_AgentAlias(t *testing.T) {
+	if got := NormalizeResourceType(ResourceType("agent")); got != ResourceTypeHost {
+		t.Fatalf("NormalizeResourceType(agent) = %q, want %q", got, ResourceTypeHost)
+	}
+}
+
+func TestNormalizeResourceID_AgentPrefix(t *testing.T) {
+	const legacyID = "agent:host1:host1"
+	if got := normalizeResourceID(legacyID); got != "host:host1:host1" {
+		t.Fatalf("normalizeResourceID(%q) = %q, want %q", legacyID, got, "host:host1:host1")
+	}
+}
+
 func TestStore_SaveGetListAndNotes(t *testing.T) {
 	store, err := NewStore(t.TempDir())
 	if err != nil {

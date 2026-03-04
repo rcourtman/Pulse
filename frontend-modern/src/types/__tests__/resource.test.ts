@@ -34,7 +34,6 @@ describe('Resource Type Guards', () => {
   describe('isInfrastructure', () => {
     const infrastructureTypes: ResourceType[] = [
       'node',
-      'host',
       'docker-host',
       'k8s-node',
       'truenas',
@@ -61,7 +60,7 @@ describe('Resource Type Guards', () => {
 
   describe('isWorkload', () => {
     const workloadTypes: ResourceType[] = ['vm', 'container', 'docker-container', 'pod', 'jail'];
-    const nonWorkloadTypes: ResourceType[] = ['node', 'host', 'docker-host', 'storage', 'pbs'];
+    const nonWorkloadTypes: ResourceType[] = ['node', 'docker-host', 'storage', 'pbs'];
 
     it.each(workloadTypes)('returns true for %s', (type) => {
       const resource = createResource({ type });

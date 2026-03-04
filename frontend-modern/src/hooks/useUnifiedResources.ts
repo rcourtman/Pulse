@@ -15,9 +15,9 @@ import { logger } from '@/utils/logger';
 import { eventBus } from '@/stores/events';
 
 const UNIFIED_RESOURCES_BASE_URL = '/api/resources';
-const DEFAULT_UNIFIED_RESOURCES_QUERY = 'type=host,pbs,pmg,k8s_cluster,k8s_node';
+const DEFAULT_UNIFIED_RESOURCES_QUERY = 'type=agent,pbs,pmg,k8s_cluster,k8s_node';
 const STORAGE_RECOVERY_UNIFIED_RESOURCES_QUERY =
-  'type=storage,pbs,pmg,vm,lxc,container,pod,host,k8s_cluster,k8s_node,physical_disk,ceph';
+  'type=storage,pbs,pmg,vm,lxc,container,pod,agent,k8s_cluster,k8s_node,physical_disk,ceph';
 const UNIFIED_RESOURCES_PAGE_LIMIT = 100;
 const UNIFIED_RESOURCES_MAX_PAGES = 20;
 const UNIFIED_RESOURCES_CACHE_MAX_AGE_MS = 15_000;
@@ -391,8 +391,9 @@ const resolveStatus = (status?: string): ResourceStatus => {
 const resolveType = (value?: string): ResourceType => {
   const normalized = (value || '').toLowerCase();
   switch (normalized) {
+    case 'agent':
     case 'host':
-      return 'host';
+      return 'node';
     case 'node':
       return 'node';
     case 'docker-host':
@@ -452,7 +453,7 @@ const resolveType = (value?: string): ResourceType => {
     case 'physical-disk':
       return 'physical_disk';
     default:
-      return 'host';
+      return 'node';
   }
 };
 
@@ -484,6 +485,7 @@ const toResource = (v2: APIResource): Resource => {
     v2.discoveryTarget?.resourceType && v2.discoveryTarget?.hostId && v2.discoveryTarget?.resourceId
       ? {
           resourceType: v2.discoveryTarget.resourceType as
+            | 'agent'
             | 'host'
             | 'vm'
             | 'system-container'
@@ -909,13 +911,8 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
 export function useStorageRecoveryResources() {
   return useUnifiedResources({
     query: STORAGE_RECOVERY_UNIFIED_RESOURCES_QUERY,
-    cacheKey: 'storage-backups',
+    cacheKey: 'storage-recovery',
   });
-}
-
-// Backwards-compat for older call sites.
-export function useStorageBackupsResources() {
-  return useStorageRecoveryResources();
 }
 
 export default useUnifiedResources;

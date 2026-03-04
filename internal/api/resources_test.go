@@ -93,8 +93,8 @@ func TestResourceListMergesLinkedHost(t *testing.T) {
 	if resource.DiscoveryTarget == nil {
 		t.Fatalf("expected discovery target on merged host")
 	}
-	if resource.DiscoveryTarget.ResourceType != "host" {
-		t.Fatalf("discovery target resourceType = %q, want host", resource.DiscoveryTarget.ResourceType)
+	if resource.DiscoveryTarget.ResourceType != "agent" {
+		t.Fatalf("discovery target resourceType = %q, want agent", resource.DiscoveryTarget.ResourceType)
 	}
 	if resource.DiscoveryTarget.HostID != "host-1" || resource.DiscoveryTarget.ResourceID != "host-1" {
 		t.Fatalf("discovery target = %+v, want host-1/host-1", resource.DiscoveryTarget)
@@ -162,6 +162,9 @@ func TestResourceListDoesNotMergeOneSidedLinkedHost(t *testing.T) {
 	if agentTarget == nil {
 		t.Fatalf("expected discovery target for agent host")
 	}
+	if agentTarget.ResourceType != "agent" {
+		t.Fatalf("agent discovery target type = %q, want agent", agentTarget.ResourceType)
+	}
 	if agentTarget.HostID != "host-1" || agentTarget.ResourceID != "host-1" {
 		t.Fatalf("agent discovery target = %+v, want host-1/host-1", agentTarget)
 	}
@@ -217,6 +220,9 @@ func TestResourceGetResource(t *testing.T) {
 	}
 	if resource.DiscoveryTarget == nil {
 		t.Fatalf("expected discovery target on get resource")
+	}
+	if resource.DiscoveryTarget.ResourceType != "agent" {
+		t.Fatalf("discovery target resourceType = %q, want agent", resource.DiscoveryTarget.ResourceType)
 	}
 	if resource.DiscoveryTarget.HostID != "host-1" || resource.DiscoveryTarget.ResourceID != "host-1" {
 		t.Fatalf("discovery target = %+v, want host-1/host-1", resource.DiscoveryTarget)

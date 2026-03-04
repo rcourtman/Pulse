@@ -11,7 +11,7 @@ type WorkloadTypeBadgeKey =
   | 'container'
   | 'system-container'
   | 'app-container'
-  | 'host'
+  | 'agent'
   | 'pod'
   | 'oci';
 
@@ -51,9 +51,9 @@ const BADGE_MAP: Record<WorkloadTypeBadgeKey, WorkloadTypeBadge> = {
     title: 'Kubernetes Pod',
     className: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
   },
-  host: {
-    label: 'Host',
-    title: 'Host',
+  agent: {
+    label: 'Agent',
+    title: 'Agent',
     className: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
   },
   oci: {
@@ -99,7 +99,7 @@ const normalizeKey = (value: string | null | undefined): WorkloadTypeBadgeKey | 
   }
   if (normalized === 'k8s' || normalized === 'kubernetes') return 'k8s';
   if (normalized === 'pod') return 'pod';
-  if (normalized === 'host') return 'host';
+  if (normalized === 'host' || normalized === 'agent') return 'agent';
   if (normalized === 'oci') return 'oci';
   return null;
 };

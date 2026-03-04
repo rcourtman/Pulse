@@ -324,9 +324,8 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
 
   const cpuPercent = resource.metrics?.cpu?.percent ?? resource.metrics?.cpu?.value ?? 0;
 
-  // For PVE guests, use the legacy ID format (instance:node:vmid) so metrics keys
-  // match what the backend charts API returns. Without this, sparklines
-  // show no data because the hashed unified ID doesn't match any backend keys.
+  // For Proxmox guests, use the metrics API guest ID format (instance:node:vmid)
+  // so sparklines resolve to the backend's chart keys.
   const guestId = (() => {
     if (
       (workloadType === 'vm' || workloadType === 'system-container') &&

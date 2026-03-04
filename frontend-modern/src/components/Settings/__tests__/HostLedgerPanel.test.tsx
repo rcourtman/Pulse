@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 
-import type { HostLedgerResponse } from '@/api/hostLedger';
+import type { AgentLedgerResponse } from '@/api/agentLedger';
 
-const getLedgerMock = vi.fn<() => Promise<HostLedgerResponse>>();
+const getLedgerMock = vi.fn<() => Promise<AgentLedgerResponse>>();
 
-vi.mock('@/api/hostLedger', () => ({
-  HostLedgerAPI: {
+vi.mock('@/api/agentLedger', () => ({
+  AgentLedgerAPI: {
     getLedger: () => getLedgerMock(),
   },
 }));
@@ -32,9 +32,9 @@ vi.mock('@/utils/format', () => ({
   formatRelativeTime: (v: string) => v,
 }));
 
-import { HostLedgerPanel } from '../HostLedgerPanel';
+import { AgentLedgerPanel } from '../AgentLedgerPanel';
 
-describe('HostLedgerPanel', () => {
+describe('AgentLedgerPanel', () => {
   afterEach(() => {
     cleanup();
     getLedgerMock.mockReset();
@@ -43,7 +43,7 @@ describe('HostLedgerPanel', () => {
   it('shows error message with Retry button when API fails', async () => {
     getLedgerMock.mockRejectedValue(new Error('network error'));
 
-    render(() => <HostLedgerPanel />);
+    render(() => <AgentLedgerPanel />);
 
     await waitFor(() => {
       expect(screen.getByText('Failed to load agent ledger.')).toBeInTheDocument();
@@ -55,7 +55,7 @@ describe('HostLedgerPanel', () => {
   it('recovers from error when Retry is clicked and API succeeds', async () => {
     getLedgerMock.mockRejectedValue(new Error('network error'));
 
-    render(() => <HostLedgerPanel />);
+    render(() => <AgentLedgerPanel />);
 
     await waitFor(() => {
       expect(screen.getByText('Failed to load agent ledger.')).toBeInTheDocument();
@@ -88,7 +88,7 @@ describe('HostLedgerPanel', () => {
   it('keeps Retry button visible on repeated failures', async () => {
     getLedgerMock.mockRejectedValue(new Error('network error'));
 
-    render(() => <HostLedgerPanel />);
+    render(() => <AgentLedgerPanel />);
 
     await waitFor(() => {
       expect(screen.getByText('Failed to load agent ledger.')).toBeInTheDocument();
@@ -128,7 +128,7 @@ describe('HostLedgerPanel', () => {
       limit: 10,
     });
 
-    render(() => <HostLedgerPanel />);
+    render(() => <AgentLedgerPanel />);
 
     await waitFor(() => {
       expect(screen.getByText('server-a')).toBeInTheDocument();

@@ -73,11 +73,17 @@ describe('workloadTypeBadges', () => {
       });
     });
 
-    describe('Host types', () => {
-      it('returns Host badge for host', () => {
+    describe('Agent types', () => {
+      it('returns Agent badge for host alias', () => {
         const result = getWorkloadTypeBadge('host');
-        expect(result.label).toBe('Host');
-        expect(result.title).toBe('Host');
+        expect(result.label).toBe('Agent');
+        expect(result.title).toBe('Agent');
+      });
+
+      it('returns Agent badge for agent', () => {
+        const result = getWorkloadTypeBadge('agent');
+        expect(result.label).toBe('Agent');
+        expect(result.title).toBe('Agent');
       });
     });
 

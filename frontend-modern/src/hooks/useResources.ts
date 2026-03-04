@@ -2,8 +2,8 @@
  * useResources Hook
  *
  * Provides reactive access to unified resources via the REST-backed unified resources hook.
- * This is the primary way for frontend components to access resource data as we migrate away
- * from legacy arrays (nodes, vms, containers, etc.). Tests can still inject a store override.
+ * This is the primary way for frontend components to access resource data.
+ * Tests can still inject a store override.
  *
  * Example usage:
  * ```tsx

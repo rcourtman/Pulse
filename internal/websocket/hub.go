@@ -395,23 +395,22 @@ type MultiTenantChecker interface {
 
 // Hub maintains active WebSocket clients and broadcasts messages
 type Hub struct {
-	clients             map[*Client]bool            // All clients (legacy support)
-	clientsByTenant     map[string]map[*Client]bool // Per-tenant client tracking
-	broadcast           chan []byte
-	broadcastSeq        chan Message         // Sequenced broadcast channel for ordering
-	tenantBroadcast     chan TenantBroadcast // Per-tenant broadcast channel
-	register            chan *Client
-	unregister          chan *Client
-	stopChan            chan struct{} // Signals shutdown
-	stopOnce            sync.Once
-	mu                  sync.RWMutex
-	getState            func() interface{}             // Function to get current state (legacy)
-	getStateByTenant    func(orgID string) interface{} // Function to get state for specific tenant
-	allowedOrigins      []string                       // Allowed origins for CORS
-	orgAuthChecker      OrgAuthChecker                 // Org authorization checker
-	multiTenantChecker  MultiTenantChecker             // Multi-tenant feature flag and license checker
-	isTrustedProxy      func(ip string) bool           // Optional: checks if peer IP is a trusted reverse proxy
-	legacyPayloadCompat bool                           // when true, include legacy per-type arrays in state payloads
+	clients            map[*Client]bool            // All clients (legacy support)
+	clientsByTenant    map[string]map[*Client]bool // Per-tenant client tracking
+	broadcast          chan []byte
+	broadcastSeq       chan Message         // Sequenced broadcast channel for ordering
+	tenantBroadcast    chan TenantBroadcast // Per-tenant broadcast channel
+	register           chan *Client
+	unregister         chan *Client
+	stopChan           chan struct{} // Signals shutdown
+	stopOnce           sync.Once
+	mu                 sync.RWMutex
+	getState           func() interface{}             // Function to get current state (legacy)
+	getStateByTenant   func(orgID string) interface{} // Function to get state for specific tenant
+	allowedOrigins     []string                       // Allowed origins for CORS
+	orgAuthChecker     OrgAuthChecker                 // Org authorization checker
+	multiTenantChecker MultiTenantChecker             // Multi-tenant feature flag and license checker
+	isTrustedProxy     func(ip string) bool           // Optional: checks if peer IP is a trusted reverse proxy
 	// Broadcast coalescing fields
 	coalesceWindow  time.Duration
 	coalescePending *Message
@@ -466,20 +465,6 @@ func (h *Hub) SetTrustedProxyChecker(fn func(ip string) bool) {
 	h.isTrustedProxy = fn
 }
 
-// SetLegacyPayloadCompat controls whether legacy per-type arrays are kept in websocket state payloads.
-// Default is true for backward compatibility.
-func (h *Hub) SetLegacyPayloadCompat(enabled bool) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.legacyPayloadCompat = enabled
-}
-
-func (h *Hub) legacyPayloadCompatEnabled() bool {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return h.legacyPayloadCompat
-}
-
 func (h *Hub) hasStateGetter() bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -519,7 +504,6 @@ func NewHub(getState func() interface{}) *Hub {
 		stopChan:              make(chan struct{}),
 		getState:              getState,
 		allowedOrigins:        []string{},             // Default to empty (will be set based on actual host)
-		legacyPayloadCompat:   true,                   // Keep legacy arrays by default
 		coalesceWindow:        100 * time.Millisecond, // Coalesce rapid updates within 100ms
 		tenantCoalescePending: make(map[string]*Message),
 		tenantCoalesceTimers:  make(map[string]*time.Timer),
@@ -530,9 +514,7 @@ func NewHub(getState func() interface{}) *Hub {
 func (h *Hub) Run() {
 	// Start broadcast sequencer goroutine
 	go h.runBroadcastSequencer()
-	log.Info().
-		Bool("legacy_payload_compat", h.legacyPayloadCompatEnabled()).
-		Msg("WebSocket state payload compatibility mode configured")
+	log.Info().Msg("WebSocket state payload configured for unified resources")
 
 	pingTicker := time.NewTicker(30 * time.Second)
 	defer pingTicker.Stop()
@@ -1111,10 +1093,6 @@ func (h *Hub) dispatchToTenantClients(orgID string, data []byte, dropLog string)
 
 // prepareStateForBroadcast applies websocket payload compatibility rules to state payloads.
 func (h *Hub) prepareStateForBroadcast(state interface{}) interface{} {
-	if h.legacyPayloadCompatEnabled() {
-		return state
-	}
-
 	switch s := state.(type) {
 	case models.StateFrontend:
 		stripped := s

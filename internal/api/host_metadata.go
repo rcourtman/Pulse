@@ -10,6 +10,26 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	hostMetadataLegacyBasePath = "/api/hosts/metadata"
+	hostMetadataAgentBasePath  = "/api/agents/metadata"
+)
+
+func hostMetadataPathParts(path string) (hostID string, isCollection bool, ok bool) {
+	switch {
+	case path == hostMetadataLegacyBasePath || path == hostMetadataLegacyBasePath+"/":
+		return "", true, true
+	case path == hostMetadataAgentBasePath || path == hostMetadataAgentBasePath+"/":
+		return "", true, true
+	case strings.HasPrefix(path, hostMetadataLegacyBasePath+"/"):
+		return strings.TrimPrefix(path, hostMetadataLegacyBasePath+"/"), false, true
+	case strings.HasPrefix(path, hostMetadataAgentBasePath+"/"):
+		return strings.TrimPrefix(path, hostMetadataAgentBasePath+"/"), false, true
+	default:
+		return "", false, false
+	}
+}
+
 // HostMetadataHandler handles host metadata operations
 type HostMetadataHandler struct {
 	mtPersistence *config.MultiTenantPersistence
@@ -45,10 +65,13 @@ func (h *HostMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Check if requesting specific host
-	path := r.URL.Path
-	// Handle both /api/hosts/metadata and /api/hosts/metadata/
-	if path == "/api/hosts/metadata" || path == "/api/hosts/metadata/" {
+	hostID, isCollection, ok := hostMetadataPathParts(r.URL.Path)
+	if !ok {
+		http.Error(w, "Invalid request path", http.StatusBadRequest)
+		return
+	}
+
+	if isCollection {
 		// Get all metadata
 		w.Header().Set("Content-Type", "application/json")
 		store := h.getStore(r.Context())
@@ -61,9 +84,6 @@ func (h *HostMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.R
 		}
 		return
 	}
-
-	// Get specific host ID from path
-	hostID := strings.TrimPrefix(path, "/api/hosts/metadata/")
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -90,8 +110,8 @@ func (h *HostMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *htt
 		return
 	}
 
-	hostID := strings.TrimPrefix(r.URL.Path, "/api/hosts/metadata/")
-	if hostID == "" || hostID == "metadata" {
+	hostID, isCollection, ok := hostMetadataPathParts(r.URL.Path)
+	if !ok || isCollection || hostID == "" || hostID == "metadata" {
 		http.Error(w, "Host ID required", http.StatusBadRequest)
 		return
 	}
@@ -131,8 +151,8 @@ func (h *HostMetadataHandler) HandleDeleteMetadata(w http.ResponseWriter, r *htt
 		return
 	}
 
-	hostID := strings.TrimPrefix(r.URL.Path, "/api/hosts/metadata/")
-	if hostID == "" || hostID == "metadata" {
+	hostID, isCollection, ok := hostMetadataPathParts(r.URL.Path)
+	if !ok || isCollection || hostID == "" || hostID == "metadata" {
 		http.Error(w, "Host ID required", http.StatusBadRequest)
 		return
 	}

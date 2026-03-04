@@ -55,7 +55,7 @@ const PLATFORM_TONES: Record<KnownSourcePlatform, SourcePlatformTone> = {
     tone: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-400',
   },
   'host-agent': {
-    label: 'Host',
+    label: 'Agent',
     tone: 'bg-surface-alt text-base-content',
   },
   unraid: {

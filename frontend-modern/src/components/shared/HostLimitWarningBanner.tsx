@@ -1,7 +1,8 @@
-import { Component, Show, createMemo } from 'solid-js';
+import { Component, Show, createEffect, createMemo } from 'solid-js';
 import { entitlements, getLimit, getUpgradeActionUrlOrFallback } from '@/stores/license';
+import { trackUpgradeMetricEvent, UPGRADE_METRIC_EVENTS } from '@/utils/upgradeMetrics';
 
-export const HostLimitWarningBanner: Component = () => {
+export const AgentLimitWarningBanner: Component = () => {
   // No onMount load — TrialBanner (mounted above) already calls loadLicenseStatus().
 
   const nodeLimit = createMemo(() => getLimit('max_agents'));
@@ -9,6 +10,24 @@ export const HostLimitWarningBanner: Component = () => {
   const isUrgent = createMemo(() => {
     const state = nodeLimit()?.state;
     return state === 'warning' || state === 'enforced';
+  });
+
+  // Emit limit_warning_shown once when the banner transitions to warning/enforced.
+  // Uses previous-state tracking to avoid re-emitting on every reactive update.
+  let prevUrgent = false;
+  createEffect(() => {
+    const urgent = isUrgent();
+    const limit = nodeLimit();
+    if (urgent && !prevUrgent && limit) {
+      trackUpgradeMetricEvent({
+        type: UPGRADE_METRIC_EVENTS.LIMIT_WARNING_SHOWN,
+        surface: 'agent_limit_banner',
+        limit_key: 'max_agents',
+        current_value: limit.current,
+        limit_value: limit.limit,
+      });
+    }
+    prevUrgent = !!urgent;
   });
 
   const overflowDaysRemaining = createMemo(() => entitlements()?.overflow_days_remaining);
@@ -57,4 +76,6 @@ export const HostLimitWarningBanner: Component = () => {
   );
 };
 
-export default HostLimitWarningBanner;
+// Compatibility alias while host naming is phased out from imports/events.
+export const HostLimitWarningBanner = AgentLimitWarningBanner;
+export default AgentLimitWarningBanner;

@@ -882,7 +882,7 @@ func parseResourceTypes(raw string) map[unified.ResourceType]struct{} {
 	result := make(map[unified.ResourceType]struct{})
 	for _, part := range splitCSV(raw) {
 		switch part {
-		case "host", "hosts", "node", "nodes", "docker-host":
+		case "agent", "agents", "host", "hosts", "node", "nodes", "docker-host":
 			// "node" and "docker-host" are frontend aliases that both resolve to
 			// ResourceTypeHost. Filtering by the frontend type is supported because
 			// applyFrontendTypes() runs after filtering, so we match on the backend
@@ -1065,7 +1065,7 @@ func buildMetricsTarget(resource unified.Resource, registry *unified.ResourceReg
 			return &unified.MetricsTarget{ResourceType: "node", ResourceID: st.SourceID}
 		}
 		if st, ok := bySource[unified.SourceAgent]; ok {
-			return &unified.MetricsTarget{ResourceType: "host", ResourceID: st.SourceID}
+			return &unified.MetricsTarget{ResourceType: "agent", ResourceID: st.SourceID}
 		}
 		if st, ok := bySource[unified.SourceDocker]; ok {
 			return &unified.MetricsTarget{ResourceType: "dockerHost", ResourceID: st.SourceID}
@@ -1165,8 +1165,12 @@ func cephDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
 
 func hostDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
 	linkedHostAgentID := ""
-	if hasSource(resource.Sources, unified.SourceAgent) || resource.Agent != nil {
+	agentBacked := hasSource(resource.Sources, unified.SourceAgent) || resource.Agent != nil
+	if agentBacked {
 		linkedHostAgentID = proxmoxLinkedHostAgentID(resource.Proxmox)
+	}
+	if linkedHostAgentID != "" {
+		agentBacked = true
 	}
 	hostID := firstNonEmptyTrimmed(
 		agentID(resource.Agent),
@@ -1183,8 +1187,12 @@ func hostDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
 	if hostID == "" {
 		return nil
 	}
+	resourceType := "host"
+	if agentBacked {
+		resourceType = "agent"
+	}
 	return &unified.DiscoveryTarget{
-		ResourceType: "host",
+		ResourceType: resourceType,
 		HostID:       hostID,
 		ResourceID:   hostID,
 		Hostname: firstNonEmptyTrimmed(

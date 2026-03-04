@@ -10,8 +10,8 @@ import {
   TableCell,
 } from '@/components/shared/Table';
 import { formatRelativeTime } from '@/utils/format';
-import { HostLedgerAPI } from '@/api/hostLedger';
-import type { HostLedgerEntry } from '@/api/hostLedger';
+import { AgentLedgerAPI } from '@/api/agentLedger';
+import type { AgentLedgerEntry } from '@/api/agentLedger';
 import type { StatusIndicatorVariant } from '@/utils/status';
 
 function statusVariant(status: string): StatusIndicatorVariant {
@@ -30,8 +30,8 @@ function usagePercent(total: number, limit: number): number {
   return Math.min(100, Math.round((total / limit) * 100));
 }
 
-export function HostLedgerPanel() {
-  const [ledger, { refetch }] = createResource(() => HostLedgerAPI.getLedger());
+export function AgentLedgerPanel() {
+  const [ledger, { refetch }] = createResource(() => AgentLedgerAPI.getLedger());
 
   const total = () => ledger()?.total ?? 0;
   const limit = () => ledger()?.limit ?? 0;
@@ -111,7 +111,7 @@ export function HostLedgerPanel() {
               </TableHeader>
               <TableBody>
                 <For each={hosts()}>
-                  {(host: HostLedgerEntry) => (
+                  {(host: AgentLedgerEntry) => (
                     <TableRow>
                       <TableCell>
                         <span class="text-sm font-medium text-base-content">{host.name}</span>
@@ -140,3 +140,6 @@ export function HostLedgerPanel() {
     </Card>
   );
 }
+
+// Compatibility alias while host naming is phased out from imports.
+export const HostLedgerPanel = AgentLedgerPanel;
