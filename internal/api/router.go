@@ -8214,7 +8214,7 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 
 	hostID := strings.TrimSpace(payload.HostID)
 	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "hostId is required", nil)
+		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID (hostId) is required", nil)
 		return
 	}
 
