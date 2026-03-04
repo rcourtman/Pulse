@@ -290,6 +290,97 @@ func BenchmarkRollupCandidate(b *testing.B) {
 	}
 }
 
+// BenchmarkConcurrentReadWrite measures query latency under worst-case write
+// contention. A background goroutine continuously writes batches while the
+// benchmark loop queries historical data. Since the production Store uses
+// MaxOpenConns(1) (SQLite best practice), this measures single-connection
+// pool contention — the same bottleneck production hits when live metric
+// writes overlap with dashboard chart queries. Catches regressions in
+// connection pool fairness, write transaction duration, and query plan
+// efficiency under contention.
+func BenchmarkConcurrentReadWrite(b *testing.B) {
+	suppressLogs(b)
+	store := newBenchStore(b)
+	base := time.Now().Add(-time.Hour)
+
+	// Seed initial data so queries return results from the start.
+	const seedPoints = 500
+	seed := make([]WriteMetric, seedPoints)
+	for i := range seed {
+		seed[i] = WriteMetric{
+			ResourceType: "vm",
+			ResourceID:   "vm-crw",
+			MetricType:   "cpu",
+			Value:        float64(i % 100),
+			Timestamp:    base.Add(time.Duration(i) * 7 * time.Second),
+			Tier:         TierRaw,
+		}
+	}
+	store.WriteBatchSync(seed)
+
+	start := base.Add(-time.Second)
+	end := base.Add(time.Duration(seedPoints) * 7 * time.Second)
+
+	// Launch a background writer that continuously appends batches at
+	// maximum throughput (worst-case stress, not paced like production 2s
+	// ticks). It writes to different resource IDs than the reader queries,
+	// mirroring production where ingestion targets many resources while a
+	// user views one.
+	stop := make(chan struct{})
+	writerDone := make(chan struct{})
+	started := make(chan struct{})
+	go func() {
+		defer close(writerDone)
+		writeBase := end
+		tick := 0
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			batch := make([]WriteMetric, 10)
+			for j := range batch {
+				batch[j] = WriteMetric{
+					ResourceType: "vm",
+					ResourceID:   fmt.Sprintf("vm-crw-live-%d", tick%50),
+					MetricType:   "cpu",
+					Value:        float64((tick + j) % 100),
+					Timestamp:    writeBase.Add(time.Duration(tick*10+j) * 2 * time.Second),
+					Tier:         TierRaw,
+				}
+			}
+			store.WriteBatchSync(batch)
+			if tick == 0 {
+				close(started) // Signal after first write completes.
+			}
+			tick++
+		}
+	}()
+
+	// Wait until the writer has completed at least one write so contention
+	// is guaranteed when timing begins.
+	<-started
+
+	// Clean up the writer on any exit path (including b.Fatalf).
+	b.Cleanup(func() {
+		close(stop)
+		<-writerDone
+	})
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		pts, err := store.Query("vm", "vm-crw", "cpu", start, end, 0)
+		if err != nil {
+			b.Fatalf("Query: %v", err)
+		}
+		if len(pts) < seedPoints {
+			b.Fatalf("expected at least %d points, got %d", seedPoints, len(pts))
+		}
+	}
+}
+
 // BenchmarkQueryManyResources measures query latency when the metrics table
 // contains data for many distinct resources — simulating a 100-resource
 // deployment where index isolation matters.
