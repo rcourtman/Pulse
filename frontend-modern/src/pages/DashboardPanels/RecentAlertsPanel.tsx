@@ -136,6 +136,7 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
                     {alert.level === 'critical' ? 'CRIT' : 'WARN'}
                   </span>
                   <p class="min-w-0 text-xs text-base-content truncate">{alert.resourceName}</p>
+                  <p class="min-w-0 text-xs text-muted truncate flex-1">{alert.message}</p>
                   <span class="shrink-0 ml-auto text-[10px] font-mono text-slate-400">
                     {formatRelativeTime(alert.startTime, { compact: true })}
                   </span>
