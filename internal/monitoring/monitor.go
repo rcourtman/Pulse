@@ -3107,7 +3107,7 @@ func monitorPlatformType(resource unifiedresources.Resource, resourceType string
 	case "pmg":
 		return "proxmox-pmg"
 	case "host":
-		return "host-agent"
+		return "agent"
 	default:
 		if monitorHasSource(resource.Sources, unifiedresources.SourceK8s) {
 			return "kubernetes"
@@ -3122,7 +3122,7 @@ func monitorPlatformType(resource unifiedresources.Resource, resourceType string
 			return "proxmox-pmg"
 		}
 		if monitorHasSource(resource.Sources, unifiedresources.SourceAgent) {
-			return "host-agent"
+			return "agent"
 		}
 		if monitorHasSource(resource.Sources, unifiedresources.SourceProxmox) {
 			return "proxmox-pve"

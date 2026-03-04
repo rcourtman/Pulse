@@ -222,7 +222,7 @@ func (a *MonitorAdapter) Nodes() []*NodeView {
 	return a.registry.Nodes()
 }
 
-// Hosts returns cached host-agent views for AI/read-state consumers.
+// Hosts returns cached agent-host views for AI/read-state consumers.
 func (a *MonitorAdapter) Hosts() []*HostView {
 	if a == nil || a.registry == nil {
 		return nil

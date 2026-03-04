@@ -91,7 +91,7 @@ type Node struct {
 	LinkedHostAgentID string
 }
 
-// Host represents a host system (via host-agent).
+// Host represents a host system (via pulse-agent host telemetry).
 type Host struct {
 	ID            string
 	Hostname      string
@@ -794,7 +794,7 @@ func (s *Service) snapshotFromReadState(rs unifiedresources.ReadState) StateSnap
 	hViews := rs.Hosts()
 	hosts := make([]Host, 0, len(hViews))
 	for _, h := range hViews {
-		// Use AgentID (original host-agent ID) rather than the registry hash
+		// Use AgentID (original agent ID) rather than the registry hash
 		// ID, because discovery lookup code matches against request IDs which
 		// use the source-level host agent ID.
 		hostID := h.AgentID()

@@ -264,7 +264,7 @@ func convertHostSensorsToTemperature(sensors models.HostSensorSummary, lastSeen 
 	}
 
 	log.Debug().
-		Str("source", "host-agent").
+		Str("source", "agent").
 		Float64("cpuPackage", temp.CPUPackage).
 		Float64("cpuMax", temp.CPUMax).
 		Int("coreCount", len(temp.Cores)).

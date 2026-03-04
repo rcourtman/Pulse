@@ -34,9 +34,9 @@ func normalizeProxmoxInstallType(raw string) (string, error) {
 
 func proxmoxAgentInstallScopes() []string {
 	return []string{
-		config.ScopeHostReport,
-		config.ScopeHostConfigRead,
-		config.ScopeHostManage,
+		config.ScopeAgentReport,
+		config.ScopeAgentConfigRead,
+		config.ScopeAgentManage,
 		config.ScopeAgentExec,
 	}
 }

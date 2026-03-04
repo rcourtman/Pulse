@@ -324,7 +324,7 @@ func metricsFromKubernetesCluster(cluster models.KubernetesCluster, linkedHosts 
 		}
 	}
 
-	// Fall back to Kubernetes metrics API usage for nodes without a linked host-agent.
+	// Fall back to Kubernetes metrics API usage for nodes without a linked agent host.
 	for _, node := range cluster.Nodes {
 		nodeName := strings.TrimSpace(node.Name)
 		normalized := strings.ToLower(NormalizeHostname(nodeName))
@@ -381,7 +381,7 @@ func metricsFromKubernetesCluster(cluster models.KubernetesCluster, linkedHosts 
 }
 
 func metricsFromKubernetesNode(_ models.KubernetesCluster, node models.KubernetesNode, linkedHost *models.Host) *ResourceMetrics {
-	// Kubernetes node usage comes from the host-agent module when running on the
+	// Kubernetes node usage comes from the pulse-agent host module when running on the
 	// same infrastructure node (unified agent). If no linked host exists, use
 	// Kubernetes metrics API usage fields when available.
 	if linkedHost != nil {

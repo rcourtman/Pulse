@@ -19,15 +19,15 @@ const (
 	ScopeDockerManage     = "docker:manage"
 	ScopeKubernetesReport = "kubernetes:report"
 	ScopeKubernetesManage = "kubernetes:manage"
-	ScopeHostReport       = "host-agent:report"
-	ScopeHostConfigRead   = "host-agent:config:read"
-	ScopeHostManage       = "host-agent:manage"
+	ScopeAgentReport      = "agent:report"
+	ScopeAgentConfigRead  = "agent:config:read"
+	ScopeAgentManage      = "agent:manage"
 	ScopeSettingsRead     = "settings:read"
 	ScopeSettingsWrite    = "settings:write"
-	ScopeAIExecute        = "ai:execute"        // Allows executing AI commands and remediation plans
-	ScopeAIChat           = "ai:chat"           // Allows AI chat participation
-	ScopeAgentExec        = "agent:exec"        // Allows agent execution WebSocket connections
-	ScopeHostEnroll       = "host-agent:enroll" // Bootstrap enrollment only
+	ScopeAIExecute        = "ai:execute"   // Allows executing AI commands and remediation plans
+	ScopeAIChat           = "ai:chat"      // Allows AI chat participation
+	ScopeAgentExec        = "agent:exec"   // Allows agent execution WebSocket connections
+	ScopeAgentEnroll      = "agent:enroll" // Bootstrap enrollment only
 )
 
 // AllKnownScopes enumerates scopes recognized by the backend (excluding the wildcard sentinel).
@@ -38,15 +38,15 @@ var AllKnownScopes = []string{
 	ScopeDockerManage,
 	ScopeKubernetesReport,
 	ScopeKubernetesManage,
-	ScopeHostReport,
-	ScopeHostConfigRead,
-	ScopeHostManage,
+	ScopeAgentReport,
+	ScopeAgentConfigRead,
+	ScopeAgentManage,
 	ScopeSettingsRead,
 	ScopeSettingsWrite,
 	ScopeAIExecute,
 	ScopeAIChat,
 	ScopeAgentExec,
-	ScopeHostEnroll,
+	ScopeAgentEnroll,
 }
 
 var scopeLookup = func() map[string]struct{} {

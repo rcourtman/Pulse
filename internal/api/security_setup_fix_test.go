@@ -256,7 +256,7 @@ func TestQuickSecuritySetupRequiresSettingsScopeForTokens(t *testing.T) {
 	}
 
 	rawToken := strings.Repeat("ab", 32) // 64 hex chars
-	record, err := config.NewAPITokenRecord(rawToken, "limited", []string{config.ScopeHostReport})
+	record, err := config.NewAPITokenRecord(rawToken, "limited", []string{config.ScopeAgentReport})
 	if err != nil {
 		t.Fatalf("new token record: %v", err)
 	}
@@ -299,7 +299,7 @@ func TestRegenerateAPITokenRequiresSettingsScope(t *testing.T) {
 	}
 
 	rawToken := strings.Repeat("cd", 32)
-	record, err := config.NewAPITokenRecord(rawToken, "limited", []string{config.ScopeHostReport})
+	record, err := config.NewAPITokenRecord(rawToken, "limited", []string{config.ScopeAgentReport})
 	if err != nil {
 		t.Fatalf("new token record: %v", err)
 	}
@@ -339,7 +339,7 @@ func TestValidateAPITokenRequiresSettingsScope(t *testing.T) {
 	}
 
 	rawToken := strings.Repeat("ef", 32)
-	record, err := config.NewAPITokenRecord(rawToken, "limited", []string{config.ScopeHostReport})
+	record, err := config.NewAPITokenRecord(rawToken, "limited", []string{config.ScopeAgentReport})
 	if err != nil {
 		t.Fatalf("new token record: %v", err)
 	}
@@ -381,7 +381,7 @@ func TestResetLockoutRequiresSettingsScope(t *testing.T) {
 	}
 
 	rawToken := strings.Repeat("12", 32)
-	record, err := config.NewAPITokenRecord(rawToken, "limited", []string{config.ScopeHostReport})
+	record, err := config.NewAPITokenRecord(rawToken, "limited", []string{config.ScopeAgentReport})
 	if err != nil {
 		t.Fatalf("new token record: %v", err)
 	}

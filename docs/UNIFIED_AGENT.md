@@ -1,6 +1,6 @@
 # Pulse Unified Agent
 
-The unified agent (`pulse-agent`) combines host, Docker, and Kubernetes monitoring into a single binary. It replaces the separate `pulse-host-agent` and `pulse-docker-agent` for simpler deployment and management.
+The unified agent (`pulse-agent`) combines host, Docker, and Kubernetes monitoring into a single binary. It replaces older split-agent installs with one deployment and one service for simpler operations.
 Install it on each host you want Pulse to monitor. This is the primary monitoring path for infrastructure onboarding.
 
 > Note: For temperature monitoring, use `pulse-agent --enable-proxmox` (recommended) or SSH-based collection. The legacy sensor proxy has been removed. See `docs/TEMPERATURE_MONITORING.md`.
@@ -227,7 +227,7 @@ PULSE_DISABLE_AUTO_UPDATE=true
 Pro and Cloud can push centralized settings to agents via Agent Profiles.
 
 Behavior:
-- The agent fetches remote config on startup from `/api/agents/host/{agent_id}/config`.
+- The agent fetches remote config on startup from `/api/agents/agent/{agent_id}/config`.
 - Profile settings override local flags/env for supported keys.
 - Profile changes take effect on the next agent restart.
 - Command execution (`commandsEnabled`) is controlled per agent in **Settings → Unified Agents** and can change live.
@@ -246,12 +246,11 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | bash -s -- --uninstall
 This removes:
 - The agent binary
 - The systemd/launchd service
-- Any legacy agents (pulse-host-agent, pulse-docker-agent)
+- Any legacy docker-agent service (`pulse-docker-agent`)
 
-## Migration from Legacy Agents
+## Migration from Legacy Docker Agent
 
-The install script automatically removes legacy agents when installing the unified agent:
-- `pulse-host-agent` service is stopped and removed
+The install script automatically removes legacy docker-agent installs when installing the unified agent:
 - `pulse-docker-agent` service is stopped and removed
 - Binaries are deleted from `/usr/local/bin/`
 

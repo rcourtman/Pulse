@@ -202,7 +202,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 								agentAvailable := uint64(agentHost.Memory.Total - agentHost.Memory.Used)
 								if agentAvailable > 0 {
 									memAvailable = agentAvailable
-									memorySource = "host-agent"
+									memorySource = "agent"
 									guestRaw.HostAgentTotal = uint64(agentHost.Memory.Total)
 									guestRaw.HostAgentUsed = uint64(agentHost.Memory.Used)
 									log.Debug().

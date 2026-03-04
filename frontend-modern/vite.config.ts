@@ -200,19 +200,7 @@ export default defineConfig({
         changeOrigin: true,
         cookieDomainRewrite: '',
       },
-      '/install-docker-agent.sh': {
-        target: backendUrl,
-        changeOrigin: true,
-      },
       '/install-container-agent.sh': {
-        target: backendUrl,
-        changeOrigin: true,
-      },
-      '/install-host-agent.sh': {
-        target: backendUrl,
-        changeOrigin: true,
-      },
-      '/install-host-agent.ps1': {
         target: backendUrl,
         changeOrigin: true,
       },

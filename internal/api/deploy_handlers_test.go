@@ -485,7 +485,7 @@ func mintTestBootstrapToken(t *testing.T, cfg *config.Config, jobID, targetID, e
 	if err != nil {
 		t.Fatalf("generate token: %v", err)
 	}
-	rec, err := config.NewAPITokenRecord(raw, "test-bootstrap", []string{config.ScopeHostEnroll})
+	rec, err := config.NewAPITokenRecord(raw, "test-bootstrap", []string{config.ScopeAgentEnroll})
 	if err != nil {
 		t.Fatalf("new token record: %v", err)
 	}
@@ -524,7 +524,7 @@ func TestHandleEnroll_Success(t *testing.T) {
 	jobID, targetID := seedEnrollJobAndTarget(t, store, deploy.TargetEnrolling)
 	rec := mintTestBootstrapToken(t, h.config, jobID, targetID, "pve-node2")
 
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/enroll", enrollJSON(t, "pve-node2"))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", enrollJSON(t, "pve-node2"))
 	attachAPITokenRecord(req, rec)
 
 	rr := httptest.NewRecorder()
@@ -573,7 +573,7 @@ func TestHandleEnroll_InstallingState(t *testing.T) {
 	jobID, targetID := seedEnrollJobAndTarget(t, store, deploy.TargetInstalling)
 	rec := mintTestBootstrapToken(t, h.config, jobID, targetID, "")
 
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/enroll", enrollJSON(t, "any-host"))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", enrollJSON(t, "any-host"))
 	attachAPITokenRecord(req, rec)
 
 	rr := httptest.NewRecorder()
@@ -589,12 +589,12 @@ func TestHandleEnroll_MissingHostname(t *testing.T) {
 
 	rec := &config.APITokenRecord{
 		ID:     "tok-1",
-		Scopes: []string{config.ScopeHostEnroll},
+		Scopes: []string{config.ScopeAgentEnroll},
 		Metadata: map[string]string{
 			deploy.MetaKeyJobID: "j1", deploy.MetaKeyTargetID: "t1",
 		},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/enroll", enrollJSON(t, ""))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", enrollJSON(t, ""))
 	attachAPITokenRecord(req, rec)
 
 	rr := httptest.NewRecorder()
@@ -608,7 +608,7 @@ func TestHandleEnroll_MissingHostname(t *testing.T) {
 func TestHandleEnroll_NoToken(t *testing.T) {
 	h, _ := newEnrollTestHandlers(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/enroll", enrollJSON(t, "host"))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", enrollJSON(t, "host"))
 	rr := httptest.NewRecorder()
 	h.HandleEnroll(rr, req)
 
@@ -622,10 +622,10 @@ func TestHandleEnroll_NotBootstrapToken(t *testing.T) {
 
 	rec := &config.APITokenRecord{
 		ID:     "tok-no-meta",
-		Scopes: []string{config.ScopeHostEnroll},
+		Scopes: []string{config.ScopeAgentEnroll},
 		// No Metadata — not a deploy bootstrap token.
 	}
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/enroll", enrollJSON(t, "host"))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", enrollJSON(t, "host"))
 	attachAPITokenRecord(req, rec)
 
 	rr := httptest.NewRecorder()
@@ -641,7 +641,7 @@ func TestHandleEnroll_BindingMismatch(t *testing.T) {
 	jobID, targetID := seedEnrollJobAndTarget(t, store, deploy.TargetEnrolling)
 	rec := mintTestBootstrapToken(t, h.config, jobID, targetID, "expected-host")
 
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/enroll", enrollJSON(t, "wrong-host"))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", enrollJSON(t, "wrong-host"))
 	attachAPITokenRecord(req, rec)
 
 	rr := httptest.NewRecorder()
@@ -658,7 +658,7 @@ func TestHandleEnroll_ProxmoxNodeNameMatch(t *testing.T) {
 	rec := mintTestBootstrapToken(t, h.config, jobID, targetID, "pve-node2")
 
 	// OS hostname differs but proxmox.nodeName matches.
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/enroll",
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll",
 		enrollJSONWithProxmox(t, "os-hostname", "pve-node2"))
 	attachAPITokenRecord(req, rec)
 
@@ -675,7 +675,7 @@ func TestHandleEnroll_InvalidTargetState(t *testing.T) {
 	jobID, targetID := seedEnrollJobAndTarget(t, store, deploy.TargetReady)
 	rec := mintTestBootstrapToken(t, h.config, jobID, targetID, "")
 
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/enroll", enrollJSON(t, "host"))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", enrollJSON(t, "host"))
 	attachAPITokenRecord(req, rec)
 
 	rr := httptest.NewRecorder()
@@ -692,7 +692,7 @@ func TestHandleEnroll_TokenConsumed(t *testing.T) {
 	rec := mintTestBootstrapToken(t, h.config, jobID, targetID, "")
 
 	// First call succeeds.
-	req1 := httptest.NewRequest(http.MethodPost, "/api/agents/host/enroll", enrollJSON(t, "host"))
+	req1 := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", enrollJSON(t, "host"))
 	attachAPITokenRecord(req1, rec)
 	rr1 := httptest.NewRecorder()
 	h.HandleEnroll(rr1, req1)
@@ -717,7 +717,7 @@ func TestHandleEnroll_TokenConsumed(t *testing.T) {
 func TestHandleEnroll_MethodNotAllowed(t *testing.T) {
 	h, _ := newEnrollTestHandlers(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/enroll", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/enroll", nil)
 	rr := httptest.NewRecorder()
 	h.HandleEnroll(rr, req)
 
@@ -752,8 +752,8 @@ func TestMintBootstrapTokenForTarget(t *testing.T) {
 	if !valid || rec == nil {
 		t.Fatal("minted token should be valid")
 	}
-	if !rec.HasScope(config.ScopeHostEnroll) {
-		t.Fatal("token should have host-agent:enroll scope")
+	if !rec.HasScope(config.ScopeAgentEnroll) {
+		t.Fatal("token should have agent:enroll scope")
 	}
 	if rec.OrgID != "test-org" {
 		t.Fatalf("expected orgID=test-org, got %q", rec.OrgID)
@@ -803,7 +803,7 @@ func TestHandleEnroll_JobTargetMismatch(t *testing.T) {
 	// Create a token bound to a DIFFERENT job.
 	rec := mintTestBootstrapToken(t, h.config, "different_job_id", targetID, "")
 
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/enroll", enrollJSON(t, "host"))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", enrollJSON(t, "host"))
 	attachAPITokenRecord(req, rec)
 
 	rr := httptest.NewRecorder()
@@ -820,7 +820,7 @@ func TestHandleEnroll_TokenAlreadyConsumed(t *testing.T) {
 	rec := mintTestBootstrapToken(t, h.config, jobID, targetID, "")
 
 	// First call succeeds.
-	req1 := httptest.NewRequest(http.MethodPost, "/api/agents/host/enroll", enrollJSON(t, "host"))
+	req1 := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", enrollJSON(t, "host"))
 	attachAPITokenRecord(req1, rec)
 	rr1 := httptest.NewRecorder()
 	h.HandleEnroll(rr1, req1)
@@ -833,7 +833,7 @@ func TestHandleEnroll_TokenAlreadyConsumed(t *testing.T) {
 	// Reset target to enrolling so we can test the token-consumed path specifically.
 	_ = store.UpdateTargetStatus(context.Background(), targetID, deploy.TargetEnrolling, "")
 
-	req2 := httptest.NewRequest(http.MethodPost, "/api/agents/host/enroll", enrollJSON(t, "host"))
+	req2 := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", enrollJSON(t, "host"))
 	attachAPITokenRecord(req2, rec) // same token record still in context
 	rr2 := httptest.NewRecorder()
 	h.HandleEnroll(rr2, req2)
@@ -852,7 +852,7 @@ func TestHandleEnroll_CommandsEnabledAddsAgentExecScope(t *testing.T) {
 		"hostname": "cmd-host", "os": "linux", "arch": "amd64",
 		"agentVersion": "6.0.0", "commandsEnabled": true,
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/enroll", bytes.NewBuffer(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", bytes.NewBuffer(body))
 	attachAPITokenRecord(req, rec)
 
 	rr := httptest.NewRecorder()
@@ -892,7 +892,7 @@ func TestHandleEnroll_CommandsEnabledAddsAgentExecScope(t *testing.T) {
 		if s == config.ScopeAgentExec {
 			hasExec = true
 		}
-		if s == config.ScopeHostManage {
+		if s == config.ScopeAgentManage {
 			hasManage = true
 		}
 	}
@@ -900,7 +900,7 @@ func TestHandleEnroll_CommandsEnabledAddsAgentExecScope(t *testing.T) {
 		t.Errorf("expected runtime token to have %s scope, got scopes: %v", config.ScopeAgentExec, found.Scopes)
 	}
 	if !hasManage {
-		t.Errorf("expected runtime token to have %s scope, got scopes: %v", config.ScopeHostManage, found.Scopes)
+		t.Errorf("expected runtime token to have %s scope, got scopes: %v", config.ScopeAgentManage, found.Scopes)
 	}
 }
 
@@ -910,7 +910,7 @@ func TestHandleEnroll_CommandsDisabledNoAgentExecScope(t *testing.T) {
 	rec := mintTestBootstrapToken(t, h.config, jobID, targetID, "no-cmd-host")
 
 	// commandsEnabled defaults to false (not sent).
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/enroll", enrollJSON(t, "no-cmd-host"))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", enrollJSON(t, "no-cmd-host"))
 	attachAPITokenRecord(req, rec)
 
 	rr := httptest.NewRecorder()
@@ -950,12 +950,12 @@ func TestHandleEnroll_CommandsDisabledNoAgentExecScope(t *testing.T) {
 	// Should still have manage.
 	hasManage := false
 	for _, s := range found.Scopes {
-		if s == config.ScopeHostManage {
+		if s == config.ScopeAgentManage {
 			hasManage = true
 		}
 	}
 	if !hasManage {
-		t.Errorf("expected runtime token to have %s scope", config.ScopeHostManage)
+		t.Errorf("expected runtime token to have %s scope", config.ScopeAgentManage)
 	}
 }
 

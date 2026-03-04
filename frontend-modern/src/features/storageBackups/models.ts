@@ -7,7 +7,7 @@ export const KNOWN_STORAGE_BACKUP_PLATFORMS = [
   'proxmox-pmg',
   'kubernetes',
   'docker',
-  'host-agent',
+  'agent',
   'truenas',
   'unraid',
   'synology-dsm',

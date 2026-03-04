@@ -65,7 +65,7 @@ const makeHostResource = (overrides: Partial<Resource> = {}): Resource => ({
   name: 'host-one',
   displayName: 'Host One',
   platformId: 'host-one',
-  platformType: 'host-agent',
+  platformType: 'agent',
   sourceType: 'agent',
   status: 'online',
   lastSeen: Date.now(),

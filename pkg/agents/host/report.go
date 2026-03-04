@@ -2,7 +2,7 @@ package host
 
 import "time"
 
-// Report represents the payload sent by the pulse-host-agent.
+// Report represents the payload sent by the host module of pulse-agent.
 type Report struct {
 	Agent          AgentInfo            `json:"agent"`
 	Host           HostInfo             `json:"host"`

@@ -7,7 +7,6 @@ export type ResourceType =
   | 'docker'
   | 'k8s'
   | 'agent'
-  | 'host'
   | 'docker_vm'
   | 'docker_system-container';
 

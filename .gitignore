@@ -5,8 +5,6 @@
 /pulse-sensor-proxy
 /pulse-server
 /pulse-test
-/pulse-host-agent
-/pulse-host-agent-*
 /pulse-agent
 /pulse-agent-*
 /pulse-linux-amd64
@@ -69,7 +67,6 @@ dist/
 build/
 *.tar.gz
 pulse-fixes*.tar.gz
-release/pulse-host-agent-*.tar.gz
 scripts/macos/dist/
 
 # Frontend copy for embedding (generated during build)

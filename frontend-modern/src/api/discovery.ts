@@ -12,10 +12,8 @@ import type {
 } from '../types/discovery';
 
 const API_BASE = '/api/discovery';
-const isAgentResourceType = (resourceType: ResourceType): boolean =>
-  resourceType === 'agent' || resourceType === 'host';
-const agentCollectionBasePath = (resourceType: ResourceType): string =>
-  resourceType === 'agent' ? `${API_BASE}/agent` : `${API_BASE}/host`;
+const isAgentResourceType = (resourceType: ResourceType): boolean => resourceType === 'agent';
+const agentCollectionBasePath = (): string => `${API_BASE}/agent`;
 
 /**
  * List all discoveries
@@ -56,9 +54,6 @@ export async function listDiscoveriesByAgent(agentId: string): Promise<Discovery
   return response.json();
 }
 
-// Compatibility alias while host naming is phased out from imports.
-export const listDiscoveriesByHost = listDiscoveriesByAgent;
-
 /**
  * Get a specific discovery
  */
@@ -70,7 +65,7 @@ export async function getDiscovery(
   if (isAgentResourceType(resourceType)) {
     // Agent discovery is frequently absent before first scan. Resolve via list endpoint
     // first to avoid noisy 404s for expected "not discovered yet" states.
-    const collectionBasePath = agentCollectionBasePath(resourceType);
+    const collectionBasePath = agentCollectionBasePath();
     const agentListResponse = await apiFetch(`${collectionBasePath}/${encodeURIComponent(hostId)}`);
     if (!agentListResponse.ok) {
       throw new Error(
@@ -86,10 +81,10 @@ export async function getDiscovery(
     const resolvedAgentDiscovery =
       agentList.discoveries.find(
         (d) =>
-          (d.resource_type === 'host' || d.resource_type === 'agent') &&
+          d.resource_type === 'agent' &&
           (d.resource_id === resourceId || d.resource_id === hostId || d.host_id === hostId),
       ) ??
-      agentList.discoveries.find((d) => d.resource_type === 'host' || d.resource_type === 'agent');
+      agentList.discoveries.find((d) => d.resource_type === 'agent');
 
     if (!resolvedAgentDiscovery) {
       return null;

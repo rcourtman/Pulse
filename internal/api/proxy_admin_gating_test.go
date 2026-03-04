@@ -34,8 +34,10 @@ func TestProxyAuthAdminGatesAdminEndpoints(t *testing.T) {
 		{method: http.MethodPost, path: "/api/diagnostics/docker/prepare-token", body: `{}`},
 		{method: http.MethodGet, path: "/api/system/settings", body: ""},
 		{method: http.MethodPost, path: "/api/system/settings/update", body: `{}`},
-		{method: http.MethodPost, path: "/api/agents/host/link", body: `{}`},
-		{method: http.MethodPost, path: "/api/agents/host/unlink", body: `{}`},
+		{method: http.MethodPost, path: "/api/agents/agent/link", body: `{}`},
+		{method: http.MethodPost, path: "/api/agents/agent/unlink", body: `{}`},
+		{method: http.MethodPost, path: "/api/agents/agent/link", body: `{}`},
+		{method: http.MethodPost, path: "/api/agents/agent/unlink", body: `{}`},
 		{method: http.MethodGet, path: "/api/admin/profiles/", body: ""},
 	}
 

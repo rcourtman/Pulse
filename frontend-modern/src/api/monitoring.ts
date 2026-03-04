@@ -219,8 +219,7 @@ export class MonitoringAPI {
       throw new Error('Agent ID is required to remove an agent.');
     }
 
-    // Keep /agents/host path for backend compatibility while client naming is agent-first.
-    const url = `${this.baseUrl}/agents/host/${encodeURIComponent(agentId)}`;
+    const url = `${this.baseUrl}/agents/agent/${encodeURIComponent(agentId)}`;
     const response = await apiFetch(url, { method: 'DELETE' });
 
     if (!response.ok) {
@@ -243,8 +242,7 @@ export class MonitoringAPI {
       throw new Error('Agent ID is required to update agent config.');
     }
 
-    // Keep /agents/host path for backend compatibility while client naming is agent-first.
-    const url = `${this.baseUrl}/agents/host/${encodeURIComponent(agentId)}/config`;
+    const url = `${this.baseUrl}/agents/agent/${encodeURIComponent(agentId)}/config`;
     const response = await apiFetch(url, {
       method: 'PATCH',
       headers: {
@@ -263,8 +261,7 @@ export class MonitoringAPI {
       throw new Error('Agent ID is required to unlink an agent.');
     }
 
-    // Keep /agents/host path for backend compatibility while client naming is agent-first.
-    const url = `${this.baseUrl}/agents/host/unlink`;
+    const url = `${this.baseUrl}/agents/agent/unlink`;
     const response = await apiFetch(url, {
       method: 'POST',
       headers: {
@@ -290,8 +287,7 @@ export class MonitoringAPI {
       throw new Error('Provide an agent identifier or hostname to look up.');
     }
 
-    // Keep /agents/host path for backend compatibility while client naming is agent-first.
-    const url = `${this.baseUrl}/agents/host/lookup?${search.toString()}`;
+    const url = `${this.baseUrl}/agents/agent/lookup?${search.toString()}`;
     const response = await apiFetch(url);
 
     if (response.status === 404) {
@@ -322,29 +318,6 @@ export class MonitoringAPI {
     }
 
     return data;
-  }
-
-  // Compatibility aliases while host naming is phased out from call sites.
-  static async deleteHostAgent(hostId: string): Promise<void> {
-    return this.deleteAgent(hostId);
-  }
-
-  static async updateHostAgentConfig(
-    hostId: string,
-    config: { commandsEnabled?: boolean },
-  ): Promise<void> {
-    return this.updateAgentConfig(hostId, config);
-  }
-
-  static async unlinkHostAgent(hostId: string): Promise<void> {
-    return this.unlinkAgent(hostId);
-  }
-
-  static async lookupHost(params: {
-    id?: string;
-    hostname?: string;
-  }): Promise<AgentLookupResponse | null> {
-    return this.lookupAgent(params);
   }
 
   /**

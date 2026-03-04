@@ -599,7 +599,7 @@ export function Alerts() {
           return;
         }
 
-        // Host agent override stored by host ID
+        // Agent override stored by host ID
         const hostAgent = hostAgentMap.get(key);
         if (hostAgent) {
           const displayName =

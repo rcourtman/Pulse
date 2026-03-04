@@ -9,7 +9,7 @@ the host is visible in the infrastructure UI.
 ## Steps
 
 1. **Login** — Authenticate as admin via the Pulse UI or API.
-2. **Register agent** — Send a POST to `/api/agents/host/report` with a
+2. **Register agent** — Send a POST to `/api/agents/agent/report` with a
    synthetic host report payload containing hostname, OS info, CPU, memory,
    disks, and network interfaces.
 3. **Verify API state** — GET `/api/state` and confirm the new host appears in
@@ -20,7 +20,7 @@ the host is visible in the infrastructure UI.
    values and verify `lastSeen` updates.
 6. **Verify UI** — Navigate to `/infrastructure` and confirm the host's
    hostname or display name is visible on the page.
-7. **Delete host** — DELETE `/api/agents/host/{hostId}` and verify the host is
+7. **Delete host** — DELETE `/api/agents/agent/{hostId}` and verify the host is
    removed from `/api/state`.
 
 ## Success Criteria

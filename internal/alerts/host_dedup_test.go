@@ -8,7 +8,7 @@ import (
 
 func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 	// Test 1: Without a host agent registered, node metrics ARE checked
-	t.Run("node_metrics_checked_without_host_agent", func(t *testing.T) {
+	t.Run("node_metrics_checked_without_agent", func(t *testing.T) {
 		m := NewManager()
 		m.config.Enabled = true
 		m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
@@ -39,7 +39,7 @@ func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 	})
 
 	// Test 2: With host agent registered, node metrics are NOT checked
-	t.Run("node_metrics_skipped_with_host_agent", func(t *testing.T) {
+	t.Run("node_metrics_skipped_with_agent", func(t *testing.T) {
 		m := NewManager()
 		m.config.Enabled = true
 		m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
@@ -72,7 +72,7 @@ func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 	})
 
 	// Test 3: After unregistering host agent, node metrics ARE checked again
-	t.Run("node_metrics_resume_after_host_agent_unregistered", func(t *testing.T) {
+	t.Run("node_metrics_resume_after_agent_unregistered", func(t *testing.T) {
 		m := NewManager()
 		m.config.Enabled = true
 		m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}

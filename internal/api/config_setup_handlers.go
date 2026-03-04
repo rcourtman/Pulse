@@ -1266,8 +1266,8 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 		if record == nil {
 			return false, "invalid_token"
 		}
-		// Accept settings:write (admin tokens) or host-agent:report (agent tokens)
-		if !record.HasScope(config.ScopeSettingsWrite) && !record.HasScope(config.ScopeHostReport) {
+		// Accept settings:write (admin tokens) or agent:report (agent tokens)
+		if !record.HasScope(config.ScopeSettingsWrite) && !record.HasScope(config.ScopeAgentReport) {
 			return false, "missing_scope"
 		}
 

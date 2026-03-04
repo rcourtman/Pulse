@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	enrollEndpoint   = "/api/agents/host/enroll"
+	enrollEndpoint   = "/api/agents/agent/enroll"
 	runtimeTokenFile = "runtime.token"
 )
 
@@ -164,19 +164,19 @@ func (a *Agent) enroll(ctx context.Context) (*enrollResponse, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Token", a.cfg.APIToken)
 	req.Header.Set("Authorization", "Bearer "+a.cfg.APIToken)
-	req.Header.Set("User-Agent", "pulse-host-agent/"+a.agentVersion)
+	req.Header.Set("User-Agent", "pulse-agent/"+a.agentVersion)
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("enrollment request failed: %w", err)
 	}
-	defer resp.Body.Close()
-
 	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+	status := resp.StatusCode
+	resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if status != http.StatusOK {
 		return nil, &enrollStatusError{
-			StatusCode: resp.StatusCode,
+			StatusCode: status,
 			Body:       string(respBody),
 		}
 	}

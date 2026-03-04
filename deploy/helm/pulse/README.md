@@ -52,7 +52,7 @@ and optional alerts for sustained failure rate, latency, and missing model confi
 | agent.extraVolumes | list | `[]` |  |
 | agent.healthPort | int | `9191` |  |
 | agent.image.pullPolicy | string | `"IfNotPresent"` |  |
-| agent.image.repository | string | `"ghcr.io/rcourtman/pulse-docker-agent"` |  |
+| agent.image.repository | string | `"ghcr.io/rcourtman/pulse-agent"` |  |
 | agent.image.tag | string | `""` |  |
 | agent.kind | string | `"DaemonSet"` |  |
 | agent.livenessProbe.enabled | bool | `true` |  |

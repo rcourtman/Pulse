@@ -525,9 +525,6 @@ export interface AgentLookupResponse {
   };
 }
 
-// Compatibility alias while host naming is phased out from call sites.
-export type HostLookupResponse = AgentLookupResponse;
-
 export interface ReplicationJob {
   id: string;
   instance: string;

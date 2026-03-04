@@ -726,7 +726,7 @@ func (h *DeployHandlers) MintBootstrapTokenForTarget(req deploy.BootstrapTokenRe
 
 	record, err := config.NewAPITokenRecord(raw,
 		fmt.Sprintf("deploy-bootstrap:%s:%s", req.JobID, req.TargetID),
-		[]string{config.ScopeHostEnroll})
+		[]string{config.ScopeAgentEnroll})
 	if err != nil {
 		return "", "", fmt.Errorf("create token record: %w", err)
 	}
@@ -768,7 +768,7 @@ type enrollRequest struct {
 }
 
 // HandleEnroll processes bootstrap token enrollment from freshly-deployed agents.
-// POST /api/agents/host/enroll
+// POST /api/agents/agent/enroll
 func (h *DeployHandlers) HandleEnroll(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -868,14 +868,14 @@ func (h *DeployHandlers) HandleEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	runtimeScopes := []string{
-		config.ScopeHostReport, config.ScopeHostConfigRead, config.ScopeHostManage,
+		config.ScopeAgentReport, config.ScopeAgentConfigRead, config.ScopeAgentManage,
 		config.ScopeDockerReport, config.ScopeKubernetesReport,
 	}
 	if req.CommandsEnabled {
 		runtimeScopes = append(runtimeScopes, config.ScopeAgentExec)
 	}
 	runtimeRecord, err := config.NewAPITokenRecord(runtimeRaw,
-		fmt.Sprintf("host-agent:%s", req.Hostname),
+		fmt.Sprintf("agent:%s", req.Hostname),
 		runtimeScopes)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create runtime token record during enroll")

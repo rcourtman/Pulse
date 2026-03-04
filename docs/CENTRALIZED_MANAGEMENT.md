@@ -98,11 +98,11 @@ Authorization: Bearer <admin-token>
 To see what configuration an agent receives:
 
 ```http
-GET /api/agents/host/{agent_id}/config
+GET /api/agents/agent/{agent_id}/config
 Authorization: Bearer <agent-or-admin-token>
 ```
 
-Requires `host-agent:config:read` (or admin tokens with management scopes).
+Requires `agent:config:read` (or admin tokens with management scopes).
 
 ### 7. Schema, Validation, and Suggestions
 

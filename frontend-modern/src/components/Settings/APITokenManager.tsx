@@ -28,7 +28,7 @@ import {
   API_SCOPE_OPTIONS,
   DOCKER_MANAGE_SCOPE,
   DOCKER_REPORT_SCOPE,
-  HOST_AGENT_SCOPE,
+  AGENT_REPORT_SCOPE,
   MONITORING_READ_SCOPE,
   SETTINGS_READ_SCOPE,
   SETTINGS_WRITE_SCOPE,
@@ -233,7 +233,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     },
     {
       label: 'Agent',
-      scopes: [HOST_AGENT_SCOPE],
+      scopes: [AGENT_REPORT_SCOPE],
       description: 'Allow the Pulse agent to submit OS, CPU, and disk metrics.',
     },
     {

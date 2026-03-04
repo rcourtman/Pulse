@@ -5,8 +5,8 @@ export interface APIScopeOption {
   group: 'Monitoring' | 'Agents' | 'Settings';
 }
 
-export const HOST_AGENT_SCOPE = 'host-agent:report';
-export const HOST_AGENT_CONFIG_READ_SCOPE = 'host-agent:config:read';
+export const AGENT_REPORT_SCOPE = 'agent:report';
+export const AGENT_CONFIG_READ_SCOPE = 'agent:config:read';
 export const DOCKER_REPORT_SCOPE = 'docker:report';
 export const DOCKER_MANAGE_SCOPE = 'docker:manage';
 export const KUBERNETES_REPORT_SCOPE = 'kubernetes:report';
@@ -55,13 +55,13 @@ export const API_SCOPE_OPTIONS: APIScopeOption[] = [
     group: 'Agents',
   },
   {
-    value: HOST_AGENT_SCOPE,
+    value: AGENT_REPORT_SCOPE,
     label: 'Agent reporting',
     description: 'Allow the agent to send OS, CPU, and disk metrics.',
     group: 'Agents',
   },
   {
-    value: HOST_AGENT_CONFIG_READ_SCOPE,
+    value: AGENT_CONFIG_READ_SCOPE,
     label: 'Agent config fetch',
     description: 'Allow the agent to retrieve its assigned configuration profile.',
     group: 'Agents',

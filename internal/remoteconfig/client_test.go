@@ -11,8 +11,8 @@ import (
 func TestClient_Fetch(t *testing.T) {
 	t.Run("successful fetch with full config", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/api/agents/host/agent-1/config" {
-				t.Errorf("Expected path /api/agents/host/agent-1/config, got %s", r.URL.Path)
+			if r.URL.Path != "/api/agents/agent/agent-1/config" {
+				t.Errorf("Expected path /api/agents/agent/agent-1/config, got %s", r.URL.Path)
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -114,7 +114,7 @@ func TestClient_Fetch(t *testing.T) {
 
 func TestClient_ResolveHostID(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/agents/host/lookup" {
+		if r.URL.Path != "/api/agents/agent/lookup" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}

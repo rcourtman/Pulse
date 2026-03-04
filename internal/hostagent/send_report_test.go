@@ -145,54 +145,6 @@ func TestAgentSendReport_Non2xxReturnsError(t *testing.T) {
 	}
 }
 
-func TestAgentSendReport_FallsBackToLegacyEndpointOn404(t *testing.T) {
-	t.Parallel()
-
-	var (
-		mu    sync.Mutex
-		paths []string
-	)
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		paths = append(paths, r.URL.Path)
-		mu.Unlock()
-
-		if r.URL.Path == agentReportEndpoint {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		if r.URL.Path != legacyReportEndpoint {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	agent := &Agent{
-		cfg:             Config{APIToken: "test-token"},
-		httpClient:      server.Client(),
-		trimmedPulseURL: server.URL,
-	}
-
-	if err := agent.sendReport(context.Background(), agentshost.Report{
-		Agent: agentshost.AgentInfo{ID: "agent-1"},
-	}); err != nil {
-		t.Fatalf("sendReport: %v", err)
-	}
-
-	mu.Lock()
-	defer mu.Unlock()
-	if len(paths) != 2 {
-		t.Fatalf("expected 2 requests, got %d (%v)", len(paths), paths)
-	}
-	if paths[0] != agentReportEndpoint || paths[1] != legacyReportEndpoint {
-		t.Fatalf("unexpected request order: %v", paths)
-	}
-}
-
 func TestAgentProcess_ForbiddenResponseDoesNotBuffer(t *testing.T) {
 	t.Parallel()
 

@@ -169,7 +169,7 @@ func TestHandleAutoRegisterRejectsBodyAPITokenOrgMismatch(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
 
-	record, err := config.NewAPITokenRecord("org-bound-body-token-123.12345678", "org-bound", []string{config.ScopeHostReport})
+	record, err := config.NewAPITokenRecord("org-bound-body-token-123.12345678", "org-bound", []string{config.ScopeAgentReport})
 	if err != nil {
 		t.Fatalf("new api token record: %v", err)
 	}
@@ -215,7 +215,7 @@ func TestHandleAutoRegisterRejectsHeaderAPITokenOrgMismatch(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
 
-	record, err := config.NewAPITokenRecord("org-bound-header-token-123.12345678", "org-bound", []string{config.ScopeHostReport})
+	record, err := config.NewAPITokenRecord("org-bound-header-token-123.12345678", "org-bound", []string{config.ScopeAgentReport})
 	if err != nil {
 		t.Fatalf("new api token record: %v", err)
 	}

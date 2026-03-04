@@ -21,8 +21,8 @@ import type { SecurityStatus } from '@/types/config';
 import type { AgentLookupResponse } from '@/types/api';
 import type { APITokenRecord } from '@/api/security';
 import {
-  HOST_AGENT_SCOPE,
-  HOST_AGENT_CONFIG_READ_SCOPE,
+  AGENT_REPORT_SCOPE,
+  AGENT_CONFIG_READ_SCOPE,
   DOCKER_REPORT_SCOPE,
   KUBERNETES_REPORT_SCOPE,
   AGENT_EXEC_SCOPE,
@@ -454,8 +454,8 @@ export const UnifiedAgents: Component = () => {
       const desiredName = tokenName().trim() || buildDefaultTokenName();
       // Generate token with unified agent reporting scopes
       const scopes = [
-        HOST_AGENT_SCOPE,
-        HOST_AGENT_CONFIG_READ_SCOPE,
+        AGENT_REPORT_SCOPE,
+        AGENT_CONFIG_READ_SCOPE,
         DOCKER_REPORT_SCOPE,
         KUBERNETES_REPORT_SCOPE,
         AGENT_EXEC_SCOPE,
@@ -572,9 +572,9 @@ export const UnifiedAgents: Component = () => {
   };
 
   /**
-   * All resources managed by a host agent.
+   * All resources managed by an agent.
    * In v6, the backend already merges resources by identity — a PVE node with a
-   * host agent is a single resource of type "node" with agent + proxmox data.
+   * linked agent is a single resource of type "node" with agent + proxmox data.
    * No frontend merge logic or type-flapping prevention needed.
    *
    * Includes docker-host resources that may lack the `agent` facet when the
@@ -768,7 +768,7 @@ export const UnifiedAgents: Component = () => {
     return removed.sort((a, b) => b.removedAt - a.removedAt);
   });
 
-  // Host agents linked to PVE nodes (shown separately with unlink option)
+  // Agents linked to PVE nodes (shown separately with unlink option)
   const linkedHostAgents = createMemo(() => {
     return agentResources().flatMap((r) => {
       const linkedNodeId = getLinkedNodeId(r);
@@ -968,7 +968,7 @@ export const UnifiedAgents: Component = () => {
 
     try {
       let removed = false;
-      // Remove the host agent registration
+      // Remove the agent registration
       if (capabilities.includes('agent') && ids.hostId) {
         await MonitoringAPI.deleteAgent(ids.hostId);
         removed = true;
@@ -1728,8 +1728,8 @@ export const UnifiedAgents: Component = () => {
                   {outdatedAgents().length > 1 ? 'ies' : ''} detected
                 </p>
                 <p class="text-sm text-amber-700 dark:text-amber-300">
-                  Older agent binaries (pulse-host-agent, pulse-docker-agent) are deprecated. Expand
-                  a row to copy the upgrade command.
+                  Older standalone agent binaries are deprecated. Expand a row to copy the upgrade
+                  command.
                 </p>
               </div>
             </div>

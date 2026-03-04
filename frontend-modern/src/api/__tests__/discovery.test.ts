@@ -14,7 +14,7 @@ describe('discovery api', () => {
     apiFetchMock.mockReset();
   });
 
-  it('returns null for missing host discovery without calling host detail endpoint', async () => {
+  it('returns null for missing agent discovery without calling detail endpoint', async () => {
     apiFetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
@@ -25,21 +25,21 @@ describe('discovery api', () => {
       ),
     );
 
-    const result = await getDiscovery('host', 'host-1', 'host-1');
+    const result = await getDiscovery('agent', 'host-1', 'host-1');
 
     expect(result).toBeNull();
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
-    expect(apiFetchMock).toHaveBeenCalledWith('/api/discovery/host/host-1');
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/discovery/agent/host-1');
   });
 
-  it('resolves host discovery through host list before fetching details', async () => {
+  it('resolves agent discovery through list before fetching details', async () => {
     apiFetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
           discoveries: [
             {
-              id: 'host:host-1:host-1',
-              resource_type: 'host',
+              id: 'agent:host-1:host-1',
+              resource_type: 'agent',
               resource_id: 'host-1',
               host_id: 'host-1',
               hostname: 'host-1.local',
@@ -60,8 +60,8 @@ describe('discovery api', () => {
     apiFetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          id: 'host:host-1:host-1',
-          resource_type: 'host',
+          id: 'agent:host-1:host-1',
+          resource_type: 'agent',
           resource_id: 'host-1',
           host_id: 'host-1',
           hostname: 'host-1.local',
@@ -87,12 +87,12 @@ describe('discovery api', () => {
       ),
     );
 
-    const result = await getDiscovery('host', 'host-1', 'host-1');
+    const result = await getDiscovery('agent', 'host-1', 'host-1');
 
-    expect(result?.id).toBe('host:host-1:host-1');
+    expect(result?.id).toBe('agent:host-1:host-1');
     expect(apiFetchMock).toHaveBeenCalledTimes(2);
-    expect(apiFetchMock).toHaveBeenNthCalledWith(1, '/api/discovery/host/host-1');
-    expect(apiFetchMock).toHaveBeenNthCalledWith(2, '/api/discovery/host/host-1/host-1');
+    expect(apiFetchMock).toHaveBeenNthCalledWith(1, '/api/discovery/agent/host-1');
+    expect(apiFetchMock).toHaveBeenNthCalledWith(2, '/api/discovery/agent/host-1/host-1');
   });
 
   it('resolves agent discovery through agent list route', async () => {
@@ -101,8 +101,8 @@ describe('discovery api', () => {
         JSON.stringify({
           discoveries: [
             {
-              id: 'host:agent-1:agent-1',
-              resource_type: 'host',
+              id: 'agent:agent-1:agent-1',
+              resource_type: 'agent',
               resource_id: 'agent-1',
               host_id: 'agent-1',
               hostname: 'agent-1.local',
@@ -123,8 +123,8 @@ describe('discovery api', () => {
     apiFetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          id: 'host:agent-1:agent-1',
-          resource_type: 'host',
+          id: 'agent:agent-1:agent-1',
+          resource_type: 'agent',
           resource_id: 'agent-1',
           host_id: 'agent-1',
           hostname: 'agent-1.local',
@@ -152,7 +152,7 @@ describe('discovery api', () => {
 
     const result = await getDiscovery('agent', 'agent-1', 'agent-1');
 
-    expect(result?.id).toBe('host:agent-1:agent-1');
+    expect(result?.id).toBe('agent:agent-1:agent-1');
     expect(apiFetchMock).toHaveBeenCalledTimes(2);
     expect(apiFetchMock).toHaveBeenNthCalledWith(1, '/api/discovery/agent/agent-1');
     expect(apiFetchMock).toHaveBeenNthCalledWith(2, '/api/discovery/agent/agent-1/agent-1');

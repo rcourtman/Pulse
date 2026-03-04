@@ -40,7 +40,7 @@ func TestClientFetchWithSignature(t *testing.T) {
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/agents/host/agent-1/config" {
+		if r.URL.Path != "/api/agents/agent/agent-1/config" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -140,10 +140,10 @@ func TestClientFetchSignatureFailures(t *testing.T) {
 func TestClientFetchHostLookupAndErrors(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/api/agents/host/lookup":
+		case "/api/agents/agent/lookup":
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(`{"success":true,"host":{"id":"host-9"}}`))
-		case "/api/agents/host/host-9/config":
+		case "/api/agents/agent/host-9/config":
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(`{"success":true,"hostId":"host-9","config":{"settings":{"mode":"ok"}}}`))
 		default:
@@ -375,7 +375,7 @@ func TestClientFetchEscapesAgentIDPath(t *testing.T) {
 func TestClientResolveHostIDPreventsQueryInjection(t *testing.T) {
 	const hostname = "known&admin=true"
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/agents/host/lookup" {
+		if r.URL.Path != "/api/agents/agent/lookup" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}

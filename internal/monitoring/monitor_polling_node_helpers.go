@@ -242,9 +242,9 @@ func (m *Monitor) collectNodeTemperatureData(
 			// Determine source for logging
 			tempSource := "ssh"
 			if hostAgentTemp != nil && sshTemp == nil {
-				tempSource = "host-agent"
+				tempSource = "agent"
 			} else if hostAgentTemp != nil && sshTemp != nil {
-				tempSource = "host-agent+ssh"
+				tempSource = "agent+ssh"
 			}
 
 			log.Debug().

@@ -99,10 +99,7 @@ type Agent struct {
 
 const defaultInterval = 30 * time.Second
 const defaultStateDir = "/var/lib/pulse-agent"
-const (
-	agentReportEndpoint  = "/api/agents/agent/report"
-	legacyReportEndpoint = "/api/agents/host/report"
-)
+const agentReportEndpoint = "/api/agents/agent/report"
 
 type reportHTTPStatusError struct {
 	Endpoint   string
@@ -142,7 +139,7 @@ func New(cfg Config) (*Agent, error) {
 		cfg.Logger = &defaultLogger
 	}
 
-	logger := cfg.Logger.Level(cfg.LogLevel).With().Str("component", "host-agent").Logger()
+	logger := cfg.Logger.Level(cfg.LogLevel).With().Str("component", "agent").Logger()
 
 	if strings.TrimSpace(cfg.APIToken) == "" {
 		return nil, fmt.Errorf("api token is required")
@@ -696,33 +693,22 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 		return fmt.Errorf("compress report: %w", err)
 	}
 
-	endpoints := []string{agentReportEndpoint, legacyReportEndpoint}
-	var resp *http.Response
-	var endpoint string
-	for idx, candidate := range endpoints {
-		endpoint = candidate
-		url := fmt.Sprintf("%s%s", a.trimmedPulseURL, endpoint)
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(compressed))
-		if err != nil {
-			return fmt.Errorf("create request: %w", err)
-		}
+	endpoint := agentReportEndpoint
+	url := fmt.Sprintf("%s%s", a.trimmedPulseURL, endpoint)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(compressed))
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
 
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Content-Encoding", "gzip")
-		req.Header.Set("Authorization", "Bearer "+a.cfg.APIToken)
-		req.Header.Set("X-API-Token", a.cfg.APIToken)
-		req.Header.Set("User-Agent", "pulse-host-agent/"+Version)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
+	req.Header.Set("Authorization", "Bearer "+a.cfg.APIToken)
+	req.Header.Set("X-API-Token", a.cfg.APIToken)
+	req.Header.Set("User-Agent", "pulse-agent/"+Version)
 
-		resp, err = a.httpClient.Do(req)
-		if err != nil {
-			return fmt.Errorf("send request: %w", err)
-		}
-
-		if resp.StatusCode == http.StatusNotFound && idx < len(endpoints)-1 {
-			resp.Body.Close()
-			continue
-		}
-		break
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("send request: %w", err)
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {

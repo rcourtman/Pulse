@@ -377,10 +377,10 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		expected := sha256.Sum256([]byte(content))
 		expectedHex := hex.EncodeToString(expected[:])
 
-		agents := []agentexec.ConnectedAgent{{AgentID: "host-agent", Hostname: "tower"}}
+		agents := []agentexec.ConnectedAgent{{AgentID: "agent", Hostname: "tower"}}
 		mockAgent := &mockAgentServer{}
 		mockAgent.On("GetConnectedAgents").Return(agents)
-		mockAgent.On("ExecuteCommand", mock.Anything, "host-agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+		mockAgent.On("ExecuteCommand", mock.Anything, "agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
 			return cmd.TargetType == "host" &&
 				strings.Contains(cmd.Command, encodedContent) &&
 				strings.Contains(cmd.Command, "| base64 -d >")
@@ -388,7 +388,7 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 			ExitCode: 0,
 			Stdout:   "",
 		}, nil)
-		mockAgent.On("ExecuteCommand", mock.Anything, "host-agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+		mockAgent.On("ExecuteCommand", mock.Anything, "agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
 			return cmd.TargetType == "host" &&
 				strings.Contains(cmd.Command, "sha256sum") &&
 				strings.Contains(cmd.Command, "/tmp/test.txt") &&

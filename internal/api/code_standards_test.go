@@ -238,7 +238,7 @@ func TestNoRawBroadcastStateInAgentHandlers(t *testing.T) {
 	agentFiles := map[string]bool{
 		"docker_agents.go":     true,
 		"kubernetes_agents.go": true,
-		"host_agents.go":       true,
+		"agent_ingest.go":      true,
 	}
 
 	raw := regexp.MustCompile(`go h\.wsHub\.BroadcastState\(`)

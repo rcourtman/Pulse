@@ -153,7 +153,7 @@
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "Enable legacy pulse-docker-agent workload (deprecated)"
+          "description": "Enable optional unified pulse-agent workload"
         },
         "kind": {
           "type": "string",

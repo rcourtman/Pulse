@@ -48,21 +48,21 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	})
 	r.mux.HandleFunc("/api/agents/docker/report", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleReport)))
 	r.mux.HandleFunc("/api/agents/kubernetes/report", RequireAuth(r.config, RequireScope(config.ScopeKubernetesReport, r.kubernetesAgentHandlers.HandleReport)))
-	r.mux.HandleFunc("/api/agents/host/report", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleReport)))
-	r.mux.HandleFunc("/api/agents/host/lookup", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleLookup)))
-	r.mux.HandleFunc("/api/agents/host/uninstall", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleUninstall)))
+	r.mux.HandleFunc("/api/agents/agent/report", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.hostAgentHandlers.HandleReport)))
+	r.mux.HandleFunc("/api/agents/agent/lookup", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.hostAgentHandlers.HandleLookup)))
+	r.mux.HandleFunc("/api/agents/agent/uninstall", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.hostAgentHandlers.HandleUninstall)))
 	// SECURITY: Use settings:write (not just host_manage) to prevent compromised host tokens from manipulating other hosts
-	r.mux.HandleFunc("/api/agents/host/unlink", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.hostAgentHandlers.HandleUnlink)))
-	r.mux.HandleFunc("/api/agents/host/link", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.hostAgentHandlers.HandleLink)))
+	r.mux.HandleFunc("/api/agents/agent/unlink", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.hostAgentHandlers.HandleUnlink)))
+	r.mux.HandleFunc("/api/agents/agent/link", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.hostAgentHandlers.HandleLink)))
 	// Host agent management routes - config endpoint is accessible by agents (GET) and admins (PATCH)
-	r.mux.HandleFunc("/api/agents/host/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
-		// Route /api/agents/host/{id}/config to HandleConfig
+	hostAgentManagementCore := func(w http.ResponseWriter, req *http.Request) {
+		// Route /api/agents/agent/{id}/config to HandleConfig
 		if strings.HasSuffix(req.URL.Path, "/config") {
 			// GET is for agents to fetch config (host config scope)
 			// PATCH is for UI to update config (host_manage scope, admin only)
 			if req.Method == http.MethodPatch {
 				RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
-					if !ensureScope(w, req, config.ScopeHostManage) {
+					if !ensureScope(w, req, config.ScopeAgentManage) {
 						return
 					}
 					r.hostAgentHandlers.HandleConfig(w, req)
@@ -72,7 +72,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			r.hostAgentHandlers.HandleConfig(w, req)
 			return
 		}
-		// Route DELETE /api/agents/host/{id} to HandleDeleteHost
+		// Route DELETE /api/agents/agent/{id} to HandleDeleteHost
 		// SECURITY: Require settings:write (not just host_manage) to prevent compromised host tokens from deleting other hosts
 		if req.Method == http.MethodDelete {
 			RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
@@ -84,7 +84,8 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			return
 		}
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}))
+	}
+	r.mux.HandleFunc("/api/agents/agent/", RequireAuth(r.config, hostAgentManagementCore))
 	r.mux.HandleFunc("/api/agents/docker/commands/", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleCommandAck)))
 	r.mux.HandleFunc("/api/agents/docker/hosts/", RequireAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleDockerHostActions)))
 	r.mux.HandleFunc("/api/agents/docker/containers/update", RequireAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleContainerUpdate)))
@@ -541,8 +542,8 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 				http.Error(w, "Not found", http.StatusNotFound)
 			}
 		})
-		r.mux.HandleFunc("/api/agents/host/enroll",
-			RequireAuth(r.config, RequireScope(config.ScopeHostEnroll, r.deployHandlers.HandleEnroll)))
+		r.mux.HandleFunc("/api/agents/agent/enroll",
+			RequireAuth(r.config, RequireScope(config.ScopeAgentEnroll, r.deployHandlers.HandleEnroll)))
 
 		r.mux.HandleFunc("/api/agent-deploy/preflights/", func(w http.ResponseWriter, req *http.Request) {
 			path := req.URL.Path

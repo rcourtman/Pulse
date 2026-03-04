@@ -52,7 +52,7 @@ describe('useResources - Resource Filtering Logic', () => {
       createMockResource({ id: '1', platformType: 'proxmox-pve' }),
       createMockResource({ id: '2', platformType: 'proxmox-pve' }),
       createMockResource({ id: '3', platformType: 'docker' }),
-      createMockResource({ id: '4', platformType: 'host-agent' }),
+      createMockResource({ id: '4', platformType: 'agent' }),
     ];
 
     it('filters resources by platform', () => {

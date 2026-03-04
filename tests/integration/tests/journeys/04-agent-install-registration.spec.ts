@@ -11,7 +11,7 @@ import {
  *
  * Covers the host agent lifecycle:
  *   1. Disable mock mode to start with a clean host list
- *   2. Simulate agent registration via POST /api/agents/host/report
+ *   2. Simulate agent registration via POST /api/agents/agent/report
  *   3. Verify the host appears in GET /api/state (hosts array)
  *   4. Verify the host is visible on the infrastructure page
  *   5. Verify host details (hostname, OS, CPU, memory) in API response
@@ -144,7 +144,7 @@ async function ensureHostRegistered(
 
   // Host not found — re-register.
   const report = buildHostReport();
-  const regRes = await apiRequest(page, '/api/agents/host/report', {
+  const regRes = await apiRequest(page, '/api/agents/agent/report', {
     method: 'POST',
     data: report,
     headers: { 'Content-Type': 'application/json' },
@@ -204,7 +204,7 @@ test.describe.serial(
         if (hostRegistered && serverHostId) {
           const delRes = await apiRequest(
             page,
-            `/api/agents/host/${serverHostId}`,
+            `/api/agents/agent/${serverHostId}`,
             { method: 'DELETE' },
           );
           if (!delRes.ok()) {
@@ -240,7 +240,7 @@ test.describe.serial(
       await ensureAuthenticated(page);
 
       const report = buildHostReport();
-      const res = await apiRequest(page, '/api/agents/host/report', {
+      const res = await apiRequest(page, '/api/agents/agent/report', {
         method: 'POST',
         data: report,
         headers: { 'Content-Type': 'application/json' },
@@ -339,7 +339,7 @@ test.describe.serial(
       await page.waitForTimeout(1100);
 
       const report2 = buildHostReport({ cpuUsage: 75.0, memUsage: 80.0 });
-      const res = await apiRequest(page, '/api/agents/host/report', {
+      const res = await apiRequest(page, '/api/agents/agent/report', {
         method: 'POST',
         data: report2,
         headers: { 'Content-Type': 'application/json' },
@@ -422,7 +422,7 @@ test.describe.serial(
 
       const delRes = await apiRequest(
         page,
-        `/api/agents/host/${serverHostId}`,
+        `/api/agents/agent/${serverHostId}`,
         { method: 'DELETE' },
       );
       expect(

@@ -412,9 +412,9 @@ API tokens provide scoped, revocable access to Pulse. Manage tokens in **Setting
 | `docker:manage` | Container lifecycle actions (restart, stop) |
 | `kubernetes:report` | Kubernetes agent telemetry submission |
 | `kubernetes:manage` | Kubernetes cluster management |
-| `host-agent:report` | Host agent metrics submission |
-| `host-agent:config:read` | Read host-agent config payloads |
-| `host-agent:manage` | Manage host agents (unlink/delete/config) |
+| `agent:report` | Agent host telemetry submission |
+| `agent:config:read` | Read agent config payloads |
+| `agent:manage` | Manage registered agents (unlink/delete/config) |
 | `settings:read` | Read configuration |
 | `settings:write` | Modify configuration |
 
@@ -425,7 +425,7 @@ The UI offers quick presets for common use cases:
 | Preset | Scopes | Use Case |
 | -------- | -------- | ---------- |
 | **Kiosk / Dashboard** | `monitoring:read` | Read-only dashboard displays |
-| **Host agent** | `host-agent:report` | Host agent authentication |
+| **Agent host** | `agent:report` | Agent host telemetry authentication |
 | **Container report** | `docker:report` | Container agent (read-only) |
 | **Container manage** | `docker:report`, `docker:manage` | Container agent with actions |
 | **Settings read** | `settings:read` | Read-only config access |

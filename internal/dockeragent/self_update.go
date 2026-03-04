@@ -357,7 +357,7 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 			Msg("Resolved symlink for self-update")
 	}
 
-	downloadBase := strings.TrimRight(target.URL, "/") + "/download/pulse-docker-agent"
+	downloadBase := strings.TrimRight(target.URL, "/") + "/download/pulse-agent"
 	archParam := determineSelfUpdateArch()
 
 	type downloadCandidate struct {
@@ -409,7 +409,7 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	// Create temporary file in the same directory as the target binary
 	// to ensure atomic rename works (os.Rename fails across filesystems)
 	targetDir := filepath.Dir(realExecPath)
-	tmpFile, err := osCreateTempFn(targetDir, "pulse-docker-agent-*.tmp")
+	tmpFile, err := osCreateTempFn(targetDir, "pulse-agent-*.tmp")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file in %s: %w", targetDir, err)
 	}

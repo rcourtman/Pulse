@@ -43,8 +43,8 @@ Some endpoints require admin privileges and/or scopes. Common scopes include:
 - `monitoring:read`
 - `settings:read`
 - `settings:write`
-- `host-agent:config:read`
-- `host-agent:manage`
+- `agent:config:read`
+- `agent:manage`
 
 Endpoints that require admin access are noted below.
 
@@ -140,10 +140,10 @@ Report an incorrect merge (creates exclusions).
 ### Resource Metadata
 User notes, tags, and custom URLs for resources.
 
-- `GET /api/hosts/metadata` (admin or `monitoring:read`)
-- `GET /api/hosts/metadata/{hostId}` (admin or `monitoring:read`)
-- `PUT /api/hosts/metadata/{hostId}` (admin or `monitoring:write`)
-- `DELETE /api/hosts/metadata/{hostId}` (admin or `monitoring:write`)
+- `GET /api/agents/metadata` (admin or `monitoring:read`)
+- `GET /api/agents/metadata/{agentId}` (admin or `monitoring:read`)
+- `PUT /api/agents/metadata/{agentId}` (admin or `monitoring:write`)
+- `DELETE /api/agents/metadata/{agentId}` (admin or `monitoring:write`)
 
 - `GET /api/guests/metadata` (admin or `monitoring:read`)
 - `GET /api/guests/metadata/{guestId}` (admin or `monitoring:read`)
@@ -268,7 +268,7 @@ Service discovery is used by Pulse Assistant and the UI to inventory web service
 - `GET /api/discovery/status`
 - `PUT /api/discovery/settings` (admin, `settings:write`)
 - `GET /api/discovery/type/{type}`
-- `GET /api/discovery/host/{host}`
+- `GET /api/discovery/agent/{agent}`
 - `GET /api/discovery/{type}/{host}/{id}`
 - `POST /api/discovery/{type}/{host}/{id}` (trigger discovery, optional `force`)
 - `DELETE /api/discovery/{type}/{host}/{id}`
@@ -966,33 +966,33 @@ Serves the universal `install.sh` used to install `pulse-agent` on target machin
 Serves the PowerShell installer for Windows.
 
 ### Submit Reports
-`POST /api/agents/host/report` - Host metrics
+`POST /api/agents/agent/report` - Agent metrics
 `POST /api/agents/docker/report` - Docker container metrics
 `POST /api/agents/kubernetes/report` - Kubernetes cluster metrics
 
-### Host Agent Management
-`GET /api/agents/host/lookup?id=<host_id>`  
-`GET /api/agents/host/lookup?hostname=<hostname>`  
-Looks up a host by ID or hostname/display name. Requires `host-agent:report`.
+### Agent Management
+`GET /api/agents/agent/lookup?id=<host_id>`  
+`GET /api/agents/agent/lookup?hostname=<hostname>`  
+Looks up an agent by ID or hostname/display name. Requires `agent:report`.
 
-`POST /api/agents/host/uninstall`  
-Host agent self-unregister during uninstall. Requires `host-agent:report`.
+`POST /api/agents/agent/uninstall`  
+Agent self-unregister during uninstall. Requires `agent:report`.
 
-`POST /api/agents/host/unlink` (admin, `host-agent:manage`)  
-Unlinks a host agent from a node.
+`POST /api/agents/agent/unlink` (admin, `agent:manage`)  
+Unlinks an agent from a node.
 
-`DELETE /api/agents/host/{host_id}` (admin, `host-agent:manage`)  
-Removes a host agent from state.
+`DELETE /api/agents/agent/{host_id}` (admin, `agent:manage`)  
+Removes an agent from state.
 
-### Host Agent Linking (Admin)
-- `POST /api/agents/host/link` (admin, `host-agent:manage`)
-- `POST /api/agents/host/unlink` (admin, `host-agent:manage`)
+### Agent Linking (Admin)
+- `POST /api/agents/agent/link` (admin, `agent:manage`)
+- `POST /api/agents/agent/unlink` (admin, `agent:manage`)
 
 ### Agent Remote Config
-`GET /api/agents/host/{agent_id}/config`  
-Returns the server-side config payload for an agent (used by remote config and debugging). Requires `host-agent:config:read`.
+`GET /api/agents/agent/{agent_id}/config`  
+Returns the server-side config payload for an agent (used by remote config and debugging). Requires `agent:config:read`.
 
-`PATCH /api/agents/host/{agent_id}/config` (admin, `host-agent:manage`)  
+`PATCH /api/agents/agent/{agent_id}/config` (admin, `agent:manage`)  
 Updates server-side config for an agent (e.g., `commandsEnabled`).
 
 ### Docker Agent Management (Admin)

@@ -39,7 +39,7 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
   name: 'host-1',
   displayName: 'host-1',
   platformId: 'host-1',
-  platformType: 'host-agent',
+  platformType: 'agent',
   sourceType: 'hybrid',
   status: 'online',
   lastSeen: Date.now(),

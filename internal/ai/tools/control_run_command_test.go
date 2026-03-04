@@ -285,10 +285,10 @@ func TestPulseToolExecutor_RunCommandLXCRouting(t *testing.T) {
 
 	t.Run("DirectHostRoutedCorrectly", func(t *testing.T) {
 		// Direct host commands have target type "host"
-		agents := []agentexec.ConnectedAgent{{AgentID: "host-agent", Hostname: "tower"}}
+		agents := []agentexec.ConnectedAgent{{AgentID: "agent", Hostname: "tower"}}
 		mockAgent := &mockAgentServer{}
 		mockAgent.On("GetConnectedAgents").Return(agents)
-		mockAgent.On("ExecuteCommand", mock.Anything, "host-agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+		mockAgent.On("ExecuteCommand", mock.Anything, "agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
 			return cmd.TargetType == "host" &&
 				cmd.Command == "ls /tmp/*.txt"
 		})).Return(&agentexec.CommandResultPayload{

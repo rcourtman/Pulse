@@ -238,7 +238,7 @@ const resolvePlatformType = (sources?: string[]): string | undefined => {
   if (set.has('pmg')) return 'proxmox-pmg';
   if (set.has('docker')) return 'docker';
   if (set.has('kubernetes')) return 'kubernetes';
-  if (set.has('agent')) return 'host-agent';
+  if (set.has('agent')) return 'agent';
   return undefined;
 };
 

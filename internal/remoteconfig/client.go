@@ -20,6 +20,8 @@ import (
 const (
 	maxConfigResponseBodyBytes     int64 = 1 * 1024 * 1024
 	maxHostLookupResponseBodyBytes int64 = 64 * 1024
+	agentConfigPathFormat                = "/api/agents/agent/%s/config"
+	agentLookupPath                      = "/api/agents/agent/lookup"
 )
 
 // Config holds configuration for the remote config client.
@@ -119,7 +121,7 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 		hostID = resolved
 	}
 
-	endpointURL := fmt.Sprintf("%s/api/agents/host/%s/config", c.cfg.PulseURL, url.PathEscape(hostID))
+	endpointURL := c.cfg.PulseURL + fmt.Sprintf(agentConfigPathFormat, url.PathEscape(hostID))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpointURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("create request: %w", err)
@@ -266,7 +268,7 @@ func (c *Client) resolveHostID(ctx context.Context) (string, error) {
 	}
 	logger := c.logger()
 
-	endpointURL := fmt.Sprintf("%s/api/agents/host/lookup?hostname=%s", c.cfg.PulseURL, url.QueryEscape(hostname))
+	endpointURL := fmt.Sprintf("%s%s?hostname=%s", c.cfg.PulseURL, agentLookupPath, url.QueryEscape(hostname))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpointURL, nil)
 	if err != nil {
 		logger.Warn().

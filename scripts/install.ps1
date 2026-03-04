@@ -179,7 +179,7 @@ if ($Uninstall) {
                 $body = @{ hostId = $detectedAgentId } | ConvertTo-Json
                 $headers = @{ "X-API-Token" = $Token }
 
-                Invoke-RestMethod -Uri "$Url/api/agents/host/uninstall" `
+                Invoke-RestMethod -Uri "$Url/api/agents/agent/uninstall" `
                                  -Method Post `
                                  -Body $body `
                                  -ContentType "application/json" `
@@ -308,32 +308,6 @@ if (-not [string]::IsNullOrWhiteSpace($serverChecksum)) {
     Write-Host "Checksum verified: $localChecksum" -ForegroundColor Green
 } else {
     Write-Host "Warning: Server did not provide checksum header" -ForegroundColor Yellow
-}
-
-# --- Legacy Cleanup ---
-# Remove old agents if they exist to prevent conflicts
-Write-Host "Checking for legacy agents..." -ForegroundColor Cyan
-
-if (Get-Service "PulseHostAgent" -ErrorAction SilentlyContinue) {
-    Write-Host "Removing legacy PulseHostAgent..." -ForegroundColor Yellow
-    Stop-Service "PulseHostAgent" -Force -ErrorAction SilentlyContinue
-    $scOutput = sc.exe delete "PulseHostAgent" 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Warning: Failed to delete PulseHostAgent service: $scOutput" -ForegroundColor Yellow
-    }
-    Remove-Item "C:\Program Files\Pulse\pulse-host-agent.exe" -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
-}
-
-if (Get-Service "PulseDockerAgent" -ErrorAction SilentlyContinue) {
-    Write-Host "Removing legacy PulseDockerAgent..." -ForegroundColor Yellow
-    Stop-Service "PulseDockerAgent" -Force -ErrorAction SilentlyContinue
-    $scOutput = sc.exe delete "PulseDockerAgent" 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Warning: Failed to delete PulseDockerAgent service: $scOutput" -ForegroundColor Yellow
-    }
-    Remove-Item "C:\Program Files\Pulse\pulse-docker-agent.exe" -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
 }
 
 # --- Install Binary ---

@@ -119,7 +119,7 @@ func enableMockMode(fromInit bool) {
 		Int("nodes", config.NodeCount).
 		Int("vms_per_node", config.VMsPerNode).
 		Int("lxcs_per_node", config.LXCsPerNode).
-		Int("host_agents", config.GenericHostCount).
+		Int("agent_hosts", config.GenericHostCount).
 		Int("docker_hosts", config.DockerHostCount).
 		Int("docker_containers_per_host", config.DockerContainersPerHost).
 		Int("k8s_clusters", config.K8sClusterCount).
@@ -422,7 +422,7 @@ func SetMockConfig(cfg MockConfig) {
 		Int("nodes", cfg.NodeCount).
 		Int("vms_per_node", cfg.VMsPerNode).
 		Int("lxcs_per_node", cfg.LXCsPerNode).
-		Int("host_agents", cfg.GenericHostCount).
+		Int("agent_hosts", cfg.GenericHostCount).
 		Int("docker_hosts", cfg.DockerHostCount).
 		Int("docker_containers_per_host", cfg.DockerContainersPerHost).
 		Int("k8s_clusters", cfg.K8sClusterCount).

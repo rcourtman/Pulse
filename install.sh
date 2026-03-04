@@ -2085,28 +2085,6 @@ download_pulse() {
             exit 1
         fi
 
-        # Install Docker agent binary for distribution
-        if [[ -f "$TEMP_EXTRACT/bin/pulse-docker-agent" ]]; then
-            cp -f "$TEMP_EXTRACT/bin/pulse-docker-agent" "$INSTALL_DIR/pulse-docker-agent"
-            cp -f "$TEMP_EXTRACT/bin/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
-            chmod +x "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
-            chown pulse:pulse "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
-            ln -sf "$INSTALL_DIR/bin/pulse-docker-agent" /usr/local/bin/pulse-docker-agent
-            print_success "Docker agent binary installed"
-        else
-            print_warn "Docker agent binary not found in archive; skipping installation"
-        fi
-
-        # Install host agent binary for distribution
-        if [[ -f "$TEMP_EXTRACT/bin/pulse-host-agent" ]]; then
-            cp -f "$TEMP_EXTRACT/bin/pulse-host-agent" "$INSTALL_DIR/bin/pulse-host-agent"
-            chmod +x "$INSTALL_DIR/bin/pulse-host-agent"
-            chown pulse:pulse "$INSTALL_DIR/bin/pulse-host-agent"
-            print_success "Host agent binary installed"
-        else
-            print_warn "Host agent binary not found in archive; skipping installation"
-        fi
-
         install_additional_agent_binaries "$LATEST_RELEASE" "$TEMP_EXTRACT"
 
         # Install all agent scripts
@@ -2149,13 +2127,6 @@ download_pulse() {
                     cp -f "$TEMP_EXTRACT2/pulse" "$INSTALL_DIR/bin/pulse"
                 fi
 
-                if [[ -f "$TEMP_EXTRACT2/bin/pulse-docker-agent" ]]; then
-                    cp -f "$TEMP_EXTRACT2/bin/pulse-docker-agent" "$INSTALL_DIR/pulse-docker-agent"
-                    cp -f "$TEMP_EXTRACT2/bin/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
-                    chmod +x "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
-                    ln -sf "$INSTALL_DIR/bin/pulse-docker-agent" /usr/local/bin/pulse-docker-agent
-                fi
-
                 install_additional_agent_binaries "$LATEST_RELEASE" "$TEMP_EXTRACT2"
 
                 deploy_agent_scripts "$TEMP_EXTRACT2"
@@ -2182,39 +2153,6 @@ download_pulse() {
         # Cleanup
         rm -rf "$TEMP_EXTRACT" "$ARCHIVE_PATH"
     fi  # End of SKIP_DOWNLOAD check
-}
-
-copy_host_agent_binaries_from_dir() {
-    local source_dir="$1"
-
-    if [[ -z "$source_dir" ]] || [[ ! -d "$source_dir/bin" ]]; then
-        return 1
-    fi
-
-    local copied=0
-    shopt -s nullglob
-    for agent_file in "$source_dir"/bin/pulse-host-agent-*; do
-        [[ -e "$agent_file" ]] || continue
-
-        local base
-        base=$(basename "$agent_file")
-        if [[ "$base" == "pulse-host-agent" ]]; then
-            continue
-        fi
-
-        cp -a "$agent_file" "$INSTALL_DIR/bin/$base"
-        if [[ ! -L "$INSTALL_DIR/bin/$base" ]]; then
-            chmod +x "$INSTALL_DIR/bin/$base"
-        fi
-        chown -h pulse:pulse "$INSTALL_DIR/bin/$base" || true
-        copied=1
-    done
-    shopt -u nullglob
-
-    if [[ $copied -eq 0 ]]; then
-        return 1
-    fi
-    return 0
 }
 
 copy_unified_agent_binaries_from_dir() {
@@ -2259,33 +2197,10 @@ install_additional_agent_binaries() {
         return
     fi
 
-    local docker_targets=("linux-amd64" "linux-arm64" "linux-armv7")
-    local host_targets=("linux-amd64" "linux-arm64" "linux-armv7" "linux-armv6" "linux-386" "darwin-amd64" "darwin-arm64" "windows-amd64" "windows-arm64" "windows-386")
     local unified_targets=("linux-amd64" "linux-arm64" "linux-armv7" "linux-armv6" "linux-386" "darwin-amd64" "darwin-arm64" "windows-amd64" "windows-arm64" "windows-386")
 
     # Prefer locally available agents from the extracted archive to avoid network reliance
-    copy_host_agent_binaries_from_dir "$source_dir" || true
     copy_unified_agent_binaries_from_dir "$source_dir" || true
-
-    local docker_missing_targets=()
-    for target in "${docker_targets[@]}"; do
-        if [[ ! -f "$INSTALL_DIR/bin/pulse-docker-agent-$target" ]]; then
-            docker_missing_targets+=("$target")
-        fi
-    done
-
-    local host_missing_targets=()
-    for target in "${host_targets[@]}"; do
-        if [[ "$target" == windows-* ]]; then
-            if [[ ! -e "$INSTALL_DIR/bin/pulse-host-agent-$target" && ! -e "$INSTALL_DIR/bin/pulse-host-agent-$target.exe" ]]; then
-                host_missing_targets+=("$target")
-            fi
-        else
-            if [[ ! -e "$INSTALL_DIR/bin/pulse-host-agent-$target" ]]; then
-                host_missing_targets+=("$target")
-            fi
-        fi
-    done
 
     local unified_missing_targets=()
     for target in "${unified_targets[@]}"; do
@@ -2300,7 +2215,7 @@ install_additional_agent_binaries() {
         fi
     done
 
-    if [[ ${#docker_missing_targets[@]} -eq 0 ]] && [[ ${#host_missing_targets[@]} -eq 0 ]] && [[ ${#unified_missing_targets[@]} -eq 0 ]]; then
+    if [[ ${#unified_missing_targets[@]} -eq 0 ]]; then
         return
     fi
 
@@ -2335,43 +2250,16 @@ install_additional_agent_binaries() {
         return
     fi
 
-    local docker_installed=0
-    local host_installed=0
-
-    # Install Docker agent binaries
-    for agent_file in "$temp_dir"/bin/pulse-docker-agent-linux-*; do
-        if [[ -f "$agent_file" ]]; then
-            local base
-            base=$(basename "$agent_file")
-            cp -f "$agent_file" "$INSTALL_DIR/bin/$base"
-            cp -f "$agent_file" "$INSTALL_DIR/$base"
-            chmod +x "$INSTALL_DIR/bin/$base" "$INSTALL_DIR/$base"
-            chown pulse:pulse "$INSTALL_DIR/bin/$base" "$INSTALL_DIR/$base"
-            docker_installed=1
-        fi
-    done
-
-    # Install host agent binaries (preserve symlinks for Windows targets)
-    if copy_host_agent_binaries_from_dir "$temp_dir"; then
-        host_installed=1
-    fi
-
     # Install unified agent binaries (preserve symlinks for Windows targets)
     local unified_installed=0
     if copy_unified_agent_binaries_from_dir "$temp_dir"; then
         unified_installed=1
     fi
 
-    if [[ $docker_installed -eq 1 ]]; then
-        print_success "Additional Docker agent binaries installed"
-    fi
-    if [[ $host_installed -eq 1 ]]; then
-        print_success "Additional host agent binaries installed"
-    fi
     if [[ $unified_installed -eq 1 ]]; then
         print_success "Unified agent binaries installed"
     fi
-    if [[ $docker_installed -eq 0 ]] && [[ $host_installed -eq 0 ]] && [[ $unified_installed -eq 0 ]]; then
+    if [[ $unified_installed -eq 0 ]]; then
         print_warn "No agent binaries found in universal bundle"
     fi
 
@@ -2390,11 +2278,7 @@ deploy_agent_scripts() {
     mkdir -p "$INSTALL_DIR/scripts"
 
     local scripts=(
-        "install-docker-agent.sh"
         "install-container-agent.sh"
-        "install-host-agent.ps1"
-        "uninstall-host-agent.sh"
-        "uninstall-host-agent.ps1"
         "install-docker.sh"
         "install.sh"
         "install.ps1"
@@ -2417,50 +2301,6 @@ deploy_agent_scripts() {
     fi
 }
 
-build_agent_binaries_from_source() {
-    local agent_version="$1"
-
-    if ! command -v go >/dev/null 2>&1; then
-        print_warn "Go not available for cross-compiling additional agent binaries"
-        return
-    fi
-
-    local targets=(
-        "linux-amd64:amd64:"
-        "linux-arm64:arm64:"
-        "linux-armv7:arm:7"
-    )
-
-    for entry in "${targets[@]}"; do
-        IFS=':' read -r suffix goarch goarm <<< "$entry"
-
-        local output="/tmp/pulse-docker-agent-$suffix-$$"
-
-        # Skip if already exists
-        if [[ -f "$INSTALL_DIR/bin/pulse-docker-agent-$suffix" ]]; then
-            continue
-        fi
-
-        print_info "Cross-compiling Docker agent for $suffix"
-        local env_cmd=(env GOOS=linux GOARCH="$goarch")
-        if [[ -n "$goarm" ]]; then
-            env_cmd+=(GOARM="$goarm")
-        fi
-
-        if ! "${env_cmd[@]}" go build -ldflags="-X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${agent_version}" -o "$output" ./cmd/pulse-docker-agent >/dev/null 2>&1; then
-            print_warn "Failed to build Docker agent for $suffix"
-            rm -f "$output"
-            continue
-        fi
-
-        cp -f "$output" "$INSTALL_DIR/bin/pulse-docker-agent-$suffix"
-        cp -f "$output" "$INSTALL_DIR/pulse-docker-agent-$suffix"
-        chmod +x "$INSTALL_DIR/bin/pulse-docker-agent-$suffix" "$INSTALL_DIR/pulse-docker-agent-$suffix"
-        chown pulse:pulse "$INSTALL_DIR/bin/pulse-docker-agent-$suffix" "$INSTALL_DIR/pulse-docker-agent-$suffix"
-        rm -f "$output"
-    done
-}
-
 build_from_source() {
     local branch="${1:-main}"
     local original_dir
@@ -2471,7 +2311,6 @@ build_from_source() {
     local GO_INSTALLED=false
     local arch=""
     local go_arch=""
-    local agent_version=""
     local service_name=""
 
     print_info "Building Pulse from source (branch: $branch)..."
@@ -2611,24 +2450,7 @@ build_from_source() {
     fi
     chmod +x "$INSTALL_DIR/bin/pulse"
 
-    agent_version=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
-    if ! go build -ldflags="-X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${agent_version}" -o pulse-docker-agent ./cmd/pulse-docker-agent >/dev/null 2>&1; then
-        print_error "Failed to build Docker agent binary"
-        cd "$original_dir" >/dev/null 2>&1 || true
-        rm -rf "$temp_build"
-        return 1
-    fi
-
-    cp -f pulse-docker-agent "$INSTALL_DIR/pulse-docker-agent"
-    cp -f pulse-docker-agent "$INSTALL_DIR/bin/pulse-docker-agent"
-    chmod +x "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
-    ln -sf "$INSTALL_DIR/bin/pulse-docker-agent" /usr/local/bin/pulse-docker-agent
-    rm -f pulse-docker-agent
-
-
-    build_agent_binaries_from_source "$agent_version"
-
-    for script_name in install-docker-agent.sh install-docker.sh; do
+    for script_name in install-container-agent.sh install-docker.sh install.sh install.ps1; do
         if [[ -f "scripts/$script_name" ]]; then
             cp "scripts/$script_name" "$INSTALL_DIR/scripts/$script_name"
             chmod 755 "$INSTALL_DIR/scripts/$script_name"

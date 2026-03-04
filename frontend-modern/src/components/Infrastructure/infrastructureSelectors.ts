@@ -83,7 +83,6 @@ function normalizeSource(value: string): string | null {
     case 'proxmox-pve':
       return 'proxmox';
     case 'agent':
-    case 'host-agent':
       return 'agent';
     case 'docker':
       return 'docker';

@@ -96,7 +96,7 @@ func setAgentHeaders(req *http.Request, token string) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Token", token)
 	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("User-Agent", "pulse-docker-agent/"+Version)
+	req.Header.Set("User-Agent", "pulse-agent/"+Version)
 }
 
 // Agent collects Docker metrics and posts them to Pulse.
@@ -197,10 +197,10 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	if logger == nil {
-		defaultLogger := zerolog.New(os.Stdout).Level(cfg.LogLevel).With().Timestamp().Str("component", "pulse-docker-agent").Logger()
+		defaultLogger := zerolog.New(os.Stdout).Level(cfg.LogLevel).With().Timestamp().Str("component", "pulse-agent-docker").Logger()
 		logger = &defaultLogger
 	} else {
-		scoped := logger.With().Str("component", "pulse-docker-agent").Logger()
+		scoped := logger.With().Str("component", "pulse-agent-docker").Logger()
 		logger = &scoped
 	}
 
@@ -1022,7 +1022,7 @@ func (a *Agent) handleStopCommand(ctx context.Context, target TargetConfig, comm
 			Err(err).
 			Str("target", target.URL).
 			Str("commandID", command.ID).
-			Msg("Failed to disable pulse-docker-agent service")
+			Msg("Failed to disable pulse-agent service")
 		if ackErr := a.sendCommandAck(ctx, target, command.ID, agentsdocker.CommandStatusFailed, err.Error()); ackErr != nil {
 			a.logger.Error().
 				Err(ackErr).
@@ -1050,11 +1050,11 @@ func (a *Agent) handleStopCommand(ctx context.Context, target TargetConfig, comm
 
 		stopServiceCtx, cancel := context.WithTimeout(asyncCtx, 5*time.Second)
 		defer cancel()
-		if err := stopSystemdService(stopServiceCtx, "pulse-docker-agent"); err != nil {
+		if err := stopSystemdService(stopServiceCtx, "pulse-agent"); err != nil {
 			a.logger.Warn().
 				Err(err).
 				Str("commandID", command.ID).
-				Str("service", "pulse-docker-agent").
+				Str("service", "pulse-agent").
 				Msg("Failed to stop systemd service, agent will exit normally")
 		}
 	})
@@ -1063,7 +1063,7 @@ func (a *Agent) handleStopCommand(ctx context.Context, target TargetConfig, comm
 }
 
 func (a *Agent) disableSelf(ctx context.Context) error {
-	if err := disableSystemdService(ctx, "pulse-docker-agent"); err != nil {
+	if err := disableSystemdService(ctx, "pulse-agent"); err != nil {
 		return fmt.Errorf("disable systemd service: %w", err)
 	}
 

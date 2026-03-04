@@ -448,7 +448,7 @@ describe('InfrastructureSummary range behavior', () => {
       name: 'unraid-node',
       displayName: 'unraid-node',
       platformId: 'unraid-node',
-      platformType: 'host-agent',
+      platformType: 'agent',
       sourceType: 'agent',
       status: 'online',
       lastSeen: now,
@@ -510,7 +510,7 @@ describe('InfrastructureSummary range behavior', () => {
       name: 'agent-host-two',
       displayName: 'agent-host-two',
       platformId: 'agent-host-two',
-      platformType: 'host-agent',
+      platformType: 'agent',
       sourceType: 'agent',
       status: 'online',
       lastSeen: now,
@@ -535,7 +535,7 @@ describe('InfrastructureSummary range behavior', () => {
     });
   });
 
-  it('uses linked host-agent discovery IDs for network chart fallback when host resource IDs are hashed', async () => {
+  it('uses linked agent discovery IDs for network chart fallback when host resource IDs are hashed', async () => {
     mockGetCharts.mockReset();
     const now = Date.now();
     mockGetCharts.mockResolvedValueOnce({

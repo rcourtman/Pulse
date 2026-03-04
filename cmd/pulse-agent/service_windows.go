@@ -129,8 +129,8 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 	ws.logger.Info().
 		Str("version", Version).
 		Str("pulse_url", ws.cfg.PulseURL).
-		Bool("host_agent", ws.cfg.EnableHost).
-		Bool("docker_agent", ws.cfg.EnableDocker).
+		Bool("host_enabled", ws.cfg.EnableHost).
+		Bool("docker_enabled", ws.cfg.EnableDocker).
 		Msg("Pulse Agent service is running")
 	if ws.eventLog != nil {
 		ws.eventLog.Info(1, fmt.Sprintf("Pulse Agent started (URL: %s, Host: %v, Docker: %v)", ws.cfg.PulseURL, ws.cfg.EnableHost, ws.cfg.EnableDocker))

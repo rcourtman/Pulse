@@ -26,7 +26,7 @@ interface DiscoveryTabProps {
   hostId: string;
   resourceId: string;
   hostname: string;
-  /** Whether commands are enabled for this host (from host agent config) */
+  /** Whether commands are enabled for this agent (from agent config) */
   commandsEnabled?: boolean;
 }
 

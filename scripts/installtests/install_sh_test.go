@@ -208,20 +208,6 @@ echo hello
 `,
 		},
 		{
-			name: "legacy agents too",
-			before: `#!/bin/bash
-# Pulse Host Agent
-bash /boot/config/plugins/pulse-host-agent/start.sh
-
-# Pulse Docker Agent
-bash /boot/config/plugins/pulse-docker-agent/start.sh
-
-echo other
-`,
-			// Comment and command lines removed; blank separator lines remain (harmless in /boot/config/go).
-			after: "#!/bin/bash\n\n\necho other\n",
-		},
-		{
 			name: "no pulse entries - unchanged",
 			before: `#!/bin/bash
 echo hello
@@ -265,12 +251,7 @@ echo done
 				# Remove unified agent entries
 				sed -i '' '/^# Pulse Agent$/d' "$GO_SCRIPT" 2>/dev/null || sed -i '/^# Pulse Agent$/d' "$GO_SCRIPT" 2>/dev/null || true
 				sed -i '' '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || sed -i '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || true
-				# Remove legacy agent entries
-				sed -i '' '/^# Pulse Host Agent$/d' "$GO_SCRIPT" 2>/dev/null || sed -i '/^# Pulse Host Agent$/d' "$GO_SCRIPT" 2>/dev/null || true
-				sed -i '' '/^# Pulse Docker Agent$/d' "$GO_SCRIPT" 2>/dev/null || sed -i '/^# Pulse Docker Agent$/d' "$GO_SCRIPT" 2>/dev/null || true
-				sed -i '' '/pulse-host-agent/d' "$GO_SCRIPT" 2>/dev/null || sed -i '/pulse-host-agent/d' "$GO_SCRIPT" 2>/dev/null || true
-				sed -i '' '/pulse-docker-agent/d' "$GO_SCRIPT" 2>/dev/null || sed -i '/pulse-docker-agent/d' "$GO_SCRIPT" 2>/dev/null || true
-			`
+				`
 			out, err := exec.Command("bash", "-c", script).CombinedOutput()
 			if err != nil {
 				t.Fatalf("bash: %v\n%s", err, out)
@@ -289,7 +270,7 @@ echo done
 }
 
 // TestAPIDeregistrationCurl verifies the curl command sends the correct
-// JSON payload and headers to the uninstall endpoint.
+// JSON payload and headers to the canonical uninstall endpoint.
 func TestAPIDeregistrationCurl(t *testing.T) {
 	var (
 		mu         sync.Mutex
@@ -320,7 +301,7 @@ func TestAPIDeregistrationCurl(t *testing.T) {
 		PULSE_TOKEN="` + token + `"
 		AGENT_ID="` + agentID + `"
 		CURL_ARGS=(-fsSL --connect-timeout 5 -X POST -H "Content-Type: application/json" -H "X-API-Token: ${PULSE_TOKEN}")
-		curl "${CURL_ARGS[@]}" -d "{\"hostId\": \"${AGENT_ID}\"}" "${PULSE_URL}/api/agents/host/uninstall" >/dev/null 2>&1 || true
+		curl "${CURL_ARGS[@]}" -d "{\"hostId\": \"${AGENT_ID}\"}" "${PULSE_URL}/api/agents/agent/uninstall" >/dev/null 2>&1 || true
 	`
 
 	out, err := exec.Command("bash", "-c", script).CombinedOutput()
@@ -334,8 +315,8 @@ func TestAPIDeregistrationCurl(t *testing.T) {
 	if gotMethod != "POST" {
 		t.Errorf("method = %q, want POST", gotMethod)
 	}
-	if gotPath != "/api/agents/host/uninstall" {
-		t.Errorf("path = %q, want /api/agents/host/uninstall", gotPath)
+	if gotPath != "/api/agents/agent/uninstall" {
+		t.Errorf("path = %q, want /api/agents/agent/uninstall", gotPath)
 	}
 	if gotBody["hostId"] != agentID {
 		t.Errorf("body hostId = %q, want %q", gotBody["hostId"], agentID)

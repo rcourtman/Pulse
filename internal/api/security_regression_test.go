@@ -310,7 +310,7 @@ func TestAIStatusRequiresAIChatScope(t *testing.T) {
 
 func TestWebSocketRequiresMonitoringReadScope(t *testing.T) {
 	rawToken := "ws-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeHostReport}, nil)
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
@@ -329,7 +329,7 @@ func TestWebSocketRequiresMonitoringReadScope(t *testing.T) {
 
 func TestWebSocketRequiresMonitoringReadScopeForUpgrade(t *testing.T) {
 	rawToken := "ws-scope-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeHostReport}, nil)
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 
 	hub := pulsews.NewHub(nil)
@@ -358,7 +358,7 @@ func TestWebSocketRequiresMonitoringReadScopeForUpgrade(t *testing.T) {
 
 func TestHostAgentManagementRequiresSettingsWriteScope(t *testing.T) {
 	rawToken := "host-manage-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeHostManage}, nil)
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentManage}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
@@ -367,9 +367,12 @@ func TestHostAgentManagementRequiresSettingsWriteScope(t *testing.T) {
 		method string
 		path   string
 	}{
-		{name: "link", method: http.MethodPost, path: "/api/agents/host/link"},
-		{name: "unlink", method: http.MethodPost, path: "/api/agents/host/unlink"},
-		{name: "delete", method: http.MethodDelete, path: "/api/agents/host/agent-1"},
+		{name: "link", method: http.MethodPost, path: "/api/agents/agent/link"},
+		{name: "unlink", method: http.MethodPost, path: "/api/agents/agent/unlink"},
+		{name: "delete", method: http.MethodDelete, path: "/api/agents/agent/agent-1"},
+		{name: "agent link alias", method: http.MethodPost, path: "/api/agents/agent/link"},
+		{name: "agent unlink alias", method: http.MethodPost, path: "/api/agents/agent/unlink"},
+		{name: "agent delete alias", method: http.MethodDelete, path: "/api/agents/agent/agent-1"},
 	}
 
 	for _, tc := range cases {
@@ -1874,7 +1877,7 @@ func TestAutoRegisterRejectsTokenMissingRequiredScope(t *testing.T) {
 
 func TestAutoRegisterAcceptsAgentToken(t *testing.T) {
 	rawToken := "agent-register-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeHostReport}, nil)
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 	router.configHandlers.SetConfig(cfg)
@@ -1884,9 +1887,9 @@ func TestAutoRegisterAcceptsAgentToken(t *testing.T) {
 	req.Header.Set("X-API-Token", rawToken)
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
-	// Should not be 401 — the agent token has host-agent:report which is accepted
+	// Should not be 401 — the agent token has agent:report which is accepted
 	if rec.Code == http.StatusUnauthorized {
-		t.Fatalf("expected agent token with host-agent:report to be accepted, got 401")
+		t.Fatalf("expected agent token with agent:report to be accepted, got 401")
 	}
 }
 
@@ -1954,9 +1957,9 @@ func TestDiscoveryReadEndpointsRequireMonitoringReadScope(t *testing.T) {
 		"/api/discovery/agent/host-1",
 		"/api/discovery/agent/host-1/resource-1",
 		"/api/discovery/agent/host-1/resource-1/progress",
-		"/api/discovery/host/host-1",
-		"/api/discovery/host/host-1/resource-1",
-		"/api/discovery/host/host-1/resource-1/progress",
+		"/api/discovery/agent/host-1",
+		"/api/discovery/agent/host-1/resource-1",
+		"/api/discovery/agent/host-1/resource-1/progress",
 		"/api/discovery/resource-1",
 		"/api/discovery/resource-1/progress",
 	}
@@ -1989,9 +1992,9 @@ func TestDiscoveryMutationEndpointsRequireMonitoringWriteScope(t *testing.T) {
 		{method: http.MethodPost, path: "/api/discovery/agent/host-1/resource-1", body: `{}`},
 		{method: http.MethodPut, path: "/api/discovery/agent/host-1/resource-1/notes", body: `{}`},
 		{method: http.MethodDelete, path: "/api/discovery/agent/host-1/resource-1", body: ""},
-		{method: http.MethodPost, path: "/api/discovery/host/host-1/resource-1", body: `{}`},
-		{method: http.MethodPut, path: "/api/discovery/host/host-1/resource-1/notes", body: `{}`},
-		{method: http.MethodDelete, path: "/api/discovery/host/host-1/resource-1", body: ""},
+		{method: http.MethodPost, path: "/api/discovery/agent/host-1/resource-1", body: `{}`},
+		{method: http.MethodPut, path: "/api/discovery/agent/host-1/resource-1/notes", body: `{}`},
+		{method: http.MethodDelete, path: "/api/discovery/agent/host-1/resource-1", body: ""},
 		{method: http.MethodPost, path: "/api/discovery/resource-1", body: `{}`},
 		{method: http.MethodPut, path: "/api/discovery/resource-1/notes", body: `{}`},
 		{method: http.MethodDelete, path: "/api/discovery/resource-1", body: ""},
@@ -2064,7 +2067,7 @@ func TestDiscoveryNotesRejectsProxyUserSecrets(t *testing.T) {
 	router.SetDiscoveryService(service)
 
 	payload := `{"user_notes":"note","user_secrets":{"token":"abc"}}`
-	req := httptest.NewRequest(http.MethodPut, "/api/discovery/host/host-1/resource-1/notes", strings.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPut, "/api/discovery/agent/host-1/resource-1/notes", strings.NewReader(payload))
 	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
 	req.Header.Set("X-Remote-User", "viewer-user")
 	req.Header.Set("X-Remote-Roles", "viewer")
@@ -2179,10 +2182,14 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 		{method: http.MethodPost, path: "/api/agents/docker/hosts/host-1/update-all", body: ``},
 		{method: http.MethodDelete, path: "/api/agents/docker/hosts/host-1", body: ``},
 		{method: http.MethodDelete, path: "/api/agents/kubernetes/clusters/cluster-1", body: ``},
-		{method: http.MethodPost, path: "/api/agents/host/link", body: `{}`},
-		{method: http.MethodPost, path: "/api/agents/host/unlink", body: `{}`},
-		{method: http.MethodPatch, path: "/api/agents/host/host-1/config", body: `{}`},
-		{method: http.MethodDelete, path: "/api/agents/host/agent-1", body: ``},
+		{method: http.MethodPost, path: "/api/agents/agent/link", body: `{}`},
+		{method: http.MethodPost, path: "/api/agents/agent/unlink", body: `{}`},
+		{method: http.MethodPatch, path: "/api/agents/agent/host-1/config", body: `{}`},
+		{method: http.MethodDelete, path: "/api/agents/agent/agent-1", body: ``},
+		{method: http.MethodPost, path: "/api/agents/agent/link", body: `{}`},
+		{method: http.MethodPost, path: "/api/agents/agent/unlink", body: `{}`},
+		{method: http.MethodPatch, path: "/api/agents/agent/host-1/config", body: `{}`},
+		{method: http.MethodDelete, path: "/api/agents/agent/agent-1", body: ``},
 		{method: http.MethodGet, path: "/api/admin/profiles/", body: ""},
 		{method: http.MethodPost, path: "/api/agent-install-command", body: `{}`},
 		{method: http.MethodPost, path: "/api/setup-script-url", body: `{}`},
@@ -2308,9 +2315,12 @@ func TestHostAgentEndpointsRequireHostReportScope(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	paths := []string{
-		"/api/agents/host/report",
-		"/api/agents/host/lookup",
-		"/api/agents/host/uninstall",
+		"/api/agents/agent/report",
+		"/api/agents/agent/lookup",
+		"/api/agents/agent/uninstall",
+		"/api/agents/agent/report",
+		"/api/agents/agent/lookup",
+		"/api/agents/agent/uninstall",
 	}
 
 	for _, path := range paths {
@@ -2321,27 +2331,29 @@ func TestHostAgentEndpointsRequireHostReportScope(t *testing.T) {
 		if rec.Code != http.StatusForbidden {
 			t.Fatalf("expected 403 for missing host:report scope on %s, got %d", path, rec.Code)
 		}
-		if !strings.Contains(rec.Body.String(), config.ScopeHostReport) {
-			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeHostReport, rec.Body.String())
+		if !strings.Contains(rec.Body.String(), config.ScopeAgentReport) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeAgentReport, rec.Body.String())
 		}
 	}
 }
 
 func TestHostAgentConfigPatchRequiresHostManageScope(t *testing.T) {
 	rawToken := "host-config-manage-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeHostConfigRead}, nil)
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentConfigRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
-	req := httptest.NewRequest(http.MethodPatch, "/api/agents/host/host-1/config", strings.NewReader(`{}`))
-	req.Header.Set("X-API-Token", rawToken)
-	rec := httptest.NewRecorder()
-	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for missing host:manage scope, got %d", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), config.ScopeHostManage) {
-		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeHostManage, rec.Body.String())
+	for _, path := range []string{"/api/agents/agent/host-1/config", "/api/agents/agent/host-1/config"} {
+		req := httptest.NewRequest(http.MethodPatch, path, strings.NewReader(`{}`))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing host:manage scope on %s, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeAgentManage) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeAgentManage, rec.Body.String())
+		}
 	}
 }
 
@@ -2367,8 +2379,8 @@ func TestMonitoringReadEndpointsRequireMonitoringReadScope(t *testing.T) {
 		"/api/docker/hosts/metadata/host-1",
 		"/api/agents/metadata",
 		"/api/agents/metadata/host-1",
-		"/api/hosts/metadata",
-		"/api/hosts/metadata/host-1",
+		"/api/agents/metadata",
+		"/api/agents/metadata/host-1",
 	}
 
 	for _, path := range paths {
@@ -2408,9 +2420,9 @@ func TestMetadataMutationEndpointsRequireMonitoringWriteScope(t *testing.T) {
 		{method: http.MethodPost, path: "/api/agents/metadata/host-1", body: `{}`},
 		{method: http.MethodPut, path: "/api/agents/metadata/host-1", body: `{}`},
 		{method: http.MethodDelete, path: "/api/agents/metadata/host-1", body: ""},
-		{method: http.MethodPost, path: "/api/hosts/metadata/host-1", body: `{}`},
-		{method: http.MethodPut, path: "/api/hosts/metadata/host-1", body: `{}`},
-		{method: http.MethodDelete, path: "/api/hosts/metadata/host-1", body: ""},
+		{method: http.MethodPost, path: "/api/agents/metadata/host-1", body: `{}`},
+		{method: http.MethodPut, path: "/api/agents/metadata/host-1", body: `{}`},
+		{method: http.MethodDelete, path: "/api/agents/metadata/host-1", body: ""},
 	}
 
 	for _, tc := range paths {

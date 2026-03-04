@@ -1070,7 +1070,7 @@ func TestUpdateResourceStore_SuppressesProviderOwnedSnapshotSources(t *testing.T
 		t.Fatalf("expected proxmox storage slices to be suppressed before snapshot ingest")
 	}
 	if len(store.lastSnapshot.Hosts) != 1 {
-		t.Fatalf("expected host-agent slice to remain in snapshot ingest")
+		t.Fatalf("expected agent slice to remain in snapshot ingest")
 	}
 
 	records := store.recordsBySource[unifiedresources.SourceProxmox]

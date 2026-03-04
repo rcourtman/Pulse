@@ -124,7 +124,7 @@ func TestSendReportIntegration(t *testing.T) {
 	if userAgents[0] == "" {
 		t.Fatalf("missing user-agent header")
 	}
-	if !strings.HasPrefix(userAgents[0], "pulse-docker-agent/") {
+	if !strings.HasPrefix(userAgents[0], "pulse-agent/") {
 		t.Fatalf("unexpected user-agent header: %s", userAgents[0])
 	}
 }

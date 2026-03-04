@@ -367,8 +367,8 @@ const resolvePlatformType = (flags: SourceFlags): PlatformType => {
   if (flags.hasPmg) return 'proxmox-pmg';
   if (flags.hasDocker) return 'docker';
   if (flags.hasKubernetes) return 'kubernetes';
-  if (flags.hasAgent) return 'host-agent';
-  return 'host-agent';
+  if (flags.hasAgent) return 'agent';
+  return 'agent';
 };
 
 const resolveSourceType = (flags: SourceFlags): SourceType => {

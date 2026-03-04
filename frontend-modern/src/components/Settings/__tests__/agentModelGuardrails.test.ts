@@ -72,12 +72,12 @@ describe('agent model guardrails', () => {
     expect(discoveryTypesSource).not.toContain("| 'docker_lxc'");
   });
 
-  it('keeps alerts host-agent thresholds sourced from unified host-agent resources', () => {
+  it('keeps alerts agent thresholds sourced from unified agent resources', () => {
     expect(alertsPageSource).toContain('const hostAgentResources = createMemo(');
     expect(alertsPageSource).toContain('hosts={hostAgentResources()}');
   });
 
-  it('keeps setup and node summary host fallbacks aware of v6 host-agent facets', () => {
+  it('keeps setup and node summary host fallbacks aware of v6 agent facets', () => {
     expect(completeStepSource).toContain('const hasHostAgentFacet = (resource: Resource)');
     expect(completeStepSource).toContain("resource.type === 'node'");
     expect(completeStepSource).toContain('command -v sudo');
@@ -94,7 +94,7 @@ describe('agent model guardrails', () => {
     expect(unifiedNodeSelectorSource).not.toContain('if (hostLikeResources.length === 0');
   });
 
-  it('keeps AI chat mention resources aware of host-agent facets beyond host type', () => {
+  it('keeps AI chat mention resources aware of agent facets beyond host type', () => {
     expect(aiChatSource).toContain('const hasHostAgentFacet = (resource: Resource): boolean =>');
     expect(aiChatSource).toContain("resource.type === 'truenas'");
     expect(aiChatSource).not.toContain("resource.type === 'host'");
@@ -106,7 +106,7 @@ describe('agent model guardrails', () => {
     expect(mentionAutocompleteSource).not.toContain("| 'host'");
   });
 
-  it('keeps infrastructure host-agent selectors on v6 node-family resources', () => {
+  it('keeps infrastructure agent selectors on v6 node-family resources', () => {
     expect(infrastructureSummarySource).not.toContain("resource.type === 'host'");
     expect(unifiedNodeSelectorComponentSource).not.toContain("resource.type === 'host'");
     expect(workloadsLinkSource).not.toContain("resource.type === 'host'");
@@ -149,7 +149,7 @@ describe('agent model guardrails', () => {
   });
 
   it('keeps unified resource typing normalized to node (no legacy host type)', () => {
-    expect(resourceTypesSource).not.toContain("| 'host' // Standalone host (via host-agent)");
+    expect(resourceTypesSource).not.toContain("| 'host' // Standalone host (via agent)");
     expect(unifiedResourcesHookSource).toContain("case 'host':");
     expect(unifiedResourcesHookSource).toContain("return 'node';");
     expect(unifiedResourcesHookSource).not.toContain("return 'host';");

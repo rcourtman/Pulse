@@ -13,7 +13,8 @@ const (
 	ProviderKubernetes Provider = "kubernetes"
 	ProviderTrueNAS    Provider = "truenas"
 	ProviderDocker     Provider = "docker"
-	ProviderHostAgent  Provider = "host-agent"
+	ProviderAgent      Provider = "agent"
+	ProviderHostAgent  Provider = ProviderAgent
 )
 
 type Kind string

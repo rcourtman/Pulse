@@ -21,7 +21,7 @@ func TestHandleLookupMethodNotAllowed(t *testing.T) {
 
 	// Only GET is allowed
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
-		req := httptest.NewRequest(method, "/api/agents/host/lookup?id=test", nil)
+		req := httptest.NewRequest(method, "/api/agents/agent/lookup?id=test", nil)
 		rec := httptest.NewRecorder()
 
 		handler.HandleLookup(rec, req)
@@ -38,7 +38,7 @@ func TestHandleLookupMissingParams(t *testing.T) {
 	handler := newHostAgentHandlerForTests(t)
 
 	// Neither id nor hostname provided
-	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/lookup", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/lookup", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleLookup(rec, req)
@@ -75,7 +75,7 @@ func TestHandleLookupByIDSuccess(t *testing.T) {
 		LastSeen:    lastSeen,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/lookup?id="+hostID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/lookup?id="+hostID, nil)
 	attachAPITokenRecord(req, &config.APITokenRecord{ID: tokenID})
 
 	rec := httptest.NewRecorder()
@@ -125,7 +125,7 @@ func TestHandleLookupForbiddenOnTokenMismatch(t *testing.T) {
 		TokenID:  "token-correct",
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/lookup?id="+hostID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/lookup?id="+hostID, nil)
 	attachAPITokenRecord(req, &config.APITokenRecord{ID: "token-wrong"})
 
 	rec := httptest.NewRecorder()
@@ -141,7 +141,7 @@ func TestHandleLookupNotFound(t *testing.T) {
 
 	handler := newHostAgentHandlerForTests(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/lookup?id=missing", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/lookup?id=missing", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleLookup(rec, req)
@@ -279,7 +279,7 @@ func TestHandleLookupByHostname(t *testing.T) {
 			t.Parallel()
 
 			handler := newHostAgentHandlerForTests(t, tc.hosts...)
-			req := httptest.NewRequest(http.MethodGet, "/api/agents/host/lookup?hostname="+tc.queryHostname, nil)
+			req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/lookup?hostname="+tc.queryHostname, nil)
 			rec := httptest.NewRecorder()
 
 			handler.HandleLookup(rec, req)
@@ -322,10 +322,10 @@ func TestHandleConfigMissingConfigScope(t *testing.T) {
 		TokenID: "token-expected",
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/"+hostID+"/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/"+hostID+"/config", nil)
 	attachAPITokenRecord(req, &config.APITokenRecord{
 		ID:     "token-other",
-		Scopes: []string{config.ScopeHostReport},
+		Scopes: []string{config.ScopeAgentReport},
 	})
 
 	rec := httptest.NewRecorder()
@@ -344,10 +344,10 @@ func TestHandleConfigUsesTokenBinding(t *testing.T) {
 		TokenID: "token-expected",
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/other-host/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/other-host/config", nil)
 	attachAPITokenRecord(req, &config.APITokenRecord{
 		ID:     "token-expected",
-		Scopes: []string{config.ScopeHostConfigRead},
+		Scopes: []string{config.ScopeAgentConfigRead},
 	})
 
 	rec := httptest.NewRecorder()
@@ -378,10 +378,10 @@ func TestHandleConfigAllowsHostManageScope(t *testing.T) {
 		TokenID: "token-expected",
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/"+hostID+"/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/"+hostID+"/config", nil)
 	attachAPITokenRecord(req, &config.APITokenRecord{
 		ID:     "token-other",
-		Scopes: []string{config.ScopeHostManage},
+		Scopes: []string{config.ScopeAgentManage},
 	})
 
 	rec := httptest.NewRecorder()

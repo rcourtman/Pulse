@@ -124,7 +124,7 @@ spec:
 
 Use a token scoped for the agent:
 - `kubernetes:report` for Kubernetes reporting
-- `host-agent:report` if you enable host metrics
+- `agent:report` if you enable host metrics
 
 #### Important DaemonSet Configuration
 

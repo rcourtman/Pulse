@@ -63,14 +63,6 @@ func TestUnraidPersistentPath(t *testing.T) {
 			expected:  "/boot/config/plugins/pulse-agent/pulse-agent",
 		},
 		{
-			agentName: "pulse-docker-agent",
-			expected:  "/boot/config/plugins/pulse-docker-agent/pulse-docker-agent",
-		},
-		{
-			agentName: "pulse-host-agent",
-			expected:  "/boot/config/plugins/pulse-host-agent/pulse-host-agent",
-		},
-		{
 			agentName: "custom-agent",
 			expected:  "/boot/config/plugins/custom-agent/custom-agent",
 		},

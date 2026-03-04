@@ -280,8 +280,8 @@ func TestParityHostFields(t *testing.T) {
 	hostTemp := 62.25
 	host := models.Host{
 		ID:            "agent1",
-		Hostname:      "host-agent-01",
-		DisplayName:   "host-agent-01 (prod)",
+		Hostname:      "agent-01",
+		DisplayName:   "agent-01 (prod)",
 		Platform:      "linux",
 		OSName:        "Ubuntu",
 		OSVersion:     "24.04",
@@ -689,7 +689,7 @@ func TestParityResourceCounts(t *testing.T) {
 	snapshot.Hosts = append(snapshot.Hosts,
 		models.Host{
 			ID:            "agent-merge-1",
-			Hostname:      "pve1-host-agent",
+			Hostname:      "pve1-agent",
 			Platform:      "linux",
 			OSName:        "Debian",
 			Architecture:  "amd64",

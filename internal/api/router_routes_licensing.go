@@ -39,7 +39,7 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 	r.mux.HandleFunc("/api/license/clear", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.licenseHandlers.HandleClearLicense)))
 	r.mux.HandleFunc("POST /api/license/exchange", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.licenseHandlers.HandleExchangeLicense)))
 	r.mux.HandleFunc("GET /api/license/entitlements", RequireAuth(r.config, r.licenseHandlers.HandleEntitlements))
-	r.mux.HandleFunc("GET /api/license/host-ledger", RequireAuth(r.config, r.handleHostLedger))
+	r.mux.HandleFunc("GET /api/license/agent-ledger", RequireAuth(r.config, r.handleAgentLedger))
 	r.mux.HandleFunc("POST /api/license/trial/start", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.licenseHandlers.HandleStartTrial)))
 
 	// Local upgrade metrics (formerly "conversion" telemetry). Canonical routes:

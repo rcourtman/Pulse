@@ -345,13 +345,13 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     const map = chartMap();
     if (map.size === 0) return undefined;
 
-    // 1. Agent ID match from unified platform data (most reliable for host agents).
+    // 1. Agent ID match from unified platform data (most reliable for agent resources).
     for (const key of getChartKeyCandidates(host)) {
       const match = map.get(key);
       if (match) return match;
     }
 
-    // 2. Direct matches (works for host agents where IDs may align)
+    // 2. Direct matches (works for agent resources where IDs may align)
     // Reconstruct composite key for clustered Proxmox nodes: "clusterName-nodeName"
     if (host.clusterId && host.platformId) {
       const clusterKey = `${host.clusterId}-${host.platformId}`;
@@ -372,10 +372,10 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     return undefined;
   };
 
-  // Find chart data from a linked host agent when the primary chart data
+  // Find chart data from a linked agent when the primary chart data
   // (typically from nodeData) doesn't include agent-specific metrics like
   // netin/netout/diskread/diskwrite.
-  // Host agent resources have internal IDs that match hostData chart keys, and
+  // Agent resources have internal IDs that match hostData chart keys, and
   // platformData.linkedNodeId + identity.hostname fields that let us correlate
   // with infrastructure resources.
   const findAgentChartData = (host: Resource): ChartData | undefined => {
@@ -388,7 +388,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     if (explicitAgentId) {
       directAgentCandidates.push(explicitAgentId);
     }
-    if (host.platformType === 'host-agent') {
+    if (host.platformType === 'agent') {
       const discoveryResourceId = asTrimmedString(host.discoveryTarget?.resourceId);
       const discoveryHostId = asTrimmedString(host.discoveryTarget?.hostId);
       if (discoveryResourceId) directAgentCandidates.push(discoveryResourceId);
@@ -415,7 +415,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
       ...normalizeHostIdentifier(host.identity?.hostname),
     ]);
 
-    // Find a host agent resource that matches this infrastructure resource
+    // Find an agent resource that matches this infrastructure resource
     // by linked node ID, hostname, or name
     for (const agentHost of agentHosts) {
       const linkedNodeId = getLinkedNodeIdFromResource(agentHost);

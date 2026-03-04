@@ -49,8 +49,8 @@ describe('sourcePlatformBadges', () => {
       expect(result?.label).toBe('TrueNAS');
     });
 
-    it('returns Agent badge for host-agent', () => {
-      const result = getSourcePlatformBadge('host-agent');
+    it('returns Agent badge for agent', () => {
+      const result = getSourcePlatformBadge('agent');
       expect(result?.label).toBe('Agent');
     });
 

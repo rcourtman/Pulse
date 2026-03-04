@@ -53,7 +53,7 @@ func TestNormalizeRequestedScopesRejectsEmpty(t *testing.T) {
 }
 
 func TestNormalizeRequestedScopesRejectsBlankScope(t *testing.T) {
-	raw := []string{config.ScopeHostReport, "   ", config.ScopeSettingsRead}
+	raw := []string{config.ScopeAgentReport, "   ", config.ScopeSettingsRead}
 	_, err := normalizeRequestedScopes(&raw)
 	if err == nil {
 		t.Fatal("expected error for blank scope identifier")

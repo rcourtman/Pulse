@@ -22,7 +22,7 @@ func TestResolveHosts_NoDuplicates(t *testing.T) {
 	candidates := []HostCandidate{
 		{ID: "pve:n1", Name: "pve1", Type: "proxmox-pve", Source: "proxmox", Status: "online",
 			Identity: ResourceIdentity{Hostnames: []string{"pve1"}}},
-		{ID: "host:h1", Name: "standalone", Type: "host-agent", Source: "agent", Status: "online",
+		{ID: "host:h1", Name: "standalone", Type: "agent", Source: "agent", Status: "online",
 			Identity: ResourceIdentity{MachineID: "machine-2", Hostnames: []string{"standalone"}}},
 	}
 	result := ResolveHosts(candidates)
@@ -35,7 +35,7 @@ func TestResolveHosts_MachineIDMerge(t *testing.T) {
 	candidates := []HostCandidate{
 		{ID: "pve:n1", Name: "pve1", Type: "proxmox-pve", Source: "proxmox", Status: "online",
 			Identity: ResourceIdentity{MachineID: "machine-1", Hostnames: []string{"pve1"}}},
-		{ID: "host:h1", Name: "pve1", Type: "host-agent", Source: "agent", Status: "online",
+		{ID: "host:h1", Name: "pve1", Type: "agent", Source: "agent", Status: "online",
 			Identity: ResourceIdentity{MachineID: "machine-1", Hostnames: []string{"pve1"}}},
 	}
 	result := ResolveHosts(candidates)
@@ -74,7 +74,7 @@ func TestResolveHosts_HostnameAndMACMerge(t *testing.T) {
 	candidates := []HostCandidate{
 		{ID: "pve:n1", Name: "pve1", Type: "proxmox-pve", Source: "proxmox", Status: "online",
 			Identity: ResourceIdentity{Hostnames: []string{"pve1"}, MACAddresses: []string{"00:11:22:33:44:55"}}},
-		{ID: "host:h1", Name: "pve1", Type: "host-agent", Source: "agent", Status: "online",
+		{ID: "host:h1", Name: "pve1", Type: "agent", Source: "agent", Status: "online",
 			Identity: ResourceIdentity{Hostnames: []string{"pve1"}, MACAddresses: []string{"00:11:22:33:44:55"}}},
 	}
 	result := ResolveHosts(candidates)
@@ -87,7 +87,7 @@ func TestResolveHosts_HostnameOnlyDoesNotMerge(t *testing.T) {
 	candidates := []HostCandidate{
 		{ID: "pve:n1", Name: "pve1", Type: "proxmox-pve", Source: "proxmox", Status: "online",
 			Identity: ResourceIdentity{Hostnames: []string{"pve1"}}},
-		{ID: "host:h1", Name: "pve1", Type: "host-agent", Source: "agent", Status: "online",
+		{ID: "host:h1", Name: "pve1", Type: "agent", Source: "agent", Status: "online",
 			Identity: ResourceIdentity{Hostnames: []string{"pve1"}}},
 	}
 	result := ResolveHosts(candidates)
@@ -100,7 +100,7 @@ func TestResolveHosts_IPOnlyDoesNotMerge(t *testing.T) {
 	candidates := []HostCandidate{
 		{ID: "pve:n1", Name: "pve1", Type: "proxmox-pve", Source: "proxmox", Status: "online",
 			Identity: ResourceIdentity{IPAddresses: []string{"192.168.1.10"}}},
-		{ID: "host:h1", Name: "host1", Type: "host-agent", Source: "agent", Status: "online",
+		{ID: "host:h1", Name: "host1", Type: "agent", Source: "agent", Status: "online",
 			Identity: ResourceIdentity{IPAddresses: []string{"192.168.1.10"}}},
 	}
 	result := ResolveHosts(candidates)
@@ -114,7 +114,7 @@ func TestResolveHosts_ThreeWayMerge(t *testing.T) {
 	candidates := []HostCandidate{
 		{ID: "pve:n1", Name: "pve1", Type: "proxmox-pve", Source: "proxmox", Status: "online",
 			Identity: ResourceIdentity{MachineID: "machine-1", Hostnames: []string{"pve1"}}},
-		{ID: "host:h1", Name: "pve1", Type: "host-agent", Source: "agent", Status: "online",
+		{ID: "host:h1", Name: "pve1", Type: "agent", Source: "agent", Status: "online",
 			Identity: ResourceIdentity{MachineID: "machine-1", Hostnames: []string{"pve1"}}},
 		{ID: "docker:d1", Name: "pve1", Type: "docker", Source: "docker", Status: "online",
 			Identity: ResourceIdentity{MachineID: "machine-1", Hostnames: []string{"pve1"}}},
@@ -136,7 +136,7 @@ func TestResolveHosts_StatusPromotion(t *testing.T) {
 	candidates := []HostCandidate{
 		{ID: "pve:n1", Name: "pve1", Type: "proxmox-pve", Source: "proxmox", Status: "unknown",
 			Identity: ResourceIdentity{MachineID: "machine-1"}},
-		{ID: "host:h1", Name: "pve1", Type: "host-agent", Source: "agent", Status: "online",
+		{ID: "host:h1", Name: "pve1", Type: "agent", Source: "agent", Status: "online",
 			Identity: ResourceIdentity{MachineID: "machine-1"}},
 	}
 	result := ResolveHosts(candidates)
@@ -150,7 +150,7 @@ func TestResolveHosts_ProvisionalClearedByRuntime(t *testing.T) {
 		{ID: "config-pve:p1", Name: "pve1", Type: "proxmox-pve", Source: "proxmox",
 			Status: "unknown", Provisional: true,
 			Identity: ResourceIdentity{MachineID: "machine-1"}},
-		{ID: "host:h1", Name: "pve1", Type: "host-agent", Source: "agent",
+		{ID: "host:h1", Name: "pve1", Type: "agent", Source: "agent",
 			Status: "online", Provisional: false,
 			Identity: ResourceIdentity{MachineID: "machine-1"}},
 	}
@@ -165,7 +165,7 @@ func TestResolveHosts_ProvisionalClearedByRuntime(t *testing.T) {
 
 func TestResolveHosts_SortOrder(t *testing.T) {
 	candidates := []HostCandidate{
-		{ID: "host:h1", Name: "zulu", Type: "host-agent", Source: "agent", Status: "online",
+		{ID: "host:h1", Name: "zulu", Type: "agent", Source: "agent", Status: "online",
 			Identity: ResourceIdentity{MachineID: "m1"}},
 		{ID: "docker:d1", Name: "alpha", Type: "docker", Source: "docker", Status: "online",
 			Identity: ResourceIdentity{MachineID: "m2"}},
@@ -173,12 +173,12 @@ func TestResolveHosts_SortOrder(t *testing.T) {
 			Identity: ResourceIdentity{MachineID: "m3"}},
 	}
 	result := ResolveHosts(candidates)
-	// Sorted by type then name: docker:alpha, host-agent:zulu, proxmox-pve:bravo
-	if result.Hosts[0].PrimaryType != "docker" {
-		t.Fatalf("expected docker first, got %q", result.Hosts[0].PrimaryType)
+	// Sorted by type then name: agent:zulu, docker:alpha, proxmox-pve:bravo
+	if result.Hosts[0].PrimaryType != "agent" {
+		t.Fatalf("expected agent first, got %q", result.Hosts[0].PrimaryType)
 	}
-	if result.Hosts[1].PrimaryType != "host-agent" {
-		t.Fatalf("expected host-agent second, got %q", result.Hosts[1].PrimaryType)
+	if result.Hosts[1].PrimaryType != "docker" {
+		t.Fatalf("expected docker second, got %q", result.Hosts[1].PrimaryType)
 	}
 	if result.Hosts[2].PrimaryType != "proxmox-pve" {
 		t.Fatalf("expected proxmox-pve third, got %q", result.Hosts[2].PrimaryType)
@@ -250,7 +250,7 @@ func TestCollectHostCandidates_AllSourceTypes(t *testing.T) {
 		"proxmox-pbs": 1,
 		"proxmox-pmg": 1,
 		"truenas":     1,
-		"host-agent":  1,
+		"agent":       1,
 		"docker":      1,
 		"kubernetes":  1,
 	}
@@ -416,7 +416,7 @@ func TestResolveHosts_EndToEnd_MachineIDPropagation(t *testing.T) {
 	candidates := []HostCandidate{
 		{ID: "pve:n1", Name: "pve1", Type: "proxmox-pve", Source: "proxmox", Status: "online",
 			Identity: ResourceIdentity{MachineID: "machine-1", Hostnames: []string{"pve1"}}},
-		{ID: "host:h1", Name: "pve1", Type: "host-agent", Source: "agent", Status: "online",
+		{ID: "host:h1", Name: "pve1", Type: "agent", Source: "agent", Status: "online",
 			Identity: ResourceIdentity{MachineID: "machine-1", Hostnames: []string{"pve1"},
 				MACAddresses: []string{"00:11:22:33:44:55"}}},
 		{ID: "docker:d1", Name: "pve1", Type: "docker", Source: "docker", Status: "online",

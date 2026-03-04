@@ -112,7 +112,7 @@ func (m *Monitor) applyVMStatusDetails(
 			agentAvailable := uint64(agentHost.Memory.Total - agentHost.Memory.Used)
 			if agentAvailable > 0 {
 				memAvailable = agentAvailable
-				state.memorySource = "host-agent"
+				state.memorySource = "agent"
 				state.guestRaw.HostAgentTotal = uint64(agentHost.Memory.Total)
 				state.guestRaw.HostAgentUsed = uint64(agentHost.Memory.Used)
 				log.Debug().

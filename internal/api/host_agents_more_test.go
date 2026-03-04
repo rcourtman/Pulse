@@ -50,7 +50,7 @@ func decodeErrorCode(t *testing.T, rec *httptest.ResponseRecorder) string {
 func TestHostAgentHandlers_HandleReportMethodNotAllowed(t *testing.T) {
 	handler := newHostAgentHandlerForTests(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/report", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/report", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleReport(rec, req)
@@ -63,7 +63,7 @@ func TestHostAgentHandlers_HandleReportMethodNotAllowed(t *testing.T) {
 func TestHostAgentHandlers_HandleReportInvalidJSON(t *testing.T) {
 	handler := newHostAgentHandlerForTests(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/report", bytes.NewBufferString("{"))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewBufferString("{"))
 	rec := httptest.NewRecorder()
 
 	handler.HandleReport(rec, req)
@@ -85,7 +85,7 @@ func TestHostAgentHandlers_HandleReportInvalidReport(t *testing.T) {
 	}
 	body, _ := json.Marshal(report)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/report", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	handler.HandleReport(rec, req)
@@ -117,7 +117,7 @@ func TestHostAgentHandlers_HandleReportIncludesConfigOverride(t *testing.T) {
 	}
 	body, _ := json.Marshal(report)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/report", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	handler.HandleReport(rec, req)
@@ -145,14 +145,14 @@ func TestHostAgentHandlers_HandleReportIncludesConfigOverride(t *testing.T) {
 func TestHostAgentHandlers_HandleDeleteHostErrors(t *testing.T) {
 	handler := newHostAgentHandlerForTests(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/host-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/host-1", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleDeleteHost(rec, req)
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/api/agents/host/", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/api/agents/agent/", nil)
 	rec = httptest.NewRecorder()
 	handler.HandleDeleteHost(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -169,14 +169,14 @@ func TestHostAgentHandlers_HandleConfigErrors(t *testing.T) {
 		TokenID: "token-1",
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/host-1/config", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/host-1/config", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleConfig(rec, req)
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/api/agents/host//config", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/agents/agent//config", nil)
 	rec = httptest.NewRecorder()
 	handler.HandleConfig(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -186,10 +186,10 @@ func TestHostAgentHandlers_HandleConfigErrors(t *testing.T) {
 		t.Fatalf("expected error code %q, got %q", "missing_host_id", code)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/api/agents/host/host-1/config", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/agents/agent/host-1/config", nil)
 	attachAPITokenRecord(req, &config.APITokenRecord{
 		ID:     "token-2",
-		Scopes: []string{config.ScopeHostConfigRead},
+		Scopes: []string{config.ScopeAgentConfigRead},
 	})
 	rec = httptest.NewRecorder()
 	handler.HandleConfig(rec, req)
@@ -204,7 +204,7 @@ func TestHostAgentHandlers_HandleConfigErrors(t *testing.T) {
 func TestHostAgentHandlers_HandleConfigPatchErrors(t *testing.T) {
 	handler := newHostAgentHandlerForTests(t)
 
-	req := httptest.NewRequest(http.MethodPatch, "/api/agents/host/host-1/config", bytes.NewBufferString("{"))
+	req := httptest.NewRequest(http.MethodPatch, "/api/agents/agent/host-1/config", bytes.NewBufferString("{"))
 	rec := httptest.NewRecorder()
 	handler.HandleConfig(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -214,7 +214,7 @@ func TestHostAgentHandlers_HandleConfigPatchErrors(t *testing.T) {
 		t.Fatalf("expected error code %q, got %q", "invalid_json", code)
 	}
 
-	req = httptest.NewRequest(http.MethodPatch, "/api/agents/host/host-1/config", bytes.NewBufferString(`{"commandsEnabled":true}`))
+	req = httptest.NewRequest(http.MethodPatch, "/api/agents/agent/host-1/config", bytes.NewBufferString(`{"commandsEnabled":true}`))
 	rec = httptest.NewRecorder()
 	handler.HandleConfig(rec, req)
 	if rec.Code != http.StatusInternalServerError {
@@ -228,7 +228,7 @@ func TestHostAgentHandlers_HandleConfigPatchErrors(t *testing.T) {
 func TestHostAgentHandlers_EnsureHostTokenMatchScopes(t *testing.T) {
 	handler := newHostAgentHandlerForTests(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/host-1/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/host-1/config", nil)
 	attachAPITokenRecord(req, &config.APITokenRecord{
 		ID:     "token-1",
 		Scopes: []string{config.ScopeWildcard},
@@ -241,10 +241,10 @@ func TestHostAgentHandlers_EnsureHostTokenMatchScopes(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/api/agents/host/host-1/config", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/agents/agent/host-1/config", nil)
 	attachAPITokenRecord(req, &config.APITokenRecord{
 		ID:     "token-1",
-		Scopes: []string{config.ScopeHostConfigRead},
+		Scopes: []string{config.ScopeAgentConfigRead},
 	})
 	rec = httptest.NewRecorder()
 	if ok := handler.ensureHostTokenMatch(rec, req, "missing"); ok {
@@ -263,7 +263,7 @@ func TestHostAgentHandlers_HandleConfigSigningRequiredMissingKey(t *testing.T) {
 	resetConfigSigningStateForTests()
 	t.Cleanup(resetConfigSigningStateForTests)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/host-1/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/host-1/config", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleConfig(rec, req)
 	if rec.Code != http.StatusInternalServerError {
@@ -282,7 +282,7 @@ func TestHostAgentHandlers_HandleConfigSigningSuccess(t *testing.T) {
 	resetConfigSigningStateForTests()
 	t.Cleanup(resetConfigSigningStateForTests)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/host-1/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/host-1/config", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleConfig(rec, req)
 	if rec.Code != http.StatusOK {
@@ -319,7 +319,7 @@ func TestHostAgentHandlers_HandleConfigInvalidKeyAllowed(t *testing.T) {
 	resetConfigSigningStateForTests()
 	t.Cleanup(resetConfigSigningStateForTests)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/host-1/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/host-1/config", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleConfig(rec, req)
 	if rec.Code != http.StatusOK {
@@ -343,14 +343,14 @@ func TestHostAgentHandlers_HandleConfigInvalidKeyAllowed(t *testing.T) {
 func TestHostAgentHandlers_HandleUninstallErrors(t *testing.T) {
 	handler := newHostAgentHandlerForTests(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/uninstall", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/uninstall", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleUninstall(rec, req)
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/agents/host/uninstall", bytes.NewBufferString("{"))
+	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/uninstall", bytes.NewBufferString("{"))
 	rec = httptest.NewRecorder()
 	handler.HandleUninstall(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -360,7 +360,7 @@ func TestHostAgentHandlers_HandleUninstallErrors(t *testing.T) {
 		t.Fatalf("expected error code %q, got %q", "invalid_json", code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/agents/host/uninstall", bytes.NewBufferString(`{"hostId":""}`))
+	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/uninstall", bytes.NewBufferString(`{"hostId":""}`))
 	rec = httptest.NewRecorder()
 	handler.HandleUninstall(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -374,7 +374,7 @@ func TestHostAgentHandlers_HandleUninstallErrors(t *testing.T) {
 func TestHostAgentHandlers_HandleUninstallMissingHostStillSucceeds(t *testing.T) {
 	handler, _ := newHostAgentHandlers(t, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/uninstall", bytes.NewBufferString(`{"hostId":"missing"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/uninstall", bytes.NewBufferString(`{"hostId":"missing"}`))
 	rec := httptest.NewRecorder()
 	handler.HandleUninstall(rec, req)
 	if rec.Code != http.StatusOK {
@@ -385,14 +385,14 @@ func TestHostAgentHandlers_HandleUninstallMissingHostStillSucceeds(t *testing.T)
 func TestHostAgentHandlers_HandleLinkUnlinkErrors(t *testing.T) {
 	handler := newHostAgentHandlerForTests(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/link", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/link", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleLink(rec, req)
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/agents/host/link", bytes.NewBufferString("{"))
+	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/link", bytes.NewBufferString("{"))
 	rec = httptest.NewRecorder()
 	handler.HandleLink(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -402,7 +402,7 @@ func TestHostAgentHandlers_HandleLinkUnlinkErrors(t *testing.T) {
 		t.Fatalf("expected error code %q, got %q", "invalid_json", code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/agents/host/link", bytes.NewBufferString(`{"hostId":"","nodeId":"node-1"}`))
+	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/link", bytes.NewBufferString(`{"hostId":"","nodeId":"node-1"}`))
 	rec = httptest.NewRecorder()
 	handler.HandleLink(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -412,7 +412,7 @@ func TestHostAgentHandlers_HandleLinkUnlinkErrors(t *testing.T) {
 		t.Fatalf("expected error code %q, got %q", "missing_host_id", code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/agents/host/link", bytes.NewBufferString(`{"hostId":"host-1","nodeId":""}`))
+	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/link", bytes.NewBufferString(`{"hostId":"host-1","nodeId":""}`))
 	rec = httptest.NewRecorder()
 	handler.HandleLink(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -422,7 +422,7 @@ func TestHostAgentHandlers_HandleLinkUnlinkErrors(t *testing.T) {
 		t.Fatalf("expected error code %q, got %q", "missing_node_id", code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/agents/host/link", bytes.NewBufferString(`{"hostId":"host-1","nodeId":"node-1"}`))
+	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/link", bytes.NewBufferString(`{"hostId":"host-1","nodeId":"node-1"}`))
 	rec = httptest.NewRecorder()
 	handler.HandleLink(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -432,14 +432,14 @@ func TestHostAgentHandlers_HandleLinkUnlinkErrors(t *testing.T) {
 		t.Fatalf("expected error code %q, got %q", "link_failed", code)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/api/agents/host/unlink", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/agents/agent/unlink", nil)
 	rec = httptest.NewRecorder()
 	handler.HandleUnlink(rec, req)
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/agents/host/unlink", bytes.NewBufferString("{"))
+	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/unlink", bytes.NewBufferString("{"))
 	rec = httptest.NewRecorder()
 	handler.HandleUnlink(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -449,7 +449,7 @@ func TestHostAgentHandlers_HandleLinkUnlinkErrors(t *testing.T) {
 		t.Fatalf("expected error code %q, got %q", "invalid_json", code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/agents/host/unlink", bytes.NewBufferString(`{"hostId":""}`))
+	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/unlink", bytes.NewBufferString(`{"hostId":""}`))
 	rec = httptest.NewRecorder()
 	handler.HandleUnlink(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -459,7 +459,7 @@ func TestHostAgentHandlers_HandleLinkUnlinkErrors(t *testing.T) {
 		t.Fatalf("expected error code %q, got %q", "missing_host_id", code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/agents/host/unlink", bytes.NewBufferString(`{"hostId":"missing"}`))
+	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/unlink", bytes.NewBufferString(`{"hostId":"missing"}`))
 	rec = httptest.NewRecorder()
 	handler.HandleUnlink(rec, req)
 	if rec.Code != http.StatusNotFound {

@@ -220,9 +220,9 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	logger.Info().
 		Str("version", Version).
 		Str("pulse_url", cfg.PulseURL).
-		Bool("host_agent", cfg.EnableHost).
-		Bool("docker_agent", cfg.EnableDocker).
-		Bool("kubernetes_agent", cfg.EnableKubernetes).
+		Bool("host_enabled", cfg.EnableHost).
+		Bool("docker_enabled", cfg.EnableDocker).
+		Bool("kubernetes_enabled", cfg.EnableKubernetes).
 		Bool("proxmox_mode", cfg.EnableProxmox).
 		Bool("auto_update", !cfg.DisableAutoUpdate).
 		Msg("Starting Pulse Unified Agent")

@@ -153,7 +153,7 @@ describe('MonitoringAPI', () => {
       await MonitoringAPI.deleteAgent('agent-1');
 
       expect(apiFetch).toHaveBeenCalledWith(
-        '/api/agents/host/agent-1',
+        '/api/agents/agent/agent-1',
         expect.objectContaining({ method: 'DELETE' }),
       );
     });
@@ -164,7 +164,7 @@ describe('MonitoringAPI', () => {
       await MonitoringAPI.updateAgentConfig('agent-1', { commandsEnabled: true });
 
       expect(apiFetch).toHaveBeenCalledWith(
-        '/api/agents/host/agent-1/config',
+        '/api/agents/agent/agent-1/config',
         expect.objectContaining({
           method: 'PATCH',
           body: JSON.stringify({ commandsEnabled: true }),
@@ -191,7 +191,7 @@ describe('MonitoringAPI', () => {
 
       const result = await MonitoringAPI.lookupAgent({ id: 'agent-1' });
 
-      expect(apiFetch).toHaveBeenCalledWith('/api/agents/host/lookup?id=agent-1');
+      expect(apiFetch).toHaveBeenCalledWith('/api/agents/agent/lookup?id=agent-1');
       expect(typeof result?.host.lastSeen).toBe('number');
     });
   });

@@ -103,8 +103,8 @@ server:
     failureThreshold: 3
 
 agent:
-  # Legacy: this deploys the deprecated `pulse-docker-agent`.
-  # For new deployments, prefer installing the unified agent (`pulse-agent`) on the hosts you want to monitor.
+  # Optional in-cluster agent workload.
+  # This deploys the unified `pulse-agent` in container-monitoring mode.
   enabled: false
   kind: DaemonSet # Supported: DaemonSet | Deployment
   replicaCount: 1
@@ -113,7 +113,7 @@ agent:
     name: ""
     annotations: {}
   image:
-    repository: ghcr.io/rcourtman/pulse-docker-agent
+    repository: ghcr.io/rcourtman/pulse-agent
     tag: ""
     pullPolicy: IfNotPresent
   env:
@@ -127,7 +127,9 @@ agent:
     name: ""
     data: {}
     keys: []
-  args: []
+  args:
+    - --enable-docker
+    - --enable-host=false
   resources: {}
   podAnnotations: {}
   podLabels: {}

@@ -18,6 +18,7 @@ import type {
 // Resource types - what kind of entity is being monitored
 export type ResourceType =
   | 'node' // Proxmox VE node
+  | 'host' // Legacy alias for node
   | 'docker-host' // Docker/Podman host
   | 'k8s-cluster' // Kubernetes cluster
   | 'k8s-node' // Kubernetes node
@@ -50,7 +51,7 @@ export type PlatformType =
   | 'docker'
   | 'kubernetes'
   | 'truenas'
-  | 'host-agent';
+  | 'agent';
 
 // Source types - how data is collected
 export type SourceType =
@@ -250,7 +251,7 @@ export interface Resource {
  * Helper type guards
  */
 export function isInfrastructure(r: Resource): boolean {
-  return ['node', 'docker-host', 'k8s-cluster', 'k8s-node', 'truenas'].includes(r.type);
+  return ['node', 'host', 'docker-host', 'k8s-cluster', 'k8s-node', 'truenas'].includes(r.type);
 }
 
 export function isWorkload(r: Resource): boolean {

@@ -227,7 +227,7 @@ func TestMonitorLegacyAndMetricHelpers(t *testing.T) {
 			{name: "k8s explicit", resourceType: "k8s-node", want: "kubernetes"},
 			{name: "pbs explicit", resourceType: "pbs", want: "proxmox-pbs"},
 			{name: "pmg explicit", resourceType: "pmg", want: "proxmox-pmg"},
-			{name: "host explicit", resourceType: "host", want: "host-agent"},
+			{name: "host explicit", resourceType: "host", want: "agent"},
 			{
 				name:         "fallback k8s precedence",
 				resourceType: "custom",
@@ -253,10 +253,10 @@ func TestMonitorLegacyAndMetricHelpers(t *testing.T) {
 				want:         "proxmox-pmg",
 			},
 			{
-				name:         "fallback host agent",
+				name:         "fallback agent",
 				resourceType: "custom",
 				resource:     unifiedresources.Resource{Sources: []unifiedresources.DataSource{unifiedresources.SourceAgent}},
-				want:         "host-agent",
+				want:         "agent",
 			},
 			{
 				name:         "fallback proxmox source",

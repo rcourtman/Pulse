@@ -10,7 +10,7 @@ function createResource(overrides: Partial<Resource> = {}): Resource {
     name: 'resource-1',
     displayName: 'Resource 1',
     platformId: 'platform-1',
-    platformType: 'host-agent',
+    platformType: 'agent',
     sourceType: 'agent',
     status: 'online',
     lastSeen: Date.now(),

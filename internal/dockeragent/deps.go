@@ -51,9 +51,9 @@ var (
 		"/var/lib/dbus/machine-id",
 	}
 	unraidVersionPath       = "/etc/unraid-version"
-	unraidPersistPath       = "/boot/config/plugins/pulse-docker-agent/pulse-docker-agent"
-	unraidStartupScriptPath = "/boot/config/go.d/pulse-docker-agent.sh"
-	agentLogPath            = "/var/log/pulse-docker-agent.log"
+	unraidPersistPath       = "/boot/config/plugins/pulse-agent/pulse-agent"
+	unraidStartupScriptPath = "/boot/config/plugins/pulse-agent/start-pulse-agent.sh"
+	agentLogPath            = "/var/log/pulse-agent.log"
 	openProcUptime          = func() (io.ReadCloser, error) {
 		return os.Open("/proc/uptime")
 	}

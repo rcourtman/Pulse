@@ -93,7 +93,7 @@ type Config struct {
 	// APIToken is the authentication token for the Pulse server
 	APIToken string
 
-	// AgentName is the name of the agent binary to download (e.g., "pulse-agent", "pulse-docker-agent")
+	// AgentName is the name of the agent binary to download (for example, "pulse-agent")
 	AgentName string
 
 	// CurrentVersion is the version currently running

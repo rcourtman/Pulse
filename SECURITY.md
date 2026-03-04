@@ -434,10 +434,10 @@ API tokens can be scoped to limit access. Available scopes:
 | `ai:execute` | Run AI commands, view patrol findings |
 | `docker:report` | Docker agent metric reporting |
 | `kubernetes:report` | Kubernetes agent metric reporting |
-| `host-agent:report` | Host agent metric reporting |
+| `agent:report` | Agent metric reporting |
 | `docker:manage` | Docker host management actions |
 | `kubernetes:manage` | Kubernetes cluster management actions |
-| `host-agent:manage` | Host agent configuration updates |
+| `agent:manage` | Agent configuration updates |
 
 Endpoints enforce scope checks before processing. A token without the required scope receives `403 Forbidden`.
 

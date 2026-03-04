@@ -542,7 +542,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       });
     }
 
-    // Add standalone host agents
+    // Add standalone agents
     for (const host of hosts) {
       const hostActionId = getHostActionId(host);
       const name = host.displayName || host.identity?.hostname || host.name;

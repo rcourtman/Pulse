@@ -18,7 +18,7 @@ const HighConfidenceThreshold = 0.90
 // HostSource describes where a host was seen.
 type HostSource struct {
 	// Type is the connector category: "proxmox-pve", "proxmox-pbs", "proxmox-pmg",
-	// "host-agent", "docker", "kubernetes", "truenas".
+	// "agent", "docker", "kubernetes", "truenas".
 	Type string
 	// SourceLabel is a short human-readable label: "proxmox", "agent", "docker", "kubernetes", "truenas".
 	SourceLabel string
@@ -144,7 +144,7 @@ func ResolveHosts(candidates []HostCandidate) *ResolvedHostSet {
 func mergeGroup(group []*HostCandidate) ResolvedHost {
 	typePriority := map[string]int{
 		"proxmox-pve": 0,
-		"host-agent":  1,
+		"agent":       1,
 		"docker":      2,
 		"kubernetes":  3,
 		"proxmox-pbs": 4,
@@ -336,7 +336,7 @@ func hostAgentCandidate(h models.Host) HostCandidate {
 	return HostCandidate{
 		ID:       "host:" + h.ID,
 		Name:     resolvedHostDisplayName(h.DisplayName, h.Hostname, h.ID),
-		Type:     "host-agent",
+		Type:     "agent",
 		Source:   "agent",
 		Status:   resolvedNormalizeStatus(h.Status),
 		LastSeen: resolvedFormatTime(h.LastSeen),

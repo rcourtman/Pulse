@@ -332,7 +332,7 @@ describe('ThresholdsTable Metric Formatting', () => {
 });
 
 describe('ThresholdsTable V6 ID compatibility', () => {
-  it('matches host-agent overrides keyed by actionable agent ID', async () => {
+  it('matches agent overrides keyed by actionable agent ID', async () => {
     setPathname('/alerts/thresholds/hosts');
     const host = {
       id: 'resource:host:abc123',
@@ -340,7 +340,7 @@ describe('ThresholdsTable V6 ID compatibility', () => {
       name: 'host-v6',
       displayName: 'Host V6',
       platformId: 'host-platform-1',
-      platformType: 'host-agent',
+      platformType: 'agent',
       sourceType: 'agent',
       status: 'online',
       lastSeen: 123,

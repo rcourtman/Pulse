@@ -89,7 +89,7 @@ func TestHostAgentHandlers_HandleReport(t *testing.T) {
 	}
 	body, _ := json.Marshal(report)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/report", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	handler.HandleReport(rec, req)
@@ -121,7 +121,7 @@ func TestHostAgentHandlers_HandleReport_EnforcesMaxAgentsForNewHostsOnly(t *test
 		Timestamp: time.Now().UTC(),
 	}
 	existingBody, _ := json.Marshal(existingReport)
-	existingReq := httptest.NewRequest(http.MethodPost, "/api/agents/host/report", bytes.NewReader(existingBody))
+	existingReq := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(existingBody))
 	existingRec := httptest.NewRecorder()
 	handler.HandleReport(existingRec, existingReq)
 	if existingRec.Code != http.StatusOK {
@@ -142,7 +142,7 @@ func TestHostAgentHandlers_HandleReport_EnforcesMaxAgentsForNewHostsOnly(t *test
 		Timestamp: time.Now().UTC(),
 	}
 	newBody, _ := json.Marshal(newReport)
-	newReq := httptest.NewRequest(http.MethodPost, "/api/agents/host/report", bytes.NewReader(newBody))
+	newReq := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(newBody))
 	newRec := httptest.NewRecorder()
 	handler.HandleReport(newRec, newReq)
 	if newRec.Code != http.StatusPaymentRequired {
@@ -151,29 +151,33 @@ func TestHostAgentHandlers_HandleReport_EnforcesMaxAgentsForNewHostsOnly(t *test
 }
 
 func TestHostAgentHandlers_HandleDeleteHost(t *testing.T) {
-	handler, monitor := newHostAgentHandlers(t, nil)
-	hostID := seedHostAgent(t, monitor)
+	for _, prefix := range []string{"/api/agents/agent/", "/api/agents/agent/"} {
+		handler, monitor := newHostAgentHandlers(t, nil)
+		hostID := seedHostAgent(t, monitor)
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/agents/host/"+hostID, nil)
-	rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodDelete, prefix+hostID, nil)
+		rec := httptest.NewRecorder()
 
-	handler.HandleDeleteHost(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+		handler.HandleDeleteHost(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200 for %s: %s", rec.Code, prefix, rec.Body.String())
+		}
 	}
 }
 
 func TestHostAgentHandlers_HandleConfigPatch(t *testing.T) {
-	handler, monitor := newHostAgentHandlers(t, nil)
-	hostID := seedHostAgent(t, monitor)
+	for _, prefix := range []string{"/api/agents/agent/", "/api/agents/agent/"} {
+		handler, monitor := newHostAgentHandlers(t, nil)
+		hostID := seedHostAgent(t, monitor)
 
-	body := []byte(`{"commandsEnabled":true}`)
-	req := httptest.NewRequest(http.MethodPatch, "/api/agents/host/"+hostID+"/config", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
+		body := []byte(`{"commandsEnabled":true}`)
+		req := httptest.NewRequest(http.MethodPatch, prefix+hostID+"/config", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
 
-	handler.HandleConfig(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+		handler.HandleConfig(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200 for %s: %s", rec.Code, prefix, rec.Body.String())
+		}
 	}
 }
 
@@ -186,10 +190,10 @@ func TestHostAgentHandlers_EnsureHostTokenMatch(t *testing.T) {
 		TokenID:  "token-1",
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/host-3/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/host-3/config", nil)
 	attachAPITokenRecord(req, &config.APITokenRecord{
 		ID:     "token-2",
-		Scopes: []string{config.ScopeHostConfigRead},
+		Scopes: []string{config.ScopeAgentConfigRead},
 	})
 	rec := httptest.NewRecorder()
 
@@ -207,7 +211,7 @@ func TestHostAgentHandlers_HandleUninstall(t *testing.T) {
 	hostID := seedHostAgent(t, monitor)
 
 	body := []byte(`{"hostId":"` + hostID + `"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/uninstall", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/uninstall", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	handler.HandleUninstall(rec, req)
@@ -228,10 +232,10 @@ func TestHostAgentHandlers_HandleUninstallRejectsTokenMismatch(t *testing.T) {
 	})
 
 	body := []byte(`{"hostId":"` + hostID + `"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/uninstall", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/uninstall", bytes.NewReader(body))
 	attachAPITokenRecord(req, &config.APITokenRecord{
 		ID:     "token-2",
-		Scopes: []string{config.ScopeHostReport},
+		Scopes: []string{config.ScopeAgentReport},
 	})
 	rec := httptest.NewRecorder()
 
@@ -246,7 +250,7 @@ func TestHostAgentHandlers_HandleUninstall_ResponseBody(t *testing.T) {
 	hostID := seedHostAgent(t, monitor)
 
 	body := []byte(`{"hostId":"` + hostID + `"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/uninstall", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/uninstall", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	handler.HandleUninstall(rec, req)
@@ -320,7 +324,7 @@ func TestHostAgentHandlers_HandleUninstall_FullLifecycle(t *testing.T) {
 
 	// Uninstall
 	body := []byte(`{"hostId":"` + hostID + `"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/host/uninstall", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/uninstall", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.HandleUninstall(rec, req)
 	if rec.Code != http.StatusOK {
@@ -349,7 +353,7 @@ func TestHostAgentHandlers_HandleLinkUnlink(t *testing.T) {
 	state.UpdateNodes([]models.Node{{ID: "node-1", Name: "node-1"}})
 
 	linkBody := []byte(`{"hostId":"` + hostID + `","nodeId":"node-1"}`)
-	linkReq := httptest.NewRequest(http.MethodPost, "/api/agents/host/link", bytes.NewReader(linkBody))
+	linkReq := httptest.NewRequest(http.MethodPost, "/api/agents/agent/link", bytes.NewReader(linkBody))
 	linkRec := httptest.NewRecorder()
 
 	handler.HandleLink(linkRec, linkReq)
@@ -358,7 +362,7 @@ func TestHostAgentHandlers_HandleLinkUnlink(t *testing.T) {
 	}
 
 	unlinkBody := []byte(`{"hostId":"` + hostID + `"}`)
-	unlinkReq := httptest.NewRequest(http.MethodPost, "/api/agents/host/unlink", bytes.NewReader(unlinkBody))
+	unlinkReq := httptest.NewRequest(http.MethodPost, "/api/agents/agent/unlink", bytes.NewReader(unlinkBody))
 	unlinkRec := httptest.NewRecorder()
 
 	handler.HandleUnlink(unlinkRec, unlinkReq)

@@ -8,7 +8,7 @@ type KnownSourcePlatform =
   | 'docker'
   | 'kubernetes'
   | 'truenas'
-  | 'host-agent'
+  | 'agent'
   | 'unraid'
   | 'synology-dsm'
   | 'vmware-vsphere'
@@ -54,7 +54,7 @@ const PLATFORM_TONES: Record<KnownSourcePlatform, SourcePlatformTone> = {
     label: 'TrueNAS',
     tone: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-400',
   },
-  'host-agent': {
+  agent: {
     label: 'Agent',
     tone: 'bg-surface-alt text-base-content',
   },

@@ -15,6 +15,7 @@ const (
 	ProviderKubernetes Provider = model.ProviderKubernetes
 	ProviderTrueNAS    Provider = model.ProviderTrueNAS
 	ProviderDocker     Provider = model.ProviderDocker
+	ProviderAgent      Provider = model.ProviderAgent
 	ProviderHostAgent  Provider = model.ProviderHostAgent
 )
 

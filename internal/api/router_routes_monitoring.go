@@ -104,7 +104,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 		}
 	}))
 
-	// Agent metadata routes (preferred v6 naming) + host metadata compatibility aliases.
+	// Agent metadata routes (v6 canonical naming).
 	handleAgentMetadataWriteRoute := func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
@@ -128,8 +128,6 @@ func (r *Router) registerMonitoringResourceRoutes(
 	}
 	r.mux.HandleFunc("/api/agents/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, hostMetadataHandler.HandleGetMetadata)))
 	r.mux.HandleFunc("/api/agents/metadata/", RequireAuth(r.config, handleAgentMetadataWriteRoute))
-	r.mux.HandleFunc("/api/hosts/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, hostMetadataHandler.HandleGetMetadata)))
-	r.mux.HandleFunc("/api/hosts/metadata/", RequireAuth(r.config, handleAgentMetadataWriteRoute))
 
 	// Infrastructure update detection routes (Docker containers, packages, etc.)
 	r.mux.HandleFunc("/api/infra-updates", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, infraUpdateHandlers.HandleGetInfraUpdates)))
@@ -204,12 +202,12 @@ func (r *Router) registerMonitoringResourceRoutes(
 	handleDiscoveryHostLikeRoute := func(pathPrefix string) http.HandlerFunc {
 		return func(w http.ResponseWriter, req *http.Request) {
 			// Route based on method and path depth:
-			// GET /api/discovery/{host|agent}/{hostId} → list discoveries for host/agent
-			// GET /api/discovery/{host|agent}/{hostId}/{resourceId} → get specific discovery
-			// GET /api/discovery/{host|agent}/{hostId}/{resourceId}/progress → get scan progress
-			// POST /api/discovery/{host|agent}/{hostId}/{resourceId} → trigger discovery
-			// PUT /api/discovery/{host|agent}/{hostId}/{resourceId}/notes → update notes
-			// DELETE /api/discovery/{host|agent}/{hostId}/{resourceId} → delete discovery
+			// GET /api/discovery/agent/{agentId} → list discoveries for an agent
+			// GET /api/discovery/agent/{agentId}/{resourceId} → get specific discovery
+			// GET /api/discovery/agent/{agentId}/{resourceId}/progress → get scan progress
+			// POST /api/discovery/agent/{agentId}/{resourceId} → trigger discovery
+			// PUT /api/discovery/agent/{agentId}/{resourceId}/notes → update notes
+			// DELETE /api/discovery/agent/{agentId}/{resourceId} → delete discovery
 			path := strings.TrimPrefix(req.URL.Path, pathPrefix)
 			pathParts := strings.Split(strings.TrimSuffix(path, "/"), "/")
 
@@ -219,13 +217,13 @@ func (r *Router) registerMonitoringResourceRoutes(
 					return
 				}
 				if len(pathParts) == 1 && pathParts[0] != "" {
-					// GET /api/discovery/{host|agent}/{id} → list by host
+					// GET /api/discovery/agent/{id} → list by agent
 					r.discoveryHandlers.HandleListByHost(w, req)
 				} else if len(pathParts) >= 2 {
 					if strings.HasSuffix(req.URL.Path, "/progress") {
 						r.discoveryHandlers.HandleGetProgress(w, req)
 					} else {
-						// GET /api/discovery/{host|agent}/{hostId}/{resourceId} → get specific discovery
+						// GET /api/discovery/agent/{agentId}/{resourceId} → get specific discovery
 						r.discoveryHandlers.HandleGetDiscovery(w, req)
 					}
 				} else {
@@ -235,7 +233,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 				if !ensureScope(w, req, config.ScopeMonitoringWrite) {
 					return
 				}
-				// POST /api/discovery/{host|agent}/{hostId}/{resourceId} → trigger discovery
+				// POST /api/discovery/agent/{agentId}/{resourceId} → trigger discovery
 				r.discoveryHandlers.HandleTriggerDiscovery(w, req)
 			case http.MethodPut:
 				if !ensureScope(w, req, config.ScopeMonitoringWrite) {
@@ -257,7 +255,6 @@ func (r *Router) registerMonitoringResourceRoutes(
 		}
 	}
 	r.mux.HandleFunc("/api/discovery/agent/", RequireAuth(r.config, handleDiscoveryHostLikeRoute("/api/discovery/agent/")))
-	r.mux.HandleFunc("/api/discovery/host/", RequireAuth(r.config, handleDiscoveryHostLikeRoute("/api/discovery/host/")))
 	r.mux.HandleFunc("/api/discovery/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
 		path := req.URL.Path
 		switch req.Method {

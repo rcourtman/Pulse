@@ -701,7 +701,7 @@ if [[ "$UNINSTALL" == "true" ]]; then
                 LOOKUP_ARGS=(-fsSL --connect-timeout 5 -H "X-API-Token: ${PULSE_TOKEN}")
                 if [[ "$INSECURE" == "true" ]]; then LOOKUP_ARGS+=(-k); fi
                 if [[ -n "$CURL_CA_BUNDLE" ]]; then LOOKUP_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
-                LOOKUP_RESP=$(curl "${LOOKUP_ARGS[@]}" "${PULSE_URL}/api/agents/host/lookup?hostname=${LOOKUP_HOSTNAME}" 2>/dev/null || true)
+                LOOKUP_RESP=$(curl "${LOOKUP_ARGS[@]}" "${PULSE_URL}/api/agents/agent/lookup?hostname=${LOOKUP_HOSTNAME}" 2>/dev/null || true)
                 if [[ -n "$LOOKUP_RESP" ]]; then
                     # Extract .host.id from JSON (portable, no jq dependency)
                     AGENT_ID=$(echo "$LOOKUP_RESP" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"id"[[:space:]]*:[[:space:]]*"//; s/"$//' || true)
@@ -719,7 +719,7 @@ if [[ "$UNINSTALL" == "true" ]]; then
             if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
 
             # Send unregistration request (ignore errors as we are uninstalling anyway)
-            curl "${CURL_ARGS[@]}" -d "{\"hostId\": \"${AGENT_ID}\"}" "${PULSE_URL}/api/agents/host/uninstall" >/dev/null 2>&1 || true
+            curl "${CURL_ARGS[@]}" -d "{\"hostId\": \"${AGENT_ID}\"}" "${PULSE_URL}/api/agents/agent/uninstall" >/dev/null 2>&1 || true
         fi
     fi
 
@@ -727,13 +727,9 @@ if [[ "$UNINSTALL" == "true" ]]; then
     # Use -x (exact process name match) to avoid killing THIS uninstall script,
     # whose command line path contains "pulse-agent" (e.g. /boot/config/plugins/pulse-agent/install.sh).
     pkill -x "pulse-agent" 2>/dev/null || true
-    pkill -x "pulse-host-agent" 2>/dev/null || true
-    pkill -x "pulse-docker-agent" 2>/dev/null || true
     # Kill Unraid wrapper scripts — both current (start-pulse-agent.sh) and
-    # legacy (plugins/pulse-host-agent/start.sh) naming conventions.
+    # legacy naming conventions.
     pkill -f "start-pulse-agent.sh" 2>/dev/null || true
-    pkill -f "plugins/pulse-host-agent/" 2>/dev/null || true
-    pkill -f "plugins/pulse-docker-agent/" 2>/dev/null || true
     sleep 1
 
     # Systemd - unified agent
@@ -742,29 +738,16 @@ if [[ "$UNINSTALL" == "true" ]]; then
         systemctl disable "${AGENT_NAME}" 2>/dev/null || true
         rm -f "/etc/systemd/system/${AGENT_NAME}.service"
         
-        # Legacy agents cleanup
-        systemctl stop pulse-host-agent 2>/dev/null || true
-        systemctl disable pulse-host-agent 2>/dev/null || true
-        rm -f /etc/systemd/system/pulse-host-agent.service
-        
-        systemctl stop pulse-docker-agent 2>/dev/null || true
-        systemctl disable pulse-docker-agent 2>/dev/null || true
-        rm -f /etc/systemd/system/pulse-docker-agent.service
-        
         systemctl daemon-reload 2>/dev/null || true
     fi
 
     # Remove legacy binaries
-    rm -f /usr/local/bin/pulse-host-agent
-    rm -f /usr/local/bin/pulse-docker-agent
 
     # Remove agent state directory (contains agent ID, proxmox registration state, etc.)
     rm -rf /var/lib/pulse-agent
 
     # Remove log files
     rm -f /var/log/pulse-agent.log
-    rm -f /var/log/pulse-host-agent.log
-    rm -f /var/log/pulse-docker-agent.log
 
     # Launchd (macOS)
     if [[ "$(uname -s)" == "Darwin" ]]; then
@@ -773,11 +756,6 @@ if [[ "$UNINSTALL" == "true" ]]; then
         launchctl unload "$PLIST" 2>/dev/null || true
         rm -f "$PLIST"
         
-        # Legacy agents
-        launchctl unload /Library/LaunchDaemons/com.pulse.host-agent.plist 2>/dev/null || true
-        rm -f /Library/LaunchDaemons/com.pulse.host-agent.plist
-        launchctl unload /Library/LaunchDaemons/com.pulse.docker-agent.plist 2>/dev/null || true
-        rm -f /Library/LaunchDaemons/com.pulse.docker-agent.plist
     fi
 
     # Synology DSM (handles both DSM 7+ systemd and DSM 6.x upstart)
@@ -798,14 +776,10 @@ if [[ "$UNINSTALL" == "true" ]]; then
 
     # Unraid
     if [[ -f /etc/unraid-version ]] || [[ -d /boot/config/plugins/pulse-agent ]]; then
-        log_info "Removing Unraid installation (including legacy agents)..."
-        # Stop running agents and their wrapper scripts (unified + legacy)
+        log_info "Removing Unraid installation..."
+        # Stop running agents and their wrapper scripts.
         pkill -x "pulse-agent" 2>/dev/null || true
-        pkill -x "pulse-host-agent" 2>/dev/null || true
-        pkill -x "pulse-docker-agent" 2>/dev/null || true
         pkill -f "start-pulse-agent.sh" 2>/dev/null || true
-        pkill -f "plugins/pulse-host-agent/" 2>/dev/null || true
-        pkill -f "plugins/pulse-docker-agent/" 2>/dev/null || true
         sleep 1
         
         # Remove from /boot/config/go - all pulse-related entries
@@ -816,11 +790,6 @@ if [[ "$UNINSTALL" == "true" ]]; then
             # blank line separates them).
             sed -i '/^# Pulse Agent$/d' "$GO_SCRIPT" 2>/dev/null || true
             sed -i '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || true
-            # Remove legacy agent entries
-            sed -i '/^# Pulse Host Agent$/d' "$GO_SCRIPT" 2>/dev/null || true
-            sed -i '/^# Pulse Docker Agent$/d' "$GO_SCRIPT" 2>/dev/null || true
-            sed -i '/pulse-host-agent/d' "$GO_SCRIPT" 2>/dev/null || true
-            sed -i '/pulse-docker-agent/d' "$GO_SCRIPT" 2>/dev/null || true
         fi
         
         # Remove installation directories
@@ -829,8 +798,6 @@ if [[ "$UNINSTALL" == "true" ]]; then
         
         # Remove binaries from RAM disk
         rm -f "${INSTALL_DIR}/${BINARY_NAME}"
-        rm -f /usr/local/bin/pulse-host-agent
-        rm -f /usr/local/bin/pulse-docker-agent
         
         # Remove log directory
         rm -rf /var/log/pulse
@@ -1154,53 +1121,6 @@ if [[ "$UPGRADE_MODE" == "true" ]]; then
     log_info "Binary upgraded successfully. Updating service configuration..."
 fi
 
-# --- Legacy Cleanup ---
-# Remove old agents if they exist to prevent conflicts
-# This is critical because legacy agents use the same system ID and will cause
-# connection conflicts (rapid connect/disconnect cycles) with the unified agent.
-log_info "Checking for legacy agents..."
-
-# Kill any running legacy agent processes first (even if started manually)
-# This prevents WebSocket connection conflicts during installation
-pkill -f "pulse-host-agent" 2>/dev/null || true
-pkill -f "pulse-docker-agent" 2>/dev/null || true
-sleep 1
-
-# Legacy Host Agent - systemd cleanup
-if command -v systemctl >/dev/null 2>&1; then
-    if systemctl is-active --quiet pulse-host-agent 2>/dev/null || systemctl is-enabled --quiet pulse-host-agent 2>/dev/null || [[ -f /etc/systemd/system/pulse-host-agent.service ]]; then
-        log_warn "Removing legacy pulse-host-agent..."
-        systemctl stop pulse-host-agent 2>/dev/null || true
-        systemctl disable pulse-host-agent 2>/dev/null || true
-        rm -f /etc/systemd/system/pulse-host-agent.service
-        rm -f /usr/local/bin/pulse-host-agent
-    fi
-    if systemctl is-active --quiet pulse-docker-agent 2>/dev/null || systemctl is-enabled --quiet pulse-docker-agent 2>/dev/null || [[ -f /etc/systemd/system/pulse-docker-agent.service ]]; then
-        log_warn "Removing legacy pulse-docker-agent..."
-        systemctl stop pulse-docker-agent 2>/dev/null || true
-        systemctl disable pulse-docker-agent 2>/dev/null || true
-        rm -f /etc/systemd/system/pulse-docker-agent.service
-        rm -f /usr/local/bin/pulse-docker-agent
-    fi
-    systemctl daemon-reload 2>/dev/null || true
-fi
-
-# Legacy macOS
-if [[ "$OS" == "darwin" ]]; then
-    if launchctl list | grep -q "com.pulse.host-agent"; then
-        log_warn "Removing legacy com.pulse.host-agent..."
-        launchctl unload /Library/LaunchDaemons/com.pulse.host-agent.plist 2>/dev/null || true
-        rm -f /Library/LaunchDaemons/com.pulse.host-agent.plist
-        rm -f /usr/local/bin/pulse-host-agent
-    fi
-    if launchctl list | grep -q "com.pulse.docker-agent"; then
-        log_warn "Removing legacy com.pulse.docker-agent..."
-        launchctl unload /Library/LaunchDaemons/com.pulse.docker-agent.plist 2>/dev/null || true
-        rm -f /Library/LaunchDaemons/com.pulse.docker-agent.plist
-        rm -f /usr/local/bin/pulse-docker-agent
-    fi
-fi
-
 # --- Service Installation ---
 
 # If Proxmox mode is enabled, clear the state files to ensure fresh registration
@@ -1455,17 +1375,11 @@ if [[ -f /etc/unraid-version ]]; then
     build_exec_args
     build_exec_args_array
 
-    # Kill any existing pulse agents (legacy or current)
+    # Kill any existing pulse agents.
     log_info "Stopping any existing pulse agents..."
     # Use process name matching to avoid killing unrelated processes
     pkill -f "^${RUNTIME_BINARY}" 2>/dev/null || true
-    pkill -f "^/usr/local/bin/pulse-host-agent" 2>/dev/null || true
-    pkill -f "^/usr/local/bin/pulse-docker-agent" 2>/dev/null || true
     sleep 2
-
-    # Clean up legacy binaries from RAM disk
-    rm -f /usr/local/bin/pulse-host-agent 2>/dev/null || true
-    rm -f /usr/local/bin/pulse-docker-agent 2>/dev/null || true
 
     # Create a wrapper script that will be called from /boot/config/go
     # This script copies from persistent storage to RAM disk on boot, then starts the agent
@@ -1483,8 +1397,6 @@ if [[ -f /etc/unraid-version ]]; then
 
 # Kill any existing pulse-agent processes
 pkill -f "^${RUNTIME_BINARY}" 2>/dev/null || true
-pkill -f "^/usr/local/bin/pulse-host-agent" 2>/dev/null || true
-pkill -f "^/usr/local/bin/pulse-docker-agent" 2>/dev/null || true
 sleep 2
 
 # Copy binary from persistent storage to RAM disk (needed after reboot)

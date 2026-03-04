@@ -75,7 +75,7 @@ vi.mock('@/api/agentProfiles', () => ({
 const toHostResource = (h: any) => ({
   id: h.id,
   type: 'host' as const,
-  platformType: 'host-agent' as const,
+  platformType: 'agent' as const,
   sourceType: 'agent' as const,
   name: h.hostname || h.id,
   displayName: h.displayName,

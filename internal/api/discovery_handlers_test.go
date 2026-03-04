@@ -398,7 +398,7 @@ func TestHandleListByHost(t *testing.T) {
 	require.NoError(t, store.Save(d1))
 	require.NoError(t, store.Save(d2))
 
-	req := httptest.NewRequest("GET", "/api/discovery/host/node1", nil)
+	req := httptest.NewRequest("GET", "/api/discovery/agent/node1", nil)
 	w := httptest.NewRecorder()
 
 	h.HandleListByHost(w, req)

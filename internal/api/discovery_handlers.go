@@ -554,7 +554,7 @@ func (h *DiscoveryHandlers) HandleListByType(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-// HandleListByHost handles GET /api/discovery/host/{host}
+// HandleListByHost handles GET /api/discovery/agent/{host}
 func (h *DiscoveryHandlers) HandleListByHost(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
@@ -562,10 +562,7 @@ func (h *DiscoveryHandlers) HandleListByHost(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Parse path
-	hostID := strings.TrimPrefix(r.URL.Path, "/api/discovery/host/")
-	if hostID == r.URL.Path {
-		hostID = strings.TrimPrefix(r.URL.Path, "/api/discovery/agent/")
-	}
+	hostID := strings.TrimPrefix(r.URL.Path, "/api/discovery/agent/")
 
 	discoveries, err := h.service.ListDiscoveriesByHost(hostID)
 	if err != nil {
