@@ -359,9 +359,10 @@ func normalizeTargetURL(raw string) (string, error) {
 	if scheme == "http" {
 		host := parsed.Hostname()
 		ip := net.ParseIP(host)
-		isLoopback := strings.EqualFold(host, "localhost") || (ip != nil && ip.IsLoopback())
-		if !isLoopback {
-			return "", fmt.Errorf("http is only allowed for loopback addresses, use https for %s", host)
+		isLoopbackOrPrivate := strings.EqualFold(host, "localhost") ||
+			(ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()))
+		if !isLoopbackOrPrivate {
+			return "", fmt.Errorf("http is only allowed for loopback or private network addresses, use https for %s", host)
 		}
 	}
 
