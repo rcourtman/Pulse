@@ -9,9 +9,3 @@ output: dist/common-example.sh
 scripts/lib/common.sh
 scripts/lib/systemd.sh
 scripts/lib/http.sh
-
-output: dist/install-docker-agent.sh
-scripts/lib/common.sh
-scripts/lib/systemd.sh
-scripts/lib/http.sh
-scripts/install-docker-agent.sh

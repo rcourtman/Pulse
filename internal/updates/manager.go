@@ -1578,11 +1578,7 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 		} else {
 			// List of agent scripts to deploy
 			agentScripts := []string{
-				"install-docker-agent.sh",
 				"install-container-agent.sh",
-				"install-host-agent.ps1",
-				"uninstall-host-agent.sh",
-				"uninstall-host-agent.ps1",
 				"install-docker.sh",
 				"install.sh",
 				"install.ps1",
@@ -1617,7 +1613,7 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 		if err := os.MkdirAll(destBinDir, 0755); err != nil {
 			log.Warn().Err(err).Msg("Failed to create bin directory")
 		} else {
-			// Copy agent binaries (pulse-agent-*, pulse-docker-agent-*, pulse-host-agent-*)
+			// Copy agent binaries (pulse-agent-* artifacts)
 			entries, err := os.ReadDir(binDir)
 			if err == nil {
 				agentBinariesDeployed := 0
@@ -1628,9 +1624,7 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 						continue
 					}
 					// Copy agent binaries
-					if strings.HasPrefix(name, "pulse-agent-") ||
-						strings.HasPrefix(name, "pulse-docker-agent") ||
-						strings.HasPrefix(name, "pulse-host-agent") {
+					if strings.HasPrefix(name, "pulse-agent-") {
 						srcPath := filepath.Join(binDir, name)
 						destPath := filepath.Join(destBinDir, name)
 						cmd = exec.Command("cp", "-a", srcPath, destPath)

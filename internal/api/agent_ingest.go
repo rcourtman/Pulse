@@ -23,7 +23,6 @@ import (
 
 const (
 	configSignatureTTL    = 15 * time.Minute
-	hostAgentRoutePrefix  = "/api/agents/host/"
 	agentAgentRoutePrefix = "/api/agents/agent/"
 )
 
@@ -33,19 +32,13 @@ var configSigningState struct {
 	err  error
 }
 
-// HostAgentHandlers manages ingest from the pulse-host-agent.
+// HostAgentHandlers manages ingest from the host module of pulse-agent.
 type HostAgentHandlers struct {
 	baseAgentHandlers
 }
 
 func trimHostAgentRoutePath(path string) string {
-	for _, prefix := range []string{agentAgentRoutePrefix, hostAgentRoutePrefix} {
-		if strings.HasPrefix(path, prefix) {
-			return strings.TrimPrefix(path, prefix)
-		}
-	}
-	// Preserve legacy behavior for unexpected paths.
-	return strings.TrimPrefix(path, hostAgentRoutePrefix)
+	return strings.TrimPrefix(path, agentAgentRoutePrefix)
 }
 
 // NewHostAgentHandlers constructs a new handler set for host agents.
@@ -232,7 +225,7 @@ func (h *HostAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Extract host ID from URL path
-	// Expected format: /api/agents/{agent|host}/{hostId}
+	// Expected format: /api/agents/agent/{hostId}
 	trimmedPath := trimHostAgentRoutePath(r.URL.Path)
 	hostID := strings.TrimSpace(trimmedPath)
 	if hostID == "" {
@@ -263,7 +256,7 @@ func (h *HostAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Requ
 // PATCH /api/agents/{agent|host}/{hostId}/config - UI updates host config (e.g., commandsEnabled)
 func (h *HostAgentHandlers) HandleConfig(w http.ResponseWriter, r *http.Request) {
 	// Extract host ID from URL path
-	// Expected format: /api/agents/{agent|host}/{hostId}/config
+	// Expected format: /api/agents/agent/{hostId}/config
 	trimmedPath := trimHostAgentRoutePath(r.URL.Path)
 	trimmedPath = strings.TrimSuffix(trimmedPath, "/config")
 	hostID := strings.TrimSpace(trimmedPath)
@@ -286,8 +279,8 @@ func (h *HostAgentHandlers) canReadConfig(record *config.APITokenRecord) bool {
 	if record == nil {
 		return true
 	}
-	return record.HasScope(config.ScopeHostConfigRead) ||
-		record.HasScope(config.ScopeHostManage) ||
+	return record.HasScope(config.ScopeAgentConfigRead) ||
+		record.HasScope(config.ScopeAgentManage) ||
 		record.HasScope(config.ScopeSettingsWrite)
 }
 
@@ -296,7 +289,7 @@ func (h *HostAgentHandlers) resolveConfigHost(ctx context.Context, hostID string
 	// Pulse is running in mock/demo mode.
 	snap := h.getMonitor(ctx).GetLiveStateSnapshot()
 
-	if record == nil || record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeHostManage) {
+	if record == nil || record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeAgentManage) {
 		for _, candidate := range snap.Hosts {
 			if candidate.ID == hostID {
 				return candidate, true
@@ -382,8 +375,8 @@ func isConfigSignatureRequired() bool {
 func (h *HostAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Request, hostID string) {
 	record := getAPITokenRecordFromRequest(r)
 	if !h.canReadConfig(record) {
-		respondMissingScope(w, config.ScopeHostConfigRead)
-		LogAuditEventForTenant(GetOrgID(r.Context()), "host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
+		respondMissingScope(w, config.ScopeAgentConfigRead)
+		LogAuditEventForTenant(GetOrgID(r.Context()), "agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
 			fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
 		return
 	}
@@ -391,7 +384,7 @@ func (h *HostAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Reque
 	host, ok := h.resolveConfigHost(r.Context(), hostID, record)
 	if !ok {
 		writeErrorResponse(w, http.StatusNotFound, "host_not_found", "Host has not registered with Pulse yet", nil)
-		LogAuditEventForTenant(GetOrgID(r.Context()), "host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
+		LogAuditEventForTenant(GetOrgID(r.Context()), "agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
 			fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
 		return
 	}
@@ -403,7 +396,7 @@ func (h *HostAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to sign host config payload")
 		writeErrorResponse(w, http.StatusInternalServerError, "config_signing_failed", "Failed to sign host config", nil)
-		LogAuditEventForTenant(GetOrgID(r.Context()), "host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
+		LogAuditEventForTenant(GetOrgID(r.Context()), "agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
 			fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
 		return
 	}
@@ -416,12 +409,12 @@ func (h *HostAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Reque
 
 	if err := utils.WriteJSONResponse(w, resp); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize host config response")
-		LogAuditEventForTenant(GetOrgID(r.Context()), "host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
+		LogAuditEventForTenant(GetOrgID(r.Context()), "agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
 			fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
 		return
 	}
 
-	LogAuditEventForTenant(GetOrgID(r.Context()), "host_agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true,
+	LogAuditEventForTenant(GetOrgID(r.Context()), "agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true,
 		fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
 }
 
@@ -501,7 +494,7 @@ func (h *HostAgentHandlers) handlePatchConfig(w http.ResponseWriter, r *http.Req
 }
 
 // HandleUninstall allows an agent to unregister itself during uninstallation.
-// Requires ScopeHostReport and a valid hostId in the request body.
+// Requires ScopeAgentReport and a valid hostId in the request body.
 func (h *HostAgentHandlers) HandleUninstall(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
