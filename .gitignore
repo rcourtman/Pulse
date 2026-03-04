@@ -1,7 +1,6 @@
 # Binaries
 /bin/
 /pulse
-/pulse-docker-agent
 /pulse-sensor-proxy
 /pulse-server
 /pulse-test

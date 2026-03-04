@@ -10,7 +10,7 @@ dev-docs/
 # Binaries and build artifacts
 pulse
 backend
-/pulse-docker-agent
+/pulse-agent
 /pulse-server
 bin/
 dist/

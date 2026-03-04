@@ -54,11 +54,12 @@ kubectl apply -f pulse-server.yaml
 
 ## 2. Deploying the Pulse Agent
 
-### Important: Helm Chart Agent Is Legacy Docker-Only
+### Helm Chart Agent Mode
 
-The Helm chart includes an `agent` section, but it deploys the **deprecated** `pulse-docker-agent` (Docker socket metrics only). It does **not** deploy the unified `pulse-agent`.
+The Helm chart includes an optional `agent` section that deploys the unified `pulse-agent`.
+By default, this workload runs in container-monitoring mode (`--enable-docker --enable-host=false`).
 
-If you need the unified agent on Kubernetes, use a custom DaemonSet as shown below.
+For Kubernetes monitoring, use a custom DaemonSet as shown below.
 
 ### Unified Agent on Kubernetes (DaemonSet)
 

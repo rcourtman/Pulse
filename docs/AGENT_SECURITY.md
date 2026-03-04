@@ -11,7 +11,7 @@ The agent verifies a SHA-256 checksum of the downloaded binary. The server must 
 `X-Checksum-Sha256`; updates are rejected if the header is missing or mismatched.
 
 ### 2. Signature Verification (Optional)
-The legacy Docker agent supports optional Ed25519 signature verification when the server provides `X-Signature-Ed25519`. The unified agent relies on checksum verification only. Missing signatures are logged as a warning where supported.
+When present, Ed25519 signatures (`X-Signature-Ed25519`) add an extra validation layer on top of checksums.
 
 ### 3. Pre-Flight Checks
 To prevent "brick-updates"—bad updates that crash immediately and require manual recovery—agents perform pre-flight validation before replacing the running executable.
@@ -21,13 +21,6 @@ Unified agent (`pulse-agent`):
 2. Verify checksum (required).
 3. Validate binary magic (ELF/Mach-O/PE) and size limits (100MB max).
 4. Make executable and swap atomically.
-
-Legacy Docker agent (`pulse-docker-agent`):
-1. Download new binary.
-2. Verify checksum (required).
-3. Make executable.
-4. **Execute with `--self-test`** to validate startup.
-5. If the self-test fails, the update is aborted.
 
 ## API Security
 

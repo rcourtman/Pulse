@@ -213,14 +213,14 @@ Legacy environment seeding:
 sudo systemctl edit pulse
 # Add:
 [Service]
-Environment="API_TOKENS=ansible-token,docker-agent-token"
+Environment="API_TOKENS=ansible-token,agent-token"
 Environment="API_TOKEN=legacy-token"
 
 # Then restart:
 sudo systemctl restart pulse
 
 # Docker
-docker run -e API_TOKENS=ansible-token,docker-agent-token rcourtman/pulse:latest
+docker run -e API_TOKENS=ansible-token,agent-token rcourtman/pulse:latest
 ```
 
 ### Option 2: Allow Unprotected Export (Homelab)
@@ -387,10 +387,10 @@ The Quick Security Setup automatically:
 sudo systemctl edit pulse
 # Add:
 [Service]
-Environment="API_TOKENS=ansible-token,docker-agent-token"
+Environment="API_TOKENS=ansible-token,agent-token"
 
 # Docker
-docker run -e API_TOKENS=ansible-token,docker-agent-token rcourtman/pulse:latest
+docker run -e API_TOKENS=ansible-token,agent-token rcourtman/pulse:latest
 
 # To provide pre-hashed tokens instead, list the SHA3-256 hashes
 # Environment="API_TOKENS=83c8...,b1de..."

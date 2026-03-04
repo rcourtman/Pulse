@@ -246,15 +246,10 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | bash -s -- --uninstall
 This removes:
 - The agent binary
 - The systemd/launchd service
-- Any legacy docker-agent service (`pulse-docker-agent`)
 
-## Migration from Legacy Docker Agent
+## Migration Notes
 
-The install script automatically removes legacy docker-agent installs when installing the unified agent:
-- `pulse-docker-agent` service is stopped and removed
-- Binaries are deleted from `/usr/local/bin/`
-
-No manual cleanup is required.
+Use the unified installer (`install.sh`) for all new and existing deployments.
 
 ## Health Checks & Metrics
 
