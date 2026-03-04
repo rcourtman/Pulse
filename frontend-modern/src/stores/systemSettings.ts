@@ -12,8 +12,6 @@ import type { SystemConfig } from '@/types/config';
 
 // Server-side setting to hide Docker update buttons while still detecting updates
 const [disableDockerUpdateActions, setDisableDockerUpdateActions] = createSignal(false);
-// Server-side setting to disable all legacy frontend route redirects
-const [disableLegacyRouteRedirects, setDisableLegacyRouteRedirects] = createSignal(false);
 // Server-side setting to reduce proactive Pro prompts (paywalls still appear when accessing gated features)
 const [reduceProUpsellNoise, setReduceProUpsellNoise] = createSignal(false);
 // Server-side setting to disable local-only upgrade UX metrics collection
@@ -28,13 +26,11 @@ const [systemSettingsLoaded, setSystemSettingsLoaded] = createSignal(false);
  */
 export function updateSystemSettingsFromResponse(settings: SystemConfig): void {
   setDisableDockerUpdateActions(settings.disableDockerUpdateActions ?? false);
-  setDisableLegacyRouteRedirects(settings.disableLegacyRouteRedirects ?? false);
   setReduceProUpsellNoise(settings.reduceProUpsellNoise ?? false);
   setDisableLocalUpgradeMetrics(settings.disableLocalUpgradeMetrics ?? false);
   setSystemSettingsLoaded(true);
   logger.debug('System settings updated from response', {
     disableDockerUpdateActions: settings.disableDockerUpdateActions,
-    disableLegacyRouteRedirects: settings.disableLegacyRouteRedirects,
     reduceProUpsellNoise: settings.reduceProUpsellNoise,
     disableLocalUpgradeMetrics: settings.disableLocalUpgradeMetrics,
   });
@@ -53,7 +49,6 @@ export async function loadSystemSettings(): Promise<void> {
     logger.warn('Failed to load system settings, using defaults', err);
     // Use safe defaults
     setDisableDockerUpdateActions(false);
-    setDisableLegacyRouteRedirects(false);
     setReduceProUpsellNoise(false);
     setDisableLocalUpgradeMetrics(false);
     setSystemSettingsLoaded(true);
@@ -66,13 +61,6 @@ export async function loadSystemSettings(): Promise<void> {
  */
 export function shouldHideDockerUpdateActions(): boolean {
   return disableDockerUpdateActions();
-}
-
-/**
- * Check if legacy frontend route redirects should be disabled globally.
- */
-export function shouldDisableLegacyRouteRedirects(): boolean {
-  return disableLegacyRouteRedirects();
 }
 
 export function shouldReduceProUpsellNoise(): boolean {
@@ -96,7 +84,6 @@ export function areSystemSettingsLoaded(): boolean {
  */
 export function markSystemSettingsLoadedWithDefaults(): void {
   setDisableDockerUpdateActions(false);
-  setDisableLegacyRouteRedirects(false);
   setReduceProUpsellNoise(false);
   setDisableLocalUpgradeMetrics(false);
   setSystemSettingsLoaded(true);
@@ -108,10 +95,6 @@ export function markSystemSettingsLoadedWithDefaults(): void {
  */
 export function updateDockerUpdateActionsSetting(disabled: boolean): void {
   setDisableDockerUpdateActions(disabled);
-}
-
-export function updateLegacyRouteRedirectsSetting(disabled: boolean): void {
-  setDisableLegacyRouteRedirects(disabled);
 }
 
 export function updateReduceProUpsellNoiseSetting(enabled: boolean): void {

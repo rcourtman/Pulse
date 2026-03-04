@@ -1,9 +1,9 @@
 import { Component, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
-import { HostMetadataAPI } from '@/api/hostMetadata';
+import { AgentMetadataAPI } from '@/api/agentMetadata';
 
 export interface WebInterfaceUrlFieldProps {
-  metadataKind: 'guest' | 'host';
+  metadataKind: 'guest' | 'agent' | 'host';
   metadataId?: string;
   targetLabel?: string;
   customUrl?: string;
@@ -44,9 +44,12 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
   const [urlSuccess, setUrlSuccess] = createSignal<string | null>(null);
   let urlSuccessTimer: ReturnType<typeof setTimeout> | undefined;
 
+  const isAgentMetadataKind = createMemo(
+    () => props.metadataKind === 'agent' || props.metadataKind === 'host',
+  );
   const metadataId = createMemo(() => (props.metadataId || '').trim());
   const targetLabel = createMemo(
-    () => (props.targetLabel || '').trim() || (props.metadataKind === 'host' ? 'host' : 'guest'),
+    () => (props.targetLabel || '').trim() || (isAgentMetadataKind() ? 'agent' : 'guest'),
   );
   const currentCustomUrl = createMemo(() => props.customUrl ?? fetchedCustomUrl());
   const normalizedCurrentUrl = createMemo(() => currentCustomUrl().trim());
@@ -79,8 +82,8 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
   };
 
   const readMetadataUrl = async (id: string): Promise<string> => {
-    if (props.metadataKind === 'host') {
-      const metadata = await HostMetadataAPI.getMetadata(id);
+    if (isAgentMetadataKind()) {
+      const metadata = await AgentMetadataAPI.getMetadata(id);
       return metadata?.customUrl ?? '';
     }
     const metadata = await GuestMetadataAPI.getMetadata(id);
@@ -88,8 +91,8 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
   };
 
   const updateMetadataUrl = async (id: string, value: string) => {
-    if (props.metadataKind === 'host') {
-      await HostMetadataAPI.updateMetadata(id, { customUrl: value });
+    if (isAgentMetadataKind()) {
+      await AgentMetadataAPI.updateMetadata(id, { customUrl: value });
       return;
     }
     await GuestMetadataAPI.updateMetadata(id, { customUrl: value });

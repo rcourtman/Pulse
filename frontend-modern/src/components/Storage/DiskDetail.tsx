@@ -287,7 +287,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div class="rounded border border-border bg-surface p-3 shadow-sm">
               <HistoryChart
-                resourceType="host"
+                resourceType="agent"
                 resourceId="dummy"
                 metric="disk"
                 label="Read"
@@ -301,7 +301,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
             </div>
             <div class="rounded border border-border bg-surface p-3 shadow-sm">
               <HistoryChart
-                resourceType="host"
+                resourceType="agent"
                 resourceId="dummy"
                 metric="disk"
                 label="Write"
@@ -315,7 +315,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
             </div>
             <div class="rounded border border-border bg-surface p-3 shadow-sm">
               <HistoryChart
-                resourceType="host"
+                resourceType="agent"
                 resourceId="dummy"
                 metric="disk"
                 label="Busy"
@@ -336,7 +336,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
         when={resId()}
         fallback={
           <div class="rounded border border-border bg-surface p-3 shadow-sm text-center text-[11px] text-muted">
-            Install the Pulse host agent for detailed SMART monitoring and historical charts.
+            Install the Pulse agent for detailed SMART monitoring and historical charts.
           </div>
         }
       >

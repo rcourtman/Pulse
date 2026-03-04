@@ -864,7 +864,6 @@ describe('SwarmServicesDrawer', () => {
       // Should have fetched exactly 20 pages (1 initial + 19 additional), not 25
       expect(apiFetchJSONMock).toHaveBeenCalledTimes(20);
     });
-
   });
 
   describe('table headers', () => {

@@ -19,6 +19,7 @@ import {
 import { HOST_COLORS } from '@/pages/DashboardPanels/hostColors';
 import { getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
+import { isAgentDiscoveryResourceType } from '@/utils/discoveryTarget';
 
 const normalizeHostIdentifier = (value?: string | null): string[] => {
   if (!value) return [];
@@ -66,6 +67,15 @@ const getAgentIdFromResource = (resource: Resource): string | null => {
 const getLinkedNodeIdFromResource = (resource: Resource): string | null =>
   asTrimmedString(getPlatformDataRecord(resource)?.linkedNodeId) ||
   asTrimmedString(getPlatformAgentRecord(resource)?.linkedNodeId);
+
+const hasHostAgentFacet = (resource: Resource): boolean =>
+  Boolean(
+    resource.agent ||
+    getPlatformAgentRecord(resource) ||
+    getExplicitAgentIdFromResource(resource) ||
+    (isAgentDiscoveryResourceType(resource.discoveryTarget?.resourceType) &&
+      resource.discoveryTarget.hostId),
+  );
 
 const getChartKeyCandidates = (resource: Resource): string[] => {
   const candidates = [
@@ -152,8 +162,17 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
   const hasCurrentRangeCharts = createMemo(() => chartRange() === selectedRange());
   const isCurrentRangeLoaded = createMemo(() => loadedRange() === selectedRange());
 
-  const { workloads, byType } = useResources();
-  const hostAgents = createMemo(() => byType('host'));
+  const { workloads, resources } = useResources();
+  const hostAgents = createMemo(() =>
+    resources().filter(
+      (resource) =>
+        (resource.type === 'node' ||
+          resource.type === 'pbs' ||
+          resource.type === 'pmg' ||
+          resource.type === 'truenas') &&
+        hasHostAgentFacet(resource),
+    ),
+  );
 
   // Track org switches so the effect re-runs when the org changes.
   const [orgVersion, setOrgVersion] = createSignal(0);

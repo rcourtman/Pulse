@@ -63,9 +63,9 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
         </div>
         <div class="mt-3">
           <WebInterfaceUrlField
-            metadataKind="host"
+            metadataKind="agent"
             metadataId={metadataId()}
-            targetLabel="host"
+            targetLabel="agent"
             customUrl={props.customUrl}
             onCustomUrlChange={(url) => props.onCustomUrlChange?.(metadataId(), url)}
           />
@@ -86,7 +86,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
           }
         >
           <DiscoveryTab
-            resourceType="host" /* Assuming 'host' type works for PVE nodes discovery, or if backend treats them same */
+            resourceType="agent"
             hostId={metadataId()}
             resourceId={metadataId()}
             hostname={discoveryHostname()}

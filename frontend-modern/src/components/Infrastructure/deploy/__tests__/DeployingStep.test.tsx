@@ -384,9 +384,7 @@ describe('DeployingStep', () => {
     });
 
     it('does not show error detail for targets without error messages', () => {
-      const targets = [
-        makeTarget({ id: 't1', status: 'succeeded', errorMessage: undefined }),
-      ];
+      const targets = [makeTarget({ id: 't1', status: 'succeeded', errorMessage: undefined })];
       const wizard = createMockWizard({ jobTargets: targets });
       render(() => <DeployingStep wizard={wizard} />);
 

@@ -112,8 +112,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       badges.push({
         label: 'Node Telemetry (Agent)',
         classes: supportedBadge,
-        title:
-          'Linked Pulse host agent provides node uptime, temperature, disk, network, and disk I/O.',
+        title: 'Linked Pulse agent provides node uptime, temperature, disk, network, and disk I/O.',
       });
     }
     if (capabilities.podCpuMemory) {

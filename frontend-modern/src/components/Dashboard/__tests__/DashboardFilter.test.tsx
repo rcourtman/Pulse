@@ -16,7 +16,11 @@ vi.mock('@/hooks/useBreakpoint', () => ({
 
 // Mock SearchInput to avoid its side-effects (global keydown listener, history, etc.)
 vi.mock('@/components/shared/SearchInput', () => ({
-  SearchInput: (props: { value: () => string; onChange: (v: string) => void; placeholder?: string }) => (
+  SearchInput: (props: {
+    value: () => string;
+    onChange: (v: string) => void;
+    placeholder?: string;
+  }) => (
     <input
       data-testid="search-input"
       type="text"
@@ -201,12 +205,18 @@ describe('DashboardFilter', () => {
         groupingMode: vi.fn(() => 'flat' as const),
         hostFilter: {
           value: 'host-1',
-          options: [{ value: '', label: 'All' }, { value: 'host-1', label: 'Host 1' }],
+          options: [
+            { value: '', label: 'All' },
+            { value: 'host-1', label: 'Host 1' },
+          ],
           onChange: hostOnChange,
         },
         namespaceFilter: {
           value: 'ns-1',
-          options: [{ value: '', label: 'All' }, { value: 'ns-1', label: 'NS 1' }],
+          options: [
+            { value: '', label: 'All' },
+            { value: 'ns-1', label: 'NS 1' },
+          ],
           onChange: namespaceOnChange,
         },
       });
@@ -516,12 +526,18 @@ describe('DashboardFilter', () => {
         statusMode: vi.fn(() => 'degraded' as const),
         hostFilter: {
           value: 'h1',
-          options: [{ value: '', label: 'All' }, { value: 'h1', label: 'H1' }],
+          options: [
+            { value: '', label: 'All' },
+            { value: 'h1', label: 'H1' },
+          ],
           onChange: vi.fn(),
         },
         namespaceFilter: {
           value: 'ns',
-          options: [{ value: '', label: 'All' }, { value: 'ns', label: 'NS' }],
+          options: [
+            { value: '', label: 'All' },
+            { value: 'ns', label: 'NS' },
+          ],
           onChange: vi.fn(),
         },
       });

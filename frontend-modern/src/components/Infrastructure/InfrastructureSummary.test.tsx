@@ -23,7 +23,7 @@ vi.mock('@/api/charts', async () => {
 vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({
     workloads: () => [],
-    byType: (type: string) => (type === 'host' ? mockHostAgentResources : []),
+    resources: () => mockHostAgentResources,
   }),
 }));
 
@@ -582,11 +582,11 @@ describe('InfrastructureSummary range behavior', () => {
     mockHostAgentResources = [
       {
         id: 'hash-host-resource-id',
-        type: 'host',
+        type: 'node',
         name: 'agent-host-3-name',
         displayName: 'Agent Host 3',
         platformId: 'agent-host-3-platform',
-        platformType: 'host-agent',
+        platformType: 'proxmox-pve',
         sourceType: 'agent',
         status: 'online',
         lastSeen: now,

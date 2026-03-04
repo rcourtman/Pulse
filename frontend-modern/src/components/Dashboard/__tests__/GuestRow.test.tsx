@@ -108,12 +108,7 @@ vi.mock('../workloadSelectors', () => ({
 }));
 
 // After mocks, import
-import {
-  GuestRow,
-  GUEST_COLUMNS,
-  VIEW_MODE_COLUMNS,
-  type WorkloadIOEmphasis,
-} from '../GuestRow';
+import { GuestRow, GUEST_COLUMNS, VIEW_MODE_COLUMNS, type WorkloadIOEmphasis } from '../GuestRow';
 
 // ── Helpers ────────────────────────────────────────────────────────────
 

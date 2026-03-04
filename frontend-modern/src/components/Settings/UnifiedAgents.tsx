@@ -18,7 +18,7 @@ import { SecurityAPI } from '@/api/security';
 import { notificationStore } from '@/stores/notifications';
 import { useResources } from '@/hooks/useResources';
 import type { SecurityStatus } from '@/types/config';
-import type { HostLookupResponse } from '@/types/api';
+import type { AgentLookupResponse } from '@/types/api';
 import type { APITokenRecord } from '@/api/security';
 import {
   HOST_AGENT_SCOPE,
@@ -36,6 +36,7 @@ import {
   trackAgentInstallTokenGenerated,
 } from '@/utils/upgradeMetrics';
 import type { Resource } from '@/types/resource';
+import { getAgentDiscoveryResourceId } from '@/utils/discoveryTarget';
 
 const TOKEN_PLACEHOLDER = '<api-token>';
 const UNIFIED_AGENT_TELEMETRY_SURFACE = 'settings_unified_agents';
@@ -54,7 +55,8 @@ const normalizeTelemetryPart = (value: string) =>
     .replace(/^_+|_+$/g, '');
 
 type AgentPlatform = 'linux' | 'macos' | 'freebsd' | 'windows';
-type UnifiedAgentType = 'host' | 'docker' | 'kubernetes';
+/** What this agent monitors — derived from the v6 unified resource model. */
+type AgentCapability = 'agent' | 'docker' | 'kubernetes' | 'proxmox';
 type UnifiedAgentStatus = 'active' | 'removed';
 type ScopeCategory = 'default' | 'profile' | 'ai-managed' | 'na';
 type InstallProfile = 'auto' | 'docker' | 'kubernetes' | 'proxmox-pve' | 'proxmox-pbs' | 'truenas';
@@ -68,13 +70,13 @@ type UnifiedAgentRow = {
   name: string;
   hostname?: string;
   displayName?: string;
-  types: UnifiedAgentType[];
+  capabilities: AgentCapability[];
   status: UnifiedAgentStatus;
   healthStatus?: string;
   lastSeen?: number;
   removedAt?: number;
   version?: string;
-  isLegacy?: boolean;
+  isOutdatedBinary?: boolean;
   linkedNodeId?: string;
   commandsEnabled?: boolean;
   agentId?: string;
@@ -159,9 +161,9 @@ const buildCommandsByPlatform = (
         command: `curl -fsSL ${url}/install.sh | bash -s -- --url ${url} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
         note: (
           <span>
-            Run as root (use <code>sudo</code> or <code>su -</code> if not already root).
-            Auto-detects your init system and works on Debian, Ubuntu, Proxmox, Fedora, Alpine,
-            Unraid, Synology, and more.
+            Command auto-escalates with <code>sudo</code> when available; otherwise run from a root
+            shell (for example <code>su -</code>). Auto-detects your init system and works on
+            Debian, Ubuntu, Proxmox, Fedora, Alpine, Unraid, Synology, and more.
           </span>
         ),
       },
@@ -177,9 +179,9 @@ const buildCommandsByPlatform = (
         command: `curl -fsSL ${url}/install.sh | bash -s -- --url ${url} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
         note: (
           <span>
-            Run as root (use <code>sudo</code> if not already root). Creates{' '}
-            <code>/Library/LaunchDaemons/com.pulse.agent.plist</code> and starts the agent
-            automatically.
+            Command auto-escalates with <code>sudo</code> when available; otherwise run from a root
+            shell. Creates <code>/Library/LaunchDaemons/com.pulse.agent.plist</code> and starts the
+            agent automatically.
           </span>
         ),
       },
@@ -260,9 +262,8 @@ export const UnifiedAgents: Component = () => {
   };
 
   const getHostActionId = (r: Resource) => {
-    if (r.discoveryTarget?.resourceType === 'host' && r.discoveryTarget.resourceId) {
-      return r.discoveryTarget.resourceId;
-    }
+    const discoveryAgentId = getAgentDiscoveryResourceId(r.discoveryTarget);
+    if (discoveryAgentId) return discoveryAgentId;
     if (r.discoveryTarget?.hostId) {
       return r.discoveryTarget.hostId;
     }
@@ -277,7 +278,7 @@ export const UnifiedAgents: Component = () => {
     return (
       asString(platformDocker(r)?.hostSourceId) ||
       asString(platformData?.hostSourceId) ||
-      (r.type === 'docker-host' ? (r.discoveryTarget?.hostId || r.id) : undefined)
+      (r.type === 'docker-host' ? r.discoveryTarget?.hostId || r.id : undefined)
     );
   };
 
@@ -325,7 +326,7 @@ export const UnifiedAgents: Component = () => {
   };
 
   const getLinkedNodeId = (r: Resource) => asString(pd(r)?.linkedNodeId);
-  const getIsLegacy = (r: Resource) => asBoolean(pd(r)?.isLegacy);
+  const getIsOutdatedBinary = (r: Resource) => asBoolean(pd(r)?.isLegacy);
   const hasDockerSource = (r: Resource) =>
     r.type === 'docker-host' ||
     r.platformType === 'docker' ||
@@ -341,7 +342,7 @@ export const UnifiedAgents: Component = () => {
   const [currentToken, setCurrentToken] = createSignal<string | null>(null);
   const [isGeneratingToken, setIsGeneratingToken] = createSignal(false);
   const [lookupValue, setLookupValue] = createSignal('');
-  const [lookupResult, setLookupResult] = createSignal<HostLookupResponse | null>(null);
+  const [lookupResult, setLookupResult] = createSignal<AgentLookupResponse | null>(null);
   const [lookupError, setLookupError] = createSignal<string | null>(null);
   const [lookupLoading, setLookupLoading] = createSignal(false);
   const [insecureMode, setInsecureMode] = createSignal(false); // For self-signed certificates (issue #806)
@@ -356,7 +357,7 @@ export const UnifiedAgents: Component = () => {
   >({});
   const [pendingScopeUpdates, setPendingScopeUpdates] = createSignal<Record<string, boolean>>({});
   const [expandedRowKey, setExpandedRowKey] = createSignal<string | null>(null);
-  const [filterType, setFilterType] = createSignal<'all' | UnifiedAgentType>('all');
+  const [filterCapability, setFilterCapability] = createSignal<'all' | AgentCapability>('all');
   const [filterStatus, setFilterStatus] = createSignal<'all' | UnifiedAgentStatus>('all');
   const [filterScope, setFilterScope] = createSignal<'all' | Exclude<ScopeCategory, 'na'>>('all');
   const [filterSearch, setFilterSearch] = createSignal('');
@@ -467,7 +468,7 @@ export const UnifiedAgents: Component = () => {
       setConfirmedNoToken(false);
       trackAgentInstallTokenGenerated(UNIFIED_AGENT_TELEMETRY_SURFACE, 'manual');
       notificationStore.success(
-        'Token generated with Host config + reporting, Docker, and Kubernetes permissions.',
+        'Token generated with Agent config + reporting, Docker, and Kubernetes permissions.',
         4000,
       );
     } catch (err) {
@@ -494,22 +495,22 @@ export const UnifiedAgents: Component = () => {
 
     if (!query) {
       setLookupResult(null);
-      setLookupError('Enter a hostname or host ID to check.');
+      setLookupError('Enter a hostname or agent ID to check.');
       return;
     }
 
     setLookupLoading(true);
     try {
-      const result = await MonitoringAPI.lookupHost({ id: query, hostname: query });
+      const result = await MonitoringAPI.lookupAgent({ id: query, hostname: query });
       if (!result) {
         setLookupResult(null);
-        setLookupError(`No host has reported with "${query}" yet. Try again in a few seconds.`);
+        setLookupError(`No agent has reported with "${query}" yet. Try again in a few seconds.`);
       } else {
         setLookupResult(result);
         setLookupError(null);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Host lookup failed.';
+      const message = err instanceof Error ? err.message : 'Agent lookup failed.';
       setLookupResult(null);
       setLookupError(message);
     } finally {
@@ -517,9 +518,16 @@ export const UnifiedAgents: Component = () => {
     }
   };
 
+  const withPrivilegeEscalation = (command: string) => {
+    if (!command.includes('| bash -s --')) return command;
+    return command.replace(
+      /\|\s*bash -s --\s+(.+)$/,
+      '| { if [ "$(id -u)" -eq 0 ]; then bash -s -- $1; elif command -v sudo >/dev/null 2>&1; then sudo bash -s -- $1; else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi; }',
+    );
+  };
   const getInsecureFlag = () => (insecureMode() ? ' --insecure' : '');
   const getEnableCommandsFlag = () => (enableCommands() ? ' --enable-commands' : '');
-  const getCurlInsecureFlag = () => (insecureMode() ? '-k' : '');
+  const getCurlFlags = () => (insecureMode() ? '-kfsSL' : '-fsSL');
   const getSelectedInstallProfile = () =>
     INSTALL_PROFILE_OPTIONS.find((option) => option.value === installProfile()) ??
     INSTALL_PROFILE_OPTIONS[0];
@@ -535,10 +543,12 @@ export const UnifiedAgents: Component = () => {
     const insecure = insecureMode() ? ' --insecure' : '';
     // Only include token if we have a real one - the uninstall script works without it
     // Avoid including <api-token> placeholder which causes shell syntax errors
-    if (token) {
-      return `curl ${getCurlInsecureFlag()}-fsSL ${url}/install.sh | bash -s -- --uninstall --url ${url} --token ${token}${insecure}`;
-    }
-    return `curl ${getCurlInsecureFlag()}-fsSL ${url}/install.sh | bash -s -- --uninstall --url ${url}${insecure}`;
+    const baseArgs = token
+      ? `--uninstall --url ${url} --token ${token}${insecure}`
+      : `--uninstall --url ${url}${insecure}`;
+    return withPrivilegeEscalation(
+      `curl ${getCurlFlags()} ${url}/install.sh | bash -s -- ${baseArgs}`,
+    );
   };
 
   const getWindowsUninstallCommand = () => {
@@ -551,160 +561,39 @@ export const UnifiedAgents: Component = () => {
     return `$env:PULSE_UNINSTALL="true"; irm ${url}/install.ps1 | iex`;
   };
 
-  // Track previously seen host types to prevent flapping when one source temporarily has no data
-  // This preserves types we've seen before even if one array briefly becomes empty
-  let previousHostTypes = new Map<string, Set<'host' | 'docker'>>();
+  /** Derive agent capabilities from a v6 unified resource. */
+  const getCapabilities = (r: Resource): AgentCapability[] => {
+    const caps: AgentCapability[] = [];
+    if (r.agent) caps.push('agent');
+    if (hasDockerSource(r)) caps.push('docker');
+    if (r.type === 'node' || r.type === 'pbs' || r.type === 'pmg' || r.proxmox)
+      caps.push('proxmox');
+    return caps;
+  };
 
-  const allHosts = createMemo(() => {
-    const hosts = byType('host');
-    // Include resources that have an agent but are typed as something else
-    // (e.g., nodes that are also Proxmox hosts get merged to type "node").
-    const hostIds = new Set(hosts.map((r) => r.id));
-    const agentMerged = resources().filter((r) => r.agent && !hostIds.has(r.id));
-    const allAgentHosts = [...hosts, ...agentMerged];
-    const dockerHosts = byType('docker-host');
-    const hasAnyDockerData = allAgentHosts.some(hasDockerSource) || dockerHosts.length > 0;
-
-    // Create a unified list
-    const unified = new Map<
-      string,
-      {
-        id: string;
-        hostname: string;
-        displayName?: string;
-        types: ('host' | 'docker')[];
-        status: string;
-        version?: string;
-        lastSeen?: number;
-        isLegacy?: boolean;
-        linkedNodeId?: string;
-        commandsEnabled?: boolean;
-        agentId?: string;
-        hostActionId?: string;
-        dockerActionId?: string;
-      }
-    >();
-
-    // Process Host Agents (include linked ones with a badge)
-    allAgentHosts.forEach((r) => {
-      const hostname = r.identity?.hostname || r.name || 'Unknown';
-      const agentVersion = getAgentVersion(r);
-      const dockerVersion = getDockerVersion(r);
-      const isLegacy = getIsLegacy(r);
-      const linkedNodeId = getLinkedNodeId(r);
-      const commandsEnabled = getCommandsEnabled(r);
-      const agentId = getAgentId(r);
-      const hostActionId = getHostActionId(r);
-      const dockerActionId = hasDockerSource(r) ? getDockerActionId(r) : undefined;
-      const key = hostActionId || dockerActionId || r.id;
-
-      unified.set(key, {
-        id: r.id,
-        agentId,
-        hostname,
-        displayName: r.displayName,
-        types: hasDockerSource(r) ? ['host', 'docker'] : ['host'],
-        status: r.status || 'unknown',
-        version: agentVersion || dockerVersion,
-        lastSeen: r.lastSeen,
-        isLegacy,
-        linkedNodeId,
-        commandsEnabled,
-        hostActionId,
-        dockerActionId,
-      });
-    });
-
-    // Process Docker Agents (merge if same id - indicates same physical machine)
-    dockerHosts.forEach((r) => {
-      const hostname = r.identity?.hostname || r.name || 'Unknown';
-      const agentId = getAgentId(r);
-      const agentVersion = getAgentVersion(r);
-      const dockerVersion = getDockerVersion(r);
-      const isLegacy = getIsLegacy(r);
-      const hostActionId = getHostActionId(r);
-      const dockerActionId = getDockerActionId(r);
-      const key = hostActionId || dockerActionId || r.id;
-      const existing = unified.get(key);
-      if (existing) {
-        if (!existing.types.includes('docker')) {
-          existing.types.push('docker');
-        }
-        if (!existing.agentId && agentId) {
-          existing.agentId = agentId;
-        }
-        // Update version/status if newer
-        if (!existing.version) {
-          existing.version = agentVersion || dockerVersion;
-        }
-        if (!existing.dockerActionId && dockerActionId) {
-          existing.dockerActionId = dockerActionId;
-        }
-        if (!existing.hostActionId && hostActionId) {
-          existing.hostActionId = hostActionId;
-        }
-        if (isLegacy) existing.isLegacy = true;
-      } else {
-        unified.set(key, {
-          id: r.id,
-          agentId,
-          hostname,
-          displayName: r.displayName,
-          types: ['docker'],
-          status: r.status || 'unknown',
-          version: agentVersion || dockerVersion,
-          lastSeen: r.lastSeen,
-          isLegacy,
-          hostActionId,
-          dockerActionId,
-        });
-      }
-    });
-
-    // Preserve previously seen types to prevent flapping
-    // If we previously saw both 'host' and 'docker' for a hostname, keep both
-    // unless BOTH sources are now empty (indicating intentional removal)
-    const newHostTypes = new Map<string, Set<'host' | 'docker'>>();
-
-    // Helper to ensure consistent type order: 'host' always before 'docker'
-    const sortTypes = (types: ('host' | 'docker')[]): ('host' | 'docker')[] => {
-      const result: ('host' | 'docker')[] = [];
-      if (types.includes('host')) result.push('host');
-      if (types.includes('docker')) result.push('docker');
-      return result;
-    };
-
-    unified.forEach((entry, key) => {
-      const currentTypes = new Set(entry.types);
-      const prevTypes = previousHostTypes.get(key);
-
-      if (prevTypes && prevTypes.size > currentTypes.size) {
-        // We previously had more types - check if source data exists
-        // Only add back types if the corresponding source has ANY data
-        // (prevents permanent stickiness if a host is truly removed)
-        if (prevTypes.has('host') && !currentTypes.has('host') && hosts.length > 0) {
-          // Host type disappeared but we still have host data overall
-          // This is likely a transient state - preserve the host type
-          currentTypes.add('host');
-        }
-        if (prevTypes.has('docker') && !currentTypes.has('docker') && hasAnyDockerData) {
-          // Docker type disappeared but we still have docker data overall
-          currentTypes.add('docker');
-        }
-      }
-
-      // Always ensure consistent order: 'host' before 'docker'
-      entry.types = sortTypes(Array.from(currentTypes));
-      newHostTypes.set(key, new Set(entry.types));
-    });
-    previousHostTypes = newHostTypes;
-
-    return Array.from(unified.values()).sort((a, b) => a.hostname.localeCompare(b.hostname));
+  /**
+   * All resources managed by a host agent.
+   * In v6, the backend already merges resources by identity — a PVE node with a
+   * host agent is a single resource of type "node" with agent + proxmox data.
+   * No frontend merge logic or type-flapping prevention needed.
+   *
+   * Includes docker-host resources that may lack the `agent` facet when the
+   * agent's docker data is represented as a separate resource type.
+   */
+  const agentResources = createMemo(() => {
+    return resources()
+      .filter((r) => r.agent != null || r.type === 'docker-host')
+      .sort((a, b) =>
+        (a.identity?.hostname || a.name || '').localeCompare(b.identity?.hostname || b.name || ''),
+      );
   });
 
   const hostByActionId = createMemo(() => {
     const map = new Map<string, Resource>();
-    for (const host of resources().filter((r) => r.agent || r.type === 'host')) {
+    // Only include resources with an agent facet (not docker-only resources)
+    // to avoid polluting the command config sync lookup.
+    for (const host of agentResources()) {
+      if (!host.agent) continue;
       const actionId = getHostActionId(host);
       if (!actionId || map.has(actionId)) continue;
       map.set(actionId, host);
@@ -811,8 +700,8 @@ export const UnifiedAgents: Component = () => {
     setExpandedRowKey((prev) => (prev === rowKey ? null : rowKey));
   };
 
-  const legacyAgents = createMemo(() => allHosts().filter((h) => h.isLegacy));
-  const hasLegacyAgents = createMemo(() => legacyAgents().length > 0);
+  const outdatedAgents = createMemo(() => agentResources().filter((r) => getIsOutdatedBinary(r)));
+  const hasOutdatedAgents = createMemo(() => outdatedAgents().length > 0);
 
   const removedDockerHosts = createMemo(() => {
     const removed = state.removedDockerHosts || [];
@@ -867,27 +756,6 @@ export const UnifiedAgents: Component = () => {
       });
     });
 
-    // Legacy websocket fallback for removed V5-era payloads still in memory.
-    (state.kubernetesClusters || []).forEach((cluster) => {
-      const key = cluster.id;
-      if (map.has(key)) return;
-      map.set(key, {
-        id: cluster.id,
-        actionClusterId: cluster.id,
-        name: cluster.name || cluster.id,
-        displayName: cluster.displayName,
-        customDisplayName: cluster.customDisplayName,
-        status: cluster.status,
-        lastSeen: cluster.lastSeen,
-        version: cluster.version || cluster.agentVersion,
-        agentVersion: cluster.agentVersion,
-        agentId: cluster.agentId,
-        server: cluster.server,
-        context: cluster.context,
-        tokenName: cluster.tokenName,
-      });
-    });
-
     return Array.from(map.values()).sort((a, b) =>
       (a.displayName || a.name || a.actionClusterId).localeCompare(
         b.displayName || b.name || b.actionClusterId,
@@ -902,8 +770,7 @@ export const UnifiedAgents: Component = () => {
 
   // Host agents linked to PVE nodes (shown separately with unlink option)
   const linkedHostAgents = createMemo(() => {
-    const hosts = byType('host');
-    return hosts.flatMap((r) => {
+    return agentResources().flatMap((r) => {
       const linkedNodeId = getLinkedNodeId(r);
       if (!linkedNodeId) return [];
 
@@ -927,38 +794,36 @@ export const UnifiedAgents: Component = () => {
   const unifiedRows = createMemo<UnifiedAgentRow[]>(() => {
     const rows: UnifiedAgentRow[] = [];
 
-    allHosts().forEach((agent) => {
-      const resolvedAgentId = agent.agentId || agent.hostActionId;
+    // Build rows directly from v6 unified resources that have agents
+    agentResources().forEach((r) => {
+      const hostname = r.identity?.hostname || r.name || 'Unknown';
+      const agentId = getAgentId(r);
+      const resolvedAgentId = agentId || getHostActionId(r);
       const scopeInfo = getScopeInfo(resolvedAgentId);
-      const name = agent.displayName || agent.hostname;
-      const searchText = [
-        name,
-        agent.hostname,
-        agent.id,
-        resolvedAgentId,
-        agent.hostActionId,
-        agent.dockerActionId,
-      ]
+      const hostActionId = getHostActionId(r);
+      const dockerActionId = hasDockerSource(r) ? getDockerActionId(r) : undefined;
+      const name = r.displayName || hostname;
+      const searchText = [name, hostname, r.id, resolvedAgentId, hostActionId, dockerActionId]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
 
       rows.push({
-        rowKey: `agent-${agent.id}`,
-        id: agent.id,
-        hostActionId: agent.hostActionId,
-        dockerActionId: agent.dockerActionId,
+        rowKey: `agent-${r.id}`,
+        id: r.id,
+        hostActionId,
+        dockerActionId,
         name,
-        hostname: agent.hostname,
-        displayName: agent.displayName,
-        types: agent.types,
+        hostname,
+        displayName: r.displayName,
+        capabilities: getCapabilities(r),
         status: 'active',
-        healthStatus: agent.status,
-        lastSeen: agent.lastSeen,
-        version: agent.version,
-        isLegacy: agent.isLegacy,
-        linkedNodeId: agent.linkedNodeId,
-        commandsEnabled: agent.commandsEnabled,
+        healthStatus: r.status,
+        lastSeen: r.lastSeen,
+        version: getAgentVersion(r) || getDockerVersion(r),
+        isOutdatedBinary: getIsOutdatedBinary(r),
+        linkedNodeId: getLinkedNodeId(r),
+        commandsEnabled: getCommandsEnabled(r),
         agentId: resolvedAgentId,
         scope: scopeInfo,
         searchText,
@@ -974,7 +839,7 @@ export const UnifiedAgents: Component = () => {
         id: cluster.id,
         kubernetesActionId: cluster.actionClusterId,
         name,
-        types: ['kubernetes'],
+        capabilities: ['kubernetes'],
         status: 'active',
         healthStatus: cluster.status,
         lastSeen: cluster.lastSeen,
@@ -1011,7 +876,7 @@ export const UnifiedAgents: Component = () => {
         name,
         hostname: host.hostname,
         displayName: host.displayName,
-        types: ['docker'],
+        capabilities: ['docker'],
         status: 'removed',
         removedAt: host.removedAt,
         scope: getScopeInfo(undefined),
@@ -1026,7 +891,7 @@ export const UnifiedAgents: Component = () => {
         id: cluster.id,
         kubernetesActionId: cluster.id,
         name,
-        types: ['kubernetes'],
+        capabilities: ['kubernetes'],
         status: 'removed',
         removedAt: cluster.removedAt,
         scope: getScopeInfo(undefined),
@@ -1047,7 +912,10 @@ export const UnifiedAgents: Component = () => {
   const filteredRows = createMemo(() => {
     const query = filterSearch().trim().toLowerCase();
     return unifiedRows().filter((row) => {
-      if (filterType() !== 'all' && !row.types.includes(filterType() as UnifiedAgentType)) {
+      if (
+        filterCapability() !== 'all' &&
+        !row.capabilities.includes(filterCapability() as AgentCapability)
+      ) {
         return false;
       }
       if (filterStatus() !== 'all' && row.status !== filterStatus()) {
@@ -1065,7 +933,7 @@ export const UnifiedAgents: Component = () => {
 
   const hasFilters = createMemo(() => {
     return (
-      filterType() !== 'all' ||
+      filterCapability() !== 'all' ||
       filterStatus() !== 'all' ||
       filterScope() !== 'all' ||
       filterSearch().trim().length > 0
@@ -1073,7 +941,7 @@ export const UnifiedAgents: Component = () => {
   });
 
   const resetFilters = () => {
-    setFilterType('all');
+    setFilterCapability('all');
     setFilterStatus('all');
     setFilterScope('all');
     setFilterSearch('');
@@ -1082,12 +950,14 @@ export const UnifiedAgents: Component = () => {
   const getUpgradeCommand = (_hostname: string) => {
     const token = resolvedToken();
     const url = customAgentUrl() || agentUrl();
-    return `curl ${getCurlInsecureFlag()}-fsSL ${url}/install.sh | bash -s -- --url ${url} --token ${token}${getInsecureFlag()}`;
+    return withPrivilegeEscalation(
+      `curl ${getCurlFlags()} ${url}/install.sh | bash -s -- --url ${url} --token ${token}${getInsecureFlag()}`,
+    );
   };
 
   const handleRemoveAgent = async (
     ids: { hostId?: string; dockerId?: string },
-    types: ('host' | 'docker')[],
+    capabilities: AgentCapability[],
   ) => {
     if (
       !confirm(
@@ -1097,23 +967,22 @@ export const UnifiedAgents: Component = () => {
       return;
 
     try {
-      // Delete all types associated with this agent
-      for (const type of types) {
-        if (type === 'host') {
-          const hostId = ids.hostId;
-          if (!hostId) {
-            throw new Error('Missing host ID for agent removal');
-          }
-          await MonitoringAPI.deleteHostAgent(hostId);
-        } else if (type === 'docker') {
-          const dockerId = ids.dockerId;
-          if (!dockerId) {
-            throw new Error('Missing docker host ID for agent removal');
-          }
-          await MonitoringAPI.deleteDockerHost(dockerId);
-        }
+      let removed = false;
+      // Remove the host agent registration
+      if (capabilities.includes('agent') && ids.hostId) {
+        await MonitoringAPI.deleteAgent(ids.hostId);
+        removed = true;
       }
-      notificationStore.success('Agent removed from Pulse');
+      // Remove docker host registration if present
+      if (capabilities.includes('docker') && ids.dockerId) {
+        await MonitoringAPI.deleteDockerHost(ids.dockerId);
+        removed = true;
+      }
+      if (removed) {
+        notificationStore.success('Agent removed from Pulse');
+      } else {
+        notificationStore.error('No agent IDs available for removal');
+      }
     } catch (err) {
       logger.error('Failed to remove agent', err);
       notificationStore.error('Failed to remove agent');
@@ -1163,7 +1032,7 @@ export const UnifiedAgents: Component = () => {
 
   const handleToggleCommands = async (hostId: string | undefined, enabled: boolean) => {
     if (!hostId) {
-      notificationStore.error('Host ID unavailable for command configuration');
+      notificationStore.error('Agent ID unavailable for command configuration');
       return;
     }
     // Set optimistic/pending state immediately with timestamp
@@ -1173,7 +1042,7 @@ export const UnifiedAgents: Component = () => {
     }));
 
     try {
-      await MonitoringAPI.updateHostAgentConfig(hostId, { commandsEnabled: enabled });
+      await MonitoringAPI.updateAgentConfig(hostId, { commandsEnabled: enabled });
       notificationStore.success(
         `Pulse command execution ${enabled ? 'enabled' : 'disabled'}. Syncing with agent...`,
       );
@@ -1237,15 +1106,15 @@ export const UnifiedAgents: Component = () => {
     <div class="space-y-6">
       <SettingsPanel
         title="Unified Agents"
-        description="Primary install path for monitoring hosts, Docker, Kubernetes, Proxmox, and related infrastructure."
+        description="Primary install path for monitoring systems, Docker, Kubernetes, Proxmox, and related infrastructure."
         icon={<Server class="w-5 h-5" strokeWidth={2} />}
         bodyClass="space-y-5"
       >
         <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100">
           <p class="font-semibold">Unified Agent is the default monitoring gateway.</p>
           <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
-            Install it on each host you want Pulse to monitor. The installer auto-detects available
-            platforms on that machine and enables the right integrations.
+            Install it on each system you want Pulse to monitor. The installer auto-detects
+            available platforms on that machine and enables the right integrations.
           </p>
         </div>
 
@@ -1280,7 +1149,7 @@ export const UnifiedAgents: Component = () => {
                   Generate API token
                 </p>
                 <p class="text-sm text-muted ml-6">
-                  Create a fresh token scoped for Host, Docker, and Kubernetes monitoring.
+                  Create a fresh token scoped for Agent, Docker, and Kubernetes monitoring.
                 </p>
               </div>
 
@@ -1534,6 +1403,7 @@ export const UnifiedAgents: Component = () => {
                                 if (enableCommands()) {
                                   cmd += getEnableCommandsFlag();
                                 }
+                                cmd = withPrivilegeEscalation(cmd);
                               }
                               return cmd;
                             };
@@ -1607,8 +1477,8 @@ export const UnifiedAgents: Component = () => {
                   </button>
                 </div>
                 <p class="text-xs text-blue-800 dark:text-blue-200">
-                  Enter the hostname (or host ID) from the machine you just installed. Pulse returns
-                  the latest status instantly.
+                  Enter the hostname (or agent ID) from the machine you just installed. Pulse
+                  returns the latest status instantly.
                 </p>
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                   <input
@@ -1625,7 +1495,7 @@ export const UnifiedAgents: Component = () => {
                         void handleLookup();
                       }
                     }}
-                    placeholder="Hostname or host ID"
+                    placeholder="Hostname or agent ID"
                     class="flex-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-sm text-blue-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100 dark:focus:border-blue-300 dark:focus:ring-blue-800"
                   />
                 </div>
@@ -1830,7 +1700,7 @@ export const UnifiedAgents: Component = () => {
               />
             </svg>
             <p class="text-xs text-blue-700 dark:text-blue-300">
-              <span class="font-medium">{linkedHostAgents().length}</span> host agent
+              <span class="font-medium">{linkedHostAgents().length}</span> agent
               {linkedHostAgents().length > 1 ? 's are' : ' is'} linked to Proxmox node
               {linkedHostAgents().length > 1 ? 's' : ''} and flagged with a{' '}
               <span class="font-medium text-blue-700 dark:text-blue-300">Linked</span> badge.
@@ -1838,7 +1708,7 @@ export const UnifiedAgents: Component = () => {
           </div>
         </Show>
 
-        <Show when={hasLegacyAgents()}>
+        <Show when={hasOutdatedAgents()}>
           <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-700 dark:bg-amber-900">
             <div class="flex items-start gap-3">
               <svg
@@ -1854,12 +1724,12 @@ export const UnifiedAgents: Component = () => {
               </svg>
               <div class="flex-1 space-y-1">
                 <p class="text-sm font-medium text-amber-800 dark:text-amber-200">
-                  {legacyAgents().length} legacy agent{legacyAgents().length > 1 ? 's' : ''}{' '}
-                  detected
+                  {outdatedAgents().length} outdated agent binary
+                  {outdatedAgents().length > 1 ? 'ies' : ''} detected
                 </p>
                 <p class="text-sm text-amber-700 dark:text-amber-300">
-                  Legacy agents (pulse-host-agent, pulse-docker-agent) are deprecated. Expand a row
-                  to copy the upgrade command.
+                  Older agent binaries (pulse-host-agent, pulse-docker-agent) are deprecated. Expand
+                  a row to copy the upgrade command.
                 </p>
               </div>
             </div>
@@ -1868,21 +1738,22 @@ export const UnifiedAgents: Component = () => {
 
         <div class="flex flex-wrap items-end gap-3">
           <div class="space-y-1">
-            <label for="agent-filter-type" class="text-xs font-medium text-muted">
-              Type
+            <label for="agent-filter-capability" class="text-xs font-medium text-muted">
+              Capability
             </label>
             <select
-              id="agent-filter-type"
-              value={filterType()}
+              id="agent-filter-capability"
+              value={filterCapability()}
               onChange={(event) =>
-                setFilterType(event.currentTarget.value as 'all' | UnifiedAgentType)
+                setFilterCapability(event.currentTarget.value as 'all' | AgentCapability)
               }
               class="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
             >
-              <option value="all">All types</option>
-              <option value="host">Host</option>
+              <option value="all">All capabilities</option>
+              <option value="agent">Agent</option>
               <option value="docker">Docker</option>
               <option value="kubernetes">Kubernetes</option>
+              <option value="proxmox">Proxmox</option>
             </select>
           </div>
           <div class="space-y-1">
@@ -1998,23 +1869,39 @@ export const UnifiedAgents: Component = () => {
               },
             },
             {
-              key: 'types',
-              label: 'Type',
+              key: 'capabilities',
+              label: 'Capabilities',
               render: (row: UnifiedAgentRow) => {
-                const typeBadgeClass = (type: UnifiedAgentType) => {
-                  if (type === 'host' || type === 'docker') {
-                    return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
+                const capBadgeClass = (cap: AgentCapability) => {
+                  switch (cap) {
+                    case 'proxmox':
+                      return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300';
+                    case 'kubernetes':
+                      return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300';
+                    default:
+                      return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
                   }
-                  return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300';
+                };
+                const capLabel = (cap: AgentCapability) => {
+                  switch (cap) {
+                    case 'agent':
+                      return 'Agent';
+                    case 'docker':
+                      return 'Docker';
+                    case 'kubernetes':
+                      return 'Kubernetes';
+                    case 'proxmox':
+                      return 'Proxmox';
+                  }
                 };
                 return (
                   <div class="flex flex-wrap items-center gap-2 text-xs">
-                    <For each={row.types}>
-                      {(type) => (
+                    <For each={row.capabilities}>
+                      {(cap) => (
                         <span
-                          class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${typeBadgeClass(type)}`}
+                          class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${capBadgeClass(cap)}`}
                         >
-                          {type === 'host' ? 'Host' : type === 'docker' ? 'Docker' : 'Kubernetes'}
+                          {capLabel(cap)}
                         </span>
                       )}
                     </For>
@@ -2050,7 +1937,8 @@ export const UnifiedAgents: Component = () => {
               label: 'Scope',
               render: (row: UnifiedAgentRow) => {
                 const isActive = () => row.status === 'active';
-                const isKubernetes = () => row.types.includes('kubernetes');
+                const isKubernetes = () =>
+                  row.capabilities.includes('kubernetes') && !row.capabilities.includes('agent');
                 const resolvedAgentId = row.agentId || '';
                 const assignment = () =>
                   resolvedAgentId ? assignmentByAgent().get(resolvedAgentId) : undefined;
@@ -2123,7 +2011,7 @@ export const UnifiedAgents: Component = () => {
 
                 return (
                   <Show
-                    when={isActive() && row.types.includes('host') && configHostId}
+                    when={isActive() && row.capabilities.includes('agent') && configHostId}
                     fallback={<span class="text-xs text-muted">N/A</span>}
                   >
                     {(() => {
@@ -2216,12 +2104,14 @@ export const UnifiedAgents: Component = () => {
               align: 'right',
               render: (row: UnifiedAgentRow) => {
                 const isRemoved = () => row.status === 'removed';
-                const isKubernetes = () => row.types.includes('kubernetes');
-                const canRemoveHost = () =>
-                  !row.types.includes('host') || Boolean(row.hostActionId);
-                const canRemoveDocker = () =>
-                  !row.types.includes('docker') || Boolean(row.dockerActionId);
-                const canRemove = () => canRemoveHost() && canRemoveDocker();
+                const isKubernetes = () =>
+                  row.capabilities.includes('kubernetes') && !row.capabilities.includes('agent');
+                const canRemove = () => {
+                  const needsAgent = row.capabilities.includes('agent') && !row.hostActionId;
+                  const needsDocker =
+                    row.capabilities.includes('docker') && !row.dockerActionId && !row.hostActionId;
+                  return !needsAgent && !needsDocker;
+                };
                 return (
                   <Show
                     when={isRemoved()}
@@ -2233,10 +2123,7 @@ export const UnifiedAgents: Component = () => {
                             onClick={() =>
                               handleRemoveAgent(
                                 { hostId: row.hostActionId, dockerId: row.dockerActionId },
-                                row.types.filter((type) => type !== 'kubernetes') as (
-                                  | 'host'
-                                  | 'docker'
-                                )[],
+                                row.capabilities,
                               )
                             }
                             disabled={!canRemove()}
@@ -2259,7 +2146,7 @@ export const UnifiedAgents: Component = () => {
                     }
                   >
                     <Show
-                      when={row.types.includes('docker')}
+                      when={row.capabilities.includes('docker')}
                       fallback={
                         <button
                           onClick={() =>
@@ -2292,17 +2179,34 @@ export const UnifiedAgents: Component = () => {
           onRowClick={(row) => toggleAgentDetails(row.rowKey)}
           isRowExpanded={(row) => expandedRowKey() === row.rowKey}
           expandedRender={(row: UnifiedAgentRow) => {
-            const isKubernetes = () => row.types.includes('kubernetes');
+            const isKubernetes = () =>
+              row.capabilities.includes('kubernetes') && !row.capabilities.includes('agent');
             const resolvedAgentId = row.agentId || '';
             const assignment = () =>
               resolvedAgentId ? assignmentByAgent().get(resolvedAgentId) : undefined;
             const agentName = row.displayName || row.hostname || row.name;
 
-            const typeBadgeClass = (type: UnifiedAgentType) => {
-              if (type === 'host' || type === 'docker') {
-                return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
+            const capBadgeClass = (cap: AgentCapability) => {
+              switch (cap) {
+                case 'proxmox':
+                  return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300';
+                case 'kubernetes':
+                  return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300';
+                default:
+                  return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
               }
-              return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300';
+            };
+            const capLabel = (cap: AgentCapability) => {
+              switch (cap) {
+                case 'agent':
+                  return 'Agent';
+                case 'docker':
+                  return 'Docker';
+                case 'kubernetes':
+                  return 'Kubernetes';
+                case 'proxmox':
+                  return 'Proxmox';
+              }
             };
 
             return (
@@ -2310,18 +2214,18 @@ export const UnifiedAgents: Component = () => {
                 <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
                   <div class="space-y-3">
                     <div class="flex flex-wrap items-center gap-2 text-xs">
-                      <For each={row.types}>
-                        {(type) => (
+                      <For each={row.capabilities}>
+                        {(cap) => (
                           <span
-                            class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${typeBadgeClass(type)}`}
+                            class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${capBadgeClass(cap)}`}
                           >
-                            {type === 'host' ? 'Host' : type === 'docker' ? 'Docker' : 'Kubernetes'}
+                            {capLabel(cap)}
                           </span>
                         )}
                       </For>
-                      <Show when={row.isLegacy}>
+                      <Show when={row.isOutdatedBinary}>
                         <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-                          Legacy
+                          Outdated
                         </span>
                       </Show>
                       <Show when={row.linkedNodeId}>
@@ -2335,7 +2239,8 @@ export const UnifiedAgents: Component = () => {
                     </div>
                     <Show when={row.hostActionId && row.hostActionId !== row.id}>
                       <div class="text-xs text-muted">
-                        Host ID: <span class="font-mono text-base-content">{row.hostActionId}</span>
+                        Agent ID:{' '}
+                        <span class="font-mono text-base-content">{row.hostActionId}</span>
                       </div>
                     </Show>
                     <Show when={row.dockerActionId && row.dockerActionId !== row.id}>
@@ -2445,7 +2350,7 @@ export const UnifiedAgents: Component = () => {
                           Copy uninstall command
                         </button>
                       </Show>
-                      <Show when={row.isLegacy}>
+                      <Show when={row.isOutdatedBinary}>
                         <button
                           type="button"
                           onClick={async () => {

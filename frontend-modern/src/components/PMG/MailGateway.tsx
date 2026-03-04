@@ -13,6 +13,7 @@ import {
 } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { formatRelativeTime, formatBytes } from '@/utils/format';
+import { pmgInstanceFromResource } from '@/utils/resourceStateAdapters';
 
 // Format large numbers with K/M suffixes
 const formatCompact = (value?: number | null): string => {
@@ -252,7 +253,12 @@ const MailGateway: Component = () => {
     onCleanup(() => document.removeEventListener('keydown', handleKeyDown));
   });
 
-  const instances = createMemo(() => state.pmg ?? []);
+  const instances = createMemo(() =>
+    (state.resources || [])
+      .filter((resource) => resource.type === 'pmg')
+      .map(pmgInstanceFromResource)
+      .filter((instance): instance is NonNullable<typeof instance> => Boolean(instance)),
+  );
   const hasInstances = createMemo(() => instances().length > 0);
 
   // Filter instances by search

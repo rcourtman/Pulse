@@ -84,13 +84,11 @@ describe('websocket store unified resource contract', () => {
     vi.unstubAllGlobals();
   });
 
-  it('initializes with empty resources array and empty legacy arrays', async () => {
+  it('initializes with empty resources array only', async () => {
     const { store, dispose } = await createStoreHarness();
     try {
       expect(store.state.resources).toEqual([]);
-      expect(store.state.nodes).toEqual([]);
-      expect(store.state.vms).toEqual([]);
-      expect(store.state.containers).toEqual([]);
+      expect((store.state as unknown as Record<string, unknown>).nodes).toBeUndefined();
     } finally {
       dispose();
     }
@@ -115,15 +113,13 @@ describe('websocket store unified resource contract', () => {
       });
 
       expect(store.state.resources).toHaveLength(2);
-      expect(store.state.nodes).toEqual([]);
-      expect(store.state.vms).toEqual([]);
-      expect(store.state.containers).toEqual([]);
+      expect((store.state as unknown as Record<string, unknown>).nodes).toBeUndefined();
     } finally {
       dispose();
     }
   });
 
-  it('processes mixed payload (resources + legacy arrays)', async () => {
+  it('processes mixed payload (resources + legacy arrays) with resources as canonical state', async () => {
     const { store, dispose } = await createStoreHarness();
     try {
       await waitForOpenTick();
@@ -140,13 +136,13 @@ describe('websocket store unified resource contract', () => {
       });
 
       expect(store.state.resources).toHaveLength(1);
-      expect(store.state.nodes).toHaveLength(1);
+      expect((store.state as unknown as Record<string, unknown>).nodes).toBeUndefined();
     } finally {
       dispose();
     }
   });
 
-  it('incremental update adds to resources without affecting legacy arrays', async () => {
+  it('incremental update adds to resources without creating legacy fields', async () => {
     const { store, dispose } = await createStoreHarness();
     try {
       await waitForOpenTick();
@@ -175,9 +171,7 @@ describe('websocket store unified resource contract', () => {
       });
 
       expect(store.state.resources).toHaveLength(2);
-      expect(store.state.nodes).toEqual([]);
-      expect(store.state.vms).toEqual([]);
-      expect(store.state.containers).toEqual([]);
+      expect((store.state as unknown as Record<string, unknown>).nodes).toBeUndefined();
     } finally {
       dispose();
     }

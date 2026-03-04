@@ -87,7 +87,7 @@ const getRecordAlertResourceIds = (record: StorageRecord): string[] => {
 
   return Array.from(
     new Set(
-      [record.id, refs.resourceId, refs.legacyStorageId, derivedLegacyId]
+      [record.id, refs.resourceId, derivedLegacyId]
         .filter((value): value is string => typeof value === 'string')
         .map((value) => value.trim())
         .filter((value) => value.length > 0),

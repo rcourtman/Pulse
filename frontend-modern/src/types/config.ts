@@ -16,8 +16,6 @@
 export interface AuthConfig {
   PULSE_AUTH_USER: string; // Admin username
   PULSE_AUTH_PASS: string; // Bcrypt hashed password
-  API_TOKEN: string; // Legacy API authentication token (hashed)
-  API_TOKENS?: string; // Optional comma-separated list of hashed tokens
 }
 
 /**
@@ -49,7 +47,6 @@ export interface SystemConfig {
   hideLocalLogin?: boolean; // Hide local login form (username/password)
   publicURL?: string; // Public URL for email notifications (e.g., http://192.168.1.100:8080)
   disableDockerUpdateActions?: boolean; // Hide Docker update buttons while still detecting updates (server-wide)
-  disableLegacyRouteRedirects?: boolean; // Disable legacy frontend URL redirects globally
   reduceProUpsellNoise?: boolean; // Hide proactive Pro prompts; paywalls still appear when accessing gated features
   disableLocalUpgradeMetrics?: boolean; // Disable local-only upgrade UX metrics collection
   telemetryEnabled?: boolean; // Opt-in anonymous usage telemetry
@@ -112,7 +109,7 @@ export interface SecurityStatus {
   configuredButPendingRestart: boolean;
   unprotectedExportAllowed?: boolean;
   hasHTTPS?: boolean;
-  oidcEnabled?: boolean;
+  ssoEnabled?: boolean;
   publicAccess?: boolean;
   isPrivateNetwork?: boolean;
   clientIP?: string;
@@ -122,9 +119,9 @@ export interface SecurityStatus {
   proxyAuthLogoutURL?: string;
   authUsername?: string;
   authLastModified?: string;
-  disabled?: boolean; // legacy field (removed backend support)
-  deprecatedDisableAuth?: boolean;
   message?: string;
+  ssoSessionUsername?: string;
+  ssoLogoutURL?: string;
   hideLocalLogin?: boolean; // Hide local login form
   agentUrl?: string; // URL for agent install commands (from PULSE_PUBLIC_URL or auto-detected)
   // First run setup fields
@@ -133,11 +130,6 @@ export interface SecurityStatus {
   inContainer?: boolean;
   lxcCtid?: string;
   dockerContainerName?: string;
-  // OIDC fields
-  oidcIssuer?: string;
-  oidcClientId?: string;
-  oidcEnvOverrides?: Record<string, boolean>;
-  oidcLogoutURL?: string;
   // Multi-provider SSO
   ssoProviders?: SSOProviderInfo[];
   // Token auth scopes (for kiosk/limited-access mode)

@@ -52,12 +52,9 @@ helm upgrade pulse pulse/pulse -n pulse
 
 ### Unified Navigation (Bookmarks and Deep Links)
 
-Legacy pages redirect into the unified navigation as compatibility aliases.
+Legacy page aliases have been removed. Use canonical unified routes only.
 
 - Reference: `docs/MIGRATION_UNIFIED_NAV.md`
-- To disable all legacy route redirects (and surface stale bookmarks immediately), set:
-  - `PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS=true` or
-  - `disableLegacyRouteRedirects: true` in `system.json`
 - Optional migration aid: enable the "Classic platform shortcuts" bar (Settings → System → General).
 - Optional preference: switch to **Classic** navigation style (Settings → System → General). This is stored per browser.
 
@@ -66,9 +63,6 @@ Legacy pages redirect into the unified navigation as compatibility aliases.
 Unified Resources is now the canonical model and endpoint family:
 
 - Canonical: `/api/resources`
-- Deprecated alias (temporary): `/api/v2/resources`
-
-If you have scripts/integrations calling `/api/v2/resources`, migrate them to `/api/resources`.
 
 ### License, Trial, and Entitlements
 

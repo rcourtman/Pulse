@@ -132,7 +132,7 @@ Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Tok
    - Copy the credentials before leaving the page.
 4. Open **Settings → Unified Agents** and install the unified agent on each host you want monitored.
 
-> **Note**: If you configure authentication via environment variables (`PULSE_AUTH_USER`/`PULSE_AUTH_PASS` and/or legacy `API_TOKENS`), the bootstrap token is automatically removed and this step is skipped.
+> **Note**: If you configure authentication via environment variables (`PULSE_AUTH_USER`/`PULSE_AUTH_PASS`), the bootstrap token is automatically removed and this step is skipped.
 
 ---
 

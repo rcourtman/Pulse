@@ -36,8 +36,8 @@ export const KNOWN_SETTINGS: KnownSetting[] = [
   {
     key: 'enable_host',
     type: 'boolean',
-    label: 'Enable Host Monitoring',
-    description: 'Collect host metrics and allow command execution',
+    label: 'Enable Agent Monitoring',
+    description: 'Collect agent metrics and allow command execution',
   },
   {
     key: 'enable_docker',

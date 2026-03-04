@@ -363,9 +363,9 @@ export const buildNodeByInstance = (nodes: Node[]): Record<string, Node> => {
   const map: Record<string, Node> = {};
   nodes.forEach((node) => {
     map[node.id] = node;
-    const legacyKey = `${node.instance}-${node.name}`;
-    if (!map[legacyKey]) {
-      map[legacyKey] = node;
+    const instanceNameKey = `${node.instance}-${node.name}`;
+    if (!map[instanceNameKey]) {
+      map[instanceNameKey] = node;
     }
   });
   return map;

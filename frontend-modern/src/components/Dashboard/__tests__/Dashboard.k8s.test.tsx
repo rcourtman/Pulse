@@ -276,56 +276,6 @@ describe('Dashboard Kubernetes workloads integration', () => {
     expect(queryByText('api-6c4d8')).not.toBeInTheDocument();
   });
 
-  it('shows and dismisses the migration notice for legacy kubernetes redirects', async () => {
-    lastHostFilter = undefined;
-    localStorage.clear();
-    mockWorkloads = [
-      {
-        id: 'v2-k8s-pod-visible',
-        vmid: 0,
-        name: 'api-6c4d8',
-        node: 'worker-1',
-        instance: 'cluster-visible',
-        status: 'running',
-        type: 'k8s',
-        cpu: 0,
-        cpus: 0,
-        memory: { total: 0, used: 0, free: 0, usage: 0 },
-        disk: { total: 0, used: 0, free: 0, usage: 0 },
-        networkIn: 0,
-        networkOut: 0,
-        diskRead: 0,
-        diskWrite: 0,
-        uptime: 0,
-        template: false,
-        lastBackup: 0,
-        tags: [],
-        lock: '',
-        lastSeen: new Date().toISOString(),
-        workloadType: 'k8s',
-        namespace: 'default',
-      },
-    ];
-    mockLocationSearch = '?type=k8s&migrated=1&from=kubernetes';
-
-    const { getByText, getByRole, queryByText } = render(() => (
-      <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
-    ));
-
-    await waitFor(() => {
-      expect(getByText('Kubernetes moved to Workloads')).toBeInTheDocument();
-    });
-
-    const dismiss = getByRole('button', { name: /dismiss navigation notice/i });
-    dismiss.click();
-
-    await waitFor(() => {
-      expect(queryByText('Kubernetes moved to Workloads')).not.toBeInTheDocument();
-    });
-
-    expect(localStorage.getItem('pulse.migrationNotice.dismissed.kubernetes')).toBe('1');
-  });
-
   it('filters kubernetes workloads by selected cluster', async () => {
     lastHostFilter = undefined;
     mockLocationSearch = '?type=k8s';
@@ -721,9 +671,9 @@ describe('Dashboard Kubernetes workloads integration', () => {
     expect(options?.replace).toBe(true);
   });
 
-  it('preserves migration metadata while canonicalizing workload query params', async () => {
+  it('normalizes non-canonical type to k8s when context is present', async () => {
     lastHostFilter = undefined;
-    mockLocationSearch = '?type=all&migrated=1&from=kubernetes';
+    mockLocationSearch = '?type=all&context=cluster-a';
     mockWorkloads = [];
 
     render(() => <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />);
@@ -734,9 +684,8 @@ describe('Dashboard Kubernetes workloads integration', () => {
 
     const [path, options] = navigateSpy.mock.calls.at(-1) as [string, { replace?: boolean }];
     const params = new URLSearchParams(path.split('?')[1] || '');
-    expect(params.get('type')).toBeNull();
-    expect(params.get('migrated')).toBe('1');
-    expect(params.get('from')).toBe('kubernetes');
+    expect(params.get('type')).toBe('k8s');
+    expect(params.get('context')).toBe('cluster-a');
     expect(options?.replace).toBe(true);
   });
 });

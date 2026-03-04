@@ -8,12 +8,16 @@ import {
   onCleanup,
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
-import { useWebSocket } from '@/App';
 import { NodeSummaryTable } from './NodeSummaryTable';
 import { useResources } from '@/hooks/useResources';
 import type { Host, Node } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { useRecoveryRollups } from '@/hooks/useRecoveryRollups';
+import { nodeFromResource, pbsInstanceFromResource } from '@/utils/resourceStateAdapters';
+import {
+  getAgentDiscoveryResourceId,
+  isAgentDiscoveryResourceType,
+} from '@/utils/discoveryTarget';
 
 interface UnifiedNodeSelectorProps {
   currentTab: 'dashboard' | 'storage' | 'recovery';
@@ -26,8 +30,7 @@ interface UnifiedNodeSelectorProps {
 }
 
 export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) => {
-  const { state } = useWebSocket();
-  const { byType } = useResources();
+  const { byType, resources } = useResources();
   const recovery = useRecoveryRollups();
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const pd = (r: Resource) =>
@@ -40,6 +43,18 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
     typeof value === 'number' && Number.isFinite(value) ? value : undefined;
   const asBoolean = (value: unknown): boolean | undefined =>
     typeof value === 'boolean' ? value : undefined;
+  const hasHostAgentFacet = (resource: Resource): boolean => {
+    if (resource.agent) return true;
+    const platformData = pd(resource);
+    if (!platformData) return false;
+    const platformAgent = asRecord(platformData.agent);
+    return Boolean(
+      platformAgent ||
+      asString(platformData.agentId) ||
+      (isAgentDiscoveryResourceType(resource.discoveryTarget?.resourceType) &&
+        resource.discoveryTarget.hostId),
+    );
+  };
 
   // Handle ESC key to deselect node
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -107,11 +122,17 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
   });
 
   const hostsForNodeSummary = createMemo<Host[]>(() => {
-    if ((state.hosts || []).length > 0) {
-      return state.hosts;
-    }
+    const hostLikeResources = resources().filter(
+      (resource) =>
+        (resource.type === 'node' ||
+          resource.type === 'pbs' ||
+          resource.type === 'pmg' ||
+          resource.type === 'truenas') &&
+        hasHostAgentFacet(resource),
+    );
 
-    return byType('host').map((resource) => {
+    const hostsById = new Map<string, Host>();
+    for (const resource of hostLikeResources) {
       const platformData = pd(resource);
       const agent = {
         ...(asRecord(platformData?.agent) || {}),
@@ -151,14 +172,13 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
       const hostId =
         asString(agent.agentId) ||
         resource.discoveryTarget?.hostId ||
-        (resource.discoveryTarget?.resourceType === 'host'
-          ? resource.discoveryTarget.resourceId
-          : undefined) ||
+        getAgentDiscoveryResourceId(resource.discoveryTarget) ||
         resource.id;
       const hostname =
         resource.identity?.hostname || asString(agent.hostname) || resource.name || hostId;
 
-      return {
+      if (hostsById.has(hostId)) continue;
+      hostsById.set(hostId, {
         id: hostId,
         hostname,
         displayName: resource.displayName || hostname,
@@ -194,16 +214,32 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
         tags: resource.tags,
         isLegacy: asBoolean(platformData?.isLegacy),
         linkedNodeId: asString(platformData?.linkedNodeId),
-      };
-    });
+      });
+    }
+
+    return Array.from(hostsById.values());
   });
+
+  const unifiedNodes = createMemo<Node[]>(() =>
+    resources()
+      .filter((resource) => resource.type === 'node')
+      .map(nodeFromResource)
+      .filter((node): node is Node => Boolean(node)),
+  );
+
+  const pbsInstances = createMemo(() =>
+    resources()
+      .filter((resource) => resource.type === 'pbs')
+      .map(pbsInstanceFromResource)
+      .filter((instance): instance is NonNullable<typeof instance> => Boolean(instance)),
+  );
 
   // Calculate rollup counts for PVE nodes (best-effort based on subjectRef).
   // PBS-per-instance counts require repository attribution (not currently exposed in rollups).
   const backupCounts = createMemo(() => {
     const counts: Record<string, number> = {};
 
-    const nodes = props.nodes || state.nodes;
+    const nodes = props.nodes || unifiedNodes();
     if (nodes) {
       nodes.forEach((node) => {
         counts[node.id] = 0;
@@ -235,7 +271,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
   };
 
   // Parent components now handle conditional rendering, so we can render directly
-  const nodes = createMemo(() => props.nodes || state.nodes || []);
+  const nodes = createMemo(() => props.nodes || unifiedNodes() || []);
   const showNodeSummary = () => props.showNodeSummary ?? true;
 
   return (
@@ -243,7 +279,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
       <div class="space-y-2 mb-4">
         <NodeSummaryTable
           nodes={nodes()}
-          pbsInstances={props.currentTab === 'recovery' ? state.pbs : undefined}
+          pbsInstances={props.currentTab === 'recovery' ? pbsInstances() : undefined}
           vmCounts={vmCounts()}
           containerCounts={containerCounts()}
           storageCounts={storageCounts()}

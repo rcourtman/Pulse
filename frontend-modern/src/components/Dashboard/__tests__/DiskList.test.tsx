@@ -6,7 +6,7 @@ import type { Disk } from '@/types/api';
 function makeDisk(overrides: Partial<Disk> = {}): Disk {
   return {
     total: 107374182400, // 100 GB
-    used: 53687091200,   // 50 GB
+    used: 53687091200, // 50 GB
     free: 53687091200,
     usage: 50,
     mountpoint: '/',
@@ -41,12 +41,21 @@ describe('DiskList', () => {
     });
 
     it.each([
-      ['agent-not-running', 'Guest agent not running. Install and start qemu-guest-agent in the VM.'],
+      [
+        'agent-not-running',
+        'Guest agent not running. Install and start qemu-guest-agent in the VM.',
+      ],
       ['agent-timeout', 'Guest agent timeout. Agent may need to be restarted.'],
-      ['permission-denied', 'Permission denied. Check that your Pulse user/token has VM.Monitor permission (PVE 8) or VM.GuestAgent.Audit permission (PVE 9).'],
+      [
+        'permission-denied',
+        'Permission denied. Check that your Pulse user/token has VM.Monitor permission (PVE 8) or VM.GuestAgent.Audit permission (PVE 9).',
+      ],
       ['agent-disabled', 'Guest agent is disabled in VM configuration. Enable it in VM Options.'],
       ['no-filesystems', 'No filesystems found. VM may be booting or using a Live ISO.'],
-      ['special-filesystems-only', 'Only special filesystems detected (ISO/squashfs). This is normal for Live systems.'],
+      [
+        'special-filesystems-only',
+        'Only special filesystems detected (ISO/squashfs). This is normal for Live systems.',
+      ],
       ['agent-error', 'Error communicating with guest agent.'],
       ['no-data', 'No disk data available from Proxmox API.'],
     ] as const)('shows correct tooltip for diskStatusReason="%s"', (reason, expected) => {
@@ -203,7 +212,7 @@ describe('DiskList', () => {
     it('applies warning color class at exactly 80% (disk warning threshold)', () => {
       // 80% — exactly at disk warning threshold
       const disk = makeDisk({
-        used: Math.round(107374182400 * 0.80),
+        used: Math.round(107374182400 * 0.8),
         total: 107374182400,
       });
       const { container } = render(() => <DiskList disks={[disk]} />);
@@ -215,7 +224,7 @@ describe('DiskList', () => {
 
     it('applies warning color class at 85% (between warning and critical)', () => {
       const disk = makeDisk({
-        used: 91268055040,  // ~85 GB
+        used: 91268055040, // ~85 GB
         total: 107374182400,
       });
       const { container } = render(() => <DiskList disks={[disk]} />);
@@ -239,7 +248,7 @@ describe('DiskList', () => {
 
     it('applies critical color class at exactly 90% (disk critical threshold)', () => {
       const disk = makeDisk({
-        used: Math.round(107374182400 * 0.90),
+        used: Math.round(107374182400 * 0.9),
         total: 107374182400,
       });
       const { container } = render(() => <DiskList disks={[disk]} />);

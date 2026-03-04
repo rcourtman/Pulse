@@ -86,9 +86,7 @@ describe('ErrorBoundary', () => {
     expect(screen.getByText('An unexpected error occurred')).toBeInTheDocument();
     expect(screen.getByText('Try Again')).toBeInTheDocument();
     expect(screen.getByText('Reload Page')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Technical details are suppressed/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Technical details are suppressed/)).toBeInTheDocument();
   });
 
   /* ---------- Logs error via logError ---------- */
@@ -103,10 +101,7 @@ describe('ErrorBoundary', () => {
     ));
 
     expect(logErrorMock).toHaveBeenCalledTimes(1);
-    expect(logErrorMock).toHaveBeenCalledWith(
-      'Error boundary caught error',
-      expect.any(Error),
-    );
+    expect(logErrorMock).toHaveBeenCalledWith('Error boundary caught error', expect.any(Error));
   });
 
   /* ---------- Custom onError callback ---------- */
@@ -364,14 +359,8 @@ describe('ComponentErrorBoundary', () => {
 
     // Exactly 2 calls: base ErrorBoundary log + ComponentErrorBoundary onError log
     expect(logErrorMock).toHaveBeenCalledTimes(2);
-    expect(logErrorMock).toHaveBeenCalledWith(
-      'Error boundary caught error',
-      expect.any(Error),
-    );
-    expect(logErrorMock).toHaveBeenCalledWith(
-      'Error in component MetricsPanel',
-      expect.any(Error),
-    );
+    expect(logErrorMock).toHaveBeenCalledWith('Error boundary caught error', expect.any(Error));
+    expect(logErrorMock).toHaveBeenCalledWith('Error in component MetricsPanel', expect.any(Error));
   });
 
   /* ---------- Retry button recovers the component ---------- */

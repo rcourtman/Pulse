@@ -44,33 +44,18 @@ describe('theme utils', () => {
     expect(getStoredThemePreference()).toBe('light');
   });
 
-  it('migrates legacy darkMode key to canonical preference', () => {
-    window.localStorage.setItem('darkMode', 'true');
-    expect(getStoredThemePreference()).toBe('dark');
-    expect(window.localStorage.getItem('pulseThemePreference')).toBe('dark');
-  });
-
-  it('migrates legacy bootstrap key to canonical and compatibility keys', () => {
-    window.localStorage.setItem('pulse_dark_mode', 'false');
-    expect(getStoredThemePreference()).toBe('light');
-    expect(window.localStorage.getItem('pulseThemePreference')).toBe('light');
-    expect(window.localStorage.getItem('darkMode')).toBe('false');
-  });
-
   it('reports whether any stored theme preference exists', () => {
     expect(hasStoredThemePreference()).toBe(false);
-    window.localStorage.setItem('darkMode', 'false');
+    window.localStorage.setItem('pulseThemePreference', 'dark');
     expect(hasStoredThemePreference()).toBe(true);
   });
 
-  it('persists canonical preference and syncs legacy compatibility key', () => {
+  it('persists canonical preference only', () => {
     persistThemePreference('dark');
     expect(window.localStorage.getItem('pulseThemePreference')).toBe('dark');
-    expect(window.localStorage.getItem('darkMode')).toBe('true');
 
     persistThemePreference('system');
     expect(window.localStorage.getItem('pulseThemePreference')).toBe('system');
-    expect(window.localStorage.getItem('darkMode')).toBeNull();
   });
 
   it('normalizes unrecognized values to system', () => {

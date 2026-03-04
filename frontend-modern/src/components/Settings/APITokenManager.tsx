@@ -21,6 +21,7 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { useResources } from '@/hooks/useResources';
 import type { Resource } from '@/types/resource';
+import { getAgentDiscoveryResourceId } from '@/utils/discoveryTarget';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import {
   API_SCOPE_LABELS,
@@ -44,11 +45,23 @@ const SCOPES_DOC_URL =
 const WILDCARD_SCOPE = '*';
 
 export const APITokenManager: Component<APITokenManagerProps> = (props) => {
-  const { markDockerHostsTokenRevoked, markHostsTokenRevoked } = useWebSocket();
-  const { byType } = useResources();
+  const { markDockerHostsTokenRevoked, markAgentsTokenRevoked } = useWebSocket();
+  const { byType, resources } = useResources();
 
   const dockerHostResources = createMemo(() => byType('docker-host'));
-  const hostResources = createMemo(() => byType('host'));
+  const hasAgentScopeResource = (resource: Resource): boolean => {
+    if (resource.type === 'docker-host') return false;
+    return (
+      resource.type === 'node' ||
+      resource.type === 'pbs' ||
+      resource.type === 'pmg' ||
+      resource.type === 'truenas' ||
+      resource.agent != null
+    );
+  };
+  const hostAgentResources = createMemo(() =>
+    resources().filter((resource) => hasAgentScopeResource(resource)),
+  );
 
   const readPlatformData = (resource: Resource): Record<string, unknown> | undefined => {
     return resource.platformData
@@ -91,10 +104,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     return (
       readPlatformString(resource.agent?.agentId) ||
       readPlatformString(readNestedPlatformField(platformData, 'agentId')) ||
+      getAgentDiscoveryResourceId(resource.discoveryTarget) ||
       resource.discoveryTarget?.hostId ||
-      (resource.discoveryTarget?.resourceType === 'host'
-        ? resource.discoveryTarget.resourceId
-        : undefined) ||
       resource.id
     );
   };
@@ -127,18 +138,20 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     for (const resource of dockerHostResources()) {
       const tokenId = tokenIdForResource(resource);
       if (!tokenId) continue;
+      const hostId = dockerActionIdForResource(resource);
       const label =
         resource.displayName?.trim() || resource.identity?.hostname || resource.name || resource.id;
       const previous = usage.get(tokenId);
       if (previous) {
+        if (previous.hosts.some((host) => host.id === hostId)) continue;
         usage.set(tokenId, {
           count: previous.count + 1,
-          hosts: [...previous.hosts, { id: dockerActionIdForResource(resource), label }],
+          hosts: [...previous.hosts, { id: hostId, label }],
         });
       } else {
         usage.set(tokenId, {
           count: 1,
-          hosts: [{ id: dockerActionIdForResource(resource), label }],
+          hosts: [{ id: hostId, label }],
         });
       }
     }
@@ -147,19 +160,21 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   const hostTokenUsage = createMemo(() => {
     type UsageHost = { id: string; label: string };
     const usage = new Map<string, { count: number; hosts: UsageHost[] }>();
-    for (const resource of hostResources()) {
+    for (const resource of hostAgentResources()) {
       const tokenId = tokenIdForResource(resource);
       if (!tokenId) continue;
+      const hostId = hostActionIdForResource(resource);
       const label =
         resource.displayName?.trim() || resource.identity?.hostname || resource.name || resource.id;
       const previous = usage.get(tokenId);
       if (previous) {
+        if (previous.hosts.some((host) => host.id === hostId)) continue;
         usage.set(tokenId, {
           count: previous.count + 1,
-          hosts: [...previous.hosts, { id: hostActionIdForResource(resource), label }],
+          hosts: [...previous.hosts, { id: hostId, label }],
         });
       } else {
-        usage.set(tokenId, { count: 1, hosts: [{ id: hostActionIdForResource(resource), label }] });
+        usage.set(tokenId, { count: 1, hosts: [{ id: hostId, label }] });
       }
     }
     return usage;
@@ -217,9 +232,9 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         'Read-only access for wall displays. Use ?token=xxx&kiosk=1 in the URL to hide navigation and filters.',
     },
     {
-      label: 'Host agent',
+      label: 'Agent',
       scopes: [HOST_AGENT_SCOPE],
-      description: 'Allow pulse-host-agent to submit OS, CPU, and disk metrics.',
+      description: 'Allow the Pulse agent to submit OS, CPU, and disk metrics.',
     },
     {
       label: 'Container report',
@@ -309,7 +324,11 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       if (!pendingDockerByToken.has(tokenId)) {
         pendingDockerByToken.set(tokenId, []);
       }
-      pendingDockerByToken.get(tokenId)!.push(dockerActionIdForResource(resource));
+      const hostIds = pendingDockerByToken.get(tokenId)!;
+      const hostId = dockerActionIdForResource(resource);
+      if (!hostIds.includes(hostId)) {
+        hostIds.push(hostId);
+      }
     }
 
     pendingDockerByToken.forEach((hostIds, tokenId) => {
@@ -318,7 +337,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     });
 
     const pendingHostsByToken = new Map<string, string[]>();
-    for (const resource of hostResources()) {
+    for (const resource of hostAgentResources()) {
       const tokenId = tokenIdForResource(resource);
       if (!tokenId) continue;
       if (activeTokenIds.has(tokenId)) continue;
@@ -328,12 +347,16 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       if (!pendingHostsByToken.has(tokenId)) {
         pendingHostsByToken.set(tokenId, []);
       }
-      pendingHostsByToken.get(tokenId)!.push(hostActionIdForResource(resource));
+      const hostIds = pendingHostsByToken.get(tokenId)!;
+      const hostId = hostActionIdForResource(resource);
+      if (!hostIds.includes(hostId)) {
+        hostIds.push(hostId);
+      }
     }
 
     pendingHostsByToken.forEach((hostIds, tokenId) => {
       if (hostIds.length === 0) return;
-      markHostsTokenRevoked(tokenId, hostIds);
+      markAgentsTokenRevoked(tokenId, hostIds);
     });
   });
 
@@ -415,8 +438,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       const agentExtra = hostUsage.hosts.length - 5;
       const agentSummary =
         agentExtra > 0 ? `${agentListPreview}, +${agentExtra} more` : agentListPreview;
-      const agentCountLabel =
-        hostUsage.count === 1 ? 'host agent' : `${hostUsage.count} host agents`;
+      const agentCountLabel = hostUsage.count === 1 ? 'agent' : `${hostUsage.count} agents`;
       messageChunks.push(`${agentCountLabel}: ${agentSummary}`);
     }
     if (messageChunks.length > 0) {
@@ -434,7 +456,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         markDockerHostsTokenRevoked(record.id, affectedDockerHostIds);
       }
       if (affectedHostAgentIds.length > 0) {
-        markHostsTokenRevoked(record.id, affectedHostAgentIds);
+        markAgentsTokenRevoked(record.id, affectedHostAgentIds);
       }
 
       const current = newTokenRecord();
@@ -747,11 +769,11 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                     if (hostUsageEntry) {
                       usageSegments.push(
                         hostUsageEntry.count === 1
-                          ? `${hostUsageEntry.hosts[0]?.label ?? 'Host agent'} (agent)`
-                          : `${hostUsageEntry.count} host agents`,
+                          ? `${hostUsageEntry.hosts[0]?.label ?? 'Agent'}`
+                          : `${hostUsageEntry.count} agents`,
                       );
                       usageTitleSegments.push(
-                        `Host agents: ${hostUsageEntry.hosts.map((host) => host.label).join(', ')}`,
+                        `Agents: ${hostUsageEntry.hosts.map((host) => host.label).join(', ')}`,
                       );
                     }
                     const hostSummary = usageSegments.length > 0 ? usageSegments.join(' • ') : '—';
@@ -772,7 +794,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                                 clip-rule="evenodd"
                               />
                             </svg>
-                            Host agents sharing this token ({hostUsageEntry!.count})
+                            Agents sharing this token ({hostUsageEntry!.count})
                           </span>
                         </Show>
                       </div>

@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from '@solidjs/router';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Card } from '@/components/shared/Card';
 import { SearchInput } from '@/components/shared/SearchInput';
-import { MigrationNoticeBanner } from '@/components/shared/MigrationNoticeBanner';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import { InfrastructureSummary } from '@/components/Infrastructure/InfrastructureSummary';
@@ -27,11 +26,6 @@ import {
   collectAvailableStatuses,
   buildStatusOptions,
 } from '@/components/Infrastructure/infrastructureSelectors';
-import {
-  dismissMigrationNotice,
-  isMigrationNoticeDismissed,
-  resolveMigrationNotice,
-} from '@/routing/migrationNotices';
 import {
   buildInfrastructurePath,
   INFRASTRUCTURE_PATH,
@@ -82,7 +76,6 @@ export function Infrastructure() {
   const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
   const [handledSourceParam, setHandledSourceParam] = createSignal<string | null>(null);
   const [handledQueryParam, setHandledQueryParam] = createSignal<string>('');
-  const [hideMigrationNotice, setHideMigrationNotice] = createSignal(true);
   const { isMobile } = useBreakpoint();
   const [deployCluster, setDeployCluster] = createSignal<{ id: string; name: string } | null>(null);
   const [filtersOpen, setFiltersOpen] = createSignal(false);
@@ -91,8 +84,8 @@ export function Infrastructure() {
   );
   let highlightTimer: number | undefined;
 
-  // URL sync can require multiple reactive updates (canonicalizing legacy params,
-  // normalizing source aliases, preserving deep-links). Navigating synchronously
+  // URL sync can require multiple reactive updates (normalizing source values,
+  // preserving deep-links). Navigating synchronously
   // for each intermediate state can trigger Solid Router's redirect protection.
   // Coalesce URL sync into a single replace-navigation per tick.
   let pendingUrlSyncHandle: number | null = null;
@@ -119,28 +112,6 @@ export function Infrastructure() {
     { key: 'kubernetes', label: 'K8s' },
     { key: 'truenas', label: 'TrueNAS' },
   ];
-
-  const migrationNotice = createMemo(() => {
-    const notice = resolveMigrationNotice(location.search);
-    if (!notice || notice.target !== 'infrastructure') return null;
-    return notice;
-  });
-
-  createEffect(() => {
-    const notice = migrationNotice();
-    if (!notice) {
-      setHideMigrationNotice(true);
-      return;
-    }
-    setHideMigrationNotice(isMigrationNoticeDismissed(notice.id));
-  });
-
-  const handleDismissMigrationNotice = () => {
-    const notice = migrationNotice();
-    if (!notice) return;
-    dismissMigrationNotice(notice.id);
-    setHideMigrationNotice(true);
-  };
 
   createEffect(() => {
     const { resource: resourceId } = parseInfrastructureLinkSearch(location.search);
@@ -189,9 +160,7 @@ export function Infrastructure() {
       return;
     }
     if (sourceParam === handledSourceParam()) return;
-    // Support legacy comma-separated params by taking the first value
-    const firstSource = sourceParam.split(',')[0].trim();
-    const normalized = normalizeSource(firstSource) ?? '';
+    const normalized = normalizeSource(sourceParam) ?? '';
     setSelectedSource(normalized);
     setHandledSourceParam(sourceParam);
   });
@@ -239,7 +208,6 @@ export function Infrastructure() {
     const nextParams = new URLSearchParams(location.search);
     nextParams.delete(INFRASTRUCTURE_QUERY_PARAMS.source);
     nextParams.delete(INFRASTRUCTURE_QUERY_PARAMS.query);
-    nextParams.delete(INFRASTRUCTURE_QUERY_PARAMS.legacyQuery);
     nextParams.delete(INFRASTRUCTURE_QUERY_PARAMS.resource);
     managedUrl.searchParams.forEach((value, key) => {
       nextParams.set(key, value);
@@ -266,22 +234,16 @@ export function Infrastructure() {
   function normalizeSource(value: string): string | null {
     const normalized = value.toLowerCase();
     switch (normalized) {
-      case 'pve':
       case 'proxmox':
-      case 'proxmox-pve':
         return 'proxmox';
       case 'agent':
-      case 'host-agent':
         return 'agent';
       case 'docker':
         return 'docker';
       case 'pbs':
-      case 'proxmox-pbs':
         return 'pbs';
       case 'pmg':
-      case 'proxmox-pmg':
         return 'pmg';
-      case 'k8s':
       case 'kubernetes':
         return 'kubernetes';
       case 'truenas':
@@ -393,15 +355,6 @@ export function Infrastructure() {
             }
           >
             <div class="space-y-3">
-              <Show when={migrationNotice() && !hideMigrationNotice()}>
-                <MigrationNoticeBanner
-                  title={migrationNotice()!.title}
-                  message={migrationNotice()!.message}
-                  learnMoreHref={migrationNotice()!.learnMoreHref}
-                  onDismiss={handleDismissMigrationNotice}
-                />
-              </Show>
-
               <Show when={!summaryCollapsed()}>
                 <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-surface">
                   <InfrastructureSummary

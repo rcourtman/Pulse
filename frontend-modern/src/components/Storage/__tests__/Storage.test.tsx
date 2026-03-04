@@ -172,13 +172,6 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
     refetch: vi.fn(),
     mutate: vi.fn(),
   }),
-  useStorageBackupsResources: () => ({
-    resources: () => hookResources,
-    loading: () => hookLoading,
-    error: () => hookError,
-    refetch: vi.fn(),
-    mutate: vi.fn(),
-  }),
   useUnifiedResources: () => ({
     resources: () => nodeResources,
     loading: () => false,
@@ -338,7 +331,7 @@ describe('Storage', () => {
       buildStorageResource('storage-1', 'Ceph-Store', 'pve1', { storageType: 'cephfs' }),
     ];
     mockLocationSearch =
-      '?tab=disks&search=ceph&group=status&source=proxmox-pve&status=warning&node=node-2&sort=usage&order=desc&from=proxmox-overview';
+      '?tab=disks&q=ceph&group=status&source=proxmox-pve&status=warning&node=node-2&sort=usage&order=desc&from=proxmox-overview';
 
     render(() => <Storage />);
 

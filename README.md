@@ -29,8 +29,7 @@ Pulse now groups everything by task instead of data source:
 - **Workloads** for VMs, containers, and Kubernetes pods
 - **Storage** and **Backups** as top-level views
 - PMG now routes into **Infrastructure** (source filter), and Kubernetes routes into **Workloads** (K8s filter)
-- Legacy `/services` and `/kubernetes` URLs are compatibility redirects; update bookmarks to canonical routes
-- Admins can sunset all legacy redirects immediately with `PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS=true` (or `disableLegacyRouteRedirects` in `system.json`)
+- Legacy URLs are no longer routed as compatibility aliases; use canonical v6 routes.
 
 Power-user shortcuts:
 - `g i` → Infrastructure, `g w` → Workloads, `?` → shortcuts help

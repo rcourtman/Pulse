@@ -130,7 +130,9 @@ describe('DemoBanner', () => {
     fireEvent.click(dismissBtn);
 
     await waitFor(() => {
-      expect(screen.queryByText('Demo instance with mock data (read-only)')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('Demo instance with mock data (read-only)'),
+      ).not.toBeInTheDocument();
     });
   });
 

@@ -139,7 +139,6 @@ class ApiClient {
 
     try {
       storage.removeItem(AUTH_STORAGE_KEY);
-      storage.removeItem(STORAGE_KEYS.LEGACY_TOKEN);
     } catch {
       // Ignore storage quota errors
     }
@@ -210,19 +209,7 @@ class ApiClient {
         }
       }
     } catch {
-      // Ignore parse failures and fall back to legacy key if present.
-    }
-
-    // Legacy storage key used before apiClient refactor
-    const legacyToken = storage.getItem(STORAGE_KEYS.LEGACY_TOKEN);
-    if (legacyToken) {
-      this.apiToken = legacyToken;
-      this.persistToken(legacyToken);
-      try {
-        storage.removeItem(STORAGE_KEYS.LEGACY_TOKEN);
-      } catch {
-        // Ignore storage errors.
-      }
+      // Ignore parse failures.
     }
   }
 
@@ -359,22 +346,6 @@ class ApiClient {
       } catch {
         // Ignore storage errors.
       }
-    }
-
-    try {
-      const legacyToken = storage.getItem(STORAGE_KEYS.LEGACY_TOKEN);
-      const sanitizedLegacyToken = sanitizeApiToken(legacyToken);
-      if (sanitizedLegacyToken) {
-        this.apiToken = sanitizedLegacyToken;
-        this.persistToken(sanitizedLegacyToken);
-        storage.removeItem(STORAGE_KEYS.LEGACY_TOKEN);
-        return sanitizedLegacyToken;
-      }
-      if (legacyToken) {
-        storage.removeItem(STORAGE_KEYS.LEGACY_TOKEN);
-      }
-    } catch {
-      // Ignore storage errors.
     }
 
     return null;
@@ -542,7 +513,6 @@ class ApiClient {
       '/api/settings/ai',
       '/api/charts',
       '/api/charts/infrastructure',
-      '/api/charts/infrastructure-summary',
     ];
     const shouldSkipRedirect = skipRedirectUrls.some((path) => url.includes(path));
     if (response.status === 401 && !shouldSkipRedirect) {

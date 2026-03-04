@@ -65,8 +65,7 @@ function createMockWizard(
     candidatesError,
     selectedNodeIds,
     deployableNodes: (() => deployableData) as Accessor<CandidateNode[]>,
-    onlineSourceAgents: (() =>
-      overrides.onlineSourceAgents ?? []) as Accessor<SourceAgentInfo[]>,
+    onlineSourceAgents: (() => overrides.onlineSourceAgents ?? []) as Accessor<SourceAgentInfo[]>,
     selectedSourceAgent,
     setSelectedSourceAgent,
     toggleNodeSelection,
@@ -195,9 +194,7 @@ describe('CandidatesStep', () => {
       });
       render(() => <CandidatesStep wizard={wizard} />);
 
-      expect(
-        screen.getByText(/No online source agents found/),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/No online source agents found/)).toBeInTheDocument();
     });
   });
 
@@ -315,7 +312,11 @@ describe('CandidatesStep', () => {
     it('shows the custom reason for non-deployable nodes', () => {
       const wizard = createMockWizard({
         candidates: [
-          makeCandidate({ deployable: false, hasAgent: false, reason: 'Offline (last seen 2h ago)' }),
+          makeCandidate({
+            deployable: false,
+            hasAgent: false,
+            reason: 'Offline (last seen 2h ago)',
+          }),
         ],
         candidatesLoading: false,
       });

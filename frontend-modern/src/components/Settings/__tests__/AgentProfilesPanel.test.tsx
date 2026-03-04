@@ -3,7 +3,7 @@ import { render, screen, waitFor, fireEvent, cleanup, within } from '@solidjs/te
 import { AgentProfilesPanel } from '../AgentProfilesPanel';
 import type { Resource } from '@/types/resource';
 
-let mockHostResources: Resource[] = [];
+let mockResources: Resource[] = [];
 
 const listProfilesMock = vi.fn();
 const listAssignmentsMock = vi.fn();
@@ -12,7 +12,7 @@ const unassignProfileMock = vi.fn();
 
 vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({
-    byType: (type: string) => (type === 'host' ? mockHostResources : []),
+    resources: () => mockResources,
   }),
 }));
 
@@ -61,7 +61,7 @@ vi.mock('@/utils/upgradeMetrics', () => ({
 
 const makeHostResource = (overrides: Partial<Resource> = {}): Resource => ({
   id: 'hash-host-resource-id',
-  type: 'host',
+  type: 'node',
   name: 'host-one',
   displayName: 'Host One',
   platformId: 'host-one',
@@ -74,8 +74,41 @@ const makeHostResource = (overrides: Partial<Resource> = {}): Resource => ({
   ...overrides,
 });
 
+const makeNodeResource = (overrides: Partial<Resource> = {}): Resource => ({
+  id: 'node-resource-id',
+  type: 'node',
+  name: 'pve-node-1',
+  displayName: 'PVE Node One',
+  platformId: 'pve-node-1',
+  platformType: 'proxmox-pve',
+  sourceType: 'hybrid',
+  status: 'online',
+  lastSeen: Date.now(),
+  identity: { hostname: 'pve-node-1' },
+  agent: { agentId: 'node-agent-1' },
+  ...overrides,
+});
+
+const makeDockerHostResource = (overrides: Partial<Resource> = {}): Resource => ({
+  id: 'docker-host-resource-id',
+  type: 'docker-host',
+  name: 'docker-host-1',
+  displayName: 'Docker Host One',
+  platformId: 'docker-host-1',
+  platformType: 'docker',
+  sourceType: 'agent',
+  status: 'online',
+  lastSeen: Date.now(),
+  identity: { hostname: 'docker-host-1' },
+  platformData: {
+    agent: { agentId: 'agent-123' },
+    docker: { hostSourceId: 'docker-host-1' },
+  },
+  ...overrides,
+});
+
 beforeEach(() => {
-  mockHostResources = [makeHostResource()];
+  mockResources = [makeHostResource()];
   listProfilesMock.mockReset();
   listAssignmentsMock.mockReset();
   assignProfileMock.mockReset();
@@ -154,5 +187,38 @@ describe('AgentProfilesPanel V6 agent ID handling', () => {
     await waitFor(() => {
       expect(unassignProfileMock).toHaveBeenCalledWith('agent-123');
     });
+  });
+
+  it('lists assignable non-host v6 resources (e.g. node agents)', async () => {
+    mockResources = [makeNodeResource()];
+
+    render(() => <AgentProfilesPanel />);
+
+    const agentCell = await screen.findByText('PVE Node One');
+    const row = agentCell.closest('tr') as HTMLElement;
+    const assignmentSelect = within(row).getByRole('combobox') as HTMLSelectElement;
+    await waitFor(() => {
+      expect(
+        within(assignmentSelect).getByRole('option', { name: 'Profile A' }),
+      ).toBeInTheDocument();
+    });
+    fireEvent.change(assignmentSelect, { target: { value: 'profile-a' } });
+
+    await waitFor(() => {
+      expect(assignProfileMock).toHaveBeenCalledWith('node-agent-1', 'profile-a');
+    });
+  });
+
+  it('deduplicates resources that share the same actionable agent ID', async () => {
+    mockResources = [
+      makeDockerHostResource(),
+      makeNodeResource({ agent: { agentId: 'agent-123' } }),
+    ];
+
+    render(() => <AgentProfilesPanel />);
+
+    await screen.findByText('PVE Node One');
+    expect(screen.queryByText('Docker Host One')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('combobox')).toHaveLength(1);
   });
 });

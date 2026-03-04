@@ -3,18 +3,10 @@
 import type { Resource } from './resource';
 
 export interface State {
-  nodes: Node[];
-  vms: VM[];
-  containers: Container[];
-  dockerHosts: DockerHost[];
+  // Canonical v6 resource contract.
+  // Platform entities (nodes, guests, host agents, storage, PBS/PMG, etc.) are modeled in `resources`.
   removedDockerHosts?: RemovedDockerHost[];
-  kubernetesClusters?: KubernetesCluster[];
   removedKubernetesClusters?: RemovedKubernetesCluster[];
-  hosts: Host[];
-  replicationJobs: ReplicationJob[];
-  storage: Storage[];
-  pbs: PBSInstance[];
-  pmg: PMGInstance[];
   metrics: Metric[];
   performance: Performance;
   connectionHealth: Record<string, boolean>;
@@ -520,7 +512,7 @@ export interface HostDiskIO {
   ioTimeMs?: number;
 }
 
-export interface HostLookupResponse {
+export interface AgentLookupResponse {
   success: boolean;
   host: {
     id: string;
@@ -532,6 +524,9 @@ export interface HostLookupResponse {
     agentVersion?: string;
   };
 }
+
+// Compatibility alias while host naming is phased out from call sites.
+export type HostLookupResponse = AgentLookupResponse;
 
 export interface ReplicationJob {
   id: string;

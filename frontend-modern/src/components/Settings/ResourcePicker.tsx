@@ -33,7 +33,6 @@ const typeFilterLabels: Record<TypeFilter, string> = {
 
 const REPORTABLE_RESOURCE_TYPES = new Set<ResourceType>([
   'node',
-  'host',
   'docker-host',
   'k8s-cluster',
   'k8s-node',
@@ -54,7 +53,6 @@ const REPORTABLE_RESOURCE_TYPES = new Set<ResourceType>([
 
 const INFRASTRUCTURE_TYPES = new Set<ResourceType>([
   'node',
-  'host',
   'docker-host',
   'k8s-cluster',
   'k8s-node',
@@ -80,7 +78,7 @@ function normalizeType(type: ResourceType): string {
   if (type === 'system-container' || type === 'oci-container' || type === 'container')
     return 'container';
   if (type === 'app-container' || type === 'docker-container') return 'docker';
-  if (type === 'docker-host') return 'host';
+  if (type === 'docker-host') return 'agent';
   if (type === 'k8s-node') return 'node';
   if (type === 'k8s-cluster') return 'cluster';
   return type;
@@ -89,8 +87,8 @@ function normalizeType(type: ResourceType): string {
 function toReportResourceType(type: ResourceType): string {
   if (type === 'system-container' || type === 'oci-container' || type === 'container')
     return 'container';
-  if (type === 'app-container' || type === 'docker-container') return 'docker';
-  if (type === 'docker-host') return 'host';
+  if (type === 'app-container' || type === 'docker-container') return 'dockerContainer';
+  if (type === 'docker-host') return 'dockerHost';
   return type;
 }
 
@@ -125,9 +123,8 @@ function getTypeBadge(type: ResourceType): { label: string; classes: string } {
     case 'node':
     case 'k8s-node':
       return { label: 'Node', classes: 'bg-blue-500 text-blue-300' };
-    case 'host':
     case 'docker-host':
-      return { label: 'Host', classes: 'bg-slate-500 text-slate-300' };
+      return { label: 'Agent', classes: 'bg-slate-500 text-slate-300' };
     case 'k8s-cluster':
       return { label: 'K8s', classes: 'bg-slate-500 text-slate-300' };
     case 'vm':
@@ -194,7 +191,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
     result.sort((a, b) => {
       const typeOrder: Record<string, number> = {
         node: 0,
-        host: 1,
+        agent: 1,
         cluster: 2,
         pbs: 3,
         pmg: 4,

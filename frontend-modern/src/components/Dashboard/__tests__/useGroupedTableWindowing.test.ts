@@ -38,9 +38,7 @@ describe('useGroupedTableWindowing', () => {
     disposers.length = 0;
   });
 
-  function setup(
-    opts: Partial<UseGroupedTableWindowingOptions> & { totalRowCount: () => number },
-  ) {
+  function setup(opts: Partial<UseGroupedTableWindowingOptions> & { totalRowCount: () => number }) {
     const { result, dispose } = createHook(opts);
     disposers.push(dispose);
     return result;

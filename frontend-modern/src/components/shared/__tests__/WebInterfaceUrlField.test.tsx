@@ -8,14 +8,14 @@ vi.mock('@/api/guestMetadata', () => ({
   },
 }));
 
-vi.mock('@/api/hostMetadata', () => ({
-  HostMetadataAPI: {
+vi.mock('@/api/agentMetadata', () => ({
+  AgentMetadataAPI: {
     getMetadata: vi.fn(async () => ({ id: 'host-1', customUrl: '' })),
     updateMetadata: vi.fn(async () => ({ id: 'host-1', customUrl: '' })),
   },
 }));
 
-import { HostMetadataAPI } from '@/api/hostMetadata';
+import { AgentMetadataAPI } from '@/api/agentMetadata';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 
 describe('WebInterfaceUrlField', () => {
@@ -26,7 +26,7 @@ describe('WebInterfaceUrlField', () => {
 
   it('renders URL controls for a metadata target', async () => {
     render(() => (
-      <WebInterfaceUrlField metadataKind="host" metadataId="host-1" targetLabel="host" />
+      <WebInterfaceUrlField metadataKind="agent" metadataId="host-1" targetLabel="agent" />
     ));
 
     expect(await screen.findByText('Web Interface URL')).toBeInTheDocument();
@@ -36,9 +36,9 @@ describe('WebInterfaceUrlField', () => {
   it('saves a host URL through metadata API', async () => {
     render(() => (
       <WebInterfaceUrlField
-        metadataKind="host"
+        metadataKind="agent"
         metadataId="host-1"
-        targetLabel="host"
+        targetLabel="agent"
         customUrl=""
       />
     ));
@@ -48,7 +48,7 @@ describe('WebInterfaceUrlField', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
-      expect(HostMetadataAPI.updateMetadata).toHaveBeenCalledWith('host-1', {
+      expect(AgentMetadataAPI.updateMetadata).toHaveBeenCalledWith('host-1', {
         customUrl: 'https://pve1.local:8006',
       });
     });

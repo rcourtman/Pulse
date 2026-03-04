@@ -23,7 +23,6 @@ import { NodeModal } from './NodeModal';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { UnifiedAgents } from './UnifiedAgents';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
-import { OIDCPanel } from './OIDCPanel';
 import { SSOProvidersPanel } from './SSOProvidersPanel';
 import { AISettings } from './AISettings';
 import { AICostDashboard } from '@/components/AI/AICostDashboard';
@@ -31,9 +30,9 @@ import { GeneralSettingsPanel } from './GeneralSettingsPanel';
 import { NetworkSettingsPanel } from './NetworkSettingsPanel';
 import { UpdatesSettingsPanel } from './UpdatesSettingsPanel';
 import { UpdateConfirmationModal } from '@/components/UpdateConfirmationModal';
-import { BackupsSettingsPanel } from './BackupsSettingsPanel';
+import { RecoverySettingsPanel } from './RecoverySettingsPanel';
 import { ProLicensePanel } from './ProLicensePanel';
-import { HostLedgerPanel } from './HostLedgerPanel';
+import { AgentLedgerPanel } from './AgentLedgerPanel';
 import { SecurityAuthPanel } from './SecurityAuthPanel';
 import { APIAccessPanel } from './APIAccessPanel';
 import { SecurityOverviewPanel } from './SecurityOverviewPanel';
@@ -83,6 +82,11 @@ import { eventBus } from '@/stores/events';
 
 import { updateStore } from '@/stores/updates';
 import { isPro, loadLicenseStatus } from '@/stores/license';
+import {
+  nodeFromResource,
+  pbsInstanceFromResource,
+  pmgInstanceFromResource,
+} from '@/utils/resourceStateAdapters';
 
 // Type definitions
 interface DiscoveredServer {
@@ -120,12 +124,11 @@ interface DiscoveryScanStatus {
 type SettingsTab =
   | 'proxmox'
   | 'docker'
-  | 'hosts'
   | 'agents'
   | 'system-general'
   | 'system-network'
   | 'system-updates'
-  | 'system-backups'
+  | 'system-recovery'
   | 'system-ai'
   | 'system-pro'
   | 'api'
@@ -135,7 +138,6 @@ type SettingsTab =
   | 'security-roles'
   | 'security-users'
   | 'security-audit'
-  | 'updates'
   | 'security-webhooks';
 
 type AgentKey = 'pve' | 'pbs' | 'pmg';
@@ -151,13 +153,9 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
     description:
       'Monitor Docker hosts, containers, images, and volumes across your infrastructure.',
   },
-  hosts: {
-    title: 'Hosts',
-    description: 'Monitor Linux, macOS, and Windows machines—servers, desktops, and laptops.',
-  },
   agents: {
     title: 'Agents',
-    description: 'Install and manage the unified Pulse agent for host and Docker monitoring.',
+    description: 'Install and manage the unified Pulse agent for system and Docker monitoring.',
   },
   'system-general': {
     title: 'General Settings',
@@ -172,7 +170,7 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
     description:
       'Check for updates, configure update channels, and manage automatic update checks.',
   },
-  'system-backups': {
+  'system-recovery': {
     title: 'Backup Polling',
     description: 'Control how often Pulse queries Proxmox for backup tasks and snapshots.',
   },
@@ -217,10 +215,6 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
     title: 'Audit Webhooks',
     description: 'Configure real-time delivery of audit events to external systems.',
   },
-  updates: {
-    title: 'Update History',
-    description: 'Review past software updates, rollback events, and upgrade audit logs.',
-  },
 };
 
 const BACKUP_INTERVAL_OPTIONS = [
@@ -263,30 +257,19 @@ const Settings: Component<SettingsProps> = (props) => {
   const location = useLocation();
 
   const deriveTabFromPath = (path: string): SettingsTab => {
-    if (path.includes('/settings/proxmox')) return 'proxmox';
-    if (path.includes('/settings/agent-hub')) return 'proxmox';
-    if (path.includes('/settings/docker')) return 'docker';
-    if (path.includes('/settings/containers')) return 'agents';
-    if (
-      path.includes('/settings/hosts') ||
-      path.includes('/settings/host-agents') ||
-      path.includes('/settings/servers') ||
-      path.includes('/settings/linuxServers') ||
-      path.includes('/settings/windowsServers') ||
-      path.includes('/settings/macServers') ||
-      path.includes('/settings/agents')
-    )
-      return 'agents';
+    if (path.includes('/settings/workloads/docker')) return 'docker';
+    if (path.includes('/settings/infrastructure')) return 'proxmox';
+    if (path.includes('/settings/workloads')) return 'agents';
     if (path.includes('/settings/system-general')) return 'system-general';
     if (path.includes('/settings/system-network')) return 'system-network';
     if (path.includes('/settings/system-updates')) return 'system-updates';
-    if (path.includes('/settings/system-backups')) return 'system-backups';
+    if (path.includes('/settings/system-recovery')) return 'system-recovery';
     if (path.includes('/settings/system-ai')) return 'system-ai';
     if (path.includes('/settings/system-pro')) return 'system-pro';
     // Generic /settings/system fallback must come AFTER specific system-* paths
     // because /settings/system-logs contains /settings/system as a substring
     if (path.includes('/settings/system')) return 'system-general';
-    if (path.includes('/settings/api')) return 'api';
+    if (path.includes('/settings/integrations/api')) return 'api';
     if (path.includes('/settings/security-overview')) return 'security-overview';
     if (path.includes('/settings/security-auth')) return 'security-auth';
     if (path.includes('/settings/security-sso')) return 'security-sso';
@@ -296,26 +279,13 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/security-webhooks')) return 'security-webhooks';
     // Generic /settings/security fallback must come AFTER specific security-* paths
     if (path.includes('/settings/security')) return 'security-overview';
-    if (path.includes('/settings/updates')) return 'updates';
-    // Legacy platform paths map to the Proxmox tab
-    if (
-      path.includes('/settings/pve') ||
-      path.includes('/settings/pbs') ||
-      path.includes('/settings/pmg') ||
-      path.includes('/settings/docker') ||
-      path.includes('/settings/linuxServers') ||
-      path.includes('/settings/windowsServers') ||
-      path.includes('/settings/macServers')
-    ) {
-      return 'proxmox';
-    }
     return 'proxmox';
   };
 
   const deriveAgentFromPath = (path: string): AgentKey | null => {
-    if (path.includes('/settings/pve')) return 'pve';
-    if (path.includes('/settings/pbs')) return 'pbs';
-    if (path.includes('/settings/pmg')) return 'pmg';
+    if (path.includes('/settings/infrastructure/pve')) return 'pve';
+    if (path.includes('/settings/infrastructure/pbs')) return 'pbs';
+    if (path.includes('/settings/infrastructure/pmg')) return 'pmg';
     return null;
   };
 
@@ -327,9 +297,9 @@ const Settings: Component<SettingsProps> = (props) => {
   const [selectedAgent, setSelectedAgent] = createSignal<AgentKey>('pve');
 
   const agentPaths: Record<AgentKey, string> = {
-    pve: '/settings/pve',
-    pbs: '/settings/pbs',
-    pmg: '/settings/pmg',
+    pve: '/settings/infrastructure/pve',
+    pbs: '/settings/infrastructure/pbs',
+    pmg: '/settings/infrastructure/pmg',
   };
 
   const handleSelectAgent = (agent: AgentKey) => {
@@ -347,7 +317,18 @@ const Settings: Component<SettingsProps> = (props) => {
     if (tab === 'proxmox' && deriveAgentFromPath(location.pathname) === null) {
       setSelectedAgent('pve');
     }
-    const targetPath = `/settings/${tab}`;
+    const targetPath =
+      tab === 'proxmox'
+        ? '/settings/infrastructure'
+        : tab === 'agents'
+          ? '/settings/workloads'
+          : tab === 'docker'
+            ? '/settings/workloads/docker'
+            : tab === 'api'
+              ? '/settings/integrations/api'
+              : tab === 'system-recovery'
+                ? '/settings/system-recovery'
+                : `/settings/${tab}`;
     if (location.pathname !== targetPath) {
       navigate(targetPath, { scroll: false });
       return;
@@ -373,42 +354,6 @@ const Settings: Component<SettingsProps> = (props) => {
             setCurrentTab('proxmox');
           }
           setSelectedAgent('pve');
-          return;
-        }
-
-        if (path.startsWith('/settings/agent-hub')) {
-          navigate(path.replace('/settings/agent-hub', '/settings/proxmox'), {
-            replace: true,
-            scroll: false,
-          });
-          return;
-        }
-
-        if (path.startsWith('/settings/servers')) {
-          navigate(path.replace('/settings/servers', '/settings/hosts'), {
-            replace: true,
-            scroll: false,
-          });
-          return;
-        }
-
-        if (path.startsWith('/settings/containers')) {
-          navigate(path.replace('/settings/containers', '/settings/docker'), {
-            replace: true,
-            scroll: false,
-          });
-          return;
-        }
-
-        if (
-          path.startsWith('/settings/linuxServers') ||
-          path.startsWith('/settings/windowsServers') ||
-          path.startsWith('/settings/macServers')
-        ) {
-          navigate('/settings/hosts', {
-            replace: true,
-            scroll: false,
-          });
           return;
         }
 
@@ -458,6 +403,24 @@ const Settings: Component<SettingsProps> = (props) => {
   const pveNodes = createMemo(() => nodes().filter((n) => n.type === 'pve'));
   const pbsNodes = createMemo(() => nodes().filter((n) => n.type === 'pbs'));
   const pmgNodes = createMemo(() => nodes().filter((n) => n.type === 'pmg'));
+  const unifiedNodeSnapshots = createMemo(() =>
+    (state.resources || [])
+      .filter((resource) => resource.type === 'node')
+      .map(nodeFromResource)
+      .filter((node): node is NonNullable<typeof node> => Boolean(node)),
+  );
+  const pbsInstancesFromResources = createMemo(() =>
+    (state.resources || [])
+      .filter((resource) => resource.type === 'pbs')
+      .map(pbsInstanceFromResource)
+      .filter((instance): instance is NonNullable<typeof instance> => Boolean(instance)),
+  );
+  const pmgInstancesFromResources = createMemo(() =>
+    (state.resources || [])
+      .filter((resource) => resource.type === 'pmg')
+      .map(pmgInstanceFromResource)
+      .filter((instance): instance is NonNullable<typeof instance> => Boolean(instance)),
+  );
 
   // System settings
   const [pvePollingInterval, setPVEPollingInterval] = createSignal<number>(PVE_POLLING_MIN_SECONDS);
@@ -484,8 +447,6 @@ const Settings: Component<SettingsProps> = (props) => {
   const [savingDockerUpdateActions, setSavingDockerUpdateActions] = createSignal(false);
 
   // Miscellaneous System settings
-  const [disableLegacyRouteRedirects, setDisableLegacyRouteRedirects] = createSignal(false);
-  const [savingLegacyRedirects, setSavingLegacyRedirects] = createSignal(false);
   const [disableLocalUpgradeMetrics, setDisableLocalUpgradeMetrics] = createSignal(false);
   const [savingUpgradeMetrics, setSavingUpgradeMetrics] = createSignal(false);
   const [telemetryEnabled, setTelemetryEnabled] = createSignal(true);
@@ -502,11 +463,6 @@ const Settings: Component<SettingsProps> = (props) => {
     Boolean(
       envOverrides().disableDockerUpdateActions ||
       envOverrides()['PULSE_DISABLE_DOCKER_UPDATE_ACTIONS'],
-    );
-  const disableLegacyRouteRedirectsLocked = () =>
-    Boolean(
-      envOverrides().disableLegacyRouteRedirects ||
-      envOverrides()['PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS'],
     );
   const disableLocalUpgradeMetricsLocked = () =>
     Boolean(
@@ -636,30 +592,6 @@ const Settings: Component<SettingsProps> = (props) => {
       setDisableDockerUpdateActions(previous);
     } finally {
       setSavingDockerUpdateActions(false);
-    }
-  };
-
-  const handleDisableLegacyRouteRedirectsChange = async (disabled: boolean): Promise<void> => {
-    if (disableLegacyRouteRedirectsLocked() || savingLegacyRedirects()) return;
-    const previous = disableLegacyRouteRedirects();
-    setDisableLegacyRouteRedirects(disabled);
-    setSavingLegacyRedirects(true);
-    try {
-      await SettingsAPI.updateSystemSettings({ disableLegacyRouteRedirects: disabled });
-      const { updateLegacyRouteRedirectsSetting } = await import('@/stores/systemSettings');
-      updateLegacyRouteRedirectsSetting(disabled);
-      notificationStore.success(
-        disabled ? 'Legacy URL redirects disabled' : 'Legacy URL redirects enabled',
-        2000,
-      );
-    } catch (error) {
-      logger.error('Failed to update legacy route redirects setting', error);
-      notificationStore.error(
-        error instanceof Error ? error.message : 'Failed to update legacy route redirects setting',
-      );
-      setDisableLegacyRouteRedirects(previous);
-    } finally {
-      setSavingLegacyRedirects(false);
     }
   };
 
@@ -800,7 +732,6 @@ const Settings: Component<SettingsProps> = (props) => {
     null,
   );
   const [showQuickSecuritySetup, setShowQuickSecuritySetup] = createSignal(false);
-  const authDisabledByEnv = createMemo(() => Boolean(securityStatus()?.deprecatedDisableAuth));
   const [showQuickSecurityWizard, setShowQuickSecurityWizard] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal('');
   let searchInputRef: HTMLInputElement | undefined;
@@ -856,8 +787,8 @@ const Settings: Component<SettingsProps> = (props) => {
           iconProps: { strokeWidth: 2 },
         },
         {
-          id: 'system-backups',
-          label: 'Backups',
+          id: 'system-recovery',
+          label: 'Recovery',
           icon: Clock,
           iconProps: { strokeWidth: 2 },
         },
@@ -987,8 +918,7 @@ const Settings: Component<SettingsProps> = (props) => {
     try {
       const nodesList = await NodesAPI.getNodes();
       // Merge temperature data from WebSocket state (if available)
-      // state is a store object, not a function
-      const stateNodes = state.nodes;
+      const stateNodes = unifiedNodeSnapshots();
       const nodesWithStatus = nodesList.map((node) => {
         // Find matching node in state to get temperature data
         // State uses a unified 'nodes' array for all node types
@@ -1052,12 +982,6 @@ const Settings: Component<SettingsProps> = (props) => {
       setSecurityStatusLoading(false);
     }
   };
-
-  createEffect(() => {
-    if (authDisabledByEnv() && showQuickSecuritySetup()) {
-      setShowQuickSecuritySetup(false);
-    }
-  });
 
   const updateDiscoveredNodesFromServers = (
     servers: RawDiscoveredServer[] | undefined | null,
@@ -1680,7 +1604,6 @@ const Settings: Component<SettingsProps> = (props) => {
         // Load Docker update actions setting
         setDisableDockerUpdateActions(systemSettings.disableDockerUpdateActions ?? false);
 
-        setDisableLegacyRouteRedirects(systemSettings.disableLegacyRouteRedirects ?? false);
         setDisableLocalUpgradeMetrics(systemSettings.disableLocalUpgradeMetrics ?? false);
         setTelemetryEnabled(systemSettings.telemetryEnabled ?? true);
 
@@ -1760,7 +1683,7 @@ const Settings: Component<SettingsProps> = (props) => {
   // Re-merge temperature data from WebSocket state when it updates
   createEffect(
     on(
-      () => state.nodes,
+      () => unifiedNodeSnapshots(),
       (stateNodes) => {
         const currentNodes = nodes();
 
@@ -1800,7 +1723,7 @@ const Settings: Component<SettingsProps> = (props) => {
         activeTab() === 'system-general' ||
         activeTab() === 'system-network' ||
         activeTab() === 'system-updates' ||
-        activeTab() === 'system-backups'
+        activeTab() === 'system-recovery'
       ) {
         // Save system settings using typed API
         await SettingsAPI.updateSystemSettings({
@@ -2152,7 +2075,13 @@ const Settings: Component<SettingsProps> = (props) => {
       // But for Import, we might want to trigger the token modal if it was a token issue
       // Note: apiFetch throws Error with message.
 
-      if (errorText.includes('API_TOKEN') || errorText.includes('API_TOKENS')) {
+      const normalizedError = errorText.toLowerCase();
+      if (
+        errorText.includes('API_TOKEN') ||
+        errorText.includes('API_TOKENS') ||
+        normalizedError.includes('api token') ||
+        normalizedError.includes('x-api-token')
+      ) {
         setApiTokenModalSource('import');
         setShowApiTokenModal(true);
         return;
@@ -2179,7 +2108,7 @@ const Settings: Component<SettingsProps> = (props) => {
               activeTab() === 'system-general' ||
               activeTab() === 'system-network' ||
               activeTab() === 'system-updates' ||
-              activeTab() === 'system-backups')
+              activeTab() === 'system-recovery')
           }
         >
           <div class="bg-amber-50 dark:bg-amber-900 border-l-4 border-amber-500 dark:border-amber-400 rounded-r-lg shadow-sm p-4">
@@ -2438,7 +2367,7 @@ const Settings: Component<SettingsProps> = (props) => {
                       </p>
                       <button
                         type="button"
-                        onClick={() => navigate('/settings/agents')}
+                        onClick={() => navigate('/settings/workloads')}
                         class="mt-2 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200 underline"
                       >
                         Install agent →
@@ -2561,7 +2490,6 @@ const Settings: Component<SettingsProps> = (props) => {
                             <PveNodesTable
                               nodes={pveNodes()}
                               stateNodes={(state.resources ?? []).filter((r) => r.type === 'node')}
-                              stateHosts={(state.resources ?? []).filter((r) => r.type === 'host')}
                               globalTemperatureMonitoringEnabled={temperatureMonitoringEnabled()}
                               onTestConnection={testNodeConnection}
                               onEdit={(node) => {
@@ -2846,7 +2774,7 @@ const Settings: Component<SettingsProps> = (props) => {
                           <Show when={pbsNodes().length > 0}>
                             <PbsNodesTable
                               nodes={pbsNodes()}
-                              statePbs={state.pbs ?? []}
+                              statePbs={pbsInstancesFromResources()}
                               globalTemperatureMonitoringEnabled={temperatureMonitoringEnabled()}
                               onTestConnection={testNodeConnection}
                               onEdit={(node) => {
@@ -3130,7 +3058,7 @@ const Settings: Component<SettingsProps> = (props) => {
                           <Show when={pmgNodes().length > 0}>
                             <PmgNodesTable
                               nodes={pmgNodes()}
-                              statePmg={state.pmg ?? []}
+                              statePmg={pmgInstancesFromResources()}
                               globalTemperatureMonitoringEnabled={temperatureMonitoringEnabled()}
                               onTestConnection={testNodeConnection}
                               onEdit={(node) => {
@@ -3408,31 +3336,27 @@ const Settings: Component<SettingsProps> = (props) => {
                   </div>
                 </Show>
                 <Show when={initialLoadComplete()}>
-                <GeneralSettingsPanel
-                  darkMode={props.darkMode}
-                  themePreference={props.themePreference}
-                  setThemePreference={props.setThemePreference}
-                  pvePollingInterval={pvePollingInterval}
-                  setPVEPollingInterval={setPVEPollingInterval}
-                  pvePollingSelection={pvePollingSelection}
-                  setPVEPollingSelection={setPVEPollingSelection}
-                  pvePollingCustomSeconds={pvePollingCustomSeconds}
-                  setPVEPollingCustomSeconds={setPVEPollingCustomSeconds}
-                  pvePollingEnvLocked={pvePollingEnvLocked}
-                  setHasUnsavedChanges={setHasUnsavedChanges}
-                  disableLegacyRouteRedirects={disableLegacyRouteRedirects}
-                  disableLegacyRouteRedirectsLocked={disableLegacyRouteRedirectsLocked}
-                  savingLegacyRedirects={savingLegacyRedirects}
-                  handleDisableLegacyRouteRedirectsChange={handleDisableLegacyRouteRedirectsChange}
-                  disableLocalUpgradeMetrics={disableLocalUpgradeMetrics}
-                  disableLocalUpgradeMetricsLocked={disableLocalUpgradeMetricsLocked}
-                  savingUpgradeMetrics={savingUpgradeMetrics}
-                  handleDisableLocalUpgradeMetricsChange={handleDisableLocalUpgradeMetricsChange}
-                  telemetryEnabled={telemetryEnabled}
-                  telemetryEnabledLocked={telemetryEnabledLocked}
-                  savingTelemetry={savingTelemetry}
-                  handleTelemetryEnabledChange={handleTelemetryEnabledChange}
-                />
+                  <GeneralSettingsPanel
+                    darkMode={props.darkMode}
+                    themePreference={props.themePreference}
+                    setThemePreference={props.setThemePreference}
+                    pvePollingInterval={pvePollingInterval}
+                    setPVEPollingInterval={setPVEPollingInterval}
+                    pvePollingSelection={pvePollingSelection}
+                    setPVEPollingSelection={setPVEPollingSelection}
+                    pvePollingCustomSeconds={pvePollingCustomSeconds}
+                    setPVEPollingCustomSeconds={setPVEPollingCustomSeconds}
+                    pvePollingEnvLocked={pvePollingEnvLocked}
+                    setHasUnsavedChanges={setHasUnsavedChanges}
+                    disableLocalUpgradeMetrics={disableLocalUpgradeMetrics}
+                    disableLocalUpgradeMetricsLocked={disableLocalUpgradeMetricsLocked}
+                    savingUpgradeMetrics={savingUpgradeMetrics}
+                    handleDisableLocalUpgradeMetricsChange={handleDisableLocalUpgradeMetricsChange}
+                    telemetryEnabled={telemetryEnabled}
+                    telemetryEnabledLocked={telemetryEnabledLocked}
+                    savingTelemetry={savingTelemetry}
+                    handleTelemetryEnabledChange={handleTelemetryEnabledChange}
+                  />
                 </Show>
               </Show>
 
@@ -3495,9 +3419,9 @@ const Settings: Component<SettingsProps> = (props) => {
                 />
               </Show>
 
-              {/* System Backups Tab */}
-              <Show when={activeTab() === 'system-backups'}>
-                <BackupsSettingsPanel
+              {/* System Recovery Tab */}
+              <Show when={activeTab() === 'system-recovery'}>
+                <RecoverySettingsPanel
                   backupPollingEnabled={backupPollingEnabled}
                   setBackupPollingEnabled={setBackupPollingEnabled}
                   backupPollingInterval={backupPollingInterval}
@@ -3531,7 +3455,7 @@ const Settings: Component<SettingsProps> = (props) => {
               <Show when={activeTab() === 'system-pro'}>
                 <div class="space-y-6">
                   <ProLicensePanel />
-                  <HostLedgerPanel />
+                  <AgentLedgerPanel />
                 </div>
               </Show>
 
@@ -3560,7 +3484,6 @@ const Settings: Component<SettingsProps> = (props) => {
                   securityStatus={securityStatus}
                   securityStatusLoading={securityStatusLoading}
                   versionInfo={versionInfo}
-                  authDisabledByEnv={authDisabledByEnv}
                   showQuickSecuritySetup={showQuickSecuritySetup}
                   setShowQuickSecuritySetup={setShowQuickSecuritySetup}
                   showQuickSecurityWizard={showQuickSecurityWizard}
@@ -3579,8 +3502,6 @@ const Settings: Component<SettingsProps> = (props) => {
               <Show when={activeTab() === 'security-sso'}>
                 <div class="space-y-6">
                   <SSOProvidersPanel onConfigUpdated={loadSecurityStatus} />
-                  {/* Legacy OIDC panel for backward compatibility */}
-                  <OIDCPanel onConfigUpdated={loadSecurityStatus} />
                 </div>
               </Show>
 
@@ -4068,8 +3989,10 @@ const Settings: Component<SettingsProps> = (props) => {
               </div>
 
               <div class="text-xs text-muted rounded p-2">
-                <p class="font-semibold mb-1">The API token is set as an environment variable:</p>
-                <code class="block">API_TOKENS=token-for-export,token-for-automation</code>
+                <p class="font-semibold mb-1">
+                  Create or rotate API tokens in Settings → Security → API tokens.
+                </p>
+                <p>Tokens are managed in the UI and stored in <code>api_tokens.json</code>.</p>
               </div>
             </div>
 

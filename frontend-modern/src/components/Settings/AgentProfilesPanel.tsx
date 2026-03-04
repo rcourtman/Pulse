@@ -36,22 +36,63 @@ import Lightbulb from 'lucide-solid/icons/lightbulb';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 
 export const AgentProfilesPanel: Component = () => {
-  const { byType } = useResources();
+  const { resources } = useResources();
   const pd = (r: Resource) =>
     r.platformData ? (unwrap(r.platformData) as Record<string, unknown>) : undefined;
   const asRecord = (value: unknown): Record<string, unknown> | undefined =>
     value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
   const asString = (value: unknown): string | undefined =>
     typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
-  const getActionableAgentId = (resource: Resource): string =>
-    asString(resource.agent?.agentId) ||
-    asString(asRecord(pd(resource)?.agent)?.agentId) ||
-    asString(pd(resource)?.agentId) ||
-    resource.discoveryTarget?.hostId ||
-    (resource.discoveryTarget?.resourceType === 'host'
-      ? resource.discoveryTarget.resourceId
-      : undefined) ||
-    resource.id;
+  const getActionableAgentId = (resource: Resource): string | undefined => {
+    const discoveryType = resource.discoveryTarget?.resourceType;
+    const discoveryResourceId =
+      discoveryType === 'agent' ||
+      discoveryType === 'host' ||
+      discoveryType === 'docker' ||
+      discoveryType === 'k8s'
+        ? resource.discoveryTarget?.resourceId
+        : undefined;
+    return (
+      asString(resource.agent?.agentId) ||
+      asString(asRecord(pd(resource)?.agent)?.agentId) ||
+      asString(pd(resource)?.agentId) ||
+      asString(resource.kubernetes?.agentId) ||
+      asString(asRecord(pd(resource)?.kubernetes)?.agentId) ||
+      resource.discoveryTarget?.hostId ||
+      discoveryResourceId
+    );
+  };
+  const isAssignableAgentResource = (resource: Resource): boolean => {
+    switch (resource.type) {
+      case 'docker-host':
+      case 'node':
+      case 'pbs':
+      case 'pmg':
+      case 'truenas':
+      case 'k8s-cluster':
+        return true;
+      default:
+        return false;
+    }
+  };
+  const resourcePriority = (resource: Resource): number => {
+    switch (resource.type) {
+      case 'node':
+        return 0;
+      case 'pbs':
+        return 1;
+      case 'pmg':
+        return 2;
+      case 'truenas':
+        return 3;
+      case 'k8s-cluster':
+        return 4;
+      case 'docker-host':
+        return 5;
+      default:
+        return 99;
+    }
+  };
 
   const checkingLicense = () => !licenseLoaded() || licenseLoading();
   const hasAgentProfiles = () => hasEntitlement('agent_profiles');
@@ -109,15 +150,46 @@ export const AgentProfilesPanel: Component = () => {
 
   // Connected agents from WebSocket state
   const connectedAgents = createMemo(() => {
-    const hosts = byType('host');
-    return hosts.map((r) => ({
-      id: r.id,
-      assignmentId: getActionableAgentId(r),
-      hostname: r.identity?.hostname || 'Unknown',
-      displayName: r.displayName,
-      status: r.status || 'unknown',
-      lastSeen: r.lastSeen,
-    }));
+    const sorted = resources()
+      .filter(isAssignableAgentResource)
+      .map((resource) => ({ resource, assignmentId: getActionableAgentId(resource) }))
+      .filter((entry): entry is { resource: Resource; assignmentId: string } =>
+        Boolean(entry.assignmentId),
+      )
+      .sort((a, b) => {
+        const byPriority = resourcePriority(a.resource) - resourcePriority(b.resource);
+        if (byPriority !== 0) return byPriority;
+        const aName =
+          a.resource.displayName ||
+          a.resource.identity?.hostname ||
+          a.resource.name ||
+          a.resource.id;
+        const bName =
+          b.resource.displayName ||
+          b.resource.identity?.hostname ||
+          b.resource.name ||
+          b.resource.id;
+        return aName.localeCompare(bName);
+      });
+
+    const byAssignmentId = new Map<string, Resource>();
+    for (const entry of sorted) {
+      if (byAssignmentId.has(entry.assignmentId)) continue;
+      byAssignmentId.set(entry.assignmentId, entry.resource);
+    }
+
+    return Array.from(byAssignmentId.entries())
+      .map(([assignmentId, resource]) => ({
+        id: assignmentId,
+        assignmentId,
+        hostname: resource.identity?.hostname || resource.name || 'Unknown',
+        displayName: resource.displayName,
+        status: resource.status || 'unknown',
+        lastSeen: resource.lastSeen,
+      }))
+      .sort((a, b) =>
+        (a.displayName || a.hostname || a.id).localeCompare(b.displayName || b.hostname || b.id),
+      );
   });
 
   // Get assignment for a specific agent

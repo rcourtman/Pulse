@@ -107,10 +107,10 @@ export class LicenseAPI {
     }) as Promise<ClearLicenseResponse>;
   }
 
-  static async exchangeLicense(legacyJWT: string): Promise<ExchangeLicenseResponse> {
+  static async exchangeLicense(existingJwt: string): Promise<ExchangeLicenseResponse> {
     return apiFetchJSON(`${this.baseUrl}/exchange`, {
       method: 'POST',
-      body: JSON.stringify({ legacy_jwt: legacyJWT }),
+      body: JSON.stringify({ existing_jwt: existingJwt }),
     }) as Promise<ExchangeLicenseResponse>;
   }
 

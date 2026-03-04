@@ -320,10 +320,10 @@ export const updateStore = {
   clearDismissed,
 
   // Manual testing helpers
-  simulateUpdate: (version: string = 'v5.0.0') => {
+  simulateUpdate: (version: string = 'v6.0.0') => {
     setUpdateInfo({
       available: true,
-      currentVersion: versionInfo()?.version || 'v4.9.0',
+      currentVersion: versionInfo()?.version || 'v6.0.0',
       latestVersion: version,
       releaseNotes: 'Test update notification',
       releaseDate: new Date().toISOString(),

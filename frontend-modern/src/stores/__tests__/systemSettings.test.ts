@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   markSystemSettingsLoadedWithDefaults,
-  shouldDisableLegacyRouteRedirects,
   shouldDisableLocalUpgradeMetrics,
   shouldHideDockerUpdateActions,
   shouldReduceProUpsellNoise,
@@ -17,13 +16,11 @@ describe('systemSettings store', () => {
     updateSystemSettingsFromResponse({
       autoUpdateEnabled: false,
       disableDockerUpdateActions: true,
-      disableLegacyRouteRedirects: true,
       reduceProUpsellNoise: true,
       disableLocalUpgradeMetrics: true,
     });
 
     expect(shouldHideDockerUpdateActions()).toBe(true);
-    expect(shouldDisableLegacyRouteRedirects()).toBe(true);
     expect(shouldReduceProUpsellNoise()).toBe(true);
     expect(shouldDisableLocalUpgradeMetrics()).toBe(true);
   });
@@ -32,14 +29,12 @@ describe('systemSettings store', () => {
     updateSystemSettingsFromResponse({
       autoUpdateEnabled: false,
       disableDockerUpdateActions: true,
-      disableLegacyRouteRedirects: true,
       reduceProUpsellNoise: true,
       disableLocalUpgradeMetrics: true,
     });
 
     markSystemSettingsLoadedWithDefaults();
     expect(shouldHideDockerUpdateActions()).toBe(false);
-    expect(shouldDisableLegacyRouteRedirects()).toBe(false);
     expect(shouldReduceProUpsellNoise()).toBe(false);
     expect(shouldDisableLocalUpgradeMetrics()).toBe(false);
   });

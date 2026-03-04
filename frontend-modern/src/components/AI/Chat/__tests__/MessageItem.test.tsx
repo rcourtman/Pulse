@@ -1,12 +1,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { MessageItem } from '../MessageItem';
-import type {
-  ChatMessage,
-  PendingApproval,
-  PendingQuestion,
-  StreamDisplayEvent,
-} from '../types';
+import type { ChatMessage, PendingApproval, PendingQuestion, StreamDisplayEvent } from '../types';
 
 // Mock child components to isolate MessageItem logic
 vi.mock('../ThinkingBlock', () => ({
@@ -338,9 +333,7 @@ describe('MessageItem', () => {
     });
 
     it('passes isStreaming to ThinkingBlock', () => {
-      const events: StreamDisplayEvent[] = [
-        { type: 'thinking', thinking: 'Thinking...' },
-      ];
+      const events: StreamDisplayEvent[] = [{ type: 'thinking', thinking: 'Thinking...' }];
 
       render(() => (
         <MessageItem
@@ -397,9 +390,7 @@ describe('MessageItem', () => {
         <MessageItem
           message={makeMessage({
             role: 'assistant',
-            streamEvents: [
-              { type: 'tool', tool: undefined } as unknown as StreamDisplayEvent,
-            ],
+            streamEvents: [{ type: 'tool', tool: undefined } as unknown as StreamDisplayEvent],
           })}
           {...makeHandlers()}
         />
@@ -431,9 +422,7 @@ describe('MessageItem', () => {
     });
 
     it('renders content blocks via markdown', () => {
-      const events: StreamDisplayEvent[] = [
-        { type: 'content', content: 'Here is the analysis' },
-      ];
+      const events: StreamDisplayEvent[] = [{ type: 'content', content: 'Here is the analysis' }];
 
       const { container } = render(() => (
         <MessageItem
@@ -749,9 +738,7 @@ describe('MessageItem', () => {
     });
 
     it('does not show context tools section when no tools used', () => {
-      const events: StreamDisplayEvent[] = [
-        { type: 'content', content: 'Just text, no tools' },
-      ];
+      const events: StreamDisplayEvent[] = [{ type: 'content', content: 'Just text, no tools' }];
 
       render(() => (
         <MessageItem
@@ -921,9 +908,7 @@ describe('MessageItem', () => {
     });
 
     it('does not render fallback content when stream events exist', () => {
-      const events: StreamDisplayEvent[] = [
-        { type: 'content', content: 'Streamed content' },
-      ];
+      const events: StreamDisplayEvent[] = [{ type: 'content', content: 'Streamed content' }];
 
       const { container } = render(() => (
         <MessageItem

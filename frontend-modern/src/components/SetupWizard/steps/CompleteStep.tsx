@@ -12,6 +12,10 @@ import { SecurityAPI } from '@/api/security';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { showSuccess, showError } from '@/utils/toast';
 import {
+  getAgentDiscoveryResourceId,
+  isAgentDiscoveryResourceType,
+} from '@/utils/discoveryTarget';
+import {
   trackAgentFirstConnected,
   trackAgentInstallCommandCopied,
   trackAgentInstallTokenGenerated,
@@ -49,6 +53,18 @@ const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 const pd = (resource: Resource) =>
   resource.platformData ? (unwrap(resource.platformData) as Record<string, unknown>) : undefined;
+const hasHostAgentFacet = (resource: Resource): boolean => {
+  if (resource.agent) return true;
+  const platformData = pd(resource);
+  if (!platformData) return false;
+  const platformAgent = asRecord(platformData.agent);
+  return Boolean(
+    platformAgent ||
+    asString(platformData.agentId) ||
+    (isAgentDiscoveryResourceType(resource.discoveryTarget?.resourceType) &&
+      resource.discoveryTarget.hostId),
+  );
+};
 
 const toLegacyNodeShape = (resource: Resource) => {
   const platformData = pd(resource);
@@ -73,9 +89,7 @@ const toLegacyHostShape = (resource: Resource) => {
   const id =
     asString(agent.agentId) ||
     resource.discoveryTarget?.hostId ||
-    (resource.discoveryTarget?.resourceType === 'host'
-      ? resource.discoveryTarget.resourceId
-      : undefined) ||
+    getAgentDiscoveryResourceId(resource.discoveryTarget) ||
     resource.id;
   return {
     id,
@@ -117,14 +131,18 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
           },
         });
         const resources = state.resources || [];
-        const nodes =
-          (state.nodes || []).length > 0
-            ? state.nodes
-            : resources.filter((resource) => resource.type === 'node').map(toLegacyNodeShape);
-        const hosts =
-          (state.hosts || []).length > 0
-            ? state.hosts
-            : resources.filter((resource) => resource.type === 'host').map(toLegacyHostShape);
+        const nodeResources = resources.filter((resource) => resource.type === 'node');
+        const hostLikeResources = resources.filter(
+          (resource) =>
+            (resource.type === 'node' ||
+              resource.type === 'pbs' ||
+              resource.type === 'pmg' ||
+              resource.type === 'truenas') &&
+            hasHostAgentFacet(resource),
+        );
+
+        const nodes = nodeResources.map(toLegacyNodeShape);
+        const hosts = hostLikeResources.map(toLegacyHostShape);
 
         // Check if we have new connections
         const totalAgents = nodes.length + hosts.length;
@@ -163,15 +181,15 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
             const name = host.displayName || host.hostname || 'Unknown';
             const existing = agentMap.get(name);
             if (existing) {
-              // Add Host Agent to existing PVE node
-              if (!existing.type.includes('Host')) {
-                existing.type = `${existing.type} + Host Agent`;
+              // Add Agent to existing PVE node
+              if (!existing.type.includes('Agent')) {
+                existing.type = `${existing.type} + Agent`;
               }
             } else {
               agentMap.set(name, {
                 id: host.id || `host-${name}`,
                 name,
-                type: 'Host Agent',
+                type: 'Agent',
                 host: '',
                 addedAt: new Date(),
               });
@@ -282,9 +300,8 @@ Keep these credentials secure!
 
   const getInstallCommand = () => {
     const baseUrl = getPulseBaseUrl();
-    // Simple command - the install script auto-detects Docker, Kubernetes, and Proxmox
-    // Note: sudo removed - users should run as root (via su or sudo) since some systems (like Proxmox) don't have sudo installed
-    return `curl -sSL ${baseUrl}/install.sh | bash -s -- --url "${baseUrl}" --token "${currentInstallToken()}"`;
+    // Root-aware command: run directly as root when already elevated, otherwise use sudo when available.
+    return `curl -sSL ${baseUrl}/install.sh | { if [ "$(id -u)" -eq 0 ]; then bash -s -- --url "${baseUrl}" --token "${currentInstallToken()}"; elif command -v sudo >/dev/null 2>&1; then sudo bash -s -- --url "${baseUrl}" --token "${currentInstallToken()}"; else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi; }`;
   };
 
   const handleStartTrial = async () => {
@@ -342,7 +359,7 @@ Keep these credentials secure!
             Security Configured
           </h1>
           <p class="text-slate-500 dark:text-emerald-300 font-light text-sm sm:text-base">
-            Install the Unified Agent on each host you want to monitor
+            Install the Unified Agent on each system you want to monitor
           </p>
         </div>
 
@@ -357,7 +374,8 @@ Keep these credentials secure!
                   d="M5 13l4 4L19 7"
                 />
               </svg>
-              Connected ({connectedAgents().length} host{connectedAgents().length !== 1 ? 's' : ''})
+              Connected ({connectedAgents().length} agent{connectedAgents().length !== 1 ? 's' : ''}
+              )
             </h3>
             <div class="space-y-2">
               <For each={connectedAgents()}>
@@ -403,7 +421,7 @@ Keep these credentials secure!
 
           <p class="text-muted text-xs mb-4">
             This is the primary onboarding path. The installer auto-detects platform integrations on
-            each host:
+            each system:
           </p>
 
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
@@ -492,7 +510,7 @@ Keep these credentials secure!
               }}
               disabled={generatingToken()}
               class="text-xs bg-surface-alt text-muted hover:bg-slate-200 hover:text-base-content px-2.5 py-1.5 rounded-md flex items-center gap-1.5 disabled:opacity-50 transition-colors border border-transparent "
-              title="Generate a new token for the next host"
+              title="Generate a new token for the next system"
             >
               {generatingToken() ? (
                 <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -524,7 +542,7 @@ Keep these credentials secure!
             </button>
           </div>
           <p class="text-muted text-xs mb-3">
-            Copy and run on each host you want monitored.{' '}
+            Copy and run on each system you want monitored.{' '}
             <span class="text-emerald-600 dark:text-emerald-400 font-medium">
               A new token is generated automatically after each copy.
             </span>
@@ -572,7 +590,7 @@ Keep these credentials secure!
           </div>
 
           <p class="text-[11px] text-muted">
-            Agents auto-register with Pulse. Install on as many hosts as you like.
+            Agents auto-register with Pulse. Install on as many systems as you like.
           </p>
         </div>
 

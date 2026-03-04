@@ -392,7 +392,6 @@ Alert configuration and history (requires `monitoring:read`/`monitoring:write`).
 - `POST /api/alerts/acknowledge` (body: `{ "id": "alert-id" }`)
 - `POST /api/alerts/unacknowledge` (body: `{ "id": "alert-id" }`)
 - `POST /api/alerts/clear` (body: `{ "id": "alert-id" }`)
-- Legacy path-based endpoints: `POST /api/alerts/{id}/acknowledge`, `/unacknowledge`, `/clear`
 
 ---
 
@@ -601,17 +600,11 @@ Returns minimal server info for installer scripts.
 
 ## 🔑 OIDC / SSO
 
-### Get OIDC Config
-`GET /api/security/oidc`
-Retrieve current OIDC provider settings.
+### Provider Login
+- `GET /api/oidc/{providerID}/login`
+- `GET /api/oidc/{providerID}/callback`
 
-### Update OIDC Config
-`POST /api/security/oidc`
-Configure OIDC provider details (Issuer, Client ID, etc).
-
-### Login
-`GET /api/oidc/login`
-Initiate OIDC login flow.
+OIDC and SAML configuration is managed via SSO providers.
 
 ### SSO Provider Management (Pro)
 - `GET /api/security/sso/providers` (admin)
@@ -824,12 +817,6 @@ Streaming variant of execute (used by the UI for incremental responses).
 - `POST /api/ai/sessions/{id}/revert`
 - `POST /api/ai/sessions/{id}/unrevert`
 
-### Legacy Chat Sessions (UI Sync)
-- `GET /api/ai/chat/sessions`
-- `GET /api/ai/chat/sessions/{id}`
-- `PUT /api/ai/chat/sessions/{id}`
-- `DELETE /api/ai/chat/sessions/{id}`
-
 ### Question Answers
 - `POST /api/ai/question/{id}/answer`
 
@@ -974,34 +961,9 @@ Returns the current server version for agent update checks.
 `GET /install.sh`
 Serves the universal `install.sh` used to install `pulse-agent` on target machines.
 
-`GET /api/install/install.sh`
-API-prefixed alias for the unified agent installer script.
-
 ### Unified Agent Installer (Windows)
 `GET /install.ps1`
 Serves the PowerShell installer for Windows.
-
-`GET /api/install/install.ps1`
-API-prefixed alias for the unified agent PowerShell installer.
-
-### Docker Server Installer Script
-`GET /api/install/install-docker.sh`
-Serves the turnkey Docker installer script that generates a `docker-compose.yml` and `.env`.
-
-### Legacy Agents (Deprecated)
-`GET /download/pulse-host-agent` - *Deprecated, use pulse-agent*
-`GET /download/pulse-docker-agent` - *Deprecated, use pulse-agent --enable-docker*
-
-Host-agent downloads accept `?platform=<os>&arch=<arch>` and expose a checksum endpoint:
-- `/download/pulse-host-agent.sha256?platform=linux&arch=amd64`
-
-Legacy install/uninstall scripts:
-- `GET /install-docker-agent.sh`
-- `GET /install-container-agent.sh`
-- `GET /install-host-agent.sh`
-- `GET /install-host-agent.ps1`
-- `GET /uninstall-host-agent.sh`
-- `GET /uninstall-host-agent.ps1`
 
 ### Submit Reports
 `POST /api/agents/host/report` - Host metrics
@@ -1106,7 +1068,6 @@ End-to-end encrypted relay protocol for mobile connectivity.
 ## 🔌 WebSocket Endpoints
 
 - `GET /ws` – Primary UI WebSocket (browser sessions).
-- `GET /socket.io/` – Legacy Socket.IO compatibility endpoint.
 - `GET /api/agent/ws` – Agent WebSocket used for AI command execution.
 
 ---

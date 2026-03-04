@@ -98,18 +98,14 @@ describe('GuestDrawer', () => {
     });
 
     it('starts on the Overview tab (discovery content hidden)', () => {
-      const { container } = render(() => (
-        <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />
-      ));
+      const { container } = render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
       const panels = container.querySelectorAll('[style*="overflow-anchor"]');
       expect(panels[0]).not.toHaveClass('hidden');
       expect(panels[1]).toHaveClass('hidden');
     });
 
     it('switches to Discovery tab on click', async () => {
-      const { container } = render(() => (
-        <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />
-      ));
+      const { container } = render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
       await fireEvent.click(screen.getByText('Discovery'));
       const panels = container.querySelectorAll('[style*="overflow-anchor"]');
       expect(panels[0]).toHaveClass('hidden');
@@ -117,9 +113,7 @@ describe('GuestDrawer', () => {
     });
 
     it('switches back to Overview tab', async () => {
-      const { container } = render(() => (
-        <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />
-      ));
+      const { container } = render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
       await fireEvent.click(screen.getByText('Discovery'));
       await fireEvent.click(screen.getByText('Overview'));
       const panels = container.querySelectorAll('[style*="overflow-anchor"]');
@@ -200,10 +194,7 @@ describe('GuestDrawer', () => {
   describe('Agent info', () => {
     it('shows QEMU agent info for VMs', () => {
       render(() => (
-        <GuestDrawer
-          guest={makeGuest({ agentVersion: '5.2.0', type: 'qemu' })}
-          onClose={vi.fn()}
-        />
+        <GuestDrawer guest={makeGuest({ agentVersion: '5.2.0', type: 'qemu' })} onClose={vi.fn()} />
       ));
       expect(screen.getByText('Agent')).toBeInTheDocument();
       expect(screen.getByText('QEMU 5.2.0')).toBeInTheDocument();
@@ -211,10 +202,7 @@ describe('GuestDrawer', () => {
 
     it('shows plain agent version for containers', () => {
       render(() => (
-        <GuestDrawer
-          guest={makeGuest({ agentVersion: '1.0.0', type: 'lxc' })}
-          onClose={vi.fn()}
-        />
+        <GuestDrawer guest={makeGuest({ agentVersion: '1.0.0', type: 'lxc' })} onClose={vi.fn()} />
       ));
       expect(screen.getByText('Agent')).toBeInTheDocument();
       expect(screen.getByText('1.0.0')).toBeInTheDocument();
@@ -222,10 +210,7 @@ describe('GuestDrawer', () => {
 
     it('hides agent section when no agentVersion', () => {
       render(() => (
-        <GuestDrawer
-          guest={makeGuest({ agentVersion: undefined })}
-          onClose={vi.fn()}
-        />
+        <GuestDrawer guest={makeGuest({ agentVersion: undefined })} onClose={vi.fn()} />
       ));
       expect(screen.queryByText('Agent')).not.toBeInTheDocument();
     });
@@ -353,18 +338,14 @@ describe('GuestDrawer', () => {
 
     it('shows "Today" for a backup from today', () => {
       const now = new Date('2026-03-02T10:00:00Z').getTime();
-      render(() => (
-        <GuestDrawer guest={makeGuest({ lastBackup: now })} onClose={vi.fn()} />
-      ));
+      render(() => <GuestDrawer guest={makeGuest({ lastBackup: now })} onClose={vi.fn()} />);
       expect(screen.getByText('Backup')).toBeInTheDocument();
       expect(screen.getByText('Today')).toBeInTheDocument();
     });
 
     it('shows "Yesterday" for a 1-day-old backup', () => {
       const yesterday = new Date('2026-03-01T12:00:00Z').getTime();
-      render(() => (
-        <GuestDrawer guest={makeGuest({ lastBackup: yesterday })} onClose={vi.fn()} />
-      ));
+      render(() => <GuestDrawer guest={makeGuest({ lastBackup: yesterday })} onClose={vi.fn()} />);
       expect(screen.getByText('Yesterday')).toBeInTheDocument();
     });
 
@@ -398,17 +379,13 @@ describe('GuestDrawer', () => {
 
     it('applies green color for recent backups', () => {
       const now = new Date('2026-03-02T10:00:00Z').getTime();
-      render(() => (
-        <GuestDrawer guest={makeGuest({ lastBackup: now })} onClose={vi.fn()} />
-      ));
+      render(() => <GuestDrawer guest={makeGuest({ lastBackup: now })} onClose={vi.fn()} />);
       const ageEl = screen.getByText('Today');
       expect(ageEl.className).toContain('green');
     });
 
     it('hides Backup card when lastBackup is 0 (falsy)', () => {
-      render(() => (
-        <GuestDrawer guest={makeGuest({ lastBackup: 0 })} onClose={vi.fn()} />
-      ));
+      render(() => <GuestDrawer guest={makeGuest({ lastBackup: 0 })} onClose={vi.fn()} />);
       expect(screen.queryByText('Backup')).not.toBeInTheDocument();
     });
   });
@@ -418,10 +395,7 @@ describe('GuestDrawer', () => {
   describe('Tags card', () => {
     it('renders tags from an array', () => {
       render(() => (
-        <GuestDrawer
-          guest={makeGuest({ tags: ['production', 'web'] })}
-          onClose={vi.fn()}
-        />
+        <GuestDrawer guest={makeGuest({ tags: ['production', 'web'] })} onClose={vi.fn()} />
       ));
       expect(screen.getByText('Tags')).toBeInTheDocument();
       expect(screen.getByText('production')).toBeInTheDocument();
@@ -430,10 +404,7 @@ describe('GuestDrawer', () => {
 
     it('renders tags from a comma-separated string', () => {
       render(() => (
-        <GuestDrawer
-          guest={makeGuest({ tags: 'db,critical' as any })}
-          onClose={vi.fn()}
-        />
+        <GuestDrawer guest={makeGuest({ tags: 'db,critical' as any })} onClose={vi.fn()} />
       ));
       expect(screen.getByText('db')).toBeInTheDocument();
       expect(screen.getByText('critical')).toBeInTheDocument();
@@ -441,26 +412,19 @@ describe('GuestDrawer', () => {
 
     it('trims whitespace from tags', () => {
       render(() => (
-        <GuestDrawer
-          guest={makeGuest({ tags: ' spaced , padded ' as any })}
-          onClose={vi.fn()}
-        />
+        <GuestDrawer guest={makeGuest({ tags: ' spaced , padded ' as any })} onClose={vi.fn()} />
       ));
       expect(screen.getByText('spaced')).toBeInTheDocument();
       expect(screen.getByText('padded')).toBeInTheDocument();
     });
 
     it('hides Tags card when tags is null', () => {
-      render(() => (
-        <GuestDrawer guest={makeGuest({ tags: null })} onClose={vi.fn()} />
-      ));
+      render(() => <GuestDrawer guest={makeGuest({ tags: null })} onClose={vi.fn()} />);
       expect(screen.queryByText('Tags')).not.toBeInTheDocument();
     });
 
     it('hides Tags card when tags is empty array', () => {
-      render(() => (
-        <GuestDrawer guest={makeGuest({ tags: [] })} onClose={vi.fn()} />
-      ));
+      render(() => <GuestDrawer guest={makeGuest({ tags: [] })} onClose={vi.fn()} />);
       expect(screen.queryByText('Tags')).not.toBeInTheDocument();
     });
   });
@@ -472,24 +436,18 @@ describe('GuestDrawer', () => {
       const disks: Disk[] = [
         { total: 10737418240, used: 5368709120, free: 5368709120, usage: 0.5, mountpoint: '/' },
       ];
-      render(() => (
-        <GuestDrawer guest={makeGuest({ disks })} onClose={vi.fn()} />
-      ));
+      render(() => <GuestDrawer guest={makeGuest({ disks })} onClose={vi.fn()} />);
       expect(screen.getByText('Filesystems')).toBeInTheDocument();
       expect(screen.getByTestId('disk-list')).toBeInTheDocument();
     });
 
     it('hides Filesystems card when disks is empty', () => {
-      render(() => (
-        <GuestDrawer guest={makeGuest({ disks: [] })} onClose={vi.fn()} />
-      ));
+      render(() => <GuestDrawer guest={makeGuest({ disks: [] })} onClose={vi.fn()} />);
       expect(screen.queryByText('Filesystems')).not.toBeInTheDocument();
     });
 
     it('hides Filesystems card when disks is undefined', () => {
-      render(() => (
-        <GuestDrawer guest={makeGuest({ disks: undefined })} onClose={vi.fn()} />
-      ));
+      render(() => <GuestDrawer guest={makeGuest({ disks: undefined })} onClose={vi.fn()} />);
       expect(screen.queryByText('Filesystems')).not.toBeInTheDocument();
     });
   });
@@ -499,11 +457,15 @@ describe('GuestDrawer', () => {
   describe('Network card', () => {
     it('renders network interfaces with name and traffic', () => {
       const networkInterfaces: GuestNetworkInterface[] = [
-        { name: 'eth0', mac: 'aa:bb:cc:dd:ee:ff', rxBytes: 1024, txBytes: 2048, addresses: ['192.168.1.5'] },
+        {
+          name: 'eth0',
+          mac: 'aa:bb:cc:dd:ee:ff',
+          rxBytes: 1024,
+          txBytes: 2048,
+          addresses: ['192.168.1.5'],
+        },
       ];
-      render(() => (
-        <GuestDrawer guest={makeGuest({ networkInterfaces })} onClose={vi.fn()} />
-      ));
+      render(() => <GuestDrawer guest={makeGuest({ networkInterfaces })} onClose={vi.fn()} />);
       expect(screen.getByText('Network')).toBeInTheDocument();
       expect(screen.getByText('eth0')).toBeInTheDocument();
       expect(screen.getByText('aa:bb:cc:dd:ee:ff')).toBeInTheDocument();
@@ -513,12 +475,8 @@ describe('GuestDrawer', () => {
     });
 
     it('displays "interface" as fallback when name is missing', () => {
-      const networkInterfaces: GuestNetworkInterface[] = [
-        { rxBytes: 100, txBytes: 200 },
-      ];
-      render(() => (
-        <GuestDrawer guest={makeGuest({ networkInterfaces })} onClose={vi.fn()} />
-      ));
+      const networkInterfaces: GuestNetworkInterface[] = [{ rxBytes: 100, txBytes: 200 }];
+      render(() => <GuestDrawer guest={makeGuest({ networkInterfaces })} onClose={vi.fn()} />);
       expect(screen.getByText('interface')).toBeInTheDocument();
     });
 
@@ -528,9 +486,7 @@ describe('GuestDrawer', () => {
         rxBytes: 0,
         txBytes: 0,
       }));
-      render(() => (
-        <GuestDrawer guest={makeGuest({ networkInterfaces })} onClose={vi.fn()} />
-      ));
+      render(() => <GuestDrawer guest={makeGuest({ networkInterfaces })} onClose={vi.fn()} />);
       expect(screen.getByText('eth0')).toBeInTheDocument();
       expect(screen.getByText('eth3')).toBeInTheDocument();
       expect(screen.queryByText('eth4')).not.toBeInTheDocument();
@@ -538,19 +494,13 @@ describe('GuestDrawer', () => {
     });
 
     it('hides Network card when no interfaces', () => {
-      render(() => (
-        <GuestDrawer guest={makeGuest({ networkInterfaces: [] })} onClose={vi.fn()} />
-      ));
+      render(() => <GuestDrawer guest={makeGuest({ networkInterfaces: [] })} onClose={vi.fn()} />);
       expect(screen.queryByText('Network')).not.toBeInTheDocument();
     });
 
     it('hides traffic line when both rx and tx are 0', () => {
-      const networkInterfaces: GuestNetworkInterface[] = [
-        { name: 'eth0', rxBytes: 0, txBytes: 0 },
-      ];
-      render(() => (
-        <GuestDrawer guest={makeGuest({ networkInterfaces })} onClose={vi.fn()} />
-      ));
+      const networkInterfaces: GuestNetworkInterface[] = [{ name: 'eth0', rxBytes: 0, txBytes: 0 }];
+      render(() => <GuestDrawer guest={makeGuest({ networkInterfaces })} onClose={vi.fn()} />);
       expect(screen.getByText('eth0')).toBeInTheDocument();
       expect(screen.queryByText(/^RX /)).not.toBeInTheDocument();
     });
@@ -560,12 +510,7 @@ describe('GuestDrawer', () => {
 
   describe('WebInterfaceUrlField', () => {
     it('passes correct metadataId using guest.id', () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({ id: 'my-guest-id' })}
-          onClose={vi.fn()}
-        />
-      ));
+      render(() => <GuestDrawer guest={makeGuest({ id: 'my-guest-id' })} onClose={vi.fn()} />);
       expect(screen.getByTestId('url-id').textContent).toBe('my-guest-id');
     });
 
@@ -580,22 +525,12 @@ describe('GuestDrawer', () => {
     });
 
     it('labels docker guests as "container"', () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({ workloadType: 'docker' })}
-          onClose={vi.fn()}
-        />
-      ));
+      render(() => <GuestDrawer guest={makeGuest({ workloadType: 'docker' })} onClose={vi.fn()} />);
       expect(screen.getByTestId('url-label').textContent).toBe('container');
     });
 
     it('labels k8s guests as "workload"', () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({ workloadType: 'k8s' })}
-          onClose={vi.fn()}
-        />
-      ));
+      render(() => <GuestDrawer guest={makeGuest({ workloadType: 'k8s' })} onClose={vi.fn()} />);
       expect(screen.getByTestId('url-label').textContent).toBe('workload');
     });
 
@@ -625,7 +560,10 @@ describe('GuestDrawer', () => {
   describe('DiscoveryTab integration', () => {
     it('passes correct resourceType and hostId for VM', () => {
       render(() => (
-        <GuestDrawer guest={makeGuest({ type: 'qemu', node: 'pve1', vmid: 101 })} onClose={vi.fn()} />
+        <GuestDrawer
+          guest={makeGuest({ type: 'qemu', node: 'pve1', vmid: 101 })}
+          onClose={vi.fn()}
+        />
       ));
       expect(screen.getByTestId('disc-resource-type').textContent).toBe('vm');
       expect(screen.getByTestId('disc-host-id').textContent).toBe('pve1');
@@ -666,7 +604,10 @@ describe('GuestDrawer', () => {
 
     it('passes system-container as resourceType for LXC', () => {
       render(() => (
-        <GuestDrawer guest={makeGuest({ type: 'lxc', node: 'pve2', vmid: 200 })} onClose={vi.fn()} />
+        <GuestDrawer
+          guest={makeGuest({ type: 'lxc', node: 'pve2', vmid: 200 })}
+          onClose={vi.fn()}
+        />
       ));
       expect(screen.getByTestId('disc-resource-type').textContent).toBe('system-container');
       expect(screen.getByTestId('disc-host-id').textContent).toBe('pve2');

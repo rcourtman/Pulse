@@ -13,7 +13,6 @@ import { LicenseAPI } from '@/api/license';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import ShieldCheck from 'lucide-solid/icons/shield-check';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
-import { trackUpgradeMetricEvent } from '@/utils/upgradeMetrics';
 
 const TIER_LABELS: Record<string, string> = {
   free: 'Community',
@@ -105,7 +104,7 @@ export const ProLicensePanel: Component = () => {
         }
         return;
       }
-      trackUpgradeMetricEvent({ type: 'trial_started', surface: 'license_panel' });
+      // trial_started event is emitted by the backend handler (HandleStartTrial).
       notificationStore.success('Pro trial started');
     } catch (err) {
       const statusCode = (err as { status?: number } | null)?.status;

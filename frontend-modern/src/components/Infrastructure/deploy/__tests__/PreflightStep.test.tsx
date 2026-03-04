@@ -204,16 +204,13 @@ describe('PreflightStep', () => {
       'verifying',
     ];
 
-    it.each(terminalStatuses)(
-      'counts status "%s" as completed',
-      (status) => {
-        const targets = [makeTarget({ id: 't1', status })];
-        const wizard = createMockWizard({ preflightTargets: targets });
-        render(() => <PreflightStep wizard={wizard} />);
+    it.each(terminalStatuses)('counts status "%s" as completed', (status) => {
+      const targets = [makeTarget({ id: 't1', status })];
+      const wizard = createMockWizard({ preflightTargets: targets });
+      render(() => <PreflightStep wizard={wizard} />);
 
-        expect(getProgressSummary()).toHaveTextContent('Preflight checks complete');
-      },
-    );
+      expect(getProgressSummary()).toHaveTextContent('Preflight checks complete');
+    });
 
     it('counts only non-pending/non-preflighting as completed in a mixed set', () => {
       const targets = [

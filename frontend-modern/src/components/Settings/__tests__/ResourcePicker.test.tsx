@@ -142,7 +142,7 @@ describe('ResourcePicker', () => {
       }),
       makeResource({
         id: 'host-dev-55',
-        type: 'host',
+        type: 'node',
         name: 'Edge Host',
         displayName: 'Edge Host',
         status: 'online',
@@ -182,6 +182,48 @@ describe('ResourcePicker', () => {
     await waitFor(() => {
       expect(screen.getByText('0 selected')).toBeInTheDocument();
     });
+  });
+
+  it('normalizes docker host selections to dockerHost report type', async () => {
+    mockResources = [
+      makeResource({
+        id: 'docker-host-1',
+        type: 'docker-host',
+        name: 'Docker Agent 1',
+        displayName: 'Docker Agent 1',
+      }),
+    ];
+
+    const { onSelectionChange } = renderPicker();
+
+    const resourceButton = (await screen.findByText('Docker Agent 1')).closest('button');
+    expect(resourceButton).toBeTruthy();
+    fireEvent.click(resourceButton!);
+
+    expect(onSelectionChange).toHaveBeenCalledWith([
+      { id: 'docker-host-1', type: 'dockerHost', name: 'Docker Agent 1' },
+    ]);
+  });
+
+  it('normalizes docker container selections to dockerContainer report type', async () => {
+    mockResources = [
+      makeResource({
+        id: 'docker-container-1',
+        type: 'app-container',
+        name: 'web',
+        displayName: 'web',
+      }),
+    ];
+
+    const { onSelectionChange } = renderPicker();
+
+    const resourceButton = (await screen.findByText('web')).closest('button');
+    expect(resourceButton).toBeTruthy();
+    fireEvent.click(resourceButton!);
+
+    expect(onSelectionChange).toHaveBeenCalledWith([
+      { id: 'docker-container-1', type: 'dockerContainer', name: 'web' },
+    ]);
   });
 
   it('enforces the max selection limit when toggling', async () => {

@@ -65,14 +65,6 @@ describe('resource link routing contract', () => {
     expect(INFRASTRUCTURE_QUERY_PARAMS.resource).toBe('resource');
   });
 
-  it('supports legacy infrastructure search query param parsing', () => {
-    expect(parseInfrastructureLinkSearch('?search=legacy-host')).toEqual({
-      source: '',
-      query: 'legacy-host',
-      resource: '',
-    });
-  });
-
   it('builds and parses storage query params', () => {
     const href = buildStoragePath({
       tab: 'disks',
@@ -108,20 +100,6 @@ describe('resource link routing contract', () => {
     expect(STORAGE_QUERY_PARAMS.resource).toBe('resource');
     expect(STORAGE_QUERY_PARAMS.sort).toBe('sort');
     expect(STORAGE_QUERY_PARAMS.order).toBe('order');
-  });
-
-  it('supports legacy storage search query param parsing', () => {
-    expect(parseStorageLinkSearch('?search=ceph')).toEqual({
-      tab: '',
-      group: '',
-      source: '',
-      status: '',
-      node: '',
-      query: 'ceph',
-      resource: '',
-      sort: '',
-      order: '',
-    });
   });
 
   it('builds and parses recovery query params', () => {

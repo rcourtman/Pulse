@@ -146,10 +146,10 @@ export function WhatsNewModal() {
                 <ExternalLinkIcon class="h-4 w-4" />
               </a>
               <a
-                href="/migration-guide"
+                href="/recovery?view=events&mode=remote"
                 class="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
               >
-                Migration guide
+                Recovery events
               </a>
             </div>
           </div>

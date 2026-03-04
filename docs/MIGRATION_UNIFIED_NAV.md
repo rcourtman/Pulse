@@ -1,10 +1,10 @@
 # Migration Guide: Unified Navigation
 
-This guide explains what changed in the unified navigation release and how to find the new locations for legacy pages.
+This guide explains what changed in unified navigation and where legacy pages moved in v6.
 
 ## What Changed
 - Navigation is now organized by **task** (Infrastructure, Workloads, Storage, Recovery) instead of by platform.
-- Legacy pages (Proxmox Overview, Hosts, Docker, Services, Kubernetes) redirect to unified views.
+- Legacy pages (Proxmox Overview, Hosts, Docker, Services, Kubernetes) were replaced by unified views.
 - Global search and keyboard shortcuts make navigation faster across all resources.
 - Kubernetes is now split by intent:
   - **Infrastructure** shows Kubernetes clusters and nodes.
@@ -16,11 +16,7 @@ This guide explains what changed in the unified navigation release and how to fi
 - New integrations can be added without expanding the top-level navigation indefinitely.
 
 ## Legacy Aliases and Redirects
-- Legacy redirects exist as compatibility aliases.
-- `/services` and `/kubernetes` remain available as compatibility aliases (update bookmarks to canonical routes when convenient).
-- Any future removal of legacy aliases should only happen with explicit notice in release notes.
-- To sunset all legacy aliases immediately, set `PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS=true`
-  (or set `disableLegacyRouteRedirects` in `system.json`).
+- Legacy aliases have been fully removed; update bookmarks and runbooks to canonical routes.
 - Optional migration aid: enable the **Classic shortcuts** bar in the main navigation (Settings → System → General).
 - Plan automation/bookmarks to use canonical routes now:
   - `/infrastructure?source=pmg`
@@ -34,8 +30,8 @@ This guide explains what changed in the unified navigation release and how to fi
 | Hosts | `/infrastructure` |
 | Docker | `/workloads` (containers) + `/infrastructure` (hosts) |
 | Proxmox Storage | `/storage` |
-| Proxmox Backups | `/recovery` (compatibility alias: `/backups`) |
-| Proxmox Replication | `/replication` (compatibility alias → `/recovery?view=events&mode=remote`) |
+| Proxmox Backups | `/recovery` |
+| Proxmox Replication | `/recovery?view=events&mode=remote` |
 | Proxmox Ceph | `/ceph` (summary also visible in Storage) |
 | Proxmox Mail Gateway | `/infrastructure?source=pmg` |
 | Services | `/infrastructure?source=pmg` |

@@ -4,12 +4,11 @@ export type ResourceType =
   | 'vm'
   | 'system-container'
   | 'app-container'
-  | 'lxc' // legacy alias for system-container
-  | 'docker' // legacy alias for app-container
+  | 'docker'
   | 'k8s'
+  | 'agent'
   | 'host'
   | 'docker_vm'
-  | 'docker_lxc' // legacy alias for docker_system-container
   | 'docker_system-container';
 
 export type ServiceCategory =

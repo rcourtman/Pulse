@@ -32,7 +32,10 @@ async function renderBanner() {
 
 /** Set mockResources to return N fake resources. */
 function setResourceCount(n: number) {
-  const resources = Array.from({ length: n }, (_, i) => ({ id: `res-${i}`, name: `Resource ${i}` }));
+  const resources = Array.from({ length: n }, (_, i) => ({
+    id: `res-${i}`,
+    name: `Resource ${i}`,
+  }));
   mockResources.mockReturnValue(resources);
 }
 
@@ -150,7 +153,7 @@ describe('GitHubStarBanner', () => {
     expect(screen.getByText(/independent developer/)).toBeInTheDocument();
     expect(screen.getByText('Star on GitHub')).toBeInTheDocument();
     expect(screen.getByText('Maybe later')).toBeInTheDocument();
-    expect(screen.getByLabelText('Close and don\'t show again')).toBeInTheDocument();
+    expect(screen.getByLabelText("Close and don't show again")).toBeInTheDocument();
   });
 
   /* ---------- Dismiss (X button) ---------- */
@@ -166,7 +169,7 @@ describe('GitHubStarBanner', () => {
       expect(screen.getByText('Enjoying Pulse?')).toBeInTheDocument();
     });
 
-    const closeBtn = screen.getByLabelText('Close and don\'t show again');
+    const closeBtn = screen.getByLabelText("Close and don't show again");
     fireEvent.click(closeBtn);
 
     await waitFor(() => {
@@ -271,7 +274,7 @@ describe('GitHubStarBanner', () => {
       expect(screen.getByText('Enjoying Pulse?')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText('Close and don\'t show again'));
+    fireEvent.click(screen.getByLabelText("Close and don't show again"));
 
     await waitFor(() => {
       expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();

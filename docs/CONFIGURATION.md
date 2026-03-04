@@ -16,7 +16,6 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | `oidc.enc` | OIDC provider config | 🔒 **Encrypted** |
 | `sso.enc` | SAML/SSO provider config | 🔒 **Encrypted** |
 | `api_tokens.json` | API token records (hashed) | 🔒 **Sensitive** |
-| `env_token_suppressions.json` | Suppressed legacy env tokens (migration aid) | 📝 Standard |
 | `ai.enc` | AI settings and credentials | 🔒 **Encrypted** |
 | `ai_findings.json` | AI Patrol findings | 📝 Standard |
 | `ai_patrol_runs.json` | AI Patrol run history | 📝 Standard |
@@ -67,10 +66,6 @@ This file controls access to Pulse. It is **never** exposed to the UI.
 # Admin Credentials (bcrypt hashed; plain text auto-hashes on startup)
 PULSE_AUTH_USER='admin'
 PULSE_AUTH_PASS='$2a$12$...' 
-
-# Legacy API tokens (deprecated, auto-migrated to api_tokens.json)
-API_TOKEN='token1'
-API_TOKENS='token2,token3'
 ```
 
 <details>
@@ -83,7 +78,6 @@ You can pre-configure Pulse by setting environment variables. Plain text credent
 docker run -d \
   -e PULSE_AUTH_USER=admin \
   -e PULSE_AUTH_PASS=secret123 \
-  -e API_TOKENS=ci-token,agent-token \
   rcourtman/pulse:latest
 ```
 </details>
@@ -103,7 +97,7 @@ Environment overrides (lock the corresponding UI fields):
 | `OIDC_ISSUER_URL` | Issuer URL from your IdP |
 | `OIDC_CLIENT_ID` | Client ID |
 | `OIDC_CLIENT_SECRET` | Client secret |
-| `OIDC_REDIRECT_URL` | Override redirect URL (defaults to `<public-url>/api/oidc/callback`) |
+| `OIDC_REDIRECT_URL` | Override redirect URL (defaults to `<public-url>/api/oidc/<provider-id>/callback`) |
 | `OIDC_LOGOUT_URL` | Optional logout URL |
 | `OIDC_SCOPES` | Space or comma-separated scopes |
 | `OIDC_USERNAME_CLAIM` | Claim for username (default: `preferred_username`) |
@@ -117,14 +111,8 @@ Environment overrides (lock the corresponding UI fields):
 
 </details>
 
-Legacy token flag (backwards compatibility):
-
-| Variable | Description |
-| ---------- | ------------- |
-| `API_TOKEN_ENABLED` | Legacy toggle for API token auth (defaults to enabled when tokens exist) |
-
-> **Note**: `API_TOKEN` / `API_TOKENS` are legacy and will be migrated into `api_tokens.json` on startup.
-> Manage API tokens in the UI for long-term support.
+> **Note**: `API_TOKEN` / `API_TOKENS` in `.env` are legacy and ignored at runtime in v6.
+> Manage API tokens in the UI (`api_tokens.json`) for supported behavior.
 
 ---
 
@@ -194,16 +182,15 @@ Numeric intervals are **seconds** unless noted otherwise.
 | `metricsRetentionHourlyDays` | Hourly metrics retention (days) |
 | `metricsRetentionDailyDays` | Daily metrics retention (days) |
 | `disableDockerUpdateActions` | Hide Docker update actions in UI |
-| `disableLegacyRouteRedirects` | Disable legacy frontend URL redirects (bookmark compatibility aliases) |
 | `reduceProUpsellNoise` | Reduce proactive Pro prompts (paywalls still appear when accessing gated features) |
 | `disableLocalUpgradeMetrics` | Disable local-only upgrade metrics collection |
 | `backendPort` | Legacy (unused) |
 | `frontendPort` | Legacy (ignored; use `FRONTEND_PORT`) |
 
 `discoveryConfig` supports:
-- `environment_override`, `subnet_allowlist`, `subnet_blocklist`, `ip_blocklist`
-- `max_hosts_per_scan`, `max_concurrent`, `enable_reverse_dns`, `scan_gateways`
-- `dial_timeout_ms`, `http_timeout_ms`
+- `environmentOverride`, `subnetAllowlist`, `subnetBlocklist`
+- `maxHostsPerScan`, `maxConcurrent`, `enableReverseDns`, `scanGateways`
+- `dialTimeoutMs`, `httpTimeoutMs`
 
 ### Common Overrides (Environment Variables)
 Environment variables take precedence over `system.json`.
@@ -211,7 +198,6 @@ Environment variables take precedence over `system.json`.
 | Variable | Description | Default |
 | ---------- | ------------- | --------- |
 | `FRONTEND_PORT` | Public listening port | `7655` |
-| `PORT` | Legacy alias for `FRONTEND_PORT` | *(unset)* |
 | `LOG_LEVEL` | Log verbosity (see below) | `info` |
 | `LOG_FORMAT` | Log output format (`auto`, `json`, `console`) | `auto` |
 | `LOG_FILE` | Log file path (enables file logging) | *(unset)* |
@@ -289,7 +275,6 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 | `DNS_CACHE_TIMEOUT` | Cache TTL for DNS lookups | `5m` |
 | `MAX_POLL_TIMEOUT` | Maximum time per polling cycle | `3m` |
 | `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Hide Docker update buttons (read-only mode) | `false` |
-| `PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS` | Disable legacy frontend URL redirects | `false` |
 | `PULSE_DISABLE_LOCAL_UPGRADE_METRICS` | Disable local-only upgrade metrics collection | `false` |
 | `PULSE_TELEMETRY` | Anonymous usage telemetry ([details](PRIVACY.md)); set `false` to disable | `true` |
 

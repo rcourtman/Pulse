@@ -6,7 +6,7 @@ import { buildWorkloadsHref } from '@/components/Infrastructure/workloadsLink';
 
 const baseResource = (): Resource => ({
   id: 'host-abcd',
-  type: 'host',
+  type: 'node',
   name: 'pve1',
   displayName: 'pve1',
   platformId: 'pve1',
@@ -42,22 +42,22 @@ describe('toDiscoveryConfig', () => {
       hostId: 'host-1',
       resourceId: 'host-1',
       hostname: 'pve1.local',
-      metadataKind: 'host',
+      metadataKind: 'agent',
       metadataId: 'host-1',
-      targetLabel: 'host',
+      targetLabel: 'agent',
     });
   });
 
   it('falls back to heuristic mapping when discoveryTarget is absent', () => {
     const config = toDiscoveryConfig(baseResource());
     expect(config).toEqual({
-      resourceType: 'host',
+      resourceType: 'agent',
       hostId: 'host-1',
       resourceId: 'host-1',
       hostname: 'stale-hostname',
-      metadataKind: 'host',
+      metadataKind: 'agent',
       metadataId: 'host-1',
-      targetLabel: 'host',
+      targetLabel: 'agent',
     });
   });
 
@@ -78,13 +78,13 @@ describe('toDiscoveryConfig', () => {
 
     const config = toDiscoveryConfig(resource);
     expect(config).toEqual({
-      resourceType: 'host',
+      resourceType: 'agent',
       hostId: 'docker-host-1',
       resourceId: 'docker-host-1',
       hostname: 'stale-hostname',
-      metadataKind: 'host',
+      metadataKind: 'agent',
       metadataId: 'docker-host-1',
-      targetLabel: 'host',
+      targetLabel: 'agent',
     });
   });
 

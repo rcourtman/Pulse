@@ -363,9 +363,7 @@ describe('StackedDiskBar', () => {
         total: 107374182400,
         mountpoint: '/warn',
       });
-      const { container } = render(() => (
-        <StackedDiskBar disks={[normalDisk, warningDisk]} />
-      ));
+      const { container } = render(() => <StackedDiskBar disks={[normalDisk, warningDisk]} />);
       const segments = getStackedSegments(container);
       expect(segments.length).toBe(2);
       // First segment: normal → palette color (green)
@@ -385,9 +383,7 @@ describe('StackedDiskBar', () => {
         total: 107374182400,
         mountpoint: '/full',
       });
-      const { container } = render(() => (
-        <StackedDiskBar disks={[normalDisk, criticalDisk]} />
-      ));
+      const { container } = render(() => <StackedDiskBar disks={[normalDisk, criticalDisk]} />);
       const segments = getStackedSegments(container);
       expect(segments.length).toBe(2);
       // First segment: normal → palette color

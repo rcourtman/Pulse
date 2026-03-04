@@ -22,6 +22,10 @@ describe('metricsKeys', () => {
       expect(buildMetricKey('dockerHost', 'docker-host-1')).toBe('dockerHost:docker-host-1');
     });
 
+    it('builds a compatibility key for agent resources', () => {
+      expect(buildMetricKey('agent', 'agent-1')).toBe('host:agent-1');
+    });
+
     it('builds a key for docker container resources', () => {
       expect(buildMetricKey('dockerContainer', 'abc123def')).toBe('dockerContainer:abc123def');
     });
@@ -40,16 +44,17 @@ describe('metricsKeys', () => {
   });
 
   describe('getMetricKeyPrefix', () => {
-    const kinds: MetricResourceKind[] = [
-      'node',
-      'vm',
-      'container',
-      'dockerHost',
-      'dockerContainer',
+    const expectations: Array<{ kind: MetricResourceKind; prefix: string }> = [
+      { kind: 'node', prefix: 'node:' },
+      { kind: 'vm', prefix: 'vm:' },
+      { kind: 'container', prefix: 'container:' },
+      { kind: 'dockerHost', prefix: 'dockerHost:' },
+      { kind: 'dockerContainer', prefix: 'dockerContainer:' },
+      { kind: 'agent', prefix: 'host:' },
     ];
 
-    it.each(kinds)('returns correct prefix for %s', (kind) => {
-      expect(getMetricKeyPrefix(kind)).toBe(`${kind}:`);
+    it.each(expectations)('returns correct prefix for $kind', ({ kind, prefix }) => {
+      expect(getMetricKeyPrefix(kind)).toBe(prefix);
     });
 
     it('prefixes can be used to filter keys', () => {

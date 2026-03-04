@@ -33,7 +33,6 @@ import {
 } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
-import { MigrationNoticeBanner } from '@/components/shared/MigrationNoticeBanner';
 import { isNodeOnline } from '@/utils/status';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { logger } from '@/utils/logger';
@@ -52,11 +51,6 @@ import {
   type WorkloadSummarySnapshot,
 } from '@/components/Workloads/WorkloadsSummary';
 import { isSummaryTimeRange } from '@/components/shared/summaryTimeRange';
-import {
-  dismissMigrationNotice,
-  isMigrationNoticeDismissed,
-  resolveMigrationNotice,
-} from '@/routing/migrationNotices';
 import {
   buildWorkloadsPath,
   parseWorkloadsLinkSearch,
@@ -329,10 +323,9 @@ export function Dashboard(props: DashboardProps) {
   const [handledNamespaceParam, setHandledNamespaceParam] = createSignal('');
   const [handledHostParam, setHandledHostParam] = createSignal('');
   const [selectedHostHint, setSelectedHostHint] = createSignal<string | null>(null);
-  const [hideMigrationNotice, setHideMigrationNotice] = createSignal(true);
 
-  // URL-sync can legitimately require multiple reactive updates (e.g. canonicalizing
-  // legacy params, normalizing type aliases, dropping irrelevant params). If we
+  // URL-sync can legitimately require multiple reactive updates (e.g. normalizing
+  // type aliases, dropping irrelevant params). If we
   // call navigate() synchronously for each intermediate state, Solid Router will
   // treat it as a redirect chain and can throw "Too many redirects".
   //
@@ -359,28 +352,6 @@ export function Dashboard(props: DashboardProps) {
       pendingUrlSyncPath = null;
     }
   });
-
-  const migrationNotice = createMemo(() => {
-    const notice = resolveMigrationNotice(location.search);
-    if (!notice || notice.target !== 'workloads') return null;
-    return notice;
-  });
-
-  createEffect(() => {
-    const notice = migrationNotice();
-    if (!notice) {
-      setHideMigrationNotice(true);
-      return;
-    }
-    setHideMigrationNotice(isMigrationNoticeDismissed(notice.id));
-  });
-
-  const handleDismissMigrationNotice = () => {
-    const notice = migrationNotice();
-    if (!notice) return;
-    dismissMigrationNotice(notice.id);
-    setHideMigrationNotice(true);
-  };
 
   createEffect(() => {
     const { resource: resourceId } = parseWorkloadsLinkSearch(location.search);
@@ -561,7 +532,7 @@ export function Dashboard(props: DashboardProps) {
   // Initialize from localStorage with proper type checking
   const [viewMode, setViewMode] = usePersistentSignal<ViewMode>('dashboardViewMode', 'all', {
     deserialize: (raw) => {
-      // Normalize legacy 'lxc' from old localStorage
+      // Normalize older saved 'lxc' preference to the canonical system-container value.
       if (raw === 'lxc') return 'system-container' as ViewMode;
       return raw === 'all' ||
         raw === 'vm' ||
@@ -1153,7 +1124,7 @@ export function Dashboard(props: DashboardProps) {
       ) {
         const selectorDiskUsage = getDiskUsagePercent(guest);
         const rawDiskUsage = (guest.disk.used / guest.disk.total) * 100;
-        // Preserve legacy fallback behavior for anomalous >100% values.
+        // Preserve fallback behavior for anomalous >100% values.
         diskUsage = rawDiskUsage > 100 ? rawDiskUsage : (selectorDiskUsage ?? rawDiskUsage);
       }
 
@@ -1414,15 +1385,6 @@ export function Dashboard(props: DashboardProps) {
         </div>
       </Show>
 
-      <Show when={isWorkloadsRoute() && migrationNotice() && !hideMigrationNotice()}>
-        <MigrationNoticeBanner
-          title={migrationNotice()!.title}
-          message={migrationNotice()!.message}
-          learnMoreHref={migrationNotice()!.learnMoreHref}
-          onDismiss={handleDismissMigrationNotice}
-        />
-      </Show>
-
       {/* Unified Node Selector - infrastructure summary (hidden on workloads) */}
       <UnifiedNodeSelector
         currentTab="dashboard"
@@ -1615,7 +1577,7 @@ export function Dashboard(props: DashboardProps) {
             }
             return {
               id: 'workloads-node-filter',
-              label: 'Host',
+              label: 'Node',
               value: selectedNode() ?? '',
               options: [{ value: '', label: 'All nodes' }, ...workloadNodeOptions()],
               onChange: (value: string) => {

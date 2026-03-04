@@ -691,7 +691,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                           <Show when={isPVEItem && node!.linkedHostAgentId}>
                             <span
                               class="text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-400"
-                              title="Pulse host agent installed for enhanced metrics"
+                              title="Pulse agent installed for enhanced metrics"
                             >
                               +Agent
                             </span>

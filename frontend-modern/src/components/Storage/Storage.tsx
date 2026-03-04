@@ -104,7 +104,7 @@ const Storage: Component = () => {
   const nodes = createMemo(() => byType('node'));
   const physicalDisks = createMemo(() => byType('physical_disk'));
   const cephResources = createMemo(() => byType('ceph'));
-  const storageBackupsResources = useStorageRecoveryResources();
+  const storageRecoveryResources = useStorageRecoveryResources();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
 
@@ -123,7 +123,7 @@ const Storage: Component = () => {
   let highlightTimer: number | undefined;
 
   const adapterResources = createMemo(() => {
-    const unifiedResources = storageBackupsResources.resources();
+    const unifiedResources = storageRecoveryResources.resources();
     return unifiedResources;
   });
 
@@ -267,7 +267,7 @@ const Storage: Component = () => {
 
   const isWaitingForData = createMemo(
     () =>
-      storageBackupsResources.loading() &&
+      storageRecoveryResources.loading() &&
       filteredRecords().length === 0 &&
       !connected() &&
       !initialDataReceived(),
@@ -276,9 +276,10 @@ const Storage: Component = () => {
     () => !connected() && initialDataReceived() && !reconnecting(),
   );
   const isLoadingPools = createMemo(
-    () => storageBackupsResources.loading() && view() === 'pools' && filteredRecords().length === 0,
+    () =>
+      storageRecoveryResources.loading() && view() === 'pools' && filteredRecords().length === 0,
   );
-  const hasFetchError = createMemo(() => Boolean(storageBackupsResources.error()));
+  const hasFetchError = createMemo(() => Boolean(storageRecoveryResources.error()));
 
   const isActiveStorageRoute = () => location.pathname === '/storage';
 

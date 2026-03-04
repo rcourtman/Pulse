@@ -27,10 +27,7 @@ const NON_VISUAL_PAGE_WRAPPERS = new Set([
   'src/pages/RecoveryRoute.tsx',
 ]);
 
-const SETTINGS_PANEL_SHIMS = new Set([
-  // Alias shim (intentional passthrough, no JSX render tree here).
-  'src/components/Settings/BackupsSettingsPanel.tsx',
-]);
+const SETTINGS_PANEL_SHIMS = new Set([]);
 
 const HEADER_PRIMITIVES = ['PageHeader', 'SectionHeader', 'SettingsPanel', 'OperationsPanel'];
 

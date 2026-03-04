@@ -26,7 +26,8 @@ let mockWsStore: {
 
 const lookupMock = vi.fn();
 const createTokenMock = vi.fn();
-const deleteHostAgentMock = vi.fn();
+const deleteAgentMock = vi.fn();
+const updateAgentConfigMock = vi.fn();
 const deleteDockerHostMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
@@ -45,8 +46,11 @@ vi.mock('@/App', () => ({
 
 vi.mock('@/api/monitoring', () => ({
   MonitoringAPI: {
+    lookupAgent: (...args: unknown[]) => lookupMock(...args),
     lookupHost: (...args: unknown[]) => lookupMock(...args),
-    deleteHostAgent: (...args: unknown[]) => deleteHostAgentMock(...args),
+    deleteAgent: (...args: unknown[]) => deleteAgentMock(...args),
+    deleteHostAgent: (...args: unknown[]) => deleteAgentMock(...args),
+    updateAgentConfig: (...args: unknown[]) => updateAgentConfigMock(...args),
     deleteDockerHost: (...args: unknown[]) => deleteDockerHostMock(...args),
   },
 }));
@@ -65,113 +69,121 @@ vi.mock('@/api/agentProfiles', () => ({
   },
 }));
 
+// Build mock resources from the WebSocket store data.
+// The component uses resources() for agentResources (filtered by r.agent != null || r.type === 'docker-host')
+// and byType('k8s-cluster') for kubernetes clusters.
+const toHostResource = (h: any) => ({
+  id: h.id,
+  type: 'host' as const,
+  platformType: 'host-agent' as const,
+  sourceType: 'agent' as const,
+  name: h.hostname || h.id,
+  displayName: h.displayName,
+  status: h.status || 'unknown',
+  lastSeen: h.lastSeen,
+  identity: { hostname: h.hostname },
+  discoveryTarget: {
+    resourceType: 'host' as const,
+    hostId: h.id,
+    resourceId: h.id,
+  },
+  agent: {
+    agentId: h.id,
+    agentVersion: h.agentVersion,
+    commandsEnabled: h.commandsEnabled,
+    tokenName: h.tokenName,
+  },
+  platformData: {
+    agent: {
+      agentId: h.id,
+      agentVersion: h.agentVersion,
+      commandsEnabled: h.commandsEnabled,
+      tokenName: h.tokenName,
+    },
+    agentVersion: h.agentVersion,
+    isLegacy: h.isLegacy,
+    linkedNodeId: h.linkedNodeId,
+    commandsEnabled: h.commandsEnabled,
+    agentId: h.id,
+  },
+});
+
+const toDockerHostResource = (d: any) => ({
+  id: d.id,
+  type: 'docker-host' as const,
+  platformType: 'docker' as const,
+  sourceType: 'agent' as const,
+  name: d.hostname || d.id,
+  displayName: d.displayName,
+  status: d.status || 'unknown',
+  lastSeen: d.lastSeen,
+  identity: { hostname: d.hostname },
+  discoveryTarget: {
+    resourceType: 'docker' as const,
+    hostId: d.agentId || d.id,
+    resourceId: d.id,
+  },
+  platformData: {
+    agent: {
+      agentId: d.agentId || d.id,
+      agentVersion: d.agentVersion,
+    },
+    docker: {
+      hostSourceId: d.id,
+      agentVersion: d.agentVersion,
+      dockerVersion: d.dockerVersion,
+    },
+    agentId: d.agentId || d.id,
+    agentVersion: d.agentVersion,
+    dockerVersion: d.dockerVersion,
+    isLegacy: d.isLegacy,
+  },
+});
+
+const toK8sClusterResource = (k: any) => ({
+  id: k.id,
+  type: 'k8s-cluster' as const,
+  platformType: 'kubernetes' as const,
+  sourceType: 'agent' as const,
+  name: k.name || k.id,
+  displayName: k.customDisplayName || k.displayName || k.name || k.id,
+  status: k.status || 'unknown',
+  lastSeen: k.lastSeen,
+  discoveryTarget: {
+    resourceType: 'k8s' as const,
+    hostId: k.agentId || k.id,
+    resourceId: k.id,
+  },
+  platformData: {
+    kubernetes: {
+      clusterId: k.id,
+      clusterName: k.name,
+      context: k.context,
+      server: k.server,
+      agentId: k.agentId,
+    },
+    agent: {
+      agentId: k.agentId,
+      agentVersion: k.agentVersion,
+      tokenName: k.tokenName,
+    },
+  },
+});
+
 vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({
     byType: (type: string) => {
-      if (type === 'host') {
-        return (mockWsStore?.state?.hosts || []).map((h: any) => ({
-          id: h.id,
-          type: 'host',
-          platformType: 'host-agent',
-          sourceType: 'agent',
-          name: h.hostname || h.id,
-          displayName: h.displayName,
-          status: h.status || 'unknown',
-          lastSeen: h.lastSeen,
-          identity: { hostname: h.hostname },
-          discoveryTarget: {
-            resourceType: 'host',
-            hostId: h.id,
-            resourceId: h.id,
-          },
-          agent: {
-            agentId: h.id,
-            agentVersion: h.agentVersion,
-            commandsEnabled: h.commandsEnabled,
-            tokenName: h.tokenName,
-          },
-          platformData: {
-            agent: {
-              agentId: h.id,
-              agentVersion: h.agentVersion,
-              commandsEnabled: h.commandsEnabled,
-              tokenName: h.tokenName,
-            },
-            agentVersion: h.agentVersion,
-            isLegacy: h.isLegacy,
-            linkedNodeId: h.linkedNodeId,
-            commandsEnabled: h.commandsEnabled,
-            agentId: h.id,
-          },
-        }));
-      }
-      if (type === 'docker-host') {
-        return (mockWsStore?.state?.dockerHosts || []).map((d: any) => ({
-          id: d.id,
-          type: 'docker-host',
-          platformType: 'docker',
-          sourceType: 'agent',
-          name: d.hostname || d.id,
-          displayName: d.displayName,
-          status: d.status || 'unknown',
-          lastSeen: d.lastSeen,
-          identity: { hostname: d.hostname },
-          discoveryTarget: {
-            resourceType: 'docker',
-            hostId: d.agentId || d.id,
-            resourceId: d.id,
-          },
-          platformData: {
-            agent: {
-              agentId: d.agentId || d.id,
-              agentVersion: d.agentVersion,
-            },
-            docker: {
-              hostSourceId: d.id,
-              agentVersion: d.agentVersion,
-              dockerVersion: d.dockerVersion,
-            },
-            agentId: d.agentId || d.id,
-            agentVersion: d.agentVersion,
-            dockerVersion: d.dockerVersion,
-            isLegacy: d.isLegacy,
-          },
-        }));
-      }
       if (type === 'k8s-cluster') {
-        return (mockWsStore?.state?.kubernetesClusters || []).map((k: any) => ({
-          id: k.id,
-          type: 'k8s-cluster',
-          platformType: 'kubernetes',
-          sourceType: 'agent',
-          name: k.name || k.id,
-          displayName: k.customDisplayName || k.displayName || k.name || k.id,
-          status: k.status || 'unknown',
-          lastSeen: k.lastSeen,
-          discoveryTarget: {
-            resourceType: 'k8s',
-            hostId: k.agentId || k.id,
-            resourceId: k.id,
-          },
-          platformData: {
-            kubernetes: {
-              clusterId: k.id,
-              clusterName: k.name,
-              context: k.context,
-              server: k.server,
-              agentId: k.agentId,
-            },
-            agent: {
-              agentId: k.agentId,
-              agentVersion: k.agentVersion,
-              tokenName: k.tokenName,
-            },
-          },
-        }));
+        return (mockWsStore?.state?.kubernetesClusters || []).map(toK8sClusterResource);
       }
       return [];
     },
-    resources: () => [],
+    resources: () => {
+      const all: any[] = [];
+      for (const h of mockWsStore?.state?.hosts || []) all.push(toHostResource(h));
+      for (const d of mockWsStore?.state?.dockerHosts || []) all.push(toDockerHostResource(d));
+      return all;
+    },
   }),
 }));
 
@@ -294,7 +306,8 @@ const setupComponent = (
 beforeEach(() => {
   lookupMock.mockReset();
   createTokenMock.mockReset();
-  deleteHostAgentMock.mockReset();
+  deleteAgentMock.mockReset();
+  updateAgentConfigMock.mockReset();
   deleteDockerHostMock.mockReset();
   notificationSuccessMock.mockReset();
   notificationErrorMock.mockReset();
@@ -364,7 +377,7 @@ describe('UnifiedAgents token generation', () => {
       'manual',
     );
     expect(notificationSuccessMock).toHaveBeenCalledWith(
-      'Token generated with Host config + reporting, Docker, and Kubernetes permissions.',
+      'Token generated with Agent config + reporting, Docker, and Kubernetes permissions.',
       4000,
     );
   });
@@ -398,7 +411,7 @@ describe('UnifiedAgents host lookup', () => {
 
     // Wait for commands to be unlocked and lookup UI to appear
     await waitFor(() => {
-      expect(screen.getByPlaceholderText('Hostname or host ID')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Hostname or agent ID')).toBeInTheDocument();
     });
 
     lookupMock.mockResolvedValue({
@@ -414,7 +427,7 @@ describe('UnifiedAgents host lookup', () => {
       },
     });
 
-    const input = screen.getByPlaceholderText('Hostname or host ID') as HTMLInputElement;
+    const input = screen.getByPlaceholderText('Hostname or agent ID') as HTMLInputElement;
     fireEvent.input(input, { target: { value: host.id } });
 
     const checkButton = screen.getByRole('button', { name: /Check status/i });
@@ -449,13 +462,13 @@ describe('UnifiedAgents host lookup', () => {
     await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText('Hostname or host ID')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Hostname or agent ID')).toBeInTheDocument();
     });
 
     lookupMock.mockResolvedValue(null);
 
     const query = 'missing-host';
-    const input = screen.getByPlaceholderText('Hostname or host ID') as HTMLInputElement;
+    const input = screen.getByPlaceholderText('Hostname or agent ID') as HTMLInputElement;
     fireEvent.input(input, { target: { value: query } });
 
     const checkButton = screen.getByRole('button', { name: /Check status/i });
@@ -464,7 +477,9 @@ describe('UnifiedAgents host lookup', () => {
     await waitFor(
       () =>
         expect(
-          screen.getByText(`No host has reported with "${query}" yet. Try again in a few seconds.`),
+          screen.getByText(
+            `No agent has reported with "${query}" yet. Try again in a few seconds.`,
+          ),
         ).toBeInTheDocument(),
       { interval: 0 },
     );
@@ -472,7 +487,7 @@ describe('UnifiedAgents host lookup', () => {
 });
 
 describe('UnifiedAgents managed agents table', () => {
-  it('displays host agents in the table', async () => {
+  it('displays agents in the table', async () => {
     const host = createHost({ hostname: 'test-server.local', displayName: 'Test Server' });
     setupComponent([host]);
 
@@ -489,7 +504,7 @@ describe('UnifiedAgents managed agents table', () => {
     const detailsRow = document.getElementById('agent-details-agent-host-1');
     expect(detailsRow).not.toBeNull();
     const details = within(detailsRow as HTMLElement);
-    expect(details.getByText('Host')).toBeInTheDocument();
+    expect(details.getByText('Agent')).toBeInTheDocument();
   });
 
   it('displays docker hosts in the table', async () => {
@@ -522,12 +537,12 @@ describe('UnifiedAgents managed agents table', () => {
     });
   });
 
-  it('shows legacy agent warning when legacy agents are present', async () => {
+  it('shows outdated agent warning when older agent binaries are present', async () => {
     const legacyHost = createHost({ isLegacy: true });
     setupComponent([legacyHost]);
 
     await waitFor(() => {
-      expect(screen.getByText(/legacy agent.*detected/i)).toBeInTheDocument();
+      expect(screen.getByText(/outdated agent binary.*detected/i)).toBeInTheDocument();
     });
 
     const toggle = screen.getByRole('button', { name: /details for Host One/i });
@@ -536,7 +551,7 @@ describe('UnifiedAgents managed agents table', () => {
     const detailsRow = document.getElementById('agent-details-agent-host-1');
     expect(detailsRow).not.toBeNull();
     const details = within(detailsRow as HTMLElement);
-    expect(details.getByText('Legacy')).toBeInTheDocument();
+    expect(details.getByText('Outdated')).toBeInTheDocument();
   });
 
   it('filters removed agents with the status filter', async () => {
@@ -568,8 +583,8 @@ describe('UnifiedAgents managed agents table', () => {
 
     expect(screen.getByText('K8s Alpha')).toBeInTheDocument();
 
-    const typeSelect = screen.getByLabelText('Type');
-    fireEvent.change(typeSelect, { target: { value: 'kubernetes' } });
+    const capSelect = screen.getByLabelText('Capability');
+    fireEvent.change(capSelect, { target: { value: 'kubernetes' } });
 
     expect(screen.getByText('K8s Alpha')).toBeInTheDocument();
   });

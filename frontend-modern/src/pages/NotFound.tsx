@@ -15,13 +15,6 @@ const NotFound: Component = () => {
   const navigate = useNavigate();
 
   const path = () => `${location.pathname}${location.search || ''}`;
-  const recoveryTarget = () => {
-    const p = location.pathname || '';
-    if (p.startsWith('/replication') || p.startsWith('/proxmox/replication')) {
-      return buildRecoveryPath({ view: 'events', mode: 'remote' });
-    }
-    return buildRecoveryPath();
-  };
 
   return (
     <div class="space-y-4">
@@ -35,7 +28,7 @@ const NotFound: Component = () => {
               <button
                 type="button"
                 class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:bg-surface-hover"
-                onClick={() => navigate(recoveryTarget())}
+                onClick={() => navigate(buildRecoveryPath())}
               >
                 Go to Recovery
               </button>

@@ -210,7 +210,13 @@ describe('useChat', () => {
 
       mockChat
         .mockImplementationOnce(
-          (_p: string, _s: string, _m: string | undefined, _onEvent: (e: StreamEvent) => void, signal?: AbortSignal) => {
+          (
+            _p: string,
+            _s: string,
+            _m: string | undefined,
+            _onEvent: (e: StreamEvent) => void,
+            signal?: AbortSignal,
+          ) => {
             capturedSignal = signal;
             // Simulate the abort path: when aborted, reject with AbortError
             return new Promise<void>((_resolve, reject) => {
@@ -255,7 +261,12 @@ describe('useChat', () => {
     function setupWithEventCapture() {
       let fireEvent!: (event: StreamEvent) => void;
       mockChat.mockImplementation(
-        (_prompt: string, _session: string, _model: string | undefined, onEvent: (e: StreamEvent) => void) => {
+        (
+          _prompt: string,
+          _session: string,
+          _model: string | undefined,
+          onEvent: (e: StreamEvent) => void,
+        ) => {
           fireEvent = onEvent;
           return Promise.resolve();
         },
@@ -356,11 +367,17 @@ describe('useChat', () => {
 
       fire({
         type: 'explore_status',
-        data: { phase: 'investigating', message: 'Checking logs', model: 'claude-3', outcome: 'ok' },
+        data: {
+          phase: 'investigating',
+          message: 'Checking logs',
+          model: 'claude-3',
+          outcome: 'ok',
+        },
       });
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
-      const exploreEvents = assistant.streamEvents?.filter((e) => e.type === 'explore_status') ?? [];
+      const exploreEvents =
+        assistant.streamEvents?.filter((e) => e.type === 'explore_status') ?? [];
       expect(exploreEvents).toHaveLength(1);
       expect(exploreEvents[0].exploreStatus).toEqual({
         phase: 'investigating',
@@ -381,7 +398,8 @@ describe('useChat', () => {
       fire({ type: 'explore_status', data: { phase: 'x', message: '  ' } });
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
-      const exploreEvents = assistant.streamEvents?.filter((e) => e.type === 'explore_status') ?? [];
+      const exploreEvents =
+        assistant.streamEvents?.filter((e) => e.type === 'explore_status') ?? [];
       expect(exploreEvents).toHaveLength(0);
       dispose();
     });
@@ -858,7 +876,13 @@ describe('useChat', () => {
   // ──────────────────────────────────────────────
   describe('newSession', () => {
     it('creates session and clears messages', async () => {
-      mockCreateSession.mockResolvedValue({ id: 'new-sess-99', title: '', created_at: '', updated_at: '', message_count: 0 });
+      mockCreateSession.mockResolvedValue({
+        id: 'new-sess-99',
+        title: '',
+        created_at: '',
+        updated_at: '',
+        message_count: 0,
+      });
       mockChat.mockResolvedValue(undefined);
 
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'old' }));
@@ -1172,7 +1196,10 @@ describe('useChat', () => {
     it('resolves when loading finishes', async () => {
       let chatResolve!: () => void;
       mockChat.mockImplementation(
-        () => new Promise<void>((resolve) => { chatResolve = resolve; }),
+        () =>
+          new Promise<void>((resolve) => {
+            chatResolve = resolve;
+          }),
       );
 
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
@@ -1225,7 +1252,10 @@ describe('useChat', () => {
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
       await chat.sendMessage('hi');
-      getFireEvent()({ type: 'done', data: { input_tokens: 'not-a-number', output_tokens: 'bad' } });
+      getFireEvent()({
+        type: 'done',
+        data: { input_tokens: 'not-a-number', output_tokens: 'bad' },
+      });
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       // Both NaN → extractTokens returns null → no tokens set
@@ -1367,7 +1397,10 @@ describe('useChat', () => {
       expect(assistant.pendingTools).toHaveLength(2);
 
       // Resolve tool B first (out of order)
-      fire({ type: 'tool_end', data: { id: 'b', name: 'tool_b', input: '{}', output: 'B done', success: true } });
+      fire({
+        type: 'tool_end',
+        data: { id: 'b', name: 'tool_b', input: '{}', output: 'B done', success: true },
+      });
 
       assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.pendingTools).toHaveLength(1);
@@ -1376,7 +1409,10 @@ describe('useChat', () => {
       expect(assistant.toolCalls![0].name).toBe('tool_b');
 
       // Resolve tool A
-      fire({ type: 'tool_end', data: { id: 'a', name: 'tool_a', input: '{}', output: 'A done', success: true } });
+      fire({
+        type: 'tool_end',
+        data: { id: 'a', name: 'tool_a', input: '{}', output: 'A done', success: true },
+      });
 
       assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.pendingTools).toHaveLength(0);

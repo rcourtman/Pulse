@@ -13,7 +13,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   },
   agents: {
     title: 'Unified Agents',
-    description: 'Install and manage host, Docker, and Kubernetes agents from one workflow.',
+    description: 'Install and manage agent, Docker, and Kubernetes monitoring from one workflow.',
   },
   'system-general': {
     title: 'General Settings',

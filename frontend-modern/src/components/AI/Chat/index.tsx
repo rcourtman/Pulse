@@ -16,13 +16,16 @@ import { aiChatStore } from '@/stores/aiChat';
 import { logger } from '@/utils/logger';
 import { useResources } from '@/hooks/useResources';
 import type { Resource } from '@/types/resource';
+import {
+  getAgentDiscoveryResourceId,
+  isAgentDiscoveryResourceType,
+} from '@/utils/discoveryTarget';
 import { useChat } from './hooks/useChat';
 import { ChatMessages } from './ChatMessages';
 import { ModelSelector } from './ModelSelector';
 import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
 import type { PendingApproval, PendingQuestion, ModelInfo } from './types';
 
-const MODEL_LEGACY_STORAGE_KEY = 'pulse:ai_chat_model';
 const MODEL_SESSION_STORAGE_KEY = 'pulse:ai_chat_models_by_session';
 const DEFAULT_SESSION_KEY = '__default__';
 
@@ -57,7 +60,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [discoveryEnabled, setDiscoveryEnabled] = createSignal<boolean | null>(null); // null = loading
   const [discoveryHintDismissed, setDiscoveryHintDismissed] = createSignal(false);
   const [autonomousBannerDismissed, setAutonomousBannerDismissed] = createSignal(false);
-  const { byType } = useResources();
+  const { byType, resources: allResources } = useResources();
   const isCluster = createMemo(() => byType('node').length > 1);
 
   // @ mention autocomplete state
@@ -72,16 +75,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     try {
       const raw = localStorage.getItem(MODEL_SESSION_STORAGE_KEY);
       const parsed = raw ? JSON.parse(raw) : {};
-      const selections =
-        typeof parsed === 'object' && parsed ? (parsed as Record<string, string>) : {};
-      const legacy = localStorage.getItem(MODEL_LEGACY_STORAGE_KEY);
-      if (legacy && !selections[DEFAULT_SESSION_KEY]) {
-        selections[DEFAULT_SESSION_KEY] = legacy;
-      }
-      if (legacy) {
-        localStorage.removeItem(MODEL_LEGACY_STORAGE_KEY);
-      }
-      return selections;
+      return typeof parsed === 'object' && parsed ? (parsed as Record<string, string>) : {};
     } catch (error) {
       logger.warn('[AIChat] Failed to read stored models:', error);
       return {};
@@ -205,9 +199,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const settings = await AIAPI.getSettings();
       const chatOverride = (settings.chat_model || '').trim();
       const fallback = chatOverride || (settings.model || '').trim();
-      const resolvedControl = normalizeControlLevel(
-        settings.control_level || (settings.autonomous_mode ? 'autonomous' : undefined),
-      );
+      const resolvedControl = normalizeControlLevel(settings.control_level);
       setDefaultModel(fallback);
       setChatOverrideModel(chatOverride);
       setControlLevel(resolvedControl);
@@ -363,12 +355,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
   };
 
   const dedupeMentionResources = (resources: MentionResource[]) => {
-    // Only dedupe host mentions: VMs/containers/docker containers can legitimately share names across nodes/hosts.
+    // Only dedupe agent mentions: VMs/containers/docker containers can legitimately share names across nodes/agents.
     const byKey = new Map<string, { resource: MentionResource; index: number }>();
     const out: MentionResource[] = [];
 
     for (const resource of resources) {
-      if (resource.type !== 'host') {
+      if (resource.type !== 'agent') {
         out.push(resource);
         continue;
       }
@@ -402,13 +394,22 @@ export const AIChat: Component<AIChatProps> = (props) => {
       value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
     const asString = (value: unknown): string | undefined =>
       typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+    const hasHostAgentFacet = (resource: Resource): boolean => {
+      if (resource.agent) return true;
+      const platformData = readPlatformData(resource);
+      const platformAgent = asRecord(platformData?.agent);
+      return Boolean(
+        platformAgent ||
+        asString(platformData?.agentId) ||
+        (isAgentDiscoveryResourceType(resource.discoveryTarget?.resourceType) &&
+          resource.discoveryTarget.hostId),
+      );
+    };
     const getHostActionId = (resource: Resource): string => {
       const platformData = readPlatformData(resource);
       const platformAgent = asRecord(platformData?.agent);
       return (
-        (resource.discoveryTarget?.resourceType === 'host'
-          ? resource.discoveryTarget.resourceId
-          : undefined) ||
+        getAgentDiscoveryResourceId(resource.discoveryTarget) ||
         resource.discoveryTarget?.hostId ||
         asString(resource.agent?.agentId) ||
         asString(platformAgent?.agentId) ||
@@ -454,8 +455,15 @@ export const AIChat: Component<AIChatProps> = (props) => {
     ];
     const dockerHosts = byType('docker-host');
     const dockerContainers = [...byType('app-container'), ...byType('docker-container')];
-    const hosts = byType('host');
-    const resources: MentionResource[] = [];
+    const hosts = allResources().filter(
+      (resource) =>
+        (resource.type === 'node' ||
+          resource.type === 'pbs' ||
+          resource.type === 'pmg' ||
+          resource.type === 'truenas') &&
+        hasHostAgentFacet(resource),
+    );
+    const mentionCandidates: MentionResource[] = [];
 
     // Add VMs
     for (const vm of vms) {
@@ -463,7 +471,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const nodeRaw = platformData?.node;
       const node = typeof nodeRaw === 'string' ? nodeRaw : '';
       const vmid = parseLegacyVmid(vm, platformData);
-      resources.push({
+      mentionCandidates.push({
         id: `vm:${node}:${vmid}`,
         name: vm.name,
         type: 'vm',
@@ -472,13 +480,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
       });
     }
 
-    // Add LXC containers (includes OCI containers; preserve legacy mention ID format)
+    // Add LXC containers (includes OCI containers; uses compatibility mention ID format).
     for (const container of containers) {
       const platformData = readPlatformData(container);
       const nodeRaw = platformData?.node;
       const node = typeof nodeRaw === 'string' ? nodeRaw : '';
       const vmid = parseLegacyVmid(container, platformData);
-      resources.push({
+      mentionCandidates.push({
         id: `lxc:${node}:${vmid}`,
         name: container.name,
         type: 'container',
@@ -505,10 +513,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const hostnameOrId = host.identity?.hostname || host.name || host.id;
       const hostStatus =
         host.status === 'online' || host.status === 'running' ? 'online' : host.status || 'online';
-      resources.push({
+      mentionCandidates.push({
         id: `host:${dockerActionId}`,
         name: displayName,
-        type: 'host',
+        type: 'agent',
         status: hostStatus,
       });
 
@@ -517,7 +525,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         const originalContainerId = container.id.includes('/')
           ? container.id.split('/').pop() || container.id
           : container.id;
-        resources.push({
+        mentionCandidates.push({
           id: `docker:${dockerActionId}:${originalContainerId}`,
           name: container.name,
           type: 'docker',
@@ -529,7 +537,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     // Add nodes
     for (const node of nodes) {
-      resources.push({
+      mentionCandidates.push({
         id: `node:${node.platformId || ''}:${node.name}`,
         name: node.name,
         type: 'node',
@@ -543,15 +551,15 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const name = host.displayName || host.identity?.hostname || host.name;
       const hostStatus =
         host.status === 'online' || host.status === 'running' ? 'online' : host.status;
-      resources.push({
+      mentionCandidates.push({
         id: `host:${hostActionId}`,
         name,
-        type: 'host',
+        type: 'agent',
         status: hostStatus,
       });
     }
 
-    setMentionResources(dedupeMentionResources(resources));
+    setMentionResources(dedupeMentionResources(mentionCandidates));
   });
 
   // Handle submit
@@ -560,10 +568,16 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const prompt = input().trim();
     if (!prompt) return;
     const mentions = accumulatedMentions();
+    const mentionsForAPI =
+      mentions.length > 0
+        ? mentions.map((mention) =>
+            mention.type === 'agent' ? { ...mention, type: 'host' } : mention,
+          )
+        : undefined;
     // Pass findingId from context on the first message, clear after success
     const ctx = aiChatStore.context;
     const findingId = ctx.findingId;
-    chat.sendMessage(prompt, mentions.length > 0 ? mentions : undefined, findingId).then((ok) => {
+    chat.sendMessage(prompt, mentionsForAPI, findingId).then((ok) => {
       if (ok && findingId) {
         aiChatStore.clearFindingId?.();
       }

@@ -121,9 +121,7 @@ describe('ReportMergeModal', () => {
       const title = screen.getByText('Split Merged Resource');
       expect(title.id).toBe('report-merge-title-host-abc-123');
 
-      const desc = screen.getByText(
-        /Use this when two systems were combined incorrectly/,
-      );
+      const desc = screen.getByText(/Use this when two systems were combined incorrectly/);
       expect(desc.id).toBe('report-merge-description-host-abc-123');
     });
 
@@ -300,10 +298,7 @@ describe('ReportMergeModal', () => {
       await waitFor(() => {
         expect(screen.getByText('Merge not found')).toBeInTheDocument();
       });
-      expect(showErrorMock).toHaveBeenCalledWith(
-        'Unable to report merge',
-        'Merge not found',
-      );
+      expect(showErrorMock).toHaveBeenCalledWith('Unable to report merge', 'Merge not found');
     });
 
     it('uses fallback message when response body is empty', async () => {
@@ -343,10 +338,7 @@ describe('ReportMergeModal', () => {
       await waitFor(() => {
         expect(screen.getByText('Network error')).toBeInTheDocument();
       });
-      expect(showErrorMock).toHaveBeenCalledWith(
-        'Unable to report merge',
-        'Network error',
-      );
+      expect(showErrorMock).toHaveBeenCalledWith('Unable to report merge', 'Network error');
     });
 
     it('uses fallback for non-Error thrown values', async () => {

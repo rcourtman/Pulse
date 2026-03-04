@@ -101,14 +101,6 @@ Returns all unified resources. Supports query parameters:
 | `status` | Filter by status (`online`, `warning`, `critical`, `offline`) |
 | `search` | Full-text search across name, ID, tags |
 
-### Legacy Endpoint (Deprecated)
-
-```
-GET /api/v2/resources
-```
-
-Still available for backward compatibility but **deprecated**. Use `/api/resources` for new integrations.
-
 ### Resource Details
 
 Individual resource details are available via the unified state WebSocket connection, which pushes real-time updates to the frontend.

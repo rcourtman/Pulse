@@ -45,18 +45,14 @@ describe('ExploreStatusBlock', () => {
   // --- Message rendering ---
 
   it('renders the status message', () => {
-    render(() => (
-      <ExploreStatusBlock status={makeStatus({ message: 'Scanning 12 nodes...' })} />
-    ));
+    render(() => <ExploreStatusBlock status={makeStatus({ message: 'Scanning 12 nodes...' })} />);
     expect(screen.getByText('Scanning 12 nodes...')).toBeInTheDocument();
   });
 
   // --- Optional model field ---
 
   it('renders model name when provided', () => {
-    render(() => (
-      <ExploreStatusBlock status={makeStatus({ model: 'gpt-4o' })} />
-    ));
+    render(() => <ExploreStatusBlock status={makeStatus({ model: 'gpt-4o' })} />);
     expect(screen.getByText('gpt-4o')).toBeInTheDocument();
   });
 
@@ -73,9 +69,7 @@ describe('ExploreStatusBlock', () => {
   // --- Optional outcome field ---
 
   it('renders outcome when provided', () => {
-    render(() => (
-      <ExploreStatusBlock status={makeStatus({ outcome: 'success' })} />
-    ));
+    render(() => <ExploreStatusBlock status={makeStatus({ outcome: 'success' })} />);
     expect(screen.getByText('outcome=success')).toBeInTheDocument();
   });
 
@@ -88,9 +82,7 @@ describe('ExploreStatusBlock', () => {
 
   it('renders both model and outcome together', () => {
     render(() => (
-      <ExploreStatusBlock
-        status={makeStatus({ model: 'claude-3', outcome: 'partial' })}
-      />
+      <ExploreStatusBlock status={makeStatus({ model: 'claude-3', outcome: 'partial' })} />
     ));
     expect(screen.getByText('claude-3')).toBeInTheDocument();
     expect(screen.getByText('outcome=partial')).toBeInTheDocument();
@@ -145,9 +137,7 @@ describe('ExploreStatusBlock', () => {
   // --- Empty string edge cases ---
 
   it('renders empty message without crashing', () => {
-    const { container } = render(() => (
-      <ExploreStatusBlock status={makeStatus({ message: '' })} />
-    ));
+    const { container } = render(() => <ExploreStatusBlock status={makeStatus({ message: '' })} />);
     // The wrapper and message paragraph should still render
     expect(container.firstElementChild).not.toBeNull();
     const messageParagraph = container.querySelector('p');
@@ -157,9 +147,7 @@ describe('ExploreStatusBlock', () => {
 
   it('does not render model span for empty string (falsy)', () => {
     // Empty string is falsy in JS, so model span should NOT render
-    const { container } = render(() => (
-      <ExploreStatusBlock status={makeStatus({ model: '' })} />
-    ));
+    const { container } = render(() => <ExploreStatusBlock status={makeStatus({ model: '' })} />);
     const headerRow = container.querySelector('.flex');
     expect(headerRow).not.toBeNull();
     // Only phase label span should be present (no model, no outcome)
@@ -167,9 +155,7 @@ describe('ExploreStatusBlock', () => {
   });
 
   it('renders empty outcome string (falsy, should not show outcome)', () => {
-    const { container } = render(() => (
-      <ExploreStatusBlock status={makeStatus({ outcome: '' })} />
-    ));
+    const { container } = render(() => <ExploreStatusBlock status={makeStatus({ outcome: '' })} />);
     expect(container.textContent).not.toContain('outcome=');
   });
 });

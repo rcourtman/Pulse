@@ -78,8 +78,6 @@ vi.mock('@/utils/upgradeMetrics', () => ({
 
 const baseSettings = (): AISettingsType => ({
   enabled: false,
-  provider: 'anthropic',
-  api_key_set: false,
   model: '',
   configured: false,
   autonomous_mode: false,

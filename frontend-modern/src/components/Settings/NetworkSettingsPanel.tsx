@@ -82,7 +82,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
           <div class="text-sm text-blue-800 dark:text-blue-200">
             <p class="font-medium mb-1">Configuration Priority</p>
             <ul class="space-y-1">
-              <li>• Some env vars override settings (API_TOKENS, legacy API_TOKEN, PORTS, AUTH)</li>
+              <li>• Some env vars override settings (PORTS, AUTH)</li>
               <li>• Changes made here are saved to system.json immediately</li>
               <li>• Settings persist unless overridden by env vars</li>
             </ul>

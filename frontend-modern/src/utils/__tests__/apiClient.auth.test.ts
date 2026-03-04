@@ -18,16 +18,14 @@ describe('apiClient auth storage integrity', () => {
     expect(window.sessionStorage.getItem('pulse_auth')).toBeNull();
   });
 
-  it('falls back to legacy token when pulse_auth is invalid JSON', async () => {
+  it('does not use removed legacy token key when pulse_auth is invalid JSON', async () => {
     window.sessionStorage.setItem('pulse_auth', '{invalid-json');
     window.sessionStorage.setItem('pulse_api_token', 'legacy-token');
 
     const { getApiToken } = await import('@/utils/apiClient');
 
-    expect(getApiToken()).toBe('legacy-token');
-    expect(window.sessionStorage.getItem('pulse_api_token')).toBeNull();
-    expect(window.sessionStorage.getItem('pulse_auth')).toBe(
-      JSON.stringify({ type: 'token', value: 'legacy-token' }),
-    );
+    expect(getApiToken()).toBeNull();
+    expect(window.sessionStorage.getItem('pulse_api_token')).toBe('legacy-token');
+    expect(window.sessionStorage.getItem('pulse_auth')).toBeNull();
   });
 });

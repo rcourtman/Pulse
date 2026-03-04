@@ -94,7 +94,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
 
     return {
       ...base,
-      // Migration shortcuts (v5 muscle memory) into v6 unified views.
+      // Transition shortcuts for older muscle memory into unified views.
       p: buildInfrastructurePath({ source: 'proxmox' }),
       h: buildInfrastructurePath({ source: 'agent' }),
       d: buildInfrastructurePath({ source: 'docker' }),

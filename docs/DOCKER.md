@@ -54,14 +54,13 @@ Pulse is configured via the UI (`system.json`) with optional environment overrid
 | `TZ` | Timezone | `UTC` |
 | `PULSE_AUTH_USER` | Admin Username | *(unset)* |
 | `PULSE_AUTH_PASS` | Admin Password | *(unset)* |
-| `API_TOKENS` | Comma-separated API tokens (**legacy**) | *(unset)* |
 | `DISCOVERY_SUBNET` | Custom CIDR to scan | *(auto)* |
 | `ALLOWED_ORIGINS` | CORS allowed origin (`*` or a single origin). Empty = same-origin only. | *(unset)* |
 | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | `info` |
 | `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Hide Docker update buttons (read-only mode) | `false` |
 
 > **Tip**: Set `LOG_LEVEL=warn` to reduce log volume while still capturing important events.
-> **Note**: `API_TOKEN` / `API_TOKENS` are legacy. Prefer managing API tokens in the UI after initial setup.
+> **Note**: API tokens are managed in the UI and stored in `api_tokens.json`.
 > **Note**: Plain text values in `PULSE_AUTH_PASS` are auto-hashed on startup.
 
 <details>

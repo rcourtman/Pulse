@@ -135,11 +135,11 @@ export function useInfrastructureSettingsState({
   const orgNodeUsage = createMemo(
     () =>
       byType('node').length +
-      byType('host').length +
       byType('docker-host').length +
       byType('k8s-cluster').length +
       byType('pbs').length +
-      byType('pmg').length,
+      byType('pmg').length +
+      byType('truenas').length,
   );
   const orgGuestUsage = createMemo(
     () =>

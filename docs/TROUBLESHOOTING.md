@@ -105,8 +105,8 @@ sudo pulse bootstrap-token
 ### Navigation (v6)
 
 #### Old bookmarks don't work
-- Legacy URLs (`/proxmox`, `/docker`, `/kubernetes`, `/hosts`, `/services`) redirect automatically to v6 equivalents.
-- If redirects are disabled (via `PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS=true`), update your bookmarks. See [Migration Guide](MIGRATION_UNIFIED_NAV.md).
+- Legacy URLs (`/proxmox`, `/docker`, `/kubernetes`, `/hosts`, `/services`) are not supported in v6.
+- Update bookmarks to canonical routes. See [Migration Guide](MIGRATION_UNIFIED_NAV.md).
 
 ### Relay / Mobile
 

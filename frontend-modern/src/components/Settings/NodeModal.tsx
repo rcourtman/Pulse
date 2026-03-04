@@ -1145,7 +1145,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       <span>
                                         Creates monitoring user{' '}
                                         <code class="bg-blue-100 dark:bg-blue-800 px-1 rounded">
-                                          pulse-monitor@pam
+                                          pulse-monitor@pve
                                         </code>
                                       </span>
                                     </li>
@@ -1188,7 +1188,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         type="button"
                                         onClick={async () => {
                                           const cmd =
-                                            'pveum user add pulse-monitor@pam --comment "Pulse monitoring service"';
+                                            'pveum user add pulse-monitor@pve --comment "Pulse monitoring service"';
                                           if (await copyToClipboard(cmd)) {
                                             notificationStore.success('Command copied!');
                                           }
@@ -1216,7 +1216,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         </svg>
                                       </button>
                                       <code class="text-base-content">
-                                        pveum user add pulse-monitor@pam --comment "Pulse monitoring
+                                        pveum user add pulse-monitor@pve --comment "Pulse monitoring
                                         service"
                                       </code>
                                     </div>
@@ -1232,7 +1232,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         type="button"
                                         onClick={async () => {
                                           const cmd =
-                                            'pveum user token add pulse-monitor@pam pulse-token --privsep 0';
+                                            'pveum user token add pulse-monitor@pve pulse-token --privsep 0';
                                           if (await copyToClipboard(cmd)) {
                                             notificationStore.success('Command copied!');
                                           }
@@ -1260,7 +1260,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         </svg>
                                       </button>
                                       <code class="text-base-content">
-                                        pveum user token add pulse-monitor@pam pulse-token --privsep
+                                        pveum user token add pulse-monitor@pve pulse-token --privsep
                                         0
                                       </code>
                                     </div>
@@ -1280,7 +1280,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         type="button"
                                         onClick={async () => {
                                           const cmd =
-                                            'pveum aclmod / -user pulse-monitor@pam -role PVEAuditor && if pveum role list 2>/dev/null | grep -q "VM.Monitor" || pveum role add TestMonitor -privs VM.Monitor 2>/dev/null; then pveum role delete TestMonitor 2>/dev/null; pveum role delete PulseMonitor 2>/dev/null; pveum role add PulseMonitor -privs VM.Monitor; pveum aclmod / -user pulse-monitor@pam -role PulseMonitor; fi';
+                                            'pveum aclmod / -user pulse-monitor@pve -role PVEAuditor && if pveum role list 2>/dev/null | grep -q "VM.Monitor" || pveum role add TestMonitor -privs VM.Monitor 2>/dev/null; then pveum role delete TestMonitor 2>/dev/null; pveum role delete PulseMonitor 2>/dev/null; pveum role add PulseMonitor -privs VM.Monitor; pveum aclmod / -user pulse-monitor@pve -role PulseMonitor; fi';
                                           if (await copyToClipboard(cmd)) {
                                             notificationStore.success('Command copied!');
                                           }
@@ -1309,7 +1309,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       </button>
                                       <code class="text-base-content whitespace-pre-line">
                                         {
-                                          '# Apply monitoring permissions - use built-in PVEAuditor role\npveum aclmod / -user pulse-monitor@pam -role PVEAuditor\n\n# Gather additional privileges for VM metrics\nEXTRA_PRIVS=()\n\n# Sys.Audit (Ceph, cluster status)\nif pveum role list 2>/dev/null | grep -q "Sys.Audit"; then\n  EXTRA_PRIVS+=(\"Sys.Audit\")\nelse\n  if pveum role add PulseTmpSysAudit -privs Sys.Audit 2>/dev/null; then\n    EXTRA_PRIVS+=(\"Sys.Audit\")\n    pveum role delete PulseTmpSysAudit 2>/dev/null\n  fi\nfi\n\n# VM guest agent / monitor privileges\nVM_PRIV=\"\"\nif pveum role list 2>/dev/null | grep -q "VM.Monitor"; then\n  VM_PRIV=\"VM.Monitor\"\nelif pveum role list 2>/dev/null | grep -q "VM.GuestAgent.Audit"; then\n  VM_PRIV=\"VM.GuestAgent.Audit\"\nelse\n  if pveum role add PulseTmpVMMonitor -privs VM.Monitor 2>/dev/null; then\n    VM_PRIV=\"VM.Monitor\"\n    pveum role delete PulseTmpVMMonitor 2>/dev/null\n  elif pveum role add PulseTmpGuestAudit -privs VM.GuestAgent.Audit 2>/dev/null; then\n    VM_PRIV=\"VM.GuestAgent.Audit\"\n    pveum role delete PulseTmpGuestAudit 2>/dev/null\n  fi\nfi\n\nif [ -n \"$VM_PRIV\" ]; then\n  EXTRA_PRIVS+=(\"$VM_PRIV\")\nfi\n\nif [ ${#EXTRA_PRIVS[@]} -gt 0 ]; then\n  PRIV_STRING=\"${EXTRA_PRIVS[*]}\"\n  pveum role delete PulseMonitor 2>/dev/null\n  pveum role add PulseMonitor -privs \"$PRIV_STRING\"\n  pveum aclmod / -user pulse-monitor@pam -role PulseMonitor\nfi'
+                                          '# Apply monitoring permissions - use built-in PVEAuditor role\npveum aclmod / -user pulse-monitor@pve -role PVEAuditor\n\n# Gather additional privileges for VM metrics\nEXTRA_PRIVS=()\n\n# Sys.Audit (Ceph, cluster status)\nif pveum role list 2>/dev/null | grep -q "Sys.Audit"; then\n  EXTRA_PRIVS+=(\"Sys.Audit\")\nelse\n  if pveum role add PulseTmpSysAudit -privs Sys.Audit 2>/dev/null; then\n    EXTRA_PRIVS+=(\"Sys.Audit\")\n    pveum role delete PulseTmpSysAudit 2>/dev/null\n  fi\nfi\n\n# VM guest agent / monitor privileges\nVM_PRIV=\"\"\nif pveum role list 2>/dev/null | grep -q "VM.Monitor"; then\n  VM_PRIV=\"VM.Monitor\"\nelif pveum role list 2>/dev/null | grep -q "VM.GuestAgent.Audit"; then\n  VM_PRIV=\"VM.GuestAgent.Audit\"\nelse\n  if pveum role add PulseTmpVMMonitor -privs VM.Monitor 2>/dev/null; then\n    VM_PRIV=\"VM.Monitor\"\n    pveum role delete PulseTmpVMMonitor 2>/dev/null\n  elif pveum role add PulseTmpGuestAudit -privs VM.GuestAgent.Audit 2>/dev/null; then\n    VM_PRIV=\"VM.GuestAgent.Audit\"\n    pveum role delete PulseTmpGuestAudit 2>/dev/null\n  fi\nfi\n\nif [ -n \"$VM_PRIV\" ]; then\n  EXTRA_PRIVS+=(\"$VM_PRIV\")\nfi\n\nif [ ${#EXTRA_PRIVS[@]} -gt 0 ]; then\n  PRIV_STRING=\"${EXTRA_PRIVS[*]}\"\n  pveum role delete PulseMonitor 2>/dev/null\n  pveum role add PulseMonitor -privs \"$PRIV_STRING\"\n  pveum aclmod / -user pulse-monitor@pve -role PulseMonitor\nfi'
                                         }
                                       </code>
                                     </div>
@@ -1318,7 +1318,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         type="button"
                                         onClick={async () => {
                                           const cmd =
-                                            'pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin';
+                                            'pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin';
                                           if (await copyToClipboard(cmd)) {
                                             notificationStore.success('Command copied!');
                                           }
@@ -1346,7 +1346,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         </svg>
                                       </button>
                                       <code class="text-base-content">
-                                        pveum aclmod /storage -user pulse-monitor@pam -role
+                                        pveum aclmod /storage -user pulse-monitor@pve -role
                                         PVEDatastoreAdmin
                                       </code>
                                     </div>
@@ -1365,7 +1365,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     </p>
                                     <ul class="text-xs text-green-800 dark:text-green-200 ml-4 list-disc">
                                       <li>
-                                        <strong>Token ID:</strong> pulse-monitor@pam!pulse-token
+                                        <strong>Token ID:</strong> pulse-monitor@pve!pulse-token
                                       </li>
                                       <li>
                                         <strong>Token Value:</strong> [The value from step 2]
@@ -2068,7 +2068,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                               onInput={(e) => updateField('tokenName', e.currentTarget.value)}
                               placeholder={
                                 props.nodeType === 'pve'
-                                  ? 'pulse-monitor@pam!pulse-token'
+                                  ? 'pulse-monitor@pve!pulse-token'
                                   : 'pulse-monitor@pbs!pulse-token'
                               }
                               required={formData().authType === 'token'}

@@ -149,35 +149,27 @@ describe('QuestionCard', () => {
     });
 
     it('renders option labels', () => {
-      render(() => (
-        <QuestionCard question={selectQuestion} onAnswer={vi.fn()} onSkip={vi.fn()} />
-      ));
+      render(() => <QuestionCard question={selectQuestion} onAnswer={vi.fn()} onSkip={vi.fn()} />);
 
       expect(screen.getByText('Restart')).toBeInTheDocument();
       expect(screen.getByText('Stop')).toBeInTheDocument();
     });
 
     it('renders option descriptions when provided', () => {
-      render(() => (
-        <QuestionCard question={selectQuestion} onAnswer={vi.fn()} onSkip={vi.fn()} />
-      ));
+      render(() => <QuestionCard question={selectQuestion} onAnswer={vi.fn()} onSkip={vi.fn()} />);
 
       expect(screen.getByText('Restart the service')).toBeInTheDocument();
     });
 
     it('submit is disabled before selecting an option', () => {
-      render(() => (
-        <QuestionCard question={selectQuestion} onAnswer={vi.fn()} onSkip={vi.fn()} />
-      ));
+      render(() => <QuestionCard question={selectQuestion} onAnswer={vi.fn()} onSkip={vi.fn()} />);
 
       const submitBtn = screen.getByText('Submit Answer').closest('button')!;
       expect(submitBtn).toBeDisabled();
     });
 
     it('submit is enabled after selecting an option', () => {
-      render(() => (
-        <QuestionCard question={selectQuestion} onAnswer={vi.fn()} onSkip={vi.fn()} />
-      ));
+      render(() => <QuestionCard question={selectQuestion} onAnswer={vi.fn()} onSkip={vi.fn()} />);
 
       fireEvent.click(screen.getByText('Restart'));
 
@@ -187,9 +179,7 @@ describe('QuestionCard', () => {
 
     it('calls onAnswer with the selected option value', () => {
       const onAnswer = vi.fn();
-      render(() => (
-        <QuestionCard question={selectQuestion} onAnswer={onAnswer} onSkip={vi.fn()} />
-      ));
+      render(() => <QuestionCard question={selectQuestion} onAnswer={onAnswer} onSkip={vi.fn()} />);
 
       fireEvent.click(screen.getByText('Stop'));
       fireEvent.click(screen.getByText('Submit Answer'));
@@ -200,9 +190,7 @@ describe('QuestionCard', () => {
 
     it('selecting a different option changes the answer', () => {
       const onAnswer = vi.fn();
-      render(() => (
-        <QuestionCard question={selectQuestion} onAnswer={onAnswer} onSkip={vi.fn()} />
-      ));
+      render(() => <QuestionCard question={selectQuestion} onAnswer={onAnswer} onSkip={vi.fn()} />);
 
       fireEvent.click(screen.getByText('Restart'));
       fireEvent.click(screen.getByText('Stop'));
@@ -229,18 +217,14 @@ describe('QuestionCard', () => {
     });
 
     it('renders all questions', () => {
-      render(() => (
-        <QuestionCard question={multiQuestion} onAnswer={vi.fn()} onSkip={vi.fn()} />
-      ));
+      render(() => <QuestionCard question={multiQuestion} onAnswer={vi.fn()} onSkip={vi.fn()} />);
 
       expect(screen.getByText('Enter the name')).toBeInTheDocument();
       expect(screen.getByText('Choose action')).toBeInTheDocument();
     });
 
     it('submit is disabled until all questions are answered', () => {
-      render(() => (
-        <QuestionCard question={multiQuestion} onAnswer={vi.fn()} onSkip={vi.fn()} />
-      ));
+      render(() => <QuestionCard question={multiQuestion} onAnswer={vi.fn()} onSkip={vi.fn()} />);
 
       // Answer only the text question
       const input = screen.getByPlaceholderText('Type your answer...');
@@ -251,9 +235,7 @@ describe('QuestionCard', () => {
     });
 
     it('submit is enabled when all questions are answered', () => {
-      render(() => (
-        <QuestionCard question={multiQuestion} onAnswer={vi.fn()} onSkip={vi.fn()} />
-      ));
+      render(() => <QuestionCard question={multiQuestion} onAnswer={vi.fn()} onSkip={vi.fn()} />);
 
       const input = screen.getByPlaceholderText('Type your answer...');
       fireEvent.input(input, { target: { value: 'test-name' } });
@@ -265,9 +247,7 @@ describe('QuestionCard', () => {
 
     it('submits all answers in order', () => {
       const onAnswer = vi.fn();
-      render(() => (
-        <QuestionCard question={multiQuestion} onAnswer={onAnswer} onSkip={vi.fn()} />
-      ));
+      render(() => <QuestionCard question={multiQuestion} onAnswer={onAnswer} onSkip={vi.fn()} />);
 
       const input = screen.getByPlaceholderText('Type your answer...');
       fireEvent.input(input, { target: { value: 'my-resource' } });
@@ -349,9 +329,7 @@ describe('QuestionCard', () => {
         ],
       });
 
-      render(() => (
-        <QuestionCard question={selectQ} onAnswer={vi.fn()} onSkip={vi.fn()} />
-      ));
+      render(() => <QuestionCard question={selectQ} onAnswer={vi.fn()} onSkip={vi.fn()} />);
 
       // All buttons (option A, option B, submit, skip) should be disabled
       const buttons = screen.getAllByRole('button');
@@ -398,9 +376,7 @@ describe('QuestionCard', () => {
         ],
       });
 
-      render(() => (
-        <QuestionCard question={multiQ} onAnswer={vi.fn()} onSkip={vi.fn()} />
-      ));
+      render(() => <QuestionCard question={multiQ} onAnswer={vi.fn()} onSkip={vi.fn()} />);
 
       // Answer only the first of two text questions
       const inputs = screen.getAllByPlaceholderText('Type your answer...');
@@ -423,9 +399,7 @@ describe('QuestionCard', () => {
         ],
       });
 
-      render(() => (
-        <QuestionCard question={noOptionsQ} onAnswer={vi.fn()} onSkip={vi.fn()} />
-      ));
+      render(() => <QuestionCard question={noOptionsQ} onAnswer={vi.fn()} onSkip={vi.fn()} />);
 
       expect(screen.getByText('Pick something')).toBeInTheDocument();
       // Submit should be disabled since there is no way to answer

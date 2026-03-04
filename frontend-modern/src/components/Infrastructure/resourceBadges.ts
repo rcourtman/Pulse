@@ -52,7 +52,7 @@ const unifiedSourceClasses: Record<UnifiedSource, string> = {
 };
 
 const typeLabels: Partial<Record<ResourceType, string>> = {
-  host: 'Host',
+  host: 'Agent',
   node: 'Node',
   'docker-host': 'Container Host',
   pbs: 'PBS',

@@ -12,6 +12,10 @@ import type {
 } from '../types/discovery';
 
 const API_BASE = '/api/discovery';
+const isAgentResourceType = (resourceType: ResourceType): boolean =>
+  resourceType === 'agent' || resourceType === 'host';
+const agentCollectionBasePath = (resourceType: ResourceType): string =>
+  resourceType === 'agent' ? `${API_BASE}/agent` : `${API_BASE}/host`;
 
 /**
  * List all discoveries
@@ -40,17 +44,20 @@ export async function listDiscoveriesByType(
 }
 
 /**
- * List discoveries by host
+ * List discoveries by agent
  */
-export async function listDiscoveriesByHost(hostId: string): Promise<DiscoveryListResponse> {
-  const response = await apiFetch(`${API_BASE}/host/${encodeURIComponent(hostId)}`);
+export async function listDiscoveriesByAgent(agentId: string): Promise<DiscoveryListResponse> {
+  const response = await apiFetch(`${API_BASE}/agent/${encodeURIComponent(agentId)}`);
   if (!response.ok) {
     throw new Error(
-      await readAPIErrorMessage(response, `Failed to list discoveries for host ${hostId}`),
+      await readAPIErrorMessage(response, `Failed to list discoveries for agent ${agentId}`),
     );
   }
   return response.json();
 }
+
+// Compatibility alias while host naming is phased out from imports.
+export const listDiscoveriesByHost = listDiscoveriesByAgent;
 
 /**
  * Get a specific discovery
@@ -60,34 +67,40 @@ export async function getDiscovery(
   hostId: string,
   resourceId: string,
 ): Promise<ResourceDiscovery | null> {
-  if (resourceType === 'host') {
-    // Host discovery is frequently absent before first scan. Resolve via list endpoint
+  if (isAgentResourceType(resourceType)) {
+    // Agent discovery is frequently absent before first scan. Resolve via list endpoint
     // first to avoid noisy 404s for expected "not discovered yet" states.
-    const hostListResponse = await apiFetch(`${API_BASE}/host/${encodeURIComponent(hostId)}`);
-    if (!hostListResponse.ok) {
+    const collectionBasePath = agentCollectionBasePath(resourceType);
+    const agentListResponse = await apiFetch(
+      `${collectionBasePath}/${encodeURIComponent(hostId)}`,
+    );
+    if (!agentListResponse.ok) {
       throw new Error(
-        await readAPIErrorMessage(hostListResponse, 'Failed to list host discoveries'),
+        await readAPIErrorMessage(agentListResponse, 'Failed to list agent discoveries'),
       );
     }
 
-    const hostList = (await hostListResponse.json()) as DiscoveryListResponse;
-    if (!hostList.discoveries || hostList.discoveries.length === 0) {
+    const agentList = (await agentListResponse.json()) as DiscoveryListResponse;
+    if (!agentList.discoveries || agentList.discoveries.length === 0) {
       return null;
     }
 
-    const resolvedHostDiscovery =
-      hostList.discoveries.find(
+    const resolvedAgentDiscovery =
+      agentList.discoveries.find(
         (d) =>
-          d.resource_type === 'host' &&
+          (d.resource_type === 'host' || d.resource_type === 'agent') &&
           (d.resource_id === resourceId || d.resource_id === hostId || d.host_id === hostId),
-      ) ?? hostList.discoveries.find((d) => d.resource_type === 'host');
+      ) ??
+      agentList.discoveries.find(
+        (d) => d.resource_type === 'host' || d.resource_type === 'agent',
+      );
 
-    if (!resolvedHostDiscovery) {
+    if (!resolvedAgentDiscovery) {
       return null;
     }
 
     const response = await apiFetch(
-      `${API_BASE}/host/${encodeURIComponent(resolvedHostDiscovery.host_id)}/${encodeURIComponent(resolvedHostDiscovery.resource_id)}`,
+      `${collectionBasePath}/${encodeURIComponent(resolvedAgentDiscovery.host_id)}/${encodeURIComponent(resolvedAgentDiscovery.resource_id)}`,
     );
     if (response.status === 404) {
       return null;

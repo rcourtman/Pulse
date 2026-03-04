@@ -28,15 +28,8 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
   const infrastructurePath = buildInfrastructurePath();
   const workloadsPath = buildWorkloadsPath();
   const kubernetesWorkloadsPath = buildWorkloadsPath({ type: 'k8s' });
-  const lxcWorkloadsPath = buildWorkloadsPath({ type: 'system-container' });
   const storagePath = buildStoragePath();
   const recoveryPath = buildRecoveryPath();
-  const classicProxmoxPath = buildInfrastructurePath({ source: 'proxmox' });
-  const classicHostsPath = buildInfrastructurePath({ source: 'agent' });
-  const classicDockerHostsPath = buildInfrastructurePath({ source: 'docker' });
-  const classicServicesPath = buildInfrastructurePath({ source: 'pmg' });
-  const classicContainersPath = buildWorkloadsPath({ type: 'docker' });
-  const classicLxcPath = lxcWorkloadsPath;
 
   let inputRef: HTMLInputElement | undefined;
 
@@ -97,92 +90,8 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
         keywords: ['preferences', 'config'],
         action: () => navigate('/settings'),
       },
-      {
-        id: 'nav-migration-guide',
-        label: 'Open Migration Guide',
-        description: '/migration-guide',
-        keywords: ['migration', 'legacy', 'routes', 'navigation', 'moved'],
-        action: () => navigate('/migration-guide'),
-      },
     ];
-
-    return [
-      {
-        id: 'nav-classic-proxmox',
-        label: 'Go to Proxmox (v5 entry point)',
-        description: classicProxmoxPath,
-        shortcut: 'g p',
-        keywords: ['proxmox', 'pve', 'legacy', 'v5', 'migration', 'entry'],
-        action: () => navigate(classicProxmoxPath),
-      },
-      {
-        id: 'nav-classic-hosts',
-        label: 'Go to Hosts (v5 entry point)',
-        description: classicHostsPath,
-        shortcut: 'g h',
-        keywords: ['hosts', 'agent', 'legacy', 'v5', 'migration', 'entry'],
-        action: () => navigate(classicHostsPath),
-      },
-      {
-        id: 'nav-classic-docker-hosts',
-        label: 'Go to Container Hosts (v5 entry point)',
-        description: classicDockerHostsPath,
-        shortcut: 'g d',
-        keywords: ['containers', 'docker', 'podman', 'hosts', 'legacy', 'v5', 'migration', 'entry'],
-        action: () => navigate(classicDockerHostsPath),
-      },
-      {
-        id: 'nav-classic-services',
-        label: 'Go to Services (v5 entry point)',
-        description: classicServicesPath,
-        shortcut: 'g v',
-        keywords: ['services', 'pmg', 'mail', 'legacy', 'v5', 'migration', 'entry'],
-        action: () => navigate(classicServicesPath),
-      },
-      {
-        id: 'nav-classic-containers',
-        label: 'Go to Containers (v5 entry point)',
-        description: classicContainersPath,
-        shortcut: 'g c',
-        keywords: [
-          'containers',
-          'docker',
-          'podman',
-          'workloads',
-          'legacy',
-          'v5',
-          'migration',
-          'entry',
-        ],
-        action: () => navigate(classicContainersPath),
-      },
-      {
-        id: 'nav-classic-lxc',
-        label: 'Go to LXC Containers (v5 entry point)',
-        description: classicLxcPath,
-        shortcut: 'g l',
-        keywords: [
-          'lxc',
-          'containers',
-          'proxmox',
-          'workloads',
-          'legacy',
-          'v5',
-          'migration',
-          'entry',
-        ],
-        action: () => navigate(classicLxcPath),
-      },
-      {
-        id: 'nav-classic-kubernetes',
-        label: 'Go to Kubernetes (v5 entry point)',
-        description: kubernetesWorkloadsPath,
-        shortcut: 'g k',
-        keywords: ['k8s', 'kubernetes', 'pods', 'legacy', 'v5', 'migration', 'entry'],
-        action: () => navigate(kubernetesWorkloadsPath),
-      },
-      ...base,
-    ];
+    return base;
   });
 
   const normalizedQuery = createMemo(() => query().toLowerCase().trim().replace(/\s+/g, ''));

@@ -196,7 +196,13 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
       // But for Import, we might want to trigger the token modal if it was a token issue
       // Note: apiFetch throws Error with message.
 
-      if (errorText.includes('API_TOKEN') || errorText.includes('API_TOKENS')) {
+      const normalizedError = errorText.toLowerCase();
+      if (
+        errorText.includes('API_TOKEN') ||
+        errorText.includes('API_TOKENS') ||
+        normalizedError.includes('api token') ||
+        normalizedError.includes('x-api-token')
+      ) {
         setApiTokenModalSource('import');
         setShowApiTokenModal(true);
         return;

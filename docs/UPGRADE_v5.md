@@ -85,7 +85,7 @@ This can happen if:
 
 **Quick fix** (run on each Proxmox host):
 ```bash
-pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin
+pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin
 ```
 
 **Alternative** (re-run setup):

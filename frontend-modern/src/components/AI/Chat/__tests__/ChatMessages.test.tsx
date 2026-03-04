@@ -93,11 +93,7 @@ describe('ChatMessages', () => {
 
     it('does not show subtitle when not provided', () => {
       render(() => (
-        <ChatMessages
-          messages={[]}
-          {...makeHandlers()}
-          emptyState={{ title: 'Welcome' }}
-        />
+        <ChatMessages messages={[]} {...makeHandlers()} emptyState={{ title: 'Welcome' }} />
       ));
 
       expect(screen.getByText('Welcome')).toBeInTheDocument();
@@ -200,9 +196,7 @@ describe('ChatMessages', () => {
     });
 
     it('does not show empty state when emptyState prop is not provided', () => {
-      render(() => (
-        <ChatMessages messages={[]} {...makeHandlers()} />
-      ));
+      render(() => <ChatMessages messages={[]} {...makeHandlers()} />);
 
       expect(screen.queryByText('Welcome')).not.toBeInTheDocument();
       expect(screen.queryByText('Or try asking')).not.toBeInTheDocument();
@@ -253,9 +247,7 @@ describe('ChatMessages', () => {
         makeMessage({ id: 'msg-3', role: 'user', content: 'Question two' }),
       ];
 
-      const { container } = render(() => (
-        <ChatMessages messages={messages} {...makeHandlers()} />
-      ));
+      const { container } = render(() => <ChatMessages messages={messages} {...makeHandlers()} />);
 
       const items = container.querySelectorAll('[data-testid^="message-item-"]');
       expect(items).toHaveLength(3);
@@ -271,9 +263,7 @@ describe('ChatMessages', () => {
         makeMessage({ id: 'asst-1', role: 'assistant', content: 'Assistant message' }),
       ];
 
-      render(() => (
-        <ChatMessages messages={messages} {...makeHandlers()} />
-      ));
+      render(() => <ChatMessages messages={messages} {...makeHandlers()} />);
 
       const userMsg = screen.getByTestId('message-item-user-1');
       const asstMsg = screen.getByTestId('message-item-asst-1');
@@ -291,9 +281,7 @@ describe('ChatMessages', () => {
     });
 
     it('renders no message items when messages is empty and no emptyState', () => {
-      const { container } = render(() => (
-        <ChatMessages messages={[]} {...makeHandlers()} />
-      ));
+      const { container } = render(() => <ChatMessages messages={[]} {...makeHandlers()} />);
 
       expect(container.querySelectorAll('[data-testid^="message-item-"]')).toHaveLength(0);
     });
@@ -303,9 +291,7 @@ describe('ChatMessages', () => {
         makeMessage({ id: `msg-${i}`, content: `Message ${i}` }),
       );
 
-      const { container } = render(() => (
-        <ChatMessages messages={messages} {...makeHandlers()} />
-      ));
+      const { container } = render(() => <ChatMessages messages={messages} {...makeHandlers()} />);
 
       expect(container.querySelectorAll('[data-testid^="message-item-"]')).toHaveLength(50);
     });
@@ -314,12 +300,7 @@ describe('ChatMessages', () => {
   describe('callback forwarding', () => {
     it('forwards onApprove with message.id prepended', () => {
       const handlers = makeHandlers();
-      render(() => (
-        <ChatMessages
-          messages={[makeMessage({ id: 'msg-42' })]}
-          {...handlers}
-        />
-      ));
+      render(() => <ChatMessages messages={[makeMessage({ id: 'msg-42' })]} {...handlers} />);
 
       const propsForMsg = capturedMessageItemProps.find((p) => p.message.id === 'msg-42');
       expect(propsForMsg).toBeDefined();
@@ -337,12 +318,7 @@ describe('ChatMessages', () => {
 
     it('forwards onSkip with message.id prepended', () => {
       const handlers = makeHandlers();
-      render(() => (
-        <ChatMessages
-          messages={[makeMessage({ id: 'msg-99' })]}
-          {...handlers}
-        />
-      ));
+      render(() => <ChatMessages messages={[makeMessage({ id: 'msg-99' })]} {...handlers} />);
 
       const propsForMsg = capturedMessageItemProps.find((p) => p.message.id === 'msg-99');
       propsForMsg!.onSkip('tool-xyz');
@@ -352,12 +328,7 @@ describe('ChatMessages', () => {
 
     it('forwards onAnswerQuestion with message.id prepended', () => {
       const handlers = makeHandlers();
-      render(() => (
-        <ChatMessages
-          messages={[makeMessage({ id: 'msg-7' })]}
-          {...handlers}
-        />
-      ));
+      render(() => <ChatMessages messages={[makeMessage({ id: 'msg-7' })]} {...handlers} />);
 
       const propsForMsg = capturedMessageItemProps.find((p) => p.message.id === 'msg-7');
       const fakeQuestion: PendingQuestion = {
@@ -372,12 +343,7 @@ describe('ChatMessages', () => {
 
     it('forwards onSkipQuestion with message.id prepended', () => {
       const handlers = makeHandlers();
-      render(() => (
-        <ChatMessages
-          messages={[makeMessage({ id: 'msg-5' })]}
-          {...handlers}
-        />
-      ));
+      render(() => <ChatMessages messages={[makeMessage({ id: 'msg-5' })]} {...handlers} />);
 
       const propsForMsg = capturedMessageItemProps.find((p) => p.message.id === 'msg-5');
       propsForMsg!.onSkipQuestion('q-77');
@@ -389,10 +355,7 @@ describe('ChatMessages', () => {
       const handlers = makeHandlers();
       render(() => (
         <ChatMessages
-          messages={[
-            makeMessage({ id: 'msg-a' }),
-            makeMessage({ id: 'msg-b' }),
-          ]}
+          messages={[makeMessage({ id: 'msg-a' }), makeMessage({ id: 'msg-b' })]}
           {...handlers}
         />
       ));
@@ -410,12 +373,7 @@ describe('ChatMessages', () => {
 
   describe('auto-scroll behavior', () => {
     it('calls scrollIntoView when messages are present', () => {
-      render(() => (
-        <ChatMessages
-          messages={[makeMessage({ id: 'msg-1' })]}
-          {...makeHandlers()}
-        />
-      ));
+      render(() => <ChatMessages messages={[makeMessage({ id: 'msg-1' })]} {...makeHandlers()} />);
 
       // scrollIntoView should have been called by the createEffect
       expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
@@ -425,9 +383,7 @@ describe('ChatMessages', () => {
       // Reset the mock to clear any prior calls
       (Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>).mockClear();
 
-      render(() => (
-        <ChatMessages messages={[]} {...makeHandlers()} />
-      ));
+      render(() => <ChatMessages messages={[]} {...makeHandlers()} />);
 
       expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
     });
@@ -435,9 +391,7 @@ describe('ChatMessages', () => {
 
   describe('container structure', () => {
     it('renders the scrollable container with correct classes', () => {
-      const { container } = render(() => (
-        <ChatMessages messages={[]} {...makeHandlers()} />
-      ));
+      const { container } = render(() => <ChatMessages messages={[]} {...makeHandlers()} />);
 
       const scrollContainer = container.firstElementChild;
       expect(scrollContainer).toHaveClass('flex-1', 'overflow-y-auto');

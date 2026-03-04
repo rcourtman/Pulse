@@ -79,8 +79,20 @@ function baseSummary(overrides?: Partial<AICostSummary>): AICostSummary {
     ],
     targets: [],
     daily_totals: [
-      { date: '2026-02-28', input_tokens: 25000, output_tokens: 5000, total_tokens: 30000, estimated_usd: 0.21 },
-      { date: '2026-03-01', input_tokens: 25000, output_tokens: 5000, total_tokens: 30000, estimated_usd: 0.21 },
+      {
+        date: '2026-02-28',
+        input_tokens: 25000,
+        output_tokens: 5000,
+        total_tokens: 30000,
+        estimated_usd: 0.21,
+      },
+      {
+        date: '2026-03-01',
+        input_tokens: 25000,
+        output_tokens: 5000,
+        total_tokens: 30000,
+        estimated_usd: 0.21,
+      },
     ],
     totals: {
       provider: '',
@@ -509,7 +521,6 @@ describe('AICostDashboard', () => {
         expect.stringContaining('backup: /data/backup.json'),
       );
     });
-
   });
 
   it('calls resetCostHistory and shows success notification without backup file', async () => {
@@ -524,11 +535,8 @@ describe('AICostDashboard', () => {
     fireEvent.click(screen.getByText('Reset history'));
 
     await waitFor(() => {
-      expect(notificationSuccessMock).toHaveBeenCalledWith(
-        'Pulse Assistant usage history reset',
-      );
+      expect(notificationSuccessMock).toHaveBeenCalledWith('Pulse Assistant usage history reset');
     });
-
   });
 
   it('does not call resetCostHistory when user cancels confirm', async () => {
@@ -560,7 +568,6 @@ describe('AICostDashboard', () => {
         'Failed to reset Pulse Assistant usage history',
       );
     });
-
   });
 
   // ---- export ----
@@ -655,7 +662,6 @@ describe('AICostDashboard', () => {
         'Failed to export Pulse Assistant usage history',
       );
     });
-
   });
 
   // ---- no pricing known ----
@@ -706,9 +712,7 @@ describe('AICostDashboard', () => {
   });
 
   it('shows "No daily token trend yet" when less than 2 daily totals', async () => {
-    getCostSummaryMock.mockResolvedValue(
-      baseSummary({ daily_totals: [] }),
-    );
+    getCostSummaryMock.mockResolvedValue(baseSummary({ daily_totals: [] }));
     renderDashboard();
     await waitFor(() => {
       expect(screen.getByText('No daily token trend yet.')).toBeInTheDocument();

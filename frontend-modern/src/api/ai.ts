@@ -470,7 +470,7 @@ export interface RemediationExecution {
   rollback_error?: string;
 }
 
-// Legacy type for backwards compatibility
+// Compatibility response shape for older execution endpoints.
 export interface RemediationExecutionResult {
   execution_id: string;
   plan_id: string;

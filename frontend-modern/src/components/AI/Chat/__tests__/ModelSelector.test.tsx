@@ -54,9 +54,7 @@ describe('ModelSelector', () => {
   });
 
   it('shows "Default" when no model is selected', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     expect(screen.getByText('Default')).toBeInTheDocument();
   });
@@ -104,9 +102,7 @@ describe('ModelSelector', () => {
   // --- Dropdown Open/Close ---
 
   it('opens dropdown when button is clicked', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     // Dropdown not open initially
     expect(screen.queryByPlaceholderText('Search or enter model ID')).not.toBeInTheDocument();
@@ -118,9 +114,7 @@ describe('ModelSelector', () => {
   });
 
   it('closes dropdown when toggled again', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     const button = screen.getByTitle('Select model for this chat');
     fireEvent.click(button);
@@ -133,9 +127,7 @@ describe('ModelSelector', () => {
   // --- Default Option ---
 
   it('renders the Default option in dropdown', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
 
@@ -194,9 +186,7 @@ describe('ModelSelector', () => {
   });
 
   it('does not show chat override option when chatOverrideModel is not provided', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
 
@@ -208,7 +198,11 @@ describe('ModelSelector', () => {
   it('calls onModelSelect with empty string when Default is clicked', () => {
     const onModelSelect = vi.fn();
     render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="anthropic:claude-sonnet-4" onModelSelect={onModelSelect} />
+      <ModelSelector
+        models={SAMPLE_MODELS}
+        selectedModel="anthropic:claude-sonnet-4"
+        onModelSelect={onModelSelect}
+      />
     ));
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
@@ -216,7 +210,7 @@ describe('ModelSelector', () => {
     // Click the Default option (the one with "Use configured default model" text)
     const defaultButtons = screen.getAllByRole('button');
     const defaultOption = defaultButtons.find((btn) =>
-      btn.textContent?.includes('Use configured default model')
+      btn.textContent?.includes('Use configured default model'),
     );
     expect(defaultOption).toBeDefined();
     fireEvent.click(defaultOption!);
@@ -237,9 +231,7 @@ describe('ModelSelector', () => {
   });
 
   it('closes dropdown after selection', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
     expect(screen.getByPlaceholderText('Search or enter model ID')).toBeInTheDocument();
@@ -270,9 +262,7 @@ describe('ModelSelector', () => {
   // --- Notable Model Filtering ---
 
   it('shows only notable models by default', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
 
@@ -287,9 +277,7 @@ describe('ModelSelector', () => {
   });
 
   it('shows toggle with hidden model count', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
 
@@ -298,9 +286,7 @@ describe('ModelSelector', () => {
   });
 
   it('shows all models after clicking the toggle', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
     fireEvent.click(screen.getByText('Show 2 older models'));
@@ -315,9 +301,7 @@ describe('ModelSelector', () => {
 
   it('falls back to showing all models when no models are notable', () => {
     const allNonNotable = SAMPLE_MODELS.map((m) => ({ ...m, notable: false }));
-    render(() => (
-      <ModelSelector models={allNonNotable} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={allNonNotable} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
 
@@ -329,9 +313,7 @@ describe('ModelSelector', () => {
   // --- Search / Filtering ---
 
   it('filters models by name when searching', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
     const searchInput = screen.getByPlaceholderText('Search or enter model ID');
@@ -343,9 +325,7 @@ describe('ModelSelector', () => {
   });
 
   it('searches all models including non-notable when query is present', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
     const searchInput = screen.getByPlaceholderText('Search or enter model ID');
@@ -356,9 +336,7 @@ describe('ModelSelector', () => {
   });
 
   it('searches by model ID', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
     const searchInput = screen.getByPlaceholderText('Search or enter model ID');
@@ -369,9 +347,7 @@ describe('ModelSelector', () => {
   });
 
   it('searches by description', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
     const searchInput = screen.getByPlaceholderText('Search or enter model ID');
@@ -407,9 +383,7 @@ describe('ModelSelector', () => {
   });
 
   it('shows "No matching models" and no model rows when search has no results', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
     const searchInput = screen.getByPlaceholderText('Search or enter model ID');
@@ -423,9 +397,7 @@ describe('ModelSelector', () => {
   });
 
   it('hides the show older models toggle when searching', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
     expect(screen.getByText('Show 2 older models')).toBeInTheDocument();
@@ -439,9 +411,7 @@ describe('ModelSelector', () => {
   // --- Custom Model ID ---
 
   it('shows custom model option when search query does not match any model ID', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
     const searchInput = screen.getByPlaceholderText('Search or enter model ID');
@@ -452,9 +422,7 @@ describe('ModelSelector', () => {
   });
 
   it('does not show custom model option when query exactly matches an existing model ID', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
     const searchInput = screen.getByPlaceholderText('Search or enter model ID');
@@ -523,9 +491,7 @@ describe('ModelSelector', () => {
   });
 
   it('does not show error section when no error', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
 
@@ -550,9 +516,7 @@ describe('ModelSelector', () => {
   });
 
   it('does not show refresh button when onRefresh is not provided', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
 
@@ -595,9 +559,7 @@ describe('ModelSelector', () => {
   // --- Provider Grouping ---
 
   it('groups models by provider with headers', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
 
@@ -610,11 +572,7 @@ describe('ModelSelector', () => {
 
   it('highlights the currently selected model', () => {
     render(() => (
-      <ModelSelector
-        models={SAMPLE_MODELS}
-        selectedModel="openai:gpt-4o"
-        onModelSelect={vi.fn()}
-      />
+      <ModelSelector models={SAMPLE_MODELS} selectedModel="openai:gpt-4o" onModelSelect={vi.fn()} />
     ));
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
@@ -622,9 +580,7 @@ describe('ModelSelector', () => {
     // GPT-4o appears twice: in the top button label and in the dropdown list.
     // Find the one inside the dropdown's model list (which has font-medium class in a flex container).
     const allGpt4o = screen.getAllByText('GPT-4o');
-    const dropdownEntry = allGpt4o.find(
-      (el) => el.closest('.max-h-72') !== null
-    );
+    const dropdownEntry = allGpt4o.find((el) => el.closest('.max-h-72') !== null);
     expect(dropdownEntry).toBeDefined();
     const modelButton = dropdownEntry!.closest('button');
     expect(modelButton?.className).toContain('bg-purple-50');
@@ -635,7 +591,11 @@ describe('ModelSelector', () => {
   it('falls back to model ID segment when name is not provided', () => {
     const models = [makeModel({ id: 'anthropic:claude-test', name: '', notable: true })];
     render(() => (
-      <ModelSelector models={models} selectedModel="anthropic:claude-test" onModelSelect={vi.fn()} />
+      <ModelSelector
+        models={models}
+        selectedModel="anthropic:claude-test"
+        onModelSelect={vi.fn()}
+      />
     ));
 
     // selectedLabel should use id.split(':').pop() when name is empty but match exists
@@ -646,9 +606,7 @@ describe('ModelSelector', () => {
   // --- Empty models list ---
 
   it('handles empty models list gracefully', () => {
-    render(() => (
-      <ModelSelector models={[]} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={[]} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
 
@@ -659,9 +617,7 @@ describe('ModelSelector', () => {
   // --- Search resets on close ---
 
   it('resets search query after selection', () => {
-    render(() => (
-      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />
-    ));
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
     const searchInput = screen.getByPlaceholderText('Search or enter model ID');
@@ -672,7 +628,9 @@ describe('ModelSelector', () => {
 
     // Re-open dropdown
     fireEvent.click(screen.getByTitle('Select model for this chat'));
-    const newSearchInput = screen.getByPlaceholderText('Search or enter model ID') as HTMLInputElement;
+    const newSearchInput = screen.getByPlaceholderText(
+      'Search or enter model ID',
+    ) as HTMLInputElement;
     expect(newSearchInput.value).toBe('');
   });
 

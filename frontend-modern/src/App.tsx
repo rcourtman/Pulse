@@ -43,7 +43,7 @@ import { UpdateBanner } from './components/UpdateBanner';
 import { DemoBanner } from './components/DemoBanner';
 import { GitHubStarBanner } from './components/GitHubStarBanner';
 import { TrialBanner } from './components/shared/TrialBanner';
-import { HostLimitWarningBanner } from './components/shared/HostLimitWarningBanner';
+import { AgentLimitWarningBanner } from './components/shared/AgentLimitWarningBanner';
 import { ActiveUseTrialNudge } from './components/shared/ActiveUseTrialNudge';
 import { WhatsNewModal } from './components/shared/WhatsNewModal';
 import { KeyboardShortcutsModal } from './components/shared/KeyboardShortcutsModal';
@@ -74,7 +74,6 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import {
   updateSystemSettingsFromResponse,
   markSystemSettingsLoadedWithDefaults,
-  shouldDisableLegacyRouteRedirects,
 } from './stores/systemSettings';
 import {
   fetchInfrastructureSummaryAndCache,
@@ -87,12 +86,7 @@ import {
   getPulseWebSocketUrl,
 } from './utils/url';
 import { useKioskMode, syncKioskMode } from '@/hooks/useKioskMode';
-import {
-  buildLegacyRedirectTarget,
-  getActiveTabForPath,
-  mergeRedirectQueryParams,
-} from './routing/navigation';
-import { LEGACY_REDIRECTS } from './routing/legacyRedirects';
+import { getActiveTabForPath } from './routing/navigation';
 import {
   buildRecoveryPath,
   DASHBOARD_PATH,
@@ -102,7 +96,6 @@ import {
 } from './routing/resourceLinks';
 import { buildStorageRecoveryTabSpecs } from './routing/platformTabs';
 import { isMultiTenantEnabled, isPro, licenseLoaded, loadLicenseStatus } from '@/stores/license';
-import { IS_V6_PUBLIC_RELEASE } from '@/config/publicRelease';
 
 import { showToast } from '@/utils/toast';
 import {
@@ -136,7 +129,6 @@ const DashboardPage = lazy(() => import('./pages/Dashboard'));
 const AIIntelligencePage = lazy(() =>
   import('./pages/AIIntelligence').then((module) => ({ default: module.AIIntelligence })),
 );
-const MigrationGuidePage = lazy(() => import('./pages/MigrationGuide'));
 const NotFoundPage = lazy(() => import('./pages/NotFound'));
 const PricingPage = lazy(() => import('./pages/PricingV6'));
 const CloudPricingPage = lazy(() => import('./pages/CloudPricing'));
@@ -146,7 +138,6 @@ const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
 const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 const STORAGE_PATH = buildStoragePath();
 const RECOVERY_ROUTE_PATH = buildRecoveryPath();
-const RECOVERY_REMOTE_EVENTS_PATH = buildRecoveryPath({ view: 'events', mode: 'remote' });
 
 // Enhanced store type with proper typing
 type EnhancedStore = ReturnType<typeof getGlobalWebSocketStore>;
@@ -259,52 +250,6 @@ function GlobalUpdateProgressWatcher() {
   );
 }
 
-type LegacyRedirectProps = {
-  to: string;
-  toast?: {
-    type?: 'success' | 'error' | 'warning' | 'info';
-    title: string;
-    message?: string;
-    /**
-     * If set, the toast will only be shown once per browser profile.
-     * This avoids spamming users when legacy aliases are hit repeatedly.
-     */
-    onceKey?: string;
-  };
-};
-
-function LegacyRedirect(props: LegacyRedirectProps) {
-  const navigate = useNavigate();
-  const location = useLocation();
-  onMount(() => {
-    if (props.toast) {
-      let shouldShow = true;
-      const onceKey = props.toast.onceKey;
-      if (onceKey) {
-        try {
-          shouldShow = localStorage.getItem(onceKey) !== '1';
-        } catch {
-          // localStorage may be disabled; fall back to showing the toast.
-        }
-      }
-
-      if (shouldShow) {
-        showToast(props.toast.type ?? 'info', props.toast.title, props.toast.message);
-        if (onceKey) {
-          try {
-            localStorage.setItem(onceKey, '1');
-          } catch {
-            // ignore
-          }
-        }
-      }
-    }
-    const target = mergeRedirectQueryParams(props.to, location.search);
-    navigate(target, { replace: true });
-  });
-  return null;
-}
-
 function App() {
   // Initialize kiosk mode from URL params immediately (persists to sessionStorage)
   // This must happen before any renders so kiosk state is available everywhere
@@ -390,16 +335,7 @@ function App() {
   };
 
   const fallbackState: State = {
-    nodes: [],
-    vms: [],
-    containers: [],
-    dockerHosts: [],
     removedDockerHosts: [],
-    hosts: [],
-    storage: [],
-    pbs: [],
-    pmg: [],
-    replicationJobs: [],
     metrics: [],
     performance: {
       apiCallDuration: {},
@@ -433,8 +369,8 @@ function App() {
   ]);
   const [activeOrgID, setActiveOrgID] = createSignal(getSelectedOrgID() || 'default');
   const [orgsLoading, setOrgsLoading] = createSignal(false);
-  // Store full security status for Login component (hideLocalLogin, oidcEnabled, etc.)
-  // Store full security status for Login component (hideLocalLogin, oidcEnabled, etc.)
+  // Store full security status for Login component (hideLocalLogin, SSO providers, etc.)
+  // Store full security status for Login component (hideLocalLogin, SSO providers, etc.)
   const [securityStatus, setSecurityStatus] = createSignal<SecurityStatus | null>(null);
   const [proxyAuthInfo, setProxyAuthInfo] = createSignal<{
     username?: string;
@@ -640,7 +576,7 @@ function App() {
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
   // Theme settings
   // Single source of truth:
-  // 1) localStorage preference (including migrated legacy key)
+  // 1) localStorage preference
   // 2) system preference
   // 3) server preference (only when no local preference exists)
   const initialThemePref = getStoredThemePreference();
@@ -729,7 +665,7 @@ function App() {
     const justLoggedOut = localStorage.getItem('just_logged_out');
 
     // First check security status to see if auth is configured
-    // We need this for ALL paths to properly set hideLocalLogin, oidcEnabled, etc.
+    // We need this for ALL paths to properly set hideLocalLogin, SSO providers, etc.
     try {
       const securityRes = await apiFetch('/api/security/status');
 
@@ -755,7 +691,7 @@ function App() {
       if (justLoggedOut) {
         localStorage.removeItem('just_logged_out');
         logger.debug('[App] User logged out, showing login page');
-        // Parse security data to get hideLocalLogin, oidcEnabled, etc.
+        // Parse security data to get hideLocalLogin, SSO providers, etc.
         if (securityRes.ok) {
           const securityData = await securityRes.json();
           setSecurityStatus(securityData as SecurityStatus);
@@ -775,13 +711,6 @@ function App() {
 
       // Store full security status for Login component
       setSecurityStatus(securityData as SecurityStatus);
-
-      // Detect legacy DISABLE_AUTH flag (now ignored) so we can surface a warning
-      if (securityData.deprecatedDisableAuth === true) {
-        logger.warn(
-          '[App] Legacy DISABLE_AUTH flag detected; authentication remains enabled. Remove the flag and restart Pulse to silence this warning.',
-        );
-      }
 
       const authConfigured = securityData.hasAuthentication || false;
       setHasAuth(authConfigured);
@@ -833,17 +762,17 @@ function App() {
         return;
       }
 
-      // Check for OIDC session
-      if (securityData.oidcEnabled && securityData.oidcUsername) {
-        logger.info('[App] OIDC session detected', { user: securityData.oidcUsername });
-        setHasAuth(true); // OIDC is enabled, so auth is configured
+      // Check for SSO session
+      if (securityData.ssoEnabled && securityData.ssoSessionUsername) {
+        logger.info('[App] SSO session detected', { user: securityData.ssoSessionUsername });
+        setHasAuth(true); // SSO is enabled, so auth is configured
         setProxyAuthInfo({
-          username: securityData.oidcUsername,
-          logoutURL: securityData.oidcLogoutURL, // OIDC logout URL from IdP
+          username: securityData.ssoSessionUsername,
+          logoutURL: securityData.ssoLogoutURL, // Optional SSO logout URL from IdP
         });
         setNeedsAuth(false);
         await loadOrganizations();
-        // Initialize WebSocket for OIDC users
+        // Initialize WebSocket for SSO users
         setWsStore(acquireWsStore());
 
         // Load system settings (theme + server-wide feature flags + layout prefs)
@@ -980,7 +909,6 @@ function App() {
     // Keys to clear on logout (auth and per-session caches)
     const keysToRemove = [
       STORAGE_KEYS.AUTH,
-      STORAGE_KEYS.LEGACY_TOKEN,
       STORAGE_KEYS.GUEST_METADATA,
       STORAGE_KEYS.DOCKER_METADATA,
       STORAGE_KEYS.DOCKER_METADATA + '_hosts',
@@ -1110,7 +1038,7 @@ function App() {
                         <DemoBanner />
                         <UpdateBanner />
                         <TrialBanner />
-                        <HostLimitWarningBanner />
+                        <AgentLimitWarningBanner />
                         <ActiveUseTrialNudge />
                         <GitHubStarBanner />
                         <WhatsNewModal />
@@ -1176,14 +1104,8 @@ function App() {
   return (
     <Router root={RootLayout}>
       <Route path="/pricing" component={PricingPage} />
-      <Route
-        path="/cloud"
-        component={IS_V6_PUBLIC_RELEASE ? CloudPricingPage : () => <Navigate href="/pricing" />}
-      />
-      <Route
-        path="/cloud/signup"
-        component={IS_V6_PUBLIC_RELEASE ? HostedSignupPage : () => <Navigate href="/pricing" />}
-      />
+      <Route path="/cloud" component={CloudPricingPage} />
+      <Route path="/cloud/signup" component={HostedSignupPage} />
       <Route path="/dashboard" component={DashboardPage} />
       <Route path="/" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
       <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsView} />
@@ -1191,163 +1113,6 @@ function App() {
       <Route path={RECOVERY_ROUTE_PATH} component={RecoveryRoute} />
       <Route path="/ceph" component={CephPage} />
       <Route path={ROOT_INFRASTRUCTURE_PATH} component={InfrastructurePage} />
-      <Route path="/migration-guide" component={MigrationGuidePage} />
-
-      <Show when={!shouldDisableLegacyRouteRedirects()}>
-        <Route path="/proxmox" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
-        <Route
-          path="/replication"
-          component={() => (
-            <LegacyRedirect
-              to={RECOVERY_REMOTE_EVENTS_PATH}
-              toast={{
-                type: 'info',
-                title: 'Replication moved',
-                message:
-                  'Replication is now shown in Recovery (Remote events). Update your bookmark to /recovery.',
-                onceKey: 'pulse_toast_replication_moved_to_recovery',
-              }}
-            />
-          )}
-        />
-        <Route
-          path={LEGACY_REDIRECTS.proxmoxOverview.path}
-          component={() => (
-            <LegacyRedirect
-              to={buildLegacyRedirectTarget(
-                LEGACY_REDIRECTS.proxmoxOverview.destination,
-                LEGACY_REDIRECTS.proxmoxOverview.source,
-              )}
-              toast={{
-                title: LEGACY_REDIRECTS.proxmoxOverview.toastTitle,
-                message: LEGACY_REDIRECTS.proxmoxOverview.toastMessage,
-              }}
-            />
-          )}
-        />
-        <Route
-          path={LEGACY_REDIRECTS.hosts.path}
-          component={() => (
-            <LegacyRedirect
-              to={buildLegacyRedirectTarget(
-                LEGACY_REDIRECTS.hosts.destination,
-                LEGACY_REDIRECTS.hosts.source,
-              )}
-              toast={{
-                title: LEGACY_REDIRECTS.hosts.toastTitle,
-                message: LEGACY_REDIRECTS.hosts.toastMessage,
-              }}
-            />
-          )}
-        />
-        <Route
-          path={LEGACY_REDIRECTS.docker.path}
-          component={() => (
-            <LegacyRedirect
-              to={buildLegacyRedirectTarget(
-                LEGACY_REDIRECTS.docker.destination,
-                LEGACY_REDIRECTS.docker.source,
-              )}
-              toast={{
-                title: LEGACY_REDIRECTS.docker.toastTitle,
-                message: LEGACY_REDIRECTS.docker.toastMessage,
-              }}
-            />
-          )}
-        />
-        <Route path="/proxmox/storage" component={() => <Navigate href={STORAGE_PATH} />} />
-        <Route path="/proxmox/ceph" component={() => <Navigate href="/ceph" />} />
-        <Route
-          path="/proxmox/replication"
-          component={() => (
-            <LegacyRedirect
-              to={RECOVERY_REMOTE_EVENTS_PATH}
-              toast={{
-                type: 'info',
-                title: 'Replication moved',
-                message:
-                  'Replication is now shown in Recovery (Remote events). Update your bookmark to /recovery.',
-                onceKey: 'pulse_toast_replication_moved_to_recovery',
-              }}
-            />
-          )}
-        />
-        <Route
-          path={LEGACY_REDIRECTS.proxmoxMail.path}
-          component={() => (
-            <LegacyRedirect
-              to={buildLegacyRedirectTarget(
-                LEGACY_REDIRECTS.proxmoxMail.destination,
-                LEGACY_REDIRECTS.proxmoxMail.source,
-              )}
-              toast={{
-                title: LEGACY_REDIRECTS.proxmoxMail.toastTitle,
-                message: LEGACY_REDIRECTS.proxmoxMail.toastMessage,
-              }}
-            />
-          )}
-        />
-        <Route
-          path="/proxmox/backups"
-          component={() => (
-            <LegacyRedirect
-              to={RECOVERY_ROUTE_PATH}
-              toast={{
-                type: 'info',
-                title: 'Backups moved',
-                message: 'Backups is now Recovery. Update your bookmark to /recovery.',
-                onceKey: 'pulse_toast_backups_moved_to_recovery',
-              }}
-            />
-          )}
-        />
-        <Route
-          path={LEGACY_REDIRECTS.mail.path}
-          component={() => (
-            <LegacyRedirect
-              to={buildLegacyRedirectTarget(
-                LEGACY_REDIRECTS.mail.destination,
-                LEGACY_REDIRECTS.mail.source,
-              )}
-              toast={{
-                title: LEGACY_REDIRECTS.mail.toastTitle,
-                message: LEGACY_REDIRECTS.mail.toastMessage,
-              }}
-            />
-          )}
-        />
-        <Route
-          path={LEGACY_REDIRECTS.services.path}
-          component={() => (
-            <LegacyRedirect
-              to={buildLegacyRedirectTarget(
-                LEGACY_REDIRECTS.services.destination,
-                LEGACY_REDIRECTS.services.source,
-              )}
-              toast={{
-                title: LEGACY_REDIRECTS.services.toastTitle,
-                message: LEGACY_REDIRECTS.services.toastMessage,
-              }}
-            />
-          )}
-        />
-        <Route
-          path={LEGACY_REDIRECTS.kubernetes.path}
-          component={() => (
-            <LegacyRedirect
-              to={buildLegacyRedirectTarget(
-                LEGACY_REDIRECTS.kubernetes.destination,
-                LEGACY_REDIRECTS.kubernetes.source,
-              )}
-              toast={{
-                title: LEGACY_REDIRECTS.kubernetes.toastTitle,
-                message: LEGACY_REDIRECTS.kubernetes.toastMessage,
-              }}
-            />
-          )}
-        />
-        <Route path="/servers" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
-      </Show>
 
       <Route path="/alerts/*" component={AlertsPage} />
       <Route path="/ai/*" component={AIIntelligencePage} />
@@ -1614,7 +1379,7 @@ function AppLayout(props: {
         icon: <BoxesIcon class="w-4 h-4 shrink-0" />,
         alwaysShow: true,
       },
-      ...buildStorageRecoveryTabSpecs(true).map((tab) => ({
+      ...buildStorageRecoveryTabSpecs().map((tab) => ({
         ...tab,
         enabled: true,
         live: true,
@@ -1666,7 +1431,7 @@ function AppLayout(props: {
         icon: <BoxesIcon class="w-4 h-4 shrink-0" />,
         alwaysShow: true,
       },
-      ...buildStorageRecoveryTabSpecs(true).map((tab) => ({
+      ...buildStorageRecoveryTabSpecs().map((tab) => ({
         ...tab,
         enabled: true,
         live: true,

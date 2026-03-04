@@ -18,11 +18,23 @@ function makeResource(overrides?: Partial<MentionResource>): MentionResource {
 
 const defaultResources: MentionResource[] = [
   makeResource({ id: 'vm-100', name: 'web-server', type: 'vm', status: 'running', node: 'pve1' }),
-  makeResource({ id: 'ct-200', name: 'db-container', type: 'container', status: 'running', node: 'pve2' }),
+  makeResource({
+    id: 'ct-200',
+    name: 'db-container',
+    type: 'container',
+    status: 'running',
+    node: 'pve2',
+  }),
   makeResource({ id: 'node-1', name: 'pve1', type: 'node', status: 'running' }),
   makeResource({ id: 'stor-1', name: 'local-lvm', type: 'storage', node: undefined }),
-  makeResource({ id: 'docker-1', name: 'nginx-proxy', type: 'docker', status: 'running', node: 'docker-host' }),
-  makeResource({ id: 'host-1', name: 'bare-metal-01', type: 'host', status: 'stopped' }),
+  makeResource({
+    id: 'docker-1',
+    name: 'nginx-proxy',
+    type: 'docker',
+    status: 'running',
+    node: 'docker-host',
+  }),
+  makeResource({ id: 'host-1', name: 'bare-metal-01', type: 'agent', status: 'stopped' }),
 ];
 
 const defaultPosition = { top: 100, left: 200 };
@@ -80,7 +92,7 @@ describe('MentionAutocomplete', () => {
 
     it('limits results to 10 items', () => {
       const manyResources = Array.from({ length: 15 }, (_, i) =>
-        makeResource({ id: `vm-${i}`, name: `server-${i}` })
+        makeResource({ id: `vm-${i}`, name: `server-${i}` }),
       );
       renderAutocomplete({ resources: manyResources, query: '' });
 
@@ -99,6 +111,13 @@ describe('MentionAutocomplete', () => {
       // "vm" text is inside a div alongside " · " and node name, so use a substring match
       const resourceBtn = screen.getByText('web-server').closest('button')!;
       expect(resourceBtn.textContent).toContain('vm');
+    });
+
+    it('shows agent type label for agent resources', () => {
+      renderAutocomplete({ query: 'bare-metal' });
+      const resourceBtn = screen.getByText('bare-metal-01').closest('button')!;
+      expect(resourceBtn.textContent).toContain('agent');
+      expect(resourceBtn.textContent).not.toContain('host');
     });
 
     it('shows the node name when present', () => {

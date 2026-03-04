@@ -55,9 +55,7 @@ describe('StackedMemoryBar', () => {
 
   it('prefers used/total over percentOnly', () => {
     // 2GB/8GB = 25%, percentOnly = 90 should be ignored
-    render(() => (
-      <StackedMemoryBar used={2 * 1024 ** 3} total={8 * 1024 ** 3} percentOnly={90} />
-    ));
+    render(() => <StackedMemoryBar used={2 * 1024 ** 3} total={8 * 1024 ** 3} percentOnly={90} />);
     expect(screen.getByText('25%')).toBeInTheDocument();
   });
 
@@ -88,11 +86,7 @@ describe('StackedMemoryBar', () => {
   it('renders balloon segment when active ballooning is in effect', () => {
     // used=2GB, total=8GB, balloon=4GB — active ballooning
     const { container } = render(() => (
-      <StackedMemoryBar
-        used={2 * 1024 ** 3}
-        total={8 * 1024 ** 3}
-        balloon={4 * 1024 ** 3}
-      />
+      <StackedMemoryBar used={2 * 1024 ** 3} total={8 * 1024 ** 3} balloon={4 * 1024 ** 3} />
     ));
     const segments = container.querySelectorAll('.absolute.top-0.h-full');
     // Active segment + Balloon segment
@@ -107,11 +101,7 @@ describe('StackedMemoryBar', () => {
   it('does not render balloon segment when balloon equals total', () => {
     // balloon == total means ballooning configured but at max — no actual ballooning
     const { container } = render(() => (
-      <StackedMemoryBar
-        used={2 * 1024 ** 3}
-        total={8 * 1024 ** 3}
-        balloon={8 * 1024 ** 3}
-      />
+      <StackedMemoryBar used={2 * 1024 ** 3} total={8 * 1024 ** 3} balloon={8 * 1024 ** 3} />
     ));
     const segments = container.querySelectorAll('.absolute.top-0.h-full');
     expect(segments.length).toBe(1);
@@ -128,11 +118,7 @@ describe('StackedMemoryBar', () => {
   it('does not render balloon segment when used exceeds balloon', () => {
     // used=5GB > balloon=4GB — no room for balloon segment
     const { container } = render(() => (
-      <StackedMemoryBar
-        used={5 * 1024 ** 3}
-        total={8 * 1024 ** 3}
-        balloon={4 * 1024 ** 3}
-      />
+      <StackedMemoryBar used={5 * 1024 ** 3} total={8 * 1024 ** 3} balloon={4 * 1024 ** 3} />
     ));
     const segments = container.querySelectorAll('.absolute.top-0.h-full');
     // Only active segment (balloon filtered out because used > balloon)
@@ -140,18 +126,14 @@ describe('StackedMemoryBar', () => {
   });
 
   it('renders no segments when used is 0 and total > 0', () => {
-    const { container } = render(() => (
-      <StackedMemoryBar used={0} total={8 * 1024 ** 3} />
-    ));
+    const { container } = render(() => <StackedMemoryBar used={0} total={8 * 1024 ** 3} />);
     const segments = container.querySelectorAll('.absolute.top-0.h-full');
     // bytes=0 is filtered out
     expect(segments.length).toBe(0);
   });
 
   it('renders percent-only segment (no bytes) when total is 0 but percentOnly > 0', () => {
-    const { container } = render(() => (
-      <StackedMemoryBar used={0} total={0} percentOnly={60} />
-    ));
+    const { container } = render(() => <StackedMemoryBar used={0} total={0} percentOnly={60} />);
     const segments = container.querySelectorAll('.absolute.top-0.h-full');
     expect(segments.length).toBe(1);
     expect((segments[0] as HTMLElement).style.width).toBe('60%');
@@ -260,9 +242,7 @@ describe('StackedMemoryBar', () => {
       severity: 'critical',
       description: 'Memory usage 3x above baseline',
     };
-    render(() => (
-      <StackedMemoryBar used={7 * 1024 ** 3} total={8 * 1024 ** 3} anomaly={anomaly} />
-    ));
+    render(() => <StackedMemoryBar used={7 * 1024 ** 3} total={8 * 1024 ** 3} anomaly={anomaly} />);
     // 90/30 = 3.0x
     expect(screen.getByText('3.0x')).toBeInTheDocument();
     expect(screen.getByText('3.0x')).toHaveClass('text-red-400');
@@ -281,18 +261,14 @@ describe('StackedMemoryBar', () => {
       severity: 'medium',
       description: 'Memory usage above baseline',
     };
-    render(() => (
-      <StackedMemoryBar used={4 * 1024 ** 3} total={8 * 1024 ** 3} anomaly={anomaly} />
-    ));
+    render(() => <StackedMemoryBar used={4 * 1024 ** 3} total={8 * 1024 ** 3} anomaly={anomaly} />);
     // 50/30 = 1.67x → '↑↑'
     expect(screen.getByText('↑↑')).toBeInTheDocument();
     expect(screen.getByText('↑↑')).toHaveClass('text-yellow-400');
   });
 
   it('does not render anomaly indicator when anomaly is null', () => {
-    render(() => (
-      <StackedMemoryBar used={4 * 1024 ** 3} total={8 * 1024 ** 3} anomaly={null} />
-    ));
+    render(() => <StackedMemoryBar used={4 * 1024 ** 3} total={8 * 1024 ** 3} anomaly={null} />);
     // No anomaly ratio text (Nx, ↑↑, ↑) should be present
     expect(screen.queryByText(/\dx$/)).not.toBeInTheDocument();
     expect(screen.queryByText('↑↑')).not.toBeInTheDocument();

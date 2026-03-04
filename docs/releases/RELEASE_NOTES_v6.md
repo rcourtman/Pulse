@@ -22,9 +22,8 @@ The core architectural change in v6: every monitored resource — Proxmox VMs, c
 - **Command palette** (Cmd+K / Ctrl+K) with fuzzy-search navigation to any page, resource, or action.
 - **Keyboard shortcuts** — press `?` to see the reference. Vim-style `g` then key navigation: `g+i` Infrastructure, `g+w` Workloads, `g+s` Storage, `g+b` Recovery, `g+a` Alerts, `g+t` Settings. `/` focuses search.
 - **Mobile bottom navigation bar** — fixed bottom nav for mobile and tablet with horizontally scrollable tabs and alert badge counts. Hidden on desktop.
-- Legacy routes (`/proxmox/overview`, `/docker`, `/kubernetes`, `/hosts`, `/services`, `/mail`) redirect to their new destinations with toast notifications explaining the move. See Migration Notes below.
-- **"What's New" modal** on first visit after upgrade, explaining the navigation changes with a link to the migration guide.
-- **In-app migration guide** at `/migration-guide` showing the complete old-to-new route mapping.
+- Legacy routes (`/proxmox/overview`, `/docker`, `/kubernetes`, `/hosts`, `/services`, `/mail`) are no longer supported; use canonical v6 routes from the migration guide.
+- **"What's New" modal** on first visit after upgrade, explaining the navigation changes and linking to canonical docs.
 - Optional migration aid: **Classic platform shortcuts** bar in the main navigation (can be hidden in Settings → System → General).
 
 ### Dashboard Redesign
@@ -215,22 +214,20 @@ Infrastructure for running Pulse as a hosted SaaS product — entirely opt-in.
 
 - **Unified Resources is now the canonical resource model.**
   - Canonical API: `/api/resources`, `/api/resources/stats`, `/api/resources/{id}`.
-  - Deprecated alias: `/api/v2/resources` — returns a `Deprecation: true` HTTP header. This shim exists for compatibility; migrate to `/api/resources`.
 - **New `/api/license/entitlements` endpoint** is the canonical way to determine feature availability. Replaces inferring capabilities from tier names.
 
 ### Frontend Routing
 
 - **Navigation restructured around unified resources.**
-  - Legacy routes redirect with toast notifications:
-    | Legacy Route | Redirects To |
+  - Legacy aliases have been removed. Use canonical routes:
+    | Legacy Route | Canonical Route |
     |---|---|
     | `/proxmox/overview` | `/infrastructure` |
     | `/hosts` | `/infrastructure?source=agent` |
     | `/docker` | `/infrastructure?source=docker` |
     | `/proxmox/mail`, `/mail`, `/services` | `/infrastructure?source=pmg` |
     | `/kubernetes` | `/workloads?type=k8s` |
-  - These redirects exist as compatibility aliases; update bookmarks to canonical routes.
-- **Storage/Recovery "V2" naming removed** — use canonical `/storage` and `/recovery` routes (`/backups` remains as a compatibility alias).
+- **Storage/Recovery "V2" naming removed** — use canonical `/storage` and `/recovery` routes.
 
 ### Agent
 
@@ -242,7 +239,7 @@ Infrastructure for running Pulse as a hosted SaaS product — entirely opt-in.
 |---|---|
 | `BACKEND_HOST` | `BIND_ADDRESS` |
 | `POLLING_INTERVAL` in `.env` | Per-service intervals in `system.json` (`PVE_POLLING_INTERVAL`, `BACKUP_POLLING_INTERVAL`, etc.) |
-| `API_TOKEN` / `API_TOKENS` in `.env` | UI-managed tokens in `api_tokens.json` (`.env` values ignored when `api_tokens.json` exists) |
+| `API_TOKEN` / `API_TOKENS` in `.env` | UI-managed tokens in `api_tokens.json` (`.env` values ignored at runtime in v6) |
 | `DISABLE_AUTH` | Removed — stripped at runtime with a warning |
 | `--disable-commands` / `PULSE_DISABLE_COMMANDS` (agent) | `--enable-commands` / `PULSE_ENABLE_COMMANDS` |
 | `GroupingWindow` (alerts config) | `Grouping.Window` (auto-migrated on config update) |
@@ -266,11 +263,9 @@ Infrastructure for running Pulse as a hosted SaaS product — entirely opt-in.
 
 - Update bookmarks, documentation, and runbooks to canonical unified routes.
 - Reference: `docs/MIGRATION_UNIFIED_NAV.md` for the complete old-to-new mapping.
-- To disable all legacy route redirects (and surface stale bookmarks immediately), set `PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS=true` (or `disableLegacyRouteRedirects: true` in `system.json`).
 
 ### API Clients and Integrations
 
-- Replace calls to `/api/v2/resources` with `/api/resources` (recommended).
 - If an integration depended on legacy resource arrays or legacy resource endpoints, migrate to unified resource types and unified resource IDs.
 - Use the new `/api/license/entitlements` endpoint for feature availability checks instead of inferring from tier names.
 
@@ -288,7 +283,7 @@ Infrastructure for running Pulse as a hosted SaaS product — entirely opt-in.
 5. Confirm notifications still send (send a test).
 6. Confirm agents are connected (if used).
 7. Update bookmarks and automation to canonical routes (`/infrastructure`, `/workloads`, `/storage`, `/recovery`).
-8. Migrate any scripts calling `/api/v2/resources` to `/api/resources`.
+8. Confirm external scripts/integrations are using canonical `/api/resources` endpoints.
 
 ### Multi-Tenant Organizations (Enterprise, Opt-In)
 

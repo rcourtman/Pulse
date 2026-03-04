@@ -137,6 +137,7 @@ export type ResourceType =
   | 'docker'
   | 'dockerHost'
   | 'k8s'
+  | 'agent'
   | 'host'
   | 'disk';
 
@@ -207,7 +208,7 @@ export class ChartsAPI {
     signal?: AbortSignal,
     options?: { nodeId?: string | null },
   ): Promise<InfrastructureChartsResponse> {
-    const url = this.buildChartsUrl('/charts/infrastructure-summary', {
+    const url = this.buildChartsUrl('/charts/infrastructure', {
       range,
       nodeId: options?.nodeId,
     });

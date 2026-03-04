@@ -32,7 +32,7 @@ export const updatesHelpContent: HelpContent[] = [
       'RC builds are tested but may have rough edges. Use stable for production environments.\n\n' +
       'For major version pre-releases (e.g. v6.0.0-rc.1), we strongly recommend installing ' +
       'as a separate instance rather than upgrading your production installation.',
-    examples: ['stable - v5.0.11, v5.0.12, etc.', 'rc - v5.1.0-rc.1, v6.0.0-rc.1, etc.'],
+    examples: ['stable - v6.1.1, v6.1.2, etc.', 'rc - v6.2.0-rc.1, v6.2.0-rc.2, etc.'],
     addedInVersion: 'v4.0.0',
   },
   {

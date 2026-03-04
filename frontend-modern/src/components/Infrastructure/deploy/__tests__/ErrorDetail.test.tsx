@@ -33,7 +33,9 @@ describe('ErrorDetail', () => {
   it('truncates long messages and shows "more" button', () => {
     render(() => <ErrorDetail message={longMessage} />);
     // Should show truncated text (first 60 chars + ellipsis)
-    expect(screen.getByText(/This is a very long error message that exceeds the sixty ch/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/This is a very long error message that exceeds the sixty ch/),
+    ).toBeInTheDocument();
     expect(screen.getByText('more')).toBeInTheDocument();
     // Full message should NOT be visible initially
     expect(screen.queryByText(longMessage)).not.toBeInTheDocument();

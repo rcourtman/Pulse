@@ -407,9 +407,7 @@ describe('K8sDeploymentsDrawer', () => {
     });
 
     it('does not show namespace dropdown when no namespaces exist', async () => {
-      mockApiResponse([
-        makeDeployment({ id: '1', name: 'dep-1', kubernetes: { namespace: '' } }),
-      ]);
+      mockApiResponse([makeDeployment({ id: '1', name: 'dep-1', kubernetes: { namespace: '' } })]);
       render(() => <K8sDeploymentsDrawer cluster="c1" />);
 
       await waitFor(() => {
@@ -576,9 +574,7 @@ describe('K8sDeploymentsDrawer', () => {
     });
 
     it('applies slate class for unknown status', async () => {
-      mockApiResponse([
-        makeDeployment({ id: '1', name: 'dep-unknown', status: 'something-else' }),
-      ]);
+      mockApiResponse([makeDeployment({ id: '1', name: 'dep-unknown', status: 'something-else' })]);
       const { container } = render(() => <K8sDeploymentsDrawer cluster="c1" />);
 
       await waitFor(() => {

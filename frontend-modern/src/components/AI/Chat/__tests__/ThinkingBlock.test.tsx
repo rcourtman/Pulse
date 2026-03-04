@@ -52,8 +52,7 @@ describe('ThinkingBlock', () => {
   });
 
   it('truncates preview to 60 chars with ellipsis', () => {
-    const longLine =
-      'A'.repeat(70) + ' and some more text';
+    const longLine = 'A'.repeat(70) + ' and some more text';
     render(() => <ThinkingBlock content={longLine} />);
     const expectedPreview = 'A'.repeat(60) + '...';
     expect(screen.getByText(expectedPreview)).toBeInTheDocument();
@@ -106,9 +105,7 @@ describe('ThinkingBlock', () => {
 
     // After expanding, preview span should be gone; content appears only inside <pre>
     const spans = document.querySelectorAll('span');
-    const previewSpans = Array.from(spans).filter(
-      (s) => s.textContent === 'Preview goes away'
-    );
+    const previewSpans = Array.from(spans).filter((s) => s.textContent === 'Preview goes away');
     expect(previewSpans.length).toBe(0);
   });
 
@@ -129,8 +126,7 @@ describe('ThinkingBlock', () => {
   // --- Content sanitization ---
 
   it('sanitizes TCP connection details in expanded content', async () => {
-    const rawContent =
-      'Error: write tcp 192.168.0.123:7655->192.168.0.134:58004: i/o timeout';
+    const rawContent = 'Error: write tcp 192.168.0.123:7655->192.168.0.134:58004: i/o timeout';
     render(() => <ThinkingBlock content={rawContent} />);
     const button = screen.getByRole('button');
     await fireEvent.click(button);
@@ -143,8 +139,7 @@ describe('ThinkingBlock', () => {
   });
 
   it('sanitizes "failed to send command" patterns', async () => {
-    const rawContent =
-      'failed to send command: write tcp 10.0.0.1:7655->10.0.0.2:9999: broken';
+    const rawContent = 'failed to send command: write tcp 10.0.0.1:7655->10.0.0.2:9999: broken';
     render(() => <ThinkingBlock content={rawContent} />);
     const button = screen.getByRole('button');
     await fireEvent.click(button);

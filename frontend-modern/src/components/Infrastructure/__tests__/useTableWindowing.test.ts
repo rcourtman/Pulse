@@ -8,9 +8,10 @@ import {
 } from '../useTableWindowing';
 
 /** Helper: create the hook inside a reactive root, returning the result + dispose. */
-function createHook(
-  opts: Partial<UseTableWindowingOptions> & { totalCount: () => number },
-): { result: UseTableWindowingResult; dispose: () => void } {
+function createHook(opts: Partial<UseTableWindowingOptions> & { totalCount: () => number }): {
+  result: UseTableWindowingResult;
+  dispose: () => void;
+} {
   let result!: UseTableWindowingResult;
   const dispose = createRoot((dispose) => {
     result = useTableWindowing({

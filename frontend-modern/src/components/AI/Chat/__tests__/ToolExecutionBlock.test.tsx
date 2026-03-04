@@ -74,40 +74,30 @@ describe('ToolExecutionBlock', () => {
   });
 
   it('truncates fallback label to 12 characters', () => {
-    render(() => (
-      <ToolExecutionBlock tool={makeTool({ name: 'very_long_unknown_tool_name' })} />
-    ));
+    render(() => <ToolExecutionBlock tool={makeTool({ name: 'very_long_unknown_tool_name' })} />);
     expect(screen.getByText('very long un')).toBeInTheDocument();
   });
 
   // --- Status icon ---
 
   it('shows checkmark for successful tool', () => {
-    const { container } = render(() => (
-      <ToolExecutionBlock tool={makeTool({ success: true })} />
-    ));
+    const { container } = render(() => <ToolExecutionBlock tool={makeTool({ success: true })} />);
     expect(container.textContent).toContain('✓');
   });
 
   it('shows cross for failed tool', () => {
-    const { container } = render(() => (
-      <ToolExecutionBlock tool={makeTool({ success: false })} />
-    ));
+    const { container } = render(() => <ToolExecutionBlock tool={makeTool({ success: false })} />);
     expect(container.textContent).toContain('✗');
   });
 
   it('applies emerald color class for success', () => {
-    const { container } = render(() => (
-      <ToolExecutionBlock tool={makeTool({ success: true })} />
-    ));
+    const { container } = render(() => <ToolExecutionBlock tool={makeTool({ success: true })} />);
     const icon = container.querySelector('.text-emerald-600');
     expect(icon).not.toBeNull();
   });
 
   it('applies red color class for failure', () => {
-    const { container } = render(() => (
-      <ToolExecutionBlock tool={makeTool({ success: false })} />
-    ));
+    const { container } = render(() => <ToolExecutionBlock tool={makeTool({ success: false })} />);
     const icon = container.querySelector('.text-red-600');
     expect(icon).not.toBeNull();
   });
@@ -133,9 +123,7 @@ describe('ToolExecutionBlock', () => {
   // --- Output display ---
 
   it('shows output when non-empty', () => {
-    render(() => (
-      <ToolExecutionBlock tool={makeTool({ output: 'hello world' })} />
-    ));
+    render(() => <ToolExecutionBlock tool={makeTool({ output: 'hello world' })} />);
     expect(screen.getByText('hello world')).toBeInTheDocument();
   });
 
@@ -209,9 +197,7 @@ describe('ToolExecutionBlock', () => {
 
   it('clicking header row toggles output when has more lines', async () => {
     const output = 'l1\nl2\nl3\nl4\nl5';
-    const { container } = render(() => (
-      <ToolExecutionBlock tool={makeTool({ output })} />
-    ));
+    const { container } = render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
     // The header row has cursor-pointer class when collapsible
     const header = container.querySelector('.cursor-pointer');
     expect(header).not.toBeNull();
@@ -221,9 +207,7 @@ describe('ToolExecutionBlock', () => {
 
   it('header row is not clickable when output has 3 or fewer lines', () => {
     const output = 'l1\nl2';
-    const { container } = render(() => (
-      <ToolExecutionBlock tool={makeTool({ output })} />
-    ));
+    const { container } = render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
     expect(container.querySelector('.cursor-pointer')).toBeNull();
   });
 
@@ -231,18 +215,14 @@ describe('ToolExecutionBlock', () => {
 
   it('renders expand chevron SVG when output is collapsible', () => {
     const output = 'l1\nl2\nl3\nl4';
-    const { container } = render(() => (
-      <ToolExecutionBlock tool={makeTool({ output })} />
-    ));
+    const { container } = render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
     const svg = container.querySelector('svg');
     expect(svg).not.toBeNull();
   });
 
   it('rotates chevron when expanded', async () => {
     const output = 'l1\nl2\nl3\nl4';
-    const { container } = render(() => (
-      <ToolExecutionBlock tool={makeTool({ output })} />
-    ));
+    const { container } = render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
     fireEvent.click(screen.getByText('Show full output'));
     const svg = container.querySelector('svg');
     expect(svg?.classList.contains('rotate-180')).toBe(true);
@@ -251,9 +231,7 @@ describe('ToolExecutionBlock', () => {
   // --- Edge cases ---
 
   it('handles empty output string', () => {
-    const { container } = render(() => (
-      <ToolExecutionBlock tool={makeTool({ output: '' })} />
-    ));
+    const { container } = render(() => <ToolExecutionBlock tool={makeTool({ output: '' })} />);
     expect(container.querySelector('pre')).toBeNull();
   });
 
@@ -266,9 +244,7 @@ describe('ToolExecutionBlock', () => {
 
   it('hides output for multi-line "not available" response', () => {
     const output = 'line1\nnot available\nline3\nline4';
-    const { container } = render(() => (
-      <ToolExecutionBlock tool={makeTool({ output })} />
-    ));
+    const { container } = render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
     // hasOutput returns false when output contains "not available"
     expect(container.querySelector('pre')).toBeNull();
     // The expand button should also not appear since output section is hidden
@@ -384,7 +360,7 @@ describe('PendingToolsList', () => {
 
   it('collapses when more than 3 tools, showing first 2', () => {
     const tools = Array.from({ length: 5 }, (_, i) =>
-      makePending({ id: `t${i}`, name: 'run_command', input: `cmd-${i}` })
+      makePending({ id: `t${i}`, name: 'run_command', input: `cmd-${i}` }),
     );
     render(() => <PendingToolsList tools={tools} />);
     expect(screen.getByText('cmd-0')).toBeInTheDocument();
@@ -396,7 +372,7 @@ describe('PendingToolsList', () => {
 
   it('shows "+ N more tools running..." button when collapsed', () => {
     const tools = Array.from({ length: 5 }, (_, i) =>
-      makePending({ id: `t${i}`, name: 'run_command', input: `cmd-${i}` })
+      makePending({ id: `t${i}`, name: 'run_command', input: `cmd-${i}` }),
     );
     render(() => <PendingToolsList tools={tools} />);
     expect(screen.getByText('+ 3 more tools running...')).toBeInTheDocument();
@@ -404,7 +380,7 @@ describe('PendingToolsList', () => {
 
   it('expands all tools when expand button is clicked', async () => {
     const tools = Array.from({ length: 5 }, (_, i) =>
-      makePending({ id: `t${i}`, name: 'run_command', input: `cmd-${i}` })
+      makePending({ id: `t${i}`, name: 'run_command', input: `cmd-${i}` }),
     );
     render(() => <PendingToolsList tools={tools} />);
     fireEvent.click(screen.getByText('+ 3 more tools running...'));
@@ -416,7 +392,7 @@ describe('PendingToolsList', () => {
 
   it('does not show expand button when exactly 3 tools', () => {
     const tools = Array.from({ length: 3 }, (_, i) =>
-      makePending({ id: `t${i}`, name: 'run_command', input: `cmd-${i}` })
+      makePending({ id: `t${i}`, name: 'run_command', input: `cmd-${i}` }),
     );
     render(() => <PendingToolsList tools={tools} />);
     expect(screen.queryByText(/more tools running/)).toBeNull();
@@ -424,7 +400,7 @@ describe('PendingToolsList', () => {
 
   it('shows correct hidden count for 4 tools', () => {
     const tools = Array.from({ length: 4 }, (_, i) =>
-      makePending({ id: `t${i}`, name: 'run_command', input: `cmd-${i}` })
+      makePending({ id: `t${i}`, name: 'run_command', input: `cmd-${i}` }),
     );
     render(() => <PendingToolsList tools={tools} />);
     expect(screen.getByText('+ 2 more tools running...')).toBeInTheDocument();
@@ -445,7 +421,7 @@ describe('PendingToolsList', () => {
 describe('ToolExecutionsList', () => {
   it('renders all tools when 5 or fewer', () => {
     const tools = Array.from({ length: 5 }, (_, i) =>
-      makeTool({ name: 'run_command', input: `exec-${i}`, output: `out-${i}` })
+      makeTool({ name: 'run_command', input: `exec-${i}`, output: `out-${i}` }),
     );
     render(() => <ToolExecutionsList tools={tools} />);
     for (let i = 0; i < 5; i++) {
@@ -455,7 +431,7 @@ describe('ToolExecutionsList', () => {
 
   it('collapses when more than 5 tools, showing first 3', () => {
     const tools = Array.from({ length: 8 }, (_, i) =>
-      makeTool({ name: 'run_command', input: `exec-${i}`, output: '' })
+      makeTool({ name: 'run_command', input: `exec-${i}`, output: '' }),
     );
     render(() => <ToolExecutionsList tools={tools} />);
     expect(screen.getByText('exec-0')).toBeInTheDocument();
@@ -467,10 +443,10 @@ describe('ToolExecutionsList', () => {
   it('shows expand button with correct stats when collapsed', () => {
     const tools = [
       ...Array.from({ length: 5 }, (_, i) =>
-        makeTool({ name: 'run_command', input: `ok-${i}`, output: '', success: true })
+        makeTool({ name: 'run_command', input: `ok-${i}`, output: '', success: true }),
       ),
       ...Array.from({ length: 3 }, (_, i) =>
-        makeTool({ name: 'run_command', input: `fail-${i}`, output: '', success: false })
+        makeTool({ name: 'run_command', input: `fail-${i}`, output: '', success: false }),
       ),
     ];
     render(() => <ToolExecutionsList tools={tools} />);
@@ -482,7 +458,7 @@ describe('ToolExecutionsList', () => {
 
   it('expands all tools when expand button is clicked', async () => {
     const tools = Array.from({ length: 7 }, (_, i) =>
-      makeTool({ name: 'run_command', input: `exec-${i}`, output: '' })
+      makeTool({ name: 'run_command', input: `exec-${i}`, output: '' }),
     );
     render(() => <ToolExecutionsList tools={tools} />);
     const btn = screen.getByText(/more tools/);
@@ -494,7 +470,7 @@ describe('ToolExecutionsList', () => {
 
   it('does not show expand button when exactly 5 tools', () => {
     const tools = Array.from({ length: 5 }, (_, i) =>
-      makeTool({ name: 'run_command', input: `exec-${i}`, output: '' })
+      makeTool({ name: 'run_command', input: `exec-${i}`, output: '' }),
     );
     render(() => <ToolExecutionsList tools={tools} />);
     expect(screen.queryByText(/more tools/)).toBeNull();
@@ -502,7 +478,7 @@ describe('ToolExecutionsList', () => {
 
   it('counts all-success correctly in stats', () => {
     const tools = Array.from({ length: 6 }, (_, i) =>
-      makeTool({ name: 'run_command', input: `s-${i}`, output: '', success: true })
+      makeTool({ name: 'run_command', input: `s-${i}`, output: '', success: true }),
     );
     render(() => <ToolExecutionsList tools={tools} />);
     expect(screen.getByText(/6 ✓/)).toBeInTheDocument();
@@ -511,7 +487,7 @@ describe('ToolExecutionsList', () => {
 
   it('counts all-failure correctly in stats', () => {
     const tools = Array.from({ length: 6 }, (_, i) =>
-      makeTool({ name: 'run_command', input: `f-${i}`, output: '', success: false })
+      makeTool({ name: 'run_command', input: `f-${i}`, output: '', success: false }),
     );
     render(() => <ToolExecutionsList tools={tools} />);
     expect(screen.getByText(/0 ✓/)).toBeInTheDocument();

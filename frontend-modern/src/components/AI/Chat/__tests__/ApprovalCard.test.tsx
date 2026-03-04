@@ -17,25 +17,19 @@ function makeApproval(overrides?: Partial<PendingApproval>): PendingApproval {
 
 describe('ApprovalCard', () => {
   it('renders the command text', () => {
-    render(() => (
-      <ApprovalCard approval={makeApproval()} onApprove={vi.fn()} onSkip={vi.fn()} />
-    ));
+    render(() => <ApprovalCard approval={makeApproval()} onApprove={vi.fn()} onSkip={vi.fn()} />);
 
     expect(screen.getByText('systemctl restart nginx')).toBeInTheDocument();
   });
 
   it('renders the "Approval Required" header', () => {
-    render(() => (
-      <ApprovalCard approval={makeApproval()} onApprove={vi.fn()} onSkip={vi.fn()} />
-    ));
+    render(() => <ApprovalCard approval={makeApproval()} onApprove={vi.fn()} onSkip={vi.fn()} />);
 
     expect(screen.getByText('Approval Required')).toBeInTheDocument();
   });
 
   it('renders Run Command and Skip buttons', () => {
-    render(() => (
-      <ApprovalCard approval={makeApproval()} onApprove={vi.fn()} onSkip={vi.fn()} />
-    ));
+    render(() => <ApprovalCard approval={makeApproval()} onApprove={vi.fn()} onSkip={vi.fn()} />);
 
     expect(screen.getByText('Run Command')).toBeInTheDocument();
     expect(screen.getByText('Skip')).toBeInTheDocument();
@@ -43,9 +37,7 @@ describe('ApprovalCard', () => {
 
   it('calls onApprove when Run Command is clicked', () => {
     const onApprove = vi.fn();
-    render(() => (
-      <ApprovalCard approval={makeApproval()} onApprove={onApprove} onSkip={vi.fn()} />
-    ));
+    render(() => <ApprovalCard approval={makeApproval()} onApprove={onApprove} onSkip={vi.fn()} />);
 
     fireEvent.click(screen.getByText('Run Command'));
     expect(onApprove).toHaveBeenCalledOnce();
@@ -53,9 +45,7 @@ describe('ApprovalCard', () => {
 
   it('calls onSkip when Skip is clicked', () => {
     const onSkip = vi.fn();
-    render(() => (
-      <ApprovalCard approval={makeApproval()} onApprove={vi.fn()} onSkip={onSkip} />
-    ));
+    render(() => <ApprovalCard approval={makeApproval()} onApprove={vi.fn()} onSkip={onSkip} />);
 
     fireEvent.click(screen.getByText('Skip'));
     expect(onSkip).toHaveBeenCalledOnce();

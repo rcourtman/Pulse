@@ -3,7 +3,7 @@ import { createSignal, onCleanup, onMount, createEffect } from 'solid-js';
 interface CountdownTimerProps {
   targetDate: string;
   prefix?: string;
-  // Prefer `class` (Solid convention). `className` is supported for legacy call-sites.
+  // Prefer `class` (Solid convention). `className` is still accepted for compatibility.
   class?: string;
   className?: string;
 }

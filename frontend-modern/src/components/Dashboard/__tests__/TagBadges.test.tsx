@@ -245,12 +245,10 @@ describe('TagBadges', () => {
       const dot = getTagDots()[0] as HTMLElement;
       fireEvent.mouseEnter(dot.parentElement!);
       expect(showTooltipMock).toHaveBeenCalledTimes(1);
-      expect(showTooltipMock).toHaveBeenCalledWith(
-        'web',
-        expect.any(Number),
-        expect.any(Number),
-        { align: 'center', direction: 'up' },
-      );
+      expect(showTooltipMock).toHaveBeenCalledWith('web', expect.any(Number), expect.any(Number), {
+        align: 'center',
+        direction: 'up',
+      });
     });
 
     it('hides tooltip on mouseleave of a tag dot', () => {
@@ -264,12 +262,11 @@ describe('TagBadges', () => {
       render(() => <TagBadges tags={['a', 'b', 'c', 'd', 'e']} />);
       const overflowIndicator = screen.getByText('+2');
       fireEvent.mouseEnter(overflowIndicator.parentElement!);
-      expect(showTooltipMock).toHaveBeenCalledWith(
-        'd\ne',
-        expect.any(Number),
-        expect.any(Number),
-        { align: 'center', direction: 'up', maxWidth: 260 },
-      );
+      expect(showTooltipMock).toHaveBeenCalledWith('d\ne', expect.any(Number), expect.any(Number), {
+        align: 'center',
+        direction: 'up',
+        maxWidth: 260,
+      });
     });
 
     it('hides tooltip on mouseleave of +X indicator', () => {

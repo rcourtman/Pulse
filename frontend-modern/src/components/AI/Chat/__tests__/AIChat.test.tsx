@@ -11,6 +11,7 @@ const {
   mockNotificationStore,
   mockAiChatStore,
   mockByType,
+  mockResources,
 } = vi.hoisted(() => {
   const mockChat = {
     messages: vi.fn((): ChatMessage[] => []),
@@ -83,6 +84,7 @@ const {
   };
 
   const mockByType = vi.fn((): Array<{ name: string }> => []);
+  const mockResources = vi.fn((): Array<{ id: string; type: string }> => []);
 
   return {
     mockChat,
@@ -91,6 +93,7 @@ const {
     mockNotificationStore,
     mockAiChatStore,
     mockByType,
+    mockResources,
   };
 });
 
@@ -138,7 +141,7 @@ vi.mock('@/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/hooks/useResources', () => ({
-  useResources: () => ({ byType: mockByType }),
+  useResources: () => ({ byType: mockByType, resources: mockResources }),
 }));
 
 // ── Lazy import after mocks ────────────────────────────────────────────────
@@ -169,6 +172,7 @@ beforeEach(() => {
   mockChat.model.mockReturnValue('');
   mockChat.sendMessage.mockResolvedValue(true);
   mockByType.mockReturnValue([]);
+  mockResources.mockReturnValue([]);
   mockAIAPI.getModels.mockResolvedValue({ models: [] });
   mockAIAPI.getSettings.mockResolvedValue({
     model: 'gpt-4',
@@ -500,11 +504,10 @@ describe('AIChat', () => {
   // ── Model persistence ────────────────────────────────────────────────
 
   describe('model persistence', () => {
-    it('removes legacy storage key on mount', () => {
-      localStorage.setItem('pulse:ai_chat_model', 'legacy-model');
+    it('ignores malformed per-session model storage on mount', () => {
+      localStorage.setItem('pulse:ai_chat_models_by_session', '{broken json');
       renderChat();
-      // Legacy key should be removed after loadModelSelections runs
-      expect(localStorage.getItem('pulse:ai_chat_model')).toBeNull();
+      expect(localStorage.getItem('pulse:ai_chat_models_by_session')).toBe('{broken json');
     });
 
     it('initializes useChat with stored default model', () => {

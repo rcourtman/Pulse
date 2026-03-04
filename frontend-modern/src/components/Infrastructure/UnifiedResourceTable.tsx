@@ -430,7 +430,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
       <Show when={showHostTable()}>
         <Card padding="none" tone="card" class="mb-0 overflow-hidden">
           <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-            Host Infrastructure
+            Agent Infrastructure
           </div>
           <div class="overflow-x-auto">
             <Table
@@ -547,7 +547,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                     const statusIndicator = createMemo(() =>
                       getHostStatusIndicator({ status: resource.status }),
                     );
-                    const metricsKey = createMemo(() => buildMetricKey('host', resource.id));
+                    const metricsKey = createMemo(() => buildMetricKey('agent', resource.id));
 
                     const cpuPercentValue = createMemo(() =>
                       resource.cpu ? Math.round(getCpuPercent(resource)) : null,

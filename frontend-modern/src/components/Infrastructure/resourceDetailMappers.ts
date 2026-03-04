@@ -10,6 +10,7 @@ import type {
 import type { Resource, ResourceMetric } from '@/types/resource';
 import { formatTemperature } from '@/utils/temperature';
 import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
+import { isAgentDiscoveryResourceType } from '@/utils/discoveryTarget';
 
 export type ProxmoxPlatformData = {
   nodeName?: string;
@@ -163,7 +164,7 @@ export type DiscoveryConfig = {
   hostId: string;
   resourceId: string;
   hostname: string;
-  metadataKind: 'guest' | 'host';
+  metadataKind: 'guest' | 'agent';
   metadataId: string;
   targetLabel: string;
 };
@@ -183,6 +184,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
   ) {
     const resourceType = (() => {
       switch (explicitDiscoveryTarget.resourceType) {
+        case 'agent':
         case 'host':
         case 'vm':
         case 'system-container':
@@ -201,9 +203,9 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         resource.displayName ||
         resource.name ||
         explicitDiscoveryTarget.resourceId;
-      const isHostDiscovery = resourceType === 'host';
+      const isHostDiscovery = isAgentDiscoveryResourceType(resourceType);
       const targetLabel = isHostDiscovery
-        ? 'host'
+        ? 'agent'
         : resourceType === 'docker'
           ? 'container'
           : resourceType === 'k8s'
@@ -214,7 +216,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         hostId: explicitDiscoveryTarget.hostId,
         resourceId: explicitDiscoveryTarget.resourceId,
         hostname,
-        metadataKind: isHostDiscovery ? 'host' : 'guest',
+        metadataKind: isHostDiscovery ? 'agent' : 'guest',
         metadataId: explicitDiscoveryTarget.resourceId,
         targetLabel,
       };
@@ -280,7 +282,6 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     resource.identity?.hostname || resource.displayName || resource.name || resource.id;
 
   switch (resource.type) {
-    case 'host':
     case 'node':
     case 'docker-host':
     case 'pbs':
@@ -289,13 +290,13 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     case 'k8s-node':
     case 'truenas':
       return {
-        resourceType: 'host',
+        resourceType: 'agent',
         hostId: hostLikeId,
         resourceId: hostLikeId,
         hostname,
-        metadataKind: 'host',
+        metadataKind: 'agent',
         metadataId: hostLikeId,
-        targetLabel: 'host',
+        targetLabel: 'agent',
       };
     case 'vm':
       return {

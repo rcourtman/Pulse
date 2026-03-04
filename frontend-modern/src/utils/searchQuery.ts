@@ -34,7 +34,6 @@ export interface ParsedFilter {
 export interface FilterStack {
   filters: ParsedFilter[];
   operators: LogicalOperator[]; // Operators between filters (length = filters.length - 1)
-  logicalOperator?: LogicalOperator; // Deprecated, kept for compatibility
 }
 
 // Parse a single filter from a search term
@@ -107,10 +106,7 @@ export function parseFilterStack(searchString: string): FilterStack {
     }
   }
 
-  // For backward compatibility, include logicalOperator as the first operator
-  const logicalOperator = operators.length > 0 ? operators[0] : 'AND';
-
-  return { filters, operators, logicalOperator };
+  return { filters, operators };
 }
 
 type FilterableItem = VM | Container;

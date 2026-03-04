@@ -147,7 +147,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
       hints.push('Docker update checks are disabled. Update visibility will be limited.');
     }
     if (config.enable_host === false) {
-      hints.push('Host monitoring is disabled. Host metrics and command execution will stop.');
+      hints.push('Agent monitoring is disabled. Agent metrics and command execution will stop.');
     }
     if (config.enable_docker === false) {
       hints.push('Docker monitoring is disabled. Container metrics and update tracking will stop.');

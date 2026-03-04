@@ -31,7 +31,6 @@ Pulse uses a split config model:
 - **OIDC config**: `oidc.enc` (encrypted)
 - **SSO config**: `sso.enc` (encrypted)
 - **API tokens**: `api_tokens.json`
-- **Legacy token suppressions**: `env_token_suppressions.json`
 - **AI config**: `ai.enc` (encrypted)
 - **AI patrol data**: `ai_findings.json`, `ai_patrol_runs.json`, `ai_usage_history.json`
 - **AI chat sessions**: `ai_chat_sessions.json` (legacy UI sync)

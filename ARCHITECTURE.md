@@ -54,7 +54,7 @@ All backend code lives under `cmd/`, `internal/`, and `pkg/`. The binary is asse
    - **Resource types**: `host`, `vm`, `lxc`, `container`, `storage`, `k8s_cluster`, `k8s_pod`, `pmg`, `ceph`, `physical_disk`.
    - Identity-matching engine: merges resources across sources using machine IDs, DMI UUIDs, hostnames, IPs, and MAC addresses.
    - Provides typed **views** (`NodeView`, `K8sClusterView`, etc.) for consumer-specific queries.
-   - Canonical API endpoint: `GET /api/resources` (replaces deprecated `/api/v2/resources`).
+   - Canonical API endpoint: `GET /api/resources`.
 
 3. **Monitoring Engine (`internal/monitoring`)**
    - **Polymorphic monitors**: Each Proxmox VE/PBS/PMG node runs in its own goroutine, polling via the platform REST API.
@@ -143,14 +143,14 @@ Navigation is organised by **task**, not by platform:
 | `/settings/*` | Settings | Configuration, security, AI, relay |
 | `/operations/*` | Operations | Operational tools |
 
-Legacy routes (`/proxmox`, `/kubernetes`, `/services`, `/hosts`, etc.) are redirected to canonical paths with an informational toast. Redirects can be disabled with `PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS=true`.
+Legacy route aliases have been removed; canonical v6 routes are the only supported navigation surface.
 
 ### State Management
 - **WebSocket store** (`stores/websocket.ts`): Manages the live connection, reactive `State` object, reconnection logic, and per-org switching.
 - **Metrics collector** (`stores/metricsCollector.ts`): Buffers time-series data for sparklines and historical charts.
 - **AI stores** (`stores/aiChat.ts`, `stores/aiIntelligence.ts`): Manage chat sessions and patrol findings.
 - **License store** (`stores/license.ts`): Tracks plan tier, feature flags, and multi-tenant state.
-- **System settings store** (`stores/systemSettings.ts`): Caches server-side preferences (e.g., legacy-redirect toggle, theme).
+- **System settings store** (`stores/systemSettings.ts`): Caches server-side preferences (for example theme and feature toggles).
 
 ### Component Design
 - **Shared primitives** in `components/shared/`: `Card`, `Button`, `Toggle`, `FilterButtonGroup`, `Table` — all mapped to the semantic design tokens.

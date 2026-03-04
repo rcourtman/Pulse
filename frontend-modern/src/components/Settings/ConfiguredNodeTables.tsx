@@ -17,7 +17,6 @@ import {
 interface PveNodesTableProps {
   nodes: NodeConfigWithStatus[];
   stateNodes: Resource[];
-  stateHosts?: Resource[];
   globalTemperatureMonitoringEnabled?: boolean;
   onTestConnection: (nodeId: string) => void;
   onEdit: (node: NodeConfigWithStatus) => void;

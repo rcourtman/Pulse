@@ -68,11 +68,7 @@ interface DiscoveryDiagnostic {
 interface APITokenDiagnostic {
   enabled: boolean;
   tokenCount: number;
-  hasEnvTokens: boolean;
-  hasLegacyToken: boolean;
   recommendTokenSetup: boolean;
-  recommendTokenRotation: boolean;
-  legacyDockerHostCount?: number;
   unusedTokenCount?: number;
   notes?: string[];
 }
@@ -93,9 +89,6 @@ interface DockerAgentDiagnostic {
 }
 
 interface AlertsDiagnostic {
-  legacyThresholdsDetected: boolean;
-  legacyThresholdSources?: string[];
-  legacyScheduleSettings?: string[];
   missingCooldown: boolean;
   missingGroupingWindow: boolean;
   notes?: string[];
@@ -693,16 +686,7 @@ export const DiagnosticsPanel: Component = () => {
                   label="Unused Tokens"
                   value={diagnosticsData()?.apiTokens?.unusedTokenCount ?? 0}
                 />
-                <MetricRow
-                  label="Legacy Docker Hosts"
-                  value={diagnosticsData()?.apiTokens?.legacyDockerHostCount ?? 0}
-                />
               </div>
-              <Show when={diagnosticsData()?.apiTokens?.hasLegacyToken}>
-                <div class="mt-3 p-2 bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-700 dark:text-amber-300">
-                  Legacy token detected. Consider migrating to scoped tokens.
-                </div>
-              </Show>
             </Card>
           </Show>
 
@@ -760,16 +744,6 @@ export const DiagnosticsPanel: Component = () => {
                 </div>
               </div>
               <div class="flex flex-wrap gap-2">
-                <span
-                  class={`px-2 py-1 rounded text-xs font-medium ${
-                    diagnosticsData()?.alerts?.legacyThresholdsDetected
-                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
-                      : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                  }`}
-                >
-                  Legacy thresholds:{' '}
-                  {diagnosticsData()?.alerts?.legacyThresholdsDetected ? 'Detected' : 'Migrated'}
-                </span>
                 <span
                   class={`px-2 py-1 rounded text-xs font-medium ${
                     diagnosticsData()?.alerts?.missingCooldown

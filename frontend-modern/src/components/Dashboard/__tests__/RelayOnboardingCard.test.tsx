@@ -42,8 +42,7 @@ vi.mock('@/stores/license', () => ({
   loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
   licenseLoaded: (...args: unknown[]) => licenseLoadedMock(...args),
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
-  getUpgradeActionUrlOrFallback: (...args: unknown[]) =>
-    getUpgradeActionUrlOrFallbackMock(...args),
+  getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
 }));
 
 vi.mock('@/api/relay', () => ({
@@ -102,10 +101,7 @@ function resetAllMocks() {
  * Sets up mock defaults for the "has relay feature" scenario (setup card).
  * Override individual mocks after calling this if needed.
  */
-function setupWithRelayFeature(statusOverride?: {
-  connected: boolean;
-  active_channels: number;
-}) {
+function setupWithRelayFeature(statusOverride?: { connected: boolean; active_channels: number }) {
   const defaultStatus = statusOverride ?? { connected: false, active_channels: 0 };
   loadLicenseStatusMock.mockResolvedValue(undefined);
   licenseLoadedMock.mockReturnValue(true);
@@ -474,9 +470,7 @@ describe('RelayOnboardingCard', () => {
         expect(screen.getByText('Pair Your Mobile Device')).toBeInTheDocument();
       });
 
-      expect(
-        screen.getByText(/Pulse Relay lets your phone securely connect/),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/Pulse Relay lets your phone securely connect/)).toBeInTheDocument();
     });
 
     it('connected relay with zero active channels still shows setup card', async () => {

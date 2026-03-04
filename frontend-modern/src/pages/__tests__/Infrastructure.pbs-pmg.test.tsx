@@ -106,22 +106,13 @@ describe('Infrastructure PBS/PMG integration', () => {
     expect(getByText('2 resources')).toBeInTheDocument();
   });
 
-  it('canonicalizes legacy search query params to q', async () => {
-    mockLocationSearch = '?search=pmg&migrated=1&from=services';
+  it('keeps canonical q search query params', async () => {
+    mockLocationSearch = '?q=pmg';
 
     render(() => <Infrastructure />);
 
-    await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalled();
-    });
-
-    const [path, options] = navigateSpy.mock.calls.at(-1) as [string, { replace?: boolean }];
-    const params = new URLSearchParams(path.split('?')[1] || '');
-    expect(params.get('q')).toBe('pmg');
-    expect(params.get('search')).toBeNull();
-    expect(params.get('migrated')).toBe('1');
-    expect(params.get('from')).toBe('services');
-    expect(options?.replace).toBe(true);
+    await Promise.resolve();
+    expect(navigateSpy).not.toHaveBeenCalled();
   });
 
   it('syncs source filter selection to query params', async () => {

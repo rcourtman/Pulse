@@ -143,6 +143,59 @@ describe('MonitoringAPI', () => {
     });
   });
 
+  describe('agent management aliases', () => {
+    it('deletes agent via host-compatible backend route', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(''),
+      } as unknown as Response);
+
+      await MonitoringAPI.deleteAgent('agent-1');
+
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/agents/host/agent-1',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+
+    it('updates agent config via host-compatible backend route', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce({ ok: true } as unknown as Response);
+
+      await MonitoringAPI.updateAgentConfig('agent-1', { commandsEnabled: true });
+
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/agents/host/agent-1/config',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ commandsEnabled: true }),
+        }),
+      );
+    });
+
+    it('looks up agent and normalizes timestamp', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            host: {
+              id: 'agent-1',
+              hostname: 'agent-1.local',
+              status: 'online',
+              connected: true,
+              lastSeen: '2026-01-01T00:00:00Z',
+            },
+          }),
+          { status: 200 },
+        ),
+      );
+
+      const result = await MonitoringAPI.lookupAgent({ id: 'agent-1' });
+
+      expect(apiFetch).toHaveBeenCalledWith('/api/agents/host/lookup?id=agent-1');
+      expect(typeof result?.host.lastSeen).toBe('number');
+    });
+  });
+
   describe('deleteKubernetesCluster', () => {
     it('deletes kubernetes cluster', async () => {
       vi.mocked(apiFetch).mockResolvedValueOnce({ ok: true, status: 204 } as unknown as Response);

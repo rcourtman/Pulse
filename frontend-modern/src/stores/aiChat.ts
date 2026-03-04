@@ -143,7 +143,7 @@ export const aiChatStore = {
   // Reactive accessor - use this in Show/createEffect for proper reactivity
   isOpenSignal: isAIChatOpen,
 
-  // Get current context (legacy single-item)
+  // Get current context (single-item compatibility shape)
   get context() {
     return aiChatContext();
   },
@@ -324,7 +324,7 @@ export const aiChatStore = {
     setAIChatContext(context);
   },
 
-  // Clear single-item context (legacy)
+  // Clear single-item context
   clearContext() {
     setAIChatContext({});
   },
@@ -339,7 +339,7 @@ export const aiChatStore = {
       }
       return [...prev, { id, type, name, data, addedAt: new Date() }];
     });
-    // Also update legacy context to point to most recently added
+    // Also update the single-item context to point to most recently added
     setAIChatContext({
       targetType: type,
       targetId: id,
@@ -350,7 +350,7 @@ export const aiChatStore = {
   // Remove an item from context
   removeContextItem(id: string) {
     setContextItems((prev) => prev.filter((item) => item.id !== id));
-    // Update legacy context if we removed the current one
+    // Update single-item context if we removed the current one
     const current = aiChatContext();
     if (current.targetId === id) {
       const remaining = contextItems().filter((item) => item.id !== id);

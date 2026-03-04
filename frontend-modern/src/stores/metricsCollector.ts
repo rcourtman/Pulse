@@ -14,50 +14,110 @@ interface DiskCounterState {
   ioTimeMs: number;
 }
 
+interface DiskCounterSample {
+  hostId: string;
+  device: string;
+  readBytes: number;
+  writeBytes: number;
+  readOps: number;
+  writeOps: number;
+  ioTimeMs: number;
+}
+
 const previousDiskCounters = new Map<string, DiskCounterState>();
+
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
+const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+const asString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+const asNumber = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+const getResourceDiskCounters = (resource: unknown): DiskCounterSample[] => {
+  const raw = asRecord(resource);
+  if (!raw) return [];
+
+  const agent = asRecord(raw.agent);
+  const discoveryTarget = asRecord(raw.discoveryTarget);
+  const hostId =
+    asString(agent?.agentId) ||
+    asString(discoveryTarget?.hostId) ||
+    asString(raw.id) ||
+    asString(raw.platformId);
+  if (!hostId) return [];
+
+  const platformData = asRecord(raw.platformData);
+  const platformAgent = asRecord(platformData?.agent);
+
+  const diskIoCandidates = [
+    platformData?.diskIO,
+    platformAgent?.diskIO,
+    agent?.diskIO,
+  ] as unknown[];
+  const diskIoRaw = diskIoCandidates.find((value) => Array.isArray(value));
+  const diskIo = asArray(diskIoRaw);
+  if (diskIo.length === 0) return [];
+
+  const counters: DiskCounterSample[] = [];
+  for (const entry of diskIo) {
+    const disk = asRecord(entry);
+    const device = asString(disk?.device);
+    if (!device) continue;
+    counters.push({
+      hostId,
+      device,
+      readBytes: asNumber(disk?.readBytes) ?? 0,
+      writeBytes: asNumber(disk?.writeBytes) ?? 0,
+      readOps: asNumber(disk?.readOps) ?? 0,
+      writeOps: asNumber(disk?.writeOps) ?? 0,
+      ioTimeMs: asNumber(disk?.ioTimeMs) ?? 0,
+    });
+  }
+
+  return counters;
+};
 
 function sampleMetrics(): void {
   const wsStore = getGlobalWebSocketStore();
   const state = wsStore.state;
+  const now = Date.now();
+  const observedKeys = new Set<string>();
 
-  // Sample Unified Host Agents (Disk I/O)
-  if (state.hosts) {
-    const now = Date.now();
-    for (const host of state.hosts) {
-      if (!host.id || !host.diskIO) continue;
+  for (const resource of state.resources || []) {
+    const diskCounters = getResourceDiskCounters(resource);
+    if (diskCounters.length === 0) continue;
 
-      for (const disk of host.diskIO) {
-        if (!disk.device) continue;
+    for (const disk of diskCounters) {
+      const key = `${disk.hostId}:${disk.device}`;
+      if (observedKeys.has(key)) continue;
+      observedKeys.add(key);
 
-        const key = `${host.id}:${disk.device}`;
-        const prev = previousDiskCounters.get(key);
+      const prev = previousDiskCounters.get(key);
+      const current: DiskCounterState = {
+        timestamp: now,
+        readBytes: disk.readBytes,
+        writeBytes: disk.writeBytes,
+        readOps: disk.readOps,
+        writeOps: disk.writeOps,
+        ioTimeMs: disk.ioTimeMs,
+      };
 
-        const current: DiskCounterState = {
-          timestamp: now,
-          readBytes: disk.readBytes || 0,
-          writeBytes: disk.writeBytes || 0,
-          readOps: disk.readOps || 0,
-          writeOps: disk.writeOps || 0,
-          ioTimeMs: disk.ioTimeMs || 0,
-        };
+      if (prev) {
+        const deltaSeconds = (now - prev.timestamp) / 1000;
 
-        if (prev) {
-          const deltaSeconds = (now - prev.timestamp) / 1000;
+        if (deltaSeconds > 0) {
+          const readBps = Math.max(0, (current.readBytes - prev.readBytes) / deltaSeconds);
+          const writeBps = Math.max(0, (current.writeBytes - prev.writeBytes) / deltaSeconds);
+          const readIops = Math.max(0, (current.readOps - prev.readOps) / deltaSeconds);
+          const writeIops = Math.max(0, (current.writeOps - prev.writeOps) / deltaSeconds);
+          const deltaIoTime = Math.max(0, current.ioTimeMs - prev.ioTimeMs);
+          const utilPercent = Math.min(100, (deltaIoTime / (deltaSeconds * 1000)) * 100);
 
-          if (deltaSeconds > 0) {
-            const readBps = Math.max(0, (current.readBytes - prev.readBytes) / deltaSeconds);
-            const writeBps = Math.max(0, (current.writeBytes - prev.writeBytes) / deltaSeconds);
-            const readIops = Math.max(0, (current.readOps - prev.readOps) / deltaSeconds);
-            const writeIops = Math.max(0, (current.writeOps - prev.writeOps) / deltaSeconds);
-            const deltaIoTime = Math.max(0, current.ioTimeMs - prev.ioTimeMs);
-            const utilPercent = Math.min(100, (deltaIoTime / (deltaSeconds * 1000)) * 100);
-
-            // Record to Disk Metrics Store
-            recordDiskMetric(key, readBps, writeBps, readIops, writeIops, utilPercent);
-          }
+          recordDiskMetric(key, readBps, writeBps, readIops, writeIops, utilPercent);
         }
-        previousDiskCounters.set(key, current);
       }
+      previousDiskCounters.set(key, current);
     }
   }
 }

@@ -220,7 +220,7 @@ export const AISettings: Component = () => {
   createEffect((wasPaywallVisible) => {
     const isPaywallVisible = form.controlLevel === 'autonomous' && autoFixLocked();
     if (isPaywallVisible && !wasPaywallVisible) {
-      trackPaywallViewed('ai_autofix', 'settings_ai_autonomous_mode');
+      trackPaywallViewed('ai_autofix', 'settings_ai_patrol_autofix');
     }
     return isPaywallVisible;
   }, false);
@@ -246,14 +246,10 @@ export const AISettings: Component = () => {
 
   const [form, setForm] = createStore({
     enabled: false,
-    provider: 'anthropic' as AIProvider, // Legacy - kept for compatibility
-    apiKey: '', // Legacy - kept for compatibility
     model: '',
     chatModel: '', // Empty means use default model
     patrolModel: '', // Empty means use default model
     autoFixModel: '', // Empty means use patrol model
-    baseUrl: '', // Legacy - kept for compatibility
-    clearApiKey: false,
     authMethod: 'api_key' as AuthMethod,
     patrolIntervalMinutes: 360, // 6 hours default
     alertTriggeredAnalysis: true,
@@ -282,14 +278,10 @@ export const AISettings: Component = () => {
     if (!data) {
       setForm({
         enabled: false,
-        provider: 'anthropic',
-        apiKey: '',
         model: '', // Will be set when provider is configured
         chatModel: '',
         patrolModel: '',
         autoFixModel: '',
-        baseUrl: '',
-        clearApiKey: false,
         authMethod: 'api_key',
         patrolIntervalMinutes: 360, // 6 hours default
         alertTriggeredAnalysis: true,
@@ -314,14 +306,10 @@ export const AISettings: Component = () => {
 
     setForm({
       enabled: data.enabled,
-      provider: data.provider,
-      apiKey: '',
       model: data.model || '', // User must select a model
       chatModel: data.chat_model || '',
       patrolModel: data.patrol_model || '',
       autoFixModel: data.auto_fix_model || '',
-      baseUrl: data.base_url || '',
-      clearApiKey: false,
       authMethod: data.auth_method || 'api_key',
       patrolIntervalMinutes: data.patrol_interval_minutes ?? 360, // Use minutes, default to 6hr
       alertTriggeredAnalysis: data.alert_triggered_analysis !== false, // default to true
@@ -702,21 +690,8 @@ export const AISettings: Component = () => {
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {
-        provider: form.provider,
         model: selectedModel,
       };
-
-      // Only include base_url if it's set or if provider is ollama
-      if (form.baseUrl.trim() || form.provider === 'ollama') {
-        payload.base_url = form.baseUrl.trim();
-      }
-
-      // Handle API key
-      if (form.apiKey.trim() !== '') {
-        payload.api_key = form.apiKey.trim();
-      } else if (form.clearApiKey) {
-        payload.api_key = '';
-      }
 
       // Only include enabled if we're toggling it
       if (form.enabled !== settings()?.enabled) {
@@ -2324,7 +2299,7 @@ export const AISettings: Component = () => {
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={() =>
-                        trackUpgradeClicked('settings_ai_autonomous_mode', 'ai_autofix')
+                        trackUpgradeClicked('settings_ai_patrol_autofix', 'ai_autofix')
                       }
                     >
                       Upgrade to Pro
@@ -2532,7 +2507,7 @@ export const AISettings: Component = () => {
 
             {/* Actions - sticky at bottom for easy access */}
             <div class="sticky bottom-0 bg-surface px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
-              <Show when={settings()?.api_key_set || settings()?.oauth_connected}>
+              <Show when={settings()?.configured}>
                 <button
                   type="button"
                   class="w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 text-sm border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900 disabled:opacity-50 disabled:cursor-not-allowed"

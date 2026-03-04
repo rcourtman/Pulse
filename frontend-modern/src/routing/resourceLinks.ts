@@ -18,7 +18,6 @@ export const RECOVERY_PATH = '/recovery';
 export const INFRASTRUCTURE_QUERY_PARAMS = {
   source: 'source',
   query: 'q',
-  legacyQuery: 'search',
   resource: 'resource',
 } as const;
 
@@ -31,7 +30,6 @@ export const STORAGE_QUERY_PARAMS = {
   status: 'status',
   node: 'node',
   query: 'q',
-  legacyQuery: 'search',
   resource: 'resource',
   sort: 'sort',
   order: 'order',
@@ -126,12 +124,9 @@ export const buildWorkloadsPath = (options: WorkloadsLinkOptions = {}): string =
 
 export const parseInfrastructureLinkSearch = (search: string) => {
   const params = new URLSearchParams(search);
-  const queryValue =
-    normalizeQueryValue(params.get(INFRASTRUCTURE_QUERY_PARAMS.query)) ||
-    normalizeQueryValue(params.get(INFRASTRUCTURE_QUERY_PARAMS.legacyQuery));
   return {
     source: normalizeQueryValue(params.get(INFRASTRUCTURE_QUERY_PARAMS.source)),
-    query: queryValue,
+    query: normalizeQueryValue(params.get(INFRASTRUCTURE_QUERY_PARAMS.query)),
     resource: normalizeQueryValue(params.get(INFRASTRUCTURE_QUERY_PARAMS.resource)),
   };
 };
@@ -150,16 +145,13 @@ export const buildInfrastructurePath = (options: InfrastructureLinkOptions = {})
 
 export const parseStorageLinkSearch = (search: string) => {
   const params = new URLSearchParams(search);
-  const queryValue =
-    normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.query)) ||
-    normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.legacyQuery));
   return {
     tab: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.tab)),
     group: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.group)),
     source: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.source)),
     status: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.status)),
     node: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.node)),
-    query: queryValue,
+    query: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.query)),
     resource: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.resource)),
     sort: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.sort)),
     order: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.order)),

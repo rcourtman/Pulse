@@ -13,25 +13,19 @@ export interface ModelInfo {
 
 export interface AISettings {
   enabled: boolean;
-  provider: AIProvider; // DEPRECATED: legacy single provider
-  api_key_set: boolean; // DEPRECATED: whether legacy API key is set
   model: string;
   chat_model?: string; // Model for interactive chat (empty = use default)
   patrol_model?: string; // Model for background patrol (empty = use default)
   auto_fix_model?: string; // Model for auto-fix remediation (empty = use patrol model)
-  base_url?: string; // DEPRECATED: legacy base URL
   configured: boolean; // true if AI is ready to use
-  autonomous_mode: boolean; // true if AI can execute commands without approval
   custom_context: string; // user-provided infrastructure context
   // OAuth fields for Claude Pro/Max subscription authentication
   auth_method: AuthMethod; // "api_key" or "oauth"
   oauth_connected: boolean; // true if OAuth tokens are configured
   // Patrol settings for token efficiency
-  patrol_schedule_preset?: string; // DEPRECATED: use patrol_interval_minutes
   patrol_interval_minutes?: number; // Patrol interval in minutes (0 = disabled, minimum 10)
   alert_triggered_analysis?: boolean; // true if AI should analyze when alerts fire
   patrol_auto_fix?: boolean; // true if Patrol can auto-fix without approval
-  available_models?: ModelInfo[]; // DEPRECATED: use /api/ai/models endpoint
   // Multi-provider configuration
   anthropic_configured: boolean; // true if Anthropic API key or OAuth is set
   openai_configured: boolean; // true if OpenAI API key is set
@@ -67,11 +61,7 @@ export interface AISettings {
 
 export interface AISettingsUpdateRequest {
   enabled?: boolean;
-  provider?: AIProvider; // DEPRECATED: use model selection instead
-  api_key?: string; // DEPRECATED: use per-provider keys
   model?: string;
-  base_url?: string; // DEPRECATED: use per-provider URLs
-  autonomous_mode?: boolean;
   custom_context?: string; // user-provided infrastructure context
   auth_method?: AuthMethod; // "api_key" or "oauth"
   // Model overrides for different use cases
@@ -79,7 +69,6 @@ export interface AISettingsUpdateRequest {
   patrol_model?: string; // Model for background patrol
   auto_fix_model?: string; // Model for auto-fix remediation
   // Patrol settings for token efficiency
-  patrol_schedule_preset?: string; // DEPRECATED: use patrol_interval_minutes
   patrol_interval_minutes?: number; // Custom interval in minutes (0 = disabled, minimum 10)
   alert_triggered_analysis?: boolean; // true if AI should analyze when alerts fire
   patrol_auto_fix?: boolean; // true if Patrol can auto-fix without approval

@@ -35,7 +35,7 @@ vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
 
 const makeResource = (i: number, overrides?: Partial<Resource>): Resource => ({
   id: `resource-${i}`,
-  type: i % 5 === 0 ? 'node' : i % 3 === 0 ? 'docker-host' : 'host',
+  type: i % 3 === 0 ? 'docker-host' : 'node',
   name: `host-${i}`,
   displayName: `Host ${i}`,
   platformId: `platform-${i}`,
@@ -68,19 +68,15 @@ const getTypeDistribution = (resources: Resource[]) =>
     (acc, resource) => {
       if (resource.type === 'node') acc.node += 1;
       if (resource.type === 'docker-host') acc.dockerHost += 1;
-      if (resource.type === 'host') acc.host += 1;
       return acc;
     },
-    { node: 0, dockerHost: 0, host: 0 },
+    { node: 0, dockerHost: 0 },
   );
 
 const expectedTypeDistribution = (count: number) => {
-  const node = Math.floor((count - 1) / 5) + 1;
-  const multiplesOf3 = Math.floor((count - 1) / 3) + 1;
-  const multiplesOf15 = Math.floor((count - 1) / 15) + 1;
-  const dockerHost = multiplesOf3 - multiplesOf15;
-  const host = count - node - dockerHost;
-  return { node, dockerHost, host };
+  const dockerHost = Math.floor((count - 1) / 3) + 1;
+  const node = count - dockerHost;
+  return { node, dockerHost };
 };
 
 const getBodyRowCount = (container: HTMLElement) => container.querySelectorAll('tbody tr').length;

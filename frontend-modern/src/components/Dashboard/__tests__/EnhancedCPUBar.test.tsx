@@ -208,7 +208,11 @@ describe('EnhancedCPUBar', () => {
     });
 
     it('sets title attribute with anomaly description', () => {
-      const anomaly = makeAnomaly({ description: 'CPU spike detected', current_value: 60, baseline_mean: 30 });
+      const anomaly = makeAnomaly({
+        description: 'CPU spike detected',
+        current_value: 60,
+        baseline_mean: 30,
+      });
       render(() => <EnhancedCPUBar usage={60} anomaly={anomaly} />);
       const indicator = screen.getByText('2.0x');
       expect(indicator).toHaveAttribute('title', 'CPU spike detected');
