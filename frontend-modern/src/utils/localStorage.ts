@@ -147,13 +147,11 @@ export function createLocalStorageStringSignal(
 export const STORAGE_KEYS = {
   // Authentication
   AUTH: 'pulse_auth',
-  LEGACY_TOKEN: 'pulse_api_token',
   ORG_ID: 'pulse_org_id',
   SETUP_CREDENTIALS: 'pulse_setup_credentials',
 
   // UI preferences
   THEME_PREFERENCE: 'pulseThemePreference',
-  DARK_MODE: 'darkMode',
   SIDEBAR_COLLAPSED: 'sidebarCollapsed',
   FULL_WIDTH_MODE: 'fullWidthMode',
 
@@ -173,15 +171,10 @@ export const STORAGE_KEYS = {
   STORAGE_VIEW_MODE: 'storageViewMode',
   STORAGE_SOURCE_FILTER: 'storageSourceFilter',
 
-  // Recovery settings (canonical name; localStorage keys preserved for backwards compatibility)
+  // Recovery settings
   RECOVERY_SHOW_FILTERS: 'backupsShowFilters',
   RECOVERY_USE_RELATIVE_TIME: 'backupsUseRelativeTime',
   RECOVERY_SEARCH_HISTORY: 'backupsSearchHistory',
-
-  // Backup settings (legacy naming; prefer RECOVERY_* in new code)
-  BACKUPS_SHOW_FILTERS: 'backupsShowFilters',
-  BACKUPS_USE_RELATIVE_TIME: 'backupsUseRelativeTime',
-  BACKUPS_SEARCH_HISTORY: 'backupsSearchHistory',
 
   // Dashboard settings
   DASHBOARD_SHOW_FILTERS: 'dashboardShowFilters',
@@ -205,7 +198,6 @@ export const STORAGE_KEYS = {
   // Column visibility
   DASHBOARD_HIDDEN_COLUMNS: 'dashboardHiddenColumns',
   RECOVERY_HIDDEN_COLUMNS: 'backupsHiddenColumns',
-  BACKUPS_HIDDEN_COLUMNS: 'backupsHiddenColumns',
   STORAGE_HIDDEN_COLUMNS: 'storageHiddenColumns',
 
   // Resources search

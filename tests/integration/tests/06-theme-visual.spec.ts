@@ -104,11 +104,9 @@ async function forceLoggedOutAuthSurface(page: Page): Promise<void> {
     hasProxyAuth: false,
     proxyAuthUsername: '',
     proxyAuthLogoutURL: '',
-    oidcEnabled: false,
-    oidcClientId: '',
-    oidcIssuer: '',
-    oidcLogoutURL: '',
-    oidcUsername: '',
+    ssoEnabled: false,
+    ssoSessionUsername: '',
+    ssoLogoutURL: '',
     requiresAuth: true,
   };
 

@@ -9,14 +9,11 @@ export type StorageRecoveryTabSpec = {
   badge?: 'preview';
 };
 
-// Backwards-compat for older call sites.
-export type StorageBackupsTabSpec = StorageRecoveryTabSpec;
-
 /**
  * Returns the canonical Storage + Recovery tab specs for the platform nav.
  * Legacy dual-tab modes were removed in SB5-05.
  */
-export function buildStorageRecoveryTabSpecs(_planOrShowV2?: unknown): StorageRecoveryTabSpec[] {
+export function buildStorageRecoveryTabSpecs(): StorageRecoveryTabSpec[] {
   return [
     {
       id: 'storage',
@@ -33,9 +30,4 @@ export function buildStorageRecoveryTabSpecs(_planOrShowV2?: unknown): StorageRe
       tooltip: 'Backup, snapshot, and replication activity',
     },
   ];
-}
-
-// Backwards-compat for older call sites.
-export function buildStorageBackupsTabSpecs(_planOrShowV2?: unknown): StorageBackupsTabSpec[] {
-  return buildStorageRecoveryTabSpecs(_planOrShowV2);
 }

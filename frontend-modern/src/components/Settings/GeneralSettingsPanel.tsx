@@ -34,11 +34,6 @@ interface GeneralSettingsPanelProps {
   pvePollingEnvLocked: () => boolean;
   setHasUnsavedChanges: Setter<boolean>;
 
-  disableLegacyRouteRedirects: Accessor<boolean>;
-  disableLegacyRouteRedirectsLocked: () => boolean;
-  savingLegacyRedirects: Accessor<boolean>;
-  handleDisableLegacyRouteRedirectsChange: (disabled: boolean) => Promise<void>;
-
   disableLocalUpgradeMetrics: Accessor<boolean>;
   disableLocalUpgradeMetricsLocked: () => boolean;
   savingUpgradeMetrics: Accessor<boolean>;
@@ -188,41 +183,11 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
       {/* Navigation + Privacy Card */}
       <SettingsPanel
         title="Navigation and privacy"
-        description="Control migration helpers, local metrics, and anonymous telemetry."
+        description="Control local metrics and anonymous telemetry."
         icon={<Sliders class="w-5 h-5" strokeWidth={2} />}
         noPadding
         bodyClass="divide-y divide-border"
       >
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6">
-          <div class="flex-1 min-w-0 space-y-1">
-            <div class="flex items-center gap-2">
-              <span class="text-sm font-medium text-base-content truncate">
-                Disable legacy URL redirects
-              </span>
-              <Show when={props.disableLegacyRouteRedirectsLocked()}>
-                <span
-                  class="shrink-0 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
-                  title="Locked by environment variable PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS"
-                >
-                  ENV
-                </span>
-              </Show>
-            </div>
-            <p class="text-xs text-muted line-clamp-2">
-              When enabled, Pulse will not redirect old bookmarks like{' '}
-              <code class="px-1 py-0.5 rounded bg-surface-hover">/services</code>.
-            </p>
-          </div>
-          <Toggle
-            checked={props.disableLegacyRouteRedirects()}
-            class="shrink-0"
-            disabled={props.disableLegacyRouteRedirectsLocked() || props.savingLegacyRedirects()}
-            onChange={() =>
-              props.handleDisableLegacyRouteRedirectsChange(!props.disableLegacyRouteRedirects())
-            }
-          />
-        </div>
-
         <div class="flex items-center justify-between gap-4 p-4 sm:p-6">
           <div class="flex-1 min-w-0 space-y-1">
             <div class="flex items-center gap-2">

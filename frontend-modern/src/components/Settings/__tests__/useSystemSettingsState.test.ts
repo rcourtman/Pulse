@@ -76,7 +76,9 @@ describe('useSystemSettingsState', () => {
     }));
 
     vi.doMock('@/stores/systemSettings', () => ({
+      updateDisableLocalUpgradeMetricsSetting: vi.fn(),
       updateDockerUpdateActionsSetting: vi.fn(),
+      updateReduceProUpsellNoiseSetting: vi.fn(),
     }));
 
     ({ useSystemSettingsState } = await import('../useSystemSettingsState'));

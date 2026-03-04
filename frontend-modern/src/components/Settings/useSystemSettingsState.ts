@@ -9,7 +9,6 @@ import { updateStore } from '@/stores/updates';
 import {
   updateDisableLocalUpgradeMetricsSetting,
   updateDockerUpdateActionsSetting,
-  updateLegacyRouteRedirectsSetting,
   updateReduceProUpsellNoiseSetting,
 } from '@/stores/systemSettings';
 import type { SettingsTab } from './settingsTypes';
@@ -84,11 +83,7 @@ interface APITokenUsage {
 interface APITokenDiagnostic {
   enabled: boolean;
   tokenCount: number;
-  hasEnvTokens: boolean;
-  hasLegacyToken: boolean;
   recommendTokenSetup: boolean;
-  recommendTokenRotation: boolean;
-  legacyDockerHostCount?: number;
   unusedTokenCount?: number;
   notes?: string[];
   tokens?: APITokenSummary[];
@@ -137,9 +132,6 @@ interface DiscoveryDiagnostic {
 }
 
 interface AlertsDiagnostic {
-  legacyThresholdsDetected: boolean;
-  legacyThresholdSources?: string[];
-  legacyScheduleSettings?: string[];
   missingCooldown: boolean;
   missingGroupingWindow: boolean;
   notes?: string[];
@@ -192,8 +184,6 @@ export function useSystemSettingsState({
   const [savingHideLocalLogin, setSavingHideLocalLogin] = createSignal(false);
   const [disableDockerUpdateActions, setDisableDockerUpdateActions] = createSignal(false);
   const [savingDockerUpdateActions, setSavingDockerUpdateActions] = createSignal(false);
-  const [disableLegacyRouteRedirects, setDisableLegacyRouteRedirects] = createSignal(false);
-  const [savingLegacyRedirects, setSavingLegacyRedirects] = createSignal(false);
   const [reduceProUpsellNoise, setReduceProUpsellNoise] = createSignal(false);
   const [savingReduceUpsells, setSavingReduceUpsells] = createSignal(false);
   const [disableLocalUpgradeMetrics, setDisableLocalUpgradeMetrics] = createSignal(false);
@@ -226,11 +216,6 @@ export function useSystemSettingsState({
     Boolean(
       envOverrides().disableDockerUpdateActions ||
       envOverrides()['PULSE_DISABLE_DOCKER_UPDATE_ACTIONS'],
-    );
-  const disableLegacyRouteRedirectsLocked = () =>
-    Boolean(
-      envOverrides().disableLegacyRouteRedirects ||
-      envOverrides()['PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS'],
     );
   const disableLocalUpgradeMetricsLocked = () =>
     Boolean(
@@ -342,7 +327,6 @@ export function useSystemSettingsState({
       );
       setHideLocalLogin(systemSettings.hideLocalLogin ?? false);
       setDisableDockerUpdateActions(systemSettings.disableDockerUpdateActions ?? false);
-      setDisableLegacyRouteRedirects(systemSettings.disableLegacyRouteRedirects ?? false);
       setReduceProUpsellNoise(systemSettings.reduceProUpsellNoise ?? false);
       setDisableLocalUpgradeMetrics(systemSettings.disableLocalUpgradeMetrics ?? false);
 
@@ -495,33 +479,6 @@ export function useSystemSettingsState({
       setDisableDockerUpdateActions(previous);
     } finally {
       setSavingDockerUpdateActions(false);
-    }
-  };
-
-  const handleDisableLegacyRouteRedirectsChange = async (disabled: boolean): Promise<void> => {
-    if (disableLegacyRouteRedirectsLocked() || savingLegacyRedirects()) {
-      return;
-    }
-
-    const previous = disableLegacyRouteRedirects();
-    setDisableLegacyRouteRedirects(disabled);
-    setSavingLegacyRedirects(true);
-
-    try {
-      await SettingsAPI.updateSystemSettings({ disableLegacyRouteRedirects: disabled });
-      updateLegacyRouteRedirectsSetting(disabled);
-      notificationStore.success(
-        disabled ? 'Legacy URL redirects disabled' : 'Legacy URL redirects enabled',
-        2000,
-      );
-    } catch (error) {
-      logger.error('Failed to update legacy route redirects setting', error);
-      notificationStore.error(
-        error instanceof Error ? error.message : 'Failed to update legacy route redirects setting',
-      );
-      setDisableLegacyRouteRedirects(previous);
-    } finally {
-      setSavingLegacyRedirects(false);
     }
   };
 
@@ -694,10 +651,6 @@ export function useSystemSettingsState({
     disableDockerUpdateActionsLocked,
     savingDockerUpdateActions,
     handleDisableDockerUpdateActionsChange,
-    disableLegacyRouteRedirects,
-    disableLegacyRouteRedirectsLocked,
-    savingLegacyRedirects,
-    handleDisableLegacyRouteRedirectsChange,
     reduceProUpsellNoise,
     savingReduceUpsells,
     handleReduceProUpsellNoiseChange,

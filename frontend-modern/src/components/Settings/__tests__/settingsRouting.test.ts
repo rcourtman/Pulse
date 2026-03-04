@@ -56,52 +56,12 @@ describe('settingsRouting', () => {
     expect(settingsTabPath('future-tab' as SettingsTab)).toBe('/settings/future-tab');
   });
 
-  it('maps all listed legacy aliases and redirects', () => {
-    const cases: Array<[string, SettingsTab]> = [
-      ['/settings/proxmox', 'proxmox'],
-      ['/settings/agent-hub', 'proxmox'],
-      ['/settings/docker', 'docker'],
-      ['/settings/storage', 'proxmox'],
-      ['/settings/hosts', 'agents'],
-      ['/settings/host-agents', 'agents'],
-      ['/settings/servers', 'proxmox'],
-      ['/settings/linuxServers', 'agents'],
-      ['/settings/windowsServers', 'agents'],
-      ['/settings/macServers', 'agents'],
-      ['/settings/agents', 'agents'],
-      ['/settings/pve', 'proxmox'],
-      ['/settings/pbs', 'proxmox'],
-      ['/settings/pmg', 'proxmox'],
-      ['/settings/containers', 'docker'],
-    ];
-    for (const [path, expectedTab] of cases) {
-      expect(deriveTabFromPath(path)).toBe(expectedTab);
-    }
-    expect(deriveTabFromPath('/settings/not-a-real-tab')).toBe('proxmox');
-  });
-
-  it('canonicalizes legacy settings routes', () => {
-    const canonicalCases: Array<[string, string]> = [
-      ['/settings/backups', '/settings/system-recovery'],
-      ['/settings/system-backups', '/settings/system-recovery'],
-      ['/settings/recovery', '/settings/system-recovery'],
-      ['/settings/integrations/relay', '/settings/system-relay'],
-      ['/settings/billing', '/settings/organization/billing'],
-      ['/settings/api', '/settings/integrations/api'],
-      ['/settings/security', '/settings/security-overview'],
-      ['/settings/pve', '/settings/infrastructure/pve'],
-      ['/settings/pbs', '/settings/infrastructure/pbs'],
-      ['/settings/pmg', '/settings/infrastructure/pmg'],
-      ['/settings/docker', '/settings/workloads/docker'],
-      ['/settings/hosts', '/settings/workloads'],
-    ];
-
-    for (const [path, expected] of canonicalCases) {
-      expect(resolveCanonicalSettingsPath(path)).toBe(expected);
-    }
-
+  it('resolves only canonical settings paths', () => {
     expect(resolveCanonicalSettingsPath('/settings/system-updates')).toBe(
       '/settings/system-updates',
+    );
+    expect(resolveCanonicalSettingsPath('/settings/infrastructure/pve')).toBe(
+      '/settings/infrastructure/pve',
     );
     expect(resolveCanonicalSettingsPath('/not-settings')).toBeNull();
   });
@@ -111,8 +71,6 @@ describe('settingsRouting', () => {
       ['/settings/organization', 'organization-overview'],
       ['/settings/organization/access', 'organization-access'],
       ['/settings/organization/sharing', 'organization-sharing'],
-      ['/settings/billing', 'organization-billing'],
-      ['/settings/plan', 'organization-billing'],
       ['/settings/organization/billing', 'organization-billing'],
     ];
     for (const [path, expectedTab] of organizationCases) {
@@ -125,11 +83,10 @@ describe('settingsRouting', () => {
       ['?tab=infrastructure', 'proxmox'],
       ['?tab=workloads', 'agents'],
       ['?tab=docker', 'docker'],
-      ['?tab=backups', 'system-recovery'],
-      ['?tab=recovery', 'system-recovery'],
-      ['?tab=organization', 'organization-overview'],
-      ['?tab=billing', 'organization-billing'],
-      ['?tab=security', 'security-overview'],
+      ['?tab=system-recovery', 'system-recovery'],
+      ['?tab=organization-overview', 'organization-overview'],
+      ['?tab=organization-billing', 'organization-billing'],
+      ['?tab=security-overview', 'security-overview'],
       ['?tab=unknown', null],
     ];
     for (const [query, expectedTab] of queryCases) {
@@ -165,15 +122,11 @@ describe('settingsRouting', () => {
     expect(isTabLocked('proxmox', hasFeatures([]), () => true)).toBe(false);
   });
 
-  it('maps deriveAgentFromPath contracts including legacy and storage routes', () => {
+  it('maps deriveAgentFromPath contracts for canonical infrastructure routes', () => {
     const agentCases: Array<[string, 'pve' | 'pbs' | 'pmg' | null]> = [
       ['/settings/infrastructure/pve', 'pve'],
       ['/settings/infrastructure/pbs', 'pbs'],
       ['/settings/infrastructure/pmg', 'pmg'],
-      ['/settings/pve', 'pve'],
-      ['/settings/pbs', 'pbs'],
-      ['/settings/pmg', 'pmg'],
-      ['/settings/storage', 'pbs'],
       ['/settings/workloads', null],
     ];
     for (const [path, expectedAgent] of agentCases) {
