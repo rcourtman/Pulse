@@ -8,7 +8,6 @@ import (
 	"math"
 	"net"
 	"net/http"
-	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -997,17 +996,7 @@ func (h *Hub) BroadcastState(state interface{}) {
 		return
 	}
 
-	// Debug log to track docker hosts
-	dockerHostsCount := -1
-	// Use reflection to get dockerHosts field from any struct type
-	v := reflect.ValueOf(state)
-	if v.Kind() == reflect.Struct {
-		field := v.FieldByName("DockerHosts")
-		if field.IsValid() && field.Kind() == reflect.Slice {
-			dockerHostsCount = field.Len()
-		}
-	}
-	log.Debug().Int("dockerHostsCount", dockerHostsCount).Msg("broadcasting state")
+	log.Debug().Msg("broadcasting state")
 	stateData := h.prepareStateForBroadcast(state)
 
 	msg := Message{

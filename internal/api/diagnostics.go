@@ -825,7 +825,7 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 	}
 
 	if len(hosts) == 0 {
-		appendNote("No Docker agents have reported in yet. Use Settings → Docker Agents to install the container-side agent and unlock remote commands.")
+		appendNote("No container runtime agents have reported in yet. Use Settings → Agents to install the container-side agent and unlock remote commands.")
 		return diag
 	}
 
@@ -864,11 +864,11 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 		issues := make([]string, 0, 4)
 
 		if status != "online" && status != "" {
-			issues = append(issues, fmt.Sprintf("Host reports status %q.", status))
+			issues = append(issues, fmt.Sprintf("Container runtime reports status %q.", status))
 		}
 
 		if versionStr == "" {
-			issues = append(issues, "Agent has not reported a version (pre v4.24). Reinstall using Settings → Docker Agents.")
+			issues = append(issues, "Agent has not reported a version (pre v4.24). Reinstall using Settings → Agents.")
 		} else if serverVer != nil {
 			if agentVer, err := updates.ParseVersion(versionStr); err == nil {
 				if agentVer.Compare(serverVer) < 0 {
@@ -881,7 +881,7 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 		}
 
 		if strings.TrimSpace(host.TokenID) == "" {
-			issues = append(issues, "Host is still using the shared API token. Generate a dedicated token in Settings → Security and rerun the installer.")
+			issues = append(issues, "Container runtime is still using the shared API token. Generate a dedicated token in Settings → Security and rerun the installer.")
 		}
 
 		if !host.LastSeen.IsZero() && now.Sub(host.LastSeen.UTC()) > 10*time.Minute {
@@ -903,7 +903,7 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 
 		if host.PendingUninstall {
 			diag.HostsPendingUninstall++
-			issues = append(issues, "Host is pending uninstall; confirm the agent container stopped or clear the flag.")
+			issues = append(issues, "Container runtime is pending uninstall; confirm the agent container stopped or clear the flag.")
 		}
 
 		if len(issues) == 0 {
@@ -925,22 +925,22 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 	diag.HostsNeedingAttention = len(diag.Attention)
 
 	if legacyTokenHosts > 0 {
-		appendNote(fmt.Sprintf("%d Docker host(s) still rely on the shared API token. Migrate each host to a dedicated token via Settings → Security and rerun the installer.", legacyTokenHosts))
+		appendNote(fmt.Sprintf("%d container runtime(s) still rely on the shared API token. Migrate each runtime to a dedicated token via Settings → Security and rerun the installer.", legacyTokenHosts))
 	}
 	if diag.HostsOutdatedVersion > 0 {
-		appendNote(fmt.Sprintf("%d Docker host(s) run an out-of-date agent. Re-run the installer from Settings → Docker Agents to upgrade them.", diag.HostsOutdatedVersion))
+		appendNote(fmt.Sprintf("%d container runtime(s) run an out-of-date agent. Re-run the installer from Settings → Agents to upgrade them.", diag.HostsOutdatedVersion))
 	}
 	if diag.HostsWithoutVersion > 0 {
-		appendNote(fmt.Sprintf("%d Docker host(s) have not reported an agent version yet. Reinstall the agent to enable the new command system.", diag.HostsWithoutVersion))
+		appendNote(fmt.Sprintf("%d container runtime(s) have not reported an agent version yet. Reinstall the agent to enable the new command system.", diag.HostsWithoutVersion))
 	}
 	if diag.HostsWithStaleCommand > 0 {
-		appendNote(fmt.Sprintf("%d Docker host command(s) appear stuck. Use the 'Allow re-enroll' action in Settings → Docker Agents to reset them.", diag.HostsWithStaleCommand))
+		appendNote(fmt.Sprintf("%d container runtime command(s) appear stuck. Use the 'Allow re-enroll' action in Settings → Agents to reset them.", diag.HostsWithStaleCommand))
 	}
 	if diag.HostsPendingUninstall > 0 {
-		appendNote(fmt.Sprintf("%d Docker host(s) are pending uninstall. Confirm the uninstall or clear the flag from Settings → Docker Agents.", diag.HostsPendingUninstall))
+		appendNote(fmt.Sprintf("%d container runtime(s) are pending uninstall. Confirm the uninstall or clear the flag from Settings → Agents.", diag.HostsPendingUninstall))
 	}
 	if diag.HostsNeedingAttention == 0 {
-		appendNote("All Docker agents are reporting with dedicated tokens and the expected version.")
+		appendNote("All container runtime agents are reporting with dedicated tokens and the expected version.")
 	}
 
 	return diag
