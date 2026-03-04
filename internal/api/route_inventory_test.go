@@ -379,7 +379,6 @@ var allRouteAllowlist = []string{
 	"/api/license/features",
 	"/api/license/activate",
 	"/api/license/clear",
-	"POST /api/license/exchange",
 	"GET /api/license/entitlements",
 	"POST /api/license/trial/start",
 	"GET /api/license/agent-ledger",

@@ -26,6 +26,7 @@ import discoveryTypesSource from '@/types/discovery.ts?raw';
 import mentionAutocompleteSource from '@/components/AI/Chat/MentionAutocomplete.tsx?raw';
 import resourceLinksSource from '@/routing/resourceLinks.ts?raw';
 import alertsApiSource from '@/api/alerts.ts?raw';
+import licenseApiSource from '@/api/license.ts?raw';
 import resourceStateAdaptersSource from '@/utils/resourceStateAdapters.ts?raw';
 import resourceBadgesSource from '@/components/Infrastructure/resourceBadges.ts?raw';
 import problemResourcesTableSource from '@/pages/DashboardPanels/ProblemResourcesTable.tsx?raw';
@@ -88,11 +89,11 @@ describe('agent model guardrails', () => {
     expect(alertsPageSource).not.toContain('disableAllHosts');
   });
 
-  it('keeps setup and node summary host fallbacks aware of v6 agent facets', () => {
+  it('keeps setup and node summary fallbacks aware of v6 agent facets', () => {
     expect(completeStepSource).toContain('const hasAgentFacet = (resource: Resource)');
     expect(completeStepSource).toContain("resource.type === 'node'");
     expect(completeStepSource).toContain('command -v sudo');
-    expect(completeStepSource).toContain('const hostLikeResources = resources.filter(');
+    expect(completeStepSource).toContain('const agentFacetResources = resources.filter(');
     expect(completeStepSource).not.toContain('state.nodes || []');
     expect(completeStepSource).not.toContain('state.hosts || []');
     expect(completeStepSource).not.toContain(
@@ -162,6 +163,12 @@ describe('agent model guardrails', () => {
     expect(alertsApiSource).not.toContain('disableAllHosts');
     expect(alertsApiSource).not.toContain('timeThresholds.host');
     expect(alertsApiSource).toContain('body: JSON.stringify(config)');
+  });
+
+  it('keeps license API free of removed legacy exchange surface', () => {
+    expect(licenseApiSource).not.toContain('exchangeLicense(');
+    expect(licenseApiSource).not.toContain('/exchange');
+    expect(licenseApiSource).not.toContain('existing_jwt');
   });
 
   it('keeps login and SSO settings on provider-based flows only', () => {

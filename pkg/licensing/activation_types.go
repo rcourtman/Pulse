@@ -160,36 +160,6 @@ type RefreshGrantResponse struct {
 	RefreshPolicy RefreshHints  `json:"refresh_policy"`
 }
 
-// ExchangeLegacyRequest is the payload sent to POST /v1/licenses/exchange.
-type ExchangeLegacyRequest struct {
-	LegacyLicenseToken  string `json:"legacy_license_token"`
-	InstanceFingerprint string `json:"instance_fingerprint"`
-	ClientVersion       string `json:"client_version,omitempty"`
-}
-
-// ExchangeLegacyResponse is the payload returned from the exchange endpoint.
-type ExchangeLegacyResponse struct {
-	Migration     ExchangeMigrationInfo `json:"migration"`
-	Installation  ExchangeInstallation  `json:"installation"`
-	Grant         GrantEnvelope         `json:"grant"`
-	RefreshPolicy RefreshHints          `json:"refresh_policy"`
-}
-
-// ExchangeMigrationInfo describes the legacy→v6 migration result.
-type ExchangeMigrationInfo struct {
-	Source              string `json:"source"`                 // e.g. "legacy_jwt"
-	LegacyLID           string `json:"legacy_lid"`             // original legacy license ID
-	ResolvedV6LicenseID string `json:"resolved_v6_license_id"` // new v6 license ID (lic_*)
-	AlreadyMigrated     bool   `json:"already_migrated"`       // true if this was a repeat call
-}
-
-// ExchangeInstallation describes the installation created by the exchange.
-type ExchangeInstallation struct {
-	InstallationID    string `json:"installation_id"`    // inst_*
-	InstallationToken string `json:"installation_token"` // pit_live_* (secret)
-	Status            string `json:"status"`             // active|revoked
-}
-
 // RevocationEvent is a single event from the revocation feed.
 type RevocationEvent struct {
 	Seq               int64  `json:"seq"`

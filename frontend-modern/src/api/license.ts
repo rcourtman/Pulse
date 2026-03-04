@@ -66,12 +66,6 @@ export interface ClearLicenseResponse {
   message?: string;
 }
 
-export interface ExchangeLicenseResponse {
-  success: boolean;
-  message?: string;
-  status?: LicenseStatus;
-}
-
 export interface LicenseFeatureStatus {
   license_status: string;
   features: Record<string, boolean>;
@@ -105,13 +99,6 @@ export class LicenseAPI {
       method: 'POST',
       body: JSON.stringify({}),
     }) as Promise<ClearLicenseResponse>;
-  }
-
-  static async exchangeLicense(existingJwt: string): Promise<ExchangeLicenseResponse> {
-    return apiFetchJSON(`${this.baseUrl}/exchange`, {
-      method: 'POST',
-      body: JSON.stringify({ existing_jwt: existingJwt }),
-    }) as Promise<ExchangeLicenseResponse>;
   }
 
   static async startTrial(): Promise<Response> {

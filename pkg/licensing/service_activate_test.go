@@ -19,8 +19,8 @@ func TestServiceActivate_RejectsLegacyJWTOutsideDevMode(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected legacy JWT activation rejection in strict v6 mode")
 	}
-	if !strings.Contains(err.Error(), "/api/license/exchange") {
-		t.Fatalf("expected exchange guidance error, got %q", err.Error())
+	if !strings.Contains(err.Error(), "activation key") {
+		t.Fatalf("expected activation-key guidance error, got %q", err.Error())
 	}
 }
 

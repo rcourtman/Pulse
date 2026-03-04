@@ -107,38 +107,6 @@ func (c *LicenseServerClient) RefreshGrant(ctx context.Context, installationID, 
 	return &result, nil
 }
 
-// ExchangeLegacy calls the license server to exchange a legacy JWT for a v6 license.
-// This creates a new installation and relay grant from an existing legacy JWT token.
-func (c *LicenseServerClient) ExchangeLegacy(ctx context.Context, req ExchangeLegacyRequest) (*ExchangeLegacyResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal exchange request: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/licenses/exchange", bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("create exchange request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Idempotency-Key", generateIdempotencyKey())
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("exchange request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return nil, c.parseError(resp)
-	}
-
-	var result ExchangeLegacyResponse
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode exchange response: %w", err)
-	}
-	return &result, nil
-}
-
 // FetchRevocations polls the revocation feed for events after the given sequence number.
 // The feedToken authenticates access to the revocation feed.
 func (c *LicenseServerClient) FetchRevocations(ctx context.Context, feedToken string, sinceSeq int64, limit int) (*RevocationFeedResponse, error) {
