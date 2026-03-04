@@ -103,7 +103,7 @@ type Node struct {
 	PendingUpdatesCheckedAt time.Time `json:"pendingUpdatesCheckedAt,omitempty"` // When updates were last checked
 
 	// Linking: When a host agent is running on this PVE node, link them together
-	LinkedHostAgentID string `json:"linkedHostAgentId,omitempty"` // ID of the host agent running on this node
+	LinkedAgentID string `json:"linkedAgentId,omitempty"` // ID of the host agent running on this node
 }
 
 // VM represents a virtual machine
@@ -1438,7 +1438,7 @@ func nodeConnectionHealthRank(health string) int {
 
 func preferNodeForMerge(existing Node, candidate Node) Node {
 	existingScore := nodeStatusRank(existing.Status)*100 + nodeConnectionHealthRank(existing.ConnectionHealth)*10
-	if existing.LinkedHostAgentID != "" {
+	if existing.LinkedAgentID != "" {
 		existingScore += 2
 	}
 	if existing.IsClusterMember {
@@ -1446,7 +1446,7 @@ func preferNodeForMerge(existing Node, candidate Node) Node {
 	}
 
 	candidateScore := nodeStatusRank(candidate.Status)*100 + nodeConnectionHealthRank(candidate.ConnectionHealth)*10
-	if candidate.LinkedHostAgentID != "" {
+	if candidate.LinkedAgentID != "" {
 		candidateScore += 2
 	}
 	if candidate.IsClusterMember {
@@ -1475,16 +1475,16 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Preserve LinkedHostAgentID for nodes that are being updated, including when IDs churn.
-	existingNodeLinks := make(map[string]string)             // nodeID -> linkedHostAgentID
-	existingNodeLinksByLogicalKey := make(map[string]string) // logical node key -> linkedHostAgentID
+	// Preserve LinkedAgentID for nodes that are being updated, including when IDs churn.
+	existingNodeLinks := make(map[string]string)             // nodeID -> linkedAgentID
+	existingNodeLinksByLogicalKey := make(map[string]string) // logical node key -> linkedAgentID
 	for _, node := range s.Nodes {
-		if node.LinkedHostAgentID == "" {
+		if node.LinkedAgentID == "" {
 			continue
 		}
-		existingNodeLinks[node.ID] = node.LinkedHostAgentID
+		existingNodeLinks[node.ID] = node.LinkedAgentID
 		if key := nodeLogicalKey(node); key != "" {
-			existingNodeLinksByLogicalKey[key] = node.LinkedHostAgentID
+			existingNodeLinksByLogicalKey[key] = node.LinkedAgentID
 		}
 	}
 
@@ -1564,20 +1564,20 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 		// Preserve existing link if we had one, but only if the host agent still exists
 		if existingLink, ok := existingNodeLinks[node.ID]; ok {
 			if validHostAgentIDs[existingLink] {
-				node.LinkedHostAgentID = existingLink
+				node.LinkedAgentID = existingLink
 			}
-			// If host agent no longer exists, leave LinkedHostAgentID empty (stale reference cleared)
+			// If host agent no longer exists, leave LinkedAgentID empty (stale reference cleared)
 		}
 		// Fallback: preserve link by logical identity when node IDs changed across polls.
-		if node.LinkedHostAgentID == "" {
+		if node.LinkedAgentID == "" {
 			if existingLink, ok := existingNodeLinksByLogicalKey[nodeLogicalKey(node)]; ok {
 				if validHostAgentIDs[existingLink] {
-					node.LinkedHostAgentID = existingLink
+					node.LinkedAgentID = existingLink
 				}
 			}
 		}
 		// If no existing link, try to match by hostname
-		if node.LinkedHostAgentID == "" {
+		if node.LinkedAgentID == "" {
 			nodeName := strings.TrimSpace(strings.ToLower(node.Name))
 			candidates := make(map[string]struct{})
 			if nodeName != "" {
@@ -1596,7 +1596,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 			}
 			if len(candidates) == 1 {
 				for hostID := range candidates {
-					node.LinkedHostAgentID = hostID
+					node.LinkedAgentID = hostID
 				}
 			}
 		}
@@ -2432,7 +2432,7 @@ func (s *State) LinkNodeToHostAgent(nodeID, hostAgentID string) bool {
 
 	for i, node := range s.Nodes {
 		if node.ID == nodeID {
-			s.Nodes[i].LinkedHostAgentID = hostAgentID
+			s.Nodes[i].LinkedAgentID = hostAgentID
 			s.LastUpdate = time.Now()
 			return true
 		}
@@ -2440,7 +2440,7 @@ func (s *State) LinkNodeToHostAgent(nodeID, hostAgentID string) bool {
 	return false
 }
 
-// UnlinkNodesFromHostAgent clears LinkedHostAgentID from all nodes linked to the given host agent.
+// UnlinkNodesFromHostAgent clears LinkedAgentID from all nodes linked to the given host agent.
 // This is called when a host agent is removed to clean up stale references.
 func (s *State) UnlinkNodesFromHostAgent(hostAgentID string) int {
 	s.mu.Lock()
@@ -2448,8 +2448,8 @@ func (s *State) UnlinkNodesFromHostAgent(hostAgentID string) int {
 
 	count := 0
 	for i, node := range s.Nodes {
-		if node.LinkedHostAgentID == hostAgentID {
-			s.Nodes[i].LinkedHostAgentID = ""
+		if node.LinkedAgentID == hostAgentID {
+			s.Nodes[i].LinkedAgentID = ""
 			count++
 		}
 	}
@@ -2461,7 +2461,7 @@ func (s *State) UnlinkNodesFromHostAgent(hostAgentID string) int {
 
 // LinkHostAgentToNode creates a bidirectional link between a host agent and a PVE node.
 // This is used for manual linking when auto-linking can't disambiguate (e.g., multiple nodes
-// with the same hostname). Sets LinkedNodeID on the host and LinkedHostAgentID on the node.
+// with the same hostname). Sets LinkedNodeID on the host and LinkedAgentID on the node.
 // Returns an error if either the host or node is not found.
 func (s *State) LinkHostAgentToNode(hostID, nodeID string) error {
 	s.mu.Lock()
@@ -2496,7 +2496,7 @@ func (s *State) LinkHostAgentToNode(hostID, nodeID string) error {
 	if oldNodeID != "" {
 		for i, node := range s.Nodes {
 			if node.ID == oldNodeID {
-				s.Nodes[i].LinkedHostAgentID = ""
+				s.Nodes[i].LinkedAgentID = ""
 				break
 			}
 		}
@@ -2513,14 +2513,14 @@ func (s *State) LinkHostAgentToNode(hostID, nodeID string) error {
 	s.Hosts[hostIdx].LinkedNodeID = nodeID
 	s.Hosts[hostIdx].LinkedVMID = "" // Clear VM/container links if setting node link
 	s.Hosts[hostIdx].LinkedContainerID = ""
-	s.Nodes[nodeIdx].LinkedHostAgentID = hostID
+	s.Nodes[nodeIdx].LinkedAgentID = hostID
 
 	s.LastUpdate = time.Now()
 	return nil
 }
 
 // UnlinkHostAgent removes the bidirectional link between a host agent and its PVE node.
-// Clears LinkedNodeID on the host and LinkedHostAgentID on the node.
+// Clears LinkedNodeID on the host and LinkedAgentID on the node.
 // Returns true if the host was found and unlinked.
 func (s *State) UnlinkHostAgent(hostID string) bool {
 	s.mu.Lock()
@@ -2548,8 +2548,8 @@ func (s *State) UnlinkHostAgent(hostID string) bool {
 
 	// Clear the link on the node
 	for i, node := range s.Nodes {
-		if node.ID == linkedNodeID || node.LinkedHostAgentID == hostID {
-			s.Nodes[i].LinkedHostAgentID = ""
+		if node.ID == linkedNodeID || node.LinkedAgentID == hostID {
+			s.Nodes[i].LinkedAgentID = ""
 		}
 	}
 

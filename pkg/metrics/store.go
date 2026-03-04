@@ -143,6 +143,7 @@ func NewStore(config StoreConfig) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
+	store.migrateLegacyHostResourceType()
 
 	// Clean up stale data from previous runs before starting the background worker.
 	// This prevents accumulation if Pulse was restarted before hourly retention ran.
@@ -292,6 +293,61 @@ func (s *Store) migrateAutoVacuum() {
 	log.Info().Dur("duration", time.Since(start)).Msg("Metrics database auto-vacuum migration complete")
 }
 
+// migrateLegacyHostResourceType rewrites legacy v5 `resource_type=host` rows to
+// canonical v6 `resource_type=agent`. This keeps reads/writes agent-only while
+// preserving historical data.
+func (s *Store) migrateLegacyHostResourceType() {
+	tx, err := s.db.Begin()
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to start legacy host->agent metrics migration")
+		return
+	}
+	defer tx.Rollback()
+
+	// Reinsert legacy rows with canonical type, keeping any existing canonical
+	// records when duplicates collide with the unique index.
+	if _, err := tx.Exec(`
+		INSERT OR IGNORE INTO metrics (
+			resource_type, resource_id, metric_type, value, min_value, max_value, timestamp, tier
+		)
+		SELECT
+			'agent', resource_id, metric_type, value, min_value, max_value, timestamp, tier
+		FROM metrics
+		WHERE resource_type = 'host'
+	`); err != nil {
+		log.Warn().Err(err).Msg("Failed to copy legacy host metrics rows")
+		return
+	}
+
+	deleteResult, err := tx.Exec(`DELETE FROM metrics WHERE resource_type = 'host'`)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to delete legacy host metrics rows")
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		log.Warn().Err(err).Msg("Failed to commit legacy host->agent metrics migration")
+		return
+	}
+
+	rowsDeleted, err := deleteResult.RowsAffected()
+	if err != nil {
+		log.Debug().Err(err).Msg("Failed to read affected rows for legacy host->agent migration")
+		return
+	}
+	if rowsDeleted > 0 {
+		log.Info().Int64("rows", rowsDeleted).Msg("Migrated legacy host metrics rows to agent")
+	}
+}
+
+func normalizeMetricResourceType(resourceType string) string {
+	return strings.TrimSpace(resourceType)
+}
+
+func isLegacyMetricResourceType(resourceType string) bool {
+	return strings.EqualFold(strings.TrimSpace(resourceType), "host")
+}
+
 // Write adds a metric to the write buffer with the 'raw' tier by default
 func (s *Store) Write(resourceType, resourceID, metricType string, value float64, timestamp time.Time) {
 	s.WriteWithTier(resourceType, resourceID, metricType, value, timestamp, TierRaw)
@@ -300,6 +356,13 @@ func (s *Store) Write(resourceType, resourceID, metricType string, value float64
 // WriteWithTier adds a metric to the write buffer with a specific tier
 func (s *Store) WriteWithTier(resourceType, resourceID, metricType string, value float64, timestamp time.Time, tier Tier) {
 	if s.stopping.Load() {
+		return
+	}
+	if isLegacyMetricResourceType(resourceType) {
+		log.Warn().
+			Str("resource_type", resourceType).
+			Str("resource_id", resourceID).
+			Msg(`Dropping legacy metrics write for unsupported resource type "host"; use "agent"`)
 		return
 	}
 
@@ -311,7 +374,7 @@ func (s *Store) WriteWithTier(resourceType, resourceID, metricType string, value
 	}
 
 	s.buffer = append(s.buffer, bufferedMetric{
-		resourceType: resourceType,
+		resourceType: normalizeMetricResourceType(resourceType),
 		resourceID:   resourceID,
 		metricType:   metricType,
 		value:        value,
@@ -331,16 +394,29 @@ func (s *Store) WriteBatchSync(metrics []WriteMetric) {
 		return
 	}
 
-	batch := make([]bufferedMetric, len(metrics))
-	for i, metric := range metrics {
-		batch[i] = bufferedMetric{
-			resourceType: metric.ResourceType,
+	batch := make([]bufferedMetric, 0, len(metrics))
+	droppedLegacyHost := 0
+	for _, metric := range metrics {
+		if isLegacyMetricResourceType(metric.ResourceType) {
+			droppedLegacyHost++
+			continue
+		}
+		batch = append(batch, bufferedMetric{
+			resourceType: normalizeMetricResourceType(metric.ResourceType),
 			resourceID:   metric.ResourceID,
 			metricType:   metric.MetricType,
 			value:        metric.Value,
 			timestamp:    metric.Timestamp,
 			tier:         metric.Tier,
-		}
+		})
+	}
+	if droppedLegacyHost > 0 {
+		log.Warn().
+			Int("dropped", droppedLegacyHost).
+			Msg(`Dropped legacy metrics writes for unsupported resource type "host"; use "agent"`)
+	}
+	if len(batch) == 0 {
+		return
 	}
 
 	s.writeBatch(batch)

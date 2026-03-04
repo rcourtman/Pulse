@@ -465,7 +465,7 @@ func discoveryTokens(d *ResourceDiscovery) []string {
 	add(d.ID)
 	add(d.HostID)
 	if d.HostID != "" {
-		add("host:" + d.HostID)
+		add("agent:" + d.HostID)
 	}
 
 	switch d.ResourceType {
@@ -483,8 +483,8 @@ func discoveryTokens(d *ResourceDiscovery) []string {
 			add("docker:" + d.HostID)
 			add("docker:" + d.HostID + "/" + d.ResourceID)
 		}
-	case ResourceTypeHost:
-		add("host:" + d.ResourceID)
+	case ResourceTypeAgent:
+		add("agent:" + d.ResourceID)
 	case ResourceTypeK8s:
 		add("k8s/" + d.ResourceID)
 		add("kubernetes/" + d.ResourceID)

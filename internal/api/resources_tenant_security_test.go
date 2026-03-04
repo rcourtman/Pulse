@@ -57,7 +57,7 @@ func TestResourceHandlers_NonDefaultOrgUsesTenantStateProvider(t *testing.T) {
 		},
 	}})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=host", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
 	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "acme"))
 	rec := httptest.NewRecorder()
 

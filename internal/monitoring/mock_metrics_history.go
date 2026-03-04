@@ -871,7 +871,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 			diskPercent = host.Disks[0].Usage
 		}
 
-		recordGuest("host:"+host.ID, "host", host.ID, host.CPUUsage, host.Memory.Usage, diskPercent, host.DiskReadRate, host.DiskWriteRate, host.NetInRate, host.NetOutRate, true, true, true)
+		recordGuest("agent:"+host.ID, "agent", host.ID, host.CPUUsage, host.Memory.Usage, diskPercent, host.DiskReadRate, host.DiskWriteRate, host.NetInRate, host.NetOutRate, true, true, true)
 		time.Sleep(50 * time.Millisecond)
 	}
 
@@ -1243,7 +1243,7 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, stat
 			diskPercent = host.Disks[0].Usage
 		}
 
-		hostKey := "host:" + host.ID
+		hostKey := "agent:" + host.ID
 		mh.AddGuestMetric(hostKey, "cpu", host.CPUUsage, ts)
 		mh.AddGuestMetric(hostKey, "memory", host.Memory.Usage, ts)
 		mh.AddGuestMetric(hostKey, "disk", diskPercent, ts)
@@ -1253,13 +1253,13 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, stat
 		mh.AddGuestMetric(hostKey, "netout", host.NetOutRate, ts)
 
 		if ms != nil {
-			ms.Write("host", host.ID, "cpu", host.CPUUsage, ts)
-			ms.Write("host", host.ID, "memory", host.Memory.Usage, ts)
-			ms.Write("host", host.ID, "disk", diskPercent, ts)
-			ms.Write("host", host.ID, "diskread", host.DiskReadRate, ts)
-			ms.Write("host", host.ID, "diskwrite", host.DiskWriteRate, ts)
-			ms.Write("host", host.ID, "netin", host.NetInRate, ts)
-			ms.Write("host", host.ID, "netout", host.NetOutRate, ts)
+			ms.Write("agent", host.ID, "cpu", host.CPUUsage, ts)
+			ms.Write("agent", host.ID, "memory", host.Memory.Usage, ts)
+			ms.Write("agent", host.ID, "disk", diskPercent, ts)
+			ms.Write("agent", host.ID, "diskread", host.DiskReadRate, ts)
+			ms.Write("agent", host.ID, "diskwrite", host.DiskWriteRate, ts)
+			ms.Write("agent", host.ID, "netin", host.NetInRate, ts)
+			ms.Write("agent", host.ID, "netout", host.NetOutRate, ts)
 		}
 	}
 

@@ -56,8 +56,8 @@ func TestRouter_HandleState_MockIsolation(t *testing.T) {
 		err := json.Unmarshal(w.Body.Bytes(), &state)
 		assert.NoError(t, err)
 
-		// Verify we got the mock state
-		assert.NotEmpty(t, state.Nodes)
+		// Verify v6 contract: legacy per-type arrays are stripped from /api/state.
+		assert.Nil(t, state.Nodes)
 		assert.Greater(t, state.LastUpdate, int64(0))
 	})
 

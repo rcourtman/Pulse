@@ -659,7 +659,7 @@ func (h *OrgHandlers) HandleCreateShare(w http.ResponseWriter, r *http.Request) 
 	}
 
 	req.TargetOrgID = strings.TrimSpace(req.TargetOrgID)
-	req.ResourceType = strings.ToLower(strings.TrimSpace(req.ResourceType))
+	req.ResourceType = normalizeOrganizationShareResourceType(req.ResourceType)
 	req.ResourceID = strings.TrimSpace(req.ResourceID)
 	req.ResourceName = strings.TrimSpace(req.ResourceName)
 	req.AccessRole = models.NormalizeOrganizationRole(req.AccessRole)
@@ -677,6 +677,10 @@ func (h *OrgHandlers) HandleCreateShare(w http.ResponseWriter, r *http.Request) 
 	}
 	if req.ResourceType == "" || req.ResourceID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_resource", "Resource type and resource ID are required", nil)
+		return
+	}
+	if req.ResourceType == "host" {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_resource", `Resource type "host" is no longer supported; use "agent"`, nil)
 		return
 	}
 	if !models.IsValidOrganizationRole(req.AccessRole) || req.AccessRole == models.OrgRoleOwner {
@@ -900,7 +904,7 @@ func normalizeOrganizationShares(shares []models.OrganizationShare) []models.Org
 			share.ID = generateOrganizationShareID()
 		}
 		share.TargetOrgID = strings.TrimSpace(share.TargetOrgID)
-		share.ResourceType = strings.ToLower(strings.TrimSpace(share.ResourceType))
+		share.ResourceType = normalizeOrganizationShareResourceType(share.ResourceType)
 		share.ResourceID = strings.TrimSpace(share.ResourceID)
 		share.ResourceName = strings.TrimSpace(share.ResourceName)
 		share.AccessRole = models.NormalizeOrganizationRole(share.AccessRole)
@@ -910,6 +914,10 @@ func normalizeOrganizationShares(shares []models.OrganizationShare) []models.Org
 		if share.TargetOrgID == "" || share.ResourceType == "" || share.ResourceID == "" {
 			continue
 		}
+		// Legacy v5 share entries are invalid in v6 and should not be retained.
+		if share.ResourceType == "host" {
+			continue
+		}
 		normalized = append(normalized, share)
 	}
 	return normalized
@@ -917,6 +925,10 @@ func normalizeOrganizationShares(shares []models.OrganizationShare) []models.Org
 
 func generateOrganizationShareID() string {
 	return "shr-" + strconv.FormatInt(time.Now().UTC().UnixNano(), 36)
+}
+
+func normalizeOrganizationShareResourceType(raw string) string {
+	return strings.ToLower(strings.TrimSpace(raw))
 }
 
 func writeJSON(w http.ResponseWriter, statusCode int, payload any) {

@@ -982,7 +982,7 @@ func TestUpdateResourceStore_IngestsSupplementalRecords(t *testing.T) {
 				{
 					SourceID: "xcp-host-1",
 					Resource: unifiedresources.Resource{
-						Type:     unifiedresources.ResourceTypeHost,
+						Type:     unifiedresources.ResourceTypeAgent,
 						Name:     "xcp-host-1",
 						Status:   unifiedresources.StatusOnline,
 						LastSeen: time.Now().UTC(),
@@ -1032,7 +1032,7 @@ func TestUpdateResourceStore_SuppressesProviderOwnedSnapshotSources(t *testing.T
 				{
 					SourceID: "xcp-host-1",
 					Resource: unifiedresources.Resource{
-						Type:     unifiedresources.ResourceTypeHost,
+						Type:     unifiedresources.ResourceTypeAgent,
 						Name:     "xcp-host-1",
 						Status:   unifiedresources.StatusOnline,
 						LastSeen: time.Now().UTC(),
@@ -1087,7 +1087,7 @@ func TestUpdateResourceStore_IngestsRegisteredSupplementalProvider(t *testing.T)
 				{
 					SourceID: "tn-host-1",
 					Resource: unifiedresources.Resource{
-						Type:     unifiedresources.ResourceTypeHost,
+						Type:     unifiedresources.ResourceTypeAgent,
 						Name:     "tn-host-1",
 						Status:   unifiedresources.StatusOnline,
 						LastSeen: time.Now().UTC(),
@@ -1128,7 +1128,7 @@ func TestUpdateResourceStore_SuppressesSnapshotForRegisteredSupplementalOwnershi
 				{
 					SourceID: "tn-host-1",
 					Resource: unifiedresources.Resource{
-						Type:     unifiedresources.ResourceTypeHost,
+						Type:     unifiedresources.ResourceTypeAgent,
 						Name:     "tn-host-1",
 						Status:   unifiedresources.StatusOnline,
 						LastSeen: time.Now().UTC(),

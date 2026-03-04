@@ -65,7 +65,7 @@ func BenchmarkIngestRecords_MergeDedup(b *testing.B) {
 				initial[i] = IngestRecord{
 					SourceID: fmt.Sprintf("node/pve-%d", i),
 					Resource: Resource{
-						Type:     ResourceTypeHost,
+						Type:     ResourceTypeAgent,
 						Name:     fmt.Sprintf("pve-%d", i),
 						Status:   StatusOnline,
 						LastSeen: now,
@@ -94,7 +94,7 @@ func BenchmarkIngestRecords_MergeDedup(b *testing.B) {
 				incoming[i] = IngestRecord{
 					SourceID: fmt.Sprintf("agent-%d", i),
 					Resource: Resource{
-						Type:     ResourceTypeHost,
+						Type:     ResourceTypeAgent,
 						Name:     fmt.Sprintf("pve-%d", i),
 						Status:   StatusOnline,
 						LastSeen: now.Add(time.Second),
@@ -133,7 +133,7 @@ func BenchmarkIngestRecords_MergeDedup(b *testing.B) {
 				// Verify all hosts have both sources and payloads after merge.
 				mergedCount := 0
 				for _, r := range rr.List() {
-					if r.Type != ResourceTypeHost {
+					if r.Type != ResourceTypeAgent {
 						continue
 					}
 					if r.Proxmox == nil || r.Agent == nil {
@@ -252,7 +252,7 @@ func BenchmarkIngestMixed(b *testing.B) {
 		hostRecords[i] = IngestRecord{
 			SourceID: fmt.Sprintf("node/pve-%d", i),
 			Resource: Resource{
-				Type:     ResourceTypeHost,
+				Type:     ResourceTypeAgent,
 				Name:     fmt.Sprintf("pve-%d", i),
 				Status:   StatusOnline,
 				LastSeen: now,
@@ -331,7 +331,7 @@ func BenchmarkIngestMixed(b *testing.B) {
 		agentRecords[i] = IngestRecord{
 			SourceID: fmt.Sprintf("agent-host-%d", i),
 			Resource: Resource{
-				Type:     ResourceTypeHost,
+				Type:     ResourceTypeAgent,
 				Name:     fmt.Sprintf("pve-%d", i),
 				Status:   StatusOnline,
 				LastSeen: now.Add(time.Second),
@@ -369,7 +369,7 @@ func BenchmarkIngestMixed(b *testing.B) {
 		// Verify all agent hosts were merged into existing Proxmox hosts.
 		mergedHostCount := 0
 		for _, r := range rr.List() {
-			if r.Type != ResourceTypeHost || r.Agent == nil {
+			if r.Type != ResourceTypeAgent || r.Agent == nil {
 				continue
 			}
 			if r.Proxmox == nil {

@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -35,7 +36,8 @@ type enrollPayload struct {
 
 // enrollResponse is the JSON body returned by the enrollment endpoint.
 type enrollResponse struct {
-	HostID         string `json:"hostId"`
+	AgentID        string `json:"agentId"`
+	HostID         string `json:"hostId"` // Deprecated alias for older servers.
 	RuntimeToken   string `json:"runtimeToken"`
 	RuntimeTokenID string `json:"runtimeTokenId"`
 	ReportInterval string `json:"reportInterval"`
@@ -74,11 +76,15 @@ func (a *Agent) runEnrollmentLoop(ctx context.Context) error {
 			// Success — persist and use the runtime token.
 			a.cfg.APIToken = result.RuntimeToken
 			a.persistRuntimeToken(result.RuntimeToken)
-			if result.HostID != "" {
-				a.persistHostID(result.HostID)
+			canonicalID := strings.TrimSpace(result.AgentID)
+			if canonicalID == "" {
+				canonicalID = strings.TrimSpace(result.HostID)
+			}
+			if canonicalID != "" {
+				a.persistHostID(canonicalID)
 			}
 			a.logger.Info().
-				Str("hostId", result.HostID).
+				Str("agentId", canonicalID).
 				Msg("Enrollment succeeded, using runtime token")
 			return nil
 		}

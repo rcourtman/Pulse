@@ -113,6 +113,10 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 	}
 
 	resources := registry.List()
+	if hasLegacyHostTypeToken(r.URL.Query().Get("type")) {
+		http.Error(w, `type "host" is no longer supported; use "agent"`, http.StatusBadRequest)
+		return
+	}
 
 	filters := parseListFilters(r)
 	resources = applyFilters(resources, filters)
@@ -125,7 +129,7 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 
 	// Build aggregations: use registry.Stats() for Total/ByStatus/BySource (unfiltered,
 	// no conversion needed), but recompute ByType from the full registry list so keys
-	// match frontend expectations (e.g. "node" instead of "host").
+	// match frontend expectations (e.g. "node"/"agent" instead of backend "host").
 	stats := registry.Stats()
 	stats.ByType = computeFrontendByType(registry.List())
 
@@ -178,6 +182,7 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 
 	resourceID := strings.TrimPrefix(r.URL.Path, "/api/resources/")
 	resourceID = strings.TrimSuffix(resourceID, "/")
+	resourceID = unified.CanonicalResourceID(resourceID)
 	if resourceID == "" {
 		http.Error(w, "Resource ID required", http.StatusBadRequest)
 		return
@@ -240,6 +245,7 @@ func (h *ResourceHandlers) HandleGetChildren(w http.ResponseWriter, r *http.Requ
 	path := strings.TrimPrefix(r.URL.Path, "/api/resources/")
 	path = strings.TrimSuffix(path, "/children")
 	path = strings.TrimSuffix(path, "/")
+	path = unified.CanonicalResourceID(path)
 	if path == "" {
 		http.Error(w, "Resource ID required", http.StatusBadRequest)
 		return
@@ -271,6 +277,7 @@ func (h *ResourceHandlers) HandleGetMetrics(w http.ResponseWriter, r *http.Reque
 	path := strings.TrimPrefix(r.URL.Path, "/api/resources/")
 	path = strings.TrimSuffix(path, "/metrics")
 	path = strings.TrimSuffix(path, "/")
+	path = unified.CanonicalResourceID(path)
 	if path == "" {
 		http.Error(w, "Resource ID required", http.StatusBadRequest)
 		return
@@ -324,6 +331,7 @@ func (h *ResourceHandlers) HandleLink(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/resources/")
 	path = strings.TrimSuffix(path, "/link")
 	path = strings.TrimSuffix(path, "/")
+	path = unified.CanonicalResourceID(path)
 	if path == "" {
 		http.Error(w, "Resource ID required", http.StatusBadRequest)
 		return
@@ -341,6 +349,7 @@ func (h *ResourceHandlers) HandleLink(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "targetId required", http.StatusBadRequest)
 		return
 	}
+	payload.TargetID = unified.CanonicalResourceID(payload.TargetID)
 
 	link := unified.ResourceLink{
 		ResourceA: path,
@@ -381,6 +390,7 @@ func (h *ResourceHandlers) HandleUnlink(w http.ResponseWriter, r *http.Request) 
 	path := strings.TrimPrefix(r.URL.Path, "/api/resources/")
 	path = strings.TrimSuffix(path, "/unlink")
 	path = strings.TrimSuffix(path, "/")
+	path = unified.CanonicalResourceID(path)
 	if path == "" {
 		http.Error(w, "Resource ID required", http.StatusBadRequest)
 		return
@@ -398,6 +408,7 @@ func (h *ResourceHandlers) HandleUnlink(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "targetId required", http.StatusBadRequest)
 		return
 	}
+	payload.TargetID = unified.CanonicalResourceID(payload.TargetID)
 
 	exclusion := unified.ResourceExclusion{
 		ResourceA: path,
@@ -437,6 +448,7 @@ func (h *ResourceHandlers) HandleReportMerge(w http.ResponseWriter, r *http.Requ
 	path := strings.TrimPrefix(r.URL.Path, "/api/resources/")
 	path = strings.TrimSuffix(path, "/report-merge")
 	path = strings.TrimSuffix(path, "/")
+	path = unified.CanonicalResourceID(path)
 	if path == "" {
 		http.Error(w, "Resource ID required", http.StatusBadRequest)
 		return
@@ -882,12 +894,12 @@ func parseResourceTypes(raw string) map[unified.ResourceType]struct{} {
 	result := make(map[unified.ResourceType]struct{})
 	for _, part := range splitCSV(raw) {
 		switch part {
-		case "agent", "agents", "host", "hosts", "node", "nodes", "docker-host":
-			// "node" and "docker-host" are frontend aliases that both resolve to
-			// ResourceTypeHost. Filtering by the frontend type is supported because
+		case "agent", "agents", "node", "nodes", "docker-host":
+			// "agent", "node", and "docker-host" are frontend aliases that
+			// all resolve to ResourceTypeAgent. Filtering by the frontend type is supported because
 			// applyFrontendTypes() runs after filtering, so we match on the backend
 			// type and let the type conversion produce the expected frontend names.
-			result[unified.ResourceTypeHost] = struct{}{}
+			result[unified.ResourceTypeAgent] = struct{}{}
 		case "vm", "vms", "qemu":
 			result[unified.ResourceTypeVM] = struct{}{}
 		case "lxc", "lxcs", "system-container", "system_container", "container", "containers":
@@ -924,6 +936,15 @@ func parseResourceTypes(raw string) map[unified.ResourceType]struct{} {
 		}
 	}
 	return result
+}
+
+func hasLegacyHostTypeToken(raw string) bool {
+	for _, part := range splitCSV(raw) {
+		if part == "host" || part == "hosts" {
+			return true
+		}
+	}
+	return false
 }
 
 func parseSources(raw string) map[unified.DataSource]struct{} {
@@ -1007,15 +1028,15 @@ func attachMetricsTarget(resource *unified.Resource, registry *unified.ResourceR
 // the frontend expects. This mirrors the monitorLegacyResourceType() logic in
 // monitor.go so that both the WebSocket and REST API paths agree on type names.
 func frontendResourceType(r unified.Resource) unified.ResourceType {
-	switch r.Type {
-	case unified.ResourceTypeHost:
+	switch unified.CanonicalResourceType(r.Type) {
+	case unified.ResourceTypeAgent:
 		if r.Proxmox != nil {
 			return "node"
 		}
 		if r.Docker != nil {
 			return "docker-host"
 		}
-		return "host"
+		return "agent"
 	case unified.ResourceTypeSystemContainer:
 		return "container"
 	case unified.ResourceTypeAppContainer:
@@ -1058,8 +1079,8 @@ func buildMetricsTarget(resource unified.Resource, registry *unified.ResourceReg
 		bySource[st.Source] = st
 	}
 
-	switch resource.Type {
-	case unified.ResourceTypeHost:
+	switch unified.CanonicalResourceType(resource.Type) {
+	case unified.ResourceTypeAgent:
 		// Infrastructure hosts: prefer Proxmox > Agent > Docker source.
 		if st, ok := bySource[unified.SourceProxmox]; ok {
 			return &unified.MetricsTarget{ResourceType: "node", ResourceID: st.SourceID}
@@ -1115,8 +1136,8 @@ func buildMetricsTarget(resource unified.Resource, registry *unified.ResourceReg
 }
 
 func buildDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
-	switch resource.Type {
-	case unified.ResourceTypeHost:
+	switch unified.CanonicalResourceType(resource.Type) {
+	case unified.ResourceTypeAgent:
 		return hostDiscoveryTarget(resource)
 	case unified.ResourceTypeVM:
 		return proxmoxGuestDiscoveryTarget(resource, "vm")
@@ -1164,17 +1185,17 @@ func cephDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
 }
 
 func hostDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
-	linkedHostAgentID := ""
+	linkedAgentID := ""
 	agentBacked := hasSource(resource.Sources, unified.SourceAgent) || resource.Agent != nil
 	if agentBacked {
-		linkedHostAgentID = proxmoxLinkedHostAgentID(resource.Proxmox)
+		linkedAgentID = proxmoxLinkedAgentID(resource.Proxmox)
 	}
-	if linkedHostAgentID != "" {
+	if linkedAgentID != "" {
 		agentBacked = true
 	}
 	hostID := firstNonEmptyTrimmed(
 		agentID(resource.Agent),
-		linkedHostAgentID,
+		linkedAgentID,
 		proxmoxNodeName(resource.Proxmox),
 		agentHostname(resource.Agent),
 		dockerHostname(resource.Docker),
@@ -1187,12 +1208,8 @@ func hostDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
 	if hostID == "" {
 		return nil
 	}
-	resourceType := "host"
-	if agentBacked {
-		resourceType = "agent"
-	}
 	return &unified.DiscoveryTarget{
-		ResourceType: resourceType,
+		ResourceType: "agent",
 		HostID:       hostID,
 		ResourceID:   hostID,
 		Hostname: firstNonEmptyTrimmed(
@@ -1363,11 +1380,11 @@ func agentHostname(agent *unified.AgentData) string {
 	return agent.Hostname
 }
 
-func proxmoxLinkedHostAgentID(proxmox *unified.ProxmoxData) string {
+func proxmoxLinkedAgentID(proxmox *unified.ProxmoxData) string {
 	if proxmox == nil {
 		return ""
 	}
-	return proxmox.LinkedHostAgentID
+	return proxmox.LinkedAgentID
 }
 
 func proxmoxNodeName(proxmox *unified.ProxmoxData) string {

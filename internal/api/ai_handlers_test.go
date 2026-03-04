@@ -1185,6 +1185,56 @@ func TestHandleRunCommand_InvalidBody(t *testing.T) {
 	}
 }
 
+func TestNormalizeRunCommandApprovalTarget_CanonicalizesAgentTarget(t *testing.T) {
+	tests := []struct {
+		name    string
+		req     AIRunCommandRequest
+		wantTyp string
+		wantID  string
+		wantErr string
+	}{
+		{
+			name: "host target type rejected",
+			req: AIRunCommandRequest{
+				TargetType: "host",
+				TargetID:   "Node-1",
+			},
+			wantErr: "unsupported target_type",
+		},
+		{
+			name: "run_on_host forces agent target",
+			req: AIRunCommandRequest{
+				TargetType: "vm",
+				RunOnHost:  true,
+				TargetHost: "PVE-A",
+			},
+			wantTyp: "agent",
+			wantID:  "pve-a",
+		},
+		{
+			name: "missing target host when run_on_host",
+			req: AIRunCommandRequest{
+				RunOnHost: true,
+			},
+			wantErr: "target_host is required when run_on_host is true",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotType, gotID, err := normalizeRunCommandApprovalTarget(tt.req)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.wantTyp, gotType)
+			require.Equal(t, tt.wantID, gotID)
+		})
+	}
+}
+
 func TestHandleRunCommand_RequiresApprovalID(t *testing.T) {
 	t.Parallel()
 

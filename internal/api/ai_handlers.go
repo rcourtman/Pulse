@@ -2932,7 +2932,7 @@ type AIConversationMessage struct {
 
 type AIExecuteRequest struct {
 	Prompt     string                  `json:"prompt"`
-	TargetType string                  `json:"target_type,omitempty"` // "host", "container", "vm", "node"
+	TargetType string                  `json:"target_type,omitempty"` // "agent", "container", "vm", "node"
 	TargetID   string                  `json:"target_id,omitempty"`
 	Context    map[string]interface{}  `json:"context,omitempty"` // Current metrics, state, etc.
 	History    []AIConversationMessage `json:"history,omitempty"` // Previous conversation messages
@@ -3003,10 +3003,10 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 	targetType := strings.ToLower(strings.TrimSpace(req.TargetType))
 	if targetType != "" {
 		switch targetType {
-		case "host", "container", "vm", "node", "lxc":
+		case "agent", "container", "vm", "node", "lxc":
 			// valid
 		default:
-			http.Error(w, "Invalid target_type (allowed: host, container, vm, node, lxc)", http.StatusBadRequest)
+			http.Error(w, "Invalid target_type (allowed: agent, container, vm, node, lxc)", http.StatusBadRequest)
 			return
 		}
 	}
@@ -3189,10 +3189,10 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 	targetType := strings.ToLower(strings.TrimSpace(req.TargetType))
 	if targetType != "" {
 		switch targetType {
-		case "host", "container", "vm", "node", "lxc":
+		case "agent", "container", "vm", "node", "lxc":
 			// valid
 		default:
-			http.Error(w, "Invalid target_type (allowed: host, container, vm, node, lxc)", http.StatusBadRequest)
+			http.Error(w, "Invalid target_type (allowed: agent, container, vm, node, lxc)", http.StatusBadRequest)
 			return
 		}
 	}
@@ -3477,8 +3477,8 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 	log.Info().
 		Str("command", req.Command).
 		Str("approval_id", req.ApprovalID).
-		Str("target_type", req.TargetType).
-		Str("target_id", req.TargetID).
+		Str("target_type", approvalTargetType).
+		Str("target_id", approvalTargetID).
 		Bool("run_on_host", req.RunOnHost).
 		Str("target_host", req.TargetHost).
 		Msg("Executing approved command")
@@ -3490,11 +3490,11 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 	resp, err := h.GetAIService(r.Context()).RunCommand(ctx, ai.RunCommandRequest{
 		Command:    req.Command,
 		ApprovalID: req.ApprovalID,
-		TargetType: req.TargetType,
-		TargetID:   req.TargetID,
+		TargetType: approvalTargetType,
+		TargetID:   approvalTargetID,
 		RunOnHost:  req.RunOnHost,
 		VMID:       req.VMID,
-		TargetHost: req.TargetHost,
+		TargetHost: strings.ToLower(strings.TrimSpace(req.TargetHost)),
 	})
 
 	if err != nil {
@@ -3514,13 +3514,13 @@ func normalizeRunCommandApprovalTarget(req AIRunCommandRequest) (string, string,
 	targetHost := strings.ToLower(strings.TrimSpace(req.TargetHost))
 
 	allowedTargetTypes := map[string]struct{}{
-		"host":      {},
+		"agent":     {},
 		"container": {},
 		"vm":        {},
 	}
 
 	if req.RunOnHost {
-		targetType = "host"
+		targetType = "agent"
 		if targetHost == "" {
 			return "", "", errors.New("target_host is required when run_on_host is true")
 		}
@@ -3528,22 +3528,22 @@ func normalizeRunCommandApprovalTarget(req AIRunCommandRequest) (string, string,
 	}
 
 	if targetType == "" {
-		targetType = "host"
+		targetType = "agent"
 	}
 	if _, ok := allowedTargetTypes[targetType]; !ok {
-		return "", "", fmt.Errorf("unsupported target_type %q (allowed: host, container, vm)", targetType)
+		return "", "", fmt.Errorf("unsupported target_type %q (allowed: agent, container, vm)", targetType)
 	}
 
 	if (targetType == "container" || targetType == "vm") && strings.TrimSpace(req.VMID) != "" {
 		targetID = strings.TrimSpace(req.VMID)
 	}
 
-	if targetType == "host" {
+	if targetType == "agent" {
 		if targetID == "" {
 			targetID = targetHost
 		}
 		if targetID == "" {
-			return "", "", errors.New("target_id or target_host is required for host commands")
+			return "", "", errors.New("target_id or target_host is required for agent commands")
 		}
 		targetID = strings.ToLower(targetID)
 	}

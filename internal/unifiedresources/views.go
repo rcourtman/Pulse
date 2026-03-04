@@ -487,7 +487,7 @@ func (v ContainerView) IPAddresses() []string {
 	return cloneStringSlice(v.r.Identity.IPAddresses)
 }
 
-// NodeView wraps a host-type resource with Proxmox data.
+// NodeView wraps an infrastructure parent resource with Proxmox data.
 type NodeView struct{ r *Resource }
 
 func NewNodeView(r *Resource) NodeView { return NodeView{r: r} }
@@ -537,11 +537,25 @@ func (v NodeView) ClusterName() string {
 	return v.r.Proxmox.ClusterName
 }
 
+func (v NodeView) IsClusterMember() bool {
+	if v.r == nil || v.r.Proxmox == nil {
+		return false
+	}
+	return v.r.Proxmox.IsClusterMember
+}
+
 func (v NodeView) Instance() string {
 	if v.r == nil || v.r.Proxmox == nil {
 		return ""
 	}
 	return v.r.Proxmox.Instance
+}
+
+func (v NodeView) HostURL() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.HostURL
 }
 
 func (v NodeView) PVEVersion() string {
@@ -663,14 +677,14 @@ func (v NodeView) LastSeen() time.Time {
 	return v.r.LastSeen
 }
 
-func (v NodeView) LinkedHostAgentID() string {
+func (v NodeView) LinkedAgentID() string {
 	if v.r == nil || v.r.Proxmox == nil {
 		return ""
 	}
-	return v.r.Proxmox.LinkedHostAgentID
+	return v.r.Proxmox.LinkedAgentID
 }
 
-// HostView wraps a host-type resource with Agent data.
+// HostView wraps an infrastructure parent resource with Agent data.
 type HostView struct{ r *Resource }
 
 func NewHostView(r *Resource) HostView { return HostView{r: r} }
@@ -884,7 +898,7 @@ func (v HostView) Ceph() *HostCephMeta {
 	return cloneHostCephMeta(v.r.Agent.Ceph)
 }
 
-// DockerHostView wraps a host-type resource with Docker data.
+// DockerHostView wraps an infrastructure parent resource with Docker data.
 type DockerHostView struct{ r *Resource }
 
 func NewDockerHostView(r *Resource) DockerHostView { return DockerHostView{r: r} }

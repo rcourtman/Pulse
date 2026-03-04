@@ -44,7 +44,7 @@ func TestIntegrationFullLifecycle(t *testing.T) {
 	foundPoolHealthTag := false
 
 	for _, resource := range resources {
-		if resource.Type == unifiedresources.ResourceTypeHost && resource.Name == "truenas-main" {
+		if resource.Type == unifiedresources.ResourceTypeAgent && resource.Name == "truenas-main" {
 			foundHost = true
 		}
 

@@ -601,32 +601,32 @@ func TestHostResourceID(t *testing.T) {
 		{
 			name:   "normal host ID",
 			hostID: "host-123",
-			want:   "host:host-123",
+			want:   "agent:host-123",
 		},
 		{
 			name:   "empty string returns unknown",
 			hostID: "",
-			want:   "host:unknown",
+			want:   "agent:unknown",
 		},
 		{
 			name:   "whitespace only returns unknown",
 			hostID: "   ",
-			want:   "host:unknown",
+			want:   "agent:unknown",
 		},
 		{
 			name:   "whitespace is trimmed",
 			hostID: "  host-456  ",
-			want:   "host:host-456",
+			want:   "agent:host-456",
 		},
 		{
 			name:   "UUID format",
 			hostID: "550e8400-e29b-41d4-a716-446655440000",
-			want:   "host:550e8400-e29b-41d4-a716-446655440000",
+			want:   "agent:550e8400-e29b-41d4-a716-446655440000",
 		},
 		{
 			name:   "simple hostname",
 			hostID: "server1",
-			want:   "host:server1",
+			want:   "agent:server1",
 		},
 	}
 
@@ -675,13 +675,13 @@ func TestHostDisplayName(t *testing.T) {
 			want: "id-123",
 		},
 		{
-			name: "fallback to Host literal",
+			name: "fallback to Agent literal",
 			host: models.Host{
 				ID:          "",
 				DisplayName: "",
 				Hostname:    "",
 			},
-			want: "Host",
+			want: "Agent",
 		},
 		{
 			name: "whitespace display name ignored",
@@ -746,12 +746,12 @@ func TestHostInstanceName(t *testing.T) {
 			want: "Ubuntu 22.04",
 		},
 		{
-			name: "fallback to Host Agent",
+			name: "fallback to Agent",
 			host: models.Host{
 				Platform: "",
 				OSName:   "",
 			},
-			want: "Host Agent",
+			want: "Agent",
 		},
 		{
 			name: "whitespace platform ignored",
@@ -767,7 +767,7 @@ func TestHostInstanceName(t *testing.T) {
 				Platform: "",
 				OSName:   "   ",
 			},
-			want: "Host Agent",
+			want: "Agent",
 		},
 		{
 			name: "platform with whitespace trimmed",
@@ -994,7 +994,7 @@ func TestHostDiskResourceID(t *testing.T) {
 				Mountpoint: "/mnt/data",
 				Device:     "/dev/sda1",
 			},
-			wantID:       "host:host-123/disk:mnt-data",
+			wantID:       "agent:host-123/disk:mnt-data",
 			wantNamePart: "/mnt/data",
 		},
 		{
@@ -1004,7 +1004,7 @@ func TestHostDiskResourceID(t *testing.T) {
 				Mountpoint: "",
 				Device:     "/dev/sda1",
 			},
-			wantID:       "host:host-123/disk:dev-sda1",
+			wantID:       "agent:host-123/disk:dev-sda1",
 			wantNamePart: "/dev/sda1",
 		},
 		{
@@ -1014,7 +1014,7 @@ func TestHostDiskResourceID(t *testing.T) {
 				Mountpoint: "",
 				Device:     "",
 			},
-			wantID:       "host:host-123/disk:disk",
+			wantID:       "agent:host-123/disk:disk",
 			wantNamePart: "disk",
 		},
 		{
@@ -1024,7 +1024,7 @@ func TestHostDiskResourceID(t *testing.T) {
 				Mountpoint: "/",
 				Device:     "/dev/sda1",
 			},
-			wantID:       "host:host-123/disk:unknown",
+			wantID:       "agent:host-123/disk:unknown",
 			wantNamePart: "/",
 		},
 		{
@@ -1034,7 +1034,7 @@ func TestHostDiskResourceID(t *testing.T) {
 				Mountpoint: "   ",
 				Device:     "/dev/sda1",
 			},
-			wantID:       "host:host-123/disk:dev-sda1",
+			wantID:       "agent:host-123/disk:dev-sda1",
 			wantNamePart: "/dev/sda1",
 		},
 		{
@@ -1046,7 +1046,7 @@ func TestHostDiskResourceID(t *testing.T) {
 			disk: models.Disk{
 				Mountpoint: "/data",
 			},
-			wantID:       "host:host-123/disk:data",
+			wantID:       "agent:host-123/disk:data",
 			wantNamePart: "My Server",
 		},
 	}
@@ -1459,24 +1459,34 @@ func TestCanonicalResourceTypeKeys(t *testing.T) {
 			want:         []string{"node"},
 		},
 		{
-			name:         "host returns host and node",
+			name:         "legacy host type is no longer canonicalized",
 			resourceType: "host",
-			want:         []string{"host", "node"},
+			want:         []string{"host"},
 		},
 		{
-			name:         "host agent returns host and node",
+			name:         "legacy host agent type is no longer canonicalized",
 			resourceType: "host agent",
-			want:         []string{"host", "node"},
+			want:         []string{"host agent"},
 		},
 		{
-			name:         "host disk returns host-disk, host, storage",
+			name:         "legacy host disk type is no longer canonicalized",
 			resourceType: "host disk",
-			want:         []string{"host-disk", "host", "storage"},
+			want:         []string{"host disk"},
 		},
 		{
-			name:         "hostdisk returns host-disk, host, storage",
+			name:         "legacy hostdisk type is no longer canonicalized",
 			resourceType: "hostdisk",
-			want:         []string{"host-disk", "host", "storage"},
+			want:         []string{"hostdisk"},
+		},
+		{
+			name:         "agent returns agent and node",
+			resourceType: "agent",
+			want:         []string{"agent", "node"},
+		},
+		{
+			name:         "agent disk returns agent-disk, agent, storage",
+			resourceType: "agent disk",
+			want:         []string{"agent-disk", "agent", "storage"},
 		},
 
 		// PBS types

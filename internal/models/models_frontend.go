@@ -33,7 +33,7 @@ type NodeFrontend struct {
 	IsClusterMember              bool         `json:"isClusterMember,omitempty"`
 	ClusterName                  string       `json:"clusterName,omitempty"`
 	TemperatureMonitoringEnabled *bool        `json:"temperatureMonitoringEnabled,omitempty"` // Per-node temperature monitoring override
-	LinkedHostAgentID            string       `json:"linkedHostAgentId,omitempty"`            // ID of linked host agent (for "Via agent" badge)
+	LinkedAgentID                string       `json:"linkedAgentId,omitempty"`                // ID of linked agent (for "Via agent" badge)
 }
 
 // VMFrontend represents a VM with frontend-friendly field names

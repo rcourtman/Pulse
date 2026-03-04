@@ -15,8 +15,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/deploy"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
@@ -108,7 +108,11 @@ func (h *DeployHandlers) HandleCandidates(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	snapshot := h.monitor.GetState()
+	readState := h.monitor.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "state_unavailable", "Resource state is unavailable", nil)
+		return
+	}
 
 	// Build connected agents set
 	connectedAgents := make(map[string]bool)
@@ -122,23 +126,26 @@ func (h *DeployHandlers) HandleCandidates(w http.ResponseWriter, r *http.Request
 		sourceAgents []sourceAgentInfo
 	)
 
-	for _, node := range snapshot.Nodes {
-		if !node.IsClusterMember {
+	for _, node := range readState.Nodes() {
+		if node == nil {
+			continue
+		}
+		if !node.IsClusterMember() {
 			continue
 		}
 		// Match cluster by name (clusterID in URL = cluster name).
-		if node.ClusterName != clusterID {
+		if node.ClusterName() != clusterID {
 			continue
 		}
 		if clusterName == "" {
-			clusterName = node.ClusterName
+			clusterName = node.ClusterName()
 		}
 
-		hasAgent := node.LinkedHostAgentID != ""
+		hasAgent := node.LinkedAgentID() != ""
 		cn := candidateNode{
-			NodeID:   node.ID,
-			Name:     node.Name,
-			IP:       nodeIP(node),
+			NodeID:   node.ID(),
+			Name:     nodeName(node),
+			IP:       nodeIP(node.HostURL()),
 			HasAgent: hasAgent,
 		}
 
@@ -147,11 +154,11 @@ func (h *DeployHandlers) HandleCandidates(w http.ResponseWriter, r *http.Request
 			cn.Reason = "already_agent"
 
 			// This node has an agent — check if it's a source candidate.
-			hostID := node.LinkedHostAgentID
+			hostID := node.LinkedAgentID()
 			if connectedAgents[hostID] {
 				sourceAgents = append(sourceAgents, sourceAgentInfo{
 					AgentID: hostID,
-					NodeID:  node.ID,
+					NodeID:  node.ID(),
 					Online:  true,
 				})
 			}
@@ -227,20 +234,27 @@ func (h *DeployHandlers) HandleCreatePreflight(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Resolve cluster nodes from state.
-	snapshot := h.monitor.GetState()
+	// Resolve cluster nodes from read-state.
+	readState := h.monitor.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "state_unavailable", "Resource state is unavailable", nil)
+		return
+	}
 
 	clusterName := ""
 	sourceNodeID := ""
-	nodesByID := make(map[string]models.Node)
-	for _, node := range snapshot.Nodes {
-		if node.ClusterName == clusterID && node.IsClusterMember {
-			nodesByID[node.ID] = node
+	nodesByID := make(map[string]*unifiedresources.NodeView)
+	for _, node := range readState.Nodes() {
+		if node == nil {
+			continue
+		}
+		if node.ClusterName() == clusterID && node.IsClusterMember() {
+			nodesByID[node.ID()] = node
 			if clusterName == "" {
-				clusterName = node.ClusterName
+				clusterName = node.ClusterName()
 			}
-			if node.LinkedHostAgentID == req.SourceAgentID {
-				sourceNodeID = node.ID
+			if node.LinkedAgentID() == req.SourceAgentID {
+				sourceNodeID = node.ID()
 			}
 		}
 	}
@@ -290,7 +304,7 @@ func (h *DeployHandlers) HandleCreatePreflight(w http.ResponseWriter, r *http.Re
 		if !ok {
 			continue // skip nodes not in cluster
 		}
-		ip := nodeIP(node)
+		ip := nodeIP(node.HostURL())
 		if ip == "" {
 			continue // skip nodes without IP
 		}
@@ -300,7 +314,7 @@ func (h *DeployHandlers) HandleCreatePreflight(w http.ResponseWriter, r *http.Re
 			ID:        targetID,
 			JobID:     jobID,
 			NodeID:    nodeID,
-			NodeName:  node.Name,
+			NodeName:  nodeName(node),
 			NodeIP:    ip,
 			Status:    deploy.TargetPending,
 			CreatedAt: now,
@@ -312,7 +326,7 @@ func (h *DeployHandlers) HandleCreatePreflight(w http.ResponseWriter, r *http.Re
 		}
 		targets = append(targets, agentexec.DeployPreflightTarget{
 			TargetID: targetID,
-			NodeName: node.Name,
+			NodeName: nodeName(node),
 			NodeIP:   ip,
 		})
 	}
@@ -917,8 +931,10 @@ func (h *DeployHandlers) HandleEnroll(w http.ResponseWriter, r *http.Request) {
 	h.broadcastSSE(jobID, enrollEvt)
 
 	// 12. Return runtime token + config to agent.
+	canonicalAgentID := fmt.Sprintf("agent-%s", req.Hostname)
 	resp := map[string]any{
-		"hostId":         fmt.Sprintf("host-%s", req.Hostname),
+		"agentId":        canonicalAgentID,
+		"hostId":         canonicalAgentID, // Deprecated alias for older agents.
 		"runtimeToken":   runtimeRaw,
 		"runtimeTokenId": runtimeRecord.ID,
 		"reportInterval": "30s",
@@ -1918,9 +1934,9 @@ func extractPathSuffix(path, prefix string) string {
 	return strings.TrimSpace(s)
 }
 
-// nodeIP extracts the hostname/IP from a Node's Host URL (e.g. "https://10.0.0.2:8006" → "10.0.0.2").
-func nodeIP(node models.Node) string {
-	raw := strings.TrimSpace(node.Host)
+// nodeIP extracts the hostname/IP from a node host URL (e.g. "https://10.0.0.2:8006" -> "10.0.0.2").
+func nodeIP(hostURL string) string {
+	raw := strings.TrimSpace(hostURL)
 	if raw == "" {
 		return ""
 	}
@@ -1930,6 +1946,16 @@ func nodeIP(node models.Node) string {
 	}
 	host := parsed.Hostname() // strips port
 	return host
+}
+
+func nodeName(node *unifiedresources.NodeView) string {
+	if node == nil {
+		return ""
+	}
+	if name := strings.TrimSpace(node.NodeName()); name != "" {
+		return name
+	}
+	return strings.TrimSpace(node.Name())
 }
 
 // generateID creates a prefixed unique ID.

@@ -198,7 +198,7 @@ func TestSystemRecordPopulatesTrueNASMetadata(t *testing.T) {
 	}
 
 	system := records[0]
-	if system.Resource.Type != unifiedresources.ResourceTypeHost {
+	if system.Resource.Type != unifiedresources.ResourceTypeAgent {
 		t.Fatalf("expected first record type host, got %s", system.Resource.Type)
 	}
 	if system.Resource.TrueNAS == nil {

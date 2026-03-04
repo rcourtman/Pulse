@@ -168,10 +168,10 @@ func TestDeepScanner_FindAgentAndTargetType(t *testing.T) {
 	if scanner.getTargetType(ResourceTypeVM) != "vm" {
 		t.Fatalf("unexpected target type for vm")
 	}
-	if scanner.getTargetType(ResourceTypeDocker) != "host" {
+	if scanner.getTargetType(ResourceTypeDocker) != "agent" {
 		t.Fatalf("unexpected target type for docker")
 	}
-	if scanner.getTargetType(ResourceTypeHost) != "host" {
+	if scanner.getTargetType(ResourceTypeAgent) != "agent" {
 		t.Fatalf("unexpected target type for host")
 	}
 }
@@ -193,11 +193,11 @@ func TestDeepScanner_GetTargetTypeAndID(t *testing.T) {
 	}{
 		{ResourceTypeSystemContainer, "container"},
 		{ResourceTypeVM, "vm"},
-		{ResourceTypeDocker, "host"},
+		{ResourceTypeDocker, "agent"},
 		{ResourceTypeDockerSystemContainer, "container"}, // Docker inside LXC runs via pct exec
 		{ResourceTypeDockerVM, "vm"},                     // Docker inside VM runs via qm guest exec
-		{ResourceTypeHost, "host"},
-		{ResourceType("unknown"), "host"},
+		{ResourceTypeAgent, "agent"},
+		{ResourceType("unknown"), "agent"},
 	}
 	for _, tt := range tests {
 		if got := scanner.getTargetType(tt.resourceType); got != tt.wantType {
@@ -216,7 +216,7 @@ func TestDeepScanner_GetTargetTypeAndID(t *testing.T) {
 		{ResourceTypeDocker, "web", "web"},
 		{ResourceTypeDockerSystemContainer, "201:nginx", "201"}, // Extract vmid for nested docker
 		{ResourceTypeDockerVM, "301:postgres", "301"},           // Extract vmid for nested docker
-		{ResourceTypeHost, "myhost", "myhost"},
+		{ResourceTypeAgent, "myhost", "myhost"},
 	}
 	for _, tt := range idTests {
 		if got := scanner.getTargetID(tt.resourceType, tt.resourceID); got != tt.wantID {
@@ -241,7 +241,7 @@ func TestDeepScanner_BuildCommandAndProgress(t *testing.T) {
 		t.Fatalf("Docker should include docker exec, got: %s", cmd)
 	}
 	// Host: buildCommand returns raw command
-	if cmd := scanner.buildCommand(ResourceTypeHost, "host", "echo hi"); cmd != "echo hi" {
+	if cmd := scanner.buildCommand(ResourceTypeAgent, "host", "echo hi"); cmd != "echo hi" {
 		t.Fatalf("Host should return raw command, got: %s", cmd)
 	}
 
@@ -410,8 +410,8 @@ func TestDeepScanner_ScanLogsStructuredContextWhenExecutorMissing(t *testing.T) 
 		`"component":"service_discovery_scanner"`,
 		`"action":"scan_precondition_failed"`,
 		`"reason":"executor_missing"`,
-		`"resource_id":"host:host1:host1"`,
-		`"resource_type":"host"`,
+		`"resource_id":"agent:host1:host1"`,
+		`"resource_type":"agent"`,
 		`"host_id":"host1"`,
 		`"message":"Deep scan unavailable"`,
 	} {

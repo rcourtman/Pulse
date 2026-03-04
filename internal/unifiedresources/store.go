@@ -287,6 +287,9 @@ func (s *SQLiteResourceStore) AddLink(link ResourceLink) error {
 	if link.ResourceA == "" || link.ResourceB == "" {
 		return fmt.Errorf("resource IDs required")
 	}
+	link.ResourceA = CanonicalResourceID(link.ResourceA)
+	link.ResourceB = CanonicalResourceID(link.ResourceB)
+	link.PrimaryID = CanonicalResourceID(link.PrimaryID)
 	if link.PrimaryID == "" {
 		link.PrimaryID = link.ResourceA
 	}
@@ -316,6 +319,8 @@ func (s *SQLiteResourceStore) AddExclusion(exclusion ResourceExclusion) error {
 	if exclusion.ResourceA == "" || exclusion.ResourceB == "" {
 		return fmt.Errorf("resource IDs required")
 	}
+	exclusion.ResourceA = CanonicalResourceID(exclusion.ResourceA)
+	exclusion.ResourceB = CanonicalResourceID(exclusion.ResourceB)
 	if exclusion.CreatedAt.IsZero() {
 		exclusion.CreatedAt = time.Now().UTC()
 	}
@@ -357,6 +362,9 @@ func (s *SQLiteResourceStore) GetLinks() (links []ResourceLink, err error) {
 		if scanErr := rows.Scan(&link.ResourceA, &link.ResourceB, &link.PrimaryID, &link.Reason, &link.CreatedBy, &link.CreatedAt); scanErr != nil {
 			return nil, fmt.Errorf("scan resource link row: %w", scanErr)
 		}
+		link.ResourceA = CanonicalResourceID(link.ResourceA)
+		link.ResourceB = CanonicalResourceID(link.ResourceB)
+		link.PrimaryID = CanonicalResourceID(link.PrimaryID)
 		links = append(links, link)
 	}
 	if rowsErr := rows.Err(); rowsErr != nil {
@@ -386,6 +394,8 @@ func (s *SQLiteResourceStore) GetExclusions() (exclusions []ResourceExclusion, e
 		if scanErr := rows.Scan(&exclusion.ResourceA, &exclusion.ResourceB, &exclusion.Reason, &exclusion.CreatedBy, &exclusion.CreatedAt); scanErr != nil {
 			return nil, fmt.Errorf("scan resource exclusion row: %w", scanErr)
 		}
+		exclusion.ResourceA = CanonicalResourceID(exclusion.ResourceA)
+		exclusion.ResourceB = CanonicalResourceID(exclusion.ResourceB)
 		exclusions = append(exclusions, exclusion)
 	}
 	if rowsErr := rows.Err(); rowsErr != nil {
@@ -417,6 +427,9 @@ func NewMemoryStore() *MemoryStore {
 func (m *MemoryStore) AddLink(link ResourceLink) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	link.ResourceA = CanonicalResourceID(link.ResourceA)
+	link.ResourceB = CanonicalResourceID(link.ResourceB)
+	link.PrimaryID = CanonicalResourceID(link.PrimaryID)
 	m.links = append(m.links, link)
 	return nil
 }
@@ -424,6 +437,8 @@ func (m *MemoryStore) AddLink(link ResourceLink) error {
 func (m *MemoryStore) AddExclusion(exclusion ResourceExclusion) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	exclusion.ResourceA = CanonicalResourceID(exclusion.ResourceA)
+	exclusion.ResourceB = CanonicalResourceID(exclusion.ResourceB)
 	m.exclusions = append(m.exclusions, exclusion)
 	return nil
 }
@@ -449,6 +464,8 @@ func (m *MemoryStore) Close() error {
 }
 
 func normalizePair(a, b string) (string, string) {
+	a = CanonicalResourceID(a)
+	b = CanonicalResourceID(b)
 	if a > b {
 		return b, a
 	}

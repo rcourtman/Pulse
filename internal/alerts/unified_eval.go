@@ -1,8 +1,6 @@
 package alerts
 
-import (
-	"github.com/rs/zerolog/log"
-)
+import "github.com/rs/zerolog/log"
 
 // Override Key Format by Resource Type
 //
@@ -12,8 +10,8 @@ import (
 //	VM (Qemu):         "qemu-{VMID}"       e.g. "qemu-100"
 //	Container (LXC):   "lxc-{VMID}"        e.g. "lxc-200"
 //	Node:              node.ID             e.g. "node/pve-1"
-//	Host (Agent):      host.ID             e.g. "host1" (without "host:" prefix)
-//	Host Disk:         "host:{hostID}/disk:{mountpoint}" e.g. "host:host1/disk:root"
+//	Agent:             host.ID             e.g. "host1" (without "agent:" prefix)
+//	Agent Disk:        "agent:{hostID}/disk:{mountpoint}" e.g. "agent:host1/disk:root"
 //	Storage:           storage.ID          e.g. "local-lvm"
 //	PBS:               pbs.ID              e.g. "pbs-1"
 //	PMG:               pmg.ID              e.g. "pmg-1"
@@ -34,7 +32,7 @@ type UnifiedResourceMetric struct {
 // This avoids importing unifiedresources (which would cause an import cycle).
 type UnifiedResourceInput struct {
 	ID         string
-	Type       string // lowercase: "vm", "system-container", "app-container", "lxc", "container", "host", "pbs", "storage", "pmg"
+	Type       string // lowercase: "vm", "system-container", "app-container", "lxc", "container", "agent", "pbs", "storage", "pmg"
 	Name       string
 	Node       string
 	Instance   string
@@ -56,8 +54,8 @@ func unifiedAlertType(typeKey string) string {
 		return "Container"
 	case "app-container":
 		return "Docker"
-	case "host":
-		return "Host"
+	case "agent":
+		return "Agent"
 	case "node":
 		return "Node"
 	case "pbs":
@@ -86,8 +84,8 @@ func (m *Manager) unifiedDefaultThresholds(typeKey string) ThresholdConfig {
 	switch typeKey {
 	case "vm", "system-container", "app-container", "lxc", "container":
 		return cloneThresholdConfig(m.config.GuestDefaults)
-	case "host":
-		return cloneThresholdConfig(m.config.HostDefaults)
+	case "agent":
+		return cloneThresholdConfig(m.config.AgentDefaults)
 	case "node":
 		return cloneThresholdConfig(m.config.NodeDefaults)
 	case "pbs":

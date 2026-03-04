@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,19 +39,36 @@ func (m mockSupplementalRecordsProvider) SnapshotOwnedSources() []unified.DataSo
 	return out
 }
 
+func TestResourceListRejectsLegacyHostTypeFilter(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{}})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=host", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, `type "host" is no longer supported; use "agent"`) {
+		t.Fatalf("unexpected response body: %s", body)
+	}
+}
+
 func TestResourceListMergesLinkedHost(t *testing.T) {
 	now := time.Now().UTC()
 	node := models.Node{
-		ID:                "instance-pve1",
-		Name:              "pve1",
-		Instance:          "instance",
-		Host:              "https://pve1:8006",
-		Status:            "online",
-		CPU:               0.15,
-		Memory:            models.Memory{Total: 1024, Used: 512, Free: 512, Usage: 0.5},
-		Disk:              models.Disk{Total: 2048, Used: 1024, Free: 1024, Usage: 0.5},
-		LastSeen:          now,
-		LinkedHostAgentID: "host-1",
+		ID:            "instance-pve1",
+		Name:          "pve1",
+		Instance:      "instance",
+		Host:          "https://pve1:8006",
+		Status:        "online",
+		CPU:           0.15,
+		Memory:        models.Memory{Total: 1024, Used: 512, Free: 512, Usage: 0.5},
+		Disk:          models.Disk{Total: 2048, Used: 1024, Free: 1024, Usage: 0.5},
+		LastSeen:      now,
+		LinkedAgentID: "host-1",
 	}
 	host := models.Host{
 		ID:           "host-1",
@@ -71,7 +89,7 @@ func TestResourceListMergesLinkedHost(t *testing.T) {
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=host", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
 	h.HandleListResources(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -104,16 +122,16 @@ func TestResourceListMergesLinkedHost(t *testing.T) {
 func TestResourceListDoesNotMergeOneSidedLinkedHost(t *testing.T) {
 	now := time.Now().UTC()
 	node := models.Node{
-		ID:                "instance-pve1",
-		Name:              "pve1",
-		Instance:          "instance",
-		Host:              "https://pve1:8006",
-		Status:            "online",
-		CPU:               0.15,
-		Memory:            models.Memory{Total: 1024, Used: 512, Free: 512, Usage: 0.5},
-		Disk:              models.Disk{Total: 2048, Used: 1024, Free: 1024, Usage: 0.5},
-		LastSeen:          now,
-		LinkedHostAgentID: "host-1",
+		ID:            "instance-pve1",
+		Name:          "pve1",
+		Instance:      "instance",
+		Host:          "https://pve1:8006",
+		Status:        "online",
+		CPU:           0.15,
+		Memory:        models.Memory{Total: 1024, Used: 512, Free: 512, Usage: 0.5},
+		Disk:          models.Disk{Total: 2048, Used: 1024, Free: 1024, Usage: 0.5},
+		LastSeen:      now,
+		LinkedAgentID: "host-1",
 	}
 	host := models.Host{
 		ID:       "host-1",
@@ -134,7 +152,7 @@ func TestResourceListDoesNotMergeOneSidedLinkedHost(t *testing.T) {
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=host", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
 	h.HandleListResources(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -192,7 +210,7 @@ func TestResourceGetResource(t *testing.T) {
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	listRec := httptest.NewRecorder()
-	listReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=host", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
 	h.HandleListResources(listRec, listReq)
 
 	var listResp ResourcesResponse
@@ -263,7 +281,7 @@ func TestResourceLinkMergesResources(t *testing.T) {
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	listRec := httptest.NewRecorder()
-	listReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=host", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
 	h.HandleListResources(listRec, listReq)
 
 	var listResp ResourcesResponse
@@ -286,7 +304,7 @@ func TestResourceLinkMergesResources(t *testing.T) {
 	}
 
 	listRec2 := httptest.NewRecorder()
-	listReq2 := httptest.NewRequest(http.MethodGet, "/api/resources?type=host", nil)
+	listReq2 := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
 	h.HandleListResources(listRec2, listReq2)
 
 	var listResp2 ResourcesResponse
@@ -336,7 +354,7 @@ func TestResourceReportMergeCreatesExclusions(t *testing.T) {
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	listRec := httptest.NewRecorder()
-	listReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=host", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
 	h.HandleListResources(listRec, listReq)
 
 	if listRec.Code != http.StatusOK {
@@ -365,7 +383,7 @@ func TestResourceReportMergeCreatesExclusions(t *testing.T) {
 	}
 
 	listRec2 := httptest.NewRecorder()
-	listReq2 := httptest.NewRequest(http.MethodGet, "/api/resources?type=host", nil)
+	listReq2 := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
 	h.HandleListResources(listRec2, listReq2)
 
 	if listRec2.Code != http.StatusOK {
@@ -927,8 +945,8 @@ func TestResourceListIncludesPBSAndPMG(t *testing.T) {
 			if resource.PBS == nil {
 				t.Fatalf("expected PBS payload, got nil")
 			}
-			if resource.DiscoveryTarget == nil || resource.DiscoveryTarget.ResourceType != "host" {
-				t.Fatalf("expected host discovery target for PBS, got %+v", resource.DiscoveryTarget)
+			if resource.DiscoveryTarget == nil || resource.DiscoveryTarget.ResourceType != "agent" {
+				t.Fatalf("expected agent discovery target for PBS, got %+v", resource.DiscoveryTarget)
 			}
 		case unified.ResourceTypePMG:
 			gotPMG = true
@@ -943,8 +961,8 @@ func TestResourceListIncludesPBSAndPMG(t *testing.T) {
 			if len(resource.PMG.DomainStats) > 0 {
 				t.Fatalf("expected domainStats pruned from list response, got %+v", resource.PMG.DomainStats)
 			}
-			if resource.DiscoveryTarget == nil || resource.DiscoveryTarget.ResourceType != "host" {
-				t.Fatalf("expected host discovery target for PMG, got %+v", resource.DiscoveryTarget)
+			if resource.DiscoveryTarget == nil || resource.DiscoveryTarget.ResourceType != "agent" {
+				t.Fatalf("expected agent discovery target for PMG, got %+v", resource.DiscoveryTarget)
 			}
 		}
 	}
@@ -1058,7 +1076,7 @@ func TestResourceListIncludesTrueNASFromSupplementalProvider(t *testing.T) {
 			{
 				SourceID: "system:truenas-main",
 				Resource: unified.Resource{
-					Type:      unified.ResourceTypeHost,
+					Type:      unified.ResourceTypeAgent,
 					Name:      "truenas-main",
 					Status:    unified.StatusOnline,
 					LastSeen:  now,
@@ -1089,8 +1107,8 @@ func TestResourceListIncludesTrueNASFromSupplementalProvider(t *testing.T) {
 	}
 
 	resource := resp.Data[0]
-	if resource.Type != unified.ResourceTypeHost {
-		t.Fatalf("resource type = %q, want %q", resource.Type, unified.ResourceTypeHost)
+	if resource.Type != "agent" {
+		t.Fatalf("resource type = %q, want %q", resource.Type, "agent")
 	}
 	if !containsSource(resource.Sources, unified.SourceTrueNAS) {
 		t.Fatalf("expected truenas source, got %+v", resource.Sources)
@@ -1120,7 +1138,7 @@ func TestResourceListSupplementalOwnerSuppressesSnapshotSource(t *testing.T) {
 			{
 				SourceID: "host-provider-1",
 				Resource: unified.Resource{
-					Type:      unified.ResourceTypeHost,
+					Type:      unified.ResourceTypeAgent,
 					Name:      "provider-host",
 					Status:    unified.StatusOnline,
 					LastSeen:  now,

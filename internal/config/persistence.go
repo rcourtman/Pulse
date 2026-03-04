@@ -491,6 +491,8 @@ func normalizeStorageDefault(t *alerts.HysteresisThreshold) {
 // Called by both SaveAlertConfig and LoadAlertConfig to avoid duplicating the
 // same validation and defaulting code.
 func normalizeAlertDefaults(config *alerts.AlertConfig) {
+	alerts.NormalizeAlertConfigAliases(config)
+
 	// Storage threshold
 	normalizeStorageDefault(&config.StorageDefault)
 
@@ -504,10 +506,10 @@ func normalizeAlertDefaults(config *alerts.AlertConfig) {
 		config.HysteresisMargin = 5.0
 	}
 
-	// Host defaults
-	normalizeHysteresisThreshold(&config.HostDefaults.CPU, 80, 75)
-	normalizeHysteresisThreshold(&config.HostDefaults.Memory, 85, 80)
-	normalizeHysteresisThreshold(&config.HostDefaults.Disk, 90, 85)
+	// Agent defaults
+	normalizeHysteresisThreshold(&config.AgentDefaults.CPU, 80, 75)
+	normalizeHysteresisThreshold(&config.AgentDefaults.Memory, 85, 80)
+	normalizeHysteresisThreshold(&config.AgentDefaults.Disk, 90, 85)
 
 	// Time thresholds
 	config.MetricTimeThresholds = alerts.NormalizeMetricTimeThresholds(config.MetricTimeThresholds)
@@ -522,6 +524,7 @@ func normalizeAlertDefaults(config *alerts.AlertConfig) {
 	}
 	ensureDelay("guest")
 	ensureDelay("node")
+	ensureDelay("agent")
 	ensureDelay("storage")
 	ensureDelay("pbs")
 	if delay, ok := config.TimeThresholds["all"]; ok && delay <= 0 {
@@ -653,7 +656,7 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 					Disk:        &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
 					Temperature: &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
 				},
-				HostDefaults: alerts.ThresholdConfig{
+				AgentDefaults: alerts.ThresholdConfig{
 					CPU:    &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
 					Memory: &alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
 					Disk:   &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
@@ -665,6 +668,7 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 				TimeThresholds: map[string]int{
 					"guest":   5,
 					"node":    5,
+					"agent":   5,
 					"storage": 5,
 					"pbs":     5,
 				},

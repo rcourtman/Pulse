@@ -214,8 +214,8 @@ func TestMonitor_LinkNodeToHostAgent_Extra(t *testing.T) {
 
 	m.linkNodeToHostAgent("node1:node1", "host1")
 
-	if m.state.Nodes[0].LinkedHostAgentID != "host1" {
-		t.Errorf("Expected link to host1, got %s", m.state.Nodes[0].LinkedHostAgentID)
+	if m.state.Nodes[0].LinkedAgentID != "host1" {
+		t.Errorf("Expected link to host1, got %s", m.state.Nodes[0].LinkedAgentID)
 	}
 }
 
@@ -527,7 +527,7 @@ func TestMonitor_ResourcesForBroadcast_Extra(t *testing.T) {
 		resources: []unifiedresources.Resource{
 			{
 				ID:       "node-1",
-				Type:     unifiedresources.ResourceTypeHost,
+				Type:     unifiedresources.ResourceTypeAgent,
 				Name:     "Node One",
 				Status:   unifiedresources.StatusOnline,
 				LastSeen: now,

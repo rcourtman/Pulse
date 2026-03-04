@@ -80,8 +80,8 @@ func TestMonitorLinkHostAgent(t *testing.T) {
 	if len(hosts) != 1 || hosts[0].LinkedNodeID != "node-1" {
 		t.Fatalf("LinkedNodeID = %q, want %q", hosts[0].LinkedNodeID, "node-1")
 	}
-	if len(monitor.state.Nodes) != 1 || monitor.state.Nodes[0].LinkedHostAgentID != "host-1" {
-		t.Fatalf("LinkedHostAgentID = %q, want %q", monitor.state.Nodes[0].LinkedHostAgentID, "host-1")
+	if len(monitor.state.Nodes) != 1 || monitor.state.Nodes[0].LinkedAgentID != "host-1" {
+		t.Fatalf("LinkedAgentID = %q, want %q", monitor.state.Nodes[0].LinkedAgentID, "host-1")
 	}
 }
 

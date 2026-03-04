@@ -295,7 +295,7 @@ func TestStartMockMetricsSampler_DoesNotClearExistingMetricsStoreData(t *testing
 	now := time.Now().UTC().Truncate(time.Second)
 	store.WriteBatchSync([]metrics.WriteMetric{
 		{
-			ResourceType: "host",
+			ResourceType: "agent",
 			ResourceID:   "prod-node-1",
 			MetricType:   "cpu",
 			Value:        55.0,
@@ -318,7 +318,7 @@ func TestStartMockMetricsSampler_DoesNotClearExistingMetricsStoreData(t *testing
 	monitor.startMockMetricsSampler(ctx)
 	t.Cleanup(func() { monitor.stopMockMetricsSampler() })
 
-	points, err := store.Query("host", "prod-node-1", "cpu", now.Add(-2*time.Hour), now.Add(time.Hour), 0)
+	points, err := store.Query("agent", "prod-node-1", "cpu", now.Add(-2*time.Hour), now.Add(time.Hour), 0)
 	if err != nil {
 		t.Fatalf("failed to query preserved production metrics: %v", err)
 	}

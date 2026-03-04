@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -65,7 +66,8 @@ type MetricsTarget struct {
 type ResourceType string
 
 const (
-	ResourceTypeHost            ResourceType = "host"
+	// ResourceTypeAgent is the canonical v6 infrastructure parent type.
+	ResourceTypeAgent           ResourceType = "agent"
 	ResourceTypeVM              ResourceType = "vm"
 	ResourceTypeSystemContainer ResourceType = "system-container"
 	ResourceTypeAppContainer    ResourceType = "app-container"
@@ -80,6 +82,16 @@ const (
 	ResourceTypeCeph            ResourceType = "ceph"
 	ResourceTypePhysicalDisk    ResourceType = "physical_disk"
 )
+
+// CanonicalResourceType normalizes legacy and canonical type spellings into the
+// internal canonical enum value.
+func CanonicalResourceType(rt ResourceType) ResourceType {
+	normalized := ResourceType(strings.ToLower(strings.TrimSpace(string(rt))))
+	if normalized == "host" || normalized == "agent" {
+		return ResourceTypeAgent
+	}
+	return normalized
+}
 
 // ResourceStatus represents the high-level status of a resource.
 type ResourceStatus string
@@ -160,28 +172,30 @@ type MetricValue struct {
 
 // ProxmoxData contains Proxmox-specific data for a resource.
 type ProxmoxData struct {
-	SourceID       string     `json:"sourceId,omitempty"` // raw model ID from source snapshot
-	NodeName       string     `json:"nodeName,omitempty"`
-	ClusterName    string     `json:"clusterName,omitempty"`
-	Instance       string     `json:"instance,omitempty"`
-	VMID           int        `json:"vmid,omitempty"`
-	CPUs           int        `json:"cpus,omitempty"`
-	Template       bool       `json:"template,omitempty"`
-	Temperature    *float64   `json:"temperature,omitempty"` // Max node CPU temp in Celsius
-	PVEVersion     string     `json:"pveVersion,omitempty"`
-	KernelVersion  string     `json:"kernelVersion,omitempty"`
-	Uptime         int64      `json:"uptime,omitempty"`
-	LastBackup     time.Time  `json:"lastBackup,omitempty"`
-	CPUInfo        *CPUInfo   `json:"cpuInfo,omitempty"`
-	LoadAverage    []float64  `json:"loadAverage,omitempty"`
-	PendingUpdates int        `json:"pendingUpdates,omitempty"`
-	Disks          []DiskInfo `json:"disks,omitempty"`
-	SwapUsed       int64      `json:"swapUsed,omitempty"`
-	SwapTotal      int64      `json:"swapTotal,omitempty"`
-	Balloon        int64      `json:"balloon,omitempty"`
-	Lock           string     `json:"lock,omitempty"` // Proxmox lock state (e.g. "backup", "migrate", "snapshot")
+	SourceID        string     `json:"sourceId,omitempty"` // raw model ID from source snapshot
+	NodeName        string     `json:"nodeName,omitempty"`
+	ClusterName     string     `json:"clusterName,omitempty"`
+	IsClusterMember bool       `json:"isClusterMember,omitempty"`
+	Instance        string     `json:"instance,omitempty"`
+	HostURL         string     `json:"host,omitempty"`
+	VMID            int        `json:"vmid,omitempty"`
+	CPUs            int        `json:"cpus,omitempty"`
+	Template        bool       `json:"template,omitempty"`
+	Temperature     *float64   `json:"temperature,omitempty"` // Max node CPU temp in Celsius
+	PVEVersion      string     `json:"pveVersion,omitempty"`
+	KernelVersion   string     `json:"kernelVersion,omitempty"`
+	Uptime          int64      `json:"uptime,omitempty"`
+	LastBackup      time.Time  `json:"lastBackup,omitempty"`
+	CPUInfo         *CPUInfo   `json:"cpuInfo,omitempty"`
+	LoadAverage     []float64  `json:"loadAverage,omitempty"`
+	PendingUpdates  int        `json:"pendingUpdates,omitempty"`
+	Disks           []DiskInfo `json:"disks,omitempty"`
+	SwapUsed        int64      `json:"swapUsed,omitempty"`
+	SwapTotal       int64      `json:"swapTotal,omitempty"`
+	Balloon         int64      `json:"balloon,omitempty"`
+	Lock            string     `json:"lock,omitempty"` // Proxmox lock state (e.g. "backup", "migrate", "snapshot")
 	// Internal link hint to a host agent resource.
-	LinkedHostAgentID string `json:"-"`
+	LinkedAgentID string `json:"-"`
 }
 
 // StorageMeta contains storage-specific metadata for storage resources.
@@ -415,7 +429,7 @@ type DockerData struct {
 	AgentVersion   string   `json:"agentVersion,omitempty"`
 	UptimeSeconds  int64    `json:"uptimeSeconds,omitempty"`
 
-	// Host-level summary fields (populated when Resource.Type == ResourceTypeHost and Docker != nil)
+	// Host-level summary fields (populated when Resource.Type == ResourceTypeAgent and Docker != nil)
 	ContainerCount        int                             `json:"containerCount,omitempty"`
 	UpdatesAvailableCount int                             `json:"updatesAvailableCount,omitempty"`
 	UpdatesLastCheckedAt  *time.Time                      `json:"updatesLastCheckedAt,omitempty"`

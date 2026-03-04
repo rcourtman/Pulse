@@ -86,9 +86,9 @@ type StateSnapshot struct {
 
 // Node represents a Proxmox VE node.
 type Node struct {
-	ID                string
-	Name              string
-	LinkedHostAgentID string
+	ID            string
+	Name          string
+	LinkedAgentID string
 }
 
 // Host represents a host system (via pulse-agent host telemetry).
@@ -827,9 +827,9 @@ func (s *Service) snapshotFromReadState(rs unifiedresources.ReadState) StateSnap
 			nodeID = n.ID()
 		}
 		nodes = append(nodes, Node{
-			ID:                nodeID,
-			Name:              n.Name(),
-			LinkedHostAgentID: n.LinkedHostAgentID(),
+			ID:            nodeID,
+			Name:          n.Name(),
+			LinkedAgentID: n.LinkedAgentID(),
 		})
 	}
 
@@ -1486,7 +1486,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	resourceID := MakeResourceID(req.ResourceType, req.HostID, req.ResourceID)
 
 	// Get current fingerprint (if available)
-	// Fingerprint key matches the resource ID format: type:host:id
+	// Fingerprint key matches the resource ID format: type:scope:id
 	currentFP, err := s.store.GetFingerprint(resourceID)
 	if err != nil {
 		log.Warn().Err(err).Str("id", resourceID).Msg("Failed to load current fingerprint; continuing without fingerprint check")
@@ -1788,7 +1788,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 // normalizeDiscoveryRequest resolves host discovery aliases to a canonical ID.
 // This prevents duplicate discoveries for the same physical host under different IDs.
 func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]string) DiscoveryRequest {
-	if req.ResourceType != ResourceTypeHost {
+	if req.ResourceType != ResourceTypeAgent {
 		return req
 	}
 	snap, ok := s.getSnapshot()
@@ -1799,7 +1799,7 @@ func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]st
 		if hostID == "" || resourceID == "" {
 			return
 		}
-		id := MakeResourceID(ResourceTypeHost, hostID, resourceID)
+		id := MakeResourceID(ResourceTypeAgent, hostID, resourceID)
 		for _, existing := range *aliasIDs {
 			if existing == id {
 				return
@@ -1828,14 +1828,14 @@ func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]st
 			if req.Hostname == "" {
 				req.Hostname = node.Name
 			}
-			if node.LinkedHostAgentID != "" {
+			if node.LinkedAgentID != "" {
 				log.Info().
 					Str("from_host", req.HostID).
-					Str("to_agent", node.LinkedHostAgentID).
+					Str("to_agent", node.LinkedAgentID).
 					Msg("Redirecting discovery scan to linked host agent")
-				addAlias(node.LinkedHostAgentID, node.LinkedHostAgentID)
-				req.HostID = node.LinkedHostAgentID
-				req.ResourceID = node.LinkedHostAgentID
+				addAlias(node.LinkedAgentID, node.LinkedAgentID)
+				req.HostID = node.LinkedAgentID
+				req.ResourceID = node.LinkedAgentID
 				return req
 			}
 			req.HostID = node.Name
@@ -1905,7 +1905,7 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 				break
 			}
 		}
-	case ResourceTypeHost:
+	case ResourceTypeAgent:
 		for _, host := range snap.Hosts {
 			if host.ID == req.ResourceID || host.Hostname == req.ResourceID || host.ID == req.HostID {
 				metadata["hostname"] = host.Hostname
@@ -1981,7 +1981,7 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 				}
 			}
 		}
-	case ResourceTypeHost:
+	case ResourceTypeAgent:
 		// Host-agent resources: prefer the reported hostname from state
 		for _, host := range snap.Hosts {
 			if host.ID == req.ResourceID || host.Hostname == req.ResourceID || host.ID == req.HostID || host.Hostname == req.HostID {
@@ -2114,7 +2114,7 @@ func (s *Service) suggestHostManagementURL(req DiscoveryRequest, host string) st
 }
 
 func (s *Service) suggestHostManagementURLWithReason(req DiscoveryRequest, host string) (string, string, string) {
-	if req.ResourceType != ResourceTypeHost {
+	if req.ResourceType != ResourceTypeAgent {
 		return "", "host_fallback_not_applicable", "not a host resource"
 	}
 	if host == "" {
@@ -2147,7 +2147,7 @@ func (s *Service) suggestHostManagementURLWithReason(req DiscoveryRequest, host 
 		if nodeMatchesReq(node) {
 			return buildURL("https", host, 8006, ""), "host_management_profile_proxmox_node", "Proxmox node profile"
 		}
-		if matchedHost != nil && node.LinkedHostAgentID != "" && node.LinkedHostAgentID == matchedHost.ID {
+		if matchedHost != nil && node.LinkedAgentID != "" && node.LinkedAgentID == matchedHost.ID {
 			return buildURL("https", host, 8006, ""), "host_management_profile_linked_proxmox_node", "Linked Proxmox node profile"
 		}
 	}
@@ -2292,7 +2292,7 @@ Host: %s (%s)`, req.ResourceType, req.ResourceID, req.Hostname, req.HostID))
 	}
 
 	// Use different prompts for HOST vs other resource types
-	if req.ResourceType == ResourceTypeHost {
+	if req.ResourceType == ResourceTypeAgent {
 		return fmt.Sprintf(`Analyze this HOST system and provide detailed discovery information.
 
 %s
@@ -2577,8 +2577,8 @@ func (s *Service) deduplicateDiscoveries(discoveries []*ResourceDiscovery) []*Re
 	// AgentID -> NodeName
 	linkedAgents := make(map[string]string)
 	for _, node := range snap.Nodes {
-		if node.LinkedHostAgentID != "" {
-			linkedAgents[node.LinkedHostAgentID] = node.Name
+		if node.LinkedAgentID != "" {
+			linkedAgents[node.LinkedAgentID] = node.Name
 		}
 	}
 
@@ -2589,7 +2589,7 @@ func (s *Service) deduplicateDiscoveries(discoveries []*ResourceDiscovery) []*Re
 	// Check which agents actually have discovery data
 	hasAgentDiscovery := make(map[string]bool)
 	for _, d := range discoveries {
-		if d.ResourceType == ResourceTypeHost {
+		if d.ResourceType == ResourceTypeAgent {
 			// d.HostID is usually the agent ID for host resources
 			if _, ok := linkedAgents[d.HostID]; ok {
 				hasAgentDiscovery[d.HostID] = true
@@ -2600,7 +2600,7 @@ func (s *Service) deduplicateDiscoveries(discoveries []*ResourceDiscovery) []*Re
 	// Filter out PVE node discoveries if the corresponding agent discovery exists
 	filtered := make([]*ResourceDiscovery, 0, len(discoveries))
 	for _, d := range discoveries {
-		if d.ResourceType == ResourceTypeHost {
+		if d.ResourceType == ResourceTypeAgent {
 			// If this discovery is for a PVE node (by name/ID)
 			// check if it maps to an agent that ALREADY has a discovery in this list
 
@@ -2611,7 +2611,7 @@ func (s *Service) deduplicateDiscoveries(discoveries []*ResourceDiscovery) []*Re
 			for _, node := range snap.Nodes {
 				if d.HostID == node.Name || d.HostID == node.ID || d.ResourceID == node.Name {
 					isPVENode = true
-					linkedAgentID = node.LinkedHostAgentID
+					linkedAgentID = node.LinkedAgentID
 					break
 				}
 			}

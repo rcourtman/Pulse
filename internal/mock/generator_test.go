@@ -138,12 +138,12 @@ func TestGenerateMockDataLinksAllNodesToHostAgents(t *testing.T) {
 	}
 
 	for _, node := range data.Nodes {
-		if node.LinkedHostAgentID == "" {
+		if node.LinkedAgentID == "" {
 			t.Fatalf("node %s is missing linked host agent id", node.ID)
 		}
-		host, ok := hostsByID[node.LinkedHostAgentID]
+		host, ok := hostsByID[node.LinkedAgentID]
 		if !ok {
-			t.Fatalf("node %s linked host %s not found", node.ID, node.LinkedHostAgentID)
+			t.Fatalf("node %s linked host %s not found", node.ID, node.LinkedAgentID)
 		}
 		if host.LinkedNodeID != node.ID {
 			t.Fatalf("host %s linkedNodeID=%q, want %q", host.ID, host.LinkedNodeID, node.ID)

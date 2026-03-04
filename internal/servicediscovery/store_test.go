@@ -35,16 +35,29 @@ func (errorCrypto) Decrypt(ciphertext []byte) ([]byte, error) {
 	return nil, os.ErrInvalid
 }
 
-func TestNormalizeResourceType_AgentAlias(t *testing.T) {
-	if got := NormalizeResourceType(ResourceType("agent")); got != ResourceTypeHost {
-		t.Fatalf("NormalizeResourceType(agent) = %q, want %q", got, ResourceTypeHost)
+func TestNormalizeResourceType_DoesNotAliasHost(t *testing.T) {
+	if got := NormalizeResourceType(ResourceType("host")); got != ResourceType("host") {
+		t.Fatalf("NormalizeResourceType(host) = %q, want %q", got, ResourceType("host"))
 	}
 }
 
-func TestNormalizeResourceID_AgentPrefix(t *testing.T) {
-	const legacyID = "agent:host1:host1"
-	if got := normalizeResourceID(legacyID); got != "host:host1:host1" {
-		t.Fatalf("normalizeResourceID(%q) = %q, want %q", legacyID, got, "host:host1:host1")
+func TestCanonicalStoredResourceType_HostLegacyAlias(t *testing.T) {
+	if got := canonicalStoredResourceType(ResourceType("host")); got != ResourceTypeAgent {
+		t.Fatalf("canonicalStoredResourceType(host) = %q, want %q", got, ResourceTypeAgent)
+	}
+}
+
+func TestNormalizeResourceID_DoesNotAliasHostPrefix(t *testing.T) {
+	const legacyID = "host:host1:host1"
+	if got := normalizeResourceID(legacyID); got != legacyID {
+		t.Fatalf("normalizeResourceID(%q) = %q, want %q", legacyID, got, legacyID)
+	}
+}
+
+func TestCanonicalStoredResourceID_HostPrefixLegacyAlias(t *testing.T) {
+	const legacyID = "host:host1:host1"
+	if got := canonicalStoredResourceID(legacyID); got != "agent:host1:host1" {
+		t.Fatalf("canonicalStoredResourceID(%q) = %q, want %q", legacyID, got, "agent:host1:host1")
 	}
 }
 
@@ -191,8 +204,8 @@ func TestStore_NeedsRefreshAndGetMultiple(t *testing.T) {
 	}
 
 	d := &ResourceDiscovery{
-		ID:           MakeResourceID(ResourceTypeHost, "host1", "host1"),
-		ResourceType: ResourceTypeHost,
+		ID:           MakeResourceID(ResourceTypeAgent, "host1", "host1"),
+		ResourceType: ResourceTypeAgent,
 		ResourceID:   "host1",
 		HostID:       "host1",
 		ServiceName:  "Host",

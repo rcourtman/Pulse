@@ -149,7 +149,7 @@ func TestStateSnapshotResolveResourceDockerAndKubernetesRouting(t *testing.T) {
 		{
 			name:       "host by id",
 			query:      "host-1",
-			wantType:   "host",
+			wantType:   "agent",
 			wantTarget: "linux-1",
 			wantName:   "linux-1",
 		},

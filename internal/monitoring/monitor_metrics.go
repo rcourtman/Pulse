@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
@@ -36,7 +37,29 @@ const (
 
 // GetGuestMetrics returns historical metrics for a guest
 func (m *Monitor) GetGuestMetrics(guestID string, duration time.Duration) map[string][]MetricPoint {
-	return m.metricsHistory.GetAllGuestMetrics(guestID, duration)
+	if m == nil || m.metricsHistory == nil {
+		return map[string][]MetricPoint{}
+	}
+
+	candidates := monitorGuestMetricKeyCandidates(guestID)
+	best := map[string][]MetricPoint{}
+	bestSpan := time.Duration(0)
+	bestPoints := 0
+	selected := false
+
+	for _, candidate := range candidates {
+		result := m.metricsHistory.GetAllGuestMetrics(candidate, duration)
+		span := chartMapCoverageSpan(result)
+		points := monitorMetricMapPointCount(result)
+		if !selected || span > bestSpan || (span == bestSpan && points > bestPoints) {
+			best = result
+			bestSpan = span
+			bestPoints = points
+			selected = true
+		}
+	}
+
+	return best
 }
 
 // GetGuestMetricsForChart returns guest metrics optimised for chart display.
@@ -47,7 +70,7 @@ func (m *Monitor) GetGuestMetrics(guestID string, duration time.Duration) map[st
 // sqlResourceType/sqlResourceID are the type/id used in the SQLite store
 // (e.g. "dockerContainer"/"abc123").
 func (m *Monitor) GetGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResourceID string, duration time.Duration) map[string][]MetricPoint {
-	inMemoryResult := m.metricsHistory.GetAllGuestMetrics(inMemoryKey, duration)
+	inMemoryResult := m.GetGuestMetrics(inMemoryKey, duration)
 	if m.metricsStore == nil {
 		return inMemoryResult
 	}
@@ -55,7 +78,7 @@ func (m *Monitor) GetGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResou
 		return inMemoryResult
 	}
 
-	converted, ok := m.queryStoreMetricMapWithGapFill(sqlResourceType, sqlResourceID, duration)
+	converted, ok := m.queryStoreMetricMapWithGapFillAliases(sqlResourceType, sqlResourceID, duration)
 	if !ok {
 		return inMemoryResult
 	}
@@ -159,6 +182,33 @@ func (m *Monitor) queryStoreMetricMapWithGapFill(resourceType, resourceID string
 	return query(end.Add(-chartGapFillLookbackWindow(duration)))
 }
 
+func (m *Monitor) queryStoreMetricMapWithGapFillAliases(resourceType, resourceID string, duration time.Duration) (map[string][]MetricPoint, bool) {
+	var (
+		best       map[string][]MetricPoint
+		bestSpan   time.Duration
+		bestPoints int
+		found      bool
+	)
+
+	for _, candidate := range monitorStoreResourceTypeCandidates(resourceType) {
+		result, ok := m.queryStoreMetricMapWithGapFill(candidate, resourceID, duration)
+		if !ok {
+			continue
+		}
+
+		span := chartMapCoverageSpan(result)
+		points := monitorMetricMapPointCount(result)
+		if !found || span > bestSpan || (span == bestSpan && points > bestPoints) {
+			best = result
+			bestSpan = span
+			bestPoints = points
+			found = true
+		}
+	}
+
+	return best, found
+}
+
 func (m *Monitor) queryStoreMetricSeriesWithGapFill(resourceType, resourceID, metricType string, duration time.Duration) ([]MetricPoint, bool) {
 	if m == nil || m.metricsStore == nil {
 		return nil, false
@@ -243,6 +293,36 @@ func chartMapCoverageSpan(metrics map[string][]MetricPoint) time.Duration {
 		}
 	}
 	return best
+}
+
+func monitorMetricMapPointCount(metrics map[string][]MetricPoint) int {
+	total := 0
+	for _, points := range metrics {
+		total += len(points)
+	}
+	return total
+}
+
+func monitorGuestMetricKeyCandidates(key string) []string {
+	trimmed := strings.TrimSpace(key)
+	if trimmed == "" {
+		return []string{""}
+	}
+	return []string{trimmed}
+}
+
+func monitorStoreResourceTypeCandidates(resourceType string) []string {
+	normalized := strings.TrimSpace(resourceType)
+	switch normalized {
+	case "agent":
+		return []string{"agent"}
+	case "dockerContainer":
+		return []string{"dockerContainer", "docker"}
+	case "docker":
+		return []string{"docker", "dockerContainer"}
+	default:
+		return []string{normalized}
+	}
 }
 
 func hasSufficientChartSeriesCoverage(points []MetricPoint, duration time.Duration) bool {

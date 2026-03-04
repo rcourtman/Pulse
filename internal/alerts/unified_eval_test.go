@@ -19,7 +19,7 @@ func unifiedEvalBaseConfig() AlertConfig {
 			Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
 			Disk:   &HysteresisThreshold{Trigger: 90, Clear: 85},
 		},
-		HostDefaults: ThresholdConfig{
+		AgentDefaults: ThresholdConfig{
 			CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
 			Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
 			Disk:   &HysteresisThreshold{Trigger: 90, Clear: 85},
@@ -118,11 +118,11 @@ func TestCheckUnifiedResourceMajorFamilies(t *testing.T) {
 			},
 		},
 		{
-			name:    "Host disk above threshold creates alert",
+			name:    "Agent disk above threshold creates alert",
 			alertID: "host-1-disk",
 			input: &UnifiedResourceInput{
 				ID:   "host-1",
-				Type: "host",
+				Type: "agent",
 				Name: "host-1",
 				Disk: &UnifiedResourceMetric{Percent: 95},
 			},

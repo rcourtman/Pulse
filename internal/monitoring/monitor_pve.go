@@ -712,7 +712,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			}
 		}
 		if len(existing) > 0 {
-			// Use nodes from state snapshot - they have LinkedHostAgentID populated
+			// Use nodes from state snapshot - they have LinkedAgentID populated
 			// (the local modelNodes variable doesn't have this field set)
 			updated := mergeNVMeTempsIntoDisks(existing, currentState.Nodes)
 			// Also merge SMART data from linked host agents
@@ -762,10 +762,10 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			hostByID[h.ID] = h
 		}
 		for _, n := range currentState.Nodes {
-			if n.LinkedHostAgentID == "" || n.Instance != inst {
+			if n.LinkedAgentID == "" || n.Instance != inst {
 				continue
 			}
-			if linkedHost, ok := hostByID[n.LinkedHostAgentID]; ok && len(linkedHost.DiskExclude) > 0 {
+			if linkedHost, ok := hostByID[n.LinkedAgentID]; ok && len(linkedHost.DiskExclude) > 0 {
 				diskExcludeByNode[n.Name] = linkedHost.DiskExclude
 			}
 		}
@@ -902,7 +902,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			}
 		}
 
-		// Use nodes from state snapshot - they have LinkedHostAgentID populated
+		// Use nodes from state snapshot - they have LinkedAgentID populated
 		// (modelNodesCopy passed to this goroutine doesn't have this field set)
 		allDisks = mergeNVMeTempsIntoDisks(allDisks, currentState.Nodes)
 		// Also merge SMART data from linked host agents

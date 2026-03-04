@@ -60,7 +60,7 @@ func GetCommandsForResource(resourceType ResourceType) []DiscoveryCommand {
 		return getNestedDockerCommands()
 	case ResourceTypeK8s:
 		return getK8sCommands()
-	case ResourceTypeHost:
+	case ResourceTypeAgent:
 		return getHostCommands()
 	default:
 		return []DiscoveryCommand{}
@@ -503,7 +503,7 @@ func GetCLIAccessTemplate(resourceType ResourceType) string {
 		return "Use pulse_control targeting the VM hostname with command: docker exec {container} <your-command>"
 	case ResourceTypeK8s:
 		return "Use kubectl exec -n {namespace} {pod} -- <your-command>"
-	case ResourceTypeHost:
+	case ResourceTypeAgent:
 		return "Use pulse_control with target_host matching this host. Commands run directly."
 	default:
 		return "Use pulse_control with target_host matching the resource hostname."

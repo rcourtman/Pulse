@@ -13,7 +13,7 @@ func TestMonitorAdapterReadStateForwardsToRegistry(t *testing.T) {
 			SourceID: "node-1",
 			Resource: Resource{
 				ID:     nodeID,
-				Type:   ResourceTypeHost,
+				Type:   ResourceTypeAgent,
 				Name:   "node-1",
 				Status: StatusOnline,
 				Proxmox: &ProxmoxData{

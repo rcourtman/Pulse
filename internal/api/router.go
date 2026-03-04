@@ -56,6 +56,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
+	metricstore "github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rs/zerolog/log"
 )
 
@@ -4508,6 +4509,8 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	frontendState := monitor.BuildFrontendState()
+	// v6 contract: unified resources are canonical on /api/state as well.
+	frontendState.StripLegacyArrays()
 
 	if err := utils.WriteJSONResponse(w, frontendState); err != nil {
 		log.Error().Err(err).Msg("Failed to encode state response")
@@ -5056,9 +5059,9 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			hostData[hID] = make(VMChartData)
 		}
 
-		// Get historical metrics using the host: prefix key (falls back to SQLite + LTTB for long ranges)
-		metricKey := fmt.Sprintf("host:%s", hID)
-		metrics := monitor.GetGuestMetricsForChart(metricKey, "host", hID, duration)
+		// Get historical metrics using the canonical agent key.
+		metricKey := fmt.Sprintf("agent:%s", hID)
+		metrics := monitor.GetGuestMetricsForChart(metricKey, "agent", hID, duration)
 
 		// Convert metric points to API format (sparkline metrics only)
 		for metricType, points := range metrics {
@@ -5853,8 +5856,8 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 		if hostData[hID] == nil {
 			hostData[hID] = make(VMChartData)
 		}
-		metricKey := fmt.Sprintf("host:%s", hID)
-		metrics := monitor.GetGuestMetricsForChart(metricKey, "host", hID, duration)
+		metricKey := fmt.Sprintf("agent:%s", hID)
+		metrics := monitor.GetGuestMetricsForChart(metricKey, "agent", hID, duration)
 		for metricType, points := range metrics {
 			if !sparklineMetrics[metricType] {
 				continue
@@ -6878,22 +6881,33 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 
 	query := req.URL.Query()
-	resourceType := query.Get("resourceType")
+	resourceTypeInput := strings.ToLower(strings.TrimSpace(query.Get("resourceType")))
 	resourceID := query.Get("resourceId")
 	metricType := query.Get("metric")
 	timeRange := query.Get("range")
 
-	if resourceType == "" || resourceID == "" {
+	if resourceTypeInput == "" || resourceID == "" {
 		http.Error(w, "resourceType and resourceId are required", http.StatusBadRequest)
 		return
 	}
 
-	// Normalize resource types so frontend aliases match the SQLite store keys.
-	switch resourceType {
+	if resourceTypeInput == "host" {
+		http.Error(w, `resourceType "host" is no longer supported; use "agent"`, http.StatusBadRequest)
+		return
+	}
+
+	// Normalize query aliases to runtime/store resource types.
+	responseResourceType := resourceTypeInput
+	runtimeResourceType := resourceTypeInput
+	storeResourceTypes := []string{resourceTypeInput}
+	switch resourceTypeInput {
 	case "docker":
-		resourceType = "dockerContainer"
+		runtimeResourceType = "dockerContainer"
+		storeResourceTypes = []string{"dockerContainer", "docker"}
 	case "agent":
-		resourceType = "host"
+		responseResourceType = "agent"
+		runtimeResourceType = "agent"
+		storeResourceTypes = []string{"agent"}
 	}
 
 	// Parse time range
@@ -6986,7 +7000,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	// Metric aliasing: storage metrics are stored under "usage", but some clients request "disk".
 	// Keep metricType unchanged for the response JSON; only alias the lookup/query key.
 	queryMetric := metricType
-	if resourceType == "storage" && metricType == "disk" {
+	if runtimeResourceType == "storage" && metricType == "disk" {
 		queryMetric = "usage"
 	}
 
@@ -7259,7 +7273,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				diskPercent = host.Disks[0].Usage
 			}
 			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: diskPercent}
-		case "host":
+		case "agent":
 			host := findHost(resourceID)
 			if host == nil {
 				return points
@@ -7341,7 +7355,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			return nil, "", false
 		}
 
-		if mockModeEnabled && resourceType == "disk" && metricType == "smart_temp" {
+		if mockModeEnabled && runtimeResourceType == "disk" && metricType == "smart_temp" {
 			if disk := findDisk(resourceID); disk != nil && disk.PhysicalDisk != nil && disk.PhysicalDisk.Temperature > 0 {
 				series := buildSyntheticMetricHistorySeries(
 					end,
@@ -7357,12 +7371,12 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 		}
 
-		switch resourceType {
+		switch runtimeResourceType {
 		case "vm", "container", "guest":
 			metrics := monitor.GetGuestMetrics(resourceID, duration)
 			points := metrics[metricType]
 			if len(points) == 0 {
-				livePoints := liveMetricPoints(resourceType, resourceID)
+				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
 				if live, ok := livePoints[metricType]; ok {
 					return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
 				}
@@ -7373,18 +7387,18 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			metrics := monitor.GetGuestMetrics(fmt.Sprintf("dockerHost:%s", resourceID), duration)
 			points := metrics[metricType]
 			if len(points) == 0 {
-				livePoints := liveMetricPoints(resourceType, resourceID)
+				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
 				if live, ok := livePoints[metricType]; ok {
 					return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
 				}
 				return nil, "", false
 			}
 			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
-		case "host":
-			metrics := monitor.GetGuestMetrics(fmt.Sprintf("host:%s", resourceID), duration)
+		case "agent":
+			metrics := monitor.GetGuestMetrics(fmt.Sprintf("agent:%s", resourceID), duration)
 			points := metrics[metricType]
 			if len(points) == 0 {
-				livePoints := liveMetricPoints(resourceType, resourceID)
+				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
 				if live, ok := livePoints[metricType]; ok {
 					return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
 				}
@@ -7395,7 +7409,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			metrics := monitor.GetGuestMetrics(fmt.Sprintf("docker:%s", resourceID), duration)
 			points := metrics[metricType]
 			if len(points) == 0 {
-				livePoints := liveMetricPoints(resourceType, resourceID)
+				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
 				if live, ok := livePoints[metricType]; ok {
 					return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
 				}
@@ -7405,7 +7419,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		case "node":
 			points := monitor.GetNodeMetrics(resourceID, metricType, duration)
 			if len(points) == 0 {
-				livePoints := liveMetricPoints(resourceType, resourceID)
+				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
 				if live, ok := livePoints[metricType]; ok {
 					return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
 				}
@@ -7416,7 +7430,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			metrics := monitor.GetStorageMetrics(resourceID, duration)
 			points := metrics[queryMetric]
 			if len(points) == 0 {
-				livePoints := liveMetricPoints(resourceType, resourceID)
+				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
 				if live, ok := livePoints[metricType]; ok {
 					return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
 				}
@@ -7424,7 +7438,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
 		default:
-			livePoints := liveMetricPoints(resourceType, resourceID)
+			livePoints := liveMetricPoints(runtimeResourceType, resourceID)
 			if live, ok := livePoints[metricType]; ok {
 				return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
 			}
@@ -7438,19 +7452,19 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 
 		var metrics map[string][]monitoring.MetricPoint
-		switch resourceType {
+		switch runtimeResourceType {
 		case "vm", "container", "guest":
 			metrics = monitor.GetGuestMetrics(resourceID, duration)
 		case "dockerHost":
 			metrics = monitor.GetGuestMetrics(fmt.Sprintf("dockerHost:%s", resourceID), duration)
-		case "host":
-			metrics = monitor.GetGuestMetrics(fmt.Sprintf("host:%s", resourceID), duration)
+		case "agent":
+			metrics = monitor.GetGuestMetrics(fmt.Sprintf("agent:%s", resourceID), duration)
 		case "docker", "dockerContainer":
 			metrics = monitor.GetGuestMetrics(fmt.Sprintf("docker:%s", resourceID), duration)
 		case "storage":
 			metrics = monitor.GetStorageMetrics(resourceID, duration)
 		default:
-			if resourceType == "node" {
+			if runtimeResourceType == "node" {
 				metrics = map[string][]monitoring.MetricPoint{
 					"cpu":    monitor.GetNodeMetrics(resourceID, "cpu", duration),
 					"memory": monitor.GetNodeMetrics(resourceID, "memory", duration),
@@ -7470,7 +7484,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			apiData[metric] = buildHistoryPoints(points, stepSecs)
 		}
 		if len(apiData) == 0 {
-			livePoints := liveMetricPoints(resourceType, resourceID)
+			livePoints := liveMetricPoints(runtimeResourceType, resourceID)
 			for metric, point := range livePoints {
 				apiData[metric] = buildHistoryPoints([]monitoring.MetricPoint{point}, 0)
 			}
@@ -7483,17 +7497,47 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 
 	store := monitor.GetMetricsStore()
+	queryStoreMetric := func(metric string) ([]metricstore.MetricPoint, string, error) {
+		if len(storeResourceTypes) == 0 {
+			return nil, runtimeResourceType, nil
+		}
+		for _, storeType := range storeResourceTypes {
+			points, err := store.Query(storeType, resourceID, metric, start, end, stepSecs)
+			if err != nil {
+				return nil, storeType, err
+			}
+			if len(points) > 0 {
+				return points, storeType, nil
+			}
+		}
+		return nil, storeResourceTypes[0], nil
+	}
+	queryStoreAllMetrics := func() (map[string][]metricstore.MetricPoint, string, error) {
+		if len(storeResourceTypes) == 0 {
+			return nil, runtimeResourceType, nil
+		}
+		for _, storeType := range storeResourceTypes {
+			metricsMap, err := store.QueryAll(storeType, resourceID, start, end, stepSecs)
+			if err != nil {
+				return nil, storeType, err
+			}
+			if len(metricsMap) > 0 {
+				return metricsMap, storeType, nil
+			}
+		}
+		return nil, storeResourceTypes[0], nil
+	}
 	if store == nil {
 		if metricType != "" {
 			if apiPoints, source, ok := fallbackSingle(); ok {
 				log.Warn().
-					Str("resourceType", resourceType).
+					Str("resourceType", runtimeResourceType).
 					Str("resourceId", resourceID).
 					Str("metric", metricType).
 					Str("source", source).
 					Msg("Metrics store unavailable; serving history from fallback source")
 				response := map[string]interface{}{
-					"resourceType": resourceType,
+					"resourceType": responseResourceType,
 					"resourceId":   resourceID,
 					"metric":       metricType,
 					"range":        timeRange,
@@ -7509,12 +7553,12 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		} else {
 			if apiData, source, ok := fallbackAll(); ok {
 				log.Warn().
-					Str("resourceType", resourceType).
+					Str("resourceType", runtimeResourceType).
 					Str("resourceId", resourceID).
 					Str("source", source).
 					Msg("Metrics store unavailable; serving history from fallback source")
 				response := map[string]interface{}{
-					"resourceType": resourceType,
+					"resourceType": responseResourceType,
 					"resourceId":   resourceID,
 					"range":        timeRange,
 					"start":        start.UnixMilli(),
@@ -7541,10 +7585,11 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	if metricType != "" {
 		source := historySourceStore
 		// Query single metric type
-		points, err := store.Query(resourceType, resourceID, queryMetric, start, end, stepSecs)
+		points, storeTypeUsed, err := queryStoreMetric(queryMetric)
 		if err != nil {
 			log.Error().Err(err).
-				Str("resourceType", resourceType).
+				Str("resourceType", runtimeResourceType).
+				Str("storeType", storeTypeUsed).
 				Str("resourceId", resourceID).
 				Str("metric", metricType).
 				Msg("Failed to query metrics history")
@@ -7556,13 +7601,13 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			if apiPoints, fallbackSource, ok := fallbackSingle(); ok {
 				source = fallbackSource
 				log.Info().
-					Str("resourceType", resourceType).
+					Str("resourceType", runtimeResourceType).
 					Str("resourceId", resourceID).
 					Str("metric", metricType).
 					Str("source", source).
 					Msg("Metrics store empty; serving history from fallback source")
 				response = map[string]interface{}{
-					"resourceType": resourceType,
+					"resourceType": responseResourceType,
 					"resourceId":   resourceID,
 					"metric":       metricType,
 					"range":        timeRange,
@@ -7574,7 +7619,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 		}
 
-		if response == nil && mockModeEnabled && resourceType == "disk" && metricType == "smart_temp" {
+		if response == nil && mockModeEnabled && runtimeResourceType == "disk" && metricType == "smart_temp" {
 			targetPoints := targetMockSeriesPoints(duration, historyMaxPoints)
 			if len(points) > 0 && len(points) < targetPoints {
 				current := points[len(points)-1].Value
@@ -7592,7 +7637,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				if len(series) > len(points) {
 					source = historySourceMock
 					response = map[string]interface{}{
-						"resourceType": resourceType,
+						"resourceType": responseResourceType,
 						"resourceId":   resourceID,
 						"metric":       metricType,
 						"range":        timeRange,
@@ -7618,7 +7663,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 
 			response = map[string]interface{}{
-				"resourceType": resourceType,
+				"resourceType": responseResourceType,
 				"resourceId":   resourceID,
 				"metric":       metricType,
 				"range":        timeRange,
@@ -7631,10 +7676,11 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	} else {
 		source := historySourceStore
 		// Query all metrics for this resource
-		metricsMap, err := store.QueryAll(resourceType, resourceID, start, end, stepSecs)
+		metricsMap, storeTypeUsed, err := queryStoreAllMetrics()
 		if err != nil {
 			log.Error().Err(err).
-				Str("resourceType", resourceType).
+				Str("resourceType", runtimeResourceType).
+				Str("storeType", storeTypeUsed).
 				Str("resourceId", resourceID).
 				Msg("Failed to query all metrics history")
 			http.Error(w, "Failed to query metrics", http.StatusInternalServerError)
@@ -7645,12 +7691,12 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			if apiData, fallbackSource, ok := fallbackAll(); ok {
 				source = fallbackSource
 				log.Info().
-					Str("resourceType", resourceType).
+					Str("resourceType", runtimeResourceType).
 					Str("resourceId", resourceID).
 					Str("source", source).
 					Msg("Metrics store empty; serving history from fallback source")
 				response = map[string]interface{}{
-					"resourceType": resourceType,
+					"resourceType": responseResourceType,
 					"resourceId":   resourceID,
 					"range":        timeRange,
 					"start":        start.UnixMilli(),
@@ -7678,7 +7724,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 
 			response = map[string]interface{}{
-				"resourceType": resourceType,
+				"resourceType": responseResourceType,
 				"resourceId":   resourceID,
 				"range":        timeRange,
 				"start":        start.UnixMilli(),

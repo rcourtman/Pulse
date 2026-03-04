@@ -390,25 +390,25 @@ func TestView_NodeViewAccessors(t *testing.T) {
 
 	r := &Resource{
 		ID:       "node-1",
-		Type:     ResourceTypeHost,
+		Type:     ResourceTypeAgent,
 		Name:     "pve-node-1",
 		Status:   StatusOnline,
 		LastSeen: now,
 		Tags:     []string{"pve", "rack:1"},
 		Proxmox: &ProxmoxData{
-			SourceID:          "node/pve1",
-			NodeName:          "pve-1",
-			ClusterName:       "cluster-a",
-			Instance:          "lab",
-			PVEVersion:        "8.2.2",
-			KernelVersion:     "6.8.0",
-			Uptime:            999,
-			Temperature:       &temp,
-			CPUInfo:           &CPUInfo{Model: "Xeon", Cores: 8, Sockets: 2},
-			LoadAverage:       []float64{0.12, 0.34, 0.56},
-			PendingUpdates:    7,
-			LinkedHostAgentID: "agent-123",
-			CPUs:              4, // should be ignored when CPUInfo is valid
+			SourceID:       "node/pve1",
+			NodeName:       "pve-1",
+			ClusterName:    "cluster-a",
+			Instance:       "lab",
+			PVEVersion:     "8.2.2",
+			KernelVersion:  "6.8.0",
+			Uptime:         999,
+			Temperature:    &temp,
+			CPUInfo:        &CPUInfo{Model: "Xeon", Cores: 8, Sockets: 2},
+			LoadAverage:    []float64{0.12, 0.34, 0.56},
+			PendingUpdates: 7,
+			LinkedAgentID:  "agent-123",
+			CPUs:           4, // should be ignored when CPUInfo is valid
 		},
 		Metrics: &ResourceMetrics{
 			CPU:    &MetricValue{Percent: 91},
@@ -440,8 +440,8 @@ func TestView_NodeViewAccessors(t *testing.T) {
 	if v.PendingUpdates() != 7 {
 		t.Fatalf("expected PendingUpdates %d, got %d", 7, v.PendingUpdates())
 	}
-	if v.LinkedHostAgentID() != "agent-123" {
-		t.Fatalf("expected LinkedHostAgentID %q, got %q", "agent-123", v.LinkedHostAgentID())
+	if v.LinkedAgentID() != "agent-123" {
+		t.Fatalf("expected LinkedAgentID %q, got %q", "agent-123", v.LinkedAgentID())
 	}
 	if v.CPUPercent() != 91 || v.MemoryUsed() != 1 || v.MemoryTotal() != 10 || v.MemoryPercent() != 10 || v.DiskUsed() != 2 || v.DiskTotal() != 20 || v.DiskPercent() != 10 {
 		t.Fatalf("expected metric accessors to match, got cpu=%v memUsed=%d memTotal=%d memPct=%v diskUsed=%d diskTotal=%d diskPct=%v",
@@ -453,7 +453,7 @@ func TestView_NodeViewAccessors(t *testing.T) {
 	}
 
 	t.Run("CPUsFallbackToProxmoxCPUs", func(t *testing.T) {
-		r := testResource(ResourceTypeHost)
+		r := testResource(ResourceTypeAgent)
 		r.Name = "fallback-node"
 		r.Proxmox = &ProxmoxData{
 			CPUs:    12,
@@ -472,7 +472,7 @@ func TestView_HostViewAccessors(t *testing.T) {
 	speed := int64(1000)
 	r := &Resource{
 		ID:       "host-1",
-		Type:     ResourceTypeHost,
+		Type:     ResourceTypeAgent,
 		Name:     "agent-host-1",
 		Status:   StatusOnline,
 		LastSeen: now,
@@ -552,7 +552,7 @@ func TestView_DockerHostViewAccessors(t *testing.T) {
 
 	r := &Resource{
 		ID:         "dockerhost-1",
-		Type:       ResourceTypeHost,
+		Type:       ResourceTypeAgent,
 		Name:       "docker-host-1",
 		Status:     StatusWarning,
 		LastSeen:   now,
@@ -560,7 +560,7 @@ func TestView_DockerHostViewAccessors(t *testing.T) {
 		ChildCount: 2,
 		Docker: &DockerData{
 			Hostname:       "docker-host-1",
-			AgentID:        "docker-agent-1",
+			AgentID:        "agent-docker-1",
 			DockerVersion:  "25.0.0",
 			RuntimeVersion: "1.7.0",
 			OS:             "Ubuntu",
@@ -588,7 +588,7 @@ func TestView_DockerHostViewAccessors(t *testing.T) {
 	if v.Hostname() != "docker-host-1" || v.DockerVersion() != "25.0.0" || v.RuntimeVersion() != "1.7.0" || v.OS() != "Ubuntu" {
 		t.Fatalf("expected docker accessors to match, got hostname=%q docker=%q runtime=%q os=%q", v.Hostname(), v.DockerVersion(), v.RuntimeVersion(), v.OS())
 	}
-	if v.AgentID() != "docker-agent-1" {
+	if v.AgentID() != "agent-docker-1" {
 		t.Fatalf("expected agent id accessor to match, got %q", v.AgentID())
 	}
 	if v.KernelVersion() != "6.8.0" || v.Architecture() != "amd64" || v.AgentVersion() != "2.0.0" {
@@ -932,7 +932,7 @@ func TestView_InfrastructureView(t *testing.T) {
 	now := time.Date(2026, 2, 10, 12, 9, 0, 0, time.UTC)
 	r := &Resource{
 		ID:         "infra-1",
-		Type:       ResourceTypeHost,
+		Type:       ResourceTypeAgent,
 		Name:       "infra-host",
 		Status:     StatusOnline,
 		LastSeen:   now,
@@ -1011,7 +1011,7 @@ func TestView_RegistryCachedAccessors(t *testing.T) {
 		DockerHosts: []models.DockerHost{
 			{
 				ID:           "docker-src-1",
-				AgentID:      "docker-agent-1",
+				AgentID:      "agent-docker-1",
 				Hostname:     "docker-b",
 				DisplayName:  "b-docker",
 				MachineID:    "machine-docker-b",
@@ -1024,7 +1024,7 @@ func TestView_RegistryCachedAccessors(t *testing.T) {
 			},
 			{
 				ID:           "docker-src-2",
-				AgentID:      "docker-agent-2",
+				AgentID:      "agent-docker-2",
 				Hostname:     "docker-a",
 				DisplayName:  "a-docker",
 				MachineID:    "machine-docker-a",
@@ -1093,7 +1093,7 @@ func TestView_RegistryCachedAccessors(t *testing.T) {
 		t.Fatalf("expected nodes sorted by name, got %q then %q", nodes[0].Name(), nodes[1].Name())
 	}
 	for _, v := range nodes {
-		if v == nil || v.r == nil || v.r.Type != ResourceTypeHost || v.r.Proxmox == nil {
+		if v == nil || v.r == nil || v.r.Type != ResourceTypeAgent || v.r.Proxmox == nil {
 			t.Fatalf("expected NodeView to wrap a host resource with proxmox data, got %+v", v)
 		}
 	}
@@ -1106,7 +1106,7 @@ func TestView_RegistryCachedAccessors(t *testing.T) {
 		t.Fatalf("expected hosts sorted by name, got %q then %q", hosts[0].Name(), hosts[1].Name())
 	}
 	for _, v := range hosts {
-		if v == nil || v.r == nil || v.r.Type != ResourceTypeHost || v.r.Agent == nil {
+		if v == nil || v.r == nil || v.r.Type != ResourceTypeAgent || v.r.Agent == nil {
 			t.Fatalf("expected HostView to wrap a host resource with agent data, got %+v", v)
 		}
 	}
@@ -1119,7 +1119,7 @@ func TestView_RegistryCachedAccessors(t *testing.T) {
 		t.Fatalf("expected docker hosts sorted by name, got %q then %q", dockerHosts[0].Name(), dockerHosts[1].Name())
 	}
 	for _, v := range dockerHosts {
-		if v == nil || v.r == nil || v.r.Type != ResourceTypeHost || v.r.Docker == nil {
+		if v == nil || v.r == nil || v.r.Type != ResourceTypeAgent || v.r.Docker == nil {
 			t.Fatalf("expected DockerHostView to wrap a host resource with docker data, got %+v", v)
 		}
 	}
@@ -1182,7 +1182,7 @@ func TestView_RegistryCachedAccessors(t *testing.T) {
 		t.Fatalf("expected 6 infrastructure resources (all host-type), got %d", len(infra))
 	}
 	for _, v := range infra {
-		if v == nil || v.r == nil || v.r.Type != ResourceTypeHost {
+		if v == nil || v.r == nil || v.r.Type != ResourceTypeAgent {
 			t.Fatalf("expected infrastructure to include only host-type resources, got %+v", v)
 		}
 	}
@@ -1225,7 +1225,7 @@ func TestView_ReadStateInterfaceUsage(t *testing.T) {
 			{ID: "host-iface-1", Hostname: "iface-host", DisplayName: "iface-host", MachineID: "machine-iface-host", Status: "online", LastSeen: now, AgentVersion: "1.0"},
 		},
 		DockerHosts: []models.DockerHost{
-			{ID: "docker-iface-1", AgentID: "docker-agent-iface-1", Hostname: "iface-docker", DisplayName: "iface-docker", MachineID: "machine-iface-docker", Status: "online", LastSeen: now, CPUs: 2, Memory: models.Memory{Total: 8, Used: 4, Usage: 50}},
+			{ID: "docker-iface-1", AgentID: "agent-docker-iface-1", Hostname: "iface-docker", DisplayName: "iface-docker", MachineID: "machine-iface-docker", Status: "online", LastSeen: now, CPUs: 2, Memory: models.Memory{Total: 8, Used: 4, Usage: 50}},
 		},
 		Storage: []models.Storage{
 			{ID: "storage-iface-1", Name: "iface-store", Node: "pve-i", Instance: "lab", Type: "dir", Status: "available", Content: "images", Shared: false, Total: 100, Used: 10, Free: 90, Usage: 10},

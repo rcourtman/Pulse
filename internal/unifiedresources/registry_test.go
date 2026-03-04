@@ -14,7 +14,7 @@ func TestResourceRegistry_ListByType(t *testing.T) {
 		{
 			SourceID: "host-1",
 			Resource: Resource{
-				Type:     ResourceTypeHost,
+				Type:     ResourceTypeAgent,
 				Name:     "host-1",
 				Status:   StatusOnline,
 				LastSeen: now,
@@ -105,7 +105,7 @@ func TestResourceRegistry_IngestRecords_UnknownSource(t *testing.T) {
 		{
 			SourceID: "host-1",
 			Resource: Resource{
-				Type:     ResourceTypeHost,
+				Type:     ResourceTypeAgent,
 				Name:     "xcp-host-1",
 				Status:   StatusOnline,
 				LastSeen: now,
@@ -114,7 +114,7 @@ func TestResourceRegistry_IngestRecords_UnknownSource(t *testing.T) {
 		},
 	})
 
-	hosts := rr.ListByType(ResourceTypeHost)
+	hosts := rr.ListByType(ResourceTypeAgent)
 	if len(hosts) != 1 {
 		t.Fatalf("expected 1 host for custom source, got %d", len(hosts))
 	}
@@ -141,7 +141,7 @@ func TestResourceRegistry_BuildChildCounts_ReparentClearsOldParentCount(t *testi
 		{
 			SourceID: "node-a",
 			Resource: Resource{
-				Type:     ResourceTypeHost,
+				Type:     ResourceTypeAgent,
 				Name:     "node-a",
 				Status:   StatusOnline,
 				LastSeen: now,
@@ -151,7 +151,7 @@ func TestResourceRegistry_BuildChildCounts_ReparentClearsOldParentCount(t *testi
 		{
 			SourceID: "node-b",
 			Resource: Resource{
-				Type:     ResourceTypeHost,
+				Type:     ResourceTypeAgent,
 				Name:     "node-b",
 				Status:   StatusOnline,
 				LastSeen: now,
@@ -171,8 +171,8 @@ func TestResourceRegistry_BuildChildCounts_ReparentClearsOldParentCount(t *testi
 		},
 	})
 
-	parentAID := rr.sourceSpecificID(ResourceTypeHost, SourceProxmox, "node-a")
-	parentBID := rr.sourceSpecificID(ResourceTypeHost, SourceProxmox, "node-b")
+	parentAID := rr.sourceSpecificID(ResourceTypeAgent, SourceProxmox, "node-a")
+	parentBID := rr.sourceSpecificID(ResourceTypeAgent, SourceProxmox, "node-b")
 	vmID := rr.sourceSpecificID(ResourceTypeVM, SourceProxmox, "vm-100")
 
 	parentA, ok := rr.Get(parentAID)
@@ -198,7 +198,7 @@ func TestResourceRegistry_BuildChildCounts_ReparentClearsOldParentCount(t *testi
 		{
 			SourceID: "node-a",
 			Resource: Resource{
-				Type:     ResourceTypeHost,
+				Type:     ResourceTypeAgent,
 				Name:     "node-a",
 				Status:   StatusOnline,
 				LastSeen: now.Add(30 * time.Second),
@@ -208,7 +208,7 @@ func TestResourceRegistry_BuildChildCounts_ReparentClearsOldParentCount(t *testi
 		{
 			SourceID: "node-b",
 			Resource: Resource{
-				Type:     ResourceTypeHost,
+				Type:     ResourceTypeAgent,
 				Name:     "node-b",
 				Status:   StatusOnline,
 				LastSeen: now.Add(30 * time.Second),

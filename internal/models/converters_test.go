@@ -114,15 +114,15 @@ func TestNodeToFrontend(t *testing.T) {
 			Total: 500000000000,
 			Used:  250000000000,
 		},
-		Uptime:            86400,
-		LoadAverage:       []float64{0.5, 0.7, 0.9},
-		KernelVersion:     "5.15.0",
-		PVEVersion:        "7.4-3",
-		LastSeen:          now,
-		ConnectionHealth:  "connected",
-		IsClusterMember:   true,
-		ClusterName:       "pve-cluster",
-		LinkedHostAgentID: "agent-123",
+		Uptime:           86400,
+		LoadAverage:      []float64{0.5, 0.7, 0.9},
+		KernelVersion:    "5.15.0",
+		PVEVersion:       "7.4-3",
+		LastSeen:         now,
+		ConnectionHealth: "connected",
+		IsClusterMember:  true,
+		ClusterName:      "pve-cluster",
+		LinkedAgentID:    "agent-123",
 	}
 
 	frontend := node.ToFrontend()
@@ -160,8 +160,8 @@ func TestNodeToFrontend(t *testing.T) {
 	if len(frontend.LoadAverage) != 3 {
 		t.Errorf("LoadAverage length = %d, want 3", len(frontend.LoadAverage))
 	}
-	if frontend.LinkedHostAgentID != node.LinkedHostAgentID {
-		t.Errorf("LinkedHostAgentID = %q, want %q", frontend.LinkedHostAgentID, node.LinkedHostAgentID)
+	if frontend.LinkedAgentID != node.LinkedAgentID {
+		t.Errorf("LinkedAgentID = %q, want %q", frontend.LinkedAgentID, node.LinkedAgentID)
 	}
 }
 

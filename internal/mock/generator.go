@@ -2527,7 +2527,7 @@ func ensureMockNodeHostLinks(data *models.StateSnapshot) {
 		} else {
 			data.Hosts = append(data.Hosts, linkedHost)
 		}
-		node.LinkedHostAgentID = linkedHost.ID
+		node.LinkedAgentID = linkedHost.ID
 	}
 }
 

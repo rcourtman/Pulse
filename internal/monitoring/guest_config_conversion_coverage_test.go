@@ -200,9 +200,9 @@ func TestMonitorLegacyAndMetricHelpers(t *testing.T) {
 			{name: "pmg", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypePMG}, want: "pmg"},
 			{name: "storage", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeStorage}, want: "storage"},
 			{name: "ceph", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeCeph}, want: "pool"},
-			{name: "host proxmox", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeHost, Proxmox: &unifiedresources.ProxmoxData{}}, want: "node"},
-			{name: "host docker", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeHost, Docker: &unifiedresources.DockerData{}}, want: "docker-host"},
-			{name: "host agent", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeHost}, want: "host"},
+			{name: "host proxmox", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeAgent, Proxmox: &unifiedresources.ProxmoxData{}}, want: "node"},
+			{name: "host docker", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeAgent, Docker: &unifiedresources.DockerData{}}, want: "docker-host"},
+			{name: "host agent", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeAgent}, want: "agent"},
 			{name: "unknown passthrough", resource: unifiedresources.Resource{Type: unifiedresources.ResourceType("custom")}, want: "custom"},
 		}
 
@@ -227,7 +227,7 @@ func TestMonitorLegacyAndMetricHelpers(t *testing.T) {
 			{name: "k8s explicit", resourceType: "k8s-node", want: "kubernetes"},
 			{name: "pbs explicit", resourceType: "pbs", want: "proxmox-pbs"},
 			{name: "pmg explicit", resourceType: "pmg", want: "proxmox-pmg"},
-			{name: "host explicit", resourceType: "host", want: "agent"},
+			{name: "agent explicit", resourceType: "agent", want: "agent"},
 			{
 				name:         "fallback k8s precedence",
 				resourceType: "custom",
@@ -302,8 +302,8 @@ func TestMonitorLegacyAndMetricHelpers(t *testing.T) {
 				want:         "pve-a",
 			},
 			{
-				name:         "host uses agent id",
-				resourceType: "host",
+				name:         "agent uses agent id",
+				resourceType: "agent",
 				resource:     unifiedresources.Resource{ID: "fallback", Agent: &unifiedresources.AgentData{AgentID: " agent-1 "}},
 				want:         "agent-1",
 			},
@@ -585,8 +585,8 @@ func TestMonitorPlatformData(t *testing.T) {
 	})
 
 	t.Run("nil payload branches", func(t *testing.T) {
-		if got := monitorPlatformData(unifiedresources.Resource{}, "host", "id"); got != nil {
-			t.Fatalf("expected nil payload for host without agent, got %s", string(got))
+		if got := monitorPlatformData(unifiedresources.Resource{}, "agent", "id"); got != nil {
+			t.Fatalf("expected nil payload for agent without resource agent data, got %s", string(got))
 		}
 		if got := monitorPlatformData(unifiedresources.Resource{}, "unknown", "id"); got != nil {
 			t.Fatalf("expected nil payload for unknown type, got %s", string(got))

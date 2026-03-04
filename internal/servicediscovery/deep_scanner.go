@@ -21,7 +21,7 @@ type CommandExecutor interface {
 type ExecuteCommandPayload struct {
 	RequestID  string `json:"request_id"`
 	Command    string `json:"command"`
-	TargetType string `json:"target_type"`         // "host", "container", "vm"
+	TargetType string `json:"target_type"`         // "agent", "container", "vm"
 	TargetID   string `json:"target_id,omitempty"` // VMID for container/VM
 	Timeout    int    `json:"timeout,omitempty"`
 }
@@ -247,7 +247,7 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 			targetID := s.getTargetID(req.ResourceType, req.ResourceID)
 
 			// Only validate TargetID when it will be interpolated into shell commands
-			// by the agent (container/vm types). Host/docker types don't use TargetID
+			// by the agent (container/vm types). Agent/docker types don't use TargetID
 			// in command wrapping, so they can have any format (including colons for IPv6).
 			targetType := s.getTargetType(req.ResourceType)
 			if targetType == "container" || targetType == "vm" {
@@ -374,7 +374,7 @@ func (s *DeepScanner) buildCommand(resourceType ResourceType, resourceID string,
 	case ResourceTypeDocker:
 		// Docker needs wrapping here since agent doesn't handle it
 		return BuildDockerCommand(resourceID, cmd)
-	case ResourceTypeHost:
+	case ResourceTypeAgent:
 		// Commands run directly on host
 		return cmd
 	case ResourceTypeDockerSystemContainer:
@@ -405,15 +405,15 @@ func (s *DeepScanner) getTargetType(resourceType ResourceType) string {
 	case ResourceTypeVM:
 		return "vm"
 	case ResourceTypeDocker:
-		return "host" // Docker commands run on host via docker exec
+		return "agent" // Docker commands run on agent host via docker exec
 	case ResourceTypeDockerSystemContainer:
 		return "container" // Docker inside system container: agent wraps with pct exec
 	case ResourceTypeDockerVM:
 		return "vm" // Docker inside VM: agent wraps with qm guest exec
-	case ResourceTypeHost:
-		return "host"
+	case ResourceTypeAgent:
+		return "agent"
 	default:
-		return "host"
+		return "agent"
 	}
 }
 
@@ -551,7 +551,7 @@ func (s *DeepScanner) ScanVM(ctx context.Context, hostID, hostname, vmid string)
 // ScanHost runs discovery on a host system.
 func (s *DeepScanner) ScanHost(ctx context.Context, hostID, hostname string) (*ScanResult, error) {
 	req := DiscoveryRequest{
-		ResourceType: ResourceTypeHost,
+		ResourceType: ResourceTypeAgent,
 		ResourceID:   hostID,
 		HostID:       hostID,
 		Hostname:     hostname,

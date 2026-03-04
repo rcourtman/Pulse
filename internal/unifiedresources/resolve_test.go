@@ -149,8 +149,8 @@ func TestResolveResource_Host(t *testing.T) {
 		Hosts: []models.Host{{ID: "host1", Hostname: "myserver", Platform: "linux"}},
 	})
 	loc := ResolveResource(rr, "myserver")
-	if !loc.Found || loc.ResourceType != "host" {
-		t.Fatalf("expected host, got found=%v type=%q", loc.Found, loc.ResourceType)
+	if !loc.Found || loc.ResourceType != "agent" {
+		t.Fatalf("expected agent, got found=%v type=%q", loc.Found, loc.ResourceType)
 	}
 	if loc.Platform != "linux" {
 		t.Fatalf("expected linux platform, got %q", loc.Platform)
@@ -161,8 +161,8 @@ func TestResolveResource_Host(t *testing.T) {
 
 	// Lookup by agent/source ID should also work.
 	loc2 := ResolveResource(rr, "host1")
-	if !loc2.Found || loc2.ResourceType != "host" {
-		t.Fatalf("expected host lookup by agent ID, got found=%v type=%q", loc2.Found, loc2.ResourceType)
+	if !loc2.Found || loc2.ResourceType != "agent" {
+		t.Fatalf("expected agent lookup by agent ID, got found=%v type=%q", loc2.Found, loc2.ResourceType)
 	}
 }
 

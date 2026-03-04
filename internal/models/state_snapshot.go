@@ -113,7 +113,7 @@ type ResourceLocation struct {
 	// What was found
 	Found        bool   // True if the resource was found
 	Name         string // The resource name
-	ResourceType string // "node", "vm", "system-container", "dockerhost", "docker", "host", "k8s_cluster", "k8s_pod", "k8s_deployment"
+	ResourceType string // "node", "vm", "system-container", "dockerhost", "docker", "agent", "k8s_cluster", "k8s_pod", "k8s_deployment"
 
 	// For VMs and system containers (guest resources on a hypervisor node)
 	VMID int    // Guest ID (VMID) if this is a VM or system container
@@ -265,7 +265,7 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 			return ResourceLocation{
 				Found:        true,
 				Name:         host.Hostname,
-				ResourceType: "host",
+				ResourceType: "agent",
 				HostID:       host.ID,
 				Platform:     host.Platform,
 				TargetHost:   host.Hostname,

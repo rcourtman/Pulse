@@ -55,17 +55,17 @@ func TestGetGuestMetricsForChart_ShortRangeFallsBackToStoreWhenInMemoryCoverageS
 	now := time.Now().UTC().Truncate(time.Second)
 	duration := time.Hour
 
-	inMemoryKey := "host:host-1"
+	inMemoryKey := "agent:host-1"
 	monitor.metricsHistory.AddGuestMetric(inMemoryKey, "cpu", 15, now.Add(-4*time.Minute))
 	monitor.metricsHistory.AddGuestMetric(inMemoryKey, "cpu", 18, now.Add(-1*time.Minute))
 
-	writeRawMetricBatch(t, monitor.metricsStore, "host", "host-1", "cpu", []MetricPoint{
+	writeRawMetricBatch(t, monitor.metricsStore, "agent", "host-1", "cpu", []MetricPoint{
 		{Timestamp: now.Add(-58 * time.Minute), Value: 41},
 		{Timestamp: now.Add(-30 * time.Minute), Value: 43},
 		{Timestamp: now.Add(-1 * time.Minute), Value: 46},
 	})
 
-	result := monitor.GetGuestMetricsForChart(inMemoryKey, "host", "host-1", duration)
+	result := monitor.GetGuestMetricsForChart(inMemoryKey, "agent", "host-1", duration)
 	if got, wantMin := chartMapCoverageSpan(result), 45*time.Minute; got < wantMin {
 		t.Fatalf("expected store-backed coverage >= %s, got %s", wantMin, got)
 	}
@@ -148,13 +148,13 @@ func TestGetGuestMetricsForChart_UsesGapFillLookbackWhenRequestedRangeIsEmpty(t 
 	now := time.Now().UTC().Truncate(time.Second)
 	duration := time.Hour
 
-	writeRawMetricBatch(t, monitor.metricsStore, "host", "host-1", "cpu", []MetricPoint{
+	writeRawMetricBatch(t, monitor.metricsStore, "agent", "host-1", "cpu", []MetricPoint{
 		{Timestamp: now.Add(-4 * time.Hour), Value: 37},
 		{Timestamp: now.Add(-3*time.Hour - 30*time.Minute), Value: 39},
 		{Timestamp: now.Add(-3 * time.Hour), Value: 42},
 	})
 
-	result := monitor.GetGuestMetricsForChart("host:host-1", "host", "host-1", duration)
+	result := monitor.GetGuestMetricsForChart("agent:host-1", "agent", "host-1", duration)
 	cpu := result["cpu"]
 	if len(cpu) == 0 {
 		t.Fatal("expected gap-fill fallback to return historical cpu points")

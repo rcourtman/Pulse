@@ -179,7 +179,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 	records = append(records, unifiedresources.IngestRecord{
 		SourceID: systemSourceID,
 		Resource: unifiedresources.Resource{
-			Type:      unifiedresources.ResourceTypeHost,
+			Type:      unifiedresources.ResourceTypeAgent,
 			Name:      strings.TrimSpace(snapshot.System.Hostname),
 			Status:    statusFromSystem(snapshot.System),
 			LastSeen:  collectedAt,

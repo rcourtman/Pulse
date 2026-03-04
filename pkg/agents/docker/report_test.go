@@ -60,7 +60,7 @@ func TestReport_JSONMarshal(t *testing.T) {
 	now := time.Now()
 	report := Report{
 		Agent: AgentInfo{
-			ID:              "docker-agent-1",
+			ID:              "agent-docker-1",
 			Version:         "1.0.0",
 			Type:            "docker",
 			IntervalSeconds: 30,

@@ -20,18 +20,18 @@ func TestFrontendResourceType(t *testing.T) {
 	}{
 		{
 			name: "proxmox node becomes node",
-			r:    unified.Resource{Type: unified.ResourceTypeHost, Proxmox: &unified.ProxmoxData{NodeName: "pve1"}},
+			r:    unified.Resource{Type: unified.ResourceTypeAgent, Proxmox: &unified.ProxmoxData{NodeName: "pve1"}},
 			want: "node",
 		},
 		{
 			name: "docker host becomes docker-host",
-			r:    unified.Resource{Type: unified.ResourceTypeHost, Docker: &unified.DockerData{Hostname: "dock1"}},
+			r:    unified.Resource{Type: unified.ResourceTypeAgent, Docker: &unified.DockerData{Hostname: "dock1"}},
 			want: "docker-host",
 		},
 		{
-			name: "plain host stays host",
-			r:    unified.Resource{Type: unified.ResourceTypeHost},
-			want: "host",
+			name: "plain host becomes agent",
+			r:    unified.Resource{Type: unified.ResourceTypeAgent},
+			want: "agent",
 		},
 		{
 			name: "system-container becomes container",
@@ -76,7 +76,7 @@ func TestFrontendResourceType(t *testing.T) {
 		{
 			name: "proxmox node with both proxmox and docker prefers node",
 			r: unified.Resource{
-				Type:    unified.ResourceTypeHost,
+				Type:    unified.ResourceTypeAgent,
 				Proxmox: &unified.ProxmoxData{NodeName: "pve1"},
 				Docker:  &unified.DockerData{Hostname: "dock1"},
 			},
@@ -96,16 +96,16 @@ func TestFrontendResourceType(t *testing.T) {
 
 func TestApplyFrontendTypes(t *testing.T) {
 	resources := []unified.Resource{
-		{Type: unified.ResourceTypeHost, Proxmox: &unified.ProxmoxData{NodeName: "pve1"}},
-		{Type: unified.ResourceTypeHost, Docker: &unified.DockerData{Hostname: "dock1"}},
-		{Type: unified.ResourceTypeHost},
+		{Type: unified.ResourceTypeAgent, Proxmox: &unified.ProxmoxData{NodeName: "pve1"}},
+		{Type: unified.ResourceTypeAgent, Docker: &unified.DockerData{Hostname: "dock1"}},
+		{Type: unified.ResourceTypeAgent},
 		{Type: unified.ResourceTypeVM},
 		{Type: unified.ResourceTypeSystemContainer},
 	}
 
 	applyFrontendTypes(resources)
 
-	expected := []unified.ResourceType{"node", "docker-host", "host", "vm", "container"}
+	expected := []unified.ResourceType{"node", "docker-host", "agent", "vm", "container"}
 	for i, want := range expected {
 		if resources[i].Type != want {
 			t.Fatalf("resources[%d].Type = %q, want %q", i, resources[i].Type, want)
@@ -115,10 +115,10 @@ func TestApplyFrontendTypes(t *testing.T) {
 
 func TestComputeFrontendByType(t *testing.T) {
 	resources := []unified.Resource{
-		{Type: unified.ResourceTypeHost, Proxmox: &unified.ProxmoxData{NodeName: "pve1"}},
-		{Type: unified.ResourceTypeHost, Proxmox: &unified.ProxmoxData{NodeName: "pve2"}},
-		{Type: unified.ResourceTypeHost, Docker: &unified.DockerData{Hostname: "dock1"}},
-		{Type: unified.ResourceTypeHost},
+		{Type: unified.ResourceTypeAgent, Proxmox: &unified.ProxmoxData{NodeName: "pve1"}},
+		{Type: unified.ResourceTypeAgent, Proxmox: &unified.ProxmoxData{NodeName: "pve2"}},
+		{Type: unified.ResourceTypeAgent, Docker: &unified.DockerData{Hostname: "dock1"}},
+		{Type: unified.ResourceTypeAgent},
 		{Type: unified.ResourceTypeVM},
 		{Type: unified.ResourceTypeVM},
 		{Type: unified.ResourceTypeSystemContainer},
@@ -132,8 +132,8 @@ func TestComputeFrontendByType(t *testing.T) {
 	if byType["docker-host"] != 1 {
 		t.Fatalf("byType[docker-host] = %d, want 1", byType["docker-host"])
 	}
-	if byType["host"] != 1 {
-		t.Fatalf("byType[host] = %d, want 1", byType["host"])
+	if byType["agent"] != 1 {
+		t.Fatalf("byType[agent] = %d, want 1", byType["agent"])
 	}
 	if byType[unified.ResourceTypeVM] != 2 {
 		t.Fatalf("byType[vm] = %d, want 2", byType[unified.ResourceTypeVM])
@@ -144,7 +144,7 @@ func TestComputeFrontendByType(t *testing.T) {
 
 	// Verify the input slice was NOT mutated — check exact per-index type.
 	originalTypes := []unified.ResourceType{
-		unified.ResourceTypeHost, unified.ResourceTypeHost, unified.ResourceTypeHost, unified.ResourceTypeHost,
+		unified.ResourceTypeAgent, unified.ResourceTypeAgent, unified.ResourceTypeAgent, unified.ResourceTypeAgent,
 		unified.ResourceTypeVM, unified.ResourceTypeVM,
 		unified.ResourceTypeSystemContainer,
 	}
@@ -161,29 +161,29 @@ func TestParseResourceTypesNodeAlias(t *testing.T) {
 		input string
 		want  map[unified.ResourceType]struct{}
 	}{
-		{name: "node", input: "node", want: map[unified.ResourceType]struct{}{unified.ResourceTypeHost: {}}},
-		{name: "nodes", input: "nodes", want: map[unified.ResourceType]struct{}{unified.ResourceTypeHost: {}}},
-		{name: "docker-host", input: "docker-host", want: map[unified.ResourceType]struct{}{unified.ResourceTypeHost: {}}},
-		{name: "agent", input: "agent", want: map[unified.ResourceType]struct{}{unified.ResourceTypeHost: {}}},
-		{name: "agents", input: "agents", want: map[unified.ResourceType]struct{}{unified.ResourceTypeHost: {}}},
-		{name: "host", input: "host", want: map[unified.ResourceType]struct{}{unified.ResourceTypeHost: {}}},
+		{name: "node", input: "node", want: map[unified.ResourceType]struct{}{unified.ResourceTypeAgent: {}}},
+		{name: "nodes", input: "nodes", want: map[unified.ResourceType]struct{}{unified.ResourceTypeAgent: {}}},
+		{name: "docker-host", input: "docker-host", want: map[unified.ResourceType]struct{}{unified.ResourceTypeAgent: {}}},
+		{name: "agent", input: "agent", want: map[unified.ResourceType]struct{}{unified.ResourceTypeAgent: {}}},
+		{name: "agents", input: "agents", want: map[unified.ResourceType]struct{}{unified.ResourceTypeAgent: {}}},
+		{name: "legacy host ignored by parser", input: "host", want: map[unified.ResourceType]struct{}{}},
 		{name: "container", input: "container", want: map[unified.ResourceType]struct{}{unified.ResourceTypeSystemContainer: {}}},
 		{name: "pool", input: "pool", want: map[unified.ResourceType]struct{}{unified.ResourceTypeCeph: {}}},
 		{name: "vm", input: "vm", want: map[unified.ResourceType]struct{}{unified.ResourceTypeVM: {}}},
 		// CSV with multiple types
 		{name: "csv node,vm", input: "node,vm", want: map[unified.ResourceType]struct{}{
-			unified.ResourceTypeHost: {},
-			unified.ResourceTypeVM:   {},
+			unified.ResourceTypeAgent: {},
+			unified.ResourceTypeVM:    {},
 		}},
 		// Whitespace and empty segments are handled by splitCSV
 		{name: "csv with spaces", input: " node , vm ", want: map[unified.ResourceType]struct{}{
-			unified.ResourceTypeHost: {},
-			unified.ResourceTypeVM:   {},
+			unified.ResourceTypeAgent: {},
+			unified.ResourceTypeVM:    {},
 		}},
 		// Mixed case — splitCSV lowercases tokens
 		{name: "mixed case NoDe,VM", input: "NoDe,VM", want: map[unified.ResourceType]struct{}{
-			unified.ResourceTypeHost: {},
-			unified.ResourceTypeVM:   {},
+			unified.ResourceTypeAgent: {},
+			unified.ResourceTypeVM:    {},
 		}},
 		// Unknown tokens are silently dropped
 		{name: "unknown token", input: "bogus", want: map[unified.ResourceType]struct{}{}},
@@ -207,11 +207,11 @@ func TestParseResourceTypesNodeAlias(t *testing.T) {
 }
 
 // TestResourceListProxmoxNodeReturnsFrontendNodeType verifies that Proxmox nodes are
-// returned with type "node" (not "host") from the REST API, matching what the WebSocket
+// returned with type "node" (not "agent") from the REST API, matching what the WebSocket
 // path produces. This is the regression test for Known Issue #4.
 //
 // The fixture includes mixed host-family resources (Proxmox node + agent host + Docker host)
-// to verify that ?type=node returns all three (because all host aliases resolve to the same
+// to verify that ?type=node returns all three (because node/agent/docker-host resolve to the same
 // backend type) and that applyFrontendTypes differentiates them correctly.
 func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 	now := time.Now().UTC()
@@ -282,7 +282,7 @@ func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 	h := NewResourceHandlers(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
-	// Test 1: ?type=node resolves to ResourceTypeHost — returns all host-family resources.
+	// Test 1: ?type=node resolves to ResourceTypeAgent — returns all host-family resources.
 	// The frontend then uses byType('node') client-side to select only Proxmox nodes.
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=node", nil)
@@ -297,8 +297,8 @@ func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 
-	// All three host-family resources are returned because "node", "host", and "docker-host"
-	// are aliases for the same backend type (ResourceTypeHost).
+	// All three host-family resources are returned because "node", "agent", and
+	// "docker-host" are aliases for the same backend type (ResourceTypeAgent).
 	if len(resp.Data) != 3 {
 		t.Fatalf("expected 3 host-family resources for ?type=node, got %d", len(resp.Data))
 	}
@@ -311,8 +311,8 @@ func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 	if typeSet["node"] != 1 {
 		t.Fatalf("expected 1 'node' in ?type=node response, got %d (types=%v)", typeSet["node"], typeSet)
 	}
-	if typeSet["host"] != 1 {
-		t.Fatalf("expected 1 'host' in ?type=node response, got %d (types=%v)", typeSet["host"], typeSet)
+	if typeSet["agent"] != 1 {
+		t.Fatalf("expected 1 'agent' in ?type=node response, got %d (types=%v)", typeSet["agent"], typeSet)
 	}
 	if typeSet["docker-host"] != 1 {
 		t.Fatalf("expected 1 'docker-host' in ?type=node response, got %d (types=%v)", typeSet["docker-host"], typeSet)
@@ -321,19 +321,19 @@ func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 	// Agent-backed host resources should publish agent metrics targets.
 	var foundAgentHost *unified.Resource
 	for i := range resp.Data {
-		if resp.Data[i].Type == "host" {
+		if resp.Data[i].Type == "agent" {
 			foundAgentHost = &resp.Data[i]
 			break
 		}
 	}
 	if foundAgentHost == nil {
-		t.Fatalf("expected host resource in response")
+		t.Fatalf("expected agent resource in response")
 	}
 	if foundAgentHost.MetricsTarget == nil {
-		t.Fatalf("expected metrics target on host resource")
+		t.Fatalf("expected metrics target on agent resource")
 	}
 	if foundAgentHost.MetricsTarget.ResourceType != "agent" {
-		t.Fatalf("host metrics target resourceType = %q, want %q", foundAgentHost.MetricsTarget.ResourceType, "agent")
+		t.Fatalf("agent metrics target resourceType = %q, want %q", foundAgentHost.MetricsTarget.ResourceType, "agent")
 	}
 
 	// Find the Proxmox node resource specifically and verify its metadata.
@@ -358,8 +358,8 @@ func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 	if resp.Aggregations.ByType["node"] != 1 {
 		t.Fatalf("aggregations.byType[node] = %d, want 1 (got byType=%v)", resp.Aggregations.ByType["node"], resp.Aggregations.ByType)
 	}
-	if resp.Aggregations.ByType["host"] != 1 {
-		t.Fatalf("aggregations.byType[host] = %d, want 1 (got byType=%v)", resp.Aggregations.ByType["host"], resp.Aggregations.ByType)
+	if resp.Aggregations.ByType["agent"] != 1 {
+		t.Fatalf("aggregations.byType[agent] = %d, want 1 (got byType=%v)", resp.Aggregations.ByType["agent"], resp.Aggregations.ByType)
 	}
 	if resp.Aggregations.ByType["docker-host"] != 1 {
 		t.Fatalf("aggregations.byType[docker-host] = %d, want 1 (got byType=%v)", resp.Aggregations.ByType["docker-host"], resp.Aggregations.ByType)
@@ -379,9 +379,9 @@ func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 		t.Fatalf("decode unfiltered response: %v", err)
 	}
 
-	// 5 resources: node + host + docker-host + vm + container
+	// 5 resources: node + agent + docker-host + vm + container
 	if len(resp2.Data) != 5 {
-		t.Fatalf("expected 5 resources (node+host+docker-host+vm+ct), got %d", len(resp2.Data))
+		t.Fatalf("expected 5 resources (node+agent+docker-host+vm+ct), got %d", len(resp2.Data))
 	}
 
 	typeSet2 := make(map[unified.ResourceType]int)
@@ -392,8 +392,8 @@ func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 	if typeSet2["node"] != 1 {
 		t.Fatalf("expected 1 node in unfiltered response, got %d (types=%v)", typeSet2["node"], typeSet2)
 	}
-	if typeSet2["host"] != 1 {
-		t.Fatalf("expected 1 host in unfiltered response, got %d (types=%v)", typeSet2["host"], typeSet2)
+	if typeSet2["agent"] != 1 {
+		t.Fatalf("expected 1 agent in unfiltered response, got %d (types=%v)", typeSet2["agent"], typeSet2)
 	}
 	if typeSet2["docker-host"] != 1 {
 		t.Fatalf("expected 1 docker-host in unfiltered response, got %d (types=%v)", typeSet2["docker-host"], typeSet2)
@@ -443,7 +443,7 @@ func TestResourceGetProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 	if err := json.NewDecoder(listRec.Body).Decode(&listResp); err != nil {
 		t.Fatalf("decode list response: %v", err)
 	}
-	// "node" alias maps to ResourceTypeHost — returns all host-family resources.
+	// "node" alias maps to ResourceTypeAgent — returns all host-family resources.
 	// We only have one Proxmox node in this fixture.
 	if len(listResp.Data) != 1 {
 		t.Fatalf("expected 1 host-family resource, got %d", len(listResp.Data))

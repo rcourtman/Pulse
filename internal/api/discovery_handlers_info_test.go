@@ -159,7 +159,7 @@ func TestDiscoveryHandlersHandleGetInfoWithoutProvider(t *testing.T) {
 
 	h := &DiscoveryHandlers{}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/discovery/info/host", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/discovery/info/agent", nil)
 	w := httptest.NewRecorder()
 
 	h.HandleGetInfo(w, req)
@@ -171,4 +171,20 @@ func TestDiscoveryHandlersHandleGetInfoWithoutProvider(t *testing.T) {
 	assert.Nil(t, info.AIProvider)
 	assert.NotEmpty(t, info.Commands)
 	assert.NotEmpty(t, info.CommandCategories)
+}
+
+func TestDiscoveryHandlersHandleGetInfoRejectsLegacyHostType(t *testing.T) {
+	t.Parallel()
+
+	h := &DiscoveryHandlers{}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/discovery/info/host", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleGetInfo(w, req)
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	var body map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
+	assert.Equal(t, `resource type "host" is no longer supported; use "agent"`, body["message"])
 }

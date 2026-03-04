@@ -587,7 +587,7 @@ func (a *agentCommandAdapter) ExecuteCommand(ctx context.Context, agentID, comma
 	}
 	result, execErr := a.handler.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
 		Command:    command,
-		TargetType: "host",
+		TargetType: "agent",
 	})
 	if execErr != nil {
 		return "", "", -1, execErr

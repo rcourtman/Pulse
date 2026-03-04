@@ -37,5 +37,5 @@ type ReadState interface {
 
 	// Polymorphic accessors for mixed-type iteration
 	Workloads() []*WorkloadView            // VMs + LXC containers
-	Infrastructure() []*InfrastructureView // All host-type resources
+	Infrastructure() []*InfrastructureView // All infrastructure parent resources
 }

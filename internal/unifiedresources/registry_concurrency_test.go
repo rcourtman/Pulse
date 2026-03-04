@@ -14,7 +14,7 @@ func TestResourceRegistry_ReadAPIsReturnDefensiveCopies(t *testing.T) {
 		{
 			SourceID: "host-1",
 			Resource: Resource{
-				Type:     ResourceTypeHost,
+				Type:     ResourceTypeAgent,
 				Name:     "host-1",
 				Status:   StatusOnline,
 				LastSeen: time.Now().UTC(),
@@ -54,7 +54,7 @@ func TestResourceRegistry_ReadAPIsReturnDefensiveCopies(t *testing.T) {
 		},
 	})
 
-	hostID := rr.sourceSpecificID(ResourceTypeHost, SourceAgent, "host-1")
+	hostID := rr.sourceSpecificID(ResourceTypeAgent, SourceAgent, "host-1")
 	got, ok := rr.Get(hostID)
 	if !ok || got == nil {
 		t.Fatalf("expected Get(%q) to succeed", hostID)
@@ -151,7 +151,7 @@ func TestResourceRegistry_ConcurrentIngestAndRead(t *testing.T) {
 				{
 					SourceID: "host-1",
 					Resource: Resource{
-						Type:     ResourceTypeHost,
+						Type:     ResourceTypeAgent,
 						Name:     fmt.Sprintf("host-%d", i),
 						Status:   StatusOnline,
 						LastSeen: time.Now().UTC(),

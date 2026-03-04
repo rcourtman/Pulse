@@ -6,7 +6,7 @@ func TestLinkedMergeRequiresBidirectionalNodeHostLink(t *testing.T) {
 	registry := NewRegistry(NewMemoryStore())
 
 	agentResource := Resource{
-		Type:   ResourceTypeHost,
+		Type:   ResourceTypeAgent,
 		Name:   "pve1",
 		Status: StatusOnline,
 		Agent:  &AgentData{},
@@ -14,11 +14,11 @@ func TestLinkedMergeRequiresBidirectionalNodeHostLink(t *testing.T) {
 	registry.ingest(SourceAgent, "host-1", agentResource, ResourceIdentity{Hostnames: []string{"pve1"}})
 
 	nodeResource := Resource{
-		Type:   ResourceTypeHost,
+		Type:   ResourceTypeAgent,
 		Name:   "pve1",
 		Status: StatusOnline,
 		Proxmox: &ProxmoxData{
-			LinkedHostAgentID: "host-1",
+			LinkedAgentID: "host-1",
 		},
 	}
 	registry.ingest(SourceProxmox, "node-1", nodeResource, ResourceIdentity{Hostnames: []string{"pve1"}})
@@ -33,7 +33,7 @@ func TestLinkedMergeSucceedsWithBidirectionalNodeHostLink(t *testing.T) {
 	registry := NewRegistry(NewMemoryStore())
 
 	agentResource := Resource{
-		Type:   ResourceTypeHost,
+		Type:   ResourceTypeAgent,
 		Name:   "pve1",
 		Status: StatusOnline,
 		Agent: &AgentData{
@@ -43,11 +43,11 @@ func TestLinkedMergeSucceedsWithBidirectionalNodeHostLink(t *testing.T) {
 	registry.ingest(SourceAgent, "host-1", agentResource, ResourceIdentity{Hostnames: []string{"pve1"}})
 
 	nodeResource := Resource{
-		Type:   ResourceTypeHost,
+		Type:   ResourceTypeAgent,
 		Name:   "pve1",
 		Status: StatusOnline,
 		Proxmox: &ProxmoxData{
-			LinkedHostAgentID: "host-1",
+			LinkedAgentID: "host-1",
 		},
 	}
 	registry.ingest(SourceProxmox, "node-1", nodeResource, ResourceIdentity{Hostnames: []string{"pve1"}})
@@ -66,7 +66,7 @@ func TestHostnameIPDoesNotAutoMerge(t *testing.T) {
 	registry := NewRegistry(NewMemoryStore())
 
 	agentResource := Resource{
-		Type:   ResourceTypeHost,
+		Type:   ResourceTypeAgent,
 		Name:   "alpha",
 		Status: StatusOnline,
 		Agent:  &AgentData{},
@@ -77,7 +77,7 @@ func TestHostnameIPDoesNotAutoMerge(t *testing.T) {
 	})
 
 	dockerResource := Resource{
-		Type:   ResourceTypeHost,
+		Type:   ResourceTypeAgent,
 		Name:   "alpha",
 		Status: StatusOnline,
 		Docker: &DockerData{},

@@ -1028,7 +1028,7 @@ func hasTrueNASHost(registry *unifiedresources.ResourceRegistry, hostname string
 
 	resources := registry.List()
 	for _, resource := range resources {
-		if resource.Type != unifiedresources.ResourceTypeHost || resource.Name != hostname {
+		if resource.Type != unifiedresources.ResourceTypeAgent || resource.Name != hostname {
 			continue
 		}
 		if resourceHasSource(resource, unifiedresources.SourceTrueNAS) {

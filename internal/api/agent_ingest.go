@@ -252,8 +252,8 @@ func (h *HostAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Requ
 }
 
 // HandleConfig handles GET (fetch config) and PATCH (update config) for host agents.
-// GET /api/agents/{agent|host}/{hostId}/config - Agent fetches its server-side config
-// PATCH /api/agents/{agent|host}/{hostId}/config - UI updates host config (e.g., commandsEnabled)
+// GET /api/agents/agent/{hostId}/config - Agent fetches its server-side config
+// PATCH /api/agents/agent/{hostId}/config - UI updates host config (e.g., commandsEnabled)
 func (h *HostAgentHandlers) HandleConfig(w http.ResponseWriter, r *http.Request) {
 	// Extract host ID from URL path
 	// Expected format: /api/agents/agent/{hostId}/config

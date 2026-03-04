@@ -100,18 +100,18 @@ func TestSaveAlertConfig_DoesNotOverwriteExistingClear(t *testing.T) {
 	}
 }
 
-func TestSaveAlertConfig_NormalizesHostDefaults(t *testing.T) {
+func TestSaveAlertConfig_NormalizesAgentDefaults(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
 	if err := cp.EnsureConfigDir(); err != nil {
 		t.Fatalf("EnsureConfigDir: %v", err)
 	}
 
-	// Config with nil/zero HostDefaults - should get defaults
+	// Config with nil/zero AgentDefaults - should get defaults
 	cfg := alerts.AlertConfig{
 		Enabled:        true,
 		StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
-		HostDefaults:   alerts.ThresholdConfig{}, // Empty - needs defaults
+		AgentDefaults:  alerts.ThresholdConfig{}, // Empty - needs defaults
 	}
 
 	if err := cp.SaveAlertConfig(cfg); err != nil {
@@ -123,28 +123,28 @@ func TestSaveAlertConfig_NormalizesHostDefaults(t *testing.T) {
 		t.Fatalf("LoadAlertConfig: %v", err)
 	}
 
-	// Verify host defaults were applied
-	if loaded.HostDefaults.CPU == nil {
+	// Verify agent defaults were applied
+	if loaded.AgentDefaults.CPU == nil {
 		t.Fatal("CPU defaults should be set")
 	}
-	if loaded.HostDefaults.CPU.Trigger != 80 {
-		t.Errorf("CPU trigger = %v, want 80", loaded.HostDefaults.CPU.Trigger)
+	if loaded.AgentDefaults.CPU.Trigger != 80 {
+		t.Errorf("CPU trigger = %v, want 80", loaded.AgentDefaults.CPU.Trigger)
 	}
-	if loaded.HostDefaults.Memory == nil {
+	if loaded.AgentDefaults.Memory == nil {
 		t.Fatal("Memory defaults should be set")
 	}
-	if loaded.HostDefaults.Memory.Trigger != 85 {
-		t.Errorf("Memory trigger = %v, want 85", loaded.HostDefaults.Memory.Trigger)
+	if loaded.AgentDefaults.Memory.Trigger != 85 {
+		t.Errorf("Memory trigger = %v, want 85", loaded.AgentDefaults.Memory.Trigger)
 	}
-	if loaded.HostDefaults.Disk == nil {
+	if loaded.AgentDefaults.Disk == nil {
 		t.Fatal("Disk defaults should be set")
 	}
-	if loaded.HostDefaults.Disk.Trigger != 90 {
-		t.Errorf("Disk trigger = %v, want 90", loaded.HostDefaults.Disk.Trigger)
+	if loaded.AgentDefaults.Disk.Trigger != 90 {
+		t.Errorf("Disk trigger = %v, want 90", loaded.AgentDefaults.Disk.Trigger)
 	}
 }
 
-func TestSaveAlertConfig_NormalizesHostDefaultsClear(t *testing.T) {
+func TestSaveAlertConfig_NormalizesAgentDefaultsClear(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
 	if err := cp.EnsureConfigDir(); err != nil {
@@ -155,7 +155,7 @@ func TestSaveAlertConfig_NormalizesHostDefaultsClear(t *testing.T) {
 	cfg := alerts.AlertConfig{
 		Enabled:        true,
 		StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
-		HostDefaults: alerts.ThresholdConfig{
+		AgentDefaults: alerts.ThresholdConfig{
 			CPU:    &alerts.HysteresisThreshold{Trigger: 90, Clear: 0},
 			Memory: &alerts.HysteresisThreshold{Trigger: 95, Clear: 0},
 			Disk:   &alerts.HysteresisThreshold{Trigger: 92, Clear: 0},
@@ -172,21 +172,21 @@ func TestSaveAlertConfig_NormalizesHostDefaultsClear(t *testing.T) {
 	}
 
 	// Clear should be trigger - 5
-	if loaded.HostDefaults.CPU.Clear != 85 {
-		t.Errorf("CPU clear = %v, want 85", loaded.HostDefaults.CPU.Clear)
+	if loaded.AgentDefaults.CPU.Clear != 85 {
+		t.Errorf("CPU clear = %v, want 85", loaded.AgentDefaults.CPU.Clear)
 	}
-	if loaded.HostDefaults.Memory.Clear != 90 {
-		t.Errorf("Memory clear = %v, want 90", loaded.HostDefaults.Memory.Clear)
+	if loaded.AgentDefaults.Memory.Clear != 90 {
+		t.Errorf("Memory clear = %v, want 90", loaded.AgentDefaults.Memory.Clear)
 	}
-	if loaded.HostDefaults.Disk.Clear != 87 {
-		t.Errorf("Disk clear = %v, want 87", loaded.HostDefaults.Disk.Clear)
+	if loaded.AgentDefaults.Disk.Clear != 87 {
+		t.Errorf("Disk clear = %v, want 87", loaded.AgentDefaults.Disk.Clear)
 	}
 }
 
-// TestSaveAlertConfig_HostDefaultsZeroDisablesAlerting verifies that setting
+// TestSaveAlertConfig_AgentDefaultsZeroDisablesAlerting verifies that setting
 // Host Agent thresholds to 0 is preserved (fixes GitHub issue #864).
 // Setting a threshold to 0 should disable alerting for that metric.
-func TestSaveAlertConfig_HostDefaultsZeroDisablesAlerting(t *testing.T) {
+func TestSaveAlertConfig_AgentDefaultsZeroDisablesAlerting(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
 	if err := cp.EnsureConfigDir(); err != nil {
@@ -197,7 +197,7 @@ func TestSaveAlertConfig_HostDefaultsZeroDisablesAlerting(t *testing.T) {
 	cfg := alerts.AlertConfig{
 		Enabled:        true,
 		StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
-		HostDefaults: alerts.ThresholdConfig{
+		AgentDefaults: alerts.ThresholdConfig{
 			CPU:    &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
 			Memory: &alerts.HysteresisThreshold{Trigger: 0, Clear: 0}, // Disabled
 			Disk:   &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
@@ -214,22 +214,22 @@ func TestSaveAlertConfig_HostDefaultsZeroDisablesAlerting(t *testing.T) {
 	}
 
 	// Memory threshold should remain at 0 (disabled), not reset to default
-	if loaded.HostDefaults.Memory == nil {
+	if loaded.AgentDefaults.Memory == nil {
 		t.Fatal("Memory defaults should be preserved (not nil)")
 	}
-	if loaded.HostDefaults.Memory.Trigger != 0 {
-		t.Errorf("Memory trigger = %v, want 0 (disabled)", loaded.HostDefaults.Memory.Trigger)
+	if loaded.AgentDefaults.Memory.Trigger != 0 {
+		t.Errorf("Memory trigger = %v, want 0 (disabled)", loaded.AgentDefaults.Memory.Trigger)
 	}
-	if loaded.HostDefaults.Memory.Clear != 0 {
-		t.Errorf("Memory clear = %v, want 0 (disabled)", loaded.HostDefaults.Memory.Clear)
+	if loaded.AgentDefaults.Memory.Clear != 0 {
+		t.Errorf("Memory clear = %v, want 0 (disabled)", loaded.AgentDefaults.Memory.Clear)
 	}
 
 	// CPU and Disk should still have their values
-	if loaded.HostDefaults.CPU.Trigger != 80 {
-		t.Errorf("CPU trigger = %v, want 80", loaded.HostDefaults.CPU.Trigger)
+	if loaded.AgentDefaults.CPU.Trigger != 80 {
+		t.Errorf("CPU trigger = %v, want 80", loaded.AgentDefaults.CPU.Trigger)
 	}
-	if loaded.HostDefaults.Disk.Trigger != 90 {
-		t.Errorf("Disk trigger = %v, want 90", loaded.HostDefaults.Disk.Trigger)
+	if loaded.AgentDefaults.Disk.Trigger != 90 {
+		t.Errorf("Disk trigger = %v, want 90", loaded.AgentDefaults.Disk.Trigger)
 	}
 }
 
@@ -321,7 +321,7 @@ func TestSaveAlertConfig_AllThresholdsZeroDisablesAlerting(t *testing.T) {
 		NodeDefaults: alerts.ThresholdConfig{
 			Temperature: &alerts.HysteresisThreshold{Trigger: 0, Clear: 0},
 		},
-		HostDefaults: alerts.ThresholdConfig{
+		AgentDefaults: alerts.ThresholdConfig{
 			CPU:    &alerts.HysteresisThreshold{Trigger: 0, Clear: 0},
 			Memory: &alerts.HysteresisThreshold{Trigger: 0, Clear: 0},
 			Disk:   &alerts.HysteresisThreshold{Trigger: 0, Clear: 0},
@@ -344,14 +344,14 @@ func TestSaveAlertConfig_AllThresholdsZeroDisablesAlerting(t *testing.T) {
 	if loaded.NodeDefaults.Temperature == nil || loaded.NodeDefaults.Temperature.Trigger != 0 {
 		t.Errorf("Temperature trigger = %v, want 0", loaded.NodeDefaults.Temperature)
 	}
-	if loaded.HostDefaults.CPU == nil || loaded.HostDefaults.CPU.Trigger != 0 {
-		t.Errorf("HostDefaults.CPU trigger = %v, want 0", loaded.HostDefaults.CPU)
+	if loaded.AgentDefaults.CPU == nil || loaded.AgentDefaults.CPU.Trigger != 0 {
+		t.Errorf("AgentDefaults.CPU trigger = %v, want 0", loaded.AgentDefaults.CPU)
 	}
-	if loaded.HostDefaults.Memory == nil || loaded.HostDefaults.Memory.Trigger != 0 {
-		t.Errorf("HostDefaults.Memory trigger = %v, want 0", loaded.HostDefaults.Memory)
+	if loaded.AgentDefaults.Memory == nil || loaded.AgentDefaults.Memory.Trigger != 0 {
+		t.Errorf("AgentDefaults.Memory trigger = %v, want 0", loaded.AgentDefaults.Memory)
 	}
-	if loaded.HostDefaults.Disk == nil || loaded.HostDefaults.Disk.Trigger != 0 {
-		t.Errorf("HostDefaults.Disk trigger = %v, want 0", loaded.HostDefaults.Disk)
+	if loaded.AgentDefaults.Disk == nil || loaded.AgentDefaults.Disk.Trigger != 0 {
+		t.Errorf("AgentDefaults.Disk trigger = %v, want 0", loaded.AgentDefaults.Disk)
 	}
 }
 

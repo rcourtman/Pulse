@@ -334,7 +334,7 @@ func hostAgentCandidate(h models.Host) HostCandidate {
 		ips = append(ips, h.ReportIP)
 	}
 	return HostCandidate{
-		ID:       "host:" + h.ID,
+		ID:       "agent:" + h.ID,
 		Name:     resolvedHostDisplayName(h.DisplayName, h.Hostname, h.ID),
 		Type:     "agent",
 		Source:   "agent",

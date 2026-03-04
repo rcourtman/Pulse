@@ -390,6 +390,20 @@ func TestHandleListByType(t *testing.T) {
 	assert.Len(t, discoveries, 1) // Only VM
 }
 
+func TestHandleListByType_RejectsLegacyHostType(t *testing.T) {
+	h, _, _ := setupDiscoveryHandlers(t)
+
+	req := httptest.NewRequest("GET", "/api/discovery/type/host", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleListByType(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	var body map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
+	assert.Equal(t, `resource type "host" is no longer supported; use "agent"`, body["message"])
+}
+
 func TestHandleListByHost(t *testing.T) {
 	h, _, store := setupDiscoveryHandlers(t)
 
@@ -431,6 +445,20 @@ func TestHandleGetProgress(t *testing.T) {
 	var res2 map[string]interface{}
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&res2))
 	assert.Equal(t, "completed", res2["status"])
+}
+
+func TestHandleGetDiscovery_RejectsLegacyHostType(t *testing.T) {
+	h, _, _ := setupDiscoveryHandlers(t)
+
+	req := httptest.NewRequest("GET", "/api/discovery/host/host-1/host-1", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleGetDiscovery(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	var body map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
+	assert.Equal(t, `resource type "host" is no longer supported; use "agent"`, body["message"])
 }
 
 // Additional test to cover service not configured case

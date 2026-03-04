@@ -45,7 +45,7 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 		t.Fatalf("expected %d resources, got %d", wantCount, len(resources))
 	}
 
-	system := requireResource(t, resources, unifiedresources.ResourceTypeHost, fixtures.System.Hostname)
+	system := requireResource(t, resources, unifiedresources.ResourceTypeAgent, fixtures.System.Hostname)
 	assertSourceTracking(t, *system, unifiedresources.SourceTrueNAS)
 	if system.ChildCount != len(fixtures.Pools) {
 		t.Fatalf("expected system child count %d, got %d", len(fixtures.Pools), system.ChildCount)
@@ -150,7 +150,7 @@ func TestTrueNASResourcesFlowThroughUnifiedTypesWithoutSpecialCasing(t *testing.
 			t.Fatalf("expected canonical render type, got truenas-specific type for %s", resource.ID)
 		}
 		switch resource.Type {
-		case unifiedresources.ResourceTypeHost, unifiedresources.ResourceTypeStorage, unifiedresources.ResourceTypePhysicalDisk:
+		case unifiedresources.ResourceTypeAgent, unifiedresources.ResourceTypeStorage, unifiedresources.ResourceTypePhysicalDisk:
 		default:
 			t.Fatalf("unexpected unified type for truenas fixture resource: %s (%s)", resource.Type, resource.ID)
 		}

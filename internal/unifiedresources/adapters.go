@@ -24,24 +24,26 @@ func resourceFromProxmoxNode(node models.Node) (Resource, ResourceIdentity) {
 	}
 
 	proxmox := &ProxmoxData{
-		SourceID:          node.ID,
-		NodeName:          node.Name,
-		ClusterName:       node.ClusterName,
-		Instance:          node.Instance,
-		Temperature:       maxNodeTemp(node.Temperature),
-		PVEVersion:        node.PVEVersion,
-		KernelVersion:     node.KernelVersion,
-		Uptime:            node.Uptime,
-		CPUInfo:           &CPUInfo{Model: node.CPUInfo.Model, Cores: node.CPUInfo.Cores, Sockets: node.CPUInfo.Sockets},
-		LoadAverage:       append([]float64(nil), node.LoadAverage...),
-		PendingUpdates:    node.PendingUpdates,
-		LinkedHostAgentID: node.LinkedHostAgentID,
+		SourceID:        node.ID,
+		NodeName:        node.Name,
+		ClusterName:     node.ClusterName,
+		IsClusterMember: node.IsClusterMember,
+		Instance:        node.Instance,
+		HostURL:         node.Host,
+		Temperature:     maxNodeTemp(node.Temperature),
+		PVEVersion:      node.PVEVersion,
+		KernelVersion:   node.KernelVersion,
+		Uptime:          node.Uptime,
+		CPUInfo:         &CPUInfo{Model: node.CPUInfo.Model, Cores: node.CPUInfo.Cores, Sockets: node.CPUInfo.Sockets},
+		LoadAverage:     append([]float64(nil), node.LoadAverage...),
+		PendingUpdates:  node.PendingUpdates,
+		LinkedAgentID:   node.LinkedAgentID,
 	}
 
 	metrics := metricsFromProxmoxNode(node)
 
 	resource := Resource{
-		Type:       ResourceTypeHost,
+		Type:       ResourceTypeAgent,
 		Technology: "proxmox",
 		Name:       name,
 		Status:     statusFromString(node.Status),
@@ -184,7 +186,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	metrics := metricsFromHost(host)
 
 	resource := Resource{
-		Type:       ResourceTypeHost,
+		Type:       ResourceTypeAgent,
 		Technology: strings.TrimSpace(host.Platform),
 		Name:       name,
 		Status:     statusFromString(host.Status),
@@ -274,7 +276,7 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 	metrics := metricsFromDockerHost(host)
 
 	resource := Resource{
-		Type:       ResourceTypeHost,
+		Type:       ResourceTypeAgent,
 		Technology: strings.TrimSpace(host.Runtime),
 		Name:       name,
 		Status:     statusFromString(host.Status),

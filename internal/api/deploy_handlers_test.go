@@ -110,7 +110,7 @@ func TestHandleCandidatesWithCluster(t *testing.T) {
 		{
 			ID: "node_pve-a", Name: "pve-a", Host: "https://10.0.0.1:8006",
 			IsClusterMember: true, ClusterName: "lab",
-			LinkedHostAgentID: "host-a",
+			LinkedAgentID: "host-a",
 		},
 		{
 			ID: "node_pve-b", Name: "pve-b", Host: "https://10.0.0.2:8006",
@@ -353,10 +353,9 @@ func TestNodeIP(t *testing.T) {
 		{"", ""},
 	}
 	for _, tt := range tests {
-		node := models.Node{Host: tt.host}
-		got := nodeIP(node)
+		got := nodeIP(tt.host)
 		if got != tt.want {
-			t.Errorf("nodeIP(Host=%q) = %q, want %q", tt.host, got, tt.want)
+			t.Errorf("nodeIP(%q) = %q, want %q", tt.host, got, tt.want)
 		}
 	}
 }
@@ -544,8 +543,11 @@ func TestHandleEnroll_Success(t *testing.T) {
 	if resp["runtimeTokenId"] == nil || resp["runtimeTokenId"] == "" {
 		t.Fatal("expected runtimeTokenId in response")
 	}
-	if resp["hostId"] != "host-pve-node2" {
-		t.Fatalf("expected hostId=host-pve-node2, got %v", resp["hostId"])
+	if resp["hostId"] != "agent-pve-node2" {
+		t.Fatalf("expected hostId=agent-pve-node2, got %v", resp["hostId"])
+	}
+	if resp["agentId"] != "agent-pve-node2" {
+		t.Fatalf("expected agentId=agent-pve-node2, got %v", resp["agentId"])
 	}
 
 	// Target should now be verifying.
@@ -966,7 +968,7 @@ func TestHandleCreateJob_Success(t *testing.T) {
 		{
 			ID: "node_pve-a", Name: "pve-a", Host: "https://10.0.0.1:8006",
 			IsClusterMember: true, ClusterName: "lab",
-			LinkedHostAgentID: "host-a",
+			LinkedAgentID: "host-a",
 		},
 		{
 			ID: "node_pve-b", Name: "pve-b", Host: "https://10.0.0.2:8006",

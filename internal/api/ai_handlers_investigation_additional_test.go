@@ -351,7 +351,7 @@ func TestFindingsStoreWrapper_GetAndUpdate(t *testing.T) {
 		Category:     ai.FindingCategoryPerformance,
 		ResourceID:   "res-1",
 		ResourceName: "res-1",
-		ResourceType: "host",
+		ResourceType: "agent",
 		Title:        "title",
 		Description:  "desc",
 	})
@@ -403,7 +403,7 @@ func TestHandleClearAllFindings(t *testing.T) {
 		Category:     ai.FindingCategoryPerformance,
 		ResourceID:   "res-1",
 		ResourceName: "res-1",
-		ResourceType: "host",
+		ResourceType: "agent",
 		Title:        "title",
 		Description:  "desc",
 	})
@@ -413,7 +413,7 @@ func TestHandleClearAllFindings(t *testing.T) {
 		Category:     ai.FindingCategorySecurity,
 		ResourceID:   "res-2",
 		ResourceName: "res-2",
-		ResourceType: "host",
+		ResourceType: "agent",
 		Title:        "title",
 		Description:  "desc",
 	})

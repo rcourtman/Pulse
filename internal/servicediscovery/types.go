@@ -16,7 +16,7 @@ const (
 	ResourceTypeSystemContainer       ResourceType = "system-container"
 	ResourceTypeDocker                ResourceType = "docker"
 	ResourceTypeK8s                   ResourceType = "k8s"
-	ResourceTypeHost                  ResourceType = "host"
+	ResourceTypeAgent                 ResourceType = "agent"
 	ResourceTypeDockerVM              ResourceType = "docker_vm"               // Docker on a VM
 	ResourceTypeDockerSystemContainer ResourceType = "docker_system-container" // Docker in a system container
 )
@@ -56,7 +56,7 @@ const (
 type ResourceDiscovery struct {
 	// Identity
 	ID           string       `json:"id"`            // Unique ID: "system-container:minipc:101"
-	ResourceType ResourceType `json:"resource_type"` // vm, system-container, docker, k8s, host
+	ResourceType ResourceType `json:"resource_type"` // vm, system-container, docker, k8s, agent
 	ResourceID   string       `json:"resource_id"`   // 101, container-name, etc.
 	HostID       string       `json:"host_id"`       // Proxmox node name or host agent ID
 	Hostname     string       `json:"hostname"`      // Human-readable host name

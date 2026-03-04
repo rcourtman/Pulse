@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -109,6 +110,17 @@ func writeDiscoveryError(w http.ResponseWriter, statusCode int, message string) 
 		"error":   true,
 		"message": message,
 	})
+}
+
+func parseDiscoveryResourceType(raw string) (servicediscovery.ResourceType, error) {
+	trimmed := strings.ToLower(strings.TrimSpace(raw))
+	if trimmed == "" {
+		return "", fmt.Errorf("resource type is required")
+	}
+	if trimmed == "host" {
+		return "", fmt.Errorf(`resource type "host" is no longer supported; use "agent"`)
+	}
+	return servicediscovery.NormalizeResourceType(servicediscovery.ResourceType(trimmed)), nil
 }
 
 // isAdminRequest checks whether the request has privileged admin access for
@@ -239,7 +251,11 @@ func (h *DiscoveryHandlers) HandleGetDiscovery(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	resourceType := servicediscovery.NormalizeResourceType(servicediscovery.ResourceType(parts[0]))
+	resourceType, err := parseDiscoveryResourceType(parts[0])
+	if err != nil {
+		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	hostID := parts[1]
 	resourceID := parts[2]
 
@@ -278,7 +294,11 @@ func (h *DiscoveryHandlers) HandleTriggerDiscovery(w http.ResponseWriter, r *htt
 		return
 	}
 
-	resourceType := servicediscovery.NormalizeResourceType(servicediscovery.ResourceType(parts[0]))
+	resourceType, err := parseDiscoveryResourceType(parts[0])
+	if err != nil {
+		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	hostID := parts[1]
 	resourceID := parts[2]
 
@@ -340,7 +360,11 @@ func (h *DiscoveryHandlers) HandleUpdateNotes(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	resourceType := servicediscovery.NormalizeResourceType(servicediscovery.ResourceType(parts[0]))
+	resourceType, err := parseDiscoveryResourceType(parts[0])
+	if err != nil {
+		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	hostID := parts[1]
 	resourceID := parts[2]
 
@@ -397,7 +421,11 @@ func (h *DiscoveryHandlers) HandleDeleteDiscovery(w http.ResponseWriter, r *http
 		return
 	}
 
-	resourceType := servicediscovery.NormalizeResourceType(servicediscovery.ResourceType(parts[0]))
+	resourceType, err := parseDiscoveryResourceType(parts[0])
+	if err != nil {
+		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	hostID := parts[1]
 	resourceID := parts[2]
 
@@ -428,7 +456,11 @@ func (h *DiscoveryHandlers) HandleGetProgress(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	resourceType := servicediscovery.NormalizeResourceType(servicediscovery.ResourceType(parts[0]))
+	resourceType, err := parseDiscoveryResourceType(parts[0])
+	if err != nil {
+		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	hostID := parts[1]
 	resourceID := parts[2]
 
@@ -533,7 +565,11 @@ func (h *DiscoveryHandlers) HandleListByType(w http.ResponseWriter, r *http.Requ
 
 	// Parse path
 	path := strings.TrimPrefix(r.URL.Path, "/api/discovery/type/")
-	resourceType := servicediscovery.NormalizeResourceType(servicediscovery.ResourceType(path))
+	resourceType, err := parseDiscoveryResourceType(path)
+	if err != nil {
+		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	discoveries, err := h.service.ListDiscoveriesByType(resourceType)
 	if err != nil {
@@ -588,7 +624,11 @@ func (h *DiscoveryHandlers) HandleListByHost(w http.ResponseWriter, r *http.Requ
 func (h *DiscoveryHandlers) HandleGetInfo(w http.ResponseWriter, r *http.Request) {
 	// Parse resource type from path
 	path := strings.TrimPrefix(r.URL.Path, "/api/discovery/info/")
-	resourceType := servicediscovery.NormalizeResourceType(servicediscovery.ResourceType(path))
+	resourceType, err := parseDiscoveryResourceType(path)
+	if err != nil {
+		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	// Get commands for this resource type
 	commands := servicediscovery.GetCommandsForResource(resourceType)

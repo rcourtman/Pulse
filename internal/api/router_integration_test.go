@@ -236,13 +236,22 @@ func TestStateEndpointReturnsMockData(t *testing.T) {
 		t.Fatalf("unmarshal state response: %v", err)
 	}
 
-	nodes, ok := snapshot["nodes"].([]any)
-	if !ok {
-		t.Fatalf("state response missing nodes array: %s", string(body))
+	if _, ok := snapshot["nodes"]; !ok {
+		t.Fatalf("state response missing legacy nodes key: %s", string(body))
+	}
+	if snapshot["nodes"] != nil {
+		t.Fatalf("expected legacy nodes array to be stripped (null), got: %v", snapshot["nodes"])
 	}
 
-	if len(nodes) == 0 {
-		t.Fatalf("expected nodes in state response, got none")
+	hasNonLegacyData := false
+	for _, key := range []string{"resources", "kubernetesClusters", "pbs", "pmg"} {
+		if values, ok := snapshot[key].([]any); ok && len(values) > 0 {
+			hasNonLegacyData = true
+			break
+		}
+	}
+	if !hasNonLegacyData {
+		t.Fatalf("expected non-legacy state data (resources/kubernetesClusters/pbs/pmg), got: %s", string(body))
 	}
 }
 

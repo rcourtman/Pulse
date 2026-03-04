@@ -113,14 +113,16 @@ func deploySubKey(agentID, jobID string) string {
 func normalizeTarget(targetType, targetID string) (string, string, error) {
 	normalizedType := strings.ToLower(strings.TrimSpace(targetType))
 	if normalizedType == "" {
-		normalizedType = "host"
+		normalizedType = "agent"
 	}
 
 	normalizedTargetID := strings.TrimSpace(targetID)
 	switch normalizedType {
+	case "agent":
+		// Agent-level execution ignores target ID.
+		return "agent", "", nil
 	case "host":
-		// Host-level execution ignores target ID.
-		return normalizedType, "", nil
+		return "", "", fmt.Errorf(`unsupported target type %q; use "agent"`, normalizedType)
 	case "container", "vm":
 		if normalizedTargetID == "" {
 			return "", "", fmt.Errorf("target id is required for target type %q", normalizedType)

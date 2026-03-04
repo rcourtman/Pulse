@@ -283,9 +283,9 @@ func readStateFromSnapshot(snap StateSnapshot) unifiedresources.ReadState {
 	}
 	for _, n := range snap.Nodes {
 		ms.Nodes = append(ms.Nodes, models.Node{
-			ID:                n.ID,
-			Name:              n.Name,
-			LinkedHostAgentID: n.LinkedHostAgentID,
+			ID:            n.ID,
+			Name:          n.Name,
+			LinkedAgentID: n.LinkedAgentID,
 		})
 	}
 	for _, kc := range snap.KubernetesClusters {
@@ -535,7 +535,7 @@ func TestService_getResourceExternalIP_Host(t *testing.T) {
 	service.SetReadState(readStateFromSnapshot(state))
 
 	got := service.getResourceExternalIP(DiscoveryRequest{
-		ResourceType: ResourceTypeHost,
+		ResourceType: ResourceTypeAgent,
 		ResourceID:   "agent-pve1",
 		HostID:       "agent-pve1",
 		Hostname:     "ignored-hostname",
@@ -545,7 +545,7 @@ func TestService_getResourceExternalIP_Host(t *testing.T) {
 	}
 
 	got = service.getResourceExternalIP(DiscoveryRequest{
-		ResourceType: ResourceTypeHost,
+		ResourceType: ResourceTypeAgent,
 		ResourceID:   "node-1",
 		HostID:       "node-1",
 		Hostname:     "ignored-hostname",
@@ -555,7 +555,7 @@ func TestService_getResourceExternalIP_Host(t *testing.T) {
 	}
 
 	got = service.getResourceExternalIP(DiscoveryRequest{
-		ResourceType: ResourceTypeHost,
+		ResourceType: ResourceTypeAgent,
 		ResourceID:   "missing-host",
 		HostID:       "missing-host",
 		Hostname:     "valid-hostname.local",
@@ -565,7 +565,7 @@ func TestService_getResourceExternalIP_Host(t *testing.T) {
 	}
 
 	got = service.getResourceExternalIP(DiscoveryRequest{
-		ResourceType: ResourceTypeHost,
+		ResourceType: ResourceTypeAgent,
 		ResourceID:   "missing-host",
 		HostID:       "host-id-fallback",
 		Hostname:     "Display Name With Spaces",
@@ -1269,9 +1269,9 @@ func TestService_Redirection(t *testing.T) {
 	state := StateSnapshot{
 		Nodes: []Node{
 			{
-				ID:                "pve-id-1",
-				Name:              "pve1",
-				LinkedHostAgentID: "agent-pve1",
+				ID:            "pve-id-1",
+				Name:          "pve1",
+				LinkedAgentID: "agent-pve1",
 			},
 		},
 		Hosts: []Host{
@@ -1294,7 +1294,7 @@ func TestService_Redirection(t *testing.T) {
 	// 1. Test DiscoverResource redirection
 	// Trigger discovery for the PVE node "pve1"
 	req := DiscoveryRequest{
-		ResourceType: ResourceTypeHost,
+		ResourceType: ResourceTypeAgent,
 		HostID:       "pve1",
 		ResourceID:   "pve1",
 		Force:        true,
@@ -1306,7 +1306,7 @@ func TestService_Redirection(t *testing.T) {
 	}
 
 	// The discovery should be associated with the AGENT ID, not the NODE ID
-	expectedID := MakeResourceID(ResourceTypeHost, "agent-pve1", "agent-pve1") // Host resources usually have HostID == ResourceID
+	expectedID := MakeResourceID(ResourceTypeAgent, "agent-pve1", "agent-pve1") // Host resources usually have HostID == ResourceID
 	if discovery.ID != expectedID {
 		t.Errorf("DiscoverResource ID mismatch. Got %s, want %s (should have redirected to agent ID)", discovery.ID, expectedID)
 	}
@@ -1316,10 +1316,10 @@ func TestService_Redirection(t *testing.T) {
 
 	// 1b. Hostname aliases should canonicalize to the same host agent ID and
 	// old alias records should be cleaned up so we keep one discovery per resource.
-	hostnameAliasID := MakeResourceID(ResourceTypeHost, "pve1-host", "pve1-host")
+	hostnameAliasID := MakeResourceID(ResourceTypeAgent, "pve1-host", "pve1-host")
 	if err := store.Save(&ResourceDiscovery{
 		ID:           hostnameAliasID,
-		ResourceType: ResourceTypeHost,
+		ResourceType: ResourceTypeAgent,
 		HostID:       "pve1-host",
 		ResourceID:   "pve1-host",
 		ServiceName:  "Alias Entry",
@@ -1328,7 +1328,7 @@ func TestService_Redirection(t *testing.T) {
 	}
 
 	discoveryFromHostname, err := service.DiscoverResource(ctx, DiscoveryRequest{
-		ResourceType: ResourceTypeHost,
+		ResourceType: ResourceTypeAgent,
 		HostID:       "pve1-host",
 		ResourceID:   "pve1-host",
 		Hostname:     "pve1-host",
@@ -1353,7 +1353,7 @@ func TestService_Redirection(t *testing.T) {
 
 	// 2. Test GetDiscoveryByResource redirection (standard case)
 	// Try to get discovery using the PVE node name
-	got, err := service.GetDiscoveryByResource(ResourceTypeHost, "pve1", "pve1")
+	got, err := service.GetDiscoveryByResource(ResourceTypeAgent, "pve1", "pve1")
 	if err != nil {
 		t.Fatalf("GetDiscoveryByResource error: %v", err)
 	}
@@ -1367,7 +1367,7 @@ func TestService_Redirection(t *testing.T) {
 	}
 
 	// 2b. Hostname lookups should resolve to the same canonical discovery.
-	gotByHostname, err := service.GetDiscoveryByResource(ResourceTypeHost, "pve1-host", "pve1-host")
+	gotByHostname, err := service.GetDiscoveryByResource(ResourceTypeAgent, "pve1-host", "pve1-host")
 	if err != nil {
 		t.Fatalf("GetDiscoveryByResource hostname lookup error: %v", err)
 	}
@@ -1380,10 +1380,10 @@ func TestService_Redirection(t *testing.T) {
 
 	// 3. Test GetDiscoveryByResource fallback
 	// Create a "legacy" discovery that only exists under the node ID
-	legacyID := MakeResourceID(ResourceTypeHost, "pve1", "pve1")
+	legacyID := MakeResourceID(ResourceTypeAgent, "pve1", "pve1")
 	legacyDiscovery := &ResourceDiscovery{
 		ID:           legacyID,
-		ResourceType: ResourceTypeHost,
+		ResourceType: ResourceTypeAgent,
 		HostID:       "pve1",
 		ResourceID:   "pve1",
 		ServiceName:  "Legacy PVE",
@@ -1398,7 +1398,7 @@ func TestService_Redirection(t *testing.T) {
 	}
 
 	// Try to get "pve1" again. It should redirect to agent-pve1 (not found), then fallback to pve1 (found)
-	gotLegacy, err := service.GetDiscoveryByResource(ResourceTypeHost, "pve1", "pve1")
+	gotLegacy, err := service.GetDiscoveryByResource(ResourceTypeAgent, "pve1", "pve1")
 	if err != nil {
 		t.Fatalf("GetDiscoveryByResource fallback error: %v", err)
 	}
@@ -1450,9 +1450,9 @@ func TestService_DiscoverResource_HostSuggestedURLFallbackForLinkedNode(t *testi
 	state := StateSnapshot{
 		Nodes: []Node{
 			{
-				ID:                "pve-id-1",
-				Name:              "pve1",
-				LinkedHostAgentID: "agent-pve1",
+				ID:            "pve-id-1",
+				Name:          "pve1",
+				LinkedAgentID: "agent-pve1",
 			},
 		},
 		Hosts: []Host{
@@ -1470,7 +1470,7 @@ func TestService_DiscoverResource_HostSuggestedURLFallbackForLinkedNode(t *testi
 	})
 
 	discovery, err := service.DiscoverResource(context.Background(), DiscoveryRequest{
-		ResourceType: ResourceTypeHost,
+		ResourceType: ResourceTypeAgent,
 		HostID:       "pve1",
 		ResourceID:   "pve1",
 		Force:        true,
@@ -1509,7 +1509,7 @@ func TestService_DiscoverResource_URLSuggestionDiagnostics(t *testing.T) {
 	})
 
 	discovery, err := service.DiscoverResource(context.Background(), DiscoveryRequest{
-		ResourceType: ResourceTypeHost,
+		ResourceType: ResourceTypeAgent,
 		HostID:       "missing-host",
 		ResourceID:   "missing-host",
 		Hostname:     "Display Name With Spaces",

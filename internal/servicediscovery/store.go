@@ -98,8 +98,6 @@ func cloneContainerFingerprint(src *ContainerFingerprint) *ContainerFingerprint 
 // NormalizeResourceType maps legacy resource type strings to their current values.
 func NormalizeResourceType(rt ResourceType) ResourceType {
 	switch rt {
-	case "agent":
-		return ResourceTypeHost
 	case "lxc":
 		return ResourceTypeSystemContainer
 	case "docker_lxc":
@@ -109,11 +107,17 @@ func NormalizeResourceType(rt ResourceType) ResourceType {
 	}
 }
 
+func canonicalStoredResourceType(rt ResourceType) ResourceType {
+	switch rt {
+	case "host":
+		return ResourceTypeAgent
+	default:
+		return NormalizeResourceType(rt)
+	}
+}
+
 // normalizeResourceID replaces legacy type prefixes in resource IDs.
 func normalizeResourceID(id string) string {
-	if strings.HasPrefix(id, "agent:") {
-		return string(ResourceTypeHost) + id[5:]
-	}
 	if strings.HasPrefix(id, "lxc:") {
 		return string(ResourceTypeSystemContainer) + id[3:]
 	}
@@ -123,13 +127,20 @@ func normalizeResourceID(id string) string {
 	return id
 }
 
+func canonicalStoredResourceID(id string) string {
+	if strings.HasPrefix(id, "host:") {
+		return string(ResourceTypeAgent) + id[4:]
+	}
+	return normalizeResourceID(id)
+}
+
 // normalizeDiscovery normalizes legacy type strings in a loaded discovery.
 func normalizeDiscovery(d *ResourceDiscovery) {
 	if d == nil {
 		return
 	}
-	d.ResourceType = NormalizeResourceType(d.ResourceType)
-	d.ID = normalizeResourceID(d.ID)
+	d.ResourceType = canonicalStoredResourceType(d.ResourceType)
+	d.ID = canonicalStoredResourceID(d.ID)
 }
 
 // toLegacyID converts a normalized resource ID back to its legacy form for file lookup.
@@ -615,6 +626,7 @@ func (s *Store) loadFingerprints() {
 			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to unmarshal fingerprint")
 			continue
 		}
+		fp.ResourceID = canonicalStoredResourceID(fp.ResourceID)
 
 		s.fingerprints[fp.ResourceID] = &fp
 	}
@@ -694,7 +706,7 @@ func (s *Store) GetChangedResources() ([]string, error) {
 
 	var changed []string
 	for resourceID, fp := range fingerprints {
-		// The fingerprint key is already in resource ID format (type:host:id)
+		// The fingerprint key is already in resource ID format (type:scope:id)
 		// so use it directly as the discovery ID
 		discovery, err := s.Get(resourceID)
 		if err != nil {
@@ -775,7 +787,7 @@ func (s *Store) CleanupOrphanedFingerprints(currentResourceIDs map[string]bool) 
 
 	removed := 0
 	for fpID := range s.fingerprints {
-		normalizedFpID := normalizeResourceID(fpID)
+		normalizedFpID := canonicalStoredResourceID(fpID)
 		if !currentResourceIDs[fpID] && !currentResourceIDs[normalizedFpID] {
 			// Remove from memory
 			delete(s.fingerprints, fpID)
@@ -821,7 +833,7 @@ func (s *Store) CleanupOrphanedDiscoveries(currentResourceIDs map[string]bool) i
 		}
 
 		// Normalize the stored ID before checking membership (handles legacy "lxc:..." IDs)
-		normalizedID := normalizeResourceID(resourceID)
+		normalizedID := canonicalStoredResourceID(resourceID)
 		if !currentResourceIDs[resourceID] && !currentResourceIDs[normalizedID] {
 			filePath := filepath.Join(s.dataDir, entry.Name())
 			if err := os.Remove(filePath); err != nil {

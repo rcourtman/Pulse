@@ -555,7 +555,7 @@ func TestRouteExecute_ValidTargetTypes(t *testing.T) {
 	ollama := newIPv4HTTPServer(t, mockOllamaForExecute())
 	defer ollama.Close()
 
-	for _, tt := range []string{"host", "container", "vm", "node", "lxc"} {
+	for _, tt := range []string{"agent", "container", "vm", "node", "lxc"} {
 		t.Run(tt, func(t *testing.T) {
 			router, token := setupExecuteRouter(t, ollama.URL)
 
@@ -622,7 +622,7 @@ func TestRouteExecute_TargetIDTooLong(t *testing.T) {
 	router, token := setupExecuteRouter(t, "http://192.0.2.1:11434")
 
 	longID := strings.Repeat("x", 257)
-	body := `{"prompt":"hello","target_type":"host","target_id":"` + longID + `"}`
+	body := `{"prompt":"hello","target_type":"agent","target_id":"` + longID + `"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute", strings.NewReader(body))
 	req.Header.Set("X-API-Token", token)
 	rec := httptest.NewRecorder()

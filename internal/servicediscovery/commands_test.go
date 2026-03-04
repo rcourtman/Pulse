@@ -13,7 +13,7 @@ func TestCommandsAndTemplates(t *testing.T) {
 		ResourceTypeDockerVM,
 		ResourceTypeDockerSystemContainer,
 		ResourceTypeK8s,
-		ResourceTypeHost,
+		ResourceTypeAgent,
 	}
 
 	for _, rt := range resourceTypes {

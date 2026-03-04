@@ -107,6 +107,50 @@ func TestEnroll_Success(t *testing.T) {
 	}
 }
 
+func TestEnroll_PrefersAgentIDFromResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(enrollResponse{
+			AgentID:      "agent-canonical",
+			HostID:       "host-legacy",
+			RuntimeToken: "runtime-tok-123",
+		})
+	}))
+	defer server.Close()
+
+	stateDir := t.TempDir()
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	agent := &Agent{
+		cfg: Config{
+			APIToken: "bootstrap-tok",
+			Enroll:   true,
+		},
+		logger:          logger,
+		httpClient:      server.Client(),
+		hostname:        "test-host",
+		osName:          "linux",
+		architecture:    "amd64",
+		agentVersion:    "1.0.0",
+		trimmedPulseURL: server.URL,
+		stateDir:        stateDir,
+		collector:       realFSCollector(),
+	}
+
+	if err := agent.runEnrollmentLoop(context.Background()); err != nil {
+		t.Fatalf("enrollment failed: %v", err)
+	}
+
+	hostIDPath := filepath.Join(stateDir, "host-id")
+	data, err := os.ReadFile(hostIDPath)
+	if err != nil {
+		t.Fatalf("read host-id file: %v", err)
+	}
+	if got := string(data); got != "agent-canonical" {
+		t.Fatalf("expected persisted host-id agent-canonical, got %s", got)
+	}
+}
+
 func TestEnroll_AlreadyEnrolled(t *testing.T) {
 	stateDir := t.TempDir()
 

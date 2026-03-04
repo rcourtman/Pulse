@@ -23,11 +23,11 @@ func TestMachineIDMatchMerges(t *testing.T) {
 	store := NewMemoryStore()
 	registry := NewRegistry(store)
 
-	resA := Resource{Type: ResourceTypeHost, Name: "pve1", Status: StatusOnline}
+	resA := Resource{Type: ResourceTypeAgent, Name: "pve1", Status: StatusOnline}
 	idA := ResourceIdentity{MachineID: "machine-1", Hostnames: []string{"pve1"}}
 	registry.ingest(SourceAgent, "agent-1", resA, idA)
 
-	resB := Resource{Type: ResourceTypeHost, Name: "pve1", Status: StatusOnline}
+	resB := Resource{Type: ResourceTypeAgent, Name: "pve1", Status: StatusOnline}
 	idB := ResourceIdentity{MachineID: "machine-1", Hostnames: []string{"pve1"}}
 	registry.ingest(SourceDocker, "docker-1", resB, idB)
 
@@ -41,11 +41,11 @@ func TestDMIUUIDMatchMerges(t *testing.T) {
 	store := NewMemoryStore()
 	registry := NewRegistry(store)
 
-	resA := Resource{Type: ResourceTypeHost, Name: "pve1", Status: StatusOnline}
+	resA := Resource{Type: ResourceTypeAgent, Name: "pve1", Status: StatusOnline}
 	idA := ResourceIdentity{DMIUUID: "uuid-1", Hostnames: []string{"pve1"}}
 	registry.ingest(SourceAgent, "agent-1", resA, idA)
 
-	resB := Resource{Type: ResourceTypeHost, Name: "pve1", Status: StatusOnline}
+	resB := Resource{Type: ResourceTypeAgent, Name: "pve1", Status: StatusOnline}
 	idB := ResourceIdentity{DMIUUID: "uuid-1", Hostnames: []string{"pve1"}}
 	registry.ingest(SourceDocker, "docker-1", resB, idB)
 
@@ -59,7 +59,7 @@ func TestVMInsideHostNoMerge(t *testing.T) {
 	store := NewMemoryStore()
 	registry := NewRegistry(store)
 
-	resHost := Resource{Type: ResourceTypeHost, Name: "pve1", Status: StatusOnline}
+	resHost := Resource{Type: ResourceTypeAgent, Name: "pve1", Status: StatusOnline}
 	idHost := ResourceIdentity{MachineID: "machine-1", Hostnames: []string{"pve1"}}
 	registry.ingest(SourceAgent, "agent-1", resHost, idHost)
 
@@ -75,17 +75,17 @@ func TestVMInsideHostNoMerge(t *testing.T) {
 
 func TestExclusionPreventsMatch(t *testing.T) {
 	store := NewMemoryStore()
-	primaryID := buildHashID(ResourceTypeHost, "machine:machine-1")
-	candidateID := buildHashID(ResourceTypeHost, fmt.Sprintf("%s:%s", SourceDocker, "docker-1"))
+	primaryID := buildHashID(ResourceTypeAgent, "machine:machine-1")
+	candidateID := buildHashID(ResourceTypeAgent, fmt.Sprintf("%s:%s", SourceDocker, "docker-1"))
 
 	_ = store.AddExclusion(ResourceExclusion{ResourceA: primaryID, ResourceB: candidateID})
 	registry := NewRegistry(store)
 
-	resA := Resource{Type: ResourceTypeHost, Name: "pve1", Status: StatusOnline}
+	resA := Resource{Type: ResourceTypeAgent, Name: "pve1", Status: StatusOnline}
 	idA := ResourceIdentity{MachineID: "machine-1", Hostnames: []string{"pve1"}}
 	registry.ingest(SourceAgent, "agent-1", resA, idA)
 
-	resB := Resource{Type: ResourceTypeHost, Name: "pve1", Status: StatusOnline}
+	resB := Resource{Type: ResourceTypeAgent, Name: "pve1", Status: StatusOnline}
 	idB := ResourceIdentity{MachineID: "machine-1", Hostnames: []string{"pve1"}}
 	registry.ingest(SourceDocker, "docker-1", resB, idB)
 

@@ -126,8 +126,8 @@ func TestStateLinkNodeToHostAgent(t *testing.T) {
 	if ok := state.LinkNodeToHostAgent("n1", "h1"); !ok {
 		t.Fatalf("LinkNodeToHostAgent returned false")
 	}
-	if state.Nodes[0].LinkedHostAgentID != "h1" {
-		t.Fatalf("LinkedHostAgentID = %q, want h1", state.Nodes[0].LinkedHostAgentID)
+	if state.Nodes[0].LinkedAgentID != "h1" {
+		t.Fatalf("LinkedAgentID = %q, want h1", state.Nodes[0].LinkedAgentID)
 	}
 	if ok := state.LinkNodeToHostAgent("missing", "h1"); ok {
 		t.Fatalf("expected false for missing node")
@@ -137,9 +137,9 @@ func TestStateLinkNodeToHostAgent(t *testing.T) {
 func TestStateUnlinkNodesFromHostAgent(t *testing.T) {
 	state := &State{
 		Nodes: []Node{
-			{ID: "n1", LinkedHostAgentID: "h1"},
-			{ID: "n2", LinkedHostAgentID: "h1"},
-			{ID: "n3", LinkedHostAgentID: "h2"},
+			{ID: "n1", LinkedAgentID: "h1"},
+			{ID: "n2", LinkedAgentID: "h1"},
+			{ID: "n3", LinkedAgentID: "h2"},
 		},
 	}
 
@@ -148,8 +148,8 @@ func TestStateUnlinkNodesFromHostAgent(t *testing.T) {
 		t.Fatalf("count = %d, want 2", count)
 	}
 	for _, node := range state.Nodes[:2] {
-		if node.LinkedHostAgentID != "" {
-			t.Fatalf("expected LinkedHostAgentID cleared, got %q", node.LinkedHostAgentID)
+		if node.LinkedAgentID != "" {
+			t.Fatalf("expected LinkedAgentID cleared, got %q", node.LinkedAgentID)
 		}
 	}
 }
@@ -170,8 +170,8 @@ func TestStateUpdateNodesForInstanceSkipsAmbiguousHostAgentHostnameMatch(t *test
 	if len(nodes) != 1 {
 		t.Fatalf("nodes = %#v, want 1", nodes)
 	}
-	if nodes[0].LinkedHostAgentID != "" {
-		t.Fatalf("expected no auto-link for ambiguous hostname, got %q", nodes[0].LinkedHostAgentID)
+	if nodes[0].LinkedAgentID != "" {
+		t.Fatalf("expected no auto-link for ambiguous hostname, got %q", nodes[0].LinkedAgentID)
 	}
 }
 
@@ -190,8 +190,8 @@ func TestStateUpdateNodesForInstanceLinksUniqueHostname(t *testing.T) {
 	if len(nodes) != 1 {
 		t.Fatalf("nodes = %#v, want 1", nodes)
 	}
-	if nodes[0].LinkedHostAgentID != "host-a" {
-		t.Fatalf("LinkedHostAgentID = %q, want host-a", nodes[0].LinkedHostAgentID)
+	if nodes[0].LinkedAgentID != "host-a" {
+		t.Fatalf("LinkedAgentID = %q, want host-a", nodes[0].LinkedAgentID)
 	}
 }
 
@@ -202,12 +202,12 @@ func TestUpdateNodesForInstancePreservesLinkWhenNodeIDChanges(t *testing.T) {
 		},
 		Nodes: []Node{
 			{
-				ID:                "cluster-a-pve01-old",
-				Name:              "pve01",
-				Instance:          "cluster-entry-a",
-				ClusterName:       "cluster-a",
-				IsClusterMember:   true,
-				LinkedHostAgentID: "host-1",
+				ID:              "cluster-a-pve01-old",
+				Name:            "pve01",
+				Instance:        "cluster-entry-a",
+				ClusterName:     "cluster-a",
+				IsClusterMember: true,
+				LinkedAgentID:   "host-1",
 			},
 		},
 	}
@@ -229,8 +229,8 @@ func TestUpdateNodesForInstancePreservesLinkWhenNodeIDChanges(t *testing.T) {
 	if state.Nodes[0].ID != "cluster-a-pve01-new" {
 		t.Fatalf("node id = %q, want cluster-a-pve01-new", state.Nodes[0].ID)
 	}
-	if state.Nodes[0].LinkedHostAgentID != "host-1" {
-		t.Fatalf("linkedHostAgentID = %q, want host-1", state.Nodes[0].LinkedHostAgentID)
+	if state.Nodes[0].LinkedAgentID != "host-1" {
+		t.Fatalf("linkedAgentID = %q, want host-1", state.Nodes[0].LinkedAgentID)
 	}
 }
 
@@ -324,7 +324,7 @@ func TestStateLinkHostAgentToNode(t *testing.T) {
 			{ID: "h2", LinkedVMID: "vm1", LinkedContainerID: "ct1"},
 		},
 		Nodes: []Node{
-			{ID: "n1", LinkedHostAgentID: "h1"},
+			{ID: "n1", LinkedAgentID: "h1"},
 			{ID: "n2"},
 		},
 	}
@@ -335,8 +335,8 @@ func TestStateLinkHostAgentToNode(t *testing.T) {
 	if state.Hosts[1].LinkedNodeID != "n2" {
 		t.Fatalf("LinkedNodeID = %q, want n2", state.Hosts[1].LinkedNodeID)
 	}
-	if state.Nodes[1].LinkedHostAgentID != "h2" {
-		t.Fatalf("LinkedHostAgentID = %q, want h2", state.Nodes[1].LinkedHostAgentID)
+	if state.Nodes[1].LinkedAgentID != "h2" {
+		t.Fatalf("LinkedAgentID = %q, want h2", state.Nodes[1].LinkedAgentID)
 	}
 	if state.Hosts[1].LinkedVMID != "" || state.Hosts[1].LinkedContainerID != "" {
 		t.Fatalf("expected VM/container links cleared")
@@ -353,7 +353,7 @@ func TestStateLinkHostAgentToNode(t *testing.T) {
 func TestStateUnlinkHostAgent(t *testing.T) {
 	state := &State{
 		Hosts: []Host{{ID: "h1", LinkedNodeID: "n1", LinkedVMID: "vm", LinkedContainerID: "ct"}},
-		Nodes: []Node{{ID: "n1", LinkedHostAgentID: "h1"}},
+		Nodes: []Node{{ID: "n1", LinkedAgentID: "h1"}},
 	}
 
 	if ok := state.UnlinkHostAgent("h1"); !ok {
@@ -362,7 +362,7 @@ func TestStateUnlinkHostAgent(t *testing.T) {
 	if state.Hosts[0].LinkedNodeID != "" || state.Hosts[0].LinkedVMID != "" || state.Hosts[0].LinkedContainerID != "" {
 		t.Fatalf("expected host links cleared")
 	}
-	if state.Nodes[0].LinkedHostAgentID != "" {
+	if state.Nodes[0].LinkedAgentID != "" {
 		t.Fatalf("expected node link cleared")
 	}
 	if ok := state.UnlinkHostAgent("missing"); ok {

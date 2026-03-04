@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -169,7 +170,7 @@ func TestHandleMetricsHistory_UsesStore(t *testing.T) {
 	}
 }
 
-func TestHandleMetricsHistory_AgentAliasUsesHostStoreKey(t *testing.T) {
+func TestHandleMetricsHistory_AgentRequestReadsAgentWrites(t *testing.T) {
 	monitor, _, _ := newTestMonitor(t)
 	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
 	if err != nil {
@@ -178,7 +179,7 @@ func TestHandleMetricsHistory_AgentAliasUsesHostStoreKey(t *testing.T) {
 	defer store.Close()
 
 	store.WriteBatchSync([]metrics.WriteMetric{{
-		ResourceType: "host",
+		ResourceType: "agent",
 		ResourceID:   "agent-1",
 		MetricType:   "cpu",
 		Value:        37.5,
@@ -204,9 +205,45 @@ func TestHandleMetricsHistory_AgentAliasUsesHostStoreKey(t *testing.T) {
 	if payload["source"] != "store" {
 		t.Fatalf("expected source store, got %#v", payload["source"])
 	}
+	if payload["resourceType"] != "agent" {
+		t.Fatalf("expected canonical resourceType agent, got %#v", payload["resourceType"])
+	}
 	pointsRaw, ok := payload["points"].([]interface{})
 	if !ok || len(pointsRaw) == 0 {
 		t.Fatalf("expected non-empty points, got %#v", payload["points"])
+	}
+}
+
+func TestHandleMetricsHistory_HostAliasReadsAgentStoreKeyAndReturnsAgentType(t *testing.T) {
+	monitor, _, _ := newTestMonitor(t)
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatalf("metrics.NewStore error: %v", err)
+	}
+	defer store.Close()
+
+	store.WriteBatchSync([]metrics.WriteMetric{{
+		ResourceType: "agent",
+		ResourceID:   "agent-1",
+		MetricType:   "cpu",
+		Value:        44.2,
+		Timestamp:    time.Now(),
+		Tier:         metrics.TierRaw,
+	}})
+
+	setUnexportedField(t, monitor, "metricsStore", store)
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=host&resourceId=agent-1&metric=cpu&range=1h", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleMetricsHistory(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, `resourceType "host" is no longer supported; use "agent"`) {
+		t.Fatalf("unexpected response body: %s", body)
 	}
 }
 

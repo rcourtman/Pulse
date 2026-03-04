@@ -201,6 +201,40 @@ func TestNoDirectStateAccessForMigratedResources(t *testing.T) {
 	}
 }
 
+// TestNoLegacyHostResourceTypeSymbol prevents reintroducing the removed
+// ResourceTypeHost symbol. v6 code must use ResourceTypeAgent and
+// CanonicalResourceType() for legacy normalization.
+func TestNoLegacyHostResourceTypeSymbol(t *testing.T) {
+	internalDir := filepath.Join("..")
+	err := filepath.Walk(internalDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		if filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		content := string(data)
+		if !strings.Contains(content, "ResourceTypeHost") {
+			return nil
+		}
+
+		normalizedPath := filepath.ToSlash(path)
+		t.Errorf("%s: legacy ResourceTypeHost symbol detected; use ResourceTypeAgent instead", normalizedPath)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("failed to scan internal packages: %v", err)
+	}
+}
+
 // SRC-04b: Ratchet-to-hard-ban conversion completed 2026-03-01.
 //
 // All state.* field access patterns and GetState() calls in consumer packages

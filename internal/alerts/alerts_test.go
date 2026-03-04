@@ -2027,7 +2027,7 @@ func TestUpdateConfigClampsDockerServiceCriticalGap(t *testing.T) {
 		Enabled:        true,
 		GuestDefaults:  ThresholdConfig{},
 		NodeDefaults:   ThresholdConfig{},
-		HostDefaults:   ThresholdConfig{},
+		AgentDefaults:  ThresholdConfig{},
 		StorageDefault: HysteresisThreshold{},
 		DockerDefaults: DockerThresholdConfig{
 			ServiceWarnGapPct: 35,
@@ -2061,7 +2061,7 @@ func TestDockerServiceAlertUsesClampedCriticalGap(t *testing.T) {
 		Enabled:        true,
 		GuestDefaults:  ThresholdConfig{},
 		NodeDefaults:   ThresholdConfig{},
-		HostDefaults:   ThresholdConfig{},
+		AgentDefaults:  ThresholdConfig{},
 		StorageDefault: HysteresisThreshold{},
 		DockerDefaults: DockerThresholdConfig{
 			ServiceWarnGapPct: 20,
@@ -2107,19 +2107,19 @@ func TestDockerServiceAlertUsesClampedCriticalGap(t *testing.T) {
 	}
 }
 
-// TestNormalizeHostDefaultsPreservesZeroTrigger verifies that setting
+// TestNormalizeAgentDefaultsPreservesZeroTrigger verifies that setting
 // Host Agent thresholds to 0 is preserved (fixes GitHub issue #864).
 // Setting a threshold to 0 should disable alerting for that metric.
-func TestNormalizeHostDefaultsPreservesZeroTrigger(t *testing.T) {
+func TestNormalizeAgentDefaultsPreservesZeroTrigger(t *testing.T) {
 	// t.Parallel()
 
-	t.Run("nil HostDefaults get factory defaults", func(t *testing.T) {
+	t.Run("nil AgentDefaults get factory defaults", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 
 		cfg := AlertConfig{
-			Enabled:      true,
-			HostDefaults: ThresholdConfig{}, // Empty - needs defaults
+			Enabled:       true,
+			AgentDefaults: ThresholdConfig{}, // Empty - needs defaults
 		}
 
 		m.UpdateConfig(cfg)
@@ -2127,23 +2127,23 @@ func TestNormalizeHostDefaultsPreservesZeroTrigger(t *testing.T) {
 		m.mu.RLock()
 		defer m.mu.RUnlock()
 
-		if m.config.HostDefaults.CPU == nil {
+		if m.config.AgentDefaults.CPU == nil {
 			t.Fatal("CPU defaults should be set")
 		}
-		if m.config.HostDefaults.CPU.Trigger != 80 {
-			t.Errorf("CPU trigger = %v, want 80", m.config.HostDefaults.CPU.Trigger)
+		if m.config.AgentDefaults.CPU.Trigger != 80 {
+			t.Errorf("CPU trigger = %v, want 80", m.config.AgentDefaults.CPU.Trigger)
 		}
-		if m.config.HostDefaults.Memory == nil {
+		if m.config.AgentDefaults.Memory == nil {
 			t.Fatal("Memory defaults should be set")
 		}
-		if m.config.HostDefaults.Memory.Trigger != 85 {
-			t.Errorf("Memory trigger = %v, want 85", m.config.HostDefaults.Memory.Trigger)
+		if m.config.AgentDefaults.Memory.Trigger != 85 {
+			t.Errorf("Memory trigger = %v, want 85", m.config.AgentDefaults.Memory.Trigger)
 		}
-		if m.config.HostDefaults.Disk == nil {
+		if m.config.AgentDefaults.Disk == nil {
 			t.Fatal("Disk defaults should be set")
 		}
-		if m.config.HostDefaults.Disk.Trigger != 90 {
-			t.Errorf("Disk trigger = %v, want 90", m.config.HostDefaults.Disk.Trigger)
+		if m.config.AgentDefaults.Disk.Trigger != 90 {
+			t.Errorf("Disk trigger = %v, want 90", m.config.AgentDefaults.Disk.Trigger)
 		}
 	})
 
@@ -2154,7 +2154,7 @@ func TestNormalizeHostDefaultsPreservesZeroTrigger(t *testing.T) {
 		// Set Memory to 0 to disable memory alerting for host agents
 		cfg := AlertConfig{
 			Enabled: true,
-			HostDefaults: ThresholdConfig{
+			AgentDefaults: ThresholdConfig{
 				CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
 				Memory: &HysteresisThreshold{Trigger: 0, Clear: 0}, // Disabled
 				Disk:   &HysteresisThreshold{Trigger: 90, Clear: 85},
@@ -2167,22 +2167,22 @@ func TestNormalizeHostDefaultsPreservesZeroTrigger(t *testing.T) {
 		defer m.mu.RUnlock()
 
 		// Memory threshold should remain at 0 (disabled), not reset to default
-		if m.config.HostDefaults.Memory == nil {
+		if m.config.AgentDefaults.Memory == nil {
 			t.Fatal("Memory defaults should be preserved (not nil)")
 		}
-		if m.config.HostDefaults.Memory.Trigger != 0 {
-			t.Errorf("Memory trigger = %v, want 0 (disabled)", m.config.HostDefaults.Memory.Trigger)
+		if m.config.AgentDefaults.Memory.Trigger != 0 {
+			t.Errorf("Memory trigger = %v, want 0 (disabled)", m.config.AgentDefaults.Memory.Trigger)
 		}
-		if m.config.HostDefaults.Memory.Clear != 0 {
-			t.Errorf("Memory clear = %v, want 0 (disabled)", m.config.HostDefaults.Memory.Clear)
+		if m.config.AgentDefaults.Memory.Clear != 0 {
+			t.Errorf("Memory clear = %v, want 0 (disabled)", m.config.AgentDefaults.Memory.Clear)
 		}
 
 		// CPU and Disk should still have their values
-		if m.config.HostDefaults.CPU.Trigger != 80 {
-			t.Errorf("CPU trigger = %v, want 80", m.config.HostDefaults.CPU.Trigger)
+		if m.config.AgentDefaults.CPU.Trigger != 80 {
+			t.Errorf("CPU trigger = %v, want 80", m.config.AgentDefaults.CPU.Trigger)
 		}
-		if m.config.HostDefaults.Disk.Trigger != 90 {
-			t.Errorf("Disk trigger = %v, want 90", m.config.HostDefaults.Disk.Trigger)
+		if m.config.AgentDefaults.Disk.Trigger != 90 {
+			t.Errorf("Disk trigger = %v, want 90", m.config.AgentDefaults.Disk.Trigger)
 		}
 	})
 
@@ -2193,7 +2193,7 @@ func TestNormalizeHostDefaultsPreservesZeroTrigger(t *testing.T) {
 		// Set CPU to 0 with a non-zero Clear - Clear should be normalized to 0
 		cfg := AlertConfig{
 			Enabled: true,
-			HostDefaults: ThresholdConfig{
+			AgentDefaults: ThresholdConfig{
 				CPU:    &HysteresisThreshold{Trigger: 0, Clear: 50}, // Clear should become 0
 				Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
 				Disk:   &HysteresisThreshold{Trigger: 0, Clear: 75}, // Clear should become 0
@@ -2205,11 +2205,11 @@ func TestNormalizeHostDefaultsPreservesZeroTrigger(t *testing.T) {
 		m.mu.RLock()
 		defer m.mu.RUnlock()
 
-		if m.config.HostDefaults.CPU.Clear != 0 {
-			t.Errorf("CPU clear = %v, want 0 when trigger is 0", m.config.HostDefaults.CPU.Clear)
+		if m.config.AgentDefaults.CPU.Clear != 0 {
+			t.Errorf("CPU clear = %v, want 0 when trigger is 0", m.config.AgentDefaults.CPU.Clear)
 		}
-		if m.config.HostDefaults.Disk.Clear != 0 {
-			t.Errorf("Disk clear = %v, want 0 when trigger is 0", m.config.HostDefaults.Disk.Clear)
+		if m.config.AgentDefaults.Disk.Clear != 0 {
+			t.Errorf("Disk clear = %v, want 0 when trigger is 0", m.config.AgentDefaults.Disk.Clear)
 		}
 	})
 
@@ -2219,7 +2219,7 @@ func TestNormalizeHostDefaultsPreservesZeroTrigger(t *testing.T) {
 
 		cfg := AlertConfig{
 			Enabled: true,
-			HostDefaults: ThresholdConfig{
+			AgentDefaults: ThresholdConfig{
 				CPU:    &HysteresisThreshold{Trigger: 90, Clear: 0}, // Clear should be computed
 				Memory: &HysteresisThreshold{Trigger: 95, Clear: 0}, // Clear should be computed
 				Disk:   &HysteresisThreshold{Trigger: 92, Clear: 0}, // Clear should be computed
@@ -2232,14 +2232,14 @@ func TestNormalizeHostDefaultsPreservesZeroTrigger(t *testing.T) {
 		defer m.mu.RUnlock()
 
 		// Clear should be Trigger - 5
-		if m.config.HostDefaults.CPU.Clear != 85 {
-			t.Errorf("CPU clear = %v, want 85", m.config.HostDefaults.CPU.Clear)
+		if m.config.AgentDefaults.CPU.Clear != 85 {
+			t.Errorf("CPU clear = %v, want 85", m.config.AgentDefaults.CPU.Clear)
 		}
-		if m.config.HostDefaults.Memory.Clear != 90 {
-			t.Errorf("Memory clear = %v, want 90", m.config.HostDefaults.Memory.Clear)
+		if m.config.AgentDefaults.Memory.Clear != 90 {
+			t.Errorf("Memory clear = %v, want 90", m.config.AgentDefaults.Memory.Clear)
 		}
-		if m.config.HostDefaults.Disk.Clear != 87 {
-			t.Errorf("Disk clear = %v, want 87", m.config.HostDefaults.Disk.Clear)
+		if m.config.AgentDefaults.Disk.Clear != 87 {
+			t.Errorf("Disk clear = %v, want 87", m.config.AgentDefaults.Disk.Clear)
 		}
 	})
 }
@@ -4646,7 +4646,7 @@ func TestClearHostMetricAlerts(t *testing.T) {
 		m := newTestManager(t)
 
 		hostID := "my-host"
-		resourceID := fmt.Sprintf("host:%s", hostID)
+		resourceID := fmt.Sprintf("agent:%s", hostID)
 
 		// Create alerts for cpu and memory
 		m.mu.Lock()
@@ -4679,7 +4679,7 @@ func TestClearHostMetricAlerts(t *testing.T) {
 		m := newTestManager(t)
 
 		hostID := "default-host"
-		resourceID := fmt.Sprintf("host:%s", hostID)
+		resourceID := fmt.Sprintf("agent:%s", hostID)
 
 		// Create alerts
 		m.mu.Lock()
@@ -4736,7 +4736,7 @@ func TestClearHostDiskAlerts(t *testing.T) {
 		m := newTestManager(t)
 
 		hostID := "disk-host"
-		resourceID := fmt.Sprintf("host:%s", hostID)
+		resourceID := fmt.Sprintf("agent:%s", hostID)
 
 		// Create disk alerts with the expected ResourceID format
 		m.mu.Lock()
@@ -4801,7 +4801,7 @@ func TestClearHostDiskAlerts(t *testing.T) {
 		m := newTestManager(t)
 
 		hostID := "nil-test"
-		resourceID := fmt.Sprintf("host:%s", hostID)
+		resourceID := fmt.Sprintf("agent:%s", hostID)
 
 		m.mu.Lock()
 		m.activeAlerts["nil-alert"] = nil
@@ -4854,7 +4854,7 @@ func TestCleanupHostDiskAlerts(t *testing.T) {
 		m := newTestManager(t)
 
 		host := models.Host{ID: "host-1"}
-		resourceID := fmt.Sprintf("host:%s", host.ID)
+		resourceID := fmt.Sprintf("agent:%s", host.ID)
 
 		// Create disk alerts
 		m.mu.Lock()
@@ -4925,7 +4925,7 @@ func TestCleanupHostDiskAlerts(t *testing.T) {
 		m := newTestManager(t)
 
 		host := models.Host{ID: "host-2"}
-		resourceID := fmt.Sprintf("host:%s", host.ID)
+		resourceID := fmt.Sprintf("agent:%s", host.ID)
 
 		m.mu.Lock()
 		m.activeAlerts["nil-alert"] = nil
@@ -4954,7 +4954,7 @@ func TestCleanupHostDiskAlerts(t *testing.T) {
 		m := newTestManager(t)
 
 		host := models.Host{ID: "host-3"}
-		resourceID := fmt.Sprintf("host:%s", host.ID)
+		resourceID := fmt.Sprintf("agent:%s", host.ID)
 
 		m.mu.Lock()
 		m.activeAlerts["cpu-alert"] = &Alert{
@@ -6137,11 +6137,11 @@ func TestHandleHostOffline(t *testing.T) {
 		}
 	})
 
-	t.Run("DisableAllHostsOffline clears alert and returns", func(t *testing.T) {
+	t.Run("DisableAllAgentsOffline clears alert and returns", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.config.Enabled = true
-		m.config.DisableAllHostsOffline = true
+		m.config.DisableAllAgentsOffline = true
 
 		// Pre-create an alert and confirmation
 		alertID := "host-offline-host1"
@@ -6227,22 +6227,23 @@ func TestHandleHostOffline(t *testing.T) {
 		m.config.Enabled = true
 
 		host := models.Host{ID: "host1", Hostname: "test-host"}
+		resourceKey := hostResourceID(host.ID)
 
 		// First two calls should not create alert
 		m.HandleHostOffline(host)
 		if len(m.activeAlerts) != 0 {
 			t.Errorf("expected 0 alerts after 1st call, got %d", len(m.activeAlerts))
 		}
-		if m.offlineConfirmations["host:host1"] != 1 {
-			t.Errorf("expected 1 confirmation, got %d", m.offlineConfirmations["host:host1"])
+		if m.offlineConfirmations[resourceKey] != 1 {
+			t.Errorf("expected 1 confirmation, got %d", m.offlineConfirmations[resourceKey])
 		}
 
 		m.HandleHostOffline(host)
 		if len(m.activeAlerts) != 0 {
 			t.Errorf("expected 0 alerts after 2nd call, got %d", len(m.activeAlerts))
 		}
-		if m.offlineConfirmations["host:host1"] != 2 {
-			t.Errorf("expected 2 confirmations, got %d", m.offlineConfirmations["host:host1"])
+		if m.offlineConfirmations[resourceKey] != 2 {
+			t.Errorf("expected 2 confirmations, got %d", m.offlineConfirmations[resourceKey])
 		}
 	})
 
@@ -6338,7 +6339,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 		}
 	})
 
-	t.Run("DisableAllHosts resolves Host alerts", func(t *testing.T) {
+	t.Run("DisableAllAgents resolves Host alerts", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 
@@ -6352,7 +6353,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 			},
 		}
 
-		m.config.DisableAllHosts = true
+		m.config.DisableAllAgents = true
 
 		m.mu.Lock()
 		m.reevaluateActiveAlertsLocked()
@@ -13686,7 +13687,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.TimeThresholds = map[string]int{}
-		m.config.HostDefaults = ThresholdConfig{
+		m.config.AgentDefaults = ThresholdConfig{
 			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
 		}
 		m.mu.Unlock()
@@ -13730,14 +13731,14 @@ func TestCheckHostComprehensive(t *testing.T) {
 		}
 	})
 
-	t.Run("DisableAllHosts clears existing alerts", func(t *testing.T) {
+	t.Run("DisableAllAgents clears existing alerts", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.activeAlerts["host:host1-cpu"] = &Alert{ID: "host:host1-cpu", ResourceID: "host:host1", Type: "cpu"}
-		m.activeAlerts["host:host1-memory"] = &Alert{ID: "host:host1-memory", ResourceID: "host:host1", Type: "memory"}
-		m.config.DisableAllHosts = true
+		m.activeAlerts["agent:host1-cpu"] = &Alert{ID: "agent:host1-cpu", ResourceID: "agent:host1", Type: "cpu"}
+		m.activeAlerts["agent:host1-memory"] = &Alert{ID: "agent:host1-memory", ResourceID: "agent:host1", Type: "memory"}
+		m.config.DisableAllAgents = true
 		m.mu.Unlock()
 
 		host := models.Host{
@@ -13748,8 +13749,8 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		_, cpuExists := m.activeAlerts["host:host1-cpu"]
-		_, memExists := m.activeAlerts["host:host1-memory"]
+		_, cpuExists := m.activeAlerts["agent:host1-cpu"]
+		_, memExists := m.activeAlerts["agent:host1-memory"]
 		m.mu.RUnlock()
 
 		if cpuExists {
@@ -13765,7 +13766,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.activeAlerts["host:host1-cpu"] = &Alert{ID: "host:host1-cpu", ResourceID: "host:host1", Type: "cpu"}
+		m.activeAlerts["agent:host1-cpu"] = &Alert{ID: "agent:host1-cpu", ResourceID: "agent:host1", Type: "cpu"}
 		m.config.Overrides = map[string]ThresholdConfig{
 			"host1": {Disabled: true},
 		}
@@ -13779,7 +13780,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["host:host1-cpu"]
+		_, exists := m.activeAlerts["agent:host1-cpu"]
 		m.mu.RUnlock()
 
 		if exists {
@@ -13792,8 +13793,8 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.activeAlerts["host:host1-cpu"] = &Alert{ID: "host:host1-cpu", ResourceID: "host:host1", Type: "cpu"}
-		m.config.HostDefaults = ThresholdConfig{
+		m.activeAlerts["agent:host1-cpu"] = &Alert{ID: "agent:host1-cpu", ResourceID: "agent:host1", Type: "cpu"}
+		m.config.AgentDefaults = ThresholdConfig{
 			CPU: nil, // No CPU threshold
 		}
 		m.mu.Unlock()
@@ -13806,7 +13807,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["host:host1-cpu"]
+		_, exists := m.activeAlerts["agent:host1-cpu"]
 		m.mu.RUnlock()
 
 		if exists {
@@ -13819,8 +13820,8 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.activeAlerts["host:host1-memory"] = &Alert{ID: "host:host1-memory", ResourceID: "host:host1", Type: "memory"}
-		m.config.HostDefaults = ThresholdConfig{
+		m.activeAlerts["agent:host1-memory"] = &Alert{ID: "agent:host1-memory", ResourceID: "agent:host1", Type: "memory"}
+		m.config.AgentDefaults = ThresholdConfig{
 			Memory: nil, // No memory threshold
 		}
 		m.mu.Unlock()
@@ -13835,7 +13836,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["host:host1-memory"]
+		_, exists := m.activeAlerts["agent:host1-memory"]
 		m.mu.RUnlock()
 
 		if exists {
@@ -13847,11 +13848,11 @@ func TestCheckHostComprehensive(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 
-		// Disk alert ID format: {resourceID}-disk where resourceID is host:hostID/disk:mountpoint
-		alertID := "host:host1/disk:/-disk"
+		// Disk alert ID format: {resourceID}-disk where resourceID is agent:hostID/disk:mountpoint
+		alertID := "agent:host1/disk:/-disk"
 		m.mu.Lock()
-		m.activeAlerts[alertID] = &Alert{ID: alertID, ResourceID: "host:host1/disk:/", Type: "disk"}
-		m.config.HostDefaults = ThresholdConfig{
+		m.activeAlerts[alertID] = &Alert{ID: alertID, ResourceID: "agent:host1/disk:/", Type: "disk"}
+		m.config.AgentDefaults = ThresholdConfig{
 			Disk: nil, // No disk threshold
 		}
 		m.mu.Unlock()
@@ -14095,7 +14096,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 
 		m.mu.Lock()
 		m.config.TimeThresholds = map[string]int{}
-		m.config.HostDefaults = ThresholdConfig{
+		m.config.AgentDefaults = ThresholdConfig{
 			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
 		}
 		m.config.Overrides = map[string]ThresholdConfig{
@@ -14128,7 +14129,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 
 		m.mu.Lock()
 		m.config.TimeThresholds = map[string]int{}
-		m.config.HostDefaults = ThresholdConfig{
+		m.config.AgentDefaults = ThresholdConfig{
 			Disk: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
 		}
 		m.mu.Unlock()
@@ -14147,8 +14148,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.mu.RLock()
 		var diskAlertCount int
 		for alertID := range m.activeAlerts {
-			// Disk alert ID format: host:hostID/disk:label-disk
-			if strings.Contains(alertID, "host:host1/disk:") {
+			if strings.Contains(alertID, "agent:host1/disk:") {
 				diskAlertCount++
 			}
 		}
@@ -14198,7 +14198,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 
 		m.mu.Lock()
 		m.config.TimeThresholds = map[string]int{}
-		m.config.HostDefaults = ThresholdConfig{
+		m.config.AgentDefaults = ThresholdConfig{
 			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
 		}
 		m.mu.Unlock()
@@ -14212,8 +14212,9 @@ func TestCheckHostComprehensive(t *testing.T) {
 
 		m.CheckHost(host)
 
+		cpuAlertID := fmt.Sprintf("%s-cpu", hostResourceID(host.ID))
 		m.mu.RLock()
-		alert := m.activeAlerts["host:host1-cpu"]
+		alert := m.activeAlerts[cpuAlertID]
 		m.mu.RUnlock()
 
 		if alert == nil {

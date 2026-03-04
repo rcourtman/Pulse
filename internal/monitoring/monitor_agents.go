@@ -188,7 +188,7 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 
 	m.state.RemoveConnectionHealth(hostConnectionPrefix + hostID)
 
-	// Clear LinkedHostAgentID from any nodes that were linked to this host agent
+	// Clear LinkedAgentID from any nodes that were linked to this host agent
 	unlinkedCount := m.state.UnlinkNodesFromHostAgent(hostID)
 	if unlinkedCount > 0 {
 		log.Info().
@@ -1239,7 +1239,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		}
 		seed := strings.Join(seedParts, "|")
 		sum := sha1.Sum([]byte(seed))
-		baseIdentifier = fmt.Sprintf("host-%s", hex.EncodeToString(sum[:6]))
+		baseIdentifier = fmt.Sprintf("agent-%s", hex.EncodeToString(sum[:6]))
 	}
 
 	existingHosts := m.state.GetHosts()
@@ -1276,7 +1276,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 				base := bindingID
 				if base == "" {
-					base = "host"
+					base = "agent"
 				}
 				if len(base) > 40 {
 					base = base[:40]
@@ -1551,7 +1551,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		totalDiskWriteBytes += d.WriteBytes
 	}
 
-	hostRateKey := fmt.Sprintf("host:%s", host.ID)
+	hostRateKey := fmt.Sprintf("agent:%s", host.ID)
 	currentMetrics := IOMetrics{
 		DiskRead:   int64(totalDiskReadBytes),
 		DiskWrite:  int64(totalDiskWriteBytes),
@@ -1600,8 +1600,8 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		m.alertManager.CheckHost(host)
 	}
 
-	// Record Host metrics for sparkline charts
-	hostMetricKey := fmt.Sprintf("host:%s", host.ID)
+	// Record host-agent metrics for sparkline charts.
+	hostMetricKey := fmt.Sprintf("agent:%s", host.ID)
 
 	var hostDiskPercent float64
 	if len(host.Disks) > 0 {
@@ -1628,20 +1628,20 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	}
 
 	if m.metricsStore != nil {
-		m.metricsStore.Write("host", host.ID, "cpu", host.CPUUsage, now)
-		m.metricsStore.Write("host", host.ID, "memory", host.Memory.Usage, now)
-		m.metricsStore.Write("host", host.ID, "disk", hostDiskPercent, now)
+		m.metricsStore.Write("agent", host.ID, "cpu", host.CPUUsage, now)
+		m.metricsStore.Write("agent", host.ID, "memory", host.Memory.Usage, now)
+		m.metricsStore.Write("agent", host.ID, "disk", hostDiskPercent, now)
 		if netInRate >= 0 {
-			m.metricsStore.Write("host", host.ID, "netin", netInRate, now)
+			m.metricsStore.Write("agent", host.ID, "netin", netInRate, now)
 		}
 		if netOutRate >= 0 {
-			m.metricsStore.Write("host", host.ID, "netout", netOutRate, now)
+			m.metricsStore.Write("agent", host.ID, "netout", netOutRate, now)
 		}
 		if diskReadRate >= 0 {
-			m.metricsStore.Write("host", host.ID, "diskread", diskReadRate, now)
+			m.metricsStore.Write("agent", host.ID, "diskread", diskReadRate, now)
 		}
 		if diskWriteRate >= 0 {
-			m.metricsStore.Write("host", host.ID, "diskwrite", diskWriteRate, now)
+			m.metricsStore.Write("agent", host.ID, "diskwrite", diskWriteRate, now)
 		}
 	}
 

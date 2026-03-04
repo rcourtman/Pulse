@@ -27,16 +27,16 @@ func TestMonitorLegacyNamesAdditional(t *testing.T) {
 		}
 	})
 
-	t.Run("host and docker host use source hostnames", func(t *testing.T) {
+	t.Run("agent and docker host use source hostnames", func(t *testing.T) {
 		hostName, hostDisplay := monitorLegacyNames(unifiedresources.Resource{
 			ID:   "host-1",
 			Name: "Friendly Host",
 			Agent: &unifiedresources.AgentData{
 				Hostname: "agent-host",
 			},
-		}, "host")
+		}, "agent")
 		if hostName != "agent-host" || hostDisplay != "Friendly Host" {
-			t.Fatalf("host branch mismatch: name=%q display=%q", hostName, hostDisplay)
+			t.Fatalf("agent branch mismatch: name=%q display=%q", hostName, hostDisplay)
 		}
 
 		dockerName, dockerDisplay := monitorLegacyNames(unifiedresources.Resource{

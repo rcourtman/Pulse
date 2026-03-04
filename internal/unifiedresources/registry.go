@@ -258,12 +258,14 @@ func (rr *ResourceRegistry) List() []Resource {
 //
 // The returned slice is sorted by resource ID to provide deterministic results.
 func (rr *ResourceRegistry) ListByType(t ResourceType) []Resource {
+	t = CanonicalResourceType(t)
+
 	rr.mu.RLock()
 	defer rr.mu.RUnlock()
 
 	out := make([]Resource, 0, len(rr.resources))
 	for _, r := range rr.resources {
-		if r.Type != t {
+		if CanonicalResourceType(r.Type) != t {
 			continue
 		}
 		out = append(out, cloneResource(r))
@@ -278,6 +280,7 @@ func (rr *ResourceRegistry) ListByType(t ResourceType) []Resource {
 func (rr *ResourceRegistry) Get(id string) (*Resource, bool) {
 	rr.mu.RLock()
 	defer rr.mu.RUnlock()
+	id = CanonicalResourceID(id)
 	r, ok := rr.resources[id]
 	if !ok || r == nil {
 		return nil, false
@@ -290,6 +293,7 @@ func (rr *ResourceRegistry) Get(id string) (*Resource, bool) {
 func (rr *ResourceRegistry) SourceTargets(resourceID string) []SourceTarget {
 	rr.mu.RLock()
 	defer rr.mu.RUnlock()
+	resourceID = CanonicalResourceID(resourceID)
 	resource := rr.resources[resourceID]
 	if resource == nil {
 		return nil
@@ -315,6 +319,7 @@ func (rr *ResourceRegistry) SourceTargets(resourceID string) []SourceTarget {
 func (rr *ResourceRegistry) GetChildren(parentID string) []Resource {
 	rr.mu.RLock()
 	defer rr.mu.RUnlock()
+	parentID = CanonicalResourceID(parentID)
 	var out []Resource
 	for _, r := range rr.resources {
 		if r.ParentID != nil && *r.ParentID == parentID {
@@ -335,7 +340,7 @@ func (rr *ResourceRegistry) Stats() ResourceStats {
 		BySource: make(map[DataSource]int),
 	}
 	for _, r := range rr.resources {
-		stats.ByType[r.Type]++
+		stats.ByType[CanonicalResourceType(r.Type)]++
 		stats.ByStatus[r.Status]++
 		for _, source := range r.Sources {
 			stats.BySource[source]++
@@ -515,6 +520,7 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 	}
 
 	resource.Identity = identity
+	resource.Type = CanonicalResourceType(resource.Type)
 	resource.Sources = []DataSource{source}
 	resource.SourceStatus = map[DataSource]SourceStatus{
 		source: {Status: "online", LastSeen: resource.LastSeen},
@@ -536,7 +542,7 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 
 	candidateID := rr.sourceSpecificID(resource.Type, source, sourceID)
 
-	if resource.Type == ResourceTypeHost {
+	if resource.Type == ResourceTypeAgent {
 		if match, excluded := rr.findMatch(identity, resource.Type, candidateID); match != nil {
 			existing := rr.resources[match.ResourceB]
 			if existing != nil {
@@ -593,8 +599,8 @@ func (rr *ResourceRegistry) findMatch(identity ResourceIdentity, resourceType Re
 func (rr *ResourceRegistry) resolveLinkedResource(source DataSource, sourceID string, resource Resource) string {
 	switch source {
 	case SourceProxmox:
-		if resource.Proxmox != nil && resource.Proxmox.LinkedHostAgentID != "" {
-			if id, ok := rr.bySource[SourceAgent][resource.Proxmox.LinkedHostAgentID]; ok {
+		if resource.Proxmox != nil && resource.Proxmox.LinkedAgentID != "" {
+			if id, ok := rr.bySource[SourceAgent][resource.Proxmox.LinkedAgentID]; ok {
 				existing := rr.resources[id]
 				if existing == nil || existing.Agent == nil {
 					return ""
@@ -613,7 +619,7 @@ func (rr *ResourceRegistry) resolveLinkedResource(source DataSource, sourceID st
 				if existing == nil || existing.Proxmox == nil {
 					return ""
 				}
-				linkedHostID := strings.TrimSpace(existing.Proxmox.LinkedHostAgentID)
+				linkedHostID := strings.TrimSpace(existing.Proxmox.LinkedAgentID)
 				if linkedHostID == "" || linkedHostID != sourceID {
 					return ""
 				}
@@ -798,7 +804,7 @@ func (rr *ResourceRegistry) buildChildCounts() {
 }
 
 func (rr *ResourceRegistry) chooseNewID(resourceType ResourceType, identity ResourceIdentity, source DataSource, sourceID string) string {
-	if resourceType != ResourceTypeHost {
+	if resourceType != ResourceTypeAgent {
 		return rr.sourceSpecificID(resourceType, source, sourceID)
 	}
 	if identity.MachineID != "" || identity.DMIUUID != "" || identity.ClusterName != "" {
@@ -843,6 +849,7 @@ func (rr *ResourceRegistry) sourceSpecificID(resourceType ResourceType, source D
 }
 
 func buildHashID(resourceType ResourceType, stable string) string {
+	resourceType = CanonicalResourceType(resourceType)
 	hash := sha256.Sum256([]byte(stable))
 	return fmt.Sprintf("%s-%s", resourceType, hex.EncodeToString(hash[:8]))
 }
@@ -904,7 +911,7 @@ func buildKubernetesNodeHostLookup(hosts []models.Host) map[string]*models.Host 
 
 		exactKey := strings.ToLower(strings.TrimSpace(host.Hostname))
 		if exactKey != "" {
-			lookup["host:"+exactKey] = host
+			lookup["agent:"+exactKey] = host
 		}
 
 		normalized := NormalizeHostname(host.Hostname)
@@ -924,7 +931,7 @@ func resolveKubernetesNodeHost(node models.KubernetesNode, lookup map[string]*mo
 
 	exactKey := strings.ToLower(strings.TrimSpace(node.Name))
 	if exactKey != "" {
-		if host, ok := lookup["host:"+exactKey]; ok {
+		if host, ok := lookup["agent:"+exactKey]; ok {
 			return host
 		}
 	}
@@ -1212,7 +1219,7 @@ func (rr *ResourceRegistry) rebuildViews() {
 		case ResourceTypeAppContainer:
 			v := NewDockerContainerView(viewResource)
 			rr.cachedDockerContainers = append(rr.cachedDockerContainers, &v)
-		case ResourceTypeHost:
+		case ResourceTypeAgent:
 			inf := NewInfrastructureView(viewResource)
 			rr.cachedInfra = append(rr.cachedInfra, &inf)
 			if r.Proxmox != nil {
@@ -1340,7 +1347,7 @@ func (rr *ResourceRegistry) Workloads() []*WorkloadView {
 	return withViewCache(rr, func() []*WorkloadView { return rr.cachedWorkload })
 }
 
-// Infrastructure returns a unified slice of all host-type resource views sorted by name.
+// Infrastructure returns a unified slice of all infrastructure parent resource views sorted by name.
 func (rr *ResourceRegistry) Infrastructure() []*InfrastructureView {
 	return withViewCache(rr, func() []*InfrastructureView { return rr.cachedInfra })
 }

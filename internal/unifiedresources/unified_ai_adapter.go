@@ -286,7 +286,7 @@ func unifiedDisplayName(resource Resource) string {
 
 func isUnifiedInfrastructure(t ResourceType) bool {
 	switch t {
-	case ResourceTypeHost, ResourceTypeK8sNode, ResourceTypeK8sCluster:
+	case ResourceTypeAgent, ResourceTypeK8sNode, ResourceTypeK8sCluster:
 		return true
 	default:
 		return false

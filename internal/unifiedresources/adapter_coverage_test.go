@@ -226,7 +226,7 @@ func TestMonitorAdapterPopulateSupplementalRecords(t *testing.T) {
 		{
 			SourceID: "xcp-host-1",
 			Resource: Resource{
-				Type:     ResourceTypeHost,
+				Type:     ResourceTypeAgent,
 				Name:     "xcp-host-1",
 				Status:   StatusOnline,
 				LastSeen: now,
@@ -255,7 +255,7 @@ func TestMonitorAdapterPopulateSupplementalRecords(t *testing.T) {
 
 func TestUnifiedAIAdapterClassificationAndStats(t *testing.T) {
 	registry := testRegistry(
-		Resource{ID: "host-1", Type: ResourceTypeHost, Status: StatusOnline, Sources: []DataSource{SourceAgent}},
+		Resource{ID: "host-1", Type: ResourceTypeAgent, Status: StatusOnline, Sources: []DataSource{SourceAgent}},
 		Resource{ID: "cluster-1", Type: ResourceTypeK8sCluster, Status: StatusOnline, Sources: []DataSource{SourceK8s}},
 		Resource{ID: "node-1", Type: ResourceTypeK8sNode, Status: StatusWarning, Sources: []DataSource{SourceK8s}},
 		Resource{ID: "vm-1", Type: ResourceTypeVM, Status: StatusOnline, Sources: []DataSource{SourceProxmox}},
@@ -284,7 +284,7 @@ func TestUnifiedAIAdapterClassificationAndStats(t *testing.T) {
 	if stats.Total != 9 {
 		t.Fatalf("expected stats total 9, got %d", stats.Total)
 	}
-	if stats.ByType[ResourceTypeHost] != 1 || stats.ByType[ResourceTypeVM] != 1 {
+	if stats.ByType[ResourceTypeAgent] != 1 || stats.ByType[ResourceTypeVM] != 1 {
 		t.Fatalf("unexpected ByType stats: %#v", stats.ByType)
 	}
 	if stats.ByStatus[StatusOffline] != 1 {
@@ -336,7 +336,7 @@ func TestUnifiedAIAdapterGetTopByMetric(t *testing.T) {
 		},
 		Resource{
 			ID:   "host-1",
-			Type: ResourceTypeHost,
+			Type: ResourceTypeAgent,
 			Name: "host",
 			Metrics: &ResourceMetrics{
 				CPU: &MetricValue{Percent: 99},
@@ -380,7 +380,7 @@ func TestUnifiedAIAdapterGetTopByMetric(t *testing.T) {
 
 func TestUnifiedAIAdapterGetRelated(t *testing.T) {
 	registry := testRegistry(
-		Resource{ID: "parent", Type: ResourceTypeHost, Name: "parent-host"},
+		Resource{ID: "parent", Type: ResourceTypeAgent, Name: "parent-host"},
 		Resource{ID: "child", Type: ResourceTypeAppContainer, Name: "child", ParentID: strPointer("parent")},
 		Resource{ID: "sibling", Type: ResourceTypeVM, Name: "sibling", ParentID: strPointer("parent")},
 		Resource{ID: "grandchild", Type: ResourceTypeSystemContainer, Name: "grandchild", ParentID: strPointer("child")},
@@ -420,7 +420,7 @@ func TestUnifiedAIAdapterFindContainerHost(t *testing.T) {
 	registry := testRegistry(
 		Resource{
 			ID:    "host-a",
-			Type:  ResourceTypeHost,
+			Type:  ResourceTypeAgent,
 			Name:  "host-a-name",
 			Agent: &AgentData{Hostname: "agent-host-a"},
 		},
@@ -433,7 +433,7 @@ func TestUnifiedAIAdapterFindContainerHost(t *testing.T) {
 		},
 		Resource{
 			ID:       "host-b",
-			Type:     ResourceTypeHost,
+			Type:     ResourceTypeAgent,
 			Name:     "host-b-name",
 			Identity: ResourceIdentity{Hostnames: []string{"identity-host-b"}},
 		},
@@ -445,7 +445,7 @@ func TestUnifiedAIAdapterFindContainerHost(t *testing.T) {
 		},
 		Resource{
 			ID:   "host-c",
-			Type: ResourceTypeHost,
+			Type: ResourceTypeAgent,
 			Name: "parent-c-name",
 		},
 		Resource{
@@ -456,7 +456,7 @@ func TestUnifiedAIAdapterFindContainerHost(t *testing.T) {
 		},
 		Resource{
 			ID:   "host-d",
-			Type: ResourceTypeHost,
+			Type: ResourceTypeAgent,
 		},
 		Resource{
 			ID:       "ctr-d",

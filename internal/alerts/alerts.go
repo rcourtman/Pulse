@@ -349,7 +349,7 @@ type AlertConfig struct {
 	ActivationTime                 *time.Time                 `json:"activationTime,omitempty"`
 	GuestDefaults                  ThresholdConfig            `json:"guestDefaults"`
 	NodeDefaults                   ThresholdConfig            `json:"nodeDefaults"`
-	HostDefaults                   ThresholdConfig            `json:"hostDefaults"`
+	AgentDefaults                  ThresholdConfig            `json:"agentDefaults"`
 	StorageDefault                 HysteresisThreshold        `json:"storageDefault"`
 	DockerDefaults                 DockerThresholdConfig      `json:"dockerDefaults"`
 	DockerIgnoredContainerPrefixes []string                   `json:"dockerIgnoredContainerPrefixes,omitempty"`
@@ -366,7 +366,7 @@ type AlertConfig struct {
 	// Global disable flags per resource type
 	DisableAllNodes              bool `json:"disableAllNodes"`              // Disable all alerts for Proxmox nodes
 	DisableAllGuests             bool `json:"disableAllGuests"`             // Disable all alerts for VMs/containers
-	DisableAllHosts              bool `json:"disableAllHosts"`              // Disable all alerts for Pulse host agents
+	DisableAllAgents             bool `json:"disableAllAgents"`             // Disable all alerts for Pulse agents
 	DisableAllStorage            bool `json:"disableAllStorage"`            // Disable all alerts for storage
 	DisableAllPBS                bool `json:"disableAllPBS"`                // Disable all alerts for PBS servers
 	DisableAllPMG                bool `json:"disableAllPMG"`                // Disable all alerts for PMG instances
@@ -375,7 +375,7 @@ type AlertConfig struct {
 	DisableAllDockerServices     bool `json:"disableAllDockerServices"`     // Disable all alerts for Docker services
 	DisableAllNodesOffline       bool `json:"disableAllNodesOffline"`       // Disable node offline/connectivity alerts globally
 	DisableAllGuestsOffline      bool `json:"disableAllGuestsOffline"`      // Disable guest powered-off alerts globally
-	DisableAllHostsOffline       bool `json:"disableAllHostsOffline"`       // Disable host agent offline alerts globally
+	DisableAllAgentsOffline      bool `json:"disableAllAgentsOffline"`      // Disable agent offline alerts globally
 	DisableAllPBSOffline         bool `json:"disableAllPBSOffline"`         // Disable PBS offline alerts globally
 	DisableAllPMGOffline         bool `json:"disableAllPMGOffline"`         // Disable PMG offline alerts globally
 	DisableAllDockerHostsOffline bool `json:"disableAllDockerHostsOffline"` // Disable Docker host offline alerts globally
@@ -383,7 +383,7 @@ type AlertConfig struct {
 	MinimumDelta         float64                   `json:"minimumDelta"`         // Minimum % change to trigger new alert
 	SuppressionWindow    int                       `json:"suppressionWindow"`    // Minutes to suppress duplicate alerts
 	HysteresisMargin     float64                   `json:"hysteresisMargin"`     // Default margin for legacy thresholds
-	TimeThresholds       map[string]int            `json:"timeThresholds"`       // Per-type delays: guest, node, storage, pbs
+	TimeThresholds       map[string]int            `json:"timeThresholds"`       // Per-type delays: guest, node, agent, storage, pbs
 	MetricTimeThresholds map[string]map[string]int `json:"metricTimeThresholds"` // Optional per-metric delays keyed by resource type
 	// Alert TTL and auto-cleanup
 	MaxAlertAgeDays           int `json:"maxAlertAgeDays"`           // Maximum age for alerts before auto-cleanup (0 = disabled)
@@ -394,6 +394,53 @@ type AlertConfig struct {
 	FlappingWindowSeconds   int  `json:"flappingWindowSeconds"`   // Time window for counting state changes
 	FlappingThreshold       int  `json:"flappingThreshold"`       // Number of state changes to trigger flapping
 	FlappingCooldownMinutes int  `json:"flappingCooldownMinutes"` // Cooldown period after flapping detected
+}
+
+// UnmarshalJSON accepts canonical v6 alert config keys.
+func (c *AlertConfig) UnmarshalJSON(data []byte) error {
+	type alias AlertConfig
+	var decoded alias
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*c = AlertConfig(decoded)
+
+	raw := make(map[string]json.RawMessage)
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	NormalizeAlertConfigAliases(c)
+	return nil
+}
+
+// NormalizeAlertConfigAliases strips deprecated legacy alias keys.
+func NormalizeAlertConfigAliases(config *AlertConfig) {
+	if config == nil {
+		return
+	}
+
+	if config.TimeThresholds != nil {
+		delete(config.TimeThresholds, "host")
+	}
+
+	if len(config.MetricTimeThresholds) == 0 {
+		return
+	}
+
+	delete(config.MetricTimeThresholds, "host")
+}
+
+func cloneStringIntMap(src map[string]int) map[string]int {
+	if len(src) == 0 {
+		return nil
+	}
+
+	dst := make(map[string]int, len(src))
+	for key, value := range src {
+		dst[key] = value
+	}
+	return dst
 }
 
 // pmgQuarantineSnapshot stores quarantine counts at a point in time for growth detection
@@ -598,7 +645,7 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 				Disk:        &HysteresisThreshold{Trigger: 90, Clear: 85},
 				Temperature: &HysteresisThreshold{Trigger: 80, Clear: 75}, // Warning at 80°C, clear at 75°C
 			},
-			HostDefaults: ThresholdConfig{
+			AgentDefaults: ThresholdConfig{
 				CPU:             &HysteresisThreshold{Trigger: 80, Clear: 75},
 				Memory:          &HysteresisThreshold{Trigger: 85, Clear: 80},
 				Disk:            &HysteresisThreshold{Trigger: 90, Clear: 85},
@@ -659,6 +706,7 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 			TimeThresholds: map[string]int{
 				"guest":   5,
 				"node":    5,
+				"agent":   5,
 				"storage": 5,
 				"pbs":     5,
 			},
@@ -1128,13 +1176,14 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	}
 
 	// Normalize all config sections
+	NormalizeAlertConfigAliases(&config)
 	normalizeStorageDefaults(&config)
 	normalizeDockerDefaults(&config)
 	normalizePMGDefaults(&config)
 	normalizeSnapshotDefaults(&config)
 	normalizeBackupDefaults(&config)
 	normalizeNodeDefaults(&config)
-	normalizeHostDefaults(&config)
+	normalizeAgentDefaults(&config)
 	normalizeGeneralSettings(&config)
 	normalizeTimeThresholds(&config)
 
@@ -1434,54 +1483,54 @@ func normalizeNodeDefaults(config *AlertConfig) {
 	}
 }
 
-// normalizeHostDefaults ensures host agent threshold defaults exist
+// normalizeAgentDefaults ensures host agent threshold defaults exist
 // Trigger=0 is allowed and means "disable alerting for this metric"
-func normalizeHostDefaults(config *AlertConfig) {
-	if config.HostDefaults.CPU == nil || config.HostDefaults.CPU.Trigger < 0 {
-		config.HostDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
-	} else if config.HostDefaults.CPU.Trigger == 0 {
+func normalizeAgentDefaults(config *AlertConfig) {
+	if config.AgentDefaults.CPU == nil || config.AgentDefaults.CPU.Trigger < 0 {
+		config.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	} else if config.AgentDefaults.CPU.Trigger == 0 {
 		// Trigger=0 means disabled, set Clear=0 too
-		config.HostDefaults.CPU.Clear = 0
-	} else if config.HostDefaults.CPU.Clear <= 0 {
-		config.HostDefaults.CPU.Clear = config.HostDefaults.CPU.Trigger - 5
-		if config.HostDefaults.CPU.Clear <= 0 {
-			config.HostDefaults.CPU.Clear = 75
+		config.AgentDefaults.CPU.Clear = 0
+	} else if config.AgentDefaults.CPU.Clear <= 0 {
+		config.AgentDefaults.CPU.Clear = config.AgentDefaults.CPU.Trigger - 5
+		if config.AgentDefaults.CPU.Clear <= 0 {
+			config.AgentDefaults.CPU.Clear = 75
 		}
 	}
-	if config.HostDefaults.Memory == nil || config.HostDefaults.Memory.Trigger < 0 {
-		config.HostDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
-	} else if config.HostDefaults.Memory.Trigger == 0 {
+	if config.AgentDefaults.Memory == nil || config.AgentDefaults.Memory.Trigger < 0 {
+		config.AgentDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+	} else if config.AgentDefaults.Memory.Trigger == 0 {
 		// Trigger=0 means disabled, set Clear=0 too
-		config.HostDefaults.Memory.Clear = 0
-	} else if config.HostDefaults.Memory.Clear <= 0 {
-		config.HostDefaults.Memory.Clear = config.HostDefaults.Memory.Trigger - 5
-		if config.HostDefaults.Memory.Clear <= 0 {
-			config.HostDefaults.Memory.Clear = 80
+		config.AgentDefaults.Memory.Clear = 0
+	} else if config.AgentDefaults.Memory.Clear <= 0 {
+		config.AgentDefaults.Memory.Clear = config.AgentDefaults.Memory.Trigger - 5
+		if config.AgentDefaults.Memory.Clear <= 0 {
+			config.AgentDefaults.Memory.Clear = 80
 		}
 	}
-	if config.HostDefaults.Disk == nil || config.HostDefaults.Disk.Trigger < 0 {
-		config.HostDefaults.Disk = &HysteresisThreshold{Trigger: 90, Clear: 85}
-	} else if config.HostDefaults.Disk.Trigger == 0 {
+	if config.AgentDefaults.Disk == nil || config.AgentDefaults.Disk.Trigger < 0 {
+		config.AgentDefaults.Disk = &HysteresisThreshold{Trigger: 90, Clear: 85}
+	} else if config.AgentDefaults.Disk.Trigger == 0 {
 		// Trigger=0 means disabled, set Clear=0 too
-		config.HostDefaults.Disk.Clear = 0
-	} else if config.HostDefaults.Disk.Clear <= 0 {
-		config.HostDefaults.Disk.Clear = config.HostDefaults.Disk.Trigger - 5
-		if config.HostDefaults.Disk.Clear <= 0 {
-			config.HostDefaults.Disk.Clear = 85
+		config.AgentDefaults.Disk.Clear = 0
+	} else if config.AgentDefaults.Disk.Clear <= 0 {
+		config.AgentDefaults.Disk.Clear = config.AgentDefaults.Disk.Trigger - 5
+		if config.AgentDefaults.Disk.Clear <= 0 {
+			config.AgentDefaults.Disk.Clear = 85
 		}
 	}
 
-	if config.HostDefaults.DiskTemperature == nil || config.HostDefaults.DiskTemperature.Trigger < 0 {
-		config.HostDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 55, Clear: 50}
-	} else if config.HostDefaults.DiskTemperature.Trigger == 0 {
-		config.HostDefaults.DiskTemperature.Clear = 0
-	} else if config.HostDefaults.DiskTemperature.Clear <= 0 {
-		config.HostDefaults.DiskTemperature.Clear = config.HostDefaults.DiskTemperature.Trigger - 5
-		if config.HostDefaults.DiskTemperature.Clear <= 0 {
-			config.HostDefaults.DiskTemperature.Clear = 50
+	if config.AgentDefaults.DiskTemperature == nil || config.AgentDefaults.DiskTemperature.Trigger < 0 {
+		config.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 55, Clear: 50}
+	} else if config.AgentDefaults.DiskTemperature.Trigger == 0 {
+		config.AgentDefaults.DiskTemperature.Clear = 0
+	} else if config.AgentDefaults.DiskTemperature.Clear <= 0 {
+		config.AgentDefaults.DiskTemperature.Clear = config.AgentDefaults.DiskTemperature.Trigger - 5
+		if config.AgentDefaults.DiskTemperature.Clear <= 0 {
+			config.AgentDefaults.DiskTemperature.Clear = 50
 		}
 	}
-	ensureValidHysteresis(config.HostDefaults.DiskTemperature, "host.diskTemperature")
+	ensureValidHysteresis(config.AgentDefaults.DiskTemperature, "agent.diskTemperature")
 }
 
 // normalizeGeneralSettings ensures general alert settings have valid values
@@ -1511,6 +1560,7 @@ func normalizeGeneralSettings(config *AlertConfig) {
 
 // normalizeTimeThresholds ensures time threshold settings are valid
 func normalizeTimeThresholds(config *AlertConfig) {
+	NormalizeAlertConfigAliases(config)
 	config.MetricTimeThresholds = normalizeMetricTimeThresholds(config.MetricTimeThresholds)
 
 	const defaultDelaySeconds = 5
@@ -1527,7 +1577,7 @@ func normalizeTimeThresholds(config *AlertConfig) {
 	ensureDelay("node")
 	ensureDelay("storage")
 	ensureDelay("pbs")
-	ensureDelay("host")
+	ensureDelay("agent")
 	if delay, ok := config.TimeThresholds["all"]; ok && delay < 0 {
 		config.TimeThresholds["all"] = defaultDelaySeconds
 	}
@@ -1768,7 +1818,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 		resourceTypeMeta := ""
 		if alert.Metadata != nil {
 			if metaType, ok := alert.Metadata["resourceType"].(string); ok {
-				resourceTypeMeta = strings.ToLower(metaType)
+				resourceTypeMeta = canonicalAlertResourceType(metaType)
 			}
 		}
 
@@ -1781,16 +1831,23 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			}
 		}
 
-		// Check for Host alerts by resourceType
-		if resourceTypeMeta == "host" {
-			if m.config.DisableAllHosts {
+		// Check for agent alerts by canonicalized resourceType metadata.
+		isAgentResource := false
+		for _, key := range CanonicalResourceTypeKeys(resourceTypeMeta) {
+			if key == "agent" {
+				isAgentResource = true
+				break
+			}
+		}
+		if isAgentResource {
+			if m.config.DisableAllAgents {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
-			thresholds := m.config.HostDefaults
-			// Overrides are keyed by raw host ID (without the "host:" prefix
+			thresholds := m.config.AgentDefaults
+			// Overrides are keyed by raw host ID (without the "agent:" prefix
 			// that hostResourceID adds to the resource ID used in alert IDs).
-			rawHostID := strings.TrimPrefix(resourceID, "host:")
+			rawHostID := stripHostResourcePrefix(resourceID)
 			if override, exists := m.config.Overrides[rawHostID]; exists {
 				if override.Disabled {
 					alertsToResolve = append(alertsToResolve, alertID)
@@ -2755,9 +2812,15 @@ func (m *Manager) resolveNodeDisplayName(node string) string {
 func hostResourceID(hostID string) string {
 	trimmed := strings.TrimSpace(hostID)
 	if trimmed == "" {
-		return "host:unknown"
+		return "agent:unknown"
 	}
-	return fmt.Sprintf("host:%s", trimmed)
+	return fmt.Sprintf("agent:%s", trimmed)
+}
+
+func stripHostResourcePrefix(resourceID string) string {
+	trimmed := strings.TrimSpace(resourceID)
+	trimmed = strings.TrimPrefix(trimmed, "agent:")
+	return strings.TrimSpace(trimmed)
 }
 
 func hostDisplayName(host models.Host) string {
@@ -2770,7 +2833,7 @@ func hostDisplayName(host models.Host) string {
 	if host.ID != "" {
 		return host.ID
 	}
-	return "Host"
+	return "Agent"
 }
 
 func hostInstanceName(host models.Host) string {
@@ -2780,7 +2843,7 @@ func hostInstanceName(host models.Host) string {
 	if osName := strings.TrimSpace(host.OSName); osName != "" {
 		return osName
 	}
-	return "Host Agent"
+	return "Agent"
 }
 
 func sanitizeHostComponent(value string) string {
@@ -2821,7 +2884,7 @@ func sanitizeRAIDDevice(device string) string {
 	return sanitizeHostComponent(device)
 }
 
-func hostDiskResourceID(host models.Host, disk models.Disk) (string, string) {
+func hostDiskResourceIDWithPrefix(host models.Host, disk models.Disk, resourcePrefix string) (string, string) {
 	label := strings.TrimSpace(disk.Mountpoint)
 	if label == "" {
 		label = strings.TrimSpace(disk.Device)
@@ -2829,9 +2892,13 @@ func hostDiskResourceID(host models.Host, disk models.Disk) (string, string) {
 	if label == "" {
 		label = "disk"
 	}
-	resourceID := fmt.Sprintf("%s/disk:%s", hostResourceID(host.ID), sanitizeHostComponent(label))
+	resourceID := fmt.Sprintf("%s/disk:%s", resourcePrefix, sanitizeHostComponent(label))
 	resourceName := fmt.Sprintf("%s (%s)", hostDisplayName(host), label)
 	return resourceID, resourceName
+}
+
+func hostDiskResourceID(host models.Host, disk models.Disk) (string, string) {
+	return hostDiskResourceIDWithPrefix(host, disk, hostResourceID(host.ID))
 }
 
 // CheckHost evaluates host agent telemetry for alerts.
@@ -2854,8 +2921,8 @@ func (m *Manager) CheckHost(host models.Host) {
 
 	m.mu.RLock()
 	alertsEnabled := m.config.Enabled
-	disableAllHosts := m.config.DisableAllHosts
-	thresholds := m.config.HostDefaults
+	disableAllAgents := m.config.DisableAllAgents
+	thresholds := m.config.AgentDefaults
 	override, hasOverride := m.config.Overrides[host.ID]
 	m.mu.RUnlock()
 
@@ -2863,7 +2930,7 @@ func (m *Manager) CheckHost(host models.Host) {
 		return
 	}
 
-	if disableAllHosts {
+	if disableAllAgents {
 		// Clear any existing host alerts when all host alerts are disabled
 		m.clearHostMetricAlerts(host.ID)
 		m.clearHostDiskAlerts(host.ID)
@@ -2887,7 +2954,7 @@ func (m *Manager) CheckHost(host models.Host) {
 	instanceName := hostInstanceName(host)
 
 	baseMetadata := map[string]interface{}{
-		"resourceType": "Host",
+		"resourceType": "Agent",
 		"hostId":       host.ID,
 		"hostname":     host.Hostname,
 		"displayName":  host.DisplayName,
@@ -2908,7 +2975,7 @@ func (m *Manager) CheckHost(host models.Host) {
 		if host.CPUCount > 0 {
 			cpuMetadata["cpuCount"] = host.CPUCount
 		}
-		m.checkMetric(resourceID, resourceName, nodeName, instanceName, "Host", "cpu", host.CPUUsage, thresholds.CPU, &metricOptions{Metadata: cpuMetadata})
+		m.checkMetric(resourceID, resourceName, nodeName, instanceName, "Agent", "cpu", host.CPUUsage, thresholds.CPU, &metricOptions{Metadata: cpuMetadata})
 	} else {
 		m.clearHostMetricAlerts(host.ID, "cpu")
 	}
@@ -2922,7 +2989,7 @@ func (m *Manager) CheckHost(host models.Host) {
 			memMetadata["memoryUsedBytes"] = host.Memory.Used
 			memMetadata["memoryFreeBytes"] = host.Memory.Free
 		}
-		m.checkMetric(resourceID, resourceName, nodeName, instanceName, "Host", "memory", host.Memory.Usage, thresholds.Memory, &metricOptions{Metadata: memMetadata})
+		m.checkMetric(resourceID, resourceName, nodeName, instanceName, "Agent", "memory", host.Memory.Usage, thresholds.Memory, &metricOptions{Metadata: memMetadata})
 	} else {
 		m.clearHostMetricAlerts(host.ID, "memory")
 	}
@@ -2941,7 +3008,7 @@ func (m *Manager) CheckHost(host models.Host) {
 					diskTempMetadata["temperature"] = disk.Temperature
 					diskTempMetadata["model"] = disk.Model
 
-					m.checkMetric(tempResourceID, tempResourceName, nodeName, disk.Device, "Host", "diskTemperature", float64(disk.Temperature), thresholds.DiskTemperature, &metricOptions{Metadata: diskTempMetadata})
+					m.checkMetric(tempResourceID, tempResourceName, nodeName, disk.Device, "Agent", "diskTemperature", float64(disk.Temperature), thresholds.DiskTemperature, &metricOptions{Metadata: diskTempMetadata})
 				}
 			}
 		}
@@ -2998,7 +3065,7 @@ func (m *Manager) CheckHost(host models.Host) {
 			diskMetadata["diskFreeBytes"] = disk.Free
 		}
 
-		m.checkMetric(diskResourceID, diskName, nodeName, instanceName, "Host Disk", "disk", disk.Usage, effectiveDiskThreshold, &metricOptions{Metadata: diskMetadata})
+		m.checkMetric(diskResourceID, diskName, nodeName, instanceName, "Agent Disk", "disk", disk.Usage, effectiveDiskThreshold, &metricOptions{Metadata: diskMetadata})
 	}
 
 	// Clear all disk alerts if host-level disk alerting is completely disabled and no disk-specific overrides
@@ -3008,7 +3075,8 @@ func (m *Manager) CheckHost(host models.Host) {
 		var disksToClear []string
 		for _, disk := range host.Disks {
 			diskResourceID, _ := hostDiskResourceID(host, disk)
-			if _, hasDiskOverride := m.config.Overrides[diskResourceID]; !hasDiskOverride {
+			_, hasDiskOverride := m.config.Overrides[diskResourceID]
+			if !hasDiskOverride {
 				disksToClear = append(disksToClear, fmt.Sprintf("host-%s-disk-%s", host.ID, sanitizeHostComponent(disk.Mountpoint)))
 			}
 		}
@@ -3210,7 +3278,7 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 		m.mu.RUnlock()
 		return
 	}
-	disableHostsOffline := m.config.DisableAllHostsOffline
+	disableHostsOffline := m.config.DisableAllAgentsOffline
 	m.mu.RUnlock()
 
 	alertID := fmt.Sprintf("host-offline-%s", host.ID)
@@ -3274,7 +3342,9 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 
 		// Disks and RAID
 		// Note: Disks use ResourceID prefix, RAID uses AlertID prefix
-		diskResourcePrefix := fmt.Sprintf("%s/disk:", resourceKey)
+		diskResourcePrefixes := []string{
+			fmt.Sprintf("%s/disk:", resourceKey),
+		}
 		raidAlertPrefix := fmt.Sprintf("host-%s-raid-", host.ID)
 
 		// Collect alert IDs first, then clear (avoids modifying map during iteration)
@@ -3283,9 +3353,14 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 			if a == nil {
 				continue
 			}
-			if strings.HasPrefix(a.ResourceID, diskResourcePrefix) {
-				alertsToClear = append(alertsToClear, alertID)
-			} else if strings.HasPrefix(alertID, raidAlertPrefix) {
+			matchesDiskPrefix := false
+			for _, diskResourcePrefix := range diskResourcePrefixes {
+				if strings.HasPrefix(a.ResourceID, diskResourcePrefix) {
+					matchesDiskPrefix = true
+					break
+				}
+			}
+			if matchesDiskPrefix || strings.HasPrefix(alertID, raidAlertPrefix) {
 				alertsToClear = append(alertsToClear, alertID)
 			}
 		}
@@ -3308,7 +3383,7 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 		StartTime:    time.Now(),
 		LastSeen:     time.Now(),
 		Metadata: map[string]interface{}{
-			"resourceType": "Host",
+			"resourceType": "Agent",
 			"hostId":       host.ID,
 			"hostname":     host.Hostname,
 			"displayName":  host.DisplayName,
@@ -3345,12 +3420,14 @@ func (m *Manager) clearHostMetricAlerts(hostID string, metrics ...string) {
 	if hostID == "" {
 		return
 	}
-	resourceID := hostResourceID(hostID)
+	resourceIDs := []string{hostResourceID(hostID)}
 	if len(metrics) == 0 {
 		metrics = []string{"cpu", "memory"}
 	}
-	for _, metric := range metrics {
-		m.clearAlert(fmt.Sprintf("%s-%s", resourceID, metric))
+	for _, resourceID := range resourceIDs {
+		for _, metric := range metrics {
+			m.clearAlert(fmt.Sprintf("%s-%s", resourceID, metric))
+		}
 	}
 }
 
@@ -3359,7 +3436,9 @@ func (m *Manager) clearHostDiskAlerts(hostID string) {
 		return
 	}
 
-	prefix := fmt.Sprintf("%s/disk:", hostResourceID(hostID))
+	prefixes := []string{
+		fmt.Sprintf("%s/disk:", hostResourceID(hostID)),
+	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -3368,7 +3447,14 @@ func (m *Manager) clearHostDiskAlerts(hostID string) {
 		if alert == nil {
 			continue
 		}
-		if !strings.HasPrefix(alert.ResourceID, prefix) {
+		matches := false
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(alert.ResourceID, prefix) {
+				matches = true
+				break
+			}
+		}
+		if !matches {
 			continue
 		}
 		m.clearAlertNoLock(alertID)
@@ -3380,7 +3466,9 @@ func (m *Manager) cleanupHostDiskAlerts(host models.Host, seen map[string]struct
 		return
 	}
 
-	prefix := fmt.Sprintf("%s/disk:", hostResourceID(host.ID))
+	prefixes := []string{
+		fmt.Sprintf("%s/disk:", hostResourceID(host.ID)),
+	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -3389,7 +3477,14 @@ func (m *Manager) cleanupHostDiskAlerts(host models.Host, seen map[string]struct
 		if alert == nil {
 			continue
 		}
-		if !strings.HasPrefix(alert.ResourceID, prefix) {
+		matches := false
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(alert.ResourceID, prefix) {
+				matches = true
+				break
+			}
+		}
+		if !matches {
 			continue
 		}
 		if _, exists := seen[alert.ResourceID]; exists {
@@ -3854,13 +3949,13 @@ func (m *Manager) CheckDockerHost(host models.DockerHost) {
 
 	m.mu.RLock()
 	alertsEnabled := m.config.Enabled
-	disableAllHosts := m.config.DisableAllDockerHosts
+	disableAllDockerHosts := m.config.DisableAllDockerHosts
 	ignoredPrefixes := append([]string(nil), m.config.DockerIgnoredContainerPrefixes...)
 	m.mu.RUnlock()
 	if !alertsEnabled {
 		return
 	}
-	if disableAllHosts {
+	if disableAllDockerHosts {
 		return
 	}
 
@@ -6131,7 +6226,7 @@ func (m *Manager) getGlobalMetricTimeThreshold(metricType string) (int, bool) {
 
 // CanonicalResourceTypeKeys returns normalized resource-type keys for threshold lookup.
 func CanonicalResourceTypeKeys(resourceType string) []string {
-	typeKey := strings.ToLower(strings.TrimSpace(resourceType))
+	typeKey := canonicalAlertResourceType(resourceType)
 
 	addUnique := func(slice []string, value string) []string {
 		if value == "" {
@@ -6162,12 +6257,12 @@ func CanonicalResourceTypeKeys(resourceType string) []string {
 		keys = addUnique(keys, "guest")
 	case "node":
 		keys = addUnique(keys, "node")
-	case "host", "host agent":
-		keys = addUnique(keys, "host")
+	case "agent":
+		keys = addUnique(keys, "agent")
 		keys = addUnique(keys, "node")
-	case "host disk", "hostdisk":
-		keys = addUnique(keys, "host-disk")
-		keys = addUnique(keys, "host")
+	case "agent disk", "agentdisk":
+		keys = addUnique(keys, "agent-disk")
+		keys = addUnique(keys, "agent")
 		keys = addUnique(keys, "storage")
 	case "pbs", "pbs server", "pbsserver":
 		keys = addUnique(keys, "pbs")
@@ -6185,6 +6280,10 @@ func CanonicalResourceTypeKeys(resourceType string) []string {
 	}
 
 	return keys
+}
+
+func canonicalAlertResourceType(resourceType string) string {
+	return strings.ToLower(strings.TrimSpace(resourceType))
 }
 
 // checkMetric checks a single metric against its threshold with hysteresis

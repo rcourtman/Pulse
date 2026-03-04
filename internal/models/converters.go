@@ -37,7 +37,7 @@ func (n Node) ToFrontend() NodeFrontend {
 		IsClusterMember:              n.IsClusterMember,
 		ClusterName:                  n.ClusterName,
 		TemperatureMonitoringEnabled: n.TemperatureMonitoringEnabled,
-		LinkedHostAgentID:            n.LinkedHostAgentID,
+		LinkedAgentID:                n.LinkedAgentID,
 	}
 
 	// Include full Memory object if it has data

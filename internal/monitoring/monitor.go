@@ -416,17 +416,17 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 	// Build a map of node name to linked host's SMART data
 	smartByNodeName := make(map[string][]models.HostDiskSMART)
 	for _, node := range nodes {
-		if node.LinkedHostAgentID == "" {
+		if node.LinkedAgentID == "" {
 			continue
 		}
-		host, ok := hostByID[node.LinkedHostAgentID]
+		host, ok := hostByID[node.LinkedAgentID]
 		if !ok || len(host.Sensors.SMART) == 0 {
 			continue
 		}
 		smartByNodeName[node.Name] = host.Sensors.SMART
 		log.Debug().
 			Str("nodeName", node.Name).
-			Str("hostAgentID", node.LinkedHostAgentID).
+			Str("hostAgentID", node.LinkedAgentID).
 			Int("smartDiskCount", len(host.Sensors.SMART)).
 			Msg("mergeHostAgentSMARTIntoDisks: found linked host agent with SMART data")
 	}
@@ -2867,6 +2867,23 @@ func (m *Monitor) GetUnifiedReadState() unifiedresources.ReadState {
 	return readState
 }
 
+// GetUnifiedReadStateOrSnapshot returns unified read-state when available.
+// If the monitor has not been wired with a resource store yet, it creates an
+// ephemeral snapshot-backed adapter to preserve read access without exposing
+// direct state reads to consumer packages.
+func (m *Monitor) GetUnifiedReadStateOrSnapshot() unifiedresources.ReadState {
+	if m == nil {
+		return nil
+	}
+	if readState := m.GetUnifiedReadState(); readState != nil {
+		return readState
+	}
+	snapshot := m.GetState()
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	return unifiedresources.NewMonitorAdapter(registry)
+}
+
 // shouldSkipNodeMetrics returns true if we should skip detailed metric polling
 // for the given node because a host agent is providing richer data.
 // This helps reduce API load when agents are active.
@@ -3053,14 +3070,14 @@ func monitorLegacyResourceType(resource unifiedresources.Resource) string {
 		return "storage"
 	case unifiedresources.ResourceTypeCeph:
 		return "pool"
-	case unifiedresources.ResourceTypeHost:
+	case unifiedresources.ResourceTypeAgent:
 		if resource.Proxmox != nil {
 			return "node"
 		}
 		if resource.Docker != nil {
 			return "docker-host"
 		}
-		return "host"
+		return "agent"
 	default:
 		return string(resource.Type)
 	}
@@ -3076,7 +3093,7 @@ func monitorLegacyNames(resource unifiedresources.Resource, resourceType string)
 			displayName = name
 			name = resource.Proxmox.NodeName
 		}
-	case "host":
+	case "agent":
 		if resource.Agent != nil && resource.Agent.Hostname != "" && !strings.EqualFold(resource.Agent.Hostname, name) {
 			displayName = name
 			name = resource.Agent.Hostname
@@ -3106,7 +3123,7 @@ func monitorPlatformType(resource unifiedresources.Resource, resourceType string
 		return "proxmox-pbs"
 	case "pmg":
 		return "proxmox-pmg"
-	case "host":
+	case "agent":
 		return "agent"
 	default:
 		if monitorHasSource(resource.Sources, unifiedresources.SourceK8s) {
@@ -3142,7 +3159,7 @@ func monitorPlatformID(resource unifiedresources.Resource, resourceType string) 
 		if resource.Proxmox != nil && strings.TrimSpace(resource.Proxmox.Instance) != "" {
 			return strings.TrimSpace(resource.Proxmox.Instance)
 		}
-	case "host":
+	case "agent":
 		if resource.Agent != nil && strings.TrimSpace(resource.Agent.AgentID) != "" {
 			return strings.TrimSpace(resource.Agent.AgentID)
 		}
@@ -3423,7 +3440,7 @@ func monitorPlatformData(resource unifiedresources.Resource, resourceType string
 		payload = buildProxmoxVMPayload(resource)
 	case "container", "oci-container":
 		payload = buildProxmoxVMPayload(resource)
-	case "host":
+	case "agent":
 		if resource.Agent != nil {
 			payload = map[string]interface{}{
 				"platform":      resource.Agent.Platform,
