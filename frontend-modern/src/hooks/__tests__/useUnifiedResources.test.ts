@@ -1,23 +1,15 @@
 import { batch, createEffect, createRoot, createSignal } from 'solid-js';
 import { createStore, reconcile, type SetStoreFunction } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { State } from '@/types/api';
 
 type UseUnifiedResourcesModule = typeof import('@/hooks/useUnifiedResources');
 
-type TestWsState = {
-  resources: (typeof v2Resource)[];
-  nodes: unknown[];
-  hosts: unknown[];
-  dockerHosts: unknown[];
-  kubernetesClusters: unknown[];
-  pbs: unknown[];
-  pmg: unknown[];
-  lastUpdate: string;
-};
+type TestWsState = State & Record<string, unknown>;
 
 const v2Resource = {
   id: 'node-1',
-  type: 'host',
+  type: 'agent',
   name: 'node-1',
   status: 'online',
   lastSeen: '2026-02-06T12:00:00Z',
@@ -28,7 +20,7 @@ const v2Resource = {
     disk: { used: 30 * 1024 * 1024, total: 100 * 1024 * 1024, percent: 30 },
   },
   discoveryTarget: {
-    resourceType: 'host',
+    resourceType: 'agent',
     hostId: 'host-1',
     resourceId: 'host-1',
     hostname: 'pve1',
@@ -70,13 +62,29 @@ describe('useUnifiedResources', () => {
     const [connected] = createSignal(true);
     const [initialDataReceived] = createSignal(true);
     const [state, _setWsState] = createStore<TestWsState>({
+      removedDockerHosts: [],
+      removedKubernetesClusters: [],
+      metrics: [],
+      performance: {
+        apiCallDuration: {},
+        lastPollDuration: 0,
+        pollingStartTime: '',
+        totalApiCalls: 0,
+        failedApiCalls: 0,
+        cacheHits: 0,
+        cacheMisses: 0,
+      },
+      connectionHealth: {},
+      stats: {
+        startTime: '',
+        uptime: 0,
+        pollingCycles: 0,
+        webSocketClients: 0,
+        version: '2.0.0',
+      },
+      activeAlerts: [],
+      recentlyResolved: [],
       resources: [v2Resource],
-      nodes: [],
-      hosts: [],
-      dockerHosts: [],
-      kubernetesClusters: [],
-      pbs: [],
-      pmg: [],
       lastUpdate: '',
     });
     setWsState = _setWsState;
@@ -166,7 +174,7 @@ describe('useUnifiedResources', () => {
     expect(result!.resources()[0]).toBe(originalResourceRef);
     expect(firstResourceEffectRuns).toBe(effectsAfterInitialFetch);
     expect(result!.resources()[0].discoveryTarget).toEqual({
-      resourceType: 'host',
+      resourceType: 'agent',
       hostId: 'host-1',
       resourceId: 'host-1',
       hostname: 'pve1',
@@ -208,7 +216,7 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
-  it('uses only backend v2 resources for infrastructure even when websocket has kubernetes state', async () => {
+  it('uses backend resources as canonical infrastructure state even with non-canonical websocket fields', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -235,7 +243,7 @@ describe('useUnifiedResources', () => {
     });
 
     batch(() => {
-      setWsState('kubernetesClusters', [
+      setWsState('legacy_clusters', [
         {
           id: 'legacy-cluster',
           name: 'legacy-cluster',
@@ -267,12 +275,12 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
-  it('keeps using v2 infrastructure resources when websocket legacy infra arrays are populated', async () => {
+  it('ignores non-canonical websocket payload fields for infrastructure resources', async () => {
     batch(() => {
-      setWsState('hosts', [
+      setWsState('legacy_hosts', [
         { id: 'legacy-host-1', hostname: 'legacy-host', status: 'online', lastSeen: 1738929600000 },
       ]);
-      setWsState('dockerHosts', [
+      setWsState('legacy_docker_hosts', [
         {
           id: 'legacy-docker-1',
           hostname: 'legacy-docker',
@@ -280,8 +288,8 @@ describe('useUnifiedResources', () => {
           lastSeen: 1738929600000,
         },
       ]);
-      setWsState('pbs', [{ id: 'legacy-pbs-1', name: 'legacy-pbs' }]);
-      setWsState('pmg', [{ id: 'legacy-pmg-1', name: 'legacy-pmg' }]);
+      setWsState('legacy_pbs', [{ id: 'legacy-pbs-1', name: 'legacy-pbs' }]);
+      setWsState('legacy_pmg', [{ id: 'legacy-pmg-1', name: 'legacy-pmg' }]);
       setWsState('lastUpdate', '2026-02-06T12:00:04Z');
     });
 

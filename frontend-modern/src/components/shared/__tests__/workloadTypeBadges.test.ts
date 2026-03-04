@@ -74,10 +74,10 @@ describe('workloadTypeBadges', () => {
     });
 
     describe('Agent types', () => {
-      it('returns Agent badge for host alias', () => {
+      it('does not map legacy host alias to Agent', () => {
         const result = getWorkloadTypeBadge('host');
-        expect(result.label).toBe('Agent');
-        expect(result.title).toBe('Agent');
+        expect(result.label).toBe('Host');
+        expect(result.title).toBe('Host');
       });
 
       it('returns Agent badge for agent', () => {

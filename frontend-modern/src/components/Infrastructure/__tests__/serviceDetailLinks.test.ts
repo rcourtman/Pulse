@@ -5,7 +5,7 @@ import { buildServiceDetailLinks } from '@/components/Infrastructure/serviceDeta
 
 const baseResource = (overrides: Partial<Resource>): Resource => ({
   id: 'resource-1',
-  type: 'host',
+  type: 'node',
   name: 'host-1',
   displayName: 'Host 1',
   platformId: 'host-1',
@@ -61,7 +61,7 @@ describe('buildServiceDetailLinks', () => {
   });
 
   it('returns no service links for non-service resources', () => {
-    const links = buildServiceDetailLinks(baseResource({ type: 'host' }));
+    const links = buildServiceDetailLinks(baseResource({ type: 'node' }));
     expect(links).toEqual([]);
   });
 });

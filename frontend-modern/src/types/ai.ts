@@ -148,7 +148,7 @@ export interface AIConversationMessage {
 // AI Execute request/response types
 export interface AIExecuteRequest {
   prompt: string;
-  target_type?: string; // "host", "container", "vm", "node"
+  target_type?: string; // "agent", "container", "vm", "node"
   target_id?: string;
   context?: Record<string, unknown>;
   history?: AIConversationMessage[]; // Previous conversation messages

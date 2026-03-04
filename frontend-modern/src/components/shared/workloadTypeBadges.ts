@@ -99,7 +99,7 @@ const normalizeKey = (value: string | null | undefined): WorkloadTypeBadgeKey | 
   }
   if (normalized === 'k8s' || normalized === 'kubernetes') return 'k8s';
   if (normalized === 'pod') return 'pod';
-  if (normalized === 'host' || normalized === 'agent') return 'agent';
+  if (normalized === 'agent') return 'agent';
   if (normalized === 'oci') return 'oci';
   return null;
 };

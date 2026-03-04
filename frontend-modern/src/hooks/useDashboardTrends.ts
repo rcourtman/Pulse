@@ -115,10 +115,11 @@ function asHistoryResourceType(type: string): HistoryResourceType | null {
     'dockerHost',
     'k8s',
     'agent',
-    'host',
     'disk',
   ];
-  return historyTypes.includes(type as HistoryResourceType) ? (type as HistoryResourceType) : null;
+  return historyTypes.includes(type as HistoryResourceType)
+    ? (type as HistoryResourceType)
+    : null;
 }
 
 function buildHistoryTargets(
@@ -215,8 +216,8 @@ export function mapUnifiedTypeToHistoryType(type: string): string | null {
   switch (type) {
     case 'node':
       return 'node';
-    case 'host':
-      return 'node';
+    case 'agent':
+      return 'agent';
     case 'docker-host':
       return 'dockerHost';
     case 'k8s-node':

@@ -391,7 +391,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
     const asString = (value: unknown): string | undefined =>
       typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
-    const hasHostAgentFacet = (resource: Resource): boolean => {
+    const hasAgentFacet = (resource: Resource): boolean => {
       if (resource.agent) return true;
       const platformData = readPlatformData(resource);
       const platformAgent = asRecord(platformData?.agent);
@@ -458,7 +458,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           resource.type === 'pbs' ||
           resource.type === 'pmg' ||
           resource.type === 'truenas') &&
-        hasHostAgentFacet(resource),
+        hasAgentFacet(resource),
     );
     const mentionCandidates: MentionResource[] = [];
 
@@ -477,14 +477,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
       });
     }
 
-    // Add LXC containers (includes OCI containers; uses compatibility mention ID format).
+    // Add LXC/system containers (includes OCI containers).
     for (const container of containers) {
       const platformData = readPlatformData(container);
       const nodeRaw = platformData?.node;
       const node = typeof nodeRaw === 'string' ? nodeRaw : '';
       const vmid = parseLegacyVmid(container, platformData);
       mentionCandidates.push({
-        id: `lxc:${node}:${vmid}`,
+        id: `system-container:${node}:${vmid}`,
         name: container.name,
         type: 'container',
         status: container.status === 'running' ? 'running' : 'stopped',
@@ -511,7 +511,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const hostStatus =
         host.status === 'online' || host.status === 'running' ? 'online' : host.status || 'online';
       mentionCandidates.push({
-        id: `host:${dockerActionId}`,
+        id: `agent:${dockerActionId}`,
         name: displayName,
         type: 'agent',
         status: hostStatus,
@@ -549,7 +549,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const hostStatus =
         host.status === 'online' || host.status === 'running' ? 'online' : host.status;
       mentionCandidates.push({
-        id: `host:${hostActionId}`,
+        id: `agent:${hostActionId}`,
         name,
         type: 'agent',
         status: hostStatus,
@@ -565,12 +565,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const prompt = input().trim();
     if (!prompt) return;
     const mentions = accumulatedMentions();
-    const mentionsForAPI =
-      mentions.length > 0
-        ? mentions.map((mention) =>
-            mention.type === 'agent' ? { ...mention, type: 'host' } : mention,
-          )
-        : undefined;
+    const mentionsForAPI = mentions.length > 0 ? mentions : undefined;
     // Pass findingId from context on the first message, clear after success
     const ctx = aiChatStore.context;
     const findingId = ctx.findingId;

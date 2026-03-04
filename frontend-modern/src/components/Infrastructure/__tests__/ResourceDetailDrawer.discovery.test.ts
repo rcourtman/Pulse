@@ -29,7 +29,7 @@ describe('toDiscoveryConfig', () => {
     const resource: Resource = {
       ...baseResource(),
       discoveryTarget: {
-        resourceType: 'host',
+        resourceType: 'agent',
         hostId: 'host-1',
         resourceId: 'host-1',
         hostname: 'pve1.local',
@@ -38,7 +38,7 @@ describe('toDiscoveryConfig', () => {
 
     const config = toDiscoveryConfig(resource);
     expect(config).toEqual({
-      resourceType: 'host',
+      resourceType: 'agent',
       hostId: 'host-1',
       resourceId: 'host-1',
       hostname: 'pve1.local',
@@ -268,7 +268,7 @@ describe('buildWorkloadsHref', () => {
         proxmox: { nodeName: 'pve1' },
       },
     };
-    expect(buildWorkloadsHref(resource)).toBe('/workloads?host=pve1');
+    expect(buildWorkloadsHref(resource)).toBe('/workloads?agent=pve1');
   });
 
   it('builds workloads route with docker type and host hint for docker hosts', () => {
@@ -282,6 +282,6 @@ describe('buildWorkloadsHref', () => {
         docker: { hostname: 'docker-host-1' },
       },
     };
-    expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&host=docker-host-1');
+    expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&agent=docker-host-1');
   });
 });

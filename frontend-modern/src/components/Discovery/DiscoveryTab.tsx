@@ -649,8 +649,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
           {/* Connection Status Warning - Show when commands are needed but not available */}
           <Show
             when={
-              (props.resourceType === 'host' || props.resourceType === 'agent') &&
-              !connectedAgents.loading
+              props.resourceType === 'agent' && !connectedAgents.loading
             }
           >
             <Show when={props.commandsEnabled === false}>

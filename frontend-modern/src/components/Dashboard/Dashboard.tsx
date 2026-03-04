@@ -321,7 +321,7 @@ export function Dashboard(props: DashboardProps) {
   const [handledRuntimeParam, setHandledRuntimeParam] = createSignal<string>('');
   const [handledContextParam, setHandledContextParam] = createSignal('');
   const [handledNamespaceParam, setHandledNamespaceParam] = createSignal('');
-  const [handledHostParam, setHandledHostParam] = createSignal('');
+  const [handledAgentParam, setHandledAgentParam] = createSignal('');
   const [selectedHostHint, setSelectedHostHint] = createSignal<string | null>(null);
 
   // URL-sync can legitimately require multiple reactive updates (e.g. normalizing
@@ -678,16 +678,16 @@ export function Dashboard(props: DashboardProps) {
   });
 
   createEffect(() => {
-    const { host: hostParam } = parseWorkloadsLinkSearch(location.search);
-    const normalized = hostParam ?? '';
-    if (normalized === handledHostParam()) return;
+    const { agent: agentParam } = parseWorkloadsLinkSearch(location.search);
+    const normalized = agentParam ?? '';
+    if (normalized === handledAgentParam()) return;
 
     if (normalized) {
       setSelectedHostHint(normalized);
       if (!showFilters()) {
         setShowFilters(true);
       }
-      setHandledHostParam(normalized);
+      setHandledAgentParam(normalized);
       return;
     }
 
@@ -695,7 +695,7 @@ export function Dashboard(props: DashboardProps) {
     if (selectedNode() !== null) {
       setSelectedNode(null);
     }
-    setHandledHostParam('');
+    setHandledAgentParam('');
   });
 
   createEffect(() => {
@@ -741,7 +741,7 @@ export function Dashboard(props: DashboardProps) {
     const urlRuntime = parsed.runtime ?? '';
     const urlContext = parsed.context ?? '';
     const urlNamespace = parsed.namespace ?? '';
-    const urlHost = parsed.host ?? '';
+    const urlAgent = parsed.agent ?? '';
     const urlResource = parsed.resource ?? '';
 
     // Avoid oscillation: only write managed params after we've processed the current URL.
@@ -749,7 +749,7 @@ export function Dashboard(props: DashboardProps) {
     if (handledRuntimeParam() !== urlRuntime) return;
     if (handledContextParam() !== urlContext) return;
     if (handledNamespaceParam() !== urlNamespace) return;
-    if (handledHostParam() !== urlHost) return;
+    if (handledAgentParam() !== urlAgent) return;
     if (urlResource && handledResourceId() !== urlResource) return;
 
     const currentParams = new URLSearchParams(location.search);
@@ -758,21 +758,23 @@ export function Dashboard(props: DashboardProps) {
     const nextRuntime = viewMode() === 'docker' ? containerRuntime().trim() : '';
     const nextContext = viewMode() === 'k8s' ? (selectedKubernetesContext() ?? '') : '';
     const nextNamespace = viewMode() === 'k8s' ? (selectedKubernetesNamespace() ?? '') : '';
-    const nextHost = viewMode() === 'k8s' ? '' : (selectedNode() ?? selectedHostHint() ?? '');
+    const nextAgent = viewMode() === 'k8s' ? '' : (selectedNode() ?? selectedHostHint() ?? '');
 
     const managedPath = buildWorkloadsPath({
       type: nextType || null,
       runtime: nextRuntime || null,
       context: nextContext || null,
       namespace: nextNamespace || null,
-      host: nextHost || null,
+      agent: nextAgent || null,
     });
     const managedUrl = new URL(managedPath, 'http://pulse.local');
     nextParams.delete(WORKLOADS_QUERY_PARAMS.type);
     nextParams.delete(WORKLOADS_QUERY_PARAMS.runtime);
     nextParams.delete(WORKLOADS_QUERY_PARAMS.context);
     nextParams.delete(WORKLOADS_QUERY_PARAMS.namespace);
-    nextParams.delete(WORKLOADS_QUERY_PARAMS.host);
+    nextParams.delete(WORKLOADS_QUERY_PARAMS.agent);
+    // Cleanup non-canonical alias params once canonical params are applied.
+    nextParams.delete('host');
     managedUrl.searchParams.forEach((value, key) => {
       nextParams.set(key, value);
     });

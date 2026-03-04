@@ -93,13 +93,13 @@ export const buildWorkloadsHref = (resource: Resource): string | null => {
   }
 
   if (resource.type === 'docker-host') {
-    const host = resolveHostHint(resource);
-    return buildWorkloadsPath({ type: 'docker', host });
+    const agent = resolveHostHint(resource);
+    return buildWorkloadsPath({ type: 'docker', agent });
   }
 
   if (resource.type === 'node') {
-    const host = resolveHostHint(resource);
-    return buildWorkloadsPath({ host });
+    const agent = resolveHostHint(resource);
+    return buildWorkloadsPath({ agent });
   }
 
   return null;

@@ -50,7 +50,7 @@ const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 const pd = (resource: Resource) =>
   resource.platformData ? (unwrap(resource.platformData) as Record<string, unknown>) : undefined;
-const hasHostAgentFacet = (resource: Resource): boolean => {
+const hasAgentFacet = (resource: Resource): boolean => {
   if (resource.agent) return true;
   const platformData = pd(resource);
   if (!platformData) return false;
@@ -135,7 +135,7 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
               resource.type === 'pbs' ||
               resource.type === 'pmg' ||
               resource.type === 'truenas') &&
-            hasHostAgentFacet(resource),
+            hasAgentFacet(resource),
         );
 
         const nodes = nodeResources.map(toLegacyNodeShape);
@@ -469,7 +469,7 @@ Keep these credentials secure!
               </div>
               <div class="flex-1">
                 <div class="flex items-center gap-2 mb-0.5">
-                  <span class="text-base-content font-semibold text-xs">Host Metrics</span>
+                  <span class="text-base-content font-semibold text-xs">Agent Metrics</span>
                   <span class="text-[9px] text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900 px-1.5 py-0.5 rounded-sm font-medium">
                     Always included
                   </span>

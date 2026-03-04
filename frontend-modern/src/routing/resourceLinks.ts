@@ -3,7 +3,8 @@ export const WORKLOADS_QUERY_PARAMS = {
   runtime: 'runtime',
   context: 'context',
   namespace: 'namespace',
-  host: 'host',
+  // Canonical v6 agent filter query param.
+  agent: 'agent',
   resource: 'resource',
 } as const;
 
@@ -56,7 +57,7 @@ type WorkloadsLinkOptions = {
   runtime?: string | null;
   context?: string | null;
   namespace?: string | null;
-  host?: string | null;
+  agent?: string | null;
   resource?: string | null;
 };
 
@@ -99,7 +100,7 @@ export const parseWorkloadsLinkSearch = (search: string) => {
     runtime: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.runtime)),
     context: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.context)),
     namespace: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.namespace)),
-    host: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.host)),
+    agent: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.agent)),
     resource: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.resource)),
   };
 };
@@ -110,13 +111,13 @@ export const buildWorkloadsPath = (options: WorkloadsLinkOptions = {}): string =
   const runtime = normalizeQueryValue(options.runtime);
   const context = normalizeQueryValue(options.context);
   const namespace = normalizeQueryValue(options.namespace);
-  const host = normalizeQueryValue(options.host);
+  const agent = normalizeQueryValue(options.agent);
   const resource = normalizeQueryValue(options.resource);
   if (type) params.set(WORKLOADS_QUERY_PARAMS.type, type);
   if (runtime) params.set(WORKLOADS_QUERY_PARAMS.runtime, runtime);
   if (context) params.set(WORKLOADS_QUERY_PARAMS.context, context);
   if (namespace) params.set(WORKLOADS_QUERY_PARAMS.namespace, namespace);
-  if (host) params.set(WORKLOADS_QUERY_PARAMS.host, host);
+  if (agent) params.set(WORKLOADS_QUERY_PARAMS.agent, agent);
   if (resource) params.set(WORKLOADS_QUERY_PARAMS.resource, resource);
   const query = params.toString();
   return query ? `${WORKLOADS_PATH}?${query}` : WORKLOADS_PATH;

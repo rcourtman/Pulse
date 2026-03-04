@@ -18,7 +18,7 @@ import {
 
 const makeResource = (i: number, overrides: Partial<Resource> = {}): Resource => ({
   id: `resource-${i}`,
-  type: 'host',
+  type: 'node',
   name: `host-${i}`,
   displayName: `Host ${i}`,
   platformId: `platform-${i}`,
@@ -153,7 +153,7 @@ describe('infrastructureSelectors', () => {
   describe('splitHostAndServiceResources', () => {
     it('splits pbs/pmg as services and everything else as hosts', () => {
       const resources = [
-        makeResource(1, { type: 'host' }),
+        makeResource(1, { type: 'node' }),
         makeResource(2, { type: 'node' }),
         makeResource(3, { type: 'pbs' }),
         makeResource(4, { type: 'pmg' }),

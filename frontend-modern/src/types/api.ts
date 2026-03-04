@@ -4,7 +4,7 @@ import type { Resource } from './resource';
 
 export interface State {
   // Canonical v6 resource contract.
-  // Platform entities (nodes, guests, host agents, storage, PBS/PMG, etc.) are modeled in `resources`.
+  // Platform entities (nodes, guests, agents, storage, PBS/PMG, etc.) are modeled in `resources`.
   removedDockerHosts?: RemovedDockerHost[];
   removedKubernetesClusters?: RemovedKubernetesCluster[];
   metrics: Metric[];
@@ -140,7 +140,7 @@ export interface Node {
   connectionHealth: string;
   isClusterMember?: boolean; // True if part of a cluster
   clusterName?: string; // Name of cluster (empty if standalone)
-  linkedHostAgentId?: string; // ID of host agent running on this node (for merging)
+  linkedAgentId?: string; // ID of Pulse agent running on this node (for merging)
 }
 
 export interface GuestNetworkInterface {
@@ -446,7 +446,7 @@ export interface Host {
   tokenRevokedAt?: number;
   tags?: string[];
   isLegacy?: boolean;
-  // Linking: When this host agent is running on a known PVE entity
+  // Linking: When this agent is running on a known PVE entity
   linkedNodeId?: string; // ID of PVE node this agent is running on
   linkedVmId?: string; // ID of VM this agent is running inside
   linkedContainerId?: string; // ID of container this agent is running inside

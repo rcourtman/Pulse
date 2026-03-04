@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getUnifiedSourceBadges } from '../resourceBadges';
+import { getTypeBadge, getUnifiedSourceBadges } from '../resourceBadges';
 
 describe('getUnifiedSourceBadges', () => {
   it('returns empty array for null/undefined/empty sources', () => {
@@ -45,5 +45,19 @@ describe('getUnifiedSourceBadges', () => {
     const allSources = ['proxmox', 'agent', 'docker', 'pbs', 'pmg', 'kubernetes', 'truenas'];
     const badges = getUnifiedSourceBadges(allSources);
     expect(badges).toHaveLength(7);
+  });
+});
+
+describe('getTypeBadge', () => {
+  it('returns Agent badge for canonical agent type', () => {
+    const badge = getTypeBadge('agent');
+    expect(badge?.label).toBe('Agent');
+    expect(badge?.title).toBe('agent');
+  });
+
+  it('does not map legacy host alias to Agent', () => {
+    const badge = getTypeBadge('host');
+    expect(badge?.label).toBe('host');
+    expect(badge?.title).toBe('host');
   });
 });

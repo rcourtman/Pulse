@@ -16,7 +16,7 @@ const EMPTY_STATUS_COUNTS: Record<string, number> = {
 function createResource(overrides: Partial<Resource> = {}): Resource {
   return {
     id: 'resource-1',
-    type: 'host',
+    type: 'node',
     name: 'resource-1',
     displayName: 'Resource 1',
     platformId: 'platform-1',
@@ -81,7 +81,7 @@ describe('computeDashboardOverview', () => {
     const resources: Resource[] = [
       createResource({
         id: 'infra-1',
-        type: 'host',
+        type: 'node',
         displayName: 'Host 1',
         status: 'online',
         cpu: { current: 10 },
@@ -133,8 +133,7 @@ describe('computeDashboardOverview', () => {
 
     expect(overview.infrastructure.total).toBe(6);
     expect(overview.infrastructure.byType).toEqual({
-      host: 1,
-      node: 1,
+      node: 2,
       'k8s-node': 1,
       'docker-host': 1,
       truenas: 1,
@@ -191,7 +190,7 @@ describe('computeDashboardOverview', () => {
     const resources: Resource[] = [
       createResource({
         id: 'infra-a',
-        type: 'host',
+        type: 'node',
         status: 'online',
         cpu: { current: 25 },
         memory: { current: 55 },

@@ -117,7 +117,7 @@ export function useThresholdsData(
     return nodes;
   }, []);
 
-  const hostAgentsWithOverrides = createMemo<TableResource[]>((prev = []) => {
+  const agentsWithOverrides = createMemo<TableResource[]>((prev = []) => {
     if (editingId()) {
       return prev;
     }
@@ -126,33 +126,37 @@ export function useThresholdsData(
     const overridesMap = new Map((props.overrides() ?? []).map((o: Override) => [o.id, o]));
     const seen = new Set<string>();
 
-    const hosts: TableResource[] = (props.hosts ?? []).map((host) => {
-      const override = overridesMap.get(host.id);
+    const agents: TableResource[] = (props.agents ?? []).map((agentResource) => {
+      const override = overridesMap.get(agentResource.id);
       const hasCustomThresholds =
         (override as Override | undefined)?.thresholds &&
         Object.keys((override as Override).thresholds).some((key: string) => {
           const k = key as keyof Override['thresholds'];
           return (
             (override as Override).thresholds[k] !== undefined &&
-            (override as Override).thresholds[k] !== (props.hostDefaults as any)[k]
+            (override as Override).thresholds[k] !== (props.agentDefaults as any)[k]
           );
         });
 
       const displayName =
-        host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
-      const status = host.status;
+        agentResource.displayName?.trim() ||
+        agentResource.identity?.hostname ||
+        agentResource.name ||
+        agentResource.id;
+      const status = agentResource.status;
 
-      seen.add(host.id);
+      seen.add(agentResource.id);
 
       return {
-        id: host.id,
+        id: agentResource.id,
         name: displayName,
         displayName,
-        rawName: host.identity?.hostname ?? host.name,
-        type: 'hostAgent' as const,
+        rawName: agentResource.identity?.hostname ?? agentResource.name,
+        type: 'agent' as const,
         resourceType: 'Agent',
-        node: host.identity?.hostname ?? host.name,
-        instance: (pd(host)?.platform as string) || (pd(host)?.osName as string) || '',
+        node: agentResource.identity?.hostname ?? agentResource.name,
+        instance:
+          (pd(agentResource)?.platform as string) || (pd(agentResource)?.osName as string) || '',
         status,
         hasOverride:
           hasCustomThresholds ||
@@ -161,23 +165,23 @@ export function useThresholdsData(
         disabled: (override as Override | undefined)?.disabled || false,
         disableConnectivity: (override as Override | undefined)?.disableConnectivity || false,
         thresholds: (override as Override | undefined)?.thresholds || {},
-        defaults: props.hostDefaults,
+        defaults: props.agentDefaults,
       } satisfies TableResource;
     });
 
     (props.overrides() ?? [])
       .filter(
         (override) =>
-          (override as Override).type === 'hostAgent' && !seen.has((override as Override).id),
+          (override as Override).type === 'agent' && !seen.has((override as Override).id),
       )
       .forEach((override) => {
         const name = (override as Override).name?.trim() || (override as Override).id;
-        hosts.push({
+        agents.push({
           id: (override as Override).id,
           name,
           displayName: name,
           rawName: name,
-          type: 'hostAgent' as const,
+          type: 'agent' as const,
           resourceType: 'Agent',
           node: '',
           instance: '',
@@ -186,19 +190,19 @@ export function useThresholdsData(
           disabled: (override as Override).disabled || false,
           disableConnectivity: (override as Override).disableConnectivity || false,
           thresholds: (override as Override).thresholds || {},
-          defaults: props.hostDefaults,
+          defaults: props.agentDefaults,
         } satisfies TableResource);
       });
 
     if (search) {
-      return hosts.filter((host) => host.name.toLowerCase().includes(search));
+      return agents.filter((agent) => agent.name.toLowerCase().includes(search));
     }
 
-    return hosts;
+    return agents;
   }, []);
 
-  // Helper function to create host disk resource ID (matches backend sanitizeHostComponent)
-  const hostDiskResourceID = (hostId: string, mountpoint: string, device?: string): string => {
+  // Helper function to create agent disk resource ID (matches backend sanitizeHostComponent)
+  const agentDiskResourceID = (agentId: string, mountpoint: string, device?: string): string => {
     // Use mountpoint if available, otherwise device
     let label = (mountpoint?.trim() || device?.trim() || 'disk').toLowerCase();
     // Replicate backend sanitizeHostComponent: keep a-z 0-9, replace everything else with '-', collapse consecutive hyphens
@@ -207,11 +211,11 @@ export function useThresholdsData(
       .replace(/-{2,}/g, '-')
       .replace(/^-|-$/g, '');
     if (!label) label = 'unknown';
-    return `host:${hostId}/disk:${label}`;
+    return `agent:${agentId}/disk:${label}`;
   };
 
-  // Process host disks with their overrides
-  const hostDisksWithOverrides = createMemo<TableResource[]>((prev = []) => {
+  // Process agent disks with their overrides
+  const agentDisksWithOverrides = createMemo<TableResource[]>((prev = []) => {
     if (editingId()) {
       return prev;
     }
@@ -221,12 +225,15 @@ export function useThresholdsData(
     const seen = new Set<string>();
     const disks: TableResource[] = [];
 
-    // Extract disks from all hosts
-    (props.hosts ?? []).forEach((host) => {
-      const hostDisplayName =
-        host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
+    // Extract disks from all agents
+    (props.agents ?? []).forEach((agentResource) => {
+      const agentDisplayName =
+        agentResource.displayName?.trim() ||
+        agentResource.identity?.hostname ||
+        agentResource.name ||
+        agentResource.id;
 
-      const disksForHost = (pd(host)?.disks ?? []) as Array<{
+      const disksForAgent = (pd(agentResource)?.disks ?? []) as Array<{
         mountpoint?: string;
         device?: string;
         used?: number;
@@ -234,14 +241,18 @@ export function useThresholdsData(
         type?: string;
       }>;
 
-      disksForHost.forEach((disk) => {
+      disksForAgent.forEach((disk) => {
         const diskLabel = disk.mountpoint?.trim() || disk.device?.trim() || 'disk';
-        const resourceId = hostDiskResourceID(host.id, disk.mountpoint || '', disk.device);
+        const resourceId = agentDiskResourceID(
+          agentResource.id,
+          disk.mountpoint || '',
+          disk.device,
+        );
         const override = overridesMap.get(resourceId);
 
         const hasCustomThresholds =
           (override as Override | undefined)?.thresholds?.disk !== undefined &&
-          (override as Override).thresholds.disk !== props.hostDefaults.disk;
+          (override as Override).thresholds.disk !== props.agentDefaults.disk;
 
         seen.add(resourceId);
 
@@ -250,26 +261,26 @@ export function useThresholdsData(
           name: diskLabel,
           displayName: diskLabel,
           rawName: disk.device || diskLabel,
-          type: 'hostDisk' as const,
-          resourceType: 'Host Disk',
-          host: host.id,
-          node: hostDisplayName,
+          type: 'agentDisk' as const,
+          resourceType: 'Agent Disk',
+          host: agentResource.id,
+          node: agentDisplayName,
           instance: disk.type || '',
-          status: host.status,
+          status: agentResource.status,
           hasOverride: hasCustomThresholds || Boolean((override as Override | undefined)?.disabled),
           disabled: (override as Override | undefined)?.disabled || false,
           thresholds: (override as Override | undefined)?.thresholds || {},
-          defaults: { disk: props.hostDefaults.disk },
+          defaults: { disk: props.agentDefaults.disk },
           subtitle: `${((disk.used || 0) / 1024 / 1024 / 1024).toFixed(1)} / ${((disk.total || 0) / 1024 / 1024 / 1024).toFixed(1)} GB`,
         } satisfies TableResource);
       });
     });
 
-    // Include any hostDisk overrides for disks that are no longer present
+    // Include any agentDisk overrides for disks that are no longer present
     (props.overrides() ?? [])
       .filter(
         (override) =>
-          (override as Override).type === 'hostDisk' && !seen.has((override as Override).id),
+          (override as Override).type === 'agentDisk' && !seen.has((override as Override).id),
       )
       .forEach((override) => {
         const name = (override as Override).name || (override as Override).id;
@@ -278,16 +289,16 @@ export function useThresholdsData(
           name,
           displayName: name,
           rawName: name,
-          type: 'hostDisk' as const,
-          resourceType: 'Host Disk',
+          type: 'agentDisk' as const,
+          resourceType: 'Agent Disk',
           host: '',
-          node: 'Unknown Host',
+          node: 'Unknown Agent',
           instance: '',
           status: 'unknown',
           hasOverride: true,
           disabled: (override as Override).disabled || false,
           thresholds: (override as Override).thresholds || {},
-          defaults: { disk: props.hostDefaults.disk },
+          defaults: { disk: props.agentDefaults.disk },
         });
       });
 
@@ -301,10 +312,10 @@ export function useThresholdsData(
   }, []);
 
   // Group host disks by their host
-  const hostDisksGroupedByHost = createMemo<Record<string, TableResource[]>>(() => {
+  const agentDisksGroupedByAgent = createMemo<Record<string, TableResource[]>>(() => {
     const grouped: Record<string, TableResource[]> = {};
-    hostDisksWithOverrides().forEach((disk) => {
-      const key = disk.node?.trim() || 'Unknown Host';
+    agentDisksWithOverrides().forEach((disk) => {
+      const key = disk.node?.trim() || 'Unknown Agent';
       if (!grouped[key]) {
         grouped[key] = [];
       }
@@ -1093,9 +1104,9 @@ export function useThresholdsData(
 
   return {
     nodesWithOverrides,
-    hostAgentsWithOverrides,
-    hostDisksWithOverrides,
-    hostDisksGroupedByHost,
+    agentsWithOverrides,
+    agentDisksWithOverrides,
+    agentDisksGroupedByAgent,
     dockerHostsWithOverrides,
     dockerContainersByHostId,
     dockerContainersGroupedByHost,

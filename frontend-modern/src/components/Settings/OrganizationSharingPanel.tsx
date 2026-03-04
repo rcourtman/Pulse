@@ -45,11 +45,27 @@ const accessRoleOptions: Array<{ value: ShareAccessRole; label: string }> = [
   { value: 'admin', label: 'Admin' },
 ];
 
-const VALID_RESOURCE_TYPES = ['vm', 'container', 'host', 'storage', 'pbs', 'pmg'] as const;
-const INVALID_RESOURCE_TYPE_ERROR = `Invalid resource type. Valid types: ${VALID_RESOURCE_TYPES.join(', ')}`;
+const CANONICAL_RESOURCE_TYPES = [
+  'agent',
+  'node',
+  'docker-host',
+  'k8s-cluster',
+  'k8s-node',
+  'truenas',
+  'vm',
+  'container',
+  'storage',
+  'pbs',
+  'pmg',
+] as const;
+const INVALID_RESOURCE_TYPE_ERROR = `Invalid resource type. Valid types: ${CANONICAL_RESOURCE_TYPES.join(', ')}`;
 
-const isValidResourceType = (value: string): value is (typeof VALID_RESOURCE_TYPES)[number] =>
-  (VALID_RESOURCE_TYPES as readonly string[]).includes(value);
+const normalizeResourceTypeInput = (value: string): string => {
+  return value.trim().toLowerCase();
+};
+
+const isValidResourceType = (value: string): value is (typeof CANONICAL_RESOURCE_TYPES)[number] =>
+  (CANONICAL_RESOURCE_TYPES as readonly string[]).includes(value);
 
 const normalizeShareRole = (role: OrganizationRole): ShareAccessRole => {
   const normalized = normalizeRole(role);
@@ -98,7 +114,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
       .sort((left, right) => left.name.localeCompare(right.name));
   });
 
-  const normalizedResourceType = createMemo(() => resourceType().trim().toLowerCase());
+  const normalizedResourceType = createMemo(() => normalizeResourceTypeInput(resourceType()));
   const normalizedResourceId = createMemo(() => resourceId().trim());
   const hasTargetOrg = createMemo(() => targetOrgId().trim() !== '');
   const hasQuickPickSelection = createMemo(() => selectedQuickPick().trim() !== '');
@@ -182,7 +198,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
       (resource) => resource.id === (nextID ?? '') && resource.type === (nextType ?? ''),
     );
     if (!match) return;
-    setResourceType(match.type);
+    setResourceType(normalizeResourceTypeInput(match.type));
     setResourceId(match.id);
     setResourceName(match.name);
   };
@@ -205,7 +221,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
   const updateResourceType = (value: string) => {
     setSelectedQuickPick('');
     setResourceType(value);
-    const normalized = value.trim().toLowerCase();
+    const normalized = normalizeResourceTypeInput(value);
     setResourceTypeError(
       normalized === '' || isValidResourceType(normalized) ? '' : INVALID_RESOURCE_TYPE_ERROR,
     );
@@ -489,7 +505,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                           type="text"
                           value={resourceType()}
                           onInput={(event) => updateResourceType(event.currentTarget.value)}
-                          placeholder={VALID_RESOURCE_TYPES.join(' | ')}
+                          placeholder={CANONICAL_RESOURCE_TYPES.join(' | ')}
                           class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${resourceTypeError() ? 'border-red-400 dark:border-red-500' : 'border-border'}`}
                         />
                         <Show when={resourceTypeError() !== ''}>

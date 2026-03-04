@@ -22,8 +22,8 @@ describe('metricsKeys', () => {
       expect(buildMetricKey('dockerHost', 'docker-host-1')).toBe('dockerHost:docker-host-1');
     });
 
-    it('builds a compatibility key for agent resources', () => {
-      expect(buildMetricKey('agent', 'agent-1')).toBe('host:agent-1');
+    it('builds a canonical key for agent resources', () => {
+      expect(buildMetricKey('agent', 'agent-1')).toBe('agent:agent-1');
     });
 
     it('builds a key for docker container resources', () => {
@@ -50,7 +50,7 @@ describe('metricsKeys', () => {
       { kind: 'container', prefix: 'container:' },
       { kind: 'dockerHost', prefix: 'dockerHost:' },
       { kind: 'dockerContainer', prefix: 'dockerContainer:' },
-      { kind: 'agent', prefix: 'host:' },
+      { kind: 'agent', prefix: 'agent:' },
     ];
 
     it.each(expectations)('returns correct prefix for $kind', ({ kind, prefix }) => {

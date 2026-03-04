@@ -185,7 +185,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     const resourceType = (() => {
       switch (explicitDiscoveryTarget.resourceType) {
         case 'agent':
-        case 'host':
+          return 'agent';
         case 'vm':
         case 'system-container':
         case 'docker':

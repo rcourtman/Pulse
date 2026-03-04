@@ -103,7 +103,7 @@ const baseProps = () => ({
   setRawOverridesConfig: vi.fn(),
   allGuests: () => [],
   nodes: [],
-  hosts: [],
+  agents: [],
   storage: [],
   dockerHosts: [],
   pbsInstances: [],
@@ -118,8 +118,8 @@ const baseProps = () => ({
   setGuestPoweredOffSeverity: vi.fn(),
   nodeDefaults: {},
   setNodeDefaults: vi.fn(),
-  hostDefaults: { cpu: 80, memory: 85, disk: 90 },
-  setHostDefaults: vi.fn(),
+  agentDefaults: { cpu: 80, memory: 85, disk: 90 },
+  setAgentDefaults: vi.fn(),
   dockerDefaults: DEFAULT_DOCKER_DEFAULTS,
   dockerDisableConnectivity: () => false,
   setDockerDisableConnectivity: vi.fn(),
@@ -130,13 +130,13 @@ const baseProps = () => ({
   setStorageDefault: vi.fn(),
   resetGuestDefaults: vi.fn(),
   resetNodeDefaults: vi.fn(),
-  resetHostDefaults: vi.fn(),
+  resetAgentDefaults: vi.fn(),
   resetDockerDefaults: vi.fn(),
   resetDockerIgnoredPrefixes: vi.fn(),
   resetStorageDefault: vi.fn(),
   factoryGuestDefaults: {},
   factoryNodeDefaults: {},
-  factoryHostDefaults: { cpu: 80, memory: 85, disk: 90 },
+  factoryAgentDefaults: { cpu: 80, memory: 85, disk: 90 },
   factoryDockerDefaults: DEFAULT_DOCKER_DEFAULTS,
   factoryStorageDefault: 85,
   backupDefaults: () => ({ enabled: false, warningDays: 7, criticalDays: 14 }),
@@ -159,7 +159,7 @@ const baseProps = () => ({
     criticalSizeGiB: 0,
   } as SnapshotAlertConfig,
   resetSnapshotDefaults: vi.fn(),
-  timeThresholds: () => ({ guest: 5, node: 5, storage: 5, pbs: 5, host: 5 }),
+  timeThresholds: () => ({ guest: 5, node: 5, storage: 5, pbs: 5, agent: 5 }),
   metricTimeThresholds: () => ({}),
   setMetricTimeThresholds: vi.fn(),
   activeAlerts: {},
@@ -168,8 +168,8 @@ const baseProps = () => ({
   setDisableAllNodes: vi.fn(),
   disableAllGuests: () => false,
   setDisableAllGuests: vi.fn(),
-  disableAllHosts: () => false,
-  setDisableAllHosts: vi.fn(),
+  disableAllAgents: () => false,
+  setDisableAllAgents: vi.fn(),
   disableAllStorage: () => false,
   setDisableAllStorage: vi.fn(),
   disableAllPBS: () => false,
@@ -186,8 +186,8 @@ const baseProps = () => ({
   setDisableAllNodesOffline: vi.fn(),
   disableAllGuestsOffline: () => false,
   setDisableAllGuestsOffline: vi.fn(),
-  disableAllHostsOffline: () => false,
-  setDisableAllHostsOffline: vi.fn(),
+  disableAllAgentsOffline: () => false,
+  setDisableAllAgentsOffline: vi.fn(),
   disableAllPBSOffline: () => false,
   setDisableAllPBSOffline: vi.fn(),
   disableAllPMGOffline: () => false,
@@ -232,12 +232,30 @@ describe('ThresholdsTable navigation and redirection', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/proxmox', { replace: true });
   });
 
+  it('loads agents tab from canonical route', async () => {
+    setPathname('/alerts/thresholds/agents');
+    const host: Host = {
+      id: 'legacy-h1',
+      hostname: 'legacy-host',
+      displayName: 'Legacy Host',
+      status: 'online',
+      lastSeen: 123,
+      memory: { total: 100, used: 50, free: 50, usage: 50 },
+    };
+
+    render(() => <ThresholdsTable {...(baseProps() as any)} agents={[host]} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-table-Agents')).toBeInTheDocument();
+    });
+  });
+
   it('navigates to correct route when tabs are clicked', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} />);
 
     const hostsTab = screen.getAllByRole('button').find((el) => el.textContent?.includes('Agents'));
     if (hostsTab) fireEvent.click(hostsTab);
-    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/hosts');
+    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/agents');
 
     const mailTab = screen
       .getAllByRole('button')
@@ -249,7 +267,7 @@ describe('ThresholdsTable navigation and redirection', () => {
 
 describe('ThresholdsTable Resource Rendering', () => {
   it('renders agents correctly', async () => {
-    setPathname('/alerts/thresholds/hosts');
+    setPathname('/alerts/thresholds/agents');
     const host: Host = {
       id: 'h1',
       hostname: 'host1',
@@ -259,7 +277,7 @@ describe('ThresholdsTable Resource Rendering', () => {
       memory: { total: 100, used: 50, free: 50, usage: 50 },
     };
 
-    render(() => <ThresholdsTable {...(baseProps() as any)} hosts={[host]} />);
+    render(() => <ThresholdsTable {...(baseProps() as any)} agents={[host]} />);
 
     await waitFor(() => {
       expect(screen.getByTestId('resource-table-Agents')).toBeInTheDocument();
@@ -302,7 +320,7 @@ describe('ThresholdsTable Resource Rendering', () => {
 
 describe('ThresholdsTable Metric Formatting', () => {
   it('formats metrics correctly', async () => {
-    setPathname('/alerts/thresholds/hosts');
+    setPathname('/alerts/thresholds/agents');
     const host: Host = {
       id: 'h1',
       hostname: 'host1',
@@ -315,14 +333,14 @@ describe('ThresholdsTable Metric Formatting', () => {
     const override = {
       id: 'h1',
       name: 'host1',
-      type: 'hostAgent' as const,
+      type: 'agent' as const,
       thresholds: {
         cpu: 85,
       },
     };
 
     render(() => (
-      <ThresholdsTable {...(baseProps() as any)} hosts={[host]} overrides={() => [override]} />
+      <ThresholdsTable {...(baseProps() as any)} agents={[host]} overrides={() => [override]} />
     ));
 
     await waitFor(() => {
@@ -333,10 +351,10 @@ describe('ThresholdsTable Metric Formatting', () => {
 
 describe('ThresholdsTable V6 ID compatibility', () => {
   it('matches agent overrides keyed by actionable agent ID', async () => {
-    setPathname('/alerts/thresholds/hosts');
+    setPathname('/alerts/thresholds/agents');
     const host = {
       id: 'resource:host:abc123',
-      type: 'host',
+      type: 'node',
       name: 'host-v6',
       displayName: 'Host V6',
       platformId: 'host-platform-1',
@@ -350,12 +368,12 @@ describe('ThresholdsTable V6 ID compatibility', () => {
     const override = {
       id: 'agent-host-123',
       name: 'Host V6',
-      type: 'hostAgent' as const,
+      type: 'agent' as const,
       thresholds: { cpu: 88 },
     };
 
     render(() => (
-      <ThresholdsTable {...(baseProps() as any)} hosts={[host]} overrides={() => [override]} />
+      <ThresholdsTable {...(baseProps() as any)} agents={[host]} overrides={() => [override]} />
     ));
 
     await waitFor(() => {

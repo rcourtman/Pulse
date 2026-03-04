@@ -538,10 +538,10 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 if (!isPVEItem || !node) return undefined;
                 const hosts = props.hosts ?? [];
 
-                const linkedHostAgentId = node.linkedHostAgentId;
-                if (linkedHostAgentId) {
+                const linkedAgentId = node.linkedAgentId;
+                if (linkedAgentId) {
                   const byId = hosts.find((host) =>
-                    getHostCandidateIds(host).includes(linkedHostAgentId),
+                    getHostCandidateIds(host).includes(linkedAgentId),
                   );
                   if (byId) return byId;
                 }
@@ -688,7 +688,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                               {node!.isClusterMember ? node!.clusterName : 'Standalone'}
                             </span>
                           </Show>
-                          <Show when={isPVEItem && node!.linkedHostAgentId}>
+                          <Show when={isPVEItem && node!.linkedAgentId}>
                             <span
                               class="text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-400"
                               title="Pulse agent installed for enhanced metrics"

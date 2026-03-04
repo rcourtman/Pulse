@@ -473,7 +473,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         case 'powered-off':
           return `Guest came online ${resolvedTime}`;
         case 'host-offline':
-          return `Host came online ${resolvedTime}`;
+          return `Agent came online ${resolvedTime}`;
         case 'cpu':
           return `CPU returned to normal ${resolvedTime}`;
         case 'memory':

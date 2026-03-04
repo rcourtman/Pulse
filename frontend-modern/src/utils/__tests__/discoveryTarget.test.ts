@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { getAgentDiscoveryResourceId, isAgentDiscoveryResourceType } from '@/utils/discoveryTarget';
 
 describe('discoveryTarget utils', () => {
-  it('treats both agent and host resource types as agent discovery types', () => {
+  it('treats only agent as an agent discovery type', () => {
     expect(isAgentDiscoveryResourceType('agent')).toBe(true);
-    expect(isAgentDiscoveryResourceType('host')).toBe(true);
+    expect(isAgentDiscoveryResourceType('host')).toBe(false);
     expect(isAgentDiscoveryResourceType('docker')).toBe(false);
   });
 
@@ -19,7 +19,7 @@ describe('discoveryTarget utils', () => {
 
     expect(
       getAgentDiscoveryResourceId({
-        resourceType: 'host',
+        resourceType: 'agent',
         resourceId: '',
         hostId: 'host-1',
       }),

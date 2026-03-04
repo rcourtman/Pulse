@@ -176,11 +176,12 @@ describe('Resource Interface', () => {
   it('allows all valid resource types', () => {
     const types: ResourceType[] = [
       'node',
-      'host',
       'docker-host',
+      'k8s-cluster',
       'k8s-node',
       'truenas',
       'vm',
+      'app-container',
       'container',
       'docker-container',
       'pod',

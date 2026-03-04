@@ -10,14 +10,9 @@ export type MetricResourceKind =
   | 'vm'
   | 'container'
   | 'agent'
-  | 'host'
   | 'dockerHost'
   | 'dockerContainer'
   | 'k8s';
-
-function canonicalMetricKind(kind: MetricResourceKind): Exclude<MetricResourceKind, 'agent'> {
-  return kind === 'agent' ? 'host' : kind;
-}
 
 /**
  * Build a namespaced metric key for a resource
@@ -26,7 +21,7 @@ function canonicalMetricKind(kind: MetricResourceKind): Exclude<MetricResourceKi
  * This prevents collisions if different resource types happen to share the same ID.
  */
 export function buildMetricKey(kind: MetricResourceKind, id: string): string {
-  return `${canonicalMetricKind(kind)}:${id}`;
+  return `${kind}:${id}`;
 }
 
 /**
@@ -34,5 +29,5 @@ export function buildMetricKey(kind: MetricResourceKind, id: string): string {
  * Used for bulk operations on a specific resource type
  */
 export function getMetricKeyPrefix(kind: MetricResourceKind): string {
-  return `${canonicalMetricKind(kind)}:`;
+  return `${kind}:`;
 }

@@ -107,8 +107,8 @@ export interface DestinationsRef {
 export type OverrideType =
   | 'guest'
   | 'node'
-  | 'hostAgent'
-  | 'hostDisk'
+  | 'agent'
+  | 'agentDisk'
   | 'storage'
   | 'pbs'
   | 'pmg'
@@ -124,7 +124,7 @@ export interface Override {
   node?: string; // Node name (for guests and storage), undefined for nodes themselves
   instance?: string;
   disabled?: boolean; // Completely disable alerts for this guest/storage
-  disableConnectivity?: boolean; // For nodes/hosts - disable offline/connectivity alerts
+  disableConnectivity?: boolean; // For nodes/agents - disable offline/connectivity alerts
   poweredOffSeverity?: 'warning' | 'critical';
   backup?: BackupAlertConfig;
   snapshot?: SnapshotAlertConfig;

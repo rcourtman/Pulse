@@ -68,7 +68,7 @@ const getLinkedNodeIdFromResource = (resource: Resource): string | null =>
   asTrimmedString(getPlatformDataRecord(resource)?.linkedNodeId) ||
   asTrimmedString(getPlatformAgentRecord(resource)?.linkedNodeId);
 
-const hasHostAgentFacet = (resource: Resource): boolean =>
+const hasAgentFacet = (resource: Resource): boolean =>
   Boolean(
     resource.agent ||
     getPlatformAgentRecord(resource) ||
@@ -170,7 +170,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
           resource.type === 'pbs' ||
           resource.type === 'pmg' ||
           resource.type === 'truenas') &&
-        hasHostAgentFacet(resource),
+        hasAgentFacet(resource),
     ),
   );
 

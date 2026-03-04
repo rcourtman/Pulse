@@ -3,7 +3,7 @@ import { GuestMetadataAPI } from '@/api/guestMetadata';
 import { AgentMetadataAPI } from '@/api/agentMetadata';
 
 export interface WebInterfaceUrlFieldProps {
-  metadataKind: 'guest' | 'agent' | 'host';
+  metadataKind: 'guest' | 'agent';
   metadataId?: string;
   targetLabel?: string;
   customUrl?: string;
@@ -44,9 +44,7 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
   const [urlSuccess, setUrlSuccess] = createSignal<string | null>(null);
   let urlSuccessTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const isAgentMetadataKind = createMemo(
-    () => props.metadataKind === 'agent' || props.metadataKind === 'host',
-  );
+  const isAgentMetadataKind = createMemo(() => props.metadataKind === 'agent');
   const metadataId = createMemo(() => (props.metadataId || '').trim());
   const targetLabel = createMemo(
     () => (props.targetLabel || '').trim() || (isAgentMetadataKind() ? 'agent' : 'guest'),

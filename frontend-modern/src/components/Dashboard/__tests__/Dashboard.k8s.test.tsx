@@ -424,9 +424,9 @@ describe('Dashboard Kubernetes workloads integration', () => {
     });
   });
 
-  it('applies non-kubernetes host query params to workload filtering', async () => {
+  it('applies non-kubernetes agent query params to workload filtering', async () => {
     lastHostFilter = undefined;
-    mockLocationSearch = '?type=all&host=pve-a';
+    mockLocationSearch = '?type=all&agent=pve-a';
     mockWorkloads = [
       {
         id: 'v2-vm-a',

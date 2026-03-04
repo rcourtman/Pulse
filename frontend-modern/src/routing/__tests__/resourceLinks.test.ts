@@ -20,11 +20,11 @@ describe('resource link routing contract', () => {
     const href = buildWorkloadsPath({
       type: 'k8s',
       context: 'cluster-a',
-      host: 'worker-1',
+      agent: 'worker-1',
       resource: 'cluster-a:worker-1:101',
     });
     expect(href).toBe(
-      '/workloads?type=k8s&context=cluster-a&host=worker-1&resource=cluster-a%3Aworker-1%3A101',
+      '/workloads?type=k8s&context=cluster-a&agent=worker-1&resource=cluster-a%3Aworker-1%3A101',
     );
 
     const parsed = parseWorkloadsLinkSearch(href.slice('/workloads'.length));
@@ -33,7 +33,7 @@ describe('resource link routing contract', () => {
       runtime: '',
       context: 'cluster-a',
       namespace: '',
-      host: 'worker-1',
+      agent: 'worker-1',
       resource: 'cluster-a:worker-1:101',
     });
 
@@ -41,8 +41,13 @@ describe('resource link routing contract', () => {
     expect(WORKLOADS_QUERY_PARAMS.runtime).toBe('runtime');
     expect(WORKLOADS_QUERY_PARAMS.context).toBe('context');
     expect(WORKLOADS_QUERY_PARAMS.namespace).toBe('namespace');
-    expect(WORKLOADS_QUERY_PARAMS.host).toBe('host');
+    expect(WORKLOADS_QUERY_PARAMS.agent).toBe('agent');
     expect(WORKLOADS_QUERY_PARAMS.resource).toBe('resource');
+  });
+
+  it('ignores legacy host query param in v6', () => {
+    const parsed = parseWorkloadsLinkSearch('?type=docker&host=legacy-node-1');
+    expect(parsed.agent).toBe('');
   });
 
   it('builds and parses infrastructure query params', () => {

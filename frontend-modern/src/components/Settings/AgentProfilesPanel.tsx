@@ -47,7 +47,6 @@ export const AgentProfilesPanel: Component = () => {
     const discoveryType = resource.discoveryTarget?.resourceType;
     const discoveryResourceId =
       discoveryType === 'agent' ||
-      discoveryType === 'host' ||
       discoveryType === 'docker' ||
       discoveryType === 'k8s'
         ? resource.discoveryTarget?.resourceId

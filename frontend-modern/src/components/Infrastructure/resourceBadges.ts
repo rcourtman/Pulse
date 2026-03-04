@@ -51,8 +51,8 @@ const unifiedSourceClasses: Record<UnifiedSource, string> = {
   truenas: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-400',
 };
 
-const typeLabels: Partial<Record<ResourceType, string>> = {
-  host: 'Agent',
+const typeLabels: Record<string, string> = {
+  agent: 'Agent',
   node: 'Node',
   'docker-host': 'Container Host',
   pbs: 'PBS',
@@ -84,12 +84,13 @@ export function getSourceBadge(sourceType?: SourceType): ResourceBadge | null {
   };
 }
 
-export function getTypeBadge(resourceType?: ResourceType): ResourceBadge | null {
+export function getTypeBadge(resourceType?: ResourceType | string): ResourceBadge | null {
   if (!resourceType) return null;
+  const normalizedType = resourceType.trim().toLowerCase();
   return {
-    label: typeLabels[resourceType] ?? resourceType,
+    label: typeLabels[normalizedType] ?? normalizedType,
     classes: `${baseBadge} ${typeClasses}`,
-    title: resourceType,
+    title: normalizedType,
   };
 }
 

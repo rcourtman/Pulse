@@ -151,7 +151,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const [bulkEditColumns, setBulkEditColumns] = createSignal<string[]>([]);
   const [isBulkEditDialogOpen, setIsBulkEditDialogOpen] = createSignal(false);
 
-  const [activeTab, setActiveTab] = createSignal<'proxmox' | 'pmg' | 'hosts' | 'docker'>('proxmox');
+  const [activeTab, setActiveTab] = createSignal<'proxmox' | 'pmg' | 'agents' | 'docker'>(
+    'proxmox',
+  );
   let searchInputRef: HTMLInputElement | undefined;
   const [dockerIgnoredInput, setDockerIgnoredInput] = createSignal(
     props.dockerIgnoredPrefixes().join('\n'),
@@ -183,10 +185,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   });
 
   // Determine active tab from URL
-  const getActiveTabFromRoute = (): 'proxmox' | 'pmg' | 'hosts' | 'docker' => {
+  const getActiveTabFromRoute = (): 'proxmox' | 'pmg' | 'agents' | 'docker' => {
     const path = location.pathname;
     if (path.includes('/thresholds/containers')) return 'docker';
-    if (path.includes('/thresholds/hosts')) return 'hosts';
+    if (path.includes('/thresholds/agents')) return 'agents';
     if (path.includes('/thresholds/mail-gateway')) return 'pmg';
     return 'proxmox'; // default
   };
@@ -206,11 +208,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     }
   });
 
-  const handleTabClick = (tab: 'proxmox' | 'pmg' | 'hosts' | 'docker') => {
+  const handleTabClick = (tab: 'proxmox' | 'pmg' | 'agents' | 'docker') => {
     const tabRoutes = {
       proxmox: '/alerts/thresholds/proxmox',
       pmg: '/alerts/thresholds/mail-gateway',
-      hosts: '/alerts/thresholds/hosts',
+      agents: '/alerts/thresholds/agents',
       docker: '/alerts/thresholds/containers',
     };
     navigate(tabRoutes[tab]);
@@ -468,7 +470,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return nodes;
   }, []);
 
-  const hostAgentsWithOverrides = createMemo<TableResource[]>((prev = []) => {
+  const agentsWithOverrides = createMemo<TableResource[]>((prev = []) => {
     if (editingId()) {
       return prev;
     }
@@ -477,24 +479,27 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const overridesMap = new Map((props.overrides() ?? []).map((o) => [o.id, o]));
     const seen = new Set<string>();
 
-    const hosts: TableResource[] = (props.hosts ?? []).map((host) => {
-      const idCandidates = hostOverrideIdCandidates(host);
+    const agents: TableResource[] = (props.agents ?? []).map((agentResource) => {
+      const idCandidates = hostOverrideIdCandidates(agentResource);
       const override = findOverrideByCandidates(overridesMap, idCandidates);
-      const resourceId = override?.id || idCandidates[0] || host.id;
+      const resourceId = override?.id || idCandidates[0] || agentResource.id;
       const hasCustomThresholds =
         override?.thresholds &&
         Object.keys(override.thresholds).some((key) => {
           const k = key as keyof typeof override.thresholds;
           return (
             override.thresholds[k] !== undefined &&
-            override.thresholds[k] !== (props.hostDefaults as any)[k]
+            override.thresholds[k] !== (props.agentDefaults as any)[k]
           );
         });
 
       const displayName =
-        host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
-      const status = host.status;
-      const data = pd(host);
+        agentResource.displayName?.trim() ||
+        agentResource.identity?.hostname ||
+        agentResource.name ||
+        agentResource.id;
+      const status = agentResource.status;
+      const data = pd(agentResource);
       const agentData = asRecord(data?.agent);
 
       seen.add(resourceId);
@@ -503,10 +508,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         id: resourceId,
         name: displayName,
         displayName,
-        rawName: host.identity?.hostname ?? host.name,
-        type: 'hostAgent' as const,
+        rawName: agentResource.identity?.hostname ?? agentResource.name,
+        type: 'agent' as const,
         resourceType: 'Agent',
-        node: host.identity?.hostname ?? host.name,
+        node: agentResource.identity?.hostname ?? agentResource.name,
         instance:
           asString(agentData?.platform) ||
           asString(agentData?.osName) ||
@@ -521,20 +526,20 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         disabled: override?.disabled || false,
         disableConnectivity: override?.disableConnectivity || false,
         thresholds: override?.thresholds || {},
-        defaults: props.hostDefaults,
+        defaults: props.agentDefaults,
       } satisfies TableResource;
     });
 
     (props.overrides() ?? [])
-      .filter((override) => override.type === 'hostAgent' && !seen.has(override.id))
+      .filter((override) => override.type === 'agent' && !seen.has(override.id))
       .forEach((override) => {
         const name = override.name?.trim() || override.id;
-        hosts.push({
+        agents.push({
           id: override.id,
           name,
           displayName: name,
           rawName: name,
-          type: 'hostAgent' as const,
+          type: 'agent' as const,
           resourceType: 'Agent',
           node: '',
           instance: '',
@@ -543,19 +548,19 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           disabled: override.disabled || false,
           disableConnectivity: override.disableConnectivity || false,
           thresholds: override.thresholds || {},
-          defaults: props.hostDefaults,
+          defaults: props.agentDefaults,
         } satisfies TableResource);
       });
 
     if (search) {
-      return hosts.filter((host) => host.name.toLowerCase().includes(search));
+      return agents.filter((agent) => agent.name.toLowerCase().includes(search));
     }
 
-    return hosts;
+    return agents;
   }, []);
 
-  // Helper function to create host disk resource ID (matches backend sanitizeHostComponent)
-  const hostDiskResourceID = (hostId: string, mountpoint: string, device?: string): string => {
+  // Helper function to create agent disk resource ID (matches backend sanitizeHostComponent)
+  const agentDiskResourceID = (agentId: string, mountpoint: string, device?: string): string => {
     // Use mountpoint if available, otherwise device
     let label = (mountpoint?.trim() || device?.trim() || 'disk').toLowerCase();
     // Replicate backend sanitizeHostComponent: keep a-z 0-9, replace everything else with '-', collapse consecutive hyphens
@@ -564,11 +569,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       .replace(/-{2,}/g, '-')
       .replace(/^-|-$/g, '');
     if (!label) label = 'unknown';
-    return `host:${hostId}/disk:${label}`;
+    return `agent:${agentId}/disk:${label}`;
   };
 
-  // Process host disks with their overrides
-  const hostDisksWithOverrides = createMemo<TableResource[]>((prev = []) => {
+  // Process agent disks with their overrides
+  const agentDisksWithOverrides = createMemo<TableResource[]>((prev = []) => {
     if (editingId()) {
       return prev;
     }
@@ -578,21 +583,26 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const seen = new Set<string>();
     const disks: TableResource[] = [];
 
-    // Extract disks from all hosts
-    (props.hosts ?? []).forEach((host) => {
-      const hostDisplayName =
-        host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
-      const hostIdCandidates = hostOverrideIdCandidates(host);
-      const hostIdForActions = hostActionId(host);
-      const platformData = pd(host);
+    // Extract disks from all agents
+    (props.agents ?? []).forEach((agentResource) => {
+      const agentDisplayName =
+        agentResource.displayName?.trim() ||
+        agentResource.identity?.hostname ||
+        agentResource.name ||
+        agentResource.id;
+      const agentIdCandidates = hostOverrideIdCandidates(agentResource);
+      const agentIdForActions = hostActionId(agentResource);
+      const platformData = pd(agentResource);
       const platformAgent = asRecord(platformData?.agent);
       const disksFromPlatformRoot = Array.isArray(platformData?.disks) ? platformData.disks : null;
       const disksFromPlatformAgent = Array.isArray(platformAgent?.disks)
         ? platformAgent.disks
         : null;
-      const disksFromResourceAgent = Array.isArray(host.agent?.disks) ? host.agent.disks : null;
+      const disksFromResourceAgent = Array.isArray(agentResource.agent?.disks)
+        ? agentResource.agent.disks
+        : null;
 
-      const disksForHost = (disksFromPlatformRoot ||
+      const disksForAgent = (disksFromPlatformRoot ||
         disksFromPlatformAgent ||
         disksFromResourceAgent ||
         []) as Array<{
@@ -603,11 +613,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         type?: string;
       }>;
 
-      disksForHost.forEach((disk) => {
+      disksForAgent.forEach((disk) => {
         const diskLabel = disk.mountpoint?.trim() || disk.device?.trim() || 'disk';
         const resourceIdCandidates = uniqueIds(
-          ...hostIdCandidates.map((hostId) =>
-            hostDiskResourceID(hostId, disk.mountpoint || '', disk.device),
+          ...agentIdCandidates.map((agentId) =>
+            agentDiskResourceID(agentId, disk.mountpoint || '', disk.device),
           ),
         );
         const override = findOverrideByCandidates(overridesMap, resourceIdCandidates);
@@ -616,7 +626,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
         const hasCustomThresholds =
           override?.thresholds?.disk !== undefined &&
-          override.thresholds.disk !== props.hostDefaults.disk;
+          override.thresholds.disk !== props.agentDefaults.disk;
 
         seen.add(resourceId);
 
@@ -625,24 +635,24 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           name: diskLabel,
           displayName: diskLabel,
           rawName: disk.device || diskLabel,
-          type: 'hostDisk' as const,
-          resourceType: 'Host Disk',
-          host: hostIdForActions,
-          node: hostDisplayName,
+          type: 'agentDisk' as const,
+          resourceType: 'Agent Disk',
+          host: agentIdForActions,
+          node: agentDisplayName,
           instance: disk.type || '',
-          status: host.status,
+          status: agentResource.status,
           hasOverride: hasCustomThresholds || Boolean(override?.disabled),
           disabled: override?.disabled || false,
           thresholds: override?.thresholds || {},
-          defaults: { disk: props.hostDefaults.disk },
+          defaults: { disk: props.agentDefaults.disk },
           subtitle: `${((disk.used || 0) / 1024 / 1024 / 1024).toFixed(1)} / ${((disk.total || 0) / 1024 / 1024 / 1024).toFixed(1)} GB`,
         } satisfies TableResource);
       });
     });
 
-    // Include any hostDisk overrides for disks that are no longer present
+    // Include any agentDisk overrides for disks that are no longer present
     (props.overrides() ?? [])
-      .filter((override) => override.type === 'hostDisk' && !seen.has(override.id))
+      .filter((override) => override.type === 'agentDisk' && !seen.has(override.id))
       .forEach((override) => {
         const name = override.name || override.id;
         disks.push({
@@ -650,16 +660,16 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           name,
           displayName: name,
           rawName: name,
-          type: 'hostDisk' as const,
-          resourceType: 'Host Disk',
+          type: 'agentDisk' as const,
+          resourceType: 'Agent Disk',
           host: '',
-          node: 'Unknown Host',
+          node: 'Unknown Agent',
           instance: '',
           status: 'unknown',
           hasOverride: true,
           disabled: override.disabled || false,
           thresholds: override.thresholds || {},
-          defaults: { disk: props.hostDefaults.disk },
+          defaults: { disk: props.agentDefaults.disk },
         });
       });
 
@@ -673,10 +683,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   }, []);
 
   // Group host disks by their host
-  const hostDisksGroupedByHost = createMemo<Record<string, TableResource[]>>(() => {
+  const agentDisksGroupedByAgent = createMemo<Record<string, TableResource[]>>(() => {
     const grouped: Record<string, TableResource[]> = {};
-    hostDisksWithOverrides().forEach((disk) => {
-      const key = disk.node?.trim() || 'Unknown Host';
+    agentDisksWithOverrides().forEach((disk) => {
+      const key = disk.node?.trim() || 'Unknown Agent';
       if (!grouped[key]) {
         grouped[key] = [];
       }
@@ -1536,18 +1546,18 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           tab: 'docker' as const,
         },
         {
-          key: 'hostAgents' as const,
+          key: 'agents' as const,
           label: 'Agents',
-          total: props.hosts?.length ?? 0,
-          overrides: countOverrides(hostAgentsWithOverrides()),
-          tab: 'hosts' as const,
+          total: props.agents?.length ?? 0,
+          overrides: countOverrides(agentsWithOverrides()),
+          tab: 'agents' as const,
         },
         {
-          key: 'hostDisks' as const,
-          label: 'Host Disks',
-          total: hostDisksWithOverrides().length,
-          overrides: countOverrides(hostDisksWithOverrides()),
-          tab: 'hosts' as const,
+          key: 'agentDisks' as const,
+          label: 'Agent Disks',
+          total: agentDisksWithOverrides().length,
+          overrides: countOverrides(agentDisksWithOverrides()),
+          tab: 'agents' as const,
         },
         {
           key: 'storage' as const,
@@ -1629,8 +1639,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const allDockerContainers = dockerContainersFlat();
     const allResources = [
       ...nodesWithOverrides(),
-      ...hostAgentsWithOverrides(),
-      ...hostDisksWithOverrides(),
+      ...agentsWithOverrides(),
+      ...agentDisksWithOverrides(),
       ...dockerHostsWithOverrides(),
       ...allGuests,
       ...allDockerContainers,
@@ -1844,8 +1854,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const newRawConfig = { ...props.rawOverridesConfig() };
     const allResources = [
       ...nodesWithOverrides(),
-      ...hostAgentsWithOverrides(),
-      ...hostDisksWithOverrides(),
+      ...agentsWithOverrides(),
+      ...agentDisksWithOverrides(),
       ...dockerHostsWithOverrides(),
       ...pbsServersWithOverrides(),
       ...pmgServersWithOverrides(),
@@ -1964,7 +1974,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   };
 
   const updateMetricDelay = (
-    typeKey: 'guest' | 'node' | 'storage' | 'pbs' | 'host',
+    typeKey: 'guest' | 'node' | 'storage' | 'pbs' | 'agent',
     metricKey: string,
     value: number | null,
   ) => {
@@ -2113,8 +2123,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       ...allDockerContainers,
       ...storageWithOverrides(),
       ...pbsServersWithOverrides(),
-      ...hostAgentsWithOverrides(),
-      ...hostDisksWithOverrides(),
+      ...agentsWithOverrides(),
+      ...agentDisksWithOverrides(),
     ];
     const resource = allResources.find((r) => r.id === resourceId);
     if (
@@ -2123,8 +2133,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         resource.type !== 'storage' &&
         resource.type !== 'pbs' &&
         resource.type !== 'dockerContainer' &&
-        resource.type !== 'hostAgent' &&
-        resource.type !== 'hostDisk')
+        resource.type !== 'agent' &&
+        resource.type !== 'agentDisk')
     )
       return;
 
@@ -2243,9 +2253,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const nodes = nodesWithOverrides();
     const pbsServers = pbsServersWithOverrides();
     const guests = guestsFlat();
-    const hostAgents = hostAgentsWithOverrides();
+    const agents = agentsWithOverrides();
     const dockerHosts = dockerHostsWithOverrides();
-    const resource = [...nodes, ...pbsServers, ...guests, ...hostAgents, ...dockerHosts].find(
+    const resource = [...nodes, ...pbsServers, ...guests, ...agents, ...dockerHosts].find(
       (r) => r.id === resourceId,
     );
     if (
@@ -2253,7 +2263,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       (resource.type !== 'node' &&
         resource.type !== 'pbs' &&
         resource.type !== 'guest' &&
-        resource.type !== 'hostAgent' &&
+        resource.type !== 'agent' &&
         resource.type !== 'dockerHost')
     )
       return;
@@ -2608,8 +2618,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           </button>
           <button
             type="button"
-            onClick={() => handleTabClick('hosts')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'hosts' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300'}`}
+            onClick={() => handleTabClick('agents')}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'agents' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300'}`}
           >
             <Users class="w-4 h-4" />
             <span>Agents</span>
@@ -3278,12 +3288,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           </Show>
         </Show>
 
-        <Show when={activeTab() === 'hosts'}>
-          <Show when={hasSection('hostAgents')}>
-            <div ref={registerSection('hostAgents')} class="scroll-mt-24">
+        <Show when={activeTab() === 'agents'}>
+          <Show when={hasSection('agents')}>
+            <div ref={registerSection('agents')} class="scroll-mt-24">
               <ResourceTable
                 title="Agents"
-                resources={hostAgentsWithOverrides()}
+                resources={agentsWithOverrides()}
                 columns={['CPU %', 'Memory %', 'Disk %', 'Disk Temp °C']}
                 activeAlerts={props.activeAlerts}
                 emptyMessage="No agents match the current filters."
@@ -3304,44 +3314,44 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 }
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
-                globalDefaults={props.hostDefaults}
-                setGlobalDefaults={props.setHostDefaults}
+                globalDefaults={props.agentDefaults}
+                setGlobalDefaults={props.setAgentDefaults}
                 setHasUnsavedChanges={props.setHasUnsavedChanges}
-                globalDisableFlag={props.disableAllHosts}
-                onToggleGlobalDisable={() => props.setDisableAllHosts(!props.disableAllHosts())}
-                globalDisableOfflineFlag={props.disableAllHostsOffline}
+                globalDisableFlag={props.disableAllAgents}
+                onToggleGlobalDisable={() => props.setDisableAllAgents(!props.disableAllAgents())}
+                globalDisableOfflineFlag={props.disableAllAgentsOffline}
                 onToggleGlobalDisableOffline={() =>
-                  props.setDisableAllHostsOffline(!props.disableAllHostsOffline())
+                  props.setDisableAllAgentsOffline(!props.disableAllAgentsOffline())
                 }
                 showDelayColumn={true}
-                globalDelaySeconds={props.timeThresholds().host}
-                metricDelaySeconds={props.metricTimeThresholds().host ?? {}}
-                onMetricDelayChange={(metric, value) => updateMetricDelay('host', metric, value)}
-                factoryDefaults={props.factoryHostDefaults}
-                onResetDefaults={props.resetHostDefaults}
+                globalDelaySeconds={props.timeThresholds().agent}
+                metricDelaySeconds={props.metricTimeThresholds().agent ?? {}}
+                onMetricDelayChange={(metric, value) => updateMetricDelay('agent', metric, value)}
+                factoryDefaults={props.factoryAgentDefaults}
+                onResetDefaults={props.resetAgentDefaults}
               />
             </div>
           </Show>
 
-          <Show when={hasSection('hostDisks')}>
+          <Show when={hasSection('agentDisks')}>
             <CollapsibleSection
-              id="hostDisks"
-              title="Host Disks"
-              resourceCount={hostDisksWithOverrides().length}
-              collapsed={isCollapsed('hostDisks')}
-              onToggle={() => toggleSection('hostDisks')}
+              id="agentDisks"
+              title="Agent Disks"
+              resourceCount={agentDisksWithOverrides().length}
+              collapsed={isCollapsed('agentDisks')}
+              onToggle={() => toggleSection('agentDisks')}
               icon={<HardDrive class="w-5 h-5" />}
-              isGloballyDisabled={props.disableAllHosts()}
-              emptyMessage="No host disks found. Agents with mounted filesystems will appear here."
+              isGloballyDisabled={props.disableAllAgents()}
+              emptyMessage="No agent disks found. Agents with mounted filesystems will appear here."
             >
-              <div ref={registerSection('hostDisks')} class="scroll-mt-24">
+              <div ref={registerSection('agentDisks')} class="scroll-mt-24">
                 <ResourceTable
                   title=""
-                  groupedResources={hostDisksGroupedByHost()}
+                  groupedResources={agentDisksGroupedByAgent()}
                   groupHeaderMeta={guestGroupHeaderMeta()}
                   columns={['Disk %']}
                   activeAlerts={props.activeAlerts}
-                  emptyMessage="No host disks match the current filters."
+                  emptyMessage="No agent disks match the current filters."
                   onEdit={startEditing}
                   onSaveEdit={saveEdit}
                   onCancelEdit={cancelEdit}
@@ -3365,13 +3375,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   }
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
-                  globalDefaults={{ disk: props.hostDefaults.disk }}
+                  globalDefaults={{ disk: props.agentDefaults.disk }}
                   setGlobalDefaults={(value) => {
                     if (typeof value === 'function') {
-                      const newValue = value({ disk: props.hostDefaults.disk });
-                      props.setHostDefaults((prev) => ({ ...prev, disk: newValue.disk }));
+                      const newValue = value({ disk: props.agentDefaults.disk });
+                      props.setAgentDefaults((prev) => ({ ...prev, disk: newValue.disk }));
                     } else {
-                      props.setHostDefaults((prev) => ({ ...prev, disk: value.disk }));
+                      props.setAgentDefaults((prev) => ({ ...prev, disk: value.disk }));
                     }
                   }}
                   setHasUnsavedChanges={props.setHasUnsavedChanges}

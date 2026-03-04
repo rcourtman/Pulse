@@ -24,6 +24,11 @@ import resourceTypesSource from '@/types/resource.ts?raw';
 import unifiedResourcesHookSource from '@/hooks/useUnifiedResources.ts?raw';
 import discoveryTypesSource from '@/types/discovery.ts?raw';
 import mentionAutocompleteSource from '@/components/AI/Chat/MentionAutocomplete.tsx?raw';
+import resourceLinksSource from '@/routing/resourceLinks.ts?raw';
+import alertsApiSource from '@/api/alerts.ts?raw';
+import resourceStateAdaptersSource from '@/utils/resourceStateAdapters.ts?raw';
+import resourceBadgesSource from '@/components/Infrastructure/resourceBadges.ts?raw';
+import problemResourcesTableSource from '@/pages/DashboardPanels/ProblemResourcesTable.tsx?raw';
 
 describe('agent model guardrails', () => {
   it('keeps AgentProfilesPanel on unified resources (not host-only slices)', () => {
@@ -73,12 +78,18 @@ describe('agent model guardrails', () => {
   });
 
   it('keeps alerts agent thresholds sourced from unified agent resources', () => {
-    expect(alertsPageSource).toContain('const hostAgentResources = createMemo(');
-    expect(alertsPageSource).toContain('hosts={hostAgentResources()}');
+    expect(alertsPageSource).toContain('const agentResources = createMemo(');
+    expect(alertsPageSource).toContain('agents={agentResources()}');
+    expect(alertsPageSource).toContain("resourceType: 'Agent Disk'");
+    expect(alertsPageSource).not.toContain("resourceType: 'Host Disk'");
+    expect(alertsPageSource).toContain('agentDefaults');
+    expect(alertsPageSource).toContain('disableAllAgents');
+    expect(alertsPageSource).not.toContain('hostDefaults');
+    expect(alertsPageSource).not.toContain('disableAllHosts');
   });
 
   it('keeps setup and node summary host fallbacks aware of v6 agent facets', () => {
-    expect(completeStepSource).toContain('const hasHostAgentFacet = (resource: Resource)');
+    expect(completeStepSource).toContain('const hasAgentFacet = (resource: Resource)');
     expect(completeStepSource).toContain("resource.type === 'node'");
     expect(completeStepSource).toContain('command -v sudo');
     expect(completeStepSource).toContain('const hostLikeResources = resources.filter(');
@@ -88,20 +99,19 @@ describe('agent model guardrails', () => {
       '(state.hosts || []).length > 0\n            ? state.hosts\n            : resources',
     );
     expect(unifiedNodeSelectorSource).toContain(
-      'const hasHostAgentFacet = (resource: Resource): boolean =>',
+      'const hasAgentFacet = (resource: Resource): boolean =>',
     );
     expect(unifiedNodeSelectorSource).toContain("resource.type === 'truenas'");
     expect(unifiedNodeSelectorSource).not.toContain('if (hostLikeResources.length === 0');
   });
 
   it('keeps AI chat mention resources aware of agent facets beyond host type', () => {
-    expect(aiChatSource).toContain('const hasHostAgentFacet = (resource: Resource): boolean =>');
+    expect(aiChatSource).toContain('const hasAgentFacet = (resource: Resource): boolean =>');
     expect(aiChatSource).toContain("resource.type === 'truenas'");
     expect(aiChatSource).not.toContain("resource.type === 'host'");
     expect(aiChatSource).toContain("type: 'agent'");
-    expect(aiChatSource).toContain(
-      "mention.type === 'agent' ? { ...mention, type: 'host' } : mention",
-    );
+    expect(aiChatSource).not.toContain("mention.type === 'agent'");
+    expect(aiChatSource).toContain('const mentionsForAPI = mentions.length > 0 ? mentions : undefined;');
     expect(mentionAutocompleteSource).toContain("| 'agent'");
     expect(mentionAutocompleteSource).not.toContain("| 'host'");
   });
@@ -112,6 +122,8 @@ describe('agent model guardrails', () => {
     expect(workloadsLinkSource).not.toContain("resource.type === 'host'");
     expect(unifiedResourceTableSource).toContain("buildMetricKey('agent', resource.id)");
     expect(unifiedResourceTableSource).not.toContain("buildMetricKey('host', resource.id)");
+    expect(resourceBadgesSource).not.toContain("host: 'Agent'");
+    expect(problemResourcesTableSource).not.toContain("host: 'Agent'");
   });
 
   it('keeps diagnostics alerts contract free of removed legacy threshold flags', () => {
@@ -127,7 +139,29 @@ describe('agent model guardrails', () => {
     expect(thresholdsTableSource).toContain(
       "if (path.includes('/thresholds/containers')) return 'docker';",
     );
+    expect(thresholdsTableSource).toContain('/thresholds/agents');
+    expect(thresholdsTableSource).toContain("resourceType: 'Agent Disk'");
+    expect(thresholdsTableSource).toContain('title="Agent Disks"');
+    expect(thresholdsTableSource).not.toContain("resourceType: 'Host Disk'");
+    expect(thresholdsTableSource).toContain('props.agentDefaults');
+    expect(thresholdsTableSource).not.toContain('props.hostDefaults');
+    expect(thresholdsTableSource).not.toContain('timeThresholds().host');
     expect(thresholdsTableSource).not.toContain('/thresholds/docker');
+  });
+
+  it('keeps workloads routing on canonical v6 agent query param only', () => {
+    expect(resourceLinksSource).toContain("agent: 'agent'");
+    expect(resourceLinksSource).not.toContain('LEGACY_WORKLOADS_HOST_QUERY_PARAM');
+    expect(resourceLinksSource).not.toContain('canonicalHost || legacyHost');
+  });
+
+  it('keeps alerts API adapter fully canonical v6', () => {
+    expect(alertsApiSource).not.toContain('normalizeAlertConfigFromAPI');
+    expect(alertsApiSource).not.toContain('serializeAlertConfigForAPI');
+    expect(alertsApiSource).not.toContain('hostDefaults');
+    expect(alertsApiSource).not.toContain('disableAllHosts');
+    expect(alertsApiSource).not.toContain('timeThresholds.host');
+    expect(alertsApiSource).toContain('body: JSON.stringify(config)');
   });
 
   it('keeps login and SSO settings on provider-based flows only', () => {
@@ -150,8 +184,16 @@ describe('agent model guardrails', () => {
 
   it('keeps unified resource typing normalized to node (no legacy host type)', () => {
     expect(resourceTypesSource).not.toContain("| 'host' // Standalone host (via agent)");
-    expect(unifiedResourcesHookSource).toContain("case 'host':");
+    expect(unifiedResourcesHookSource).not.toContain("case 'host':");
+    expect(unifiedResourcesHookSource).toContain("case 'agent':");
     expect(unifiedResourcesHookSource).toContain("return 'node';");
     expect(unifiedResourcesHookSource).not.toContain("return 'host';");
+  });
+
+  it('keeps node link IDs on canonical linkedAgentId only', () => {
+    expect(apiTypesSource).toContain('linkedAgentId?: string');
+    expect(apiTypesSource).not.toContain('linkedHostAgentId');
+    expect(resourceStateAdaptersSource).toContain('linkedAgentId: asString(platform?.linkedAgentId)');
+    expect(resourceStateAdaptersSource).not.toContain('linkedHostAgentId');
   });
 });

@@ -40,7 +40,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
     typeof value === 'number' && Number.isFinite(value) ? value : undefined;
   const asBoolean = (value: unknown): boolean | undefined =>
     typeof value === 'boolean' ? value : undefined;
-  const hasHostAgentFacet = (resource: Resource): boolean => {
+  const hasAgentFacet = (resource: Resource): boolean => {
     if (resource.agent) return true;
     const platformData = pd(resource);
     if (!platformData) return false;
@@ -125,7 +125,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
           resource.type === 'pbs' ||
           resource.type === 'pmg' ||
           resource.type === 'truenas') &&
-        hasHostAgentFacet(resource),
+        hasAgentFacet(resource),
     );
 
     const hostsById = new Map<string, Host>();

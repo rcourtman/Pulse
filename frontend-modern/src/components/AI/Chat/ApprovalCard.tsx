@@ -25,7 +25,7 @@ export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
         <span class="font-semibold">Approval Required</span>
         <Show when={props.approval.runOnHost}>
           <span class="px-1.5 py-0.5 bg-amber-200 dark:bg-amber-800 rounded text-[10px] font-bold uppercase tracking-wider">
-            Host
+            Agent
           </span>
         </Show>
         <Show when={props.approval.targetHost}>

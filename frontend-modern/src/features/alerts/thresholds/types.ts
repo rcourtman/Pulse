@@ -10,8 +10,8 @@ import type { Resource } from '@/types/resource';
 export type OverrideType =
   | 'guest'
   | 'node'
-  | 'hostAgent'
-  | 'hostDisk'
+  | 'agent'
+  | 'agentDisk'
   | 'storage'
   | 'pbs'
   | 'pmg'
@@ -56,7 +56,7 @@ export interface SimpleThresholds {
   networkIn?: number;
   networkOut?: number;
   temperature?: number; // For nodes only
-  diskTemperature?: number; // For host agents
+  diskTemperature?: number; // For Pulse agents
   [key: string]: number | undefined; // Add index signature for compatibility
 }
 
@@ -67,7 +67,7 @@ export interface ThresholdsTableProps {
   setRawOverridesConfig: (config: Record<string, RawOverrideConfig>) => void;
   allGuests: () => Resource[];
   nodes: Resource[];
-  hosts: Resource[];
+  agents: Resource[];
   storage: Resource[];
   dockerHosts: Resource[];
   allResources: Resource[];
@@ -89,7 +89,7 @@ export interface ThresholdsTableProps {
   setGuestPoweredOffSeverity: (value: 'warning' | 'critical') => void;
   nodeDefaults: SimpleThresholds;
   pbsDefaults?: SimpleThresholds;
-  hostDefaults: SimpleThresholds;
+  agentDefaults: SimpleThresholds;
   setNodeDefaults: (
     value:
       | Record<string, number | undefined>
@@ -100,7 +100,7 @@ export interface ThresholdsTableProps {
       | Record<string, number | undefined>
       | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
   ) => void;
-  setHostDefaults: (
+  setAgentDefaults: (
     value:
       | Record<string, number | undefined>
       | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
@@ -168,17 +168,23 @@ export interface ThresholdsTableProps {
   resetGuestDefaults?: () => void;
   resetNodeDefaults?: () => void;
   resetPBSDefaults?: () => void;
-  resetHostDefaults?: () => void;
+  resetAgentDefaults?: () => void;
   resetDockerDefaults?: () => void;
   resetDockerIgnoredPrefixes?: () => void;
   resetStorageDefault?: () => void;
   factoryGuestDefaults?: Record<string, number | undefined>;
   factoryNodeDefaults?: Record<string, number | undefined>;
   factoryPBSDefaults?: Record<string, number | undefined>;
-  factoryHostDefaults?: Record<string, number | undefined>;
+  factoryAgentDefaults?: Record<string, number | undefined>;
   factoryDockerDefaults?: Record<string, number | undefined>;
   factoryStorageDefault?: number;
-  timeThresholds: () => { guest: number; node: number; storage: number; pbs: number; host: number };
+  timeThresholds: () => {
+    guest: number;
+    node: number;
+    storage: number;
+    pbs: number;
+    agent: number;
+  };
   metricTimeThresholds: () => Record<string, Record<string, number>>;
   setMetricTimeThresholds: (
     value:
@@ -205,8 +211,8 @@ export interface ThresholdsTableProps {
   setDisableAllNodes: (value: boolean) => void;
   disableAllGuests: () => boolean;
   setDisableAllGuests: (value: boolean) => void;
-  disableAllHosts: () => boolean;
-  setDisableAllHosts: (value: boolean) => void;
+  disableAllAgents: () => boolean;
+  setDisableAllAgents: (value: boolean) => void;
   disableAllStorage: () => boolean;
   setDisableAllStorage: (value: boolean) => void;
   disableAllPBS: () => boolean;
@@ -224,8 +230,8 @@ export interface ThresholdsTableProps {
   setDisableAllNodesOffline: (value: boolean) => void;
   disableAllGuestsOffline: () => boolean;
   setDisableAllGuestsOffline: (value: boolean) => void;
-  disableAllHostsOffline: () => boolean;
-  setDisableAllHostsOffline: (value: boolean) => void;
+  disableAllAgentsOffline: () => boolean;
+  setDisableAllAgentsOffline: (value: boolean) => void;
   disableAllPBSOffline: () => boolean;
   setDisableAllPBSOffline: (value: boolean) => void;
   disableAllPMGOffline: () => boolean;

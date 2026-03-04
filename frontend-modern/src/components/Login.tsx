@@ -223,34 +223,7 @@ export const Login: Component<LoginProps> = (props) => {
         setError(data.message || 'Server error. Please try again.');
       }
     } catch (_err) {
-      // Try the old method as fallback
-      try {
-        const response = await apiClient.fetch('/api/state', {
-          headers: {
-            Authorization: `Basic ${btoa(`${usernameValue}:${passwordValue}`)}`,
-            'X-Requested-With': 'XMLHttpRequest',
-            Accept: 'application/json',
-          },
-          skipAuth: true,
-        });
-
-        if (response.ok) {
-          try {
-            sessionStorage.setItem('pulse_auth_user', usernameValue);
-          } catch (_storageErr) {
-            // Ignore storage issues
-          }
-          props.onLogin();
-        } else if (response.status === 401) {
-          setError('Invalid username or password');
-          setUsername('');
-          setPassword('');
-        } else {
-          setError('Server error. Please try again.');
-        }
-      } catch (_fallbackErr) {
-        setError('Failed to connect to server');
-      }
+      setError('Failed to connect to server');
     } finally {
       setLoading(false);
     }

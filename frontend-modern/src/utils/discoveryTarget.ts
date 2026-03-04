@@ -12,7 +12,7 @@ const asTrimmedString = (value: unknown): string | undefined => {
 
 export const isAgentDiscoveryResourceType = (resourceType: unknown): boolean => {
   const normalized = asTrimmedString(resourceType)?.toLowerCase();
-  return normalized === 'agent' || normalized === 'host';
+  return normalized === 'agent';
 };
 
 export const getAgentDiscoveryResourceId = (

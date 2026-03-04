@@ -5,6 +5,7 @@ import { apiFetch, getOrgID } from '@/utils/apiClient';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type {
   Resource,
+  ResourceDiscoveryTarget,
   PlatformType,
   SourceType,
   ResourceStatus,
@@ -392,7 +393,6 @@ const resolveType = (value?: string): ResourceType => {
   const normalized = (value || '').toLowerCase();
   switch (normalized) {
     case 'agent':
-    case 'host':
       return 'node';
     case 'node':
       return 'node';
@@ -457,6 +457,33 @@ const resolveType = (value?: string): ResourceType => {
   }
 };
 
+const resolveDiscoveryResourceType = (
+  value?: string,
+): ResourceDiscoveryTarget['resourceType'] | undefined => {
+  const normalized = (value || '').toLowerCase();
+  switch (normalized) {
+    case 'agent':
+      return 'agent';
+    case 'vm':
+      return 'vm';
+    case 'system-container':
+    case 'system_container':
+    case 'lxc':
+    case 'container':
+      return 'system-container';
+    case 'docker':
+      return 'docker';
+    case 'k8s':
+      return 'k8s';
+    case 'disk':
+      return 'disk';
+    case 'ceph':
+      return 'ceph';
+    default:
+      return undefined;
+  }
+};
+
 const metricToResourceMetric = (metric?: APIMetricValue) => {
   if (!metric) return undefined;
   const used = metric.used ?? undefined;
@@ -481,18 +508,11 @@ const toResource = (v2: APIResource): Resource => {
   const platformId =
     v2.proxmox?.nodeName || v2.agent?.hostname || v2.docker?.hostname || name || v2.id;
 
+  const discoveryResourceType = resolveDiscoveryResourceType(v2.discoveryTarget?.resourceType);
   const discoveryTarget =
-    v2.discoveryTarget?.resourceType && v2.discoveryTarget?.hostId && v2.discoveryTarget?.resourceId
+    discoveryResourceType && v2.discoveryTarget?.hostId && v2.discoveryTarget?.resourceId
       ? {
-          resourceType: v2.discoveryTarget.resourceType as
-            | 'agent'
-            | 'host'
-            | 'vm'
-            | 'system-container'
-            | 'docker'
-            | 'k8s'
-            | 'disk'
-            | 'ceph',
+          resourceType: discoveryResourceType,
           hostId: v2.discoveryTarget.hostId,
           resourceId: v2.discoveryTarget.resourceId,
           hostname: v2.discoveryTarget.hostname,

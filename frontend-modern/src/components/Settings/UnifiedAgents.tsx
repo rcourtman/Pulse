@@ -769,7 +769,7 @@ export const UnifiedAgents: Component = () => {
   });
 
   // Agents linked to PVE nodes (shown separately with unlink option)
-  const linkedHostAgents = createMemo(() => {
+  const linkedAgents = createMemo(() => {
     return agentResources().flatMap((r) => {
       const linkedNodeId = getLinkedNodeId(r);
       if (!linkedNodeId) return [];
@@ -789,7 +789,7 @@ export const UnifiedAgents: Component = () => {
       ];
     });
   });
-  const hasLinkedAgents = createMemo(() => linkedHostAgents().length > 0);
+  const hasLinkedAgents = createMemo(() => linkedAgents().length > 0);
 
   const unifiedRows = createMemo<UnifiedAgentRow[]>(() => {
     const rows: UnifiedAgentRow[] = [];
@@ -1700,9 +1700,9 @@ export const UnifiedAgents: Component = () => {
               />
             </svg>
             <p class="text-xs text-blue-700 dark:text-blue-300">
-              <span class="font-medium">{linkedHostAgents().length}</span> agent
-              {linkedHostAgents().length > 1 ? 's are' : ' is'} linked to Proxmox node
-              {linkedHostAgents().length > 1 ? 's' : ''} and flagged with a{' '}
+              <span class="font-medium">{linkedAgents().length}</span> agent
+              {linkedAgents().length > 1 ? 's are' : ' is'} linked to Proxmox node
+              {linkedAgents().length > 1 ? 's' : ''} and flagged with a{' '}
               <span class="font-medium text-blue-700 dark:text-blue-300">Linked</span> badge.
             </p>
           </div>
@@ -2245,7 +2245,7 @@ export const UnifiedAgents: Component = () => {
                     </Show>
                     <Show when={row.dockerActionId && row.dockerActionId !== row.id}>
                       <div class="text-xs text-muted">
-                        Docker Host ID:{' '}
+                        Container Agent ID:{' '}
                         <span class="font-mono text-base-content">{row.dockerActionId}</span>
                       </div>
                     </Show>

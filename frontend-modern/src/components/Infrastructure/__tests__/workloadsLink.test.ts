@@ -159,7 +159,7 @@ describe('buildWorkloadsHref', () => {
         platformType: 'docker',
         platformData: { docker: { hostname: 'docker-box' } },
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&host=docker-box');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&agent=docker-box');
     });
 
     it('falls back to agent.hostname when docker.hostname is missing', () => {
@@ -168,7 +168,7 @@ describe('buildWorkloadsHref', () => {
         platformType: 'docker',
         platformData: { agent: { hostname: 'agent-host' } },
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&host=agent-host');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&agent=agent-host');
     });
 
     it('falls back to identity.hostname', () => {
@@ -177,7 +177,7 @@ describe('buildWorkloadsHref', () => {
         platformType: 'docker',
         identity: { hostname: 'identity-host' },
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&host=identity-host');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&agent=identity-host');
     });
 
     it('falls back through name → displayName → platformId → id', () => {
@@ -189,7 +189,7 @@ describe('buildWorkloadsHref', () => {
         platformId: 'docker-plat',
         id: 'docker-id',
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&host=docker-name');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&agent=docker-name');
     });
 
     it('falls back to displayName when name is empty for docker-host', () => {
@@ -201,7 +201,7 @@ describe('buildWorkloadsHref', () => {
         platformId: 'plat-id',
         id: 'docker-id',
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&host=Docker+Display');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&agent=Docker+Display');
     });
 
     it('falls back to platformId when name and displayName are empty for docker-host', () => {
@@ -213,7 +213,7 @@ describe('buildWorkloadsHref', () => {
         platformId: 'docker-plat-id',
         id: 'docker-id',
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&host=docker-plat-id');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&agent=docker-plat-id');
     });
 
     it('falls back to resource.id as last resort for docker-host', () => {
@@ -225,7 +225,7 @@ describe('buildWorkloadsHref', () => {
         platformId: '',
         id: 'last-resort-id',
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&host=last-resort-id');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&agent=last-resort-id');
     });
   });
 
@@ -235,7 +235,7 @@ describe('buildWorkloadsHref', () => {
         type: 'node',
         platformData: { proxmox: { nodeName: 'pve-node-3' } },
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?host=pve-node-3');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?agent=pve-node-3');
     });
 
     it('falls back through the expected chain for node resources', () => {
@@ -246,7 +246,7 @@ describe('buildWorkloadsHref', () => {
         platformId: '',
         id: 'node-id',
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?host=node-name');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?agent=node-name');
     });
   });
 
@@ -294,7 +294,7 @@ describe('buildWorkloadsHref', () => {
         id: 'bare-id',
       });
       // With no platformData and empty name/platformId, falls to resource.id
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?host=bare-id');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?agent=bare-id');
     });
 
     it('trims whitespace from resolved values', () => {
@@ -303,7 +303,7 @@ describe('buildWorkloadsHref', () => {
         platformType: 'docker',
         platformData: { docker: { hostname: '  trimmed-host  ' } },
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&host=trimmed-host');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&agent=trimmed-host');
     });
 
     it('skips null values in the resolution chain', () => {

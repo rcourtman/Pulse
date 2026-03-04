@@ -6,7 +6,7 @@ import { computeDashboardOverview } from '@/hooks/useDashboardOverview';
 function createResource(overrides: Partial<Resource> = {}): Resource {
   return {
     id: 'resource-1',
-    type: 'host',
+    type: 'node',
     name: 'resource-1',
     displayName: 'Resource 1',
     platformId: 'platform-1',
@@ -23,7 +23,7 @@ describe('Dashboard panels data contract', () => {
     const resources: Resource[] = [
       createResource({
         id: 'infra-1',
-        type: 'host',
+        type: 'node',
         name: 'host-alpha',
         displayName: 'Host Alpha',
         status: 'online',
@@ -147,7 +147,7 @@ describe('Dashboard panels data contract', () => {
       }),
       createResource({
         id: 'infra-1',
-        type: 'host',
+        type: 'node',
         status: 'online',
         disk: { current: 99, total: 1000, used: 990 },
       }),

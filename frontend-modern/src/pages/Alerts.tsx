@@ -395,7 +395,7 @@ export function Alerts() {
     uniqueIds(
       ...dockerHostOverrideIdCandidates(host).map((hostId) => `docker:${hostId}/${shortId}`),
     );
-  const hasHostAgentFacet = (resource: Resource): boolean => {
+  const hasAgentFacet = (resource: Resource): boolean => {
     if (resource.agent) return true;
     const data = pd(resource);
     const agent = asRecord(data?.agent);
@@ -406,14 +406,14 @@ export function Alerts() {
         resource.discoveryTarget.hostId),
     );
   };
-  const hostAgentResources = createMemo(() =>
+  const agentResources = createMemo(() =>
     allResources().filter(
       (resource) =>
         (resource.type === 'node' ||
           resource.type === 'pbs' ||
           resource.type === 'pmg' ||
           resource.type === 'truenas') &&
-        hasHostAgentFacet(resource),
+        hasAgentFacet(resource),
     ),
   );
   const pbsInstances = createMemo<PBSInstance[]>(() =>
@@ -451,7 +451,7 @@ export function Alerts() {
       const storageResources = allResources().filter(
         (r) => r.type === 'storage' || r.type === 'datastore',
       );
-      const hostResources = hostAgentResources();
+      const agentResourceList = agentResources();
       const dockerHostResources = byType('docker-host');
 
       // Convert overrides object to array format
@@ -462,7 +462,7 @@ export function Alerts() {
         string,
         { host: Resource; container: Resource; containerShortId: string }
       >();
-      const hostAgentMap = new Map<string, Resource>();
+      const agentMap = new Map<string, Resource>();
 
       const storageCoords = (r: Resource): { node: string; instance: string } => {
         const data = pd(r);
@@ -494,9 +494,9 @@ export function Alerts() {
           });
         });
       });
-      hostResources.forEach((host) => {
-        hostOverrideIdCandidates(host).forEach((id) => {
-          hostAgentMap.set(id, host);
+      agentResourceList.forEach((agentResource) => {
+        hostOverrideIdCandidates(agentResource).forEach((id) => {
+          agentMap.set(id, agentResource);
         });
       });
 
@@ -580,42 +580,43 @@ export function Alerts() {
           return;
         }
 
-        // Host disk override stored as host:<hostId>/disk:<mountpoint>
-        const diskMatch = key.match(/^host:(.+)\/disk:(.+)$/);
+        // Agent disk override stored as agent:<agentId>/disk:<mountpoint>.
+        const diskMatch = key.match(/^agent:(.+)\/disk:(.+)$/);
         if (diskMatch) {
-          const [, hostId, diskLabel] = diskMatch;
-          const host = hostAgentMap.get(hostId);
+          const [, agentId, diskLabel] = diskMatch;
+          const agent = agentMap.get(agentId);
           const displayName = diskLabel.replace(/-/g, '/');
 
           overridesList.push({
             id: key,
             name: displayName,
-            type: 'hostDisk',
-            resourceType: 'Host Disk',
-            node: host?.displayName?.trim() || host?.identity?.hostname || host?.name || hostId,
+            type: 'agentDisk',
+            resourceType: 'Agent Disk',
+            node:
+              agent?.displayName?.trim() || agent?.identity?.hostname || agent?.name || agentId,
             disabled: thresholds.disabled || false,
             thresholds: extractTriggerValues(thresholds),
           });
           return;
         }
 
-        // Agent override stored by host ID
-        const hostAgent = hostAgentMap.get(key);
-        if (hostAgent) {
+        // Agent override stored by agent ID
+        const agentResource = agentMap.get(key);
+        if (agentResource) {
           const displayName =
-            hostAgent.displayName?.trim() ||
-            hostAgent.identity?.hostname ||
-            hostAgent.name ||
-            hostAgent.id;
-          const data = pd(hostAgent);
+            agentResource.displayName?.trim() ||
+            agentResource.identity?.hostname ||
+            agentResource.name ||
+            agentResource.id;
+          const data = pd(agentResource);
           const agent = asRecord(data?.agent);
 
           overridesList.push({
             id: key,
             name: displayName,
-            type: 'hostAgent',
+            type: 'agent',
             resourceType: 'Agent',
-            node: hostAgent.identity?.hostname ?? hostAgent.name,
+            node: agentResource.identity?.hostname ?? agentResource.name,
             instance:
               asString(agent?.platform) ||
               asString(agent?.osName) ||
@@ -766,7 +767,7 @@ export function Alerts() {
       node: DEFAULT_DELAY_SECONDS,
       storage: DEFAULT_DELAY_SECONDS,
       pbs: DEFAULT_DELAY_SECONDS,
-      host: DEFAULT_DELAY_SECONDS,
+      agent: DEFAULT_DELAY_SECONDS,
     });
     setMetricTimeThresholds({});
     setScheduleQuietHours(createDefaultQuietHours());
@@ -818,15 +819,15 @@ export function Alerts() {
         setPBSDefaults({ ...FACTORY_PBS_DEFAULTS });
       }
 
-      if (config.hostDefaults) {
-        setHostDefaults({
-          cpu: getTriggerValue(config.hostDefaults.cpu) ?? 80,
-          memory: getTriggerValue(config.hostDefaults.memory) ?? 85,
-          disk: getTriggerValue(config.hostDefaults.disk) ?? 90,
-          diskTemperature: getTriggerValue(config.hostDefaults.diskTemperature) ?? 55,
+      if (config.agentDefaults) {
+        setAgentDefaults({
+          cpu: getTriggerValue(config.agentDefaults.cpu) ?? 80,
+          memory: getTriggerValue(config.agentDefaults.memory) ?? 85,
+          disk: getTriggerValue(config.agentDefaults.disk) ?? 90,
+          diskTemperature: getTriggerValue(config.agentDefaults.diskTemperature) ?? 55,
         });
       } else {
-        setHostDefaults({ ...FACTORY_HOST_DEFAULTS });
+        setAgentDefaults({ ...FACTORY_AGENT_DEFAULTS });
       }
 
       if (config.dockerDefaults) {
@@ -884,7 +885,7 @@ export function Alerts() {
           node: config.timeThresholds.node ?? DEFAULT_DELAY_SECONDS,
           storage: config.timeThresholds.storage ?? DEFAULT_DELAY_SECONDS,
           pbs: config.timeThresholds.pbs ?? DEFAULT_DELAY_SECONDS,
-          host: config.timeThresholds.host ?? DEFAULT_DELAY_SECONDS,
+          agent: config.timeThresholds.agent ?? DEFAULT_DELAY_SECONDS,
         });
       } else {
         setTimeThresholds({
@@ -892,7 +893,7 @@ export function Alerts() {
           node: DEFAULT_DELAY_SECONDS,
           storage: DEFAULT_DELAY_SECONDS,
           pbs: DEFAULT_DELAY_SECONDS,
-          host: DEFAULT_DELAY_SECONDS,
+          agent: DEFAULT_DELAY_SECONDS,
         });
       }
       if (config.metricTimeThresholds) {
@@ -984,7 +985,7 @@ export function Alerts() {
       // Load global disable flags
       setDisableAllNodes(config.disableAllNodes ?? false);
       setDisableAllGuests(config.disableAllGuests ?? false);
-      setDisableAllHosts(config.disableAllHosts ?? false);
+      setDisableAllAgents(config.disableAllAgents ?? false);
       setDisableAllStorage(config.disableAllStorage ?? false);
       setDisableAllPBS(config.disableAllPBS ?? false);
       setDisableAllPMG(config.disableAllPMG ?? false);
@@ -995,18 +996,16 @@ export function Alerts() {
       // Load global disable offline alerts flags
       setDisableAllNodesOffline(config.disableAllNodesOffline ?? false);
       setDisableAllGuestsOffline(config.disableAllGuestsOffline ?? false);
-      setDisableAllHostsOffline(config.disableAllHostsOffline ?? false);
+      setDisableAllAgentsOffline(config.disableAllAgentsOffline ?? false);
       setDisableAllPBSOffline(config.disableAllPBSOffline ?? false);
       setDisableAllPMGOffline(config.disableAllPMGOffline ?? false);
       setDisableAllDockerHostsOffline(config.disableAllDockerHostsOffline ?? false);
 
-      // Clean up any host disk override keys that used old underscore sanitization.
-      // The old frontend incorrectly used '_' but the backend uses '-', so old keys
-      // were never functional for alert evaluation. Drop them silently on load.
+      // Clean up any agent disk override keys that used old underscore sanitization.
       const rawOverrides = config.overrides || {};
       const cleanedOverrides: typeof rawOverrides = {};
       for (const [key, value] of Object.entries(rawOverrides)) {
-        const diskMatch = key.match(/^(host:.+\/disk:)(.+)$/);
+        const diskMatch = key.match(/^(agent:.+\/disk:)(.+)$/);
         if (diskMatch) {
           const normalized =
             diskMatch[2]
@@ -1264,7 +1263,7 @@ export function Alerts() {
     memory: 85,
   };
 
-  const FACTORY_HOST_DEFAULTS = {
+  const FACTORY_AGENT_DEFAULTS = {
     cpu: 80,
     memory: 85,
     disk: 90,
@@ -1316,8 +1315,8 @@ export function Alerts() {
   const [pbsDefaults, setPBSDefaults] = createSignal<Record<string, number | undefined>>({
     ...FACTORY_PBS_DEFAULTS,
   });
-  const [hostDefaults, setHostDefaults] = createSignal<Record<string, number | undefined>>({
-    ...FACTORY_HOST_DEFAULTS,
+  const [agentDefaults, setAgentDefaults] = createSignal<Record<string, number | undefined>>({
+    ...FACTORY_AGENT_DEFAULTS,
   });
 
   const [dockerDefaults, setDockerDefaults] = createSignal({ ...FACTORY_DOCKER_DEFAULTS });
@@ -1352,8 +1351,8 @@ export function Alerts() {
     setHasUnsavedChanges(true);
   };
 
-  const resetHostDefaults = () => {
-    setHostDefaults({ ...FACTORY_HOST_DEFAULTS });
+  const resetAgentDefaults = () => {
+    setAgentDefaults({ ...FACTORY_AGENT_DEFAULTS });
     setHasUnsavedChanges(true);
   };
 
@@ -1386,7 +1385,7 @@ export function Alerts() {
     node: DEFAULT_DELAY_SECONDS,
     storage: DEFAULT_DELAY_SECONDS,
     pbs: DEFAULT_DELAY_SECONDS,
-    host: DEFAULT_DELAY_SECONDS,
+    agent: DEFAULT_DELAY_SECONDS,
   });
   const [metricTimeThresholds, setMetricTimeThresholds] = createSignal<
     Record<string, Record<string, number>>
@@ -1417,7 +1416,7 @@ export function Alerts() {
   // Global disable flags per resource type
   const [disableAllNodes, setDisableAllNodes] = createSignal(false);
   const [disableAllGuests, setDisableAllGuests] = createSignal(false);
-  const [disableAllHosts, setDisableAllHosts] = createSignal(false);
+  const [disableAllAgents, setDisableAllAgents] = createSignal(false);
   const [disableAllStorage, setDisableAllStorage] = createSignal(false);
   const [disableAllPBS, setDisableAllPBS] = createSignal(false);
   const [disableAllPMG, setDisableAllPMG] = createSignal(false);
@@ -1428,7 +1427,7 @@ export function Alerts() {
   // Global disable offline alerts flags
   const [disableAllNodesOffline, setDisableAllNodesOffline] = createSignal(false);
   const [disableAllGuestsOffline, setDisableAllGuestsOffline] = createSignal(false);
-  const [disableAllHostsOffline, setDisableAllHostsOffline] = createSignal(false);
+  const [disableAllAgentsOffline, setDisableAllAgentsOffline] = createSignal(false);
   const [disableAllPBSOffline, setDisableAllPBSOffline] = createSignal(false);
   const [disableAllPMGOffline, setDisableAllPMGOffline] = createSignal(false);
   const [disableAllDockerHostsOffline, setDisableAllDockerHostsOffline] = createSignal(false);
@@ -1615,7 +1614,7 @@ export function Alerts() {
                       // Global disable flags per resource type
                       disableAllNodes: disableAllNodes(),
                       disableAllGuests: disableAllGuests(),
-                      disableAllHosts: disableAllHosts(),
+                      disableAllAgents: disableAllAgents(),
                       disableAllStorage: disableAllStorage(),
                       disableAllPBS: disableAllPBS(),
                       disableAllPMG: disableAllPMG(),
@@ -1626,7 +1625,7 @@ export function Alerts() {
                       disableAllNodesOffline: disableAllNodesOffline(),
                       disableAllGuestsOffline: disableAllGuestsOffline(),
                       disableAllPBSOffline: disableAllPBSOffline(),
-                      disableAllHostsOffline: disableAllHostsOffline(),
+                      disableAllAgentsOffline: disableAllAgentsOffline(),
                       disableAllPMGOffline: disableAllPMGOffline(),
                       disableAllDockerHostsOffline: disableAllDockerHostsOffline(),
                       guestDefaults: {
@@ -1646,11 +1645,11 @@ export function Alerts() {
                         disk: createHysteresisThreshold(nodeDefaults().disk),
                         temperature: createHysteresisThreshold(nodeDefaults().temperature),
                       },
-                      hostDefaults: {
-                        cpu: createHysteresisThreshold(hostDefaults().cpu),
-                        memory: createHysteresisThreshold(hostDefaults().memory),
-                        disk: createHysteresisThreshold(hostDefaults().disk),
-                        diskTemperature: createHysteresisThreshold(hostDefaults().diskTemperature),
+                      agentDefaults: {
+                        cpu: createHysteresisThreshold(agentDefaults().cpu),
+                        memory: createHysteresisThreshold(agentDefaults().memory),
+                        disk: createHysteresisThreshold(agentDefaults().disk),
+                        diskTemperature: createHysteresisThreshold(agentDefaults().diskTemperature),
                       },
                       pbsDefaults: {
                         cpu: createHysteresisThreshold(pbsDefaults().cpu),
@@ -1950,7 +1949,7 @@ export function Alerts() {
                   pbsInstances={pbsInstances()}
                   pmgInstances={pmgInstances()}
                   nodes={byType('node')}
-                  hosts={hostAgentResources()}
+                  agents={agentResources()}
                   storage={allResources().filter(
                     (r) => r.type === 'storage' || r.type === 'datastore',
                   )}
@@ -1964,8 +1963,8 @@ export function Alerts() {
                   setGuestPoweredOffSeverity={setGuestPoweredOffSeverity}
                   nodeDefaults={nodeDefaults}
                   setNodeDefaults={setNodeDefaults}
-                  hostDefaults={hostDefaults}
-                  setHostDefaults={setHostDefaults}
+                  agentDefaults={agentDefaults}
+                  setAgentDefaults={setAgentDefaults}
                   pbsDefaults={pbsDefaults}
                   setPBSDefaults={setPBSDefaults}
                   dockerDefaults={dockerDefaults}
@@ -1986,7 +1985,7 @@ export function Alerts() {
                   setStorageDefault={setStorageDefault}
                   resetGuestDefaults={resetGuestDefaults}
                   resetNodeDefaults={resetNodeDefaults}
-                  resetHostDefaults={resetHostDefaults}
+                  resetAgentDefaults={resetAgentDefaults}
                   timeThresholds={timeThresholds}
                   metricTimeThresholds={metricTimeThresholds}
                   setMetricTimeThresholds={setMetricTimeThresholds}
@@ -2004,8 +2003,8 @@ export function Alerts() {
                   setDisableAllNodes={setDisableAllNodes}
                   disableAllGuests={disableAllGuests}
                   setDisableAllGuests={setDisableAllGuests}
-                  disableAllHosts={disableAllHosts}
-                  setDisableAllHosts={setDisableAllHosts}
+                  disableAllAgents={disableAllAgents}
+                  setDisableAllAgents={setDisableAllAgents}
                   disableAllStorage={disableAllStorage}
                   setDisableAllStorage={setDisableAllStorage}
                   disableAllPBS={disableAllPBS}
@@ -2022,8 +2021,8 @@ export function Alerts() {
                   setDisableAllNodesOffline={setDisableAllNodesOffline}
                   disableAllGuestsOffline={disableAllGuestsOffline}
                   setDisableAllGuestsOffline={setDisableAllGuestsOffline}
-                  disableAllHostsOffline={disableAllHostsOffline}
-                  setDisableAllHostsOffline={setDisableAllHostsOffline}
+                  disableAllAgentsOffline={disableAllAgentsOffline}
+                  setDisableAllAgentsOffline={setDisableAllAgentsOffline}
                   disableAllPBSOffline={disableAllPBSOffline}
                   setDisableAllPBSOffline={setDisableAllPBSOffline}
                   disableAllPMGOffline={disableAllPMGOffline}
@@ -2039,7 +2038,7 @@ export function Alerts() {
                   factoryGuestDefaults={FACTORY_GUEST_DEFAULTS}
                   factoryNodeDefaults={FACTORY_NODE_DEFAULTS}
                   factoryPBSDefaults={FACTORY_PBS_DEFAULTS}
-                  factoryHostDefaults={FACTORY_HOST_DEFAULTS}
+                  factoryAgentDefaults={FACTORY_AGENT_DEFAULTS}
                   factoryDockerDefaults={FACTORY_DOCKER_DEFAULTS}
                   factoryStorageDefault={FACTORY_STORAGE_DEFAULT}
                   snapshotFactoryDefaults={FACTORY_SNAPSHOT_DEFAULTS}
@@ -2103,14 +2102,14 @@ interface ThresholdsTabProps {
   pbsInstances: PBSInstance[];
   pmgInstances: PMGInstance[];
   nodes: Resource[];
-  hosts: Resource[];
+  agents: Resource[];
   storage: Resource[];
   dockerHosts: Resource[];
   allResources: Resource[];
   guestDefaults: () => Record<string, number | undefined>;
   nodeDefaults: () => Record<string, number | undefined>;
   pbsDefaults: () => Record<string, number | undefined>;
-  hostDefaults: () => Record<string, number | undefined>;
+  agentDefaults: () => Record<string, number | undefined>;
   dockerDefaults: () => {
     cpu: number;
     memory: number;
@@ -2129,7 +2128,13 @@ interface ThresholdsTabProps {
   guestTagWhitelist: () => string[];
   guestTagBlacklist: () => string[];
   storageDefault: () => number;
-  timeThresholds: () => { guest: number; node: number; storage: number; pbs: number; host: number };
+  timeThresholds: () => {
+    guest: number;
+    node: number;
+    storage: number;
+    pbs: number;
+    agent: number;
+  };
   metricTimeThresholds: () => Record<string, Record<string, number>>;
   overrides: () => Override[];
   rawOverridesConfig: () => Record<string, RawOverrideConfig>;
@@ -2151,7 +2156,7 @@ interface ThresholdsTabProps {
       | Record<string, number | undefined>
       | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
   ) => void;
-  setHostDefaults: (
+  setAgentDefaults: (
     value:
       | Record<string, number | undefined>
       | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
@@ -2231,8 +2236,8 @@ interface ThresholdsTabProps {
   setDisableAllNodes: (value: boolean) => void;
   disableAllGuests: () => boolean;
   setDisableAllGuests: (value: boolean) => void;
-  disableAllHosts: () => boolean;
-  setDisableAllHosts: (value: boolean) => void;
+  disableAllAgents: () => boolean;
+  setDisableAllAgents: (value: boolean) => void;
   disableAllStorage: () => boolean;
   setDisableAllStorage: (value: boolean) => void;
   disableAllPBS: () => boolean;
@@ -2250,8 +2255,8 @@ interface ThresholdsTabProps {
   setDisableAllNodesOffline: (value: boolean) => void;
   disableAllGuestsOffline: () => boolean;
   setDisableAllGuestsOffline: (value: boolean) => void;
-  disableAllHostsOffline: () => boolean;
-  setDisableAllHostsOffline: (value: boolean) => void;
+  disableAllAgentsOffline: () => boolean;
+  setDisableAllAgentsOffline: (value: boolean) => void;
   disableAllPBSOffline: () => boolean;
   setDisableAllPBSOffline: (value: boolean) => void;
   disableAllPMGOffline: () => boolean;
@@ -2262,14 +2267,14 @@ interface ThresholdsTabProps {
   resetGuestDefaults?: () => void;
   resetNodeDefaults?: () => void;
   resetPBSDefaults?: () => void;
-  resetHostDefaults?: () => void;
+  resetAgentDefaults?: () => void;
   resetDockerDefaults?: () => void;
   resetDockerIgnoredPrefixes?: () => void;
   resetStorageDefault?: () => void;
   factoryGuestDefaults?: Record<string, number | undefined>;
   factoryNodeDefaults?: Record<string, number | undefined>;
   factoryPBSDefaults?: Record<string, number | undefined>;
-  factoryHostDefaults?: Record<string, number | undefined>;
+  factoryAgentDefaults?: Record<string, number | undefined>;
   factoryDockerDefaults?: Record<string, number | undefined>;
   factoryStorageDefault?: number;
 }
@@ -2283,7 +2288,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setRawOverridesConfig={props.setRawOverridesConfig}
       allGuests={props.allGuests}
       nodes={props.nodes}
-      hosts={props.hosts}
+      agents={props.agents}
       storage={props.storage}
       dockerHosts={props.dockerHosts}
       allResources={props.allResources}
@@ -2298,10 +2303,10 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       guestPoweredOffSeverity={props.guestPoweredOffSeverity}
       setGuestPoweredOffSeverity={props.setGuestPoweredOffSeverity}
       nodeDefaults={props.nodeDefaults()}
-      hostDefaults={props.hostDefaults()}
+      agentDefaults={props.agentDefaults()}
       pbsDefaults={props.pbsDefaults()}
       setNodeDefaults={props.setNodeDefaults}
-      setHostDefaults={props.setHostDefaults}
+      setAgentDefaults={props.setAgentDefaults}
       setPBSDefaults={props.setPBSDefaults}
       dockerDefaults={props.dockerDefaults()}
       dockerDisableConnectivity={props.dockerDisableConnectivity}
@@ -2337,8 +2342,8 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setDisableAllNodes={props.setDisableAllNodes}
       disableAllGuests={props.disableAllGuests}
       setDisableAllGuests={props.setDisableAllGuests}
-      disableAllHosts={props.disableAllHosts}
-      setDisableAllHosts={props.setDisableAllHosts}
+      disableAllAgents={props.disableAllAgents}
+      setDisableAllAgents={props.setDisableAllAgents}
       disableAllStorage={props.disableAllStorage}
       setDisableAllStorage={props.setDisableAllStorage}
       disableAllPBS={props.disableAllPBS}
@@ -2355,8 +2360,8 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setDisableAllNodesOffline={props.setDisableAllNodesOffline}
       disableAllGuestsOffline={props.disableAllGuestsOffline}
       setDisableAllGuestsOffline={props.setDisableAllGuestsOffline}
-      disableAllHostsOffline={props.disableAllHostsOffline}
-      setDisableAllHostsOffline={props.setDisableAllHostsOffline}
+      disableAllAgentsOffline={props.disableAllAgentsOffline}
+      setDisableAllAgentsOffline={props.setDisableAllAgentsOffline}
       disableAllPBSOffline={props.disableAllPBSOffline}
       setDisableAllPBSOffline={props.setDisableAllPBSOffline}
       disableAllPMGOffline={props.disableAllPMGOffline}
@@ -2366,14 +2371,14 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       resetGuestDefaults={props.resetGuestDefaults}
       resetNodeDefaults={props.resetNodeDefaults}
       resetPBSDefaults={props.resetPBSDefaults}
-      resetHostDefaults={props.resetHostDefaults}
+      resetAgentDefaults={props.resetAgentDefaults}
       resetDockerDefaults={props.resetDockerDefaults}
       resetDockerIgnoredPrefixes={props.resetDockerIgnoredPrefixes}
       resetStorageDefault={props.resetStorageDefault}
       factoryGuestDefaults={props.factoryGuestDefaults}
       factoryNodeDefaults={props.factoryNodeDefaults}
       factoryPBSDefaults={props.factoryPBSDefaults}
-      factoryHostDefaults={props.factoryHostDefaults}
+      factoryAgentDefaults={props.factoryAgentDefaults}
       factoryDockerDefaults={props.factoryDockerDefaults}
       factoryStorageDefault={props.factoryStorageDefault}
     />

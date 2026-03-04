@@ -640,8 +640,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             <Show when={agentHost()}>
               {(host) => (
                 <>
-                  <SystemInfoCard variant="host" host={host()} />
-                  <HardwareCard variant="host" host={host()} />
+                  <SystemInfoCard variant="agent" host={host()} />
+                  <HardwareCard variant="agent" host={host()} />
                   <NetworkInterfacesCard interfaces={host().networkInterfaces} />
                   <DisksCard disks={host().disks} />
                   <RaidCard arrays={agentMeta()?.raid} />

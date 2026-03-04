@@ -80,7 +80,7 @@ export class AlertsAPI {
 
   // Alert configuration methods
   static async getConfig(): Promise<AlertConfig> {
-    return apiFetchJSON(`${this.baseUrl}/config`);
+    return apiFetchJSON(`${this.baseUrl}/config`) as Promise<AlertConfig>;
   }
 
   static async updateConfig(config: AlertConfig): Promise<{ success: boolean }> {

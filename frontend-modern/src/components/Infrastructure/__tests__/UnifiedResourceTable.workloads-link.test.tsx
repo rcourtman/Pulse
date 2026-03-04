@@ -20,7 +20,7 @@ vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
 
 const baseResource = (overrides: Partial<Resource>): Resource => ({
   id: 'resource-1',
-  type: 'host',
+  type: 'node',
   name: 'pve1',
   displayName: 'pve1',
   platformId: 'pve1',
@@ -86,10 +86,10 @@ describe('UnifiedResourceTable workloads links', () => {
     const hrefs = links
       .map((link) => link.getAttribute('href'))
       .filter((href): href is string => typeof href === 'string');
-    expect(hrefs).toContain('/workloads?host=pve1');
+    expect(hrefs).toContain('/workloads?agent=pve1');
     expect(hrefs).toContain('/workloads?type=k8s&context=cluster-a');
 
-    const hostLink = links.find((link) => link.getAttribute('href') === '/workloads?host=pve1');
+    const hostLink = links.find((link) => link.getAttribute('href') === '/workloads?agent=pve1');
     expect(hostLink).toBeDefined();
     hostLink!.addEventListener('click', (event) => event.preventDefault());
     await fireEvent.click(hostLink!);

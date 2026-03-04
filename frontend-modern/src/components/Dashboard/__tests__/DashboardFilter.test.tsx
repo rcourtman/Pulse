@@ -274,13 +274,13 @@ describe('DashboardFilter', () => {
         },
       });
       render(() => <DashboardFilter {...props} />);
-      expect(screen.getByLabelText('Host')).toBeInTheDocument();
+      expect(screen.getByLabelText('Agent')).toBeInTheDocument();
     });
 
     it('does not render when hostFilter prop is absent', () => {
       const props = makeProps();
       render(() => <DashboardFilter {...props} />);
-      expect(screen.queryByLabelText('Host')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Agent')).not.toBeInTheDocument();
     });
 
     it('calls onChange when host selection changes', () => {
@@ -296,7 +296,7 @@ describe('DashboardFilter', () => {
         },
       });
       render(() => <DashboardFilter {...props} />);
-      fireEvent.change(screen.getByLabelText('Host'), { target: { value: 'host-1' } });
+      fireEvent.change(screen.getByLabelText('Agent'), { target: { value: 'host-1' } });
       expect(onChange).toHaveBeenCalledWith('host-1');
     });
 

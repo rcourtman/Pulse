@@ -444,7 +444,7 @@ describe('InfrastructureSummary range behavior', () => {
 
     const agentOnlyHost: Resource = {
       id: 'unified-host-1',
-      type: 'host',
+      type: 'node',
       name: 'unraid-node',
       displayName: 'unraid-node',
       platformId: 'unraid-node',
@@ -506,7 +506,7 @@ describe('InfrastructureSummary range behavior', () => {
 
     const agentOnlyHost: Resource = {
       id: 'unified-host-2',
-      type: 'host',
+      type: 'node',
       name: 'agent-host-two',
       displayName: 'agent-host-two',
       platformId: 'agent-host-two',
@@ -591,7 +591,7 @@ describe('InfrastructureSummary range behavior', () => {
         status: 'online',
         lastSeen: now,
         discoveryTarget: {
-          resourceType: 'host',
+          resourceType: 'agent',
           hostId: 'agent-host-3',
           resourceId: 'agent-host-3',
         },

@@ -59,6 +59,26 @@ describe('AlertsAPI', () => {
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/alerts/config');
       expect(result).toEqual(mockConfig);
     });
+
+    it('uses canonical v6 payload as-is', async () => {
+      const mockConfig = {
+        enabled: true,
+        guestDefaults: {},
+        nodeDefaults: {},
+        agentDefaults: { cpu: { trigger: 80, clear: 75 } },
+        overrides: {},
+        storageDefault: { trigger: 90, clear: 85 },
+        disableAllAgents: true,
+        disableAllAgentsOffline: true,
+        timeThresholds: { agent: 30 },
+        metricTimeThresholds: { agent: { cpu: 45 } },
+      };
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockConfig);
+
+      const result = await AlertsAPI.getConfig();
+
+      expect(result).toEqual(mockConfig);
+    });
   });
 
   describe('updateConfig', () => {
@@ -83,6 +103,33 @@ describe('AlertsAPI', () => {
         }),
       );
       expect(result).toEqual({ success: true });
+    });
+
+    it('sends canonical v6 config without legacy host aliases', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ success: true });
+
+      const config = {
+        enabled: true,
+        guestDefaults: {},
+        nodeDefaults: {},
+        agentDefaults: { cpu: { trigger: 80, clear: 75 } },
+        overrides: {},
+        storageDefault: { trigger: 90, clear: 85 },
+        disableAllAgents: true,
+        disableAllAgentsOffline: true,
+        timeThresholds: { agent: 20 },
+        metricTimeThresholds: { agent: { memory: 60 } },
+      };
+
+      await AlertsAPI.updateConfig(config as any);
+
+      expect(apiFetchJSON).toHaveBeenCalledWith(
+        '/api/alerts/config',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify(config),
+        }),
+      );
     });
   });
 

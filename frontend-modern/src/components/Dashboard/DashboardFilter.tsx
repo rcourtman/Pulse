@@ -105,7 +105,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                     for={hostFilter().id ?? 'dashboard-host-filter'}
                     class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
                   >
-                    {hostFilter().label ?? 'Host'}
+                    {hostFilter().label ?? 'Agent'}
                   </label>
                   <select
                     id={hostFilter().id ?? 'dashboard-host-filter'}

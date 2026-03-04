@@ -128,9 +128,9 @@ describe('aiChatUtils', () => {
       expect(id).toMatch(/^node:[^:]+:[^:]+$/);
     });
 
-    it('host mention IDs follow host:id format', () => {
-      const id = 'host:agent-123';
-      expect(id).toMatch(/^host:[^:]+$/);
+    it('agent mention IDs follow agent:id format', () => {
+      const id = 'agent:agent-123';
+      expect(id).toMatch(/^agent:[^:]+$/);
     });
   });
 });

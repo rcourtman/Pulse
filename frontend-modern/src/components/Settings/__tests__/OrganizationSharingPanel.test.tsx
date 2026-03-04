@@ -121,7 +121,7 @@ beforeEach(() => {
   mockResources = [
     makeResource({ id: 'vm-200', name: 'Zulu VM', displayName: 'Zulu VM' }),
     makeResource({ id: 'vm-100', name: 'Alpha VM', displayName: '' }),
-    makeResource({ id: 'host-1', type: 'host', name: '', displayName: '' }),
+    makeResource({ id: 'host-1', type: 'node', name: '', displayName: '' }),
     makeResource({ id: '', type: 'vm', name: 'Hidden', displayName: 'Hidden' }),
   ];
 
@@ -178,7 +178,7 @@ describe('OrganizationSharingPanel', () => {
     const quickPick = screen.getByLabelText('Quick Pick Resource') as HTMLSelectElement;
     const labels = Array.from(quickPick.options).map((option) => option.textContent?.trim());
 
-    expect(labels).toEqual(['Select resource', 'Alpha VM (vm)', 'host-1 (host)', 'Zulu VM (vm)']);
+    expect(labels).toEqual(['Select resource', 'Alpha VM (vm)', 'host-1 (node)', 'Zulu VM (vm)']);
     expect(labels).not.toContain('Hidden (vm)');
   });
 
@@ -213,7 +213,7 @@ describe('OrganizationSharingPanel', () => {
 
     expect(
       screen.getByText(
-        'Invalid resource type. Valid types: vm, container, host, storage, pbs, pmg',
+        'Invalid resource type. Valid types: agent, node, docker-host, k8s-cluster, k8s-node, truenas, vm, container, storage, pbs, pmg',
       ),
     ).toBeInTheDocument();
 
@@ -222,10 +222,34 @@ describe('OrganizationSharingPanel', () => {
     await waitFor(() => {
       expect(
         screen.queryByText(
-          'Invalid resource type. Valid types: vm, container, host, storage, pbs, pmg',
+          'Invalid resource type. Valid types: agent, node, docker-host, k8s-cluster, k8s-node, truenas, vm, container, storage, pbs, pmg',
         ),
       ).not.toBeInTheDocument();
     });
+  });
+
+  it('rejects legacy host alias when creating shares manually', async () => {
+    renderPanel();
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Create Share' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enter manually' }));
+
+    fireEvent.input(screen.getByLabelText('Resource Type'), { target: { value: 'host' } });
+    fireEvent.input(screen.getByLabelText('Resource ID'), { target: { value: 'agent-123' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create Share' }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Invalid resource type. Valid types: agent, node, docker-host, k8s-cluster, k8s-node, truenas, vm, container, storage, pbs, pmg',
+        ),
+      ).toBeInTheDocument();
+    });
+    expect(createShareMock).not.toHaveBeenCalled();
   });
 
   it('creates a share with the expected payload', async () => {
