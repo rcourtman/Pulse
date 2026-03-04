@@ -85,6 +85,7 @@ fi
 
 # Re-stage only files that were already staged (to pick up formatter changes)
 # This avoids accidentally committing unrelated work-in-progress files
-git diff --cached --name-only -z | xargs -0 -r git add
+# Filter out deleted files (D status) — they can't be re-added
+git diff --cached --diff-filter=d --name-only -z | xargs -0 -r git add
 
 echo "Pre-commit checks passed!"
