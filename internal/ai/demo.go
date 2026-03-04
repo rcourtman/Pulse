@@ -301,7 +301,7 @@ EVIDENCE: Memory: 92% (7.4GB/8GB), Swap: 30%
 [FINDING]
 SEVERITY: warning
 CATEGORY: security
-KEY: host:pve2:ssh
+KEY: agent:pve2:ssh
 RESOURCE_ID: node/pve2
 RESOURCE_NAME: pve2
 RESOURCE_TYPE: node

@@ -134,7 +134,7 @@ func TestRouteToAgent_ExactMatch(t *testing.T) {
 		{
 			name: "route by context hostname for host target",
 			req: ExecuteRequest{
-				TargetType: "host",
+				TargetType: "agent",
 				Context:    map[string]interface{}{"hostname": "delly"},
 			},
 			command:      "uptime",
@@ -575,7 +575,7 @@ func TestRouteToAgent_SingleAgentFallbackForHost(t *testing.T) {
 		{AgentID: "agent-1", Hostname: "only"},
 	}
 	req := ExecuteRequest{
-		TargetType: "host",
+		TargetType: "agent",
 	}
 
 	result, err := s.routeToAgent(req, "uptime", agents)

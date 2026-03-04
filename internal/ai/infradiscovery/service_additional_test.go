@@ -112,7 +112,7 @@ func TestSaveDiscoveriesWritesKnowledge(t *testing.T) {
 			ID:        "docker:host1:pg",
 			Name:      "PostgreSQL",
 			RunsIn:    "docker",
-			HostID:    "host-1",
+			HostID:    "agent-1",
 			Hostname:  "host1",
 			CLIAccess: "docker exec pg psql",
 		},
@@ -120,7 +120,7 @@ func TestSaveDiscoveriesWritesKnowledge(t *testing.T) {
 			ID:        "docker:host1:redis",
 			Name:      "Redis",
 			RunsIn:    "docker",
-			HostID:    "host-1",
+			HostID:    "agent-1",
 			Hostname:  "host1",
 			CLIAccess: "",
 		},
@@ -128,7 +128,7 @@ func TestSaveDiscoveriesWritesKnowledge(t *testing.T) {
 
 	service.saveDiscoveries(apps)
 
-	knowledgeData, err := store.GetKnowledge("host-1")
+	knowledgeData, err := store.GetKnowledge("agent-1")
 	if err != nil {
 		t.Fatalf("load knowledge: %v", err)
 	}

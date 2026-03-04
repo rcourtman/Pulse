@@ -555,7 +555,7 @@ func (e *PulseToolExecutor) executeKubernetesScale(ctx context.Context, args map
 
 	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
 		Command:    command,
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "",
 	})
 	if err != nil {
@@ -635,7 +635,7 @@ func (e *PulseToolExecutor) executeKubernetesRestart(ctx context.Context, args m
 
 	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
 		Command:    command,
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "",
 	})
 	if err != nil {
@@ -715,7 +715,7 @@ func (e *PulseToolExecutor) executeKubernetesDeletePod(ctx context.Context, args
 
 	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
 		Command:    command,
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "",
 	})
 	if err != nil {
@@ -805,7 +805,7 @@ func (e *PulseToolExecutor) executeKubernetesExec(ctx context.Context, args map[
 
 	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
 		Command:    kubectlCmd,
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "",
 	})
 	if err != nil {
@@ -882,7 +882,7 @@ func (e *PulseToolExecutor) executeKubernetesLogs(ctx context.Context, args map[
 
 	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
 		Command:    kubectlCmd,
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "",
 	})
 	if err != nil {

@@ -45,7 +45,7 @@ type ApprovalRequest struct {
 	ExecutionID string         `json:"executionId"`     // Groups related approvals
 	ToolID      string         `json:"toolId"`          // From LLM tool call
 	Command     string         `json:"command"`
-	TargetType  string         `json:"targetType"` // host, container, vm, node
+	TargetType  string         `json:"targetType"` // agent, container, vm, node
 	TargetID    string         `json:"targetId"`
 	TargetName  string         `json:"targetName"`
 	Context     string         `json:"context"`   // Why AI wants to run this
@@ -175,6 +175,10 @@ func (s *Store) CreateApproval(req *ApprovalRequest) error {
 
 	// Set defaults
 	req.OrgID = strings.TrimSpace(req.OrgID)
+	req.TargetType = normalizeApprovalTargetType(req.TargetType)
+	if req.TargetType == "host" {
+		return fmt.Errorf(`unsupported targetType %q; use "agent"`, req.TargetType)
+	}
 	req.Status = StatusPending
 	req.RequestedAt = time.Now()
 	if req.ExpiresAt.IsZero() {
@@ -377,12 +381,16 @@ func (s *Store) ConsumeApproval(id, command, targetType, targetID string) (*Appr
 	}
 
 	// Verify command hash matches
+	targetType = normalizeApprovalTargetType(targetType)
+	if targetType == "host" {
+		return nil, fmt.Errorf(`unsupported targetType %q; use "agent"`, targetType)
+	}
 	expectedHash := ComputeCommandHash(command, targetType, targetID)
 	approvedHash := req.CommandHash
 	if approvedHash == "" {
 		// Legacy approvals created before CommandHash existed are still bound to their
 		// original command+target tuple by deriving the canonical hash on consume.
-		approvedHash = ComputeCommandHash(req.Command, req.TargetType, req.TargetID)
+		approvedHash = ComputeCommandHash(req.Command, normalizeApprovalTargetType(req.TargetType), req.TargetID)
 	}
 	if approvedHash != expectedHash {
 		log.Warn().
@@ -569,11 +577,23 @@ func (s *Store) executionsFile() string {
 }
 
 func (s *Store) load() error {
+	shouldPersist := false
+
 	// Load approvals
 	if data, err := os.ReadFile(s.approvalsFile()); err == nil {
 		var approvals []*ApprovalRequest
 		if err := json.Unmarshal(data, &approvals); err == nil {
 			for _, a := range approvals {
+				if normalizeApprovalTargetType(a.TargetType) == "host" {
+					shouldPersist = true
+					log.Warn().
+						Str("id", a.ID).
+						Msg("dropping legacy approval with unsupported target type host")
+					continue
+				}
+				if canonicalizeApprovalRequest(a) {
+					shouldPersist = true
+				}
 				s.approvals[a.ID] = a
 			}
 		}
@@ -587,6 +607,10 @@ func (s *Store) load() error {
 				s.executions[e.ID] = e
 			}
 		}
+	}
+
+	if shouldPersist {
+		s.save()
 	}
 
 	return nil
@@ -789,6 +813,32 @@ func ComputeCommandHash(command, targetType, targetID string) string {
 	h.Write([]byte("|"))
 	h.Write([]byte(targetID))
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+func normalizeApprovalTargetType(targetType string) string {
+	return strings.ToLower(strings.TrimSpace(targetType))
+}
+
+func canonicalizeApprovalRequest(req *ApprovalRequest) bool {
+	if req == nil {
+		return false
+	}
+
+	changed := false
+	prevType := req.TargetType
+	req.TargetType = normalizeApprovalTargetType(req.TargetType)
+	if req.TargetType != prevType {
+		changed = true
+	}
+
+	// Keep command hash aligned with canonical target tuple.
+	canonicalHash := ComputeCommandHash(req.Command, req.TargetType, req.TargetID)
+	if req.CommandHash == "" || changed {
+		req.CommandHash = canonicalHash
+		return true
+	}
+
+	return changed
 }
 
 // Global store instance

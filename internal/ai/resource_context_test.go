@@ -21,7 +21,7 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 	nodeWithAgent := unifiedresources.Resource{
 		ID:     "node-1",
 		Name:   "delly",
-		Type:   unifiedresources.ResourceTypeHost,
+		Type:   unifiedresources.ResourceTypeAgent,
 		Status: unifiedresources.StatusOnline,
 		Identity: unifiedresources.ResourceIdentity{
 			ClusterName: "cluster-a",
@@ -38,21 +38,21 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 	nodeNoAgent := unifiedresources.Resource{
 		ID:      "node-2",
 		Name:    "minipc",
-		Type:    unifiedresources.ResourceTypeHost,
+		Type:    unifiedresources.ResourceTypeAgent,
 		Status:  unifiedresources.StatusWarning,
 		Proxmox: &unifiedresources.ProxmoxData{NodeName: "minipc"},
 	}
 	dockerNode := unifiedresources.Resource{
 		ID:     "dock-node",
 		Name:   "dock-node",
-		Type:   unifiedresources.ResourceTypeHost,
+		Type:   unifiedresources.ResourceTypeAgent,
 		Status: unifiedresources.StatusOnline,
 		Docker: &unifiedresources.DockerData{Hostname: "dock-node"},
 	}
 	host := unifiedresources.Resource{
 		ID:     "host-1",
 		Name:   "barehost",
-		Type:   unifiedresources.ResourceTypeHost,
+		Type:   unifiedresources.ResourceTypeAgent,
 		Status: unifiedresources.StatusOnline,
 		Identity: unifiedresources.ResourceIdentity{
 			IPAddresses: []string{"192.168.1.10"},
@@ -68,7 +68,7 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 	dockerHost := unifiedresources.Resource{
 		ID:     "docker-1",
 		Name:   "dockhost",
-		Type:   unifiedresources.ResourceTypeHost,
+		Type:   unifiedresources.ResourceTypeAgent,
 		Status: unifiedresources.StatusOnline,
 		Docker: &unifiedresources.DockerData{Hostname: "dockhost"},
 	}
@@ -147,7 +147,7 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 	stats := unifiedresources.ResourceStats{
 		Total: len(all),
 		ByType: map[unifiedresources.ResourceType]int{
-			unifiedresources.ResourceTypeHost:            5,
+			unifiedresources.ResourceTypeAgent:           5,
 			unifiedresources.ResourceTypeVM:              2,
 			unifiedresources.ResourceTypeSystemContainer: 2,
 			unifiedresources.ResourceTypeAppContainer:    2,
@@ -377,14 +377,14 @@ func TestBuildUnifiedResourceContext_TruncatesLargeContext(t *testing.T) {
 	node := unifiedresources.Resource{
 		ID:     "node-1",
 		Name:   largeName,
-		Type:   unifiedresources.ResourceTypeHost,
+		Type:   unifiedresources.ResourceTypeAgent,
 		Status: unifiedresources.StatusOnline,
 	}
 
 	stats := unifiedresources.ResourceStats{
 		Total: 1,
 		ByType: map[unifiedresources.ResourceType]int{
-			unifiedresources.ResourceTypeHost: 1,
+			unifiedresources.ResourceTypeAgent: 1,
 		},
 	}
 
@@ -425,7 +425,7 @@ func TestResourceContextUnifiedProvider_NilRegistry(t *testing.T) {
 	if got := adapter.GetWorkloads(); len(got) != 0 {
 		t.Fatalf("GetWorkloads() len = %d, want 0", len(got))
 	}
-	if got := adapter.GetByType(unifiedresources.ResourceTypeHost); len(got) != 0 {
+	if got := adapter.GetByType(unifiedresources.ResourceTypeAgent); len(got) != 0 {
 		t.Fatalf("GetByType(host) len = %d, want 0", len(got))
 	}
 	if got := adapter.GetTopByCPU(3, nil); len(got) != 0 {
@@ -450,7 +450,7 @@ func TestResourceContextUnifiedProvider_ResourceCounts(t *testing.T) {
 		{
 			SourceID: "host-1",
 			Resource: unifiedresources.Resource{
-				Type:     unifiedresources.ResourceTypeHost,
+				Type:     unifiedresources.ResourceTypeAgent,
 				Name:     "host-1",
 				Status:   unifiedresources.StatusOnline,
 				LastSeen: now,
@@ -492,7 +492,7 @@ func TestResourceContextUnifiedProvider_InfrastructureWorkloadSplit(t *testing.T
 		{
 			SourceID: "host-1",
 			Resource: unifiedresources.Resource{
-				Type:     unifiedresources.ResourceTypeHost,
+				Type:     unifiedresources.ResourceTypeAgent,
 				Name:     "host-1",
 				Status:   unifiedresources.StatusOnline,
 				LastSeen: now,
@@ -536,7 +536,7 @@ func TestResourceContextUnifiedProvider_TopCPU(t *testing.T) {
 		{
 			SourceID: "host-low",
 			Resource: unifiedresources.Resource{
-				Type:     unifiedresources.ResourceTypeHost,
+				Type:     unifiedresources.ResourceTypeAgent,
 				Name:     "host-low",
 				Status:   unifiedresources.StatusOnline,
 				LastSeen: now,
@@ -577,7 +577,7 @@ func TestResourceContextUnifiedProvider_TopCPU(t *testing.T) {
 
 	unified := unifiedresources.NewUnifiedAIAdapter(registry)
 	top := unified.GetTopByCPU(2, []unifiedresources.ResourceType{
-		unifiedresources.ResourceTypeHost,
+		unifiedresources.ResourceTypeAgent,
 		unifiedresources.ResourceTypeVM,
 		unifiedresources.ResourceTypeAppContainer,
 	})
@@ -596,7 +596,7 @@ func TestResourceContextUnifiedProvider_FindContainerHost(t *testing.T) {
 		{
 			SourceID: "docker-host-1",
 			Resource: unifiedresources.Resource{
-				Type:     unifiedresources.ResourceTypeHost,
+				Type:     unifiedresources.ResourceTypeAgent,
 				Name:     "docker-node-1",
 				Status:   unifiedresources.StatusOnline,
 				LastSeen: now,

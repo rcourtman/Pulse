@@ -74,7 +74,7 @@ func (e *ErrStrictResolution) ToStructuredError() map[string]interface{} {
 type ErrRoutingMismatch struct {
 	TargetHost            string   // The host that was targeted
 	MoreSpecificResources []string // Child resource names that exist on this host
-	MoreSpecificIDs       []string // Canonical resource IDs (kind:host:id) for future ID-based targeting
+	MoreSpecificIDs       []string // Canonical resource IDs (kind:scope:id) for future ID-based targeting
 	ChildKinds            []string // Resource kinds of children (for telemetry/routing: "system-container", "vm", etc.)
 	Message               string   // Human-readable message
 }
@@ -100,9 +100,9 @@ func (e *ErrRoutingMismatch) ToToolResponse() ToolResponse {
 	if len(e.MoreSpecificIDs) > 0 {
 		details["more_specific_resource_ids"] = e.MoreSpecificIDs
 		details["target_resource_id"] = e.MoreSpecificIDs[0] // Primary suggestion
-		// Prefer ID-based targeting, with legacy target_host as fallback
+		// Prefer ID-based targeting; keep name-based targeting as a fallback.
 		details["recovery_hint"] = fmt.Sprintf(
-			"Retry with target_resource_id='%s' (preferred) or target_host='%s' (legacy)",
+			"Retry with target_resource_id='%s' (preferred) or target_host='%s'",
 			e.MoreSpecificIDs[0], e.MoreSpecificResources[0])
 	} else {
 		// Fallback if no IDs available
@@ -1906,7 +1906,7 @@ func (e *PulseToolExecutor) validateRoutingContext(targetHost string) RoutingVal
 // recentChildInfo holds both the name and canonical ID of a recently referenced child resource.
 type recentChildInfo struct {
 	Name       string // Human-readable name
-	ResourceID string // Canonical ID (kind:host:id)
+	ResourceID string // Canonical ID (kind:scope:id)
 	Kind       string // Resource kind (system-container, vm, docker_container) for telemetry
 }
 
@@ -3269,7 +3269,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 				Aliases:       aliases,
 				HostUID:       hostUID,
 				HostName:      hostName,
-				LocationChain: []string{"host:" + locationHost, "docker:" + container.Name()},
+				LocationChain: []string{"docker-host:" + locationHost, "docker:" + container.Name()},
 				Executors: []ExecutorRegistration{{
 					ExecutorID: executorID,
 					Adapter:    "docker",
@@ -3892,7 +3892,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 				Aliases:       []string{match.Name, match.ID, match.Host},
 				HostUID:       match.Host,
 				HostName:      match.Host,
-				LocationChain: []string{"host:" + match.Host},
+				LocationChain: []string{"docker-host:" + match.Host},
 				Executors: []ExecutorRegistration{{
 					ExecutorID: match.Host,
 					Adapter:    "direct",
@@ -3908,7 +3908,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 				Aliases:       []string{match.Name, match.ID},
 				HostUID:       match.Host,
 				HostName:      match.Host,
-				LocationChain: []string{"host:" + match.Host, "docker:" + match.Name},
+				LocationChain: []string{"docker-host:" + match.Host, "docker:" + match.Name},
 				Executors: []ExecutorRegistration{{
 					ExecutorID: match.Host,
 					Adapter:    "docker",

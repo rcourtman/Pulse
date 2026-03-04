@@ -23,8 +23,8 @@ func (e *PulseToolExecutor) registerDiscoveryTools() {
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "For get: resource type (vm, system-container, docker, host)",
-						Enum:        []string{"vm", "system-container", "docker", "host"},
+						Description: "For get: resource type (vm, system-container, docker, agent)",
+						Enum:        []string{"vm", "system-container", "docker", "agent"},
 					},
 					"resource_id": {
 						Type:        "string",
@@ -37,7 +37,7 @@ func (e *PulseToolExecutor) registerDiscoveryTools() {
 					"type": {
 						Type:        "string",
 						Description: "For list: filter by resource type",
-						Enum:        []string{"vm", "system-container", "docker", "host"},
+						Enum:        []string{"vm", "system-container", "docker", "agent"},
 					},
 					"host": {
 						Type:        "string",
@@ -97,7 +97,7 @@ func getCLIAccessPattern(resourceType, hostID, resourceID string) string {
 		return fmt.Sprintf("VM on node '%s' (VMID %s)", hostID, resourceID)
 	case "docker":
 		return fmt.Sprintf("Docker container '%s' on host '%s'", resourceID, hostID)
-	case "host":
+	case "agent":
 		return fmt.Sprintf("Host '%s'", hostID)
 	default:
 		return ""
@@ -219,10 +219,14 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 	resourceType, _ := args["resource_type"].(string)
 	resourceID, _ := args["resource_id"].(string)
 	hostID, _ := args["host_id"].(string)
+	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
 
 	// Silently normalize legacy "lxc" from in-flight LLM conversations.
 	if resourceType == "lxc" {
 		resourceType = "system-container"
+	}
+	if resourceType == "host" {
+		return NewErrorResult(fmt.Errorf(`resource_type "host" is no longer supported; use "agent"`)), nil
 	}
 
 	// Preserve the caller's type for response fields.
@@ -476,10 +480,14 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 	filterHost, _ := args["host"].(string)
 	filterServiceType, _ := args["service_type"].(string)
 	limit := intArg(args, "limit", 50)
+	filterType = strings.ToLower(strings.TrimSpace(filterType))
 
 	// Silently normalize legacy "lxc" from in-flight LLM conversations.
 	if filterType == "lxc" {
 		filterType = "system-container"
+	}
+	if filterType == "host" {
+		return NewErrorResult(fmt.Errorf(`type "host" is no longer supported; use "agent"`)), nil
 	}
 
 	// Preserve caller's type for the response echo.

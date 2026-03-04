@@ -28,8 +28,8 @@ func TestRouteToAgent_TargetHostExplicit(t *testing.T) {
 		{
 			name: "explicit node in context routes correctly",
 			req: ExecuteRequest{
-				TargetType: "host", // run_on_host=true sets this
-				TargetID:   "",     // run_on_host clears this
+				TargetType: "agent", // run_on_host=true sets this
+				TargetID:   "",      // run_on_host clears this
 				Context:    map[string]interface{}{"node": "minipc"},
 			},
 			command:      "pct exec 106 -- hostname",
@@ -40,7 +40,7 @@ func TestRouteToAgent_TargetHostExplicit(t *testing.T) {
 		{
 			name: "guest_node also routes correctly for host commands",
 			req: ExecuteRequest{
-				TargetType: "host",
+				TargetType: "agent",
 				TargetID:   "",
 				Context:    map[string]interface{}{"guest_node": "pimox"},
 			},
@@ -52,7 +52,7 @@ func TestRouteToAgent_TargetHostExplicit(t *testing.T) {
 		{
 			name: "node takes priority over guest_node",
 			req: ExecuteRequest{
-				TargetType: "host",
+				TargetType: "agent",
 				TargetID:   "",
 				Context: map[string]interface{}{
 					"node":       "delly",
@@ -98,7 +98,7 @@ func TestRouteToAgent_SingleAgentFallback(t *testing.T) {
 	}
 
 	req := ExecuteRequest{
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "",
 		Context:    nil, // No context at all
 	}
@@ -133,7 +133,7 @@ func TestRouteToAgent_MultiAgentNoContext(t *testing.T) {
 	}
 
 	req := ExecuteRequest{
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "",
 		Context:    nil, // No context
 	}
@@ -171,7 +171,7 @@ func TestRouteToAgent_VMIDInCommandWithContext(t *testing.T) {
 
 	// Even with a VMID in the command, if we have node context, use it
 	req := ExecuteRequest{
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "",
 		Context:    map[string]interface{}{"node": "minipc"},
 	}

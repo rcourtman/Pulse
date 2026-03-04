@@ -95,7 +95,7 @@ func dockerHostViewFromModel(dh models.DockerHost) *unifiedresources.DockerHostV
 	r := &unifiedresources.Resource{
 		ID:   dh.ID,
 		Name: dh.Hostname,
-		Type: unifiedresources.ResourceTypeHost,
+		Type: unifiedresources.ResourceTypeAgent,
 		Docker: &unifiedresources.DockerData{
 			HostSourceID: dh.ID,
 			Hostname:     dh.Hostname,

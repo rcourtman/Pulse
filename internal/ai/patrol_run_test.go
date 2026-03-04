@@ -256,7 +256,7 @@ func TestFilterStateByScope_Hosts(t *testing.T) {
 
 	scope := PatrolScope{
 		ResourceIDs:   []string{"h1"},
-		ResourceTypes: []string{"host"},
+		ResourceTypes: []string{"agent"},
 	}
 	filtered := ps.filterStateByScope(state, scope)
 	if len(filtered.Hosts) != 1 {

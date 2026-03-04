@@ -258,8 +258,8 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 		}
 	}
 
-	// Step 5: No target node determined - for host commands with no context, use first agent
-	if req.TargetType == "host" && len(agents) == 1 {
+	// Step 5: No target node determined - for agent commands with no context, use first agent.
+	if req.TargetType == "agent" && len(agents) == 1 {
 		result.AgentID = agents[0].AgentID
 		result.AgentHostname = agents[0].Hostname
 		result.RoutingMethod = "single_agent_fallback"

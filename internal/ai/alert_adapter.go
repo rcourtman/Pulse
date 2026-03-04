@@ -162,7 +162,7 @@ func inferResourceType(alertType string, metadata map[string]interface{}) string
 	case alertType == "docker_cpu" || alertType == "docker_memory" || alertType == "docker_restart" || alertType == "docker_offline":
 		return "docker"
 	case alertType == "host_cpu" || alertType == "host_memory" || alertType == "host_offline" || alertType == "host_disk":
-		return "host"
+		return "agent"
 	case alertType == "pmg" || alertType == "pmg_queue" || alertType == "pmg_quarantine":
 		return "pmg"
 	case alertType == "backup" || alertType == "backup_missing":

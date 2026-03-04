@@ -49,7 +49,7 @@ func (s *Service) buildUnifiedResourceContext() string {
 		var sections []string
 		stats := urp.GetStats()
 
-		infraCount := stats.ByType[unifiedresources.ResourceTypeHost] +
+		infraCount := stats.ByType[unifiedresources.ResourceTypeAgent] +
 			stats.ByType[unifiedresources.ResourceTypeK8sCluster] +
 			stats.ByType[unifiedresources.ResourceTypeK8sNode]
 		workloadCount := stats.ByType[unifiedresources.ResourceTypeVM] +

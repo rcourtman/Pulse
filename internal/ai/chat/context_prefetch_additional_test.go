@@ -163,7 +163,7 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 
 	structured := []StructuredMention{
 		{ID: "docker:dock1:cid:part", Name: "homepage", Type: "docker"},
-		{ID: "host:host1", Name: "host1", Type: "host"},
+		{ID: "agent:host1", Name: "host1", Type: "agent"},
 		{ID: "container:node1:201", Name: "beta", Type: "container", Node: "node1"},
 		{ID: "docker:resource:docker:abc:cid-simple", Name: "homepage2", Type: "docker"},
 	}
@@ -191,8 +191,8 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 	if len(mentions[0].BindMounts) == 0 {
 		t.Fatalf("expected bind mounts on docker mention")
 	}
-	if mentions[1].ResourceType != "host" {
-		t.Fatalf("expected host mention, got %q", mentions[1].ResourceType)
+	if mentions[1].ResourceType != "agent" {
+		t.Fatalf("expected agent mention, got %q", mentions[1].ResourceType)
 	}
 	if mentions[2].ResourceType != "system-container" {
 		t.Fatalf("expected container type normalized to system-container, got %q", mentions[2].ResourceType)
@@ -207,6 +207,11 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 	unknown := prefetcher.resolveStructuredMentions([]StructuredMention{{ID: "weird:1", Name: "mystery", Type: "weird"}})
 	if len(unknown) != 1 || unknown[0].ResourceType != "weird" {
 		t.Fatalf("expected unknown type to be preserved")
+	}
+
+	legacyHost := prefetcher.resolveStructuredMentions([]StructuredMention{{ID: "host:host1", Name: "host1", Type: "host"}})
+	if len(legacyHost) != 0 {
+		t.Fatalf("expected legacy host mention to be ignored, got %#v", legacyHost)
 	}
 }
 
@@ -238,10 +243,10 @@ func TestContextPrefetcher_GetOrTriggerDiscovery(t *testing.T) {
 		t.Fatalf("expected trigger to be called once")
 	}
 
-	mention3 := ResourceMention{ResourceType: "host", HostID: "host1", ResourceID: "host1", Name: "host1"}
+	mention3 := ResourceMention{ResourceType: "agent", HostID: "host1", ResourceID: "host1", Name: "host1"}
 	res, err = prefetcher.getOrTriggerDiscovery(context.Background(), mention3)
 	if err != nil || res != nil {
-		t.Fatalf("expected no discovery for host type")
+		t.Fatalf("expected no discovery for agent type")
 	}
 }
 

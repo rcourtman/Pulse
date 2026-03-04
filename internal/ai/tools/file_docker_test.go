@@ -381,7 +381,7 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		mockAgent := &mockAgentServer{}
 		mockAgent.On("GetConnectedAgents").Return(agents)
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			return cmd.TargetType == "host" &&
+			return cmd.TargetType == "agent" &&
 				strings.Contains(cmd.Command, encodedContent) &&
 				strings.Contains(cmd.Command, "| base64 -d >")
 		})).Return(&agentexec.CommandResultPayload{
@@ -389,7 +389,7 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 			Stdout:   "",
 		}, nil)
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			return cmd.TargetType == "host" &&
+			return cmd.TargetType == "agent" &&
 				strings.Contains(cmd.Command, "sha256sum") &&
 				strings.Contains(cmd.Command, "/tmp/test.txt") &&
 				!strings.Contains(cmd.Command, "docker exec")

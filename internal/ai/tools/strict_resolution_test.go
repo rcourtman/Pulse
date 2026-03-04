@@ -1017,10 +1017,10 @@ func TestWriteExecutionContext_BlocksNodeFallbackForLXC(t *testing.T) {
 	// This means the command would run directly on the agent, which is on the node
 	routing := CommandRoutingResult{
 		AgentID:       "agent-delly",
-		TargetType:    "host",   // Direct agent match → "host" type
+		TargetType:    "agent",  // Direct agent match -> "agent" type
 		TargetID:      "",       // No VMID
 		AgentHostname: "delly",  // Agent is on delly
-		ResolvedKind:  "host",   // Resolved as host (direct match)
+		ResolvedKind:  "agent",  // Resolved as agent (direct match)
 		ResolvedNode:  "",       // No node info (direct match doesn't resolve)
 		Transport:     "direct", // Direct execution
 	}
@@ -1101,7 +1101,7 @@ func TestWriteExecutionContext_AllowsHostWrites(t *testing.T) {
 	// Simulate: writing to delly directly (it's a host, not LXC/VM)
 	routing := CommandRoutingResult{
 		AgentID:       "agent-delly",
-		TargetType:    "host",
+		TargetType:    "agent",
 		AgentHostname: "delly",
 		ResolvedKind:  "node",
 		ResolvedNode:  "delly",
@@ -1252,8 +1252,8 @@ func TestRoutingOrder_HostnameMatchUsedWhenTopologyUnknown(t *testing.T) {
 	if routing.Transport != "direct" {
 		t.Errorf("Transport = %q, want %q (fallback for unknown resources)", routing.Transport, "direct")
 	}
-	if routing.ResolvedKind != "host" {
-		t.Errorf("ResolvedKind = %q, want %q", routing.ResolvedKind, "host")
+	if routing.ResolvedKind != "agent" {
+		t.Errorf("ResolvedKind = %q, want %q", routing.ResolvedKind, "agent")
 	}
 	if routing.AgentID != "agent-standalone" {
 		t.Errorf("AgentID = %q, want %q", routing.AgentID, "agent-standalone")

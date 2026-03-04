@@ -48,7 +48,7 @@ Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,
 					"resource_type": {
 						Type:        "string",
 						Description: "Resource type",
-						Enum:        []string{"node", "vm", "system-container", "container", "docker_container", "storage", "host", "kubernetes_cluster", "pbs"},
+						Enum:        []string{"node", "vm", "system-container", "container", "docker_container", "storage", "agent", "kubernetes_cluster", "pbs"},
 					},
 					"title": {
 						Type:        "string",
@@ -141,6 +141,7 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 	resourceID, _ := args["resource_id"].(string)
 	resourceName, _ := args["resource_name"].(string)
 	resourceType, _ := args["resource_type"].(string)
+	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
 	title, _ := args["title"].(string)
 	description, _ := args["description"].(string)
 
@@ -172,6 +173,9 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 	}
 	if len(missing) > 0 {
 		return NewErrorResult(fmt.Errorf("missing required fields: %s", strings.Join(missing, ", "))), nil
+	}
+	if resourceType == "host" {
+		return NewErrorResult(fmt.Errorf(`resource_type "host" is no longer supported; use "agent"`)), nil
 	}
 
 	// Validate enums

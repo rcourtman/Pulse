@@ -210,7 +210,7 @@ func TestExecuteKubernetesScale(t *testing.T) {
 		}
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
 			return cmd.Command == "kubectl -n 'default' scale deployment 'nginx' --replicas=3" &&
-				cmd.TargetType == "host"
+				cmd.TargetType == "agent"
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   "deployment.apps/nginx scaled",

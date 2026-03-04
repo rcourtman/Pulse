@@ -70,7 +70,7 @@ func TestService_SetResourceURL_ProviderErrors(t *testing.T) {
 		t.Fatalf("expected wrapped docker error, got %v", err)
 	}
 
-	err = svc.SetResourceURL("host", "id-3", "https://example.com")
+	err = svc.SetResourceURL("agent", "id-3", "https://example.com")
 	if err == nil || !strings.Contains(err.Error(), "failed to set host URL") {
 		t.Fatalf("expected wrapped host error, got %v", err)
 	}

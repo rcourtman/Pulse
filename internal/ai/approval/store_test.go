@@ -84,7 +84,7 @@ func TestCreateApproval(t *testing.T) {
 		ExecutionID: "exec-1",
 		ToolID:      "tool-1",
 		Command:     "systemctl restart nginx",
-		TargetType:  "host",
+		TargetType:  "agent",
 		TargetID:    "host-1",
 		TargetName:  "webserver",
 		Context:     "Service needs restart due to config change",
@@ -106,6 +106,29 @@ func TestCreateApproval(t *testing.T) {
 	}
 	if req.ExpiresAt.IsZero() {
 		t.Error("CreateApproval() did not set ExpiresAt")
+	}
+}
+
+func TestCreateApproval_RejectsLegacyHostTargetType(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:        tmpDir,
+		DefaultTimeout: 1 * time.Minute,
+	})
+
+	req := &ApprovalRequest{
+		Command:    "uptime",
+		TargetType: "host",
+		TargetID:   "host-1",
+	}
+
+	if err := store.CreateApproval(req); err == nil {
+		t.Fatal("expected legacy host target type to be rejected")
 	}
 }
 
@@ -382,6 +405,31 @@ func TestConsumeApproval_LegacyWithoutCommandHash_MismatchRejected(t *testing.T)
 	}
 	if stored.Consumed {
 		t.Fatal("expected approval to remain unconsumed after mismatch")
+	}
+}
+
+func TestConsumeApproval_RejectsLegacyHostTargetTypeInput(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:        tmpDir,
+		DefaultTimeout: 1 * time.Minute,
+	})
+
+	req := &ApprovalRequest{
+		Command:    "uptime",
+		TargetType: "agent",
+		TargetID:   "node-1",
+	}
+	_ = store.CreateApproval(req)
+	_, _ = store.Approve(req.ID, "admin")
+
+	if _, err := store.ConsumeApproval(req.ID, "uptime", "host", "node-1"); err == nil {
+		t.Fatal("expected error for legacy host target type input")
 	}
 }
 

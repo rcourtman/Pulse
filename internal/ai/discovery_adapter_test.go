@@ -56,7 +56,7 @@ func TestDiscoveryCommandAdapter_ExecuteCommandNotConnected(t *testing.T) {
 	cmd := servicediscovery.ExecuteCommandPayload{
 		RequestID:  "req-2",
 		Command:    "hostname",
-		TargetType: "host",
+		TargetType: "agent",
 		Timeout:    1,
 	}
 

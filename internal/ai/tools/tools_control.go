@@ -220,12 +220,12 @@ func approvalTargetForCommand(targetHost string, routing CommandRoutingResult) (
 	targetID = strings.TrimSpace(routing.TargetID)
 
 	if targetType == "" {
-		targetType = "host"
+		targetType = "agent"
 	}
 
-	if targetType == "host" {
-		// Host executions do not carry routing.TargetID in ExecuteCommand payload.
-		// Use agent ID to bind approvals to a specific connected host.
+	if targetType == "agent" {
+		// Agent-level executions do not carry routing.TargetID in ExecuteCommand payload.
+		// Use agent ID to bind approvals to a specific connected agent.
 		targetID = strings.TrimSpace(routing.AgentID)
 		if targetID == "" {
 			targetID = strings.TrimSpace(targetHost)
@@ -361,7 +361,7 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 
 	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
 		Command:    command,
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "",
 	})
 	if err != nil {
@@ -427,7 +427,7 @@ func (e *PulseToolExecutor) verifyGuestAction(ctx context.Context, agentID, cmdT
 	statusCmd := fmt.Sprintf("%s status %d", cmdTool, vmID)
 	res, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
 		Command:    statusCmd,
-		TargetType: "host",
+		TargetType: "agent",
 	})
 	if err != nil {
 		return map[string]interface{}{"confirmed": false, "method": "status", "command": statusCmd, "note": err.Error()}
@@ -458,12 +458,12 @@ func (e *PulseToolExecutor) verifyGuestAction(ctx context.Context, agentID, cmdT
 type CommandRoutingResult struct {
 	// Routing info for agent
 	AgentID    string // The agent that will execute the command
-	TargetType string // "host", "container", or "vm"
-	TargetID   string // VMID for LXC/VM, empty for host
+	TargetType string // "agent", "container", or "vm"
+	TargetID   string // VMID for LXC/VM, empty for agent
 
 	// Provenance info
 	AgentHostname string // Hostname of the agent
-	ResolvedKind  string // Technology/transport kind: "node", "system-container", "vm", "docker", "host" (drives routing decisions)
+	ResolvedKind  string // Technology/transport kind: "node", "system-container", "vm", "docker", "agent" (drives routing decisions)
 	ResolvedNode  string // Hypervisor node name (if applicable)
 	Transport     string // How command will be executed: "direct", "pct_exec", "qm_guest_exec"
 }
@@ -477,7 +477,7 @@ type CommandRoutingResult struct {
 // causes commands to execute on the node instead of inside the LXC via pct exec.
 func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) CommandRoutingResult {
 	result := CommandRoutingResult{
-		TargetType: "host",
+		TargetType: "agent",
 		Transport:  "direct",
 	}
 
@@ -497,7 +497,7 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 		}
 		result.AgentID = agents[0].AgentID
 		result.AgentHostname = agents[0].Hostname
-		result.ResolvedKind = "host"
+		result.ResolvedKind = "agent"
 		return result
 	}
 
@@ -509,6 +509,16 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 	if loc.Found {
 		// Route based on resource type
 		switch loc.ResourceType {
+		case "agent":
+			for _, agent := range agents {
+				if agent.Hostname == loc.TargetHost || agent.AgentID == loc.HostID {
+					result.AgentID = agent.AgentID
+					result.AgentHostname = agent.Hostname
+					result.ResolvedKind = "agent"
+					return result
+				}
+			}
+
 		case "node":
 			// Direct hypervisor node
 			nodeAgentID := e.findAgentForNode(loc.Node)
@@ -616,7 +626,7 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 		if agent.Hostname == targetHost || agent.AgentID == targetHost {
 			result.AgentID = agent.AgentID
 			result.AgentHostname = agent.Hostname
-			result.ResolvedKind = "host"
+			result.ResolvedKind = "agent"
 			return result
 		}
 	}
@@ -626,7 +636,7 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 
 // resolveTargetForCommand resolves a target_host to the correct agent and routing info.
 // Uses the authoritative resolveResourceLocation function.
-// Returns: agentID, targetType ("host", "container", or "vm"), targetID (vmid for LXC/VM)
+// Returns: agentID, targetType ("agent", "container", or "vm"), targetID (vmid for LXC/VM)
 //
 // CRITICAL ORDERING: Same as resolveTargetForCommandFull — topology first, agent fallback second.
 func (e *PulseToolExecutor) resolveTargetForCommand(targetHost string) (agentID string, targetType string, targetID string) {
@@ -983,7 +993,7 @@ func (e *PulseToolExecutor) getAgentHostnameForDockerHost(dockerHost *models.Doc
 // are executed inside the guest.
 func (e *PulseToolExecutor) resolveDockerHostRoutingFull(dockerHost *models.DockerHost) CommandRoutingResult {
 	result := CommandRoutingResult{
-		TargetType: "host",
+		TargetType: "agent",
 		Transport:  "direct",
 	}
 

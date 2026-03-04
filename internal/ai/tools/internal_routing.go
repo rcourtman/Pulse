@@ -143,7 +143,7 @@ func (e *PulseToolExecutor) resolveResourceLocation(name string) models.Resource
 			return models.ResourceLocation{
 				Found:        true,
 				Name:         host.Hostname(),
-				ResourceType: "host",
+				ResourceType: "agent",
 				HostID:       host.ID(),
 				Platform:     host.Platform(),
 				TargetHost:   host.Hostname(),

@@ -59,9 +59,9 @@ type StreamCallback func(event StreamEvent)
 // The frontend resolves these from the autocomplete and sends them alongside the prompt,
 // so the backend doesn't need to re-derive resource identity from text.
 type StructuredMention struct {
-	ID   string `json:"id"`             // e.g. "lxc:delly:123", "docker:host:container"
+	ID   string `json:"id"`             // e.g. "system-container:delly:123", "docker:docker-host-1:container", "agent:host-1"
 	Name string `json:"name"`           // Display name, e.g. "ntfy"
-	Type string `json:"type"`           // "vm", "lxc", "container", "docker", "node", "host"
+	Type string `json:"type"`           // "vm", "system-container", "container", "docker", "node", "agent"
 	Node string `json:"node,omitempty"` // Proxmox node or parent host
 }
 

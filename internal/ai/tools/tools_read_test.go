@@ -22,7 +22,7 @@ func TestPulseToolExecutor_ExecuteReadLogs_Fallbacks(t *testing.T) {
 			{AgentID: "agent1", Hostname: "node1"},
 		})
 		agentSrv.On("ExecuteCommand", mock.Anything, "agent1", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
-			return payload.TargetType == "host" &&
+			return payload.TargetType == "agent" &&
 				payload.TargetID == "" &&
 				strings.Contains(payload.Command, "docker ps --format") &&
 				strings.Contains(payload.Command, "head -20")
@@ -52,7 +52,7 @@ func TestPulseToolExecutor_ExecuteReadLogs_Fallbacks(t *testing.T) {
 			{AgentID: "agent1", Hostname: "node1"},
 		})
 		agentSrv.On("ExecuteCommand", mock.Anything, "agent1", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
-			return payload.TargetType == "host" &&
+			return payload.TargetType == "agent" &&
 				payload.TargetID == "" &&
 				payload.Command == "journalctl --since '1h' -n 50 --no-pager"
 		})).Return(&agentexec.CommandResultPayload{
@@ -83,13 +83,13 @@ func TestPulseToolExecutor_ExecuteReadLogs_Fallbacks(t *testing.T) {
 			{AgentID: "agent1", Hostname: "node1"},
 		})
 		agentSrv.On("ExecuteCommand", mock.Anything, "agent1", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
-			return payload.Command == "docker logs --tail 100 'homepage'" && payload.TargetType == "host"
+			return payload.Command == "docker logs --tail 100 'homepage'" && payload.TargetType == "agent"
 		})).Return(&agentexec.CommandResultPayload{
 			Stdout:   "docker log line",
 			ExitCode: 0,
 		}, nil).Once()
 		agentSrv.On("ExecuteCommand", mock.Anything, "agent1", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
-			return payload.Command == "journalctl -n 30 --no-pager" && payload.TargetType == "host"
+			return payload.Command == "journalctl -n 30 --no-pager" && payload.TargetType == "agent"
 		})).Return(&agentexec.CommandResultPayload{
 			Stdout:   "journal fallback line",
 			ExitCode: 0,

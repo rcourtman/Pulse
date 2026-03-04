@@ -86,7 +86,7 @@ func (s *Service) SetResourceURL(resourceType, resourceID, customURL string) err
 			Str("url", customURL).
 			Msg("AI set Docker URL")
 
-	case "host":
+	case "agent":
 		if err := mp.SetHostURL(resourceID, customURL); err != nil {
 			return fmt.Errorf("failed to set host URL: %w", err)
 		}
@@ -97,7 +97,7 @@ func (s *Service) SetResourceURL(resourceType, resourceID, customURL string) err
 			Msg("AI set host URL")
 
 	default:
-		return fmt.Errorf("unknown resource type: %s (use 'guest', 'docker', or 'host')", resourceType)
+		return fmt.Errorf("unknown resource type: %s (use 'guest', 'docker', or 'agent')", resourceType)
 	}
 
 	return nil

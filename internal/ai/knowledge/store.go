@@ -40,7 +40,7 @@ type Note struct {
 type GuestKnowledge struct {
 	GuestID   string    `json:"guest_id"`
 	GuestName string    `json:"guest_name"`
-	GuestType string    `json:"guest_type"` // "vm", "container", "node", "host"
+	GuestType string    `json:"guest_type"` // "vm", "container", "node", "agent"
 	Notes     []Note    `json:"notes"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -58,6 +58,38 @@ type Store struct {
 var newCryptoManagerAt = crypto.NewCryptoManagerAt
 var beforeKnowledgeWriteLock func()
 
+func normalizeGuestID(guestID string) string {
+	return strings.TrimSpace(guestID)
+}
+
+func isLegacyHostGuestID(guestID string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(guestID)), "host:")
+}
+
+func canonicalStoredGuestID(guestID string) string {
+	trimmed := strings.TrimSpace(guestID)
+	if strings.HasPrefix(strings.ToLower(trimmed), "host:") {
+		return "agent:" + trimmed[5:]
+	}
+	return trimmed
+}
+
+func normalizeGuestType(guestType string) string {
+	return strings.TrimSpace(guestType)
+}
+
+func isLegacyHostGuestType(guestType string) bool {
+	return strings.EqualFold(strings.TrimSpace(guestType), "host")
+}
+
+func canonicalStoredGuestType(guestType string) string {
+	trimmed := strings.TrimSpace(guestType)
+	if strings.EqualFold(trimmed, "host") {
+		return "agent"
+	}
+	return trimmed
+}
+
 // NewStore creates a new knowledge store with encryption
 func NewStore(dataDir string) (*Store, error) {
 	knowledgeDir := filepath.Join(dataDir, "knowledge")
@@ -71,11 +103,74 @@ func NewStore(dataDir string) (*Store, error) {
 		log.Warn().Err(err).Msg("failed to initialize crypto for knowledge store, data will be unencrypted")
 	}
 
-	return &Store{
+	store := &Store{
 		dataDir: knowledgeDir,
 		cache:   make(map[string]*GuestKnowledge),
 		crypto:  cryptoMgr,
-	}, nil
+	}
+
+	if err := store.migrateLegacyHostGuestFiles(); err != nil {
+		log.Warn().Err(err).Msg("failed to migrate legacy host:* knowledge files")
+	}
+
+	return store, nil
+}
+
+// migrateLegacyHostGuestFiles renames persisted host:* knowledge files to the
+// canonical agent:* naming. This runs at startup so runtime code can remain
+// strict and agent-only.
+func (s *Store) migrateLegacyHostGuestFiles() error {
+	files, err := os.ReadDir(s.dataDir)
+	if err != nil {
+		return fmt.Errorf("failed to read knowledge directory for migration: %w", err)
+	}
+
+	migrated := 0
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		name := file.Name()
+		ext := filepath.Ext(name)
+		if ext != ".enc" && ext != ".json" {
+			continue
+		}
+
+		rawID := name[:len(name)-len(ext)]
+		if !isLegacyHostGuestID(rawID) {
+			continue
+		}
+
+		canonicalID := canonicalStoredGuestID(rawID)
+		if canonicalID == "" || canonicalID == rawID {
+			continue
+		}
+
+		srcPath := filepath.Join(s.dataDir, name)
+		dstName := filepath.Base(canonicalID) + ext
+		dstPath := filepath.Join(s.dataDir, dstName)
+
+		if _, statErr := os.Stat(dstPath); statErr == nil {
+			if removeErr := os.Remove(srcPath); removeErr == nil {
+				migrated++
+			}
+			continue
+		} else if !os.IsNotExist(statErr) {
+			return fmt.Errorf("failed to inspect migration target %q: %w", dstPath, statErr)
+		}
+
+		if renameErr := os.Rename(srcPath, dstPath); renameErr != nil {
+			return fmt.Errorf("failed to migrate %q to %q: %w", srcPath, dstPath, renameErr)
+		}
+		migrated++
+	}
+
+	if migrated > 0 {
+		log.Info().Int("files", migrated).Msg("migrated legacy host:* knowledge files to agent:*")
+	}
+
+	return nil
 }
 
 // guestFilePath returns the file path for a guest's knowledge
@@ -91,6 +186,11 @@ func (s *Store) guestFilePath(guestID string) string {
 
 // GetKnowledge retrieves knowledge for a guest
 func (s *Store) GetKnowledge(guestID string) (*GuestKnowledge, error) {
+	guestID = normalizeGuestID(guestID)
+	if isLegacyHostGuestID(guestID) {
+		return nil, fmt.Errorf(`guest ID %q is no longer supported; use "agent:*"`, guestID)
+	}
+
 	s.mu.RLock()
 	if cached, ok := s.cache[guestID]; ok {
 		s.mu.RUnlock()
@@ -114,8 +214,8 @@ func (s *Store) GetKnowledge(guestID string) (*GuestKnowledge, error) {
 	data, err := os.ReadFile(filePath)
 	if os.IsNotExist(err) {
 		// Try legacy unencrypted file
-		legacyPath := filepath.Join(s.dataDir, filepath.Base(guestID)+".json")
-		data, err = os.ReadFile(legacyPath)
+		legacyJSONPath := filepath.Join(s.dataDir, filepath.Base(guestID)+".json")
+		data, err = os.ReadFile(legacyJSONPath)
 		if os.IsNotExist(err) {
 			// No knowledge yet, return empty
 			knowledge := &GuestKnowledge{
@@ -155,38 +255,74 @@ func (s *Store) GetKnowledge(guestID string) (*GuestKnowledge, error) {
 		return nil, fmt.Errorf("failed to parse knowledge file: %w", err)
 	}
 
+	// Canonicalize legacy guest identifiers/types at load time.
+	needsMigration := false
+	if canonical := canonicalStoredGuestID(knowledge.GuestID); canonical != "" && canonical != knowledge.GuestID {
+		knowledge.GuestID = canonical
+		needsMigration = true
+	}
+	if knowledge.GuestID == "" {
+		knowledge.GuestID = guestID
+		needsMigration = true
+	}
+	if canonicalType := canonicalStoredGuestType(knowledge.GuestType); canonicalType != knowledge.GuestType {
+		knowledge.GuestType = canonicalType
+		needsMigration = true
+	}
+	if knowledge.GuestID != guestID {
+		knowledge.GuestID = guestID
+		needsMigration = true
+	}
+
 	s.cache[guestID] = &knowledge
+
+	if needsMigration {
+		if err := s.saveToFile(guestID, &knowledge); err != nil {
+			log.Warn().Err(err).Str("guest_id", guestID).Msg("failed to migrate canonical guest knowledge file")
+		}
+	}
+
 	return &knowledge, nil
 }
 
 // SaveNote adds or updates a note for a guest
 func (s *Store) SaveNote(guestID, guestName, guestType, category, title, content string) error {
+	guestID = normalizeGuestID(guestID)
+	if isLegacyHostGuestID(guestID) {
+		return fmt.Errorf(`guest ID %q is no longer supported; use "agent:*"`, guestID)
+	}
+	guestType = normalizeGuestType(guestType)
+	if isLegacyHostGuestType(guestType) {
+		return fmt.Errorf(`guest type %q is no longer supported; use "agent"`, guestType)
+	}
+
+	// Prime cache so note updates merge against existing stored knowledge.
+	if _, err := s.GetKnowledge(guestID); err != nil {
+		log.Warn().
+			Err(err).
+			Str("guest_id", guestID).
+			Msg("failed to load existing knowledge for save; starting fresh")
+		s.mu.Lock()
+		s.cache[guestID] = &GuestKnowledge{
+			GuestID:   guestID,
+			GuestName: guestName,
+			GuestType: guestType,
+			Notes:     []Note{},
+		}
+		s.mu.Unlock()
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	// Get or create knowledge
 	knowledge, ok := s.cache[guestID]
 	if !ok {
-		// Try to load from disk first
 		knowledge = &GuestKnowledge{
 			GuestID:   guestID,
 			GuestName: guestName,
 			GuestType: guestType,
 			Notes:     []Note{},
-		}
-
-		// Check for existing file
-		filePath := s.guestFilePath(guestID)
-		if data, err := os.ReadFile(filePath); err == nil {
-			// Decrypt if needed
-			if s.crypto != nil && filepath.Ext(filePath) == ".enc" {
-				if decrypted, err := s.crypto.Decrypt(data); err == nil {
-					data = decrypted
-				}
-			}
-			if err := json.Unmarshal(data, &knowledge); err != nil {
-				log.Warn().Err(err).Str("guest_id", guestID).Msg("failed to parse existing knowledge, starting fresh")
-			}
 		}
 		s.cache[guestID] = knowledge
 	}
@@ -197,7 +333,10 @@ func (s *Store) SaveNote(guestID, guestName, guestType, category, title, content
 	}
 	if guestType != "" {
 		knowledge.GuestType = guestType
+	} else {
+		knowledge.GuestType = canonicalStoredGuestType(knowledge.GuestType)
 	}
+	knowledge.GuestID = guestID
 
 	now := time.Now()
 
@@ -234,6 +373,11 @@ func (s *Store) SaveNote(guestID, guestName, guestType, category, title, content
 
 // DeleteNote removes a note
 func (s *Store) DeleteNote(guestID, noteID string) error {
+	guestID = normalizeGuestID(guestID)
+	if isLegacyHostGuestID(guestID) {
+		return fmt.Errorf(`guest ID %q is no longer supported; use "agent:*"`, guestID)
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -256,6 +400,11 @@ func (s *Store) DeleteNote(guestID, noteID string) error {
 
 // GetNotesByCategory returns notes filtered by category
 func (s *Store) GetNotesByCategory(guestID, category string) ([]Note, error) {
+	guestID = normalizeGuestID(guestID)
+	if isLegacyHostGuestID(guestID) {
+		return nil, fmt.Errorf(`guest ID %q is no longer supported; use "agent:*"`, guestID)
+	}
+
 	knowledge, err := s.GetKnowledge(guestID)
 	if err != nil {
 		return nil, err
@@ -272,6 +421,12 @@ func (s *Store) GetNotesByCategory(guestID, category string) ([]Note, error) {
 
 // FormatForContext formats knowledge for injection into AI context
 func (s *Store) FormatForContext(guestID string) string {
+	guestID = normalizeGuestID(guestID)
+	if isLegacyHostGuestID(guestID) {
+		log.Warn().Str("guest_id", guestID).Msg("ignoring legacy host:* guest context request; use agent:*")
+		return ""
+	}
+
 	knowledge, err := s.GetKnowledge(guestID)
 	if err != nil {
 		log.Warn().Err(err).Str("guest_id", guestID).Msg("failed to load guest knowledge")
@@ -366,10 +521,18 @@ func (s *Store) ListGuests() ([]string, error) {
 	}
 
 	var guests []string
+	seen := make(map[string]struct{})
 	for _, file := range files {
 		ext := filepath.Ext(file.Name())
 		if ext == ".json" || ext == ".enc" {
-			guestID := file.Name()[:len(file.Name())-len(ext)]
+			guestID := canonicalStoredGuestID(file.Name()[:len(file.Name())-len(ext)])
+			if guestID == "" {
+				continue
+			}
+			if _, exists := seen[guestID]; exists {
+				continue
+			}
+			seen[guestID] = struct{}{}
 			guests = append(guests, guestID)
 		}
 	}

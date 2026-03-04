@@ -131,10 +131,10 @@ func TestInferResourceType(t *testing.T) {
 		{"docker_memory", "docker_memory", nil, "docker"},
 		{"docker_restart", "docker_restart", nil, "docker"},
 		{"docker_offline", "docker_offline", nil, "docker"},
-		{"host_cpu", "host_cpu", nil, "host"},
-		{"host_memory", "host_memory", nil, "host"},
-		{"host_offline", "host_offline", nil, "host"},
-		{"host_disk", "host_disk", nil, "host"},
+		{"host_cpu", "host_cpu", nil, "agent"},
+		{"host_memory", "host_memory", nil, "agent"},
+		{"host_offline", "host_offline", nil, "agent"},
+		{"host_disk", "host_disk", nil, "agent"},
 		{"pmg", "pmg", nil, "pmg"},
 		{"pmg_queue", "pmg_queue", nil, "pmg"},
 		{"pmg_quarantine", "pmg_quarantine", nil, "pmg"},
@@ -144,6 +144,7 @@ func TestInferResourceType(t *testing.T) {
 		{"snapshot_age", "snapshot_age", nil, "snapshot"},
 		{"unknown_type", "unknown_type", nil, "guest"},
 		{"with_metadata", "unknown", map[string]interface{}{"resourceType": "custom"}, "custom"},
+		{"with_metadata_host", "unknown", map[string]interface{}{"resourceType": "host"}, "host"},
 	}
 
 	for _, tt := range tests {

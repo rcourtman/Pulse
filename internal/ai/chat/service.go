@@ -395,7 +395,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			// the routing validation will catch it.
 			resolvedCtx := sessions.GetResolvedContext(session.ID)
 			for _, mention := range prefetchCtx.Mentions {
-				// Build canonical resource ID: kind:host:id
+				// Build canonical resource ID: kind:scope:id
 				var resourceID string
 				switch mention.ResourceType {
 				case "system-container", "lxc":

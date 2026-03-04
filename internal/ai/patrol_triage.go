@@ -871,8 +871,8 @@ func triageResourceName(primary, fallback string) string {
 		return strings.TrimPrefix(id, "pmg-")
 	case strings.HasPrefix(id, "docker-"):
 		return strings.TrimPrefix(id, "docker-")
-	case strings.HasPrefix(id, "host-"):
-		return strings.TrimPrefix(id, "host-")
+	case strings.HasPrefix(id, "agent-"):
+		return strings.TrimPrefix(id, "agent-")
 	default:
 		return id
 	}

@@ -114,7 +114,7 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 
 		req, found := store.GetApproval(approvalID)
 		require.True(t, found)
-		assert.Equal(t, "host", req.TargetType)
+		assert.Equal(t, "agent", req.TargetType)
 		assert.Equal(t, "agent-1", req.TargetID)
 		assert.Equal(t, "tower", req.TargetName)
 	})
@@ -131,7 +131,7 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 		req := &approval.ApprovalRequest{
 			ID:         "approval-1",
 			Command:    "uptime",
-			TargetType: "host",
+			TargetType: "agent",
 			TargetID:   "agent-1",
 		}
 		require.NoError(t, store.CreateApproval(req))
@@ -145,7 +145,7 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 			{AgentID: "agent-1", Hostname: "tower"},
 		}).Maybe()
 		agentSrv.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
-			return payload.Command == "uptime" && payload.TargetType == "host" && payload.TargetID == ""
+			return payload.Command == "uptime" && payload.TargetType == "agent" && payload.TargetID == ""
 		})).Return(&agentexec.CommandResultPayload{
 			Stdout:   "ok",
 			ExitCode: 0,
@@ -180,8 +180,8 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 			{AgentID: "agent1", Hostname: "node1"},
 		}).Twice()
 		agentSrv.On("ExecuteCommand", mock.Anything, "agent1", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
-			// For direct host targets, TargetID is empty - resolveTargetForCommand returns "" for host type
-			return payload.Command == "uptime" && payload.TargetType == "host" && payload.TargetID == ""
+			// For direct agent targets, TargetID is empty - resolveTargetForCommand returns "" for agent type
+			return payload.Command == "uptime" && payload.TargetType == "agent" && payload.TargetID == ""
 		})).Return(&agentexec.CommandResultPayload{
 			Stdout:   "ok",
 			ExitCode: 0,
@@ -284,12 +284,12 @@ func TestPulseToolExecutor_RunCommandLXCRouting(t *testing.T) {
 	})
 
 	t.Run("DirectHostRoutedCorrectly", func(t *testing.T) {
-		// Direct host commands have target type "host"
+		// Direct host commands are canonicalized to target type "agent"
 		agents := []agentexec.ConnectedAgent{{AgentID: "agent", Hostname: "tower"}}
 		mockAgent := &mockAgentServer{}
 		mockAgent.On("GetConnectedAgents").Return(agents)
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			return cmd.TargetType == "host" &&
+			return cmd.TargetType == "agent" &&
 				cmd.Command == "ls /tmp/*.txt"
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,

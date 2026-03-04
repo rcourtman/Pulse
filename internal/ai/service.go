@@ -1195,7 +1195,7 @@ func resolveRunCommandApprovalTarget(req ExecuteRequest, runOnHost bool, targetH
 	targetID = strings.TrimSpace(req.TargetID)
 
 	if runOnHost {
-		targetType = "host"
+		targetType = "agent"
 		if normalizedTargetHost != "" {
 			targetID = normalizedTargetHost
 			targetName = normalizedTargetHost
@@ -1203,10 +1203,10 @@ func resolveRunCommandApprovalTarget(req ExecuteRequest, runOnHost bool, targetH
 	}
 
 	if targetType == "" {
-		targetType = "host"
+		targetType = "agent"
 	}
 
-	if targetType == "host" && targetID == "" {
+	if targetType == "agent" && targetID == "" {
 		if node, ok := req.Context["node"].(string); ok && node != "" {
 			targetID = strings.ToLower(strings.TrimSpace(node))
 		} else if node, ok := req.Context["hostname"].(string); ok && node != "" {
@@ -1702,7 +1702,7 @@ type ConversationMessage struct {
 // ExecuteRequest represents a request to execute an AI prompt
 type ExecuteRequest struct {
 	Prompt       string                 `json:"prompt"`
-	TargetType   string                 `json:"target_type,omitempty"` // "host", "container", "vm", "node"
+	TargetType   string                 `json:"target_type,omitempty"` // "agent", "container", "vm", "node"
 	TargetID     string                 `json:"target_id,omitempty"`
 	Context      map[string]interface{} `json:"context,omitempty"`       // Current metrics, state, etc.
 	SystemPrompt string                 `json:"system_prompt,omitempty"` // Override system prompt
@@ -1852,7 +1852,7 @@ func (s *Service) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteResp
 You have access to tools to execute commands on the target system. You should:
 1. Use run_command to investigate issues, gather information, and PERFORM actions
 2. Actually execute the commands - don't just explain what commands to run
-3. For Proxmox operations (resize disk, manage containers/VMs), run commands on the HOST (target_type=host)
+3. For Proxmox operations (resize disk, manage containers/VMs), run commands on the AGENT (target_type=agent)
 4. For operations inside a container, run commands on the container (target_type=container)
 
 Examples of actions you can perform:
@@ -2061,7 +2061,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 You have access to tools to execute commands on the target system. You should:
 1. Use run_command to investigate issues, gather information, and PERFORM actions
 2. Actually execute the commands - don't just explain what commands to run
-3. For Proxmox operations (resize disk, manage containers/VMs), run commands on the HOST (target_type=host)
+3. For Proxmox operations (resize disk, manage containers/VMs), run commands on the AGENT (target_type=agent)
 4. For operations inside a container, run commands on the container (target_type=container)
 
 Examples of actions you can perform:
@@ -2722,8 +2722,8 @@ func (s *Service) hasAgentForTarget(req ExecuteRequest) bool {
 		return false
 	}
 
-	// For host targets with no specific context, any agent will do
-	if req.TargetType == "host" && len(req.Context) == 0 {
+	// For agent targets with no specific context, any connected agent will do.
+	if req.TargetType == "agent" && len(req.Context) == 0 {
 		return true
 	}
 
@@ -2833,8 +2833,8 @@ func (s *Service) getTools() []providers.Tool {
 				"properties": map[string]interface{}{
 					"resource_type": map[string]interface{}{
 						"type":        "string",
-						"description": "Type of resource: 'guest' for VMs/LXC containers, 'docker' for Docker containers/services, or 'host' for standalone hosts",
-						"enum":        []string{"guest", "docker", "host"},
+						"description": "Type of resource: 'guest' for VMs/LXC containers, 'docker' for Docker containers/services, or 'agent' for standalone agents",
+						"enum":        []string{"guest", "docker", "agent"},
 					},
 					"resource_id": map[string]interface{}{
 						"type":        "string",
@@ -2984,8 +2984,8 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 				Str("target_host", targetHost).
 				Str("original_target_type", req.TargetType).
 				Str("original_target_id", req.TargetID).
-				Msg("run_on_host=true - overriding target type to 'host'")
-			execReq.TargetType = "host"
+				Msg("run_on_host=true - overriding target type to 'agent'")
+			execReq.TargetType = "agent"
 			execReq.TargetID = ""
 		} else {
 			log.Debug().
@@ -3057,7 +3057,7 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		execution.Input = fmt.Sprintf("%s %s -> %s", resourceType, resourceID, resourceURL)
 
 		if resourceType == "" {
-			execution.Output = "Error: resource_type is required (use 'guest', 'docker', or 'host')"
+			execution.Output = "Error: resource_type is required (use 'guest', 'docker', or 'agent')"
 			return execution.Output, execution
 		}
 		if resourceID == "" {
@@ -3579,24 +3579,24 @@ func hasExplicitHostRoutingContext(ctx map[string]interface{}) bool {
 func normalizeExecuteTargetType(raw, targetID string, ctx map[string]interface{}) (string, error) {
 	targetType := strings.ToLower(strings.TrimSpace(raw))
 	switch targetType {
-	case "host", "node", "docker", "docker_host", "kubernetes_cluster", "kubernetes", "k8s":
-		return "host", nil
+	case "agent", "node", "docker", "docker_host", "kubernetes_cluster", "kubernetes", "k8s":
+		return "agent", nil
 	case "container", "lxc", "ct":
 		return "container", nil
 	case "vm", "qemu":
 		return "vm", nil
 	case "":
 		if strings.TrimSpace(targetID) == "" && hasExplicitHostRoutingContext(ctx) {
-			return "host", nil
+			return "agent", nil
 		}
-		return "", fmt.Errorf("target_type is required (host, container, or vm)")
+		return "", fmt.Errorf("target_type is required (agent, container, or vm)")
 	case "guest":
 		if strings.TrimSpace(targetID) == "" {
-			return "host", nil
+			return "agent", nil
 		}
 		return "", fmt.Errorf("target_type 'guest' is ambiguous with target_id; use 'container' or 'vm'")
 	default:
-		return "", fmt.Errorf("unsupported target_type %q (allowed: host, container, vm)", raw)
+		return "", fmt.Errorf("unsupported target_type %q (allowed: agent, container, vm)", raw)
 	}
 }
 
@@ -3733,7 +3733,7 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 type RunCommandRequest struct {
 	Command    string `json:"command"`
 	ApprovalID string `json:"approval_id,omitempty"` // Consumed by API handler before execution
-	TargetType string `json:"target_type"`           // "host", "container", "vm"
+	TargetType string `json:"target_type"`           // "agent", "container", "vm"
 	TargetID   string `json:"target_id"`
 	RunOnHost  bool   `json:"run_on_host"` // If true, run on host instead of target
 	VMID       string `json:"vmid,omitempty"`
@@ -3762,7 +3762,7 @@ func (s *Service) RunCommand(ctx context.Context, req RunCommandRequest) (*RunCo
 
 	// If running on host, override target type
 	if req.RunOnHost {
-		execReq.TargetType = "host"
+		execReq.TargetType = "agent"
 		// Keep the original target info for routing
 	}
 

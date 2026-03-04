@@ -147,8 +147,11 @@ func TestKnowledgeStore_SaveLoad(t *testing.T) {
 	dir := t.TempDir()
 	store := NewKnowledgeStore(dir)
 
-	if err := store.SaveNote("res-1", "note", "general"); err != nil {
+	if err := store.SaveNote("agent:res-1", "note", "general"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := store.SaveNote("host:res-legacy", "note", "general"); err == nil {
+		t.Fatalf("expected legacy host resource ID to be rejected")
 	}
 	store.saveToDisk()
 	info, err := os.Stat(filepath.Join(dir, "knowledge_store.json"))
@@ -163,9 +166,12 @@ func TestKnowledgeStore_SaveLoad(t *testing.T) {
 	if err := loaded.loadFromDisk(); err != nil {
 		t.Fatalf("unexpected load error: %v", err)
 	}
-	entries := loaded.GetKnowledge("res-1", "general")
+	entries := loaded.GetKnowledge("agent:res-1", "general")
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if len(loaded.GetKnowledge("host:res-1", "general")) != 0 {
+		t.Fatalf("expected legacy host query alias to be rejected")
 	}
 }
 
@@ -175,5 +181,26 @@ func TestKnowledgeStore_LoadMissingFile(t *testing.T) {
 	path := filepath.Join(dir, "knowledge_store.json")
 	if err := store.loadFromDisk(); err == nil {
 		t.Fatalf("expected error for missing file %s", path)
+	}
+}
+
+func TestKnowledgeStore_LoadFromDisk_CanonicalizesLegacyHostKeys(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "knowledge_store.json")
+	payload := `{"host:alpha":[{"ID":"n1","ResourceID":"host:alpha","Note":"legacy","Category":"general","CreatedAt":"2026-01-01T00:00:00Z","UpdatedAt":"2026-01-01T00:00:00Z"}]}`
+	if err := os.WriteFile(path, []byte(payload), 0600); err != nil {
+		t.Fatalf("write payload: %v", err)
+	}
+
+	store := NewKnowledgeStore(dir)
+	entries := store.GetKnowledge("agent:alpha", "general")
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 canonicalized entry, got %d", len(entries))
+	}
+	if entries[0].ResourceID != "agent:alpha" {
+		t.Fatalf("ResourceID = %q, want %q", entries[0].ResourceID, "agent:alpha")
+	}
+	if len(store.GetKnowledge("host:alpha", "general")) != 0 {
+		t.Fatalf("expected legacy host query alias to be rejected")
 	}
 }

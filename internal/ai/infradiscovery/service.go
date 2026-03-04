@@ -876,11 +876,15 @@ func (s *Service) saveDiscoveries(apps []DiscoveredApp) {
 			)
 		}
 
-		// Save to knowledge store under the host's ID
+		// Persist under canonical v6 agent identity.
+		hostID := unifiedresources.CanonicalResourceID(app.HostID)
+		if hostID == "" {
+			hostID = app.HostID
+		}
 		err := s.knowledgeStore.SaveNote(
-			app.HostID,
+			hostID,
 			app.Hostname,
-			"host",
+			"agent",
 			knowledge.CategoryInfra,
 			title,
 			content,

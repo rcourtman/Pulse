@@ -62,7 +62,7 @@ func newNodeView(id string, name string, sourceID string) *ur.NodeView {
 	r := &ur.Resource{
 		ID:   id,
 		Name: name,
-		Type: ur.ResourceTypeHost,
+		Type: ur.ResourceTypeAgent,
 		Proxmox: &ur.ProxmoxData{
 			SourceID: sourceID,
 		},

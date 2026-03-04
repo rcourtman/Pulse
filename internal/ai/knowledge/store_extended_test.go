@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Additional tests to improve coverage
@@ -143,7 +144,7 @@ func TestStore_FormatForContextForResources_Scoped(t *testing.T) {
 	if err := store.SaveNote("qemu/200", "app", "vm", "service", "API", "FastAPI"); err != nil {
 		t.Fatalf("Failed to save note: %v", err)
 	}
-	if err := store.SaveNote("host:alpha", "alpha", "host", "service", "Agent", "v1"); err != nil {
+	if err := store.SaveNote("agent:alpha", "alpha", "agent", "service", "Agent", "v1"); err != nil {
 		t.Fatalf("Failed to save note: %v", err)
 	}
 	if err := store.SaveNote("docker:host1/container1", "container1", "docker", "service", "Web", "Nginx"); err != nil {
@@ -171,13 +172,95 @@ func TestStore_FormatForContextForResources_Scoped(t *testing.T) {
 		t.Fatalf("Did not expect vm-100 notes in docker scoped context")
 	}
 
-	// Scope to host resource ID
-	scoped = store.FormatForContextForResources([]string{"host:alpha"})
+	// Scope to agent resource ID
+	scoped = store.FormatForContextForResources([]string{"agent:alpha"})
 	if !strings.Contains(scoped, "alpha") {
-		t.Fatalf("Expected host notes in scoped context")
+		t.Fatalf("Expected agent notes in scoped context")
 	}
 	if strings.Contains(scoped, "container1") {
-		t.Fatalf("Did not expect docker notes in host scoped context")
+		t.Fatalf("Did not expect docker notes in agent scoped context")
+	}
+}
+
+func TestStore_RejectsLegacyHostGuestInput(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "knowledge-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, err := NewStore(tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+
+	if err := store.SaveNote("host:alpha", "alpha", "agent", "service", "Agent", "v1"); err == nil {
+		t.Fatalf("expected legacy host guest ID to be rejected")
+	}
+	if _, err := store.GetKnowledge("host:alpha"); err == nil {
+		t.Fatalf("expected legacy host guest ID query to be rejected")
+	}
+	if err := store.SaveNote("agent:alpha", "alpha", "host", "service", "Agent", "v1"); err == nil {
+		t.Fatalf("expected legacy host guest type to be rejected")
+	}
+}
+
+func TestStore_MigrateLegacyHostGuestFiles(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "knowledge-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, err := NewStore(tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+
+	now := time.Now()
+	legacy := &GuestKnowledge{
+		GuestID:   "host:alpha",
+		GuestName: "alpha",
+		GuestType: "host",
+		Notes: []Note{
+			{
+				ID:        "service-1",
+				Category:  "service",
+				Title:     "Agent",
+				Content:   "v1",
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+		},
+		UpdatedAt: now,
+	}
+
+	if err := store.saveToFile("host:alpha", legacy); err != nil {
+		t.Fatalf("Failed to seed legacy host file: %v", err)
+	}
+
+	if err := store.migrateLegacyHostGuestFiles(); err != nil {
+		t.Fatalf("migrateLegacyHostGuestFiles failed: %v", err)
+	}
+
+	knowledge, err := store.GetKnowledge("agent:alpha")
+	if err != nil {
+		t.Fatalf("GetKnowledge failed: %v", err)
+	}
+	if knowledge.GuestID != "agent:alpha" {
+		t.Fatalf("GuestID = %q, want %q", knowledge.GuestID, "agent:alpha")
+	}
+	if knowledge.GuestType != "agent" {
+		t.Fatalf("GuestType = %q, want %q", knowledge.GuestType, "agent")
+	}
+	if len(knowledge.Notes) != 1 {
+		t.Fatalf("expected 1 migrated note, got %d", len(knowledge.Notes))
+	}
+	if _, err := os.Stat(store.guestFilePath("agent:alpha")); err != nil {
+		t.Fatalf("expected canonical agent file to exist: %v", err)
+	}
+	if _, err := os.Stat(store.guestFilePath("host:alpha")); !os.IsNotExist(err) {
+		t.Fatalf("expected legacy host file to be removed, got err=%v", err)
 	}
 }
 

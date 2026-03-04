@@ -13,7 +13,7 @@ import (
 
 func TestCreateApprovalRecord(t *testing.T) {
 	approval.SetStore(nil)
-	assert.Empty(t, createApprovalRecord("ls", "host", "h1", "host1", "ctx"))
+	assert.Empty(t, createApprovalRecord("ls", "agent", "h1", "host1", "ctx"))
 
 	store, err := approval.NewStore(approval.StoreConfig{
 		DataDir:            t.TempDir(),
@@ -23,13 +23,13 @@ func TestCreateApprovalRecord(t *testing.T) {
 	approval.SetStore(store)
 	defer approval.SetStore(nil)
 
-	approvalID := createApprovalRecord("ls", "host", "h1", "host1", "ctx")
+	approvalID := createApprovalRecord("ls", "agent", "h1", "host1", "ctx")
 	require.NotEmpty(t, approvalID)
 
 	req, ok := store.GetApproval(approvalID)
 	require.True(t, ok)
 	assert.Equal(t, "ls", req.Command)
-	assert.Equal(t, "host", req.TargetType)
+	assert.Equal(t, "agent", req.TargetType)
 	assert.Equal(t, "h1", req.TargetID)
 	assert.Equal(t, "host1", req.TargetName)
 	assert.Equal(t, "ctx", req.Context)
@@ -73,14 +73,14 @@ func TestConsumeApprovalWithValidation_RejectsCrossOrg(t *testing.T) {
 		ID:         "app-1",
 		OrgID:      "org-a",
 		Command:    "ls",
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "h1",
 	}
 	require.NoError(t, store.CreateApproval(req))
 	_, err = store.Approve("app-1", "tester")
 	require.NoError(t, err)
 
-	ok := consumeApprovalWithValidation(map[string]interface{}{"_approval_id": "app-1"}, "org-b", "ls", "host", "h1")
+	ok := consumeApprovalWithValidation(map[string]interface{}{"_approval_id": "app-1"}, "org-b", "ls", "agent", "h1")
 	assert.False(t, ok)
 
 	stored, found := store.GetApproval("app-1")
@@ -101,14 +101,14 @@ func TestConsumeApprovalWithValidation_AllowsMatchingOrg(t *testing.T) {
 		ID:         "app-2",
 		OrgID:      "org-a",
 		Command:    "ls",
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "h1",
 	}
 	require.NoError(t, store.CreateApproval(req))
 	_, err = store.Approve("app-2", "tester")
 	require.NoError(t, err)
 
-	ok := consumeApprovalWithValidation(map[string]interface{}{"_approval_id": "app-2"}, "org-a", "ls", "host", "h1")
+	ok := consumeApprovalWithValidation(map[string]interface{}{"_approval_id": "app-2"}, "org-a", "ls", "agent", "h1")
 	assert.True(t, ok)
 
 	stored, found := store.GetApproval("app-2")

@@ -46,7 +46,7 @@ func TestContract_MentionTriggersRoutingMismatchBlock(t *testing.T) {
 
 	// Step 3: Simulate prefetch marking @mention as explicit access
 	// This is what service.go does when it finds a @mention
-	resourceID := "system-container:delly:141" // kind:host:provider_uid format
+	resourceID := "system-container:delly:141" // kind:scope:provider_uid format
 	resolvedCtx.MarkExplicitAccess(resourceID)
 
 	// Verify: Resource is marked as recently accessed

@@ -71,7 +71,7 @@ func TestParityVMFields(t *testing.T) {
 		IsClusterMember:         true,
 		ClusterName:             "lab",
 		PendingUpdates:          3,
-		LinkedHostAgentID:       "",
+		LinkedAgentID:           "",
 		GuestURL:                "",
 		Temperature:             nil,
 		PendingUpdatesCheckedAt: now.Add(-30 * time.Minute),
@@ -239,7 +239,7 @@ func TestParityNodeFields(t *testing.T) {
 		ClusterName:             "lab",
 		PendingUpdates:          12,
 		PendingUpdatesCheckedAt: now.Add(-10 * time.Minute),
-		LinkedHostAgentID:       "agent1",
+		LinkedAgentID:           "agent1",
 	}
 
 	snapshot := models.StateSnapshot{
@@ -271,7 +271,7 @@ func TestParityNodeFields(t *testing.T) {
 	require.InEpsilon(t, percentFromUsage(node.Memory.Usage), v.MemoryPercent(), 1e-9)
 	require.InEpsilon(t, percentFromUsage(node.Disk.Usage), v.DiskPercent(), 1e-9)
 
-	require.Equal(t, node.LinkedHostAgentID, v.LinkedHostAgentID())
+	require.Equal(t, node.LinkedAgentID, v.LinkedAgentID())
 }
 
 func TestParityHostFields(t *testing.T) {
@@ -685,7 +685,7 @@ func TestParityResourceCounts(t *testing.T) {
 	// Add host agent records, including one mutually-linked node+agent pair
 	// that should merge into a single unified host resource.
 	nodeIDToMerge := snapshot.Nodes[0].ID
-	snapshot.Nodes[0].LinkedHostAgentID = "agent-merge-1"
+	snapshot.Nodes[0].LinkedAgentID = "agent-merge-1"
 	snapshot.Hosts = append(snapshot.Hosts,
 		models.Host{
 			ID:            "agent-merge-1",
@@ -759,17 +759,17 @@ func TestExpectedDeltaHostMerge(t *testing.T) {
 	now := time.Now().UTC()
 
 	node := models.Node{
-		ID:                proxmoxNodeID("pve", "pve1"),
-		Name:              "pve1",
-		Instance:          "pve",
-		Host:              "https://pve1.example.test:8006",
-		Status:            "online",
-		CPU:               0.1,
-		Memory:            testMemory(),
-		Disk:              testDisk(),
-		Uptime:            1000,
-		LastSeen:          now,
-		LinkedHostAgentID: "agent1",
+		ID:            proxmoxNodeID("pve", "pve1"),
+		Name:          "pve1",
+		Instance:      "pve",
+		Host:          "https://pve1.example.test:8006",
+		Status:        "online",
+		CPU:           0.1,
+		Memory:        testMemory(),
+		Disk:          testDisk(),
+		Uptime:        1000,
+		LastSeen:      now,
+		LinkedAgentID: "agent1",
 	}
 
 	host := models.Host{
@@ -801,7 +801,7 @@ func TestExpectedDeltaHostMerge(t *testing.T) {
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestSnapshot(snapshot)
 
-	hostsByType := registry.ListByType(unifiedresources.ResourceTypeHost)
+	hostsByType := registry.ListByType(unifiedresources.ResourceTypeAgent)
 	require.Len(t, hostsByType, 1)
 	merged := hostsByType[0]
 
@@ -815,17 +815,17 @@ func TestExpectedDeltaNodesThroughTwoViews(t *testing.T) {
 	now := time.Now().UTC()
 
 	node := models.Node{
-		ID:                proxmoxNodeID("pve", "pve1"),
-		Name:              "pve1",
-		Instance:          "pve",
-		Host:              "https://pve1.example.test:8006",
-		Status:            "online",
-		CPU:               0.1,
-		Memory:            testMemory(),
-		Disk:              testDisk(),
-		Uptime:            1000,
-		LastSeen:          now,
-		LinkedHostAgentID: "agent1",
+		ID:            proxmoxNodeID("pve", "pve1"),
+		Name:          "pve1",
+		Instance:      "pve",
+		Host:          "https://pve1.example.test:8006",
+		Status:        "online",
+		CPU:           0.1,
+		Memory:        testMemory(),
+		Disk:          testDisk(),
+		Uptime:        1000,
+		LastSeen:      now,
+		LinkedAgentID: "agent1",
 	}
 
 	host := models.Host{

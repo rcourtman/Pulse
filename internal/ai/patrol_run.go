@@ -972,10 +972,10 @@ func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope Patr
 			typeSet["system-container"] = true
 		case "vm", "qemu":
 			typeSet["vm"] = true
-		case "host", "host_raid", "host_sensor":
-			typeSet["host"] = true
-			typeSet["host_raid"] = true
-			typeSet["host_sensor"] = true
+		case "agent", "agent_raid", "agent_sensor":
+			typeSet["agent"] = true
+			typeSet["agent_raid"] = true
+			typeSet["agent_sensor"] = true
 		case "pbs", "pbs_datastore", "pbs_job":
 			typeSet["pbs"] = true
 			typeSet["pbs_datastore"] = true
@@ -1129,7 +1129,7 @@ func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope Patr
 		}
 	}
 	for _, h := range snap.Hosts {
-		if matchesType("host", "host_raid", "host_sensor") && matchesID(h.ID, h.DisplayName, h.Hostname) {
+		if matchesType("agent", "agent_raid", "agent_sensor") && matchesID(h.ID, h.DisplayName, h.Hostname) {
 			filtered.Hosts = append(filtered.Hosts, h)
 		}
 	}

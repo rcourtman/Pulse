@@ -69,7 +69,7 @@ func TestResolvedContextAddAndGet(t *testing.T) {
 	}
 
 	// Test GetResolvedResourceByID
-	// Note: canonical ID format includes host scope: kind:host:provider_uid
+	// Note: canonical ID format uses kind/scope/provider_uid segments.
 	info, ok = ctx.GetResolvedResourceByID("docker_container:server1:abc123")
 	if !ok {
 		t.Error("GetResolvedResourceByID should find docker_container:server1:abc123")

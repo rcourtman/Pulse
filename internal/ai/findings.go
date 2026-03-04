@@ -107,7 +107,7 @@ type Finding struct {
 	Category       FindingCategory `json:"category"`
 	ResourceID     string          `json:"resource_id"`
 	ResourceName   string          `json:"resource_name"`
-	ResourceType   string          `json:"resource_type"` // node, vm, container, docker, storage, host, pbs, host_raid
+	ResourceType   string          `json:"resource_type"` // node, vm, container, docker, storage, agent, pbs, agent_raid
 	Node           string          `json:"node,omitempty"`
 	Title          string          `json:"title"`
 	Description    string          `json:"description"`
@@ -299,8 +299,12 @@ func inferFindingResourceType(resourceID, resourceName string) string {
 		return "system-container"
 	case strings.Contains(joined, "vm"):
 		return "vm"
-	case strings.Contains(joined, "node") || strings.Contains(joined, "host"):
+	case strings.Contains(joined, "agent"):
+		return "agent"
+	case strings.Contains(joined, "node"):
 		return "node"
+	case strings.Contains(joined, "host"):
+		return "agent"
 	}
 
 	if hasFindingNumericSuffix(resourceID) {

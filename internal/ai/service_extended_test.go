@@ -171,7 +171,7 @@ func TestService_SetResourceURL(t *testing.T) {
 	}
 
 	// Invalid URL
-	err = svc.SetResourceURL("host", "host-1", "not a url")
+	err = svc.SetResourceURL("agent", "host-1", "not a url")
 	if err == nil {
 		t.Error("Expected error for invalid URL")
 	}
@@ -219,7 +219,7 @@ func TestService_HasAgentForTarget(t *testing.T) {
 	svc := NewService(nil, mockServer)
 
 	// Host target with no context (should match any agent)
-	if !svc.hasAgentForTarget(ExecuteRequest{TargetType: "host"}) {
+	if !svc.hasAgentForTarget(ExecuteRequest{TargetType: "agent"}) {
 		t.Error("Should have agent for host with no context")
 	}
 
@@ -241,7 +241,7 @@ func TestService_HasAgentForTarget(t *testing.T) {
 
 	// Empty agents
 	svc.agentServer = &mockAgentServer{agents: []agentexec.ConnectedAgent{}}
-	if svc.hasAgentForTarget(ExecuteRequest{TargetType: "host"}) {
+	if svc.hasAgentForTarget(ExecuteRequest{TargetType: "agent"}) {
 		t.Error("Should not have agent when none connected")
 	}
 }
@@ -267,7 +267,7 @@ func TestService_ExecuteOnAgent(t *testing.T) {
 
 	// Basic execution
 	output, err := svc.executeOnAgent(context.Background(), ExecuteRequest{
-		TargetType: "host",
+		TargetType: "agent",
 		Context:    map[string]interface{}{"node": "node-1"},
 	}, "uptime")
 	if err != nil {
@@ -300,7 +300,7 @@ func TestService_RunCommandExtended(t *testing.T) {
 	// Successful run
 	resp, err := svc.RunCommand(context.Background(), RunCommandRequest{
 		Command:    "uptime",
-		TargetType: "host",
+		TargetType: "agent",
 		TargetHost: "node-1",
 	})
 	if err != nil {
@@ -316,7 +316,7 @@ func TestService_RunCommandExtended(t *testing.T) {
 	// Failure (routing)
 	resp, err = svc.RunCommand(context.Background(), RunCommandRequest{
 		Command:    "uptime",
-		TargetType: "host",
+		TargetType: "agent",
 		TargetHost: "unknown",
 	})
 	if err != nil {
@@ -384,7 +384,7 @@ func TestService_ExecuteStreamExtended(t *testing.T) {
 	req := ExecuteRequest{
 		Prompt:     "Check status",
 		Model:      "anthropic:test-model",
-		TargetType: "host",
+		TargetType: "agent",
 		Context:    map[string]interface{}{"node": "node-1"},
 	}
 
@@ -1472,7 +1472,7 @@ func TestService_ExecuteOnAgent_AptNonInteractive(t *testing.T) {
 	svc := NewService(nil, mockServer)
 
 	req := ExecuteRequest{
-		TargetType: "host",
+		TargetType: "agent",
 		Context:    map[string]interface{}{"node": "node-1"},
 	}
 
@@ -1512,7 +1512,7 @@ func TestService_ExecuteOnAgent_ResultHandling(t *testing.T) {
 
 	svc := NewService(nil, nil)
 	req := ExecuteRequest{
-		TargetType: "host",
+		TargetType: "agent",
 		Context:    map[string]interface{}{"node": "node-1"},
 	}
 
@@ -1580,7 +1580,7 @@ func TestService_ExecuteOnAgent_RoutingClarification(t *testing.T) {
 
 	// No target node in context, multiple agents available -> clarification needed
 	req := ExecuteRequest{
-		TargetType: "host",
+		TargetType: "agent",
 	}
 
 	output, err := svc.executeOnAgent(context.Background(), req, "hostname")
@@ -2567,12 +2567,12 @@ func TestService_SetResourceURL_DockerType(t *testing.T) {
 	}
 }
 
-func TestService_SetResourceURL_HostType(t *testing.T) {
+func TestService_SetResourceURL_AgentType(t *testing.T) {
 	svc := NewService(nil, nil)
 	mockMeta := &mockMetadataProvider{}
 	svc.metadataProvider = mockMeta
 
-	err := svc.SetResourceURL("host", "my-host", "http://host.local:9090")
+	err := svc.SetResourceURL("agent", "my-host", "http://host.local:9090")
 	if err != nil {
 		t.Errorf("SetResourceURL failed: %v", err)
 	}

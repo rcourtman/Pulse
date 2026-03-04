@@ -13,7 +13,7 @@ import (
 // ResourceMention represents a detected resource mention in a user message
 type ResourceMention struct {
 	Name         string
-	ResourceType string // "vm", "system-container", "docker", "host", "node"
+	ResourceType string // "vm", "system-container", "docker", "agent", "node"
 	ResourceID   string
 	HostID       string
 	MatchedText  string // The actual text that matched
@@ -317,7 +317,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 					hostID := host.AgentID()
 					mentions = append(mentions, ResourceMention{
 						Name:         hostname,
-						ResourceType: "host",
+						ResourceType: "agent",
 						ResourceID:   hostID,
 						HostID:       hostID,
 						MatchedText:  hostname,
@@ -424,12 +424,12 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 
 	for _, sm := range structured {
 		// Parse the structured ID to extract resource details.
-		// Frontend ID formats: "vm:node:vmid", "lxc:node:vmid", "docker:hostId:containerId",
-		// "host:id", "node:instance:name"
+		// Frontend ID formats: "vm:node:vmid", "system-container:node:vmid",
+		// "docker:hostId:containerId", "agent:id", "node:instance:name"
 		parts := strings.Split(sm.ID, ":")
 
 		// Normalize frontend type aliases to canonical types
-		resourceType := sm.Type
+		resourceType := strings.TrimSpace(strings.ToLower(sm.Type))
 		if resourceType == "container" || resourceType == "lxc" {
 			resourceType = "system-container"
 		}
@@ -518,19 +518,26 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				TargetHost:   loc.TargetHost,
 			})
 
-		case "host":
+		case "agent":
 			hostID := ""
 			if len(parts) >= 2 {
 				hostID = strings.Join(parts[1:], ":")
 			}
 			mentions = append(mentions, ResourceMention{
 				Name:         sm.Name,
-				ResourceType: "host",
+				ResourceType: "agent",
 				ResourceID:   hostID,
 				HostID:       hostID,
 				MatchedText:  sm.Name,
 				TargetHost:   loc.TargetHost,
 			})
+
+		case "host":
+			log.Warn().
+				Str("name", sm.Name).
+				Str("id", sm.ID).
+				Msg("[ContextPrefetch] Ignoring legacy structured mention type host; use agent")
+			continue
 
 		default:
 			log.Warn().

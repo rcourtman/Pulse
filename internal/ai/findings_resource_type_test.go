@@ -46,10 +46,10 @@ func TestInferFindingResourceType(t *testing.T) {
 			expected:     "vm",
 		},
 		{
-			name:         "host keyword maps to node",
+			name:         "host keyword maps to agent",
 			resourceID:   "host-01",
 			resourceName: "Primary Host",
-			expected:     "node",
+			expected:     "agent",
 		},
 		{
 			name:         "numeric suffix fallback maps to vm",

@@ -119,7 +119,7 @@ func TestValidateWriteExecutionContext_Blocked(t *testing.T) {
 
 	// If I want to trigger the BLOCK, I need:
 	// 1. ResolveResource returns LXC.
-	// 2. Routing returns "direct" transport on "host" type.
+	// 2. Routing returns "direct" transport on "agent" type.
 
 	// This happens if `findAgent` returns an agent that is NOT the node agent?
 	// Or if the node agent is found via hostname match of the LXC name?
@@ -128,7 +128,7 @@ func TestValidateWriteExecutionContext_Blocked(t *testing.T) {
 
 	err := exec.validateWriteExecutionContext("my-lxc", CommandRoutingResult{
 		Transport:     "direct",
-		TargetType:    "host", // Agent matched directly, assuming it's a host
+		TargetType:    "agent", // Agent matched directly as an agent target
 		AgentHostname: "my-lxc",
 		AgentID:       "agent-1",
 		ResolvedKind:  "system-container", // But resolving matched system container

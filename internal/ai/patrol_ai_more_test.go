@@ -587,7 +587,7 @@ func TestSeedHealthAndAlerts_WithIssues(t *testing.T) {
 		ChildCount: 1,
 	})
 	hostView := unifiedresources.NewHostView(&unifiedresources.Resource{
-		ID: "host-1", Name: "host-1", Type: unifiedresources.ResourceTypeHost,
+		ID: "host-1", Name: "host-1", Type: unifiedresources.ResourceTypeAgent,
 		Agent: &unifiedresources.AgentData{Hostname: "host-1"},
 	})
 	ps.SetReadState(&mockReadState{

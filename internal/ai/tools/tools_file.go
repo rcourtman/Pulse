@@ -634,8 +634,8 @@ func (e *PulseToolExecutor) validateWriteExecutionContext(targetHost string, rou
 	}
 
 	// For child resources, the routing MUST use pct_exec or qm_guest_exec
-	// If it resolved as "direct" (host type), that means we'd execute on the node, not inside the container/VM
-	if routing.Transport == "direct" && routing.TargetType == "host" {
+	// If it resolved as "direct" (agent-level type), that means we'd execute on the node, not inside the container/VM
+	if routing.Transport == "direct" && routing.TargetType == "agent" {
 		log.Warn().
 			Str("target_host", targetHost).
 			Str("resolved_kind", loc.ResourceType).
