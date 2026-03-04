@@ -228,6 +228,72 @@ restore_selinux_contexts() {
     fi
 }
 
+# --- Post-Start Health Verification ---
+# After starting the agent service, poll its readiness endpoint to verify it
+# actually started. The agent exposes /readyz on :9191 once modules are initialized.
+verify_agent_started() {
+    local health_url="http://127.0.0.1:9191/readyz"
+    local max_iterations=8
+    local interval=2
+    local iteration=0
+    local log_file="${TRUENAS_LOG_FILE:-$LOG_FILE}"
+
+    log_info "Verifying agent started successfully..."
+
+    # Brief pause to let the agent process spawn (especially for background starts like Unraid)
+    sleep 2
+
+    while [ $iteration -lt $max_iterations ]; do
+        # Check the readiness endpoint first — this is the definitive signal
+        if curl -sf --max-time 2 "$health_url" >/dev/null 2>&1; then
+            log_info "Agent is running and healthy."
+            return 0
+        fi
+
+        # If curl failed, check whether the process is still alive.
+        # Use pgrep where available, fall back to ps + grep.
+        local agent_running=false
+        if command -v pgrep >/dev/null 2>&1; then
+            # Use -x (exact match) if supported, otherwise fall back to -f
+            pgrep -x "${BINARY_NAME}" >/dev/null 2>&1
+            local pgrep_rc=$?
+            if [ $pgrep_rc -eq 0 ]; then
+                agent_running=true
+            elif [ $pgrep_rc -ge 2 ]; then
+                # Exit code >= 2 means bad option — -x not supported, try -f
+                pgrep -f "${BINARY_NAME}" >/dev/null 2>&1 && agent_running=true
+            fi
+        else
+            # shellcheck disable=SC2009
+            # Use bracket trick ([p]ulse-agent) to prevent grep from matching itself
+            local grep_pattern="[${BINARY_NAME:0:1}]${BINARY_NAME:1}"
+            if ps -e -o comm= 2>/dev/null | grep -q "$grep_pattern" || ps aux 2>/dev/null | grep -q "$grep_pattern"; then
+                agent_running=true
+            fi
+        fi
+
+        if [ "$agent_running" = "false" ] && [ $iteration -ge 3 ]; then
+            # Only treat missing process as failure after ~8s — on Unraid the wrapper
+            # script takes several seconds before the actual binary launches.
+            log_warn "Agent process is not running!"
+            # Show last few log lines for diagnostics
+            if [ -f "$log_file" ]; then
+                log_warn "Last log lines:"
+                tail -5 "$log_file" 2>/dev/null | while IFS= read -r line; do log_warn "  $line"; done
+            fi
+            return 1
+        fi
+
+        sleep $interval
+        iteration=$((iteration + 1))
+    done
+
+    # Timed out — process alive but not ready
+    log_warn "Agent process is running but did not become ready within ~$((max_iterations * interval + 2))s."
+    log_warn "It may still be initializing. Check logs: tail -f $log_file"
+    return 1
+}
+
 # --- Auto-Detection Functions ---
 detect_docker() {
     # Check if Docker is available and accessible
@@ -1254,12 +1320,23 @@ EOF
     launchctl unload "$PLIST" 2>/dev/null || true
     launchctl load -w "$PLIST"
     save_connection_info "/var/lib/pulse-agent"
-    if [[ "$UPGRADE_MODE" == "true" ]]; then
-        log_info "Upgrade complete! Agent restarted with new configuration."
-        json_event "complete" "updated" "Installation updated"
+    if verify_agent_started; then
+        if [[ "$UPGRADE_MODE" == "true" ]]; then
+            log_info "Upgrade complete! Agent restarted with new configuration."
+            json_event "complete" "updated" "Installation updated"
+        else
+            log_info "Installation complete! Agent is running."
+            json_event "complete" "installed" "Installation installed"
+        fi
     else
-        log_info "Installation complete! Agent service started."
-        json_event "complete" "installed" "Installation installed"
+        if [[ "$UPGRADE_MODE" == "true" ]]; then
+            log_warn "Upgrade complete, but the agent may not be running correctly."
+            json_event "complete" "updated_unhealthy" "Agent updated but not responding"
+        else
+            log_warn "Installation complete, but the agent may not be running correctly."
+            log_warn "Check logs: tail -f $LOG_FILE"
+            json_event "complete" "installed_unhealthy" "Agent installed but not responding"
+        fi
     fi
     if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
     exit 0
@@ -1330,12 +1407,23 @@ EOF
     fi
 
     save_connection_info "/var/lib/pulse-agent"
-    if [[ "$UPGRADE_MODE" == "true" ]]; then
-        log_info "Upgrade complete! Agent restarted with new configuration."
-        json_event "complete" "updated" "Installation updated"
+    if verify_agent_started; then
+        if [[ "$UPGRADE_MODE" == "true" ]]; then
+            log_info "Upgrade complete! Agent restarted with new configuration."
+            json_event "complete" "updated" "Installation updated"
+        else
+            log_info "Installation complete! Agent is running."
+            json_event "complete" "installed" "Installation installed"
+        fi
     else
-        log_info "Installation complete! Agent service started."
-        json_event "complete" "installed" "Installation installed"
+        if [[ "$UPGRADE_MODE" == "true" ]]; then
+            log_warn "Upgrade complete, but the agent may not be running correctly."
+            json_event "complete" "updated_unhealthy" "Agent updated but not responding"
+        else
+            log_warn "Installation complete, but the agent may not be running correctly."
+            log_warn "Check logs: tail -f $LOG_FILE"
+            json_event "complete" "installed_unhealthy" "Agent installed but not responding"
+        fi
     fi
     if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
     exit 0
@@ -1454,16 +1542,28 @@ EOF
     disown 2>/dev/null || true  # Disown if available to prevent SIGHUP
 
     save_connection_info "$UNRAID_STORAGE_DIR"
-    log_info "Installation complete!"
+    if verify_agent_started; then
+        if [[ "$UPGRADE_MODE" == "true" ]]; then
+            log_info "Upgrade complete! Agent is running."
+            json_event "complete" "updated" "Installation updated"
+        else
+            log_info "Installation complete! Agent is running."
+            json_event "complete" "installed" "Installation installed"
+        fi
+    else
+        if [[ "$UPGRADE_MODE" == "true" ]]; then
+            log_warn "Upgrade complete, but the agent may not be running correctly."
+            json_event "complete" "updated_unhealthy" "Agent updated but not responding"
+        else
+            log_warn "Installation complete, but the agent may not be running correctly."
+            log_warn "Check logs: tail -f /var/log/${AGENT_NAME}.log"
+            json_event "complete" "installed_unhealthy" "Agent installed but not responding"
+        fi
+    fi
     log_info "The agent will start automatically on boot."
     log_info "To check status: pgrep -a pulse-agent"
     log_info "To view logs: tail -f /var/log/${AGENT_NAME}.log"
     if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
-    if [[ "$UPGRADE_MODE" == "true" ]]; then
-        json_event "complete" "updated" "Installation updated"
-    else
-        json_event "complete" "installed" "Installation installed"
-    fi
     exit 0
 fi
 
@@ -1823,7 +1923,23 @@ BOOTSTRAP
     fi
 
     save_connection_info "$TRUENAS_STATE_DIR"
-    log_info "Installation complete!"
+    if verify_agent_started; then
+        if [[ "$UPGRADE_MODE" == "true" ]]; then
+            log_info "Upgrade complete! Agent is running."
+            json_event "complete" "updated" "Installation updated"
+        else
+            log_info "Installation complete! Agent is running."
+            json_event "complete" "installed" "Installation installed"
+        fi
+    else
+        if [[ "$UPGRADE_MODE" == "true" ]]; then
+            log_warn "Upgrade complete, but the agent may not be running correctly."
+            json_event "complete" "updated_unhealthy" "Agent updated but not responding"
+        else
+            log_warn "Installation complete, but the agent may not be running correctly."
+            json_event "complete" "installed_unhealthy" "Agent installed but not responding"
+        fi
+    fi
     log_info "Binary: $TRUENAS_STORED_BINARY (persistent)"
     log_info "Runtime: $TRUENAS_RUNTIME_BINARY (for execution)"
     if [[ "$(uname -s)" == "Linux" ]]; then
@@ -1836,11 +1952,6 @@ BOOTSTRAP
     log_info ""
     log_info "The Init/Shutdown task ensures the agent survives TrueNAS upgrades."
     if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
-    if [[ "$UPGRADE_MODE" == "true" ]]; then
-        json_event "complete" "updated" "Installation updated"
-    else
-        json_event "complete" "installed" "Installation installed"
-    fi
     exit 0
 fi
 
@@ -1898,12 +2009,23 @@ INITEOF
     rc-update add "${AGENT_NAME}" default 2>/dev/null || true
     rc-service "${AGENT_NAME}" start
     save_connection_info "/var/lib/pulse-agent"
-    if [[ "$UPGRADE_MODE" == "true" ]]; then
-        log_info "Upgrade complete! Agent restarted with new configuration."
-        json_event "complete" "updated" "Installation updated"
+    if verify_agent_started; then
+        if [[ "$UPGRADE_MODE" == "true" ]]; then
+            log_info "Upgrade complete! Agent restarted with new configuration."
+            json_event "complete" "updated" "Installation updated"
+        else
+            log_info "Installation complete! Agent is running."
+            json_event "complete" "installed" "Installation installed"
+        fi
     else
-        log_info "Installation complete! Agent service started."
-        json_event "complete" "installed" "Installation installed"
+        if [[ "$UPGRADE_MODE" == "true" ]]; then
+            log_warn "Upgrade complete, but the agent may not be running correctly."
+            json_event "complete" "updated_unhealthy" "Agent updated but not responding"
+        else
+            log_warn "Installation complete, but the agent may not be running correctly."
+            log_warn "Check logs: tail -f $LOG_FILE"
+            json_event "complete" "installed_unhealthy" "Agent installed but not responding"
+        fi
     fi
     if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
     exit 0
@@ -2019,12 +2141,23 @@ BOOTEOF
     # Start the agent
     "$RCSCRIPT" start
     save_connection_info "/var/lib/pulse-agent"
-    if [[ "$UPGRADE_MODE" == "true" ]]; then
-        log_info "Upgrade complete! Agent restarted with new configuration."
-        json_event "complete" "updated" "Installation updated"
+    if verify_agent_started; then
+        if [[ "$UPGRADE_MODE" == "true" ]]; then
+            log_info "Upgrade complete! Agent restarted with new configuration."
+            json_event "complete" "updated" "Installation updated"
+        else
+            log_info "Installation complete! Agent is running."
+            json_event "complete" "installed" "Installation installed"
+        fi
     else
-        log_info "Installation complete! Agent service started."
-        json_event "complete" "installed" "Installation installed"
+        if [[ "$UPGRADE_MODE" == "true" ]]; then
+            log_warn "Upgrade complete, but the agent may not be running correctly."
+            json_event "complete" "updated_unhealthy" "Agent updated but not responding"
+        else
+            log_warn "Installation complete, but the agent may not be running correctly."
+            log_warn "Check logs: tail -f /var/log/messages"
+            json_event "complete" "installed_unhealthy" "Agent installed but not responding"
+        fi
     fi
     log_info "To check status: $RCSCRIPT status"
     log_info "To view logs: tail -f /var/log/messages"
@@ -2106,13 +2239,24 @@ EOF
     systemctl enable "${AGENT_NAME}"
     systemctl restart "${AGENT_NAME}"
     save_connection_info "/var/lib/pulse-agent"
-    if [[ "$UPGRADE_MODE" == "true" ]]; then
-        log_info "Upgrade complete! Agent restarted with new configuration."
-        json_event "complete" "updated" "Installation updated"
+    if verify_agent_started; then
+        if [[ "$UPGRADE_MODE" == "true" ]]; then
+            log_info "Upgrade complete! Agent restarted with new configuration."
+            json_event "complete" "updated" "Installation updated"
+        else
+            log_info "Installation complete! Agent is running."
+            log_info "Token file: $TOKEN_FILE (mode 600, root only)"
+            json_event "complete" "installed" "Installation installed"
+        fi
     else
-        log_info "Installation complete! Agent service started."
-        log_info "Token file: $TOKEN_FILE (mode 600, root only)"
-        json_event "complete" "installed" "Installation installed"
+        if [[ "$UPGRADE_MODE" == "true" ]]; then
+            log_warn "Upgrade complete, but the agent may not be running correctly."
+            json_event "complete" "updated_unhealthy" "Agent updated but not responding"
+        else
+            log_warn "Installation complete, but the agent may not be running correctly."
+            log_warn "Check logs: journalctl -u ${AGENT_NAME} --no-pager -n 20"
+            json_event "complete" "installed_unhealthy" "Agent installed but not responding"
+        fi
     fi
     if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"; fi
     exit 0
@@ -2288,12 +2432,23 @@ INITEOF
     # Start the agent
     "$INITSCRIPT" start
     save_connection_info "/var/lib/pulse-agent"
-    if [[ "$UPGRADE_MODE" == "true" ]]; then
-        log_info "Upgrade complete! Agent restarted with new configuration."
-        json_event "complete" "updated" "Installation updated"
+    if verify_agent_started; then
+        if [[ "$UPGRADE_MODE" == "true" ]]; then
+            log_info "Upgrade complete! Agent restarted with new configuration."
+            json_event "complete" "updated" "Installation updated"
+        else
+            log_info "Installation complete! Agent is running."
+            json_event "complete" "installed" "Installation installed"
+        fi
     else
-        log_info "Installation complete! Agent service started."
-        json_event "complete" "installed" "Installation installed"
+        if [[ "$UPGRADE_MODE" == "true" ]]; then
+            log_warn "Upgrade complete, but the agent may not be running correctly."
+            json_event "complete" "updated_unhealthy" "Agent updated but not responding"
+        else
+            log_warn "Installation complete, but the agent may not be running correctly."
+            log_warn "Check logs: tail -f /var/log/${AGENT_NAME}.log"
+            json_event "complete" "installed_unhealthy" "Agent installed but not responding"
+        fi
     fi
     log_info "To check status: $INITSCRIPT status"
     log_info "To view logs: tail -f /var/log/${AGENT_NAME}.log"
