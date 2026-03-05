@@ -367,3 +367,24 @@ func TestContextPrefetcher_PrefetchStructuredMentions(t *testing.T) {
 		t.Fatalf("expected summary to include resource name")
 	}
 }
+
+func TestCanonicalMentionResourceType(t *testing.T) {
+	testCases := []struct {
+		in   string
+		want string
+	}{
+		{in: "docker", want: "app-container"},
+		{in: "app_container", want: "app-container"},
+		{in: "dockerhost", want: "docker-host"},
+		{in: "k8s_cluster", want: "k8s-cluster"},
+		{in: "k8s_pod", want: "k8s-pod"},
+		{in: "k8s_deployment", want: "k8s-deployment"},
+		{in: "system-container", want: "system-container"},
+	}
+
+	for _, tc := range testCases {
+		if got := canonicalMentionResourceType(tc.in); got != tc.want {
+			t.Fatalf("canonicalMentionResourceType(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}

@@ -348,7 +348,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 					clusterSourceID := cluster.ClusterID()
 					mentions = append(mentions, ResourceMention{
 						Name:         clusterName,
-						ResourceType: "k8s_cluster",
+						ResourceType: "k8s-cluster",
 						ResourceID:   clusterSourceID,
 						TargetID:     clusterSourceID,
 						MatchedText:  clusterName,
@@ -375,7 +375,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 					}
 					mentions = append(mentions, ResourceMention{
 						Name:         podName,
-						ResourceType: "k8s_pod",
+						ResourceType: "k8s-pod",
 						ResourceID:   podName,
 						TargetID:     hostID,
 						MatchedText:  podName,
@@ -402,7 +402,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 					}
 					mentions = append(mentions, ResourceMention{
 						Name:         deployName,
-						ResourceType: "k8s_deployment",
+						ResourceType: "k8s-deployment",
 						ResourceID:   deployName,
 						TargetID:     hostID,
 						MatchedText:  deployName,
@@ -617,6 +617,14 @@ func canonicalMentionResourceType(raw string) string {
 	switch resourceType {
 	case "docker", "docker-container", "docker_container", "app_container":
 		return "app-container"
+	case "dockerhost", "docker-host":
+		return "docker-host"
+	case "k8s_cluster", "kubernetes_cluster", "k8s-cluster", "kubernetes-cluster":
+		return "k8s-cluster"
+	case "k8s_pod", "kubernetes_pod", "k8s-pod", "kubernetes-pod":
+		return "k8s-pod"
+	case "k8s_deployment", "kubernetes_deployment", "k8s-deployment", "kubernetes-deployment":
+		return "k8s-deployment"
 	default:
 		return resourceType
 	}
