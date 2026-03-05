@@ -12,16 +12,14 @@ export const resolveWorkloadTypeFromString = (value?: string | null): WorkloadTy
     normalized === 'lxc' ||
     normalized === 'oci' ||
     normalized === 'container' ||
-    normalized === 'system-container' ||
-    normalized === 'system_container'
+    normalized === 'system-container'
   )
     return 'system-container';
   if (
     normalized === 'docker' ||
     normalized === 'docker-container' ||
     normalized === 'docker_container' ||
-    normalized === 'app-container' ||
-    normalized === 'app_container'
+    normalized === 'app-container'
   ) {
     return 'docker';
   }
