@@ -637,6 +637,11 @@ export function OverviewTab(props: {
                       </button>
                       <InvestigateAlertButton
                         alert={alert}
+                        resourceType={
+                          typeof alert.metadata?.resourceType === 'string'
+                            ? (alert.metadata.resourceType as string)
+                            : undefined
+                        }
                         variant="text"
                         size="sm"
                         licenseLocked={!props.hasAIAlertsFeature() && !props.licenseLoading()}

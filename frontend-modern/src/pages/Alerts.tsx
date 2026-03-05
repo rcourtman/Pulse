@@ -5335,6 +5335,7 @@ function HistoryTab(props: {
                                               lastSeen: alert.startTime,
                                               acknowledged: alert.status === 'acknowledged',
                                             }}
+                                            resourceType={alert.resourceType}
                                             variant="icon"
                                             size="sm"
                                             licenseLocked={
