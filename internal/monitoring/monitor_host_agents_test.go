@@ -10,6 +10,53 @@ import (
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
+func TestFindLinkedProxmoxEntity_MatchesCanonicalReadStateViews(t *testing.T) {
+	monitor := &Monitor{
+		state: models.NewState(),
+	}
+
+	monitor.state.UpdateNodes([]models.Node{
+		{ID: "node-1", Name: "pve-a", Instance: "pve1"},
+	})
+	monitor.state.UpdateVMs([]models.VM{
+		{ID: "vm-100", Name: "vm-a", Instance: "pve1", VMID: 100},
+	})
+	monitor.state.UpdateContainers([]models.Container{
+		{ID: "ct-200", Name: "ct-a", Instance: "pve1", VMID: 200},
+	})
+
+	nodeID, vmID, ctID := monitor.findLinkedProxmoxEntity("pve-a")
+	if nodeID != "node-1" || vmID != "" || ctID != "" {
+		t.Fatalf("expected node match only, got node=%q vm=%q ct=%q", nodeID, vmID, ctID)
+	}
+
+	nodeID, vmID, ctID = monitor.findLinkedProxmoxEntity("vm-a")
+	if nodeID != "" || vmID != "vm-100" || ctID != "" {
+		t.Fatalf("expected vm match only, got node=%q vm=%q ct=%q", nodeID, vmID, ctID)
+	}
+
+	nodeID, vmID, ctID = monitor.findLinkedProxmoxEntity("ct-a")
+	if nodeID != "" || vmID != "" || ctID != "ct-200" {
+		t.Fatalf("expected container match only, got node=%q vm=%q ct=%q", nodeID, vmID, ctID)
+	}
+}
+
+func TestFindLinkedProxmoxEntity_AmbiguousNodeNameReturnsNoLink(t *testing.T) {
+	monitor := &Monitor{
+		state: models.NewState(),
+	}
+
+	monitor.state.UpdateNodes([]models.Node{
+		{ID: "node-1", Name: "pve", Instance: "pve-a"},
+		{ID: "node-2", Name: "pve", Instance: "pve-b"},
+	})
+
+	nodeID, vmID, ctID := monitor.findLinkedProxmoxEntity("pve")
+	if nodeID != "" || vmID != "" || ctID != "" {
+		t.Fatalf("expected ambiguous node name to produce no link, got node=%q vm=%q ct=%q", nodeID, vmID, ctID)
+	}
+}
+
 func TestEvaluateHostAgentsTriggersOfflineAlert(t *testing.T) {
 	t.Helper()
 

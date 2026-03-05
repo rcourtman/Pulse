@@ -1831,17 +1831,28 @@ func (m *Monitor) findLinkedProxmoxEntity(hostname string) (nodeID, vmID, contai
 		return false
 	}
 
-	state := m.GetState()
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return "", "", ""
+	}
 
 	// Check PVE nodes first - but detect ambiguity when multiple nodes match
-	var matchingNodes []models.Node
-	for _, node := range state.Nodes {
-		if matchHostname(node.Name) {
-			matchingNodes = append(matchingNodes, node)
+	type linkedEntityMatch struct {
+		id       string
+		instance string
+	}
+
+	var matchingNodes []linkedEntityMatch
+	for _, node := range readState.Nodes() {
+		if matchHostname(node.Name()) {
+			matchingNodes = append(matchingNodes, linkedEntityMatch{
+				id:       node.SourceID(),
+				instance: node.Instance(),
+			})
 		}
 	}
 	if len(matchingNodes) == 1 {
-		return matchingNodes[0].ID, "", ""
+		return matchingNodes[0].id, "", ""
 	}
 	if len(matchingNodes) > 1 {
 		// Multiple nodes with the same hostname - can't auto-link, would cause data mixing
@@ -1851,7 +1862,7 @@ func (m *Monitor) findLinkedProxmoxEntity(hostname string) (nodeID, vmID, contai
 			Strs("instances", func() []string {
 				instances := make([]string, len(matchingNodes))
 				for i, n := range matchingNodes {
-					instances[i] = n.Instance
+					instances[i] = n.instance
 				}
 				return instances
 			}()).
@@ -1860,14 +1871,16 @@ func (m *Monitor) findLinkedProxmoxEntity(hostname string) (nodeID, vmID, contai
 	}
 
 	// Check VMs - same pattern for ambiguity detection
-	var matchingVMs []models.VM
-	for _, vm := range state.VMs {
-		if matchHostname(vm.Name) {
-			matchingVMs = append(matchingVMs, vm)
+	var matchingVMs []linkedEntityMatch
+	for _, vm := range readState.VMs() {
+		if matchHostname(vm.Name()) {
+			matchingVMs = append(matchingVMs, linkedEntityMatch{
+				id: vm.SourceID(),
+			})
 		}
 	}
 	if len(matchingVMs) == 1 {
-		return "", matchingVMs[0].ID, ""
+		return "", matchingVMs[0].id, ""
 	}
 	if len(matchingVMs) > 1 {
 		log.Warn().
@@ -1878,14 +1891,16 @@ func (m *Monitor) findLinkedProxmoxEntity(hostname string) (nodeID, vmID, contai
 	}
 
 	// Check containers - same pattern
-	var matchingCTs []models.Container
-	for _, ct := range state.Containers {
-		if matchHostname(ct.Name) {
-			matchingCTs = append(matchingCTs, ct)
+	var matchingCTs []linkedEntityMatch
+	for _, ct := range readState.Containers() {
+		if matchHostname(ct.Name()) {
+			matchingCTs = append(matchingCTs, linkedEntityMatch{
+				id: ct.SourceID(),
+			})
 		}
 	}
 	if len(matchingCTs) == 1 {
-		return "", "", matchingCTs[0].ID
+		return "", "", matchingCTs[0].id
 	}
 	if len(matchingCTs) > 1 {
 		log.Warn().
