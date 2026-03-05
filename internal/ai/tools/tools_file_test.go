@@ -51,7 +51,7 @@ func TestExecuteFileEdit_Validation(t *testing.T) {
 		},
 		{
 			name:    "Invalid Docker Container",
-			args:    map[string]interface{}{"action": "read", "path": "/f", "target_host": "h1", "docker_container": "bad name!"},
+			args:    map[string]interface{}{"action": "read", "path": "/f", "target_host": "h1", "app_container": "bad name!"},
 			wantErr: "invalid character",
 		},
 		{

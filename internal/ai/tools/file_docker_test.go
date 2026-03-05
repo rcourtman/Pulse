@@ -23,10 +23,10 @@ func TestExecuteFileEditDockerContainerValidation(t *testing.T) {
 	t.Run("InvalidDockerContainerName", func(t *testing.T) {
 		exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: models.StateSnapshot{}}})
 		result, err := exec.executeFileEdit(ctx, map[string]interface{}{
-			"action":           "read",
-			"path":             "/config/test.json",
-			"target_host":      "tower",
-			"docker_container": "my container", // space is invalid
+			"action":        "read",
+			"path":          "/config/test.json",
+			"target_host":   "tower",
+			"app_container": "my container", // space is invalid
 		})
 		require.NoError(t, err)
 		assert.True(t, result.IsError)
@@ -37,10 +37,10 @@ func TestExecuteFileEditDockerContainerValidation(t *testing.T) {
 		// This should pass validation but fail on agent lookup
 		exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: models.StateSnapshot{}}})
 		result, err := exec.executeFileEdit(ctx, map[string]interface{}{
-			"action":           "read",
-			"path":             "/config/test.json",
-			"target_host":      "tower",
-			"docker_container": "my-container_v1.2",
+			"action":        "read",
+			"path":          "/config/test.json",
+			"target_host":   "tower",
+			"app_container": "my-container_v1.2",
 		})
 		require.NoError(t, err)
 		// Should fail with "no agent" not "invalid character"
@@ -78,7 +78,7 @@ func TestExecuteFileReadDocker(t *testing.T) {
 		require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
 		assert.True(t, resp["success"].(bool))
 		assert.Equal(t, "/config/settings.json", resp["path"])
-		assert.Equal(t, "jellyfin", resp["docker_container"])
+		assert.Equal(t, "jellyfin", resp["app_container"])
 		assert.Equal(t, `{"setting": "value"}`, resp["content"])
 		mockAgent.AssertExpectations(t)
 	})
@@ -102,13 +102,13 @@ func TestExecuteFileReadDocker(t *testing.T) {
 			AgentServer:   mockAgent,
 			ControlLevel:  ControlLevelAutonomous,
 		})
-		result, err := exec.executeFileRead(ctx, "/etc/hostname", "tower", "") // empty docker_container
+		result, err := exec.executeFileRead(ctx, "/etc/hostname", "tower", "") // empty app_container
 		require.NoError(t, err)
 
 		var resp map[string]interface{}
 		require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
 		assert.True(t, resp["success"].(bool))
-		assert.Nil(t, resp["docker_container"]) // should not be in response
+		assert.Nil(t, resp["app_container"]) // should not be in response
 		mockAgent.AssertExpectations(t)
 	})
 
@@ -179,7 +179,7 @@ func TestExecuteFileWriteDocker(t *testing.T) {
 		require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
 		assert.True(t, resp["success"].(bool))
 		assert.Equal(t, "write", resp["action"])
-		assert.Equal(t, "nginx", resp["docker_container"])
+		assert.Equal(t, "nginx", resp["app_container"])
 		assert.Equal(t, float64(len(content)), resp["bytes_written"])
 		if v, ok := resp["verification"].(map[string]interface{}); ok {
 			assert.True(t, v["ok"].(bool))
@@ -249,7 +249,7 @@ func TestExecuteFileAppendDocker(t *testing.T) {
 		require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
 		assert.True(t, resp["success"].(bool))
 		assert.Equal(t, "append", resp["action"])
-		assert.Equal(t, "logcontainer", resp["docker_container"])
+		assert.Equal(t, "logcontainer", resp["app_container"])
 		if v, ok := resp["verification"].(map[string]interface{}); ok {
 			assert.True(t, v["ok"].(bool))
 		}
@@ -311,7 +311,7 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
 		assert.True(t, resp["success"].(bool))
 		assert.Equal(t, "write", resp["action"])
-		assert.Nil(t, resp["docker_container"]) // No Docker container
+		assert.Nil(t, resp["app_container"]) // No Docker container
 		if v, ok := resp["verification"].(map[string]interface{}); ok {
 			assert.True(t, v["ok"].(bool))
 		}
@@ -476,7 +476,7 @@ func TestExecuteFileEditDockerNestedRouting(t *testing.T) {
 
 	t.Run("DockerInsideLXC", func(t *testing.T) {
 		// Test case: Docker running inside an LXC container
-		// target_host="homepage-docker" (LXC), docker_container="nginx"
+		// target_host="homepage-docker" (LXC), app_container="nginx"
 		// Command should route through Proxmox node agent with LXC target type
 
 		agents := []agentexec.ConnectedAgent{{AgentID: "proxmox-agent", Hostname: "pve-node"}}
@@ -511,7 +511,7 @@ func TestExecuteFileEditDockerNestedRouting(t *testing.T) {
 		var resp map[string]interface{}
 		require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
 		assert.True(t, resp["success"].(bool))
-		assert.Equal(t, "nginx", resp["docker_container"])
+		assert.Equal(t, "nginx", resp["app_container"])
 		mockAgent.AssertExpectations(t)
 	})
 }
