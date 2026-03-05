@@ -104,8 +104,8 @@ func TestDockerAgentHandlers_HandleReport(t *testing.T) {
 	if resp["success"] != true {
 		t.Fatalf("success = %v, want true", resp["success"])
 	}
-	if resp["hostId"] == "" {
-		t.Fatalf("expected hostId in response")
+	if resp["agentId"] == "" {
+		t.Fatalf("expected agentId in response")
 	}
 }
 
@@ -148,6 +148,30 @@ func TestDockerAgentHandlers_HandleReport_NoLimitForDockerReports(t *testing.T) 
 }
 
 func TestDockerAgentHandlers_HandleCommandAck(t *testing.T) {
+	handler, monitor := newDockerAgentHandlers(t, nil)
+	hostID := seedDockerHost(t, monitor)
+
+	cmdStatus, err := monitor.QueueDockerHostStop(hostID)
+	if err != nil {
+		t.Fatalf("QueueDockerHostStop: %v", err)
+	}
+
+	reqBody := map[string]string{
+		"agentId": hostID,
+		"status":  "completed",
+	}
+	body, _ := json.Marshal(reqBody)
+	path := "/api/agents/docker/commands/" + cmdStatus.ID + "/ack"
+	req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleCommandAck(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDockerAgentHandlers_HandleCommandAck_LegacyHostIDAlias(t *testing.T) {
 	handler, monitor := newDockerAgentHandlers(t, nil)
 	hostID := seedDockerHost(t, monitor)
 
@@ -242,12 +266,31 @@ func TestDockerAgentHandlers_HandleContainerUpdate(t *testing.T) {
 	hostID := seedDockerHost(t, monitor)
 
 	reqBody := map[string]string{
-		"hostId":        hostID,
+		"agentId":       hostID,
 		"containerId":   "container-1",
 		"containerName": "nginx",
 	}
 	body, _ := json.Marshal(reqBody)
 	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/containers/container-1/update", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleContainerUpdate(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDockerAgentHandlers_HandleContainerUpdate_LegacyHostIDAlias(t *testing.T) {
+	handler, monitor := newDockerAgentHandlers(t, &config.Config{DataPath: t.TempDir()})
+	hostID := seedDockerHost(t, monitor)
+
+	reqBody := map[string]string{
+		"hostId":        hostID,
+		"containerId":   "container-legacy",
+		"containerName": "nginx",
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/containers/container-legacy/update", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	handler.HandleContainerUpdate(rec, req)
@@ -262,7 +305,7 @@ func TestDockerAgentHandlers_HandleContainerUpdate_Disabled(t *testing.T) {
 	hostID := seedDockerHost(t, monitor)
 
 	reqBody := map[string]string{
-		"hostId":        hostID,
+		"agentId":       hostID,
 		"containerId":   "container-2",
 		"containerName": "redis",
 	}

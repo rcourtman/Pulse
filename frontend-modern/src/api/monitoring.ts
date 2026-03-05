@@ -29,14 +29,14 @@ export class MonitoringAPI {
   }
 
   static async deleteDockerHost(
-    hostId: string,
+    agentId: string,
     options: { hide?: boolean; force?: boolean } = {},
   ): Promise<DeleteDockerHostResponse> {
     const params = new URLSearchParams();
     if (options.hide) params.set('hide', 'true');
     if (options.force) params.set('force', 'true');
     const query = params.toString();
-    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(hostId)}${query ? `?${query}` : ''}`;
+    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(agentId)}${query ? `?${query}` : ''}`;
 
     const response = await apiFetch(url, {
       method: 'DELETE',
@@ -57,8 +57,8 @@ export class MonitoringAPI {
     return parseOptionalJSON(response, {}, 'Failed to parse delete docker host response');
   }
 
-  static async unhideDockerHost(hostId: string): Promise<void> {
-    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(hostId)}/unhide`;
+  static async unhideDockerHost(agentId: string): Promise<void> {
+    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(agentId)}/unhide`;
 
     const response = await apiFetch(url, {
       method: 'PUT',
@@ -74,8 +74,8 @@ export class MonitoringAPI {
     }
   }
 
-  static async markDockerHostPendingUninstall(hostId: string): Promise<void> {
-    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(hostId)}/pending-uninstall`;
+  static async markDockerHostPendingUninstall(agentId: string): Promise<void> {
+    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(agentId)}/pending-uninstall`;
 
     const response = await apiFetch(url, {
       method: 'PUT',
@@ -91,8 +91,8 @@ export class MonitoringAPI {
     }
   }
 
-  static async setDockerHostDisplayName(hostId: string, displayName: string): Promise<void> {
-    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(hostId)}/display-name`;
+  static async setDockerHostDisplayName(agentId: string, displayName: string): Promise<void> {
+    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(agentId)}/display-name`;
 
     const response = await apiFetch(url, {
       method: 'PUT',
@@ -111,8 +111,8 @@ export class MonitoringAPI {
     }
   }
 
-  static async allowDockerHostReenroll(hostId: string): Promise<void> {
-    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(hostId)}/allow-reenroll`;
+  static async allowDockerHostReenroll(agentId: string): Promise<void> {
+    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(agentId)}/allow-reenroll`;
 
     const response = await apiFetch(url, {
       method: 'POST',
@@ -329,11 +329,11 @@ export class MonitoringAPI {
   }
 
   /**
-   * Triggers an update for a Docker container on a specific host.
+   * Triggers an update for a Docker container on a specific agent.
    * The update will pull the latest image and recreate the container.
    */
   static async updateDockerContainer(
-    hostId: string,
+    agentId: string,
     containerId: string,
     containerName: string,
   ): Promise<UpdateDockerContainerResponse> {
@@ -344,7 +344,7 @@ export class MonitoringAPI {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ hostId, containerId, containerName }),
+      body: JSON.stringify({ agentId, containerId, containerName }),
     });
 
     if (!response.ok) {
@@ -362,9 +362,9 @@ export class MonitoringAPI {
    * Triggers an immediate update check for all containers on a specific container runtime.
    */
   static async checkDockerUpdates(
-    hostId: string,
+    agentId: string,
   ): Promise<{ success: boolean; commandId?: string }> {
-    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(hostId)}/check-updates`;
+    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(agentId)}/check-updates`;
 
     const response = await apiFetch(url, {
       method: 'POST',
@@ -381,9 +381,9 @@ export class MonitoringAPI {
    * Triggers a batch update for all containers with updates available on a specific container runtime.
    */
   static async updateAllDockerContainers(
-    hostId: string,
+    agentId: string,
   ): Promise<{ success: boolean; commandId?: string }> {
-    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(hostId)}/update-all`;
+    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(agentId)}/update-all`;
 
     const response = await apiFetch(url, {
       method: 'POST',
@@ -399,7 +399,7 @@ export class MonitoringAPI {
 
 export interface DeleteDockerHostResponse {
   success?: boolean;
-  hostId?: string;
+  agentId?: string;
   message?: string;
   command?: DockerHostCommand;
 }
@@ -413,7 +413,7 @@ export interface DeleteKubernetesClusterResponse {
 export interface UpdateDockerContainerResponse {
   success?: boolean;
   commandId?: string;
-  hostId?: string;
+  agentId?: string;
   container?: {
     id: string;
     name: string;

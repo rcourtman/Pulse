@@ -85,8 +85,8 @@ func TestDockerAgentHandlers_HandleCommandAck_Errors(t *testing.T) {
 	}
 
 	payload := map[string]string{
-		"hostId": "host-1",
-		"status": "unknown",
+		"agentId": "host-1",
+		"status":  "unknown",
 	}
 	body, _ := json.Marshal(payload)
 	req = httptest.NewRequest(http.MethodPost, "/api/agents/docker/commands/cmd-2/ack", bytes.NewReader(body))

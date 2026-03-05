@@ -22,7 +22,8 @@ type DockerAgentHandlers struct {
 }
 
 type dockerCommandAckRequest struct {
-	HostID  string         `json:"hostId"`
+	AgentID string         `json:"agentId"`
+	HostID  string         `json:"hostId,omitempty"` // Legacy alias accepted during migration.
 	Status  string         `json:"status"`
 	Message string         `json:"message,omitempty"`
 	Payload map[string]any `json:"payload,omitempty"`
@@ -53,6 +54,14 @@ func normalizeCommandStatus(status string) (string, error) {
 	default:
 		return "", errInvalidCommandStatus
 	}
+}
+
+func canonicalDockerAgentID(agentID string, legacyHostID string) string {
+	agentID = strings.TrimSpace(agentID)
+	if agentID != "" {
+		return agentID
+	}
+	return strings.TrimSpace(legacyHostID)
 }
 
 // NewDockerAgentHandlers constructs a new Docker agent handler group.
@@ -111,7 +120,7 @@ func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reques
 
 	response := map[string]any{
 		"success":    true,
-		"hostId":     host.ID,
+		"agentId":    host.ID,
 		"containers": len(host.Containers),
 		"lastSeen":   host.LastSeen,
 	}
@@ -215,8 +224,13 @@ func (h *DockerAgentHandlers) HandleCommandAck(w http.ResponseWriter, r *http.Re
 	}
 
 	mon := h.getMonitor(r.Context())
+	agentID := canonicalDockerAgentID(req.AgentID, req.HostID)
+	if agentID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
+		return
+	}
 
-	commandStatus, hostID, shouldRemove, err := mon.AcknowledgeDockerHostCommand(commandID, req.HostID, status, req.Message)
+	commandStatus, agentID, shouldRemove, err := mon.AcknowledgeDockerHostCommand(commandID, agentID, status, req.Message)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "docker_command_ack_failed", err.Error(), nil)
 		return
@@ -230,10 +244,10 @@ func (h *DockerAgentHandlers) HandleCommandAck(w http.ResponseWriter, r *http.Re
 		oldContainerID = strings.TrimSpace(oldContainerID)
 		newContainerID = strings.TrimSpace(newContainerID)
 		if oldContainerID != "" && newContainerID != "" && oldContainerID != newContainerID {
-			if err := mon.CopyDockerContainerMetadata(hostID, oldContainerID, newContainerID); err != nil {
+			if err := mon.CopyDockerContainerMetadata(agentID, oldContainerID, newContainerID); err != nil {
 				log.Warn().
 					Err(err).
-					Str("dockerHostID", hostID).
+					Str("dockerAgentID", agentID).
 					Str("oldContainerID", oldContainerID).
 					Str("newContainerID", newContainerID).
 					Msg("Failed to migrate docker container metadata after update")
@@ -242,13 +256,13 @@ func (h *DockerAgentHandlers) HandleCommandAck(w http.ResponseWriter, r *http.Re
 	}
 
 	if shouldRemove {
-		if _, removeErr := mon.RemoveDockerHost(hostID); removeErr != nil {
-			log.Error().Err(removeErr).Str("dockerHostID", hostID).Str("commandID", commandID).Msg("Failed to remove docker host after command completion")
+		if _, removeErr := mon.RemoveDockerHost(agentID); removeErr != nil {
+			log.Error().Err(removeErr).Str("dockerAgentID", agentID).Str("commandID", commandID).Msg("Failed to remove docker host after command completion")
 		} else {
 			// Clear the removal block since the agent has confirmed it stopped successfully.
 			// This allows immediate re-enrollment without waiting for the 24-hour TTL.
-			if reenrollErr := mon.AllowDockerHostReenroll(hostID); reenrollErr != nil {
-				log.Warn().Err(reenrollErr).Str("dockerHostID", hostID).Msg("Failed to clear removal block after successful stop")
+			if reenrollErr := mon.AllowDockerHostReenroll(agentID); reenrollErr != nil {
+				log.Warn().Err(reenrollErr).Str("dockerAgentID", agentID).Msg("Failed to clear removal block after successful stop")
 			}
 		}
 	}
@@ -257,7 +271,7 @@ func (h *DockerAgentHandlers) HandleCommandAck(w http.ResponseWriter, r *http.Re
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
-		"hostId":  hostID,
+		"agentId": agentID,
 		"command": commandStatus,
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker command acknowledgement response")
@@ -273,9 +287,9 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 	}
 
 	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/docker/hosts/")
-	hostID := strings.TrimSpace(trimmedPath)
-	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID is required", nil)
+	agentID := strings.TrimSpace(trimmedPath)
+	if agentID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 		return
 	}
 
@@ -285,16 +299,16 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 	forceParam := strings.ToLower(r.URL.Query().Get("force"))
 	force := forceParam == "true" || strings.ToLower(r.URL.Query().Get("mode")) == "force"
 
-	priorHost, hostExists := h.getMonitor(r.Context()).GetDockerHost(hostID)
+	priorHost, hostExists := h.getMonitor(r.Context()).GetDockerHost(agentID)
 
 	if shouldHide {
 		if !hostExists {
-			writeErrorResponse(w, http.StatusNotFound, "docker_host_not_found", "Container runtime not found", nil)
+			writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", "Container runtime not found", nil)
 			return
 		}
-		host, err := h.getMonitor(r.Context()).HideDockerHost(hostID)
+		host, err := h.getMonitor(r.Context()).HideDockerHost(agentID)
 		if err != nil {
-			writeErrorResponse(w, http.StatusNotFound, "docker_host_not_found", err.Error(), nil)
+			writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", err.Error(), nil)
 			return
 		}
 
@@ -302,7 +316,7 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 
 		if err := utils.WriteJSONResponse(w, map[string]any{
 			"success": true,
-			"hostId":  host.ID,
+			"agentId": host.ID,
 			"message": "Container runtime hidden",
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to serialize docker host operation response")
@@ -314,7 +328,7 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 		if force {
 			if err := utils.WriteJSONResponse(w, map[string]any{
 				"success": true,
-				"hostId":  hostID,
+				"agentId": agentID,
 				"message": "Container runtime already removed",
 			}); err != nil {
 				log.Error().Err(err).Msg("Failed to serialize docker host operation response")
@@ -322,12 +336,12 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 			return
 		}
 
-		writeErrorResponse(w, http.StatusNotFound, "docker_host_not_found", "Container runtime not found", nil)
+		writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", "Container runtime not found", nil)
 		return
 	}
 
 	if !force && strings.EqualFold(priorHost.Status, "online") {
-		command, err := h.getMonitor(r.Context()).QueueDockerHostStop(hostID)
+		command, err := h.getMonitor(r.Context()).QueueDockerHostStop(agentID)
 		if err != nil {
 			writeErrorResponse(w, http.StatusBadRequest, "docker_command_failed", err.Error(), nil)
 			return
@@ -337,7 +351,7 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 
 		if err := utils.WriteJSONResponse(w, map[string]any{
 			"success": true,
-			"hostId":  hostID,
+			"agentId": agentID,
 			"command": command,
 			"message": "Stop command queued",
 		}); err != nil {
@@ -346,9 +360,9 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	host, err := h.getMonitor(r.Context()).RemoveDockerHost(hostID)
+	host, err := h.getMonitor(r.Context()).RemoveDockerHost(agentID)
 	if err != nil {
-		writeErrorResponse(w, http.StatusNotFound, "docker_host_not_found", err.Error(), nil)
+		writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", err.Error(), nil)
 		return
 	}
 
@@ -356,7 +370,7 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
-		"hostId":  host.ID,
+		"agentId": host.ID,
 		"message": "Container runtime removed",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker host operation response")
@@ -372,14 +386,14 @@ func (h *DockerAgentHandlers) HandleAllowReenroll(w http.ResponseWriter, r *http
 
 	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/docker/hosts/")
 	trimmedPath = strings.TrimSuffix(trimmedPath, "/allow-reenroll")
-	hostID := strings.TrimSpace(trimmedPath)
-	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID is required", nil)
+	agentID := strings.TrimSpace(trimmedPath)
+	if agentID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 		return
 	}
 
-	if err := h.getMonitor(r.Context()).AllowDockerHostReenroll(hostID); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "docker_host_reenroll_failed", err.Error(), nil)
+	if err := h.getMonitor(r.Context()).AllowDockerHostReenroll(agentID); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "docker_agent_reenroll_failed", err.Error(), nil)
 		return
 	}
 
@@ -388,7 +402,7 @@ func (h *DockerAgentHandlers) HandleAllowReenroll(w http.ResponseWriter, r *http
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
-		"hostId":  hostID,
+		"agentId": agentID,
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker host allow reenroll response")
 	}
@@ -403,15 +417,15 @@ func (h *DockerAgentHandlers) HandleUnhideHost(w http.ResponseWriter, r *http.Re
 
 	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/docker/hosts/")
 	trimmedPath = strings.TrimSuffix(trimmedPath, "/unhide")
-	hostID := strings.TrimSpace(trimmedPath)
-	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID is required", nil)
+	agentID := strings.TrimSpace(trimmedPath)
+	if agentID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 		return
 	}
 
-	host, err := h.getMonitor(r.Context()).UnhideDockerHost(hostID)
+	host, err := h.getMonitor(r.Context()).UnhideDockerHost(agentID)
 	if err != nil {
-		writeErrorResponse(w, http.StatusNotFound, "docker_host_not_found", err.Error(), nil)
+		writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", err.Error(), nil)
 		return
 	}
 
@@ -419,7 +433,7 @@ func (h *DockerAgentHandlers) HandleUnhideHost(w http.ResponseWriter, r *http.Re
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
-		"hostId":  host.ID,
+		"agentId": host.ID,
 		"message": "Container runtime unhidden",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker host unhide response")
@@ -435,15 +449,15 @@ func (h *DockerAgentHandlers) HandleMarkPendingUninstall(w http.ResponseWriter, 
 
 	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/docker/hosts/")
 	trimmedPath = strings.TrimSuffix(trimmedPath, "/pending-uninstall")
-	hostID := strings.TrimSpace(trimmedPath)
-	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID is required", nil)
+	agentID := strings.TrimSpace(trimmedPath)
+	if agentID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 		return
 	}
 
-	host, err := h.getMonitor(r.Context()).MarkDockerHostPendingUninstall(hostID)
+	host, err := h.getMonitor(r.Context()).MarkDockerHostPendingUninstall(agentID)
 	if err != nil {
-		writeErrorResponse(w, http.StatusNotFound, "docker_host_not_found", err.Error(), nil)
+		writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", err.Error(), nil)
 		return
 	}
 
@@ -451,7 +465,7 @@ func (h *DockerAgentHandlers) HandleMarkPendingUninstall(w http.ResponseWriter, 
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
-		"hostId":  host.ID,
+		"agentId": host.ID,
 		"message": "Container runtime marked as pending uninstall",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker host pending uninstall response")
@@ -467,9 +481,9 @@ func (h *DockerAgentHandlers) HandleSetCustomDisplayName(w http.ResponseWriter, 
 
 	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/docker/hosts/")
 	trimmedPath = strings.TrimSuffix(trimmedPath, "/display-name")
-	hostID := strings.TrimSpace(trimmedPath)
-	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID is required", nil)
+	agentID := strings.TrimSpace(trimmedPath)
+	if agentID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 		return
 	}
 
@@ -487,9 +501,9 @@ func (h *DockerAgentHandlers) HandleSetCustomDisplayName(w http.ResponseWriter, 
 
 	customName := strings.TrimSpace(req.DisplayName)
 
-	host, err := h.getMonitor(r.Context()).SetDockerHostCustomDisplayName(hostID, customName)
+	host, err := h.getMonitor(r.Context()).SetDockerHostCustomDisplayName(agentID, customName)
 	if err != nil {
-		writeErrorResponse(w, http.StatusNotFound, "docker_host_not_found", err.Error(), nil)
+		writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", err.Error(), nil)
 		return
 	}
 
@@ -497,14 +511,14 @@ func (h *DockerAgentHandlers) HandleSetCustomDisplayName(w http.ResponseWriter, 
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
-		"hostId":  host.ID,
+		"agentId": host.ID,
 		"message": "Container runtime custom display name updated",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker host custom display name response")
 	}
 }
 
-// HandleContainerUpdate triggers a container update on a Docker host.
+// HandleContainerUpdate triggers a container update on a Docker agent.
 // POST /api/agents/docker/containers/{containerId}/update
 func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -517,7 +531,8 @@ func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *ht
 	defer r.Body.Close()
 
 	var req struct {
-		HostID        string `json:"hostId"`
+		AgentID       string `json:"agentId"`
+		HostID        string `json:"hostId,omitempty"` // Legacy alias accepted during migration.
 		ContainerID   string `json:"containerId"`
 		ContainerName string `json:"containerName"`
 	}
@@ -526,8 +541,9 @@ func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if req.HostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID is required", nil)
+	agentID := canonicalDockerAgentID(req.AgentID, req.HostID)
+	if agentID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 		return
 	}
 	if req.ContainerID == "" {
@@ -543,7 +559,7 @@ func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *ht
 	}
 
 	// Queue the update command
-	commandStatus, err := h.getMonitor(r.Context()).QueueDockerContainerUpdateCommand(req.HostID, req.ContainerID, req.ContainerName)
+	commandStatus, err := h.getMonitor(r.Context()).QueueDockerContainerUpdateCommand(agentID, req.ContainerID, req.ContainerName)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "update_command_failed", err.Error(), nil)
 		return
@@ -554,7 +570,7 @@ func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *ht
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success":   true,
 		"commandId": commandStatus.ID,
-		"hostId":    req.HostID,
+		"agentId":   agentID,
 		"container": map[string]string{
 			"id":   req.ContainerID,
 			"name": req.ContainerName,
@@ -567,7 +583,7 @@ func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *ht
 }
 
 // HandleUpdateAll triggers an update for all containers with updates available on a container runtime.
-// POST /api/agents/docker/hosts/{hostId}/update-all
+// POST /api/agents/docker/hosts/{agentId}/update-all
 func (h *DockerAgentHandlers) HandleUpdateAll(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
@@ -576,9 +592,9 @@ func (h *DockerAgentHandlers) HandleUpdateAll(w http.ResponseWriter, r *http.Req
 
 	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/docker/hosts/")
 	trimmedPath = strings.TrimSuffix(trimmedPath, "/update-all")
-	hostID := strings.TrimSpace(trimmedPath)
-	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID is required", nil)
+	agentID := strings.TrimSpace(trimmedPath)
+	if agentID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 		return
 	}
 
@@ -589,7 +605,7 @@ func (h *DockerAgentHandlers) HandleUpdateAll(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	commandStatus, err := h.getMonitor(r.Context()).QueueDockerUpdateAllCommand(hostID)
+	commandStatus, err := h.getMonitor(r.Context()).QueueDockerUpdateAllCommand(agentID)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "update_all_command_failed", err.Error(), nil)
 		return
@@ -600,7 +616,7 @@ func (h *DockerAgentHandlers) HandleUpdateAll(w http.ResponseWriter, r *http.Req
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success":   true,
 		"commandId": commandStatus.ID,
-		"hostId":    hostID,
+		"agentId":   agentID,
 		"message":   "Update all containers command queued",
 		"note":      "The update will be executed on the next agent report cycle",
 	}); err != nil {
@@ -609,7 +625,7 @@ func (h *DockerAgentHandlers) HandleUpdateAll(w http.ResponseWriter, r *http.Req
 }
 
 // HandleCheckUpdates triggers an immediate update check for all containers on a container runtime.
-// POST /api/agents/docker/hosts/{hostId}/check-updates
+// POST /api/agents/docker/hosts/{agentId}/check-updates
 func (h *DockerAgentHandlers) HandleCheckUpdates(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
@@ -618,14 +634,14 @@ func (h *DockerAgentHandlers) HandleCheckUpdates(w http.ResponseWriter, r *http.
 
 	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/docker/hosts/")
 	trimmedPath = strings.TrimSuffix(trimmedPath, "/check-updates")
-	hostID := strings.TrimSpace(trimmedPath)
-	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID is required", nil)
+	agentID := strings.TrimSpace(trimmedPath)
+	if agentID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 		return
 	}
 
 	// Queue the check updates command
-	commandStatus, err := h.getMonitor(r.Context()).QueueDockerCheckUpdatesCommand(hostID)
+	commandStatus, err := h.getMonitor(r.Context()).QueueDockerCheckUpdatesCommand(agentID)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "check_updates_command_failed", err.Error(), nil)
 		return
@@ -636,7 +652,7 @@ func (h *DockerAgentHandlers) HandleCheckUpdates(w http.ResponseWriter, r *http.
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success":   true,
 		"commandId": commandStatus.ID,
-		"hostId":    hostID,
+		"agentId":   agentID,
 		"message":   "Check for updates command queued",
 		"note":      "The agent will clear its registry cache and check for updates on the next report cycle",
 	}); err != nil {
