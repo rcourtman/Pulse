@@ -462,6 +462,61 @@ func TestV6ReleaseFacingAPITestsCoverLegacyHostRejection(t *testing.T) {
 	}
 }
 
+// TestV6DirectHostAliasValidatorCoverage keeps direct validator-level tests in
+// place for the highest-risk host-alias rejection paths.
+func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
+	repoRoot := filepath.Join("..", "..")
+	artifacts := []struct {
+		path             string
+		requiredSnippets []string
+	}{
+		{
+			path: filepath.Join(repoRoot, "internal", "api", "ai_handlers_test.go"),
+			requiredSnippets: []string{
+				`TestNormalizeAndValidateAIExecuteTargetType_StrictCanonicalV6`,
+				`legacy host rejected", in: "host"`,
+				`TestNormalizeInvestigateAlertTargetType_StrictCanonicalV6`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "api", "org_handlers_test.go"),
+			requiredSnippets: []string{
+				`TestIsUnsupportedOrganizationShareResourceType`,
+				`host unsupported`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "api", "reporting_handlers_test.go"),
+			requiredSnippets: []string{
+				`TestNormalizeReportResourceType_RejectsLegacyAliases`,
+				`{"host", "container"}`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "api", "router_misc_additional_test.go"),
+			requiredSnippets: []string{
+				`TestNormalizeMetricsHistoryResourceType_RejectsLegacyAliases`,
+				`[]string{"host", "guest", "docker", "dockerhost", "dockercontainer", "system_container"}`,
+			},
+		},
+	}
+
+	for _, artifact := range artifacts {
+		data, err := os.ReadFile(artifact.path)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", artifact.path, err)
+		}
+		content := string(data)
+		normalizedPath := filepath.ToSlash(artifact.path)
+
+		for _, snippet := range artifact.requiredSnippets {
+			if !strings.Contains(content, snippet) {
+				t.Errorf("%s: missing required direct host-alias validator snippet %q", normalizedPath, snippet)
+			}
+		}
+	}
+}
+
 // SRC-04b: Ratchet-to-hard-ban conversion completed 2026-03-01.
 //
 // All state.* field access patterns and GetState() calls in consumer packages
