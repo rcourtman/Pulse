@@ -93,11 +93,11 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
         n.id === props.disk.parentId ||
         (n.name === nodeName && getProxmoxData(n)?.instance === instance),
     );
-    const hostId = node ? getLinkedAgentId(node) : undefined;
+    const agentId = node ? getLinkedAgentId(node) : undefined;
 
-    if (!hostId) return null;
+    if (!agentId) return null;
     const deviceName = data.devPath.replace('/dev/', '');
-    return `${hostId}:${deviceName}`;
+    return `${agentId}:${deviceName}`;
   };
 
   const metricResourceId = createMemo(() => getMetricResourceId());

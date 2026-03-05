@@ -223,7 +223,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
     }
   };
 
-  const getNodeHostId = (nodeName: string, instance: string) => {
+  const getNodeAgentId = (nodeName: string, instance: string) => {
     const node = props.nodes.find(
       (n) => n.name === nodeName && getProxmoxData(n)?.instance === instance,
     );
@@ -237,11 +237,11 @@ export const DiskList: Component<DiskListProps> = (props) => {
     }
     // Fallback: try to construct from platform data
     const data = getDiskData(disk);
-    const hostId = getNodeHostId(data.node, data.instance);
-    if (!hostId) return null;
+    const agentId = getNodeAgentId(data.node, data.instance);
+    if (!agentId) return null;
     // Strip /dev/ if present to match agent metric key
     const deviceName = data.devPath.replace('/dev/', '');
-    return `${hostId}:${deviceName}`;
+    return `${agentId}:${deviceName}`;
   };
 
   return (

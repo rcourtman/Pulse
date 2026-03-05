@@ -75,7 +75,7 @@ function getRingBufferData(ring: RingBuffer, cutoffTime: number): DiskMetricSnap
  * Record a new disk metric snapshot
  */
 export function recordDiskMetric(
-  resourceId: string, // format: "nodeId:device" or "hostId:device"
+  resourceId: string, // format: "nodeId:device" or "agentId:device"
   readBps: number,
   writeBps: number,
   readIops: number,

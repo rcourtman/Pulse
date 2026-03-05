@@ -15,7 +15,7 @@ interface DiskCounterState {
 }
 
 interface DiskCounterSample {
-  hostId: string;
+  agentId: string;
   device: string;
   readBytes: number;
   writeBytes: number;
@@ -40,12 +40,12 @@ const getResourceDiskCounters = (resource: unknown): DiskCounterSample[] => {
 
   const agent = asRecord(raw.agent);
   const discoveryTarget = asRecord(raw.discoveryTarget);
-  const hostId =
+  const agentId =
     asString(agent?.agentId) ||
     asString(discoveryTarget?.hostId) ||
     asString(raw.id) ||
     asString(raw.platformId);
-  if (!hostId) return [];
+  if (!agentId) return [];
 
   const platformData = asRecord(raw.platformData);
   const platformAgent = asRecord(platformData?.agent);
@@ -65,7 +65,7 @@ const getResourceDiskCounters = (resource: unknown): DiskCounterSample[] => {
     const device = asString(disk?.device);
     if (!device) continue;
     counters.push({
-      hostId,
+      agentId,
       device,
       readBytes: asNumber(disk?.readBytes) ?? 0,
       writeBytes: asNumber(disk?.writeBytes) ?? 0,
@@ -89,7 +89,7 @@ function sampleMetrics(): void {
     if (diskCounters.length === 0) continue;
 
     for (const disk of diskCounters) {
-      const key = `${disk.hostId}:${disk.device}`;
+      const key = `${disk.agentId}:${disk.device}`;
       if (observedKeys.has(key)) continue;
       observedKeys.add(key);
 
