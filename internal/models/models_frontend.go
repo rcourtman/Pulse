@@ -565,15 +565,15 @@ type ReplicationJobFrontend struct {
 
 // StateFrontend represents the state with frontend-friendly field names
 type StateFrontend struct {
-	Nodes                        []NodeFrontend                     `json:"nodes"`
-	VMs                          []VMFrontend                       `json:"vms"`
-	Containers                   []ContainerFrontend                `json:"containers"`
-	DockerHosts                  []DockerHostFrontend               `json:"dockerHosts"`
+	Nodes                        []NodeFrontend                     `json:"nodes,omitempty"`
+	VMs                          []VMFrontend                       `json:"vms,omitempty"`
+	Containers                   []ContainerFrontend                `json:"containers,omitempty"`
+	DockerHosts                  []DockerHostFrontend               `json:"dockerHosts,omitempty"`
 	RemovedDockerHosts           []RemovedDockerHostFrontend        `json:"removedDockerHosts"`
 	KubernetesClusters           []KubernetesClusterFrontend        `json:"kubernetesClusters"`
 	RemovedKubernetesClusters    []RemovedKubernetesClusterFrontend `json:"removedKubernetesClusters"`
-	Hosts                        []HostFrontend                     `json:"hosts"`
-	Storage                      []StorageFrontend                  `json:"storage"`
+	Hosts                        []HostFrontend                     `json:"hosts,omitempty"`
+	Storage                      []StorageFrontend                  `json:"storage,omitempty"`
 	PBS                          []PBSInstance                      `json:"pbs"` // Keep as is
 	PMG                          []PMGInstance                      `json:"pmg"`
 	ReplicationJobs              []ReplicationJobFrontend           `json:"replicationJobs"`
@@ -588,8 +588,8 @@ type StateFrontend struct {
 	Resources []ResourceFrontend `json:"resources,omitempty"`
 }
 
-// StripLegacyArrays removes legacy per-type arrays from the state payload.
-// Use this when transitioning to unified Resources-only mode.
+// StripLegacyArrays removes non-canonical per-type arrays from the state payload.
+// v6 clients should consume Resources plus explicit removed-* feeds only.
 func (s *StateFrontend) StripLegacyArrays() {
 	if s == nil {
 		return
@@ -599,10 +599,8 @@ func (s *StateFrontend) StripLegacyArrays() {
 	s.VMs = nil
 	s.Containers = nil
 	s.DockerHosts = nil
-	s.RemovedDockerHosts = nil
 	s.Hosts = nil
 	s.Storage = nil
-	// PBS/PMG instances remain as infra entities until they are fully unified.
 }
 
 // ResourceFrontend is the frontend representation of a unified Resource.

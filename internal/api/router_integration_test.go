@@ -236,11 +236,8 @@ func TestStateEndpointReturnsMockData(t *testing.T) {
 		t.Fatalf("unmarshal state response: %v", err)
 	}
 
-	if _, ok := snapshot["nodes"]; !ok {
-		t.Fatalf("state response missing legacy nodes key: %s", string(body))
-	}
-	if snapshot["nodes"] != nil {
-		t.Fatalf("expected legacy nodes array to be stripped (null), got: %v", snapshot["nodes"])
+	if _, ok := snapshot["nodes"]; ok {
+		t.Fatalf("state response should omit legacy nodes key entirely: %s", string(body))
 	}
 
 	hasNonLegacyData := false
@@ -849,11 +846,8 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 		t.Fatalf("expected initialState message, got %q", msgType)
 	}
 
-	if _, ok := payload["nodes"]; !ok {
-		t.Fatalf("initial state missing nodes key")
-	}
-	if payload["nodes"] != nil {
-		t.Fatalf("initial state should not include legacy nodes array data: %v", payload["nodes"])
+	if _, ok := payload["nodes"]; ok {
+		t.Fatalf("initial state should omit legacy nodes key entirely: %v", payload["nodes"])
 	}
 
 	// Broadcast an additional state update and ensure clients receive it
@@ -864,8 +858,8 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 	if msgType != "rawData" {
 		t.Fatalf("expected rawData broadcast, got %q", msgType)
 	}
-	if payload["nodes"] != nil {
-		t.Fatalf("broadcast payload should not include legacy nodes array data: %v", payload["nodes"])
+	if _, ok := payload["nodes"]; ok {
+		t.Fatalf("broadcast payload should omit legacy nodes key entirely: %v", payload["nodes"])
 	}
 }
 
@@ -922,10 +916,15 @@ func TestWebsocketPayloadContractShape(t *testing.T) {
 		Containers:         []models.ContainerFrontend{{ID: "ct-1", Name: "CT 1"}},
 		DockerHosts:        []models.DockerHostFrontend{{ID: "docker-host-1"}},
 		RemovedDockerHosts: []models.RemovedDockerHostFrontend{{ID: "removed-docker-host-1"}},
-		Hosts:              []models.HostFrontend{{ID: "host-1", DisplayName: "Host 1"}},
-		Storage:            []models.StorageFrontend{{ID: "storage-1", Name: "local"}},
-		PBS:                []models.PBSInstance{{ID: "pbs-1", Name: "pbs-1"}},
-		PMG:                []models.PMGInstance{{ID: "pmg-1", Name: "pmg-1"}},
+		KubernetesClusters: []models.KubernetesClusterFrontend{{ID: "k8s-1", Name: "cluster-1"}},
+		RemovedKubernetesClusters: []models.RemovedKubernetesClusterFrontend{
+			{ID: "removed-k8s-1"},
+		},
+		Hosts:           []models.HostFrontend{{ID: "host-1", DisplayName: "Host 1"}},
+		Storage:         []models.StorageFrontend{{ID: "storage-1", Name: "local"}},
+		PBS:             []models.PBSInstance{{ID: "pbs-1", Name: "pbs-1"}},
+		PMG:             []models.PMGInstance{{ID: "pmg-1", Name: "pmg-1"}},
+		ReplicationJobs: []models.ReplicationJobFrontend{{ID: "job-1"}},
 		Resources: []models.ResourceFrontend{
 			{
 				ID:           "resource-1",
@@ -944,7 +943,7 @@ func TestWebsocketPayloadContractShape(t *testing.T) {
 	srv.hub.BroadcastState(contractState)
 	payload := readType("rawData")
 
-	requiredArrayKeys := []string{"resources", "pbs", "pmg"}
+	requiredArrayKeys := []string{"resources", "removedDockerHosts", "removedKubernetesClusters", "pbs", "pmg"}
 	for _, key := range requiredArrayKeys {
 		val, ok := payload[key]
 		if !ok {
@@ -960,17 +959,12 @@ func TestWebsocketPayloadContractShape(t *testing.T) {
 		"vms",
 		"containers",
 		"dockerHosts",
-		"removedDockerHosts",
 		"hosts",
 		"storage",
 	}
 	for _, key := range strippedLegacyKeys {
-		val, ok := payload[key]
-		if !ok {
-			t.Fatalf("expected websocket payload to include %q key", key)
-		}
-		if val != nil {
-			t.Fatalf("expected %q to be nil in unified-resources payload, got %v", key, val)
+		if _, ok := payload[key]; ok {
+			t.Fatalf("expected websocket payload to omit legacy key %q", key)
 		}
 	}
 
@@ -1032,10 +1026,15 @@ func TestWebsocketPayloadStripsLegacyArrays(t *testing.T) {
 		Containers:         []models.ContainerFrontend{{ID: "ct-1", Name: "CT 1"}},
 		DockerHosts:        []models.DockerHostFrontend{{ID: "docker-host-1"}},
 		RemovedDockerHosts: []models.RemovedDockerHostFrontend{{ID: "removed-docker-host-1"}},
-		Hosts:              []models.HostFrontend{{ID: "host-1", DisplayName: "Host 1"}},
-		Storage:            []models.StorageFrontend{{ID: "storage-1", Name: "local"}},
-		PBS:                []models.PBSInstance{{ID: "pbs-1", Name: "pbs-1"}},
-		PMG:                []models.PMGInstance{{ID: "pmg-1", Name: "pmg-1"}},
+		KubernetesClusters: []models.KubernetesClusterFrontend{{ID: "k8s-1", Name: "cluster-1"}},
+		RemovedKubernetesClusters: []models.RemovedKubernetesClusterFrontend{
+			{ID: "removed-k8s-1"},
+		},
+		Hosts:           []models.HostFrontend{{ID: "host-1", DisplayName: "Host 1"}},
+		Storage:         []models.StorageFrontend{{ID: "storage-1", Name: "local"}},
+		PBS:             []models.PBSInstance{{ID: "pbs-1", Name: "pbs-1"}},
+		PMG:             []models.PMGInstance{{ID: "pmg-1", Name: "pmg-1"}},
+		ReplicationJobs: []models.ReplicationJobFrontend{{ID: "job-1"}},
 		Resources: []models.ResourceFrontend{
 			{
 				ID:           "resource-1",
@@ -1059,23 +1058,30 @@ func TestWebsocketPayloadStripsLegacyArrays(t *testing.T) {
 		"vms",
 		"containers",
 		"dockerHosts",
-		"removedDockerHosts",
 		"hosts",
 		"storage",
 	}
 	for _, key := range strippedLegacyKeys {
-		val, ok := strippedPayload[key]
-		if !ok {
-			t.Fatalf("expected %s field to remain present in stripped payload", key)
-		}
-		if val != nil {
-			t.Fatalf("expected %s field to be nil when compat mode is disabled, got %v", key, val)
+		if _, ok := strippedPayload[key]; ok {
+			t.Fatalf("expected %s field to be omitted in stripped payload", key)
 		}
 	}
 
 	resources, ok := strippedPayload["resources"].([]any)
 	if !ok || len(resources) == 0 {
 		t.Fatalf("expected resources to remain populated in stripped payload: %v", strippedPayload["resources"])
+	}
+	if removedDockerHosts, ok := strippedPayload["removedDockerHosts"].([]any); !ok || len(removedDockerHosts) == 0 {
+		t.Fatalf(
+			"expected removedDockerHosts to remain populated in stripped payload: %v",
+			strippedPayload["removedDockerHosts"],
+		)
+	}
+	if removedK8s, ok := strippedPayload["removedKubernetesClusters"].([]any); !ok || len(removedK8s) == 0 {
+		t.Fatalf(
+			"expected removedKubernetesClusters to remain populated in stripped payload: %v",
+			strippedPayload["removedKubernetesClusters"],
+		)
 	}
 	if pbs, ok := strippedPayload["pbs"].([]any); !ok || len(pbs) == 0 {
 		t.Fatalf("expected pbs to remain populated in stripped payload: %v", strippedPayload["pbs"])
