@@ -48,7 +48,7 @@ func (g guestSnapshot) resourceType() string {
 	case guestKindVM:
 		return "vm"
 	case guestKindContainer:
-		return "container"
+		return "system-container"
 	default:
 		return "guest"
 	}

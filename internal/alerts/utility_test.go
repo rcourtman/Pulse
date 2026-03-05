@@ -1398,18 +1398,13 @@ func TestCanonicalResourceTypeKeys(t *testing.T) {
 			want:         []string{"guest"},
 		},
 		{
-			name:         "ct returns guest",
-			resourceType: "ct",
-			want:         []string{"guest"},
-		},
-		{
 			name:         "container returns guest",
 			resourceType: "container",
 			want:         []string{"guest"},
 		},
 		{
-			name:         "lxc returns guest",
-			resourceType: "lxc",
+			name:         "system-container returns guest",
+			resourceType: "system-container",
 			want:         []string{"guest"},
 		},
 

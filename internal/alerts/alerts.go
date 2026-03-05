@@ -1959,7 +1959,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 		}
 
 		if threshold == nil {
-			// This is a guest (qemu/lxc) alert
+			// This is a guest (vm/system-container) alert
 			// Check if all guest alerts are disabled
 			if m.config.DisableAllGuests {
 				alertsToResolve = append(alertsToResolve, alertID)
@@ -6244,7 +6244,7 @@ func CanonicalResourceTypeKeys(resourceType string) []string {
 
 	var keys []string
 	switch typeKey {
-	case "guest", "qemu", "vm", "ct", "container", "lxc", "system-container", "system_container":
+	case "guest", "qemu", "vm", "container", "system-container":
 		keys = addUnique(keys, "guest")
 	case "docker", "docker container", "dockercontainer", "app-container", "app_container":
 		keys = addUnique(keys, "docker")
