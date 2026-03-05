@@ -39,6 +39,7 @@ describe('toDiscoveryConfig', () => {
     const config = toDiscoveryConfig(resource);
     expect(config).toEqual({
       resourceType: 'agent',
+      agentId: 'host-1',
       hostId: 'host-1',
       resourceId: 'host-1',
       hostname: 'pve1.local',
@@ -52,11 +53,37 @@ describe('toDiscoveryConfig', () => {
     const config = toDiscoveryConfig(baseResource());
     expect(config).toEqual({
       resourceType: 'agent',
+      agentId: 'host-1',
       hostId: 'host-1',
       resourceId: 'host-1',
       hostname: 'stale-hostname',
       metadataKind: 'agent',
       metadataId: 'host-1',
+      targetLabel: 'agent',
+    });
+  });
+
+  it('supports explicit discoveryTarget.agentId with hostId compatibility alias', () => {
+    const resource: Resource = {
+      ...baseResource(),
+      discoveryTarget: {
+        resourceType: 'agent',
+        agentId: 'agent-explicit-1',
+        hostId: 'legacy-host-id',
+        resourceId: 'agent-explicit-1',
+        hostname: 'pve1.local',
+      } as any,
+    };
+
+    const config = toDiscoveryConfig(resource);
+    expect(config).toEqual({
+      resourceType: 'agent',
+      agentId: 'agent-explicit-1',
+      hostId: 'agent-explicit-1',
+      resourceId: 'agent-explicit-1',
+      hostname: 'pve1.local',
+      metadataKind: 'agent',
+      metadataId: 'agent-explicit-1',
       targetLabel: 'agent',
     });
   });
@@ -79,6 +106,7 @@ describe('toDiscoveryConfig', () => {
     const config = toDiscoveryConfig(resource);
     expect(config).toEqual({
       resourceType: 'agent',
+      agentId: 'docker-host-1',
       hostId: 'docker-host-1',
       resourceId: 'docker-host-1',
       hostname: 'stale-hostname',
@@ -105,6 +133,7 @@ describe('toDiscoveryConfig', () => {
     const config = toDiscoveryConfig(resource);
     expect(config).toEqual({
       resourceType: 'vm',
+      agentId: 'pve1',
       hostId: 'pve1',
       resourceId: '101',
       hostname: 'stale-hostname',
@@ -132,6 +161,7 @@ describe('toDiscoveryConfig', () => {
     const config = toDiscoveryConfig(resource);
     expect(config).toEqual({
       resourceType: 'docker',
+      agentId: 'docker-host-1',
       hostId: 'docker-host-1',
       resourceId: 'container-abc123',
       hostname: 'stale-hostname',
@@ -165,6 +195,7 @@ describe('toDiscoveryConfig', () => {
     const config = toDiscoveryConfig(resource);
     expect(config).toEqual({
       resourceType: 'k8s',
+      agentId: 'cluster-a',
       hostId: 'cluster-a',
       resourceId: 'pod-uid-1',
       hostname: 'stale-hostname',
@@ -199,6 +230,7 @@ describe('toDiscoveryConfig', () => {
     const config = toDiscoveryConfig(resource);
     expect(config).toEqual({
       resourceType: 'k8s',
+      agentId: 'k8s-agent-1',
       hostId: 'k8s-agent-1',
       resourceId: 'pod-uid-2',
       hostname: 'stale-hostname',

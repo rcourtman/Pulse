@@ -31,6 +31,7 @@ import licenseApiSource from '@/api/license.ts?raw';
 import monitoringApiSource from '@/api/monitoring.ts?raw';
 import chartsApiSource from '@/api/charts.ts?raw';
 import resourceStateAdaptersSource from '@/utils/resourceStateAdapters.ts?raw';
+import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
 import resourceBadgesSource from '@/components/Infrastructure/resourceBadges.ts?raw';
 import problemResourcesTableSource from '@/pages/DashboardPanels/ProblemResourcesTable.tsx?raw';
 import containerUpdatesSource from '@/stores/containerUpdates.ts?raw';
@@ -115,6 +116,14 @@ describe('agent model guardrails', () => {
     );
     expect(unifiedNodeSelectorSource).toContain("resource.type === 'truenas'");
     expect(unifiedNodeSelectorSource).not.toContain('if (hostLikeResources.length === 0');
+  });
+
+  it('keeps discovery mapping agentId-first with hostId compatibility alias', () => {
+    expect(resourceDetailMappersSource).toContain('agentId: explicitDiscoveryAgentId');
+    expect(resourceDetailMappersSource).toContain('hostId: explicitDiscoveryAgentId');
+    expect(unifiedResourcesHookSource).toContain(
+      'v2.discoveryTarget?.agentId || v2.discoveryTarget?.hostId',
+    );
   });
 
   it('keeps AI chat mention resources aware of agent facets beyond host type', () => {

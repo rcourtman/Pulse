@@ -161,7 +161,8 @@ export type DockerPlatformData = {
 
 export type DiscoveryConfig = {
   resourceType: DiscoveryResourceType;
-  hostId: string;
+  agentId: string;
+  hostId: string; // Legacy alias kept while callers migrate to `agentId`.
   resourceId: string;
   hostname: string;
   metadataKind: 'guest' | 'agent';
@@ -176,10 +177,14 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 
   const explicitDiscoveryTarget = resource.discoveryTarget;
+  const explicitDiscoveryAgentId =
+    asString((explicitDiscoveryTarget as { agentId?: unknown } | undefined)?.agentId) ||
+    explicitDiscoveryTarget?.hostId;
+
   if (
     explicitDiscoveryTarget &&
     explicitDiscoveryTarget.resourceType &&
-    explicitDiscoveryTarget.hostId &&
+    explicitDiscoveryAgentId &&
     explicitDiscoveryTarget.resourceId
   ) {
     const resourceType = (() => {
@@ -213,7 +218,8 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
             : 'guest';
       return {
         resourceType,
-        hostId: explicitDiscoveryTarget.hostId,
+        agentId: explicitDiscoveryAgentId,
+        hostId: explicitDiscoveryAgentId,
         resourceId: explicitDiscoveryTarget.resourceId,
         hostname,
         metadataKind: isHostDiscovery ? 'agent' : 'guest',
@@ -236,7 +242,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     asString(resource.proxmox?.nodeName) ||
     platformData?.proxmox?.nodeName ||
     asString((platformData as { nodeName?: unknown } | undefined)?.nodeName);
-  const kubernetesHostId =
+  const kubernetesAgentId =
     asString(resource.kubernetes?.agentId) ||
     asString(kubernetesPlatformData?.agentId) ||
     asString(resource.kubernetes?.clusterId) ||
@@ -258,7 +264,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         asString(resource.name);
       return namespace && podName ? `${namespace}/${podName}` : undefined;
     })();
-  const hostLookupId =
+  const agentLookupId =
     asString(dockerPlatformData?.hostSourceId) ||
     asString(resource.agent?.agentId) ||
     asString(platformData?.agent?.agentId) ||
@@ -269,11 +275,11 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     resource.name ||
     resource.platformId ||
     resource.id;
-  const hostLikeId = hostLookupId;
-  const workloadHostId =
+  const agentLikeId = agentLookupId;
+  const workloadAgentId =
     proxmoxNodeName ||
     asString(dockerPlatformData?.hostSourceId) ||
-    kubernetesHostId ||
+    kubernetesAgentId ||
     asString(resource.parentName) ||
     resource.parentId ||
     resource.platformId ||
@@ -291,17 +297,19 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     case 'truenas':
       return {
         resourceType: 'agent',
-        hostId: hostLikeId,
-        resourceId: hostLikeId,
+        agentId: agentLikeId,
+        hostId: agentLikeId,
+        resourceId: agentLikeId,
         hostname,
         metadataKind: 'agent',
-        metadataId: hostLikeId,
+        metadataId: agentLikeId,
         targetLabel: 'agent',
       };
     case 'vm':
       return {
         resourceType: 'vm',
-        hostId: workloadHostId,
+        agentId: workloadAgentId,
+        hostId: workloadAgentId,
         resourceId: vmidResourceId || resource.id,
         hostname,
         metadataKind: 'guest',
@@ -313,7 +321,8 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     case 'oci-container':
       return {
         resourceType: 'system-container',
-        hostId: workloadHostId,
+        agentId: workloadAgentId,
+        hostId: workloadAgentId,
         resourceId: vmidResourceId || resource.id,
         hostname,
         metadataKind: 'guest',
@@ -324,7 +333,8 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     case 'docker-container':
       return {
         resourceType: 'docker',
-        hostId: workloadHostId,
+        agentId: workloadAgentId,
+        hostId: workloadAgentId,
         resourceId: asString(dockerPlatformData?.containerId) || resource.id,
         hostname,
         metadataKind: 'guest',
@@ -336,7 +346,8 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     case 'k8s-service':
       return {
         resourceType: 'k8s',
-        hostId: workloadHostId,
+        agentId: workloadAgentId,
+        hostId: workloadAgentId,
         resourceId: kubernetesResourceId || resource.id,
         hostname,
         metadataKind: 'guest',
