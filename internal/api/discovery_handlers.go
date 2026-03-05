@@ -226,6 +226,22 @@ func redactSensitiveFields(d *servicediscovery.ResourceDiscovery) *servicediscov
 	return &redacted
 }
 
+func ensureDiscoveryAgentID(d *servicediscovery.ResourceDiscovery) *servicediscovery.ResourceDiscovery {
+	if d == nil {
+		return nil
+	}
+	if d.ResourceType != servicediscovery.ResourceTypeAgent {
+		return d
+	}
+	if strings.TrimSpace(d.AgentID) != "" {
+		return d
+	}
+
+	enriched := *d
+	enriched.AgentID = d.HostID
+	return &enriched
+}
+
 // HandleListDiscoveries handles GET /api/discovery
 func (h *DiscoveryHandlers) HandleListDiscoveries(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
@@ -291,6 +307,7 @@ func (h *DiscoveryHandlers) HandleGetDiscovery(w http.ResponseWriter, r *http.Re
 	if !h.isAdminRequest(r) {
 		discovery = redactSensitiveFields(discovery)
 	}
+	discovery = ensureDiscoveryAgentID(discovery)
 
 	writeDiscoveryJSON(w, discovery)
 }
@@ -356,6 +373,7 @@ func (h *DiscoveryHandlers) HandleTriggerDiscovery(w http.ResponseWriter, r *htt
 	if !h.isAdminRequest(r) {
 		discovery = redactSensitiveFields(discovery)
 	}
+	discovery = ensureDiscoveryAgentID(discovery)
 
 	writeDiscoveryJSON(w, discovery)
 }
@@ -418,6 +436,7 @@ func (h *DiscoveryHandlers) HandleUpdateNotes(w http.ResponseWriter, r *http.Req
 	if !isAdmin {
 		discovery = redactSensitiveFields(discovery)
 	}
+	discovery = ensureDiscoveryAgentID(discovery)
 
 	writeDiscoveryJSON(w, discovery)
 }

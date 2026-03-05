@@ -58,8 +58,9 @@ type ResourceDiscovery struct {
 	ID           string       `json:"id"`            // Unique ID: "system-container:minipc:101"
 	ResourceType ResourceType `json:"resource_type"` // vm, system-container, docker, k8s, agent
 	ResourceID   string       `json:"resource_id"`   // 101, container-name, etc.
-	HostID       string       `json:"host_id"`       // Proxmox node name or host agent ID
-	Hostname     string       `json:"hostname"`      // Human-readable host name
+	AgentID      string       `json:"agent_id,omitempty"`
+	HostID       string       `json:"host_id"`  // Proxmox node name or host agent ID
+	Hostname     string       `json:"hostname"` // Human-readable host name
 
 	// AI-discovered info
 	ServiceType    string          `json:"service_type"`    // frigate, postgres, pbs
@@ -215,6 +216,7 @@ type DiscoverySummary struct {
 	ID             string          `json:"id"`
 	ResourceType   ResourceType    `json:"resource_type"`
 	ResourceID     string          `json:"resource_id"`
+	AgentID        string          `json:"agent_id,omitempty"`
 	HostID         string          `json:"host_id"`
 	Hostname       string          `json:"hostname"`
 	ServiceType    string          `json:"service_type"`
@@ -230,10 +232,16 @@ type DiscoverySummary struct {
 
 // ToSummary converts a full discovery to a summary.
 func (d *ResourceDiscovery) ToSummary() DiscoverySummary {
+	agentID := d.AgentID
+	if agentID == "" && d.ResourceType == ResourceTypeAgent {
+		agentID = d.HostID
+	}
+
 	return DiscoverySummary{
 		ID:             d.ID,
 		ResourceType:   d.ResourceType,
 		ResourceID:     d.ResourceID,
+		AgentID:        agentID,
 		HostID:         d.HostID,
 		Hostname:       d.Hostname,
 		ServiceType:    d.ServiceType,

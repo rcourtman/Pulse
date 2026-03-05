@@ -462,6 +462,31 @@ func TestHandleGetDiscovery_RejectsLegacyHostType(t *testing.T) {
 	assert.Equal(t, `unsupported resource type "host"`, body["message"])
 }
 
+func TestHandleGetDiscovery_EmitsCanonicalAgentID(t *testing.T) {
+	h, _, store := setupDiscoveryHandlers(t)
+
+	agentDiscovery := &servicediscovery.ResourceDiscovery{
+		ID:           "agent:agent-1:agent-1",
+		ResourceType: servicediscovery.ResourceTypeAgent,
+		ResourceID:   "agent-1",
+		HostID:       "agent-1",
+		Hostname:     "agent-1.local",
+	}
+	require.NoError(t, store.Save(agentDiscovery))
+
+	req := httptest.NewRequest("GET", "/api/discovery/agent/agent-1/agent-1", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleGetDiscovery(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var body map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
+	assert.Equal(t, "agent-1", body["agent_id"])
+	assert.Equal(t, "agent-1", body["host_id"])
+}
+
 // Additional test to cover service not configured case
 func TestHandlers_NoService(t *testing.T) {
 	h := NewDiscoveryHandlers(nil, nil)
