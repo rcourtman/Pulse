@@ -72,7 +72,7 @@ func TestStore_SaveGetListAndNotes(t *testing.T) {
 		ID:           MakeResourceID(ResourceTypeDocker, "host1", "nginx"),
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "nginx",
-		HostID:       "host1",
+		TargetID:     "host1",
 		ServiceName:  "Nginx",
 	}
 	if err := store.Save(d1); err != nil {
@@ -108,7 +108,7 @@ func TestStore_SaveGetListAndNotes(t *testing.T) {
 		ID:           MakeResourceID(ResourceTypeVM, "node1", "101"),
 		ResourceType: ResourceTypeVM,
 		ResourceID:   "101",
-		HostID:       "node1",
+		TargetID:     "node1",
 		ServiceName:  "VM",
 	}
 	if err := store.Save(d2); err != nil {
@@ -163,7 +163,7 @@ func TestStore_SaveCanonicalizesAgentAndTargetIDs(t *testing.T) {
 		ID:           MakeResourceID(ResourceTypeAgent, "agent-1", "agent-1"),
 		ResourceType: ResourceTypeAgent,
 		ResourceID:   "agent-1",
-		HostID:       "agent-1",
+		TargetID:     "agent-1",
 		ServiceName:  "Agent",
 	}
 	if err := store.Save(d); err != nil {

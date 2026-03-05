@@ -2803,11 +2803,7 @@ func canonicalDiscoveryTargetID(discovery *ResourceDiscovery) string {
 	if discovery == nil {
 		return ""
 	}
-	targetID := strings.TrimSpace(discovery.TargetID)
-	if targetID == "" {
-		targetID = strings.TrimSpace(discovery.HostID)
-	}
-	return targetID
+	return strings.TrimSpace(discovery.TargetID)
 }
 
 func canonicalRequestTargetID(req DiscoveryRequest) string {

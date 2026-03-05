@@ -336,12 +336,6 @@ func (s *Store) Save(d *ResourceDiscovery) error {
 
 	// Persist/cache a defensive copy so callers cannot mutate shared state after Save.
 	toSave := cloneResourceDiscovery(d)
-	if strings.TrimSpace(toSave.HostID) == "" && strings.TrimSpace(toSave.TargetID) != "" {
-		toSave.HostID = toSave.TargetID
-	}
-	if strings.TrimSpace(toSave.TargetID) == "" && strings.TrimSpace(toSave.HostID) != "" {
-		toSave.TargetID = toSave.HostID
-	}
 	if toSave.ResourceType == ResourceTypeAgent && strings.TrimSpace(toSave.AgentID) == "" {
 		toSave.AgentID = toSave.TargetID
 	}
@@ -570,11 +564,7 @@ func (s *Store) ListByTarget(targetID string) ([]*ResourceDiscovery, error) {
 
 	var filtered []*ResourceDiscovery
 	for _, d := range all {
-		discoveryTargetID := strings.TrimSpace(d.TargetID)
-		if discoveryTargetID == "" {
-			discoveryTargetID = strings.TrimSpace(d.HostID)
-		}
-		if discoveryTargetID == targetID {
+		if strings.TrimSpace(d.TargetID) == targetID {
 			filtered = append(filtered, d)
 		}
 	}

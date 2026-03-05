@@ -65,7 +65,7 @@ func TestGatherGuestIntelligence_DiscoveryMatching(t *testing.T) {
 		{
 			ID:           "vm:pve1:100",
 			ResourceType: servicediscovery.ResourceTypeVM,
-			HostID:       "pve1",
+			TargetID:     "pve1",
 			ResourceID:   "100",
 			ServiceName:  "PostgreSQL 15",
 			ServiceType:  "postgres",
@@ -73,7 +73,7 @@ func TestGatherGuestIntelligence_DiscoveryMatching(t *testing.T) {
 		{
 			ID:           "lxc:pve1:101",
 			ResourceType: servicediscovery.ResourceTypeSystemContainer,
-			HostID:       "pve1",
+			TargetID:     "pve1",
 			ResourceID:   "101",
 			ServiceName:  "Nginx",
 			ServiceType:  "nginx",
@@ -141,7 +141,7 @@ func TestGatherGuestIntelligence_DiscoveryInstanceFallback(t *testing.T) {
 		{
 			ID:           "vm:my-instance:100",
 			ResourceType: servicediscovery.ResourceTypeVM,
-			HostID:       "my-instance",
+			TargetID:     "my-instance",
 			ResourceID:   "100",
 			ServiceName:  "Redis",
 			ServiceType:  "redis",

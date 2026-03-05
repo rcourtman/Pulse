@@ -91,7 +91,7 @@ func TestPatrolService_SettersAndScopeHints(t *testing.T) {
 		ID:           "vm:node1:101",
 		ResourceType: servicediscovery.ResourceTypeVM,
 		ResourceID:   "101",
-		HostID:       "node1",
+		TargetID:     "node1",
 		Hostname:     "node1",
 		ServiceName:  "nginx",
 		ServiceType:  "nginx",

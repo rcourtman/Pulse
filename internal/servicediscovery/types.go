@@ -235,9 +235,6 @@ type DiscoverySummary struct {
 // ToSummary converts a full discovery to a summary.
 func (d *ResourceDiscovery) ToSummary() DiscoverySummary {
 	targetID := d.TargetID
-	if targetID == "" {
-		targetID = d.HostID
-	}
 
 	agentID := d.AgentID
 	if agentID == "" && d.ResourceType == ResourceTypeAgent {

@@ -211,7 +211,6 @@ func (a *ToolsAdapter) convertFromSourceData(sd tools.DiscoverySourceData) *Reso
 		ResourceID:     sd.ResourceID,
 		TargetID:       targetID,
 		AgentID:        agentID,
-		HostID:         targetID,
 		Hostname:       sd.Hostname,
 		ServiceType:    sd.ServiceType,
 		ServiceName:    sd.ServiceName,

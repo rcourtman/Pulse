@@ -384,7 +384,7 @@ func TestGatherGuestIntelligence_ReadStatePath(t *testing.T) {
 		{
 			ID:           "vm:pve1:100",
 			ResourceType: servicediscovery.ResourceTypeVM,
-			HostID:       "pve1",
+			TargetID:     "pve1",
 			ResourceID:   "100",
 			ServiceName:  "PostgreSQL 15",
 			ServiceType:  "postgres",
@@ -470,7 +470,7 @@ func TestGatherGuestIntelligence_ReadStateInstanceFallback(t *testing.T) {
 		{
 			ID:           "vm:my-instance:100",
 			ResourceType: servicediscovery.ResourceTypeVM,
-			HostID:       "my-instance",
+			TargetID:     "my-instance",
 			ResourceID:   "100",
 			ServiceName:  "Redis",
 			ServiceType:  "redis",

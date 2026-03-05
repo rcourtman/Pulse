@@ -47,7 +47,7 @@ func formatSingleDiscovery(d *ResourceDiscovery) string {
 	// Header with service info
 	sb.WriteString(fmt.Sprintf("### %s (%s)\n", d.ServiceName, d.ID))
 	sb.WriteString(fmt.Sprintf("- **Type:** %s\n", d.ResourceType))
-	sb.WriteString(fmt.Sprintf("- **Target:** %s\n", firstNonEmpty(d.Hostname, d.TargetID, d.HostID)))
+	sb.WriteString(fmt.Sprintf("- **Target:** %s\n", firstNonEmpty(d.Hostname, d.TargetID)))
 
 	if d.ServiceVersion != "" {
 		sb.WriteString(fmt.Sprintf("- **Version:** %s\n", d.ServiceVersion))
@@ -190,7 +190,7 @@ func formatScopeDiscoverySummary(d *ResourceDiscovery) string {
 		base = fmt.Sprintf("%s %s", base, version)
 	}
 
-	target := firstNonEmpty(d.Hostname, d.TargetID, d.HostID)
+	target := firstNonEmpty(d.Hostname, d.TargetID)
 	meta := strings.TrimSpace(string(d.ResourceType))
 	if target != "" {
 		if meta != "" {
@@ -275,7 +275,7 @@ func FormatForRemediation(d *ResourceDiscovery) string {
 	sb.WriteString("## Resource Context for Remediation\n\n")
 
 	sb.WriteString(fmt.Sprintf("**Resource:** %s (%s)\n", d.ServiceName, d.ID))
-	sb.WriteString(fmt.Sprintf("**Type:** %s on %s\n\n", d.ResourceType, firstNonEmpty(d.Hostname, d.TargetID, d.HostID)))
+	sb.WriteString(fmt.Sprintf("**Type:** %s on %s\n\n", d.ResourceType, firstNonEmpty(d.Hostname, d.TargetID)))
 
 	// CLI access is most critical
 	if d.CLIAccess != "" {
@@ -453,7 +453,7 @@ func discoveryMatchesTokens(d *ResourceDiscovery, tokens map[string]struct{}) bo
 
 func discoveryTokens(d *ResourceDiscovery) []string {
 	var tokens []string
-	targetID := firstNonEmpty(d.TargetID, d.HostID)
+	targetID := strings.TrimSpace(d.TargetID)
 
 	add := func(value string) {
 		trimmed := strings.TrimSpace(value)
@@ -575,7 +575,7 @@ func ToJSON(d *ResourceDiscovery) map[string]any {
 		"id":                          d.ID,
 		"resource_type":               d.ResourceType,
 		"resource_id":                 d.ResourceID,
-		"target_id":                   firstNonEmpty(d.TargetID, d.HostID),
+		"target_id":                   strings.TrimSpace(d.TargetID),
 		"agent_id":                    d.AgentID,
 		"hostname":                    d.Hostname,
 		"service_type":                d.ServiceType,
