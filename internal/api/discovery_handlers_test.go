@@ -471,7 +471,7 @@ func TestHandleGetDiscovery_EmitsCanonicalAgentID(t *testing.T) {
 		ID:           "agent:agent-1:agent-1",
 		ResourceType: servicediscovery.ResourceTypeAgent,
 		ResourceID:   "agent-1",
-		HostID:       "agent-1",
+		TargetID:     "agent-1",
 		Hostname:     "agent-1.local",
 	}
 	require.NoError(t, store.Save(agentDiscovery))
