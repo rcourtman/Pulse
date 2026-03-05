@@ -50,8 +50,8 @@ All backend code lives under `cmd/`, `internal/`, and `pkg/`. The binary is asse
    - Supports graceful hot-reload via `SIGHUP` and `.env` file watching.
 
 2. **Unified Resource Registry (`internal/unifiedresources`)**
-   - Central data model that normalises resources from **7 data sources** (`proxmox`, `pbs`, `pmg`, `docker`, `agent` (host), `kubernetes`, `truenas`) into a single `Resource` struct.
-   - **Resource types**: `host`, `vm`, `lxc`, `container`, `storage`, `k8s_cluster`, `k8s_pod`, `pmg`, `ceph`, `physical_disk`.
+   - Central data model that normalises resources from **7 data sources** (`proxmox`, `pbs`, `pmg`, `docker`, `agent`, `kubernetes`, `truenas`) into a single `Resource` struct.
+   - **Canonical v6 resource types**: `agent`, `vm`, `system-container`, `app-container`, `docker-host`, `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`, `storage`, `pbs`, `pmg`, `ceph`, `physical_disk`.
    - Identity-matching engine: merges resources across sources using machine IDs, DMI UUIDs, hostnames, IPs, and MAC addresses.
    - Provides typed **views** (`NodeView`, `K8sClusterView`, etc.) for consumer-specific queries.
    - Canonical API endpoint: `GET /api/resources`.
