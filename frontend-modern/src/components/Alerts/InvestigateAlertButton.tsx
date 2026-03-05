@@ -4,6 +4,7 @@ import type { Alert } from '@/types/api';
 import { formatAlertValue } from '@/utils/alertFormatters';
 import { getUpgradeActionUrlOrFallback } from '@/stores/license';
 import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
+import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
 
 interface InvestigateAlertButtonProps {
   alert: Alert;
@@ -25,36 +26,13 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
   const isLocked = () => props.licenseLocked === true;
   const canonicalTargetType = (raw?: string): string | undefined => {
     const normalized = (raw || '').trim().toLowerCase();
-    switch (normalized) {
-      case 'vm':
-        return 'vm';
-      case 'system-container':
-      case 'app-container':
-      case 'oci-container':
-      case 'pod':
-        return normalized;
-      case 'docker-container':
-      case 'docker-service':
-        return 'app-container';
-      case 'agent':
-      case 'node':
-      case 'storage':
-      case 'disk':
-      case 'docker-host':
-      case 'pbs':
-      case 'pmg':
-      case 'k8s-node':
-      case 'k8s-cluster':
-      case 'k8s-deployment':
-      case 'k8s-service':
-        return normalized;
-      case 'host':
-        return 'agent';
-      case '':
-        return undefined;
-      default:
-        return undefined;
+    if (normalized === 'k8s' || normalized === 'kubernetes') {
+      return undefined;
     }
+    if (normalized === 'docker-container' || normalized === 'docker-service') {
+      return 'app-container';
+    }
+    return canonicalizeFrontendResourceType(raw);
   };
 
   const inferTargetTypeFromResourceID = (resourceID?: string): string | undefined => {

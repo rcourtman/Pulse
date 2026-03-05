@@ -1,5 +1,6 @@
 import type { PlatformType, SourceType, ResourceType } from '@/types/resource';
 import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
+import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
 
 export interface ResourceBadge {
   label: string;
@@ -95,14 +96,7 @@ export function getTypeBadge(resourceType?: ResourceType | string): ResourceBadg
 }
 
 function canonicalType(resourceType: string): string {
-  const normalized = resourceType.trim().toLowerCase();
-  if (normalized === 'host' || normalized === 'hosts') return 'agent';
-  if (normalized === 'dockerhost' || normalized === 'docker_host') return 'docker-host';
-  if (normalized === 'kubernetes-cluster' || normalized === 'kubernetes_cluster')
-    return 'k8s-cluster';
-  if (normalized === 'kubernetes-node' || normalized === 'kubernetes_node') return 'k8s-node';
-  if (normalized === 'k8s') return 'k8s-cluster';
-  return normalized;
+  return canonicalizeFrontendResourceType(resourceType) || resourceType.trim().toLowerCase();
 }
 
 export function getUnifiedSourceBadges(sources?: string[] | null): ResourceBadge[] {

@@ -1,3 +1,5 @@
+import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
+
 type DiscoveryTargetLike = {
   resourceType?: string;
   resourceId?: string;
@@ -17,10 +19,7 @@ const normalizeDiscoveryResourceType = (resourceType: unknown): string | undefin
 export const canonicalDiscoveryResourceType = (resourceType: unknown): string | undefined => {
   const normalized = normalizeDiscoveryResourceType(resourceType);
   if (!normalized) return undefined;
-  if (normalized === 'host') return 'agent';
-  if (normalized === 'docker' || normalized === 'app-container') return 'app-container';
-  if (normalized === 'pod' || normalized === 'k8s' || normalized === 'kubernetes') return 'pod';
-  return normalized;
+  return canonicalizeFrontendResourceType(normalized) || normalized;
 };
 
 export const toDiscoveryAPIResourceType = (resourceType: unknown): string | undefined => {

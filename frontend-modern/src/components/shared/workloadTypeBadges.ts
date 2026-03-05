@@ -1,4 +1,5 @@
 import type { WorkloadType } from '@/types/workloads';
+import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
 
 export interface WorkloadTypeBadge {
   label: string;
@@ -61,16 +62,18 @@ const toTitleCase = (value: string): string =>
     .join(' ');
 
 const normalizeKey = (value: string | null | undefined): WorkloadTypeBadgeKey | null => {
-  const normalized = (value || '').trim().toLowerCase();
-  if (!normalized) return null;
-  if (normalized === 'vm') return 'vm';
-  if (normalized === 'system-container') return 'system-container';
-  if (normalized === 'app-container' || normalized === 'docker') return 'app-container';
-  if (normalized === 'k8s' || normalized === 'kubernetes') return 'pod';
-  if (normalized === 'pod' || normalized === 'k8s-pod') return 'pod';
-  if (normalized === 'host') return 'agent';
-  if (normalized === 'agent') return 'agent';
-  if (normalized === 'oci-container') return 'oci-container';
+  const canonical = canonicalizeFrontendResourceType(value);
+  if (!canonical) return null;
+  if (
+    canonical === 'vm' ||
+    canonical === 'system-container' ||
+    canonical === 'app-container' ||
+    canonical === 'pod' ||
+    canonical === 'agent' ||
+    canonical === 'oci-container'
+  ) {
+    return canonical;
+  }
   return null;
 };
 
