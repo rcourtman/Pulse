@@ -9,12 +9,7 @@ export const resolveWorkloadTypeFromString = (value?: string | null): WorkloadTy
   const normalized = (value || '').trim().toLowerCase();
   if (normalized === 'vm') return 'vm';
   if (normalized === 'oci' || normalized === 'system-container') return 'system-container';
-  if (
-    normalized === 'docker' ||
-    normalized === 'docker-container' ||
-    normalized === 'docker_container' ||
-    normalized === 'app-container'
-  ) {
+  if (normalized === 'docker' || normalized === 'app-container') {
     return 'docker';
   }
   if (normalized === 'pod' || normalized === 'k8s' || normalized === 'kubernetes') return 'k8s';

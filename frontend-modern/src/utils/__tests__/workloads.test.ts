@@ -43,14 +43,14 @@ describe('resolveWorkloadType', () => {
     expect(resolveWorkloadType(guest)).toBe('docker');
   });
 
-  it('returns docker for docker-container type', () => {
+  it('defaults to system-container for legacy docker-container type', () => {
     const guest = { type: 'docker-container' };
-    expect(resolveWorkloadType(guest)).toBe('docker');
+    expect(resolveWorkloadType(guest)).toBe('system-container');
   });
 
-  it('returns docker for docker_container type', () => {
+  it('defaults to system-container for legacy docker_container type', () => {
     const guest = { type: 'docker_container' };
-    expect(resolveWorkloadType(guest)).toBe('docker');
+    expect(resolveWorkloadType(guest)).toBe('system-container');
   });
 
   it('returns k8s for k8s type', () => {
@@ -95,6 +95,14 @@ describe('resolveWorkloadTypeFromString', () => {
 
   it('does not normalize container alias', () => {
     expect(resolveWorkloadTypeFromString('container')).toBeNull();
+  });
+
+  it('does not normalize docker-container alias', () => {
+    expect(resolveWorkloadTypeFromString('docker-container')).toBeNull();
+  });
+
+  it('does not normalize docker_container alias', () => {
+    expect(resolveWorkloadTypeFromString('docker_container')).toBeNull();
   });
 });
 

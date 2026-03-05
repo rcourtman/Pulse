@@ -75,12 +75,7 @@ const normalizeKey = (value: string | null | undefined): WorkloadTypeBadgeKey | 
   if (!normalized) return null;
   if (normalized === 'vm') return 'vm';
   if (normalized === 'system-container') return 'system-container';
-  if (
-    normalized === 'docker' ||
-    normalized === 'docker-container' ||
-    normalized === 'docker_container' ||
-    normalized === 'app-container'
-  ) {
+  if (normalized === 'docker' || normalized === 'app-container') {
     return 'app-container';
   }
   if (normalized === 'k8s' || normalized === 'kubernetes') return 'k8s';

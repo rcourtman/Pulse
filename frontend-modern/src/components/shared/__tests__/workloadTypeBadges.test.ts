@@ -48,14 +48,16 @@ describe('workloadTypeBadges', () => {
         expect(result.label).toBe('Containers');
       });
 
-      it('returns Containers badge for docker-container', () => {
+      it('does not normalize legacy docker-container alias', () => {
         const result = getWorkloadTypeBadge('docker-container');
-        expect(result.label).toBe('Containers');
+        expect(result.label).toBe('Docker Container');
+        expect(result.title).toBe('Docker Container');
       });
 
-      it('returns Containers badge for docker_container', () => {
+      it('does not normalize legacy docker_container alias', () => {
         const result = getWorkloadTypeBadge('docker_container');
-        expect(result.label).toBe('Containers');
+        expect(result.label).toBe('Docker Container');
+        expect(result.title).toBe('Docker Container');
       });
     });
 
