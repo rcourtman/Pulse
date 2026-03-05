@@ -198,7 +198,7 @@ type ResolvedResourceInfo interface {
 // This structured approach replaces the long parameter list for clarity.
 type ResourceRegistration struct {
 	// Identity
-	Kind        string   // Technology/transport kind: "node", "vm", "system-container", "docker_container", etc. (drives routing)
+	Kind        string   // Technology/transport kind: "node", "vm", "system-container", "app-container", etc. (drives routing)
 	ProviderUID string   // Stable provider ID (container ID, VMID, pod UID)
 	Name        string   // Primary display name
 	Aliases     []string // Additional names that resolve to this resource
@@ -463,7 +463,7 @@ type TelemetryCallback interface {
 	// RecordRoutingMismatchBlock records when routing validation blocks an operation
 	// that targeted a parent host when a child resource was recently referenced.
 	// targetKind: "node" (the kind being targeted)
-	// childKind: "system-container", "vm", "docker_container" (the kind of the more specific resource)
+	// childKind: "system-container", "vm", "app-container" (the kind of the more specific resource)
 	RecordRoutingMismatchBlock(tool, targetKind, childKind string)
 }
 

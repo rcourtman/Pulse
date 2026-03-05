@@ -180,7 +180,7 @@ const (
 type ResolvedResource struct {
 	// === Structured Identity (primary) ===
 
-	// Kind is the resource type: "node", "vm", "lxc", "docker_container", "docker_host", "k8s_pod", etc.
+	// Kind is the resource type: "node", "vm", "system-container", "app-container", "docker-host", "k8s-pod", etc.
 	Kind string `json:"kind"`
 
 	// ProviderUID is the stable identifier from the provider (container ID, VMID, pod UID).
@@ -197,7 +197,7 @@ type ResolvedResource struct {
 	// === Derived/Display Fields ===
 
 	// ResourceID is the canonical string identifier, derived from Kind:ProviderUID
-	// Format: "{kind}:{provider_uid}" e.g., "docker_container:abc123def456"
+	// Format: "{kind}:{provider_uid}" e.g., "app-container:abc123def456"
 	// For backwards compatibility, falls back to "{kind}:{name}" if no ProviderUID
 	ResourceID string `json:"resource_id"`
 
@@ -804,7 +804,7 @@ func (rc *ResolvedContext) AddResolvedResource(reg tools.ResourceRegistration) {
 	// Examples:
 	//   lxc:delly:141         (LXC container 141 on node delly)
 	//   vm:minipc:203         (VM 203 on node minipc)
-	//   docker_container:media-server:abc123  (Docker container on host media-server)
+	//   app-container:media-server:abc123  (Docker container on host media-server)
 	//   node:delly            (Proxmox node - no parent scope)
 	var resourceID string
 	if reg.ProviderUID != "" {

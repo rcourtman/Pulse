@@ -1907,7 +1907,7 @@ func (e *PulseToolExecutor) validateRoutingContext(targetHost string) RoutingVal
 type recentChildInfo struct {
 	Name       string // Human-readable name
 	ResourceID string // Canonical ID (kind:scope:id)
-	Kind       string // Resource kind (system-container, vm, docker_container) for telemetry
+	Kind       string // Resource kind (system-container, vm, app-container) for telemetry
 }
 
 // findRecentlyReferencedChildrenOnNode returns the names and IDs of guest resources (system containers/VMs) on a
@@ -3323,7 +3323,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 			}
 			response.Host = hostName
 			e.registerResolvedResourceWithExplicitAccess(ResourceRegistration{
-				Kind:          "docker_container",
+				Kind:          "app-container",
 				ProviderUID:   containerID, // Docker container ID is the stable provider ID
 				Name:          container.Name(),
 				Aliases:       aliases,
@@ -3962,7 +3962,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 			}
 		case "app-container":
 			reg = ResourceRegistration{
-				Kind:          "docker_container",
+				Kind:          "app-container",
 				ProviderUID:   match.ID, // Docker container ID
 				Name:          match.Name,
 				Aliases:       []string{match.Name, match.ID},

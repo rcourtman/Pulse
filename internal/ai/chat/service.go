@@ -408,7 +408,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 					}
 				case "app-container":
 					if mention.TargetHost != "" {
-						resourceID = "docker_container:" + mention.TargetHost + ":" + mention.ResourceID
+						resourceID = "app-container:" + mention.TargetHost + ":" + mention.ResourceID
 					}
 				}
 				if resourceID != "" {

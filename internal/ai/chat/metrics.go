@@ -221,7 +221,7 @@ func (m *AIMetrics) RecordStrictResolutionBlock(tool, action string) {
 
 // RecordRoutingMismatchBlock records when routing validation blocks an operation
 // that targeted a parent host when the user recently referenced a child resource.
-// Note: use small enums for kinds (node, lxc, vm, docker_container), not resource IDs
+// Note: use small enums for kinds (node, system-container, vm, app-container), not resource IDs
 func (m *AIMetrics) RecordRoutingMismatchBlock(tool, targetKind, childKind string) {
 	m.routingMismatchBlock.WithLabelValues(sanitizeLabel(tool), sanitizeLabel(targetKind), sanitizeLabel(childKind)).Inc()
 }

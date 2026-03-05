@@ -128,7 +128,7 @@ func (p *PatrolService) InjectDemoFindings() {
 			Description:  "The uptime-kuma container on docker-host-1 has restarted 7 times in the past 24 hours. This may indicate configuration issues or resource constraints.",
 			ResourceID:   "docker/docker-host-1/uptime-kuma",
 			ResourceName: "uptime-kuma",
-			ResourceType: "docker_container",
+			ResourceType: "app-container",
 			Node:         "docker-host-1",
 			Recommendation: `**Check logs:**
 ` + "`docker logs uptime-kuma --tail 100`" + `
