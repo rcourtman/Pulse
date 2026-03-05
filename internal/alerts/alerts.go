@@ -6265,17 +6265,13 @@ func CanonicalResourceTypeKeys(resourceType string) []string {
 		keys = addUnique(keys, "guest")
 	case "app-container":
 		keys = addUnique(keys, "app-container")
-		keys = addUnique(keys, "docker")
 		keys = addUnique(keys, "guest")
 	case "docker-host":
 		keys = addUnique(keys, "docker-host")
-		keys = addUnique(keys, "dockerhost")
-		keys = addUnique(keys, "docker")
 		keys = addUnique(keys, "node")
 	case "docker-service":
 		keys = addUnique(keys, "docker-service")
 		keys = addUnique(keys, "app-container")
-		keys = addUnique(keys, "docker")
 		keys = addUnique(keys, "guest")
 	case "node":
 		keys = addUnique(keys, "node")
@@ -6294,15 +6290,12 @@ func CanonicalResourceTypeKeys(resourceType string) []string {
 		keys = addUnique(keys, "node")
 	case "k8s-cluster":
 		keys = addUnique(keys, "k8s-cluster")
-		keys = addUnique(keys, "k8s")
 		keys = addUnique(keys, "guest")
 	case "k8s-node":
 		keys = addUnique(keys, "k8s-node")
 		keys = addUnique(keys, "node")
-		keys = addUnique(keys, "k8s")
 	case "pod":
 		keys = addUnique(keys, "pod")
-		keys = addUnique(keys, "k8s")
 		keys = addUnique(keys, "guest")
 	case "storage":
 		keys = addUnique(keys, "storage")

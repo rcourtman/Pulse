@@ -1394,19 +1394,19 @@ func TestCanonicalResourceTypeKeys(t *testing.T) {
 			want:         []string{"oci-container", "system-container", "guest"},
 		},
 		{
-			name:         "app-container canonical + docker + guest fallback",
+			name:         "app-container canonical + guest fallback",
 			resourceType: "app-container",
-			want:         []string{"app-container", "docker", "guest"},
+			want:         []string{"app-container", "guest"},
 		},
 		{
-			name:         "docker-host canonical + legacy fallbacks",
+			name:         "docker-host canonical + node fallback",
 			resourceType: "docker-host",
-			want:         []string{"docker-host", "dockerhost", "docker", "node"},
+			want:         []string{"docker-host", "node"},
 		},
 		{
-			name:         "docker-service canonical + app-container + docker + guest fallback",
+			name:         "docker-service canonical + app-container + guest fallback",
 			resourceType: "docker-service",
-			want:         []string{"docker-service", "app-container", "docker", "guest"},
+			want:         []string{"docker-service", "app-container", "guest"},
 		},
 		{name: "node canonical", resourceType: "node", want: []string{"node"}},
 		{name: "agent canonical + node fallback", resourceType: "agent", want: []string{"agent", "node"}},
@@ -1420,14 +1420,14 @@ func TestCanonicalResourceTypeKeys(t *testing.T) {
 		{
 			name:         "k8s cluster canonical + guest fallback",
 			resourceType: "k8s-cluster",
-			want:         []string{"k8s-cluster", "k8s", "guest"},
+			want:         []string{"k8s-cluster", "guest"},
 		},
 		{
 			name:         "k8s node canonical + node fallback",
 			resourceType: "k8s-node",
-			want:         []string{"k8s-node", "node", "k8s"},
+			want:         []string{"k8s-node", "node"},
 		},
-		{name: "pod canonical + guest fallback", resourceType: "pod", want: []string{"pod", "k8s", "guest"}},
+		{name: "pod canonical + guest fallback", resourceType: "pod", want: []string{"pod", "guest"}},
 		{name: "storage canonical", resourceType: "storage", want: []string{"storage"}},
 		{name: "disk canonical + storage fallback", resourceType: "disk", want: []string{"disk", "storage"}},
 		{
