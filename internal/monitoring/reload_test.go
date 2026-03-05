@@ -80,3 +80,40 @@ func TestReloadableMonitor_Lifecycle_Coverage(t *testing.T) {
 	// Test Stop
 	rm.Stop()
 }
+
+func TestReloadableMonitor_SingleTenantLifecycle(t *testing.T) {
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+	}
+
+	rm, err := NewReloadableMonitor(cfg, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rm)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	rm.Start(ctx)
+
+	defaultMonitor := rm.GetMonitor()
+	require.NotNil(t, defaultMonitor)
+
+	defaultState := rm.GetState("default")
+	require.NotNil(t, defaultState)
+
+	nonDefaultState := rm.GetState("acme")
+	assert.Nil(t, nonDefaultState)
+
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- rm.Reload()
+	}()
+
+	select {
+	case err := <-errChan:
+		require.NoError(t, err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("single-tenant reload timed out")
+	}
+
+	rm.Stop()
+}

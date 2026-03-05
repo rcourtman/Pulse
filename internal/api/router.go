@@ -139,6 +139,10 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	InitSessionStore(cfg.DataPath)
 	InitCSRFStore(cfg.DataPath)
 
+	if isV5SingleTenantMode() {
+		mtMonitor = nil
+	}
+
 	updateHistory, err := updates.NewUpdateHistory(cfg.DataPath)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize update history")
@@ -152,6 +156,11 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	updateManager := updates.NewManager(cfg)
 	updateManager.SetHistory(updateHistory)
 
+	var mtPersistence *config.MultiTenantPersistence
+	if !isV5SingleTenantMode() {
+		mtPersistence = config.NewMultiTenantPersistence(cfg.DataPath)
+	}
+
 	r := &Router{
 		mux:             http.NewServeMux(),
 		config:          cfg,
@@ -164,7 +173,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		exportLimiter:   NewRateLimiter(5, 1*time.Minute),  // 5 attempts per minute
 		downloadLimiter: NewRateLimiter(60, 1*time.Minute), // downloads/installers per minute per IP
 		persistence:     config.NewConfigPersistence(cfg.DataPath),
-		multiTenant:     config.NewMultiTenantPersistence(cfg.DataPath),
+		multiTenant:     mtPersistence,
 		authorizer:      auth.GetAuthorizer(),
 		serverVersion:   strings.TrimSpace(serverVersion),
 		projectRoot:     projectRoot,
@@ -253,12 +262,16 @@ func (r *Router) setupRoutes() {
 	r.notificationHandlers = NewNotificationHandlers(r.mtMonitor, NewNotificationMonitorWrapper(r.monitor))
 	r.notificationQueueHandlers = NewNotificationQueueHandlers(r.monitor)
 	guestMetadataHandler := NewGuestMetadataHandler(r.multiTenant)
+	guestMetadataHandler.SetLegacyPersistence(r.persistence)
 	dockerMetadataHandler := NewDockerMetadataHandler(r.multiTenant)
+	dockerMetadataHandler.SetLegacyPersistence(r.persistence)
 	hostMetadataHandler := NewHostMetadataHandler(r.multiTenant)
+	hostMetadataHandler.SetLegacyPersistence(r.persistence)
 	r.configHandlers = NewConfigHandlers(r.multiTenant, r.mtMonitor, r.reloadFunc, r.wsHub, guestMetadataHandler, r.reloadSystemSettings)
 	if r.monitor != nil {
 		r.configHandlers.SetMonitor(r.monitor)
 	}
+	r.configHandlers.SetPersistence(r.persistence)
 	updateHandlers := NewUpdateHandlers(r.updateManager, r.updateHistory)
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.mtMonitor, r.monitor, r.wsHub, r.config)
 	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
@@ -266,6 +279,7 @@ func (r *Router) setupRoutes() {
 	r.resourceHandlers = NewResourceHandlers()
 	r.configProfileHandler = NewConfigProfileHandler(r.multiTenant)
 	r.licenseHandlers = NewLicenseHandlers(r.multiTenant)
+	r.licenseHandlers.SetLegacyPersistence(r.persistence)
 	// Wire license service provider so middleware can access per-tenant license services
 	SetLicenseServiceProvider(r.licenseHandlers)
 	r.reportingHandlers = NewReportingHandlers(r.mtMonitor)
@@ -1439,6 +1453,7 @@ func (r *Router) setupRoutes() {
 
 	// AI settings endpoints
 	r.aiSettingsHandler = NewAISettingsHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
+	r.aiSettingsHandler.SetLegacyRuntime(r.config, r.persistence)
 	// Inject state provider so AI has access to full infrastructure context (VMs, containers, IPs)
 	if r.monitor != nil {
 		r.aiSettingsHandler.SetStateProvider(r.monitor)

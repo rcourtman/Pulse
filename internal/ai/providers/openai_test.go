@@ -13,6 +13,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return fn(r)
+}
+
 func TestOpenAIClient_ChatStream_Success(t *testing.T) {
 	// Mock OpenAI SSE stream
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -209,9 +215,65 @@ func TestOpenAIClient_ListModels(t *testing.T) {
 	models, err := client.ListModels(context.Background())
 	require.NoError(t, err)
 
+	assert.Len(t, models, 3)
+	assert.Equal(t, "gpt-4", models[0].ID)
+	assert.Equal(t, "gpt-3.5-turbo", models[1].ID)
+	assert.Equal(t, "claude-3", models[2].ID)
+}
+
+func TestOpenAIClient_ListModels_OfficialEndpointStillFiltersNonChatModels(t *testing.T) {
+	client := NewOpenAIClient("sk-test", "gpt-4", "", 0)
+	client.client = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			assert.Equal(t, "https", r.URL.Scheme)
+			assert.Equal(t, "api.openai.com", r.URL.Host)
+			assert.Equal(t, "/v1/models", r.URL.Path)
+
+			rec := httptest.NewRecorder()
+			rec.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(rec).Encode(map[string]interface{}{
+				"data": []map[string]interface{}{
+					{"id": "gpt-4", "object": "model", "created": 1234567890, "owned_by": "openai"},
+					{"id": "gpt-3.5-turbo", "object": "model", "created": 1234567890, "owned_by": "openai"},
+					{"id": "claude-3", "object": "model", "created": 1234567890, "owned_by": "anthropic"},
+				},
+			})
+			return rec.Result(), nil
+		}),
+	}
+
+	models, err := client.ListModels(context.Background())
+	require.NoError(t, err)
+
 	assert.Len(t, models, 2)
 	assert.Equal(t, "gpt-4", models[0].ID)
 	assert.Equal(t, "gpt-3.5-turbo", models[1].ID)
+}
+
+func TestOpenAIClient_ListModels_CustomEndpointIncludesNonOpenAIModelNames(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"id": "llama3-8b", "object": "model", "created": 1234567890, "owned_by": "localai"},
+				{"id": "qwen3.5-27b", "object": "model", "created": 1234567891, "owned_by": "localai"},
+				{"id": "gemma-3-4b", "object": "model", "created": 1234567892, "owned_by": "localai"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "llama3-8b", server.URL+"/custom-openai", 0)
+
+	models, err := client.ListModels(context.Background())
+	require.NoError(t, err)
+
+	assert.Len(t, models, 3)
+	assert.Equal(t, "llama3-8b", models[0].ID)
+	assert.Equal(t, "qwen3.5-27b", models[1].ID)
+	assert.Equal(t, "gemma-3-4b", models[2].ID)
 }
 
 func TestOpenAIClient_Chat_Success(t *testing.T) {

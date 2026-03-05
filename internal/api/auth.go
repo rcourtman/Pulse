@@ -202,6 +202,12 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		return true
 	}
 
+	// Requests that already carry validated auth context from the outer
+	// middleware should not be forced back through global-config auth checks.
+	if applyAuthContextHeaders(w, r) {
+		return true
+	}
+
 	config.Mu.RLock()
 	defer config.Mu.RUnlock()
 
@@ -575,6 +581,26 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 	return false
 }
 
+func applyAuthContextHeaders(w http.ResponseWriter, r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+
+	username := internalauth.GetUser(r.Context())
+	if username == "" {
+		return false
+	}
+
+	if w != nil {
+		w.Header().Set("X-Authenticated-User", username)
+		if internalauth.GetAPIToken(r.Context()) != nil {
+			w.Header().Set("X-Auth-Method", "api_token")
+		}
+	}
+
+	return true
+}
+
 // RequireAuth middleware checks for authentication
 func RequireAuth(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -877,13 +903,7 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 		targetConfig := cfg
 
 		if mtm != nil {
-			// Check for Tenant ID in header or cookie
-			orgID := "default"
-			if id := r.Header.Get("X-Pulse-Org-ID"); id != "" {
-				orgID = id
-			} else if cookie, err := r.Cookie("pulse_org_id"); err == nil && cookie.Value != "" {
-				orgID = cookie.Value
-			}
+			orgID := requestedOrgID(r)
 
 			// If targeting a specific tenant, try to load that tenant's config
 			if orgID != "default" {

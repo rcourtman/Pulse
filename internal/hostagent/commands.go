@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -175,7 +176,8 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 	}
 
 	// Connect
-	conn, _, err := dialer.DialContext(ctx, wsURL, nil)
+	headers := make(http.Header)
+	conn, _, err := dialer.DialContext(ctx, wsURL, headers)
 	if err != nil {
 		return fmt.Errorf("dial websocket: %w", err)
 	}

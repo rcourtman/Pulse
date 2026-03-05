@@ -24,6 +24,20 @@ func createTestHandler(t *testing.T) *LicenseHandlers {
 	return NewLicenseHandlers(mtp)
 }
 
+func TestLicenseHandlers_FallbackToLegacyPersistence(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	handler := NewLicenseHandlers(nil)
+	handler.SetLegacyPersistence(persistence)
+
+	svc, p, err := handler.getTenantComponents(context.Background())
+	if err != nil {
+		t.Fatalf("expected legacy persistence fallback, got error: %v", err)
+	}
+	if svc == nil || p == nil {
+		t.Fatalf("expected service and persistence from legacy fallback")
+	}
+}
+
 type licenseFeaturesResponse struct {
 	LicenseStatus string          `json:"license_status"`
 	Features      map[string]bool `json:"features"`

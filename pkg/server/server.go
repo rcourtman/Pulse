@@ -96,6 +96,7 @@ func Run(ctx context.Context, version string) error {
 	if dataDir == "" {
 		dataDir = "/etc/pulse"
 	}
+	runtimeSingleTenant := api.IsV5SingleTenantRuntime()
 	rbacManager, err := auth.NewFileManager(dataDir)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to initialize RBAC manager, role management will be unavailable")
@@ -106,7 +107,7 @@ func Run(ctx context.Context, version string) error {
 
 	// Run multi-tenant data migration only when the feature is explicitly enabled.
 	// This prevents any on-disk layout changes for default (single-tenant) users.
-	if api.IsMultiTenantEnabled() {
+	if api.IsMultiTenantEnabled() && !runtimeSingleTenant {
 		if err := config.RunMigrationIfNeeded(dataDir); err != nil {
 			log.Error().Err(err).Msg("Multi-tenant data migration failed")
 			// Continue anyway - migration failure shouldn't block startup
@@ -147,9 +148,13 @@ func Run(ctx context.Context, version string) error {
 		wsHub.SetAllowedOrigins([]string{})
 	}
 	go wsHub.Run()
+	wsHub.SetSingleTenantMode(runtimeSingleTenant)
 
 	// Initialize reloadable monitoring system
-	mtPersistence := config.NewMultiTenantPersistence(cfg.DataPath)
+	var mtPersistence *config.MultiTenantPersistence
+	if !runtimeSingleTenant {
+		mtPersistence = config.NewMultiTenantPersistence(cfg.DataPath)
+	}
 	reloadableMonitor, err := monitoring.NewReloadableMonitor(cfg, mtPersistence, wsHub)
 	if err != nil {
 		return fmt.Errorf("failed to initialize monitoring system: %w", err)
@@ -197,6 +202,11 @@ func Run(ctx context.Context, version string) error {
 
 	// Set tenant-aware state getter for multi-tenant support
 	wsHub.SetStateGetterForTenant(func(orgID string) interface{} {
+		if runtimeSingleTenant {
+			state := reloadableMonitor.GetMonitor().GetState()
+			return state.ToFrontend()
+		}
+
 		mtMonitor := reloadableMonitor.GetMultiTenantMonitor()
 		if mtMonitor == nil {
 			// Fall back to default monitor
@@ -216,12 +226,14 @@ func Run(ctx context.Context, version string) error {
 
 	// Set org authorization checker for WebSocket connections
 	// This ensures clients can only subscribe to orgs they have access to
-	orgLoader := api.NewMultiTenantOrganizationLoader(mtPersistence)
-	wsHub.SetOrgAuthChecker(api.NewAuthorizationChecker(orgLoader))
+	if !runtimeSingleTenant {
+		orgLoader := api.NewMultiTenantOrganizationLoader(mtPersistence)
+		wsHub.SetOrgAuthChecker(api.NewAuthorizationChecker(orgLoader))
 
-	// Set multi-tenant checker for WebSocket connections
-	// This ensures the feature flag and license are checked before allowing non-default org connections
-	wsHub.SetMultiTenantChecker(api.NewMultiTenantChecker())
+		// Set multi-tenant checker for WebSocket connections
+		// This ensures the feature flag and license are checked before allowing non-default org connections
+		wsHub.SetMultiTenantChecker(api.NewMultiTenantChecker())
+	}
 
 	// Wire up Prometheus metrics for alert lifecycle
 	alerts.SetMetricHooks(
@@ -243,19 +255,31 @@ func Run(ctx context.Context, version string) error {
 		}
 		if router != nil {
 			router.SetMonitor(reloadableMonitor.GetMonitor())
-			router.SetMultiTenantMonitor(reloadableMonitor.GetMultiTenantMonitor())
+			if runtimeSingleTenant {
+				router.SetMultiTenantMonitor(nil)
+			} else {
+				router.SetMultiTenantMonitor(reloadableMonitor.GetMultiTenantMonitor())
+			}
 			if cfg := reloadableMonitor.GetConfig(); cfg != nil {
 				router.SetConfig(cfg)
 			}
 		}
 		return nil
 	}
-	router = api.NewRouter(cfg, reloadableMonitor.GetMonitor(), reloadableMonitor.GetMultiTenantMonitor(), wsHub, reloadFunc, version)
+	routerMTMonitor := reloadableMonitor.GetMultiTenantMonitor()
+	if runtimeSingleTenant {
+		routerMTMonitor = nil
+	}
+	router = api.NewRouter(cfg, reloadableMonitor.GetMonitor(), routerMTMonitor, wsHub, reloadFunc, version)
 
 	// Inject resource store into monitor for WebSocket broadcasts
 	router.SetMonitor(reloadableMonitor.GetMonitor())
 	// Wire multi-tenant monitor to resource handlers for tenant-aware state
-	router.SetMultiTenantMonitor(reloadableMonitor.GetMultiTenantMonitor())
+	if runtimeSingleTenant {
+		router.SetMultiTenantMonitor(nil)
+	} else {
+		router.SetMultiTenantMonitor(reloadableMonitor.GetMultiTenantMonitor())
+	}
 
 	// Create HTTP server with unified configuration
 	srv := &http.Server{
@@ -319,7 +343,11 @@ func Run(ctx context.Context, version string) error {
 				log.Error().Err(err).Msg("Failed to reload monitor after mock.env change")
 			} else if router != nil {
 				router.SetMonitor(reloadableMonitor.GetMonitor())
-				router.SetMultiTenantMonitor(reloadableMonitor.GetMultiTenantMonitor())
+				if runtimeSingleTenant {
+					router.SetMultiTenantMonitor(nil)
+				} else {
+					router.SetMultiTenantMonitor(reloadableMonitor.GetMultiTenantMonitor())
+				}
 				if cfg := reloadableMonitor.GetConfig(); cfg != nil {
 					router.SetConfig(cfg)
 				}

@@ -13,7 +13,8 @@ import (
 
 // DockerMetadataHandler handles Docker resource metadata operations
 type DockerMetadataHandler struct {
-	mtPersistence *config.MultiTenantPersistence
+	mtPersistence     *config.MultiTenantPersistence
+	legacyPersistence *config.ConfigPersistence
 }
 
 // NewDockerMetadataHandler creates a new Docker metadata handler
@@ -23,6 +24,10 @@ func NewDockerMetadataHandler(mtPersistence *config.MultiTenantPersistence) *Doc
 	}
 }
 
+func (h *DockerMetadataHandler) SetLegacyPersistence(persistence *config.ConfigPersistence) {
+	h.legacyPersistence = persistence
+}
+
 func (h *DockerMetadataHandler) getStore(ctx context.Context) *config.DockerMetadataStore {
 	orgID := "default"
 	if ctx != nil {
@@ -30,8 +35,15 @@ func (h *DockerMetadataHandler) getStore(ctx context.Context) *config.DockerMeta
 			orgID = id
 		}
 	}
-	p, _ := h.mtPersistence.GetPersistence(orgID)
-	return p.GetDockerMetadataStore()
+	if h.mtPersistence != nil {
+		if p, err := h.mtPersistence.GetPersistence(orgID); err == nil && p != nil {
+			return p.GetDockerMetadataStore()
+		}
+	}
+	if h.legacyPersistence != nil {
+		return h.legacyPersistence.GetDockerMetadataStore()
+	}
+	return nil
 }
 
 // Store returns the underlying metadata store for default tenant

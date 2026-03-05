@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestHandleSetupScriptURL(t *testing.T) {
@@ -128,5 +130,55 @@ func TestHandleSetupScriptURL_MethodNotAllowed(t *testing.T) {
 
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("expected method not allowed, got %v", w.Code)
+	}
+}
+
+func TestHandleSetupScriptURLIgnoresOrgContext(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "pulse-setup-url-test-org")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	cfg := &config.Config{
+		DataPath:     tempDir,
+		FrontendPort: 8080,
+		PublicURL:    "https://pulse.example.com",
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	body := bytes.NewBufferString(`{"type":"pve","host":"delly"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/setup-script-url", body)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "acme"))
+	req.Host = "127.0.0.1:8080"
+	w := httptest.NewRecorder()
+
+	handler.HandleSetupScriptURL(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	token, ok := resp["setupToken"].(string)
+	if !ok || token == "" {
+		t.Fatalf("expected setup token in response, got %#v", resp["setupToken"])
+	}
+
+	tokenHash := internalauth.HashAPIToken(token)
+
+	handler.codeMutex.RLock()
+	setupCode := handler.setupCodes[tokenHash]
+	handler.codeMutex.RUnlock()
+
+	if setupCode == nil {
+		t.Fatalf("expected setup code to be stored for token hash %q", tokenHash)
+	}
+	if setupCode.OrgID != "default" {
+		t.Fatalf("expected setup code org to be forced to default, got %q", setupCode.OrgID)
 	}
 }

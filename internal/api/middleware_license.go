@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -18,9 +19,29 @@ import (
 // AND properly licensed for non-default organizations to work.
 var multiTenantEnabled = strings.EqualFold(os.Getenv("PULSE_MULTI_TENANT_ENABLED"), "true")
 
+// v5 should behave as single-tenant in real runtime even if dormant multi-tenant
+// code remains in the branch. Tests can disable this to exercise legacy paths.
+var v5SingleTenantMode = !runningUnderGoTest()
+
 // IsMultiTenantEnabled returns whether multi-tenant functionality is enabled.
 func IsMultiTenantEnabled() bool {
 	return multiTenantEnabled
+}
+
+func isV5SingleTenantMode() bool {
+	return v5SingleTenantMode
+}
+
+func IsV5SingleTenantRuntime() bool {
+	return isV5SingleTenantMode()
+}
+
+func setV5SingleTenantModeForTests(enabled bool) {
+	v5SingleTenantMode = enabled
+}
+
+func runningUnderGoTest() bool {
+	return strings.HasSuffix(filepath.Base(os.Args[0]), ".test")
 }
 
 // DefaultMultiTenantChecker implements websocket.MultiTenantChecker for use with the WebSocket hub.

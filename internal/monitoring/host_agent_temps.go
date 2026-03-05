@@ -36,10 +36,28 @@ func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.T
 
 	var matchedHost *models.Host
 
-	// First, try to find a host agent that is explicitly linked to this node
-	// via LinkedNodeID. This is the most reliable method and handles duplicate
-	// hostnames correctly.
+	// First, try to resolve through the node's canonical linked host agent ID.
+	// This is the link preserved by node refreshes and is more reliable than
+	// host-side hostname matching when node IDs change or FQDN/short names differ.
 	if nodeID != "" {
+		if linkedHostID := m.state.GetNodeLinkedHostAgentID(nodeID); linkedHostID != "" {
+			for i := range hosts {
+				if hosts[i].ID == linkedHostID {
+					matchedHost = &hosts[i]
+					log.Debug().
+						Str("nodeID", nodeID).
+						Str("hostAgentID", hosts[i].ID).
+						Str("hostname", hosts[i].Hostname).
+						Msg("Matched host agent to node via LinkedHostAgentID")
+					break
+				}
+			}
+		}
+	}
+
+	// Fallback: try to find a host agent that is explicitly linked to this node
+	// via LinkedNodeID. This maintains compatibility with older host-side links.
+	if matchedHost == nil && nodeID != "" {
 		for i := range hosts {
 			if hosts[i].LinkedNodeID == nodeID {
 				matchedHost = &hosts[i]
@@ -54,11 +72,12 @@ func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.T
 	}
 
 	// Fallback: match by hostname if no linked host was found
-	// This maintains backwards compatibility for setups where linking hasn't occurred yet
+	// This maintains backwards compatibility for setups where linking hasn't occurred yet.
+	// Compare both FQDN and short hostname forms so the behavior matches node auto-linking.
 	if matchedHost == nil {
-		nodeLower := strings.ToLower(strings.TrimSpace(nodeName))
+		nodeLower := normalizeHostAgentNodeName(nodeName)
 		for i := range hosts {
-			hostnameLower := strings.ToLower(strings.TrimSpace(hosts[i].Hostname))
+			hostnameLower := normalizeHostAgentNodeName(hosts[i].Hostname)
 			if hostnameLower == nodeLower {
 				matchedHost = &hosts[i]
 				break
@@ -70,13 +89,22 @@ func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.T
 		return nil
 	}
 
-	// Check if the host agent has temperature data
-	if len(matchedHost.Sensors.TemperatureCelsius) == 0 {
+	// Allow SMART-only sensor payloads from platforms like FreeBSD where
+	// CPU sensors may be unavailable but disk temperature data is still valid.
+	if len(matchedHost.Sensors.TemperatureCelsius) == 0 && len(matchedHost.Sensors.SMART) == 0 {
 		return nil
 	}
 
 	// Convert host agent sensor data to Temperature model
 	return convertHostSensorsToTemperature(matchedHost.Sensors, matchedHost.LastSeen)
+}
+
+func normalizeHostAgentNodeName(name string) string {
+	normalized := strings.ToLower(strings.TrimSpace(name))
+	if idx := strings.Index(normalized, "."); idx > 0 {
+		return normalized[:idx]
+	}
+	return normalized
 }
 
 // convertHostSensorsToTemperature converts HostSensorSummary to the Temperature model.
@@ -86,10 +114,6 @@ func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.T
 // - "nvme0", "nvme1", etc. -> NVMe temperatures
 // - "gpu_edge", "gpu_junction", etc. -> GPU temperatures
 func convertHostSensorsToTemperature(sensors models.HostSensorSummary, lastSeen time.Time) *models.Temperature {
-	if len(sensors.TemperatureCelsius) == 0 {
-		return nil
-	}
-
 	temp := &models.Temperature{
 		Available:  true,
 		LastUpdate: lastSeen,

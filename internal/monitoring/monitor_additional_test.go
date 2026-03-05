@@ -149,27 +149,63 @@ func TestClusterEndpointEffectiveURL(t *testing.T) {
 		IP:   "10.0.0.1",
 	}
 
-	if got := clusterEndpointEffectiveURL(endpoint, true, false); got != "https://node.local:8006" {
+	if got := clusterEndpointEffectiveURL(endpoint, true, ""); got != "https://node.local:8006" {
 		t.Fatalf("verifySSL host preference = %q, want %q", got, "https://node.local:8006")
 	}
 
 	endpoint.Host = ""
-	if got := clusterEndpointEffectiveURL(endpoint, true, false); got != "https://10.0.0.1:8006" {
+	if got := clusterEndpointEffectiveURL(endpoint, true, ""); got != "https://10.0.0.1:8006" {
 		t.Fatalf("verifySSL fallback to IP = %q, want %q", got, "https://10.0.0.1:8006")
 	}
 
 	endpoint.Host = "node.local"
-	if got := clusterEndpointEffectiveURL(endpoint, false, false); got != "https://10.0.0.1:8006" {
+	if got := clusterEndpointEffectiveURL(endpoint, false, ""); got != "https://10.0.0.1:8006" {
 		t.Fatalf("non-SSL IP preference = %q, want %q", got, "https://10.0.0.1:8006")
 	}
 
 	endpoint.IPOverride = "192.168.1.10"
-	if got := clusterEndpointEffectiveURL(endpoint, false, false); got != "https://192.168.1.10:8006" {
+	if got := clusterEndpointEffectiveURL(endpoint, false, ""); got != "https://192.168.1.10:8006" {
 		t.Fatalf("override IP preference = %q, want %q", got, "https://192.168.1.10:8006")
 	}
 
+	endpoint.Fingerprint = "ep-fingerprint"
+	if got := clusterEndpointEffectiveURL(endpoint, true, ""); got != "https://192.168.1.10:8006" {
+		t.Fatalf("per-endpoint fingerprint should allow IP override, got %q", got)
+	}
+
 	endpoint = config.ClusterEndpoint{}
-	if got := clusterEndpointEffectiveURL(endpoint, true, false); got != "" {
+	if got := clusterEndpointEffectiveURL(endpoint, true, ""); got != "" {
 		t.Fatalf("empty endpoint = %q, want empty", got)
+	}
+}
+
+func TestBuildClusterClientEndpoints_PrefersOverrideWhenEndpointFingerprintPresent(t *testing.T) {
+	pve := config.PVEInstance{
+		Name:        "cluster-a",
+		Host:        "https://cluster-a.local:8006",
+		VerifySSL:   true,
+		IsCluster:   true,
+		ClusterName: "cluster-a",
+		ClusterEndpoints: []config.ClusterEndpoint{
+			{
+				NodeName:    "node1",
+				Host:        "https://node1.local:8006",
+				IP:          "10.15.5.11",
+				IPOverride:  "10.15.2.11",
+				Fingerprint: "node1-fp",
+			},
+		},
+	}
+
+	endpoints, fingerprints := buildClusterClientEndpoints(pve)
+
+	if len(endpoints) != 2 {
+		t.Fatalf("expected endpoint plus main host fallback, got %d", len(endpoints))
+	}
+	if endpoints[0] != "https://10.15.2.11:8006" {
+		t.Fatalf("expected endpoint override URL first, got %q", endpoints[0])
+	}
+	if fingerprints["https://10.15.2.11:8006"] != "node1-fp" {
+		t.Fatalf("expected fingerprint to follow effective endpoint URL, got %q", fingerprints["https://10.15.2.11:8006"])
 	}
 }

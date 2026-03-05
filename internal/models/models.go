@@ -2302,6 +2302,20 @@ func (s *State) GetHosts() []Host {
 	return hosts
 }
 
+// GetNodeLinkedHostAgentID returns the linked host agent ID for the given node.
+func (s *State) GetNodeLinkedHostAgentID(nodeID string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, node := range s.Nodes {
+		if node.ID == nodeID {
+			return node.LinkedHostAgentID
+		}
+	}
+
+	return ""
+}
+
 // RemoveHost removes a host by ID and returns the removed entry.
 func (s *State) RemoveHost(hostID string) (Host, bool) {
 	s.mu.Lock()

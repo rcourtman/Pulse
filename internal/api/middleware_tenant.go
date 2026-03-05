@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -51,24 +52,7 @@ func (m *TenantMiddleware) SetAuthChecker(checker AuthorizationChecker) {
 
 func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 1. Extract Org ID
-		// Priority:
-		// 1. Header: X-Pulse-Org-ID (for API clients/agents)
-		// 2. Cookie: pulse_org_id (for browser session)
-		// 3. Fallback: "default" (for backward compatibility)
-
-		orgID := r.Header.Get("X-Pulse-Org-ID")
-		if orgID == "" {
-			// Check cookie
-			if cookie, err := r.Cookie("pulse_org_id"); err == nil {
-				orgID = cookie.Value
-			}
-		}
-
-		// Fallback to default
-		if orgID == "" {
-			orgID = "default"
-		}
+		orgID := requestedOrgID(r)
 
 		// 2. Validate Organization Exists (only for non-default orgs)
 		// This must check existence WITHOUT creating directories to prevent DoS.
@@ -173,4 +157,30 @@ func GetOrganization(ctx context.Context) *models.Organization {
 		return org
 	}
 	return &models.Organization{ID: "default", DisplayName: "Default Organization"}
+}
+
+func requestedOrgID(r *http.Request) string {
+	orgID := ""
+	if r != nil {
+		orgID = strings.TrimSpace(r.Header.Get("X-Pulse-Org-ID"))
+		if orgID == "" {
+			if cookie, err := r.Cookie("pulse_org_id"); err == nil {
+				orgID = strings.TrimSpace(cookie.Value)
+			}
+		}
+	}
+
+	if orgID != "" && orgID != "default" && isV5SingleTenantMode() {
+		log.Debug().
+			Str("path", r.URL.Path).
+			Str("requested_org", orgID).
+			Msg("Ignoring non-default org for single-tenant v5 runtime")
+		return "default"
+	}
+
+	if orgID == "" {
+		return "default"
+	}
+
+	return orgID
 }

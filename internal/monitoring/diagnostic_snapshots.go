@@ -50,6 +50,8 @@ type VMMemoryRaw struct {
 	StatusMem             uint64 `json:"statusMem,omitempty"`
 	StatusFreeMem         uint64 `json:"statusFreemem,omitempty"`
 	StatusMaxMem          uint64 `json:"statusMaxmem,omitempty"`
+	RRDAvailable          uint64 `json:"rrdAvailable,omitempty"`
+	RRDUsed               uint64 `json:"rrdUsed,omitempty"`
 	Balloon               uint64 `json:"balloon,omitempty"`
 	BalloonMin            uint64 `json:"balloonMin,omitempty"`
 	MemInfoUsed           uint64 `json:"meminfoUsed,omitempty"`

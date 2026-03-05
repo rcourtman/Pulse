@@ -124,11 +124,23 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 	}
 }
 
+func (h *AISettingsHandler) ensureLegacyAIService() *ai.Service {
+	if h.legacyAIService != nil || h.legacyPersistence == nil {
+		return h.legacyAIService
+	}
+
+	h.legacyAIService = ai.NewService(h.legacyPersistence, h.agentServer)
+	if err := h.legacyAIService.LoadConfig(); err != nil {
+		log.Warn().Err(err).Msg("Failed to load AI config on startup")
+	}
+	return h.legacyAIService
+}
+
 // GetAIService returns the underlying AI service
 func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	orgID := GetOrgID(ctx)
 	if orgID == "default" || orgID == "" {
-		return h.legacyAIService
+		return h.ensureLegacyAIService()
 	}
 
 	h.aiServicesMu.RLock()
@@ -266,6 +278,17 @@ func (h *AISettingsHandler) SetConfig(cfg *config.Config) {
 	h.legacyConfig = cfg
 }
 
+// SetLegacyRuntime wires the single-tenant runtime config and persistence explicitly.
+func (h *AISettingsHandler) SetLegacyRuntime(cfg *config.Config, persistence *config.ConfigPersistence) {
+	if cfg != nil {
+		h.legacyConfig = cfg
+	}
+	if persistence != nil {
+		h.legacyPersistence = persistence
+	}
+	h.ensureLegacyAIService()
+}
+
 // setSSECORSHeaders validates the request origin against the configured AllowedOrigins
 // and sets CORS headers only for allowed origins. This prevents arbitrary origin reflection.
 func (h *AISettingsHandler) setSSECORSHeaders(w http.ResponseWriter, r *http.Request) {
@@ -305,7 +328,9 @@ func (h *AISettingsHandler) setSSECORSHeaders(w http.ResponseWriter, r *http.Req
 // SetStateProvider sets the state provider for infrastructure context
 func (h *AISettingsHandler) SetStateProvider(sp ai.StateProvider) {
 	h.stateProvider = sp
-	h.legacyAIService.SetStateProvider(sp)
+	if svc := h.ensureLegacyAIService(); svc != nil {
+		svc.SetStateProvider(sp)
+	}
 
 	h.aiServicesMu.Lock()
 	for _, svc := range h.aiServices {
@@ -335,7 +360,9 @@ func (h *AISettingsHandler) GetStateProvider() ai.StateProvider {
 // SetResourceProvider sets the resource provider for unified infrastructure context (Phase 2)
 func (h *AISettingsHandler) SetResourceProvider(rp ai.ResourceProvider) {
 	h.resourceProvider = rp
-	h.legacyAIService.SetResourceProvider(rp)
+	if svc := h.ensureLegacyAIService(); svc != nil {
+		svc.SetResourceProvider(rp)
+	}
 
 	h.aiServicesMu.Lock()
 	defer h.aiServicesMu.Unlock()
@@ -347,7 +374,9 @@ func (h *AISettingsHandler) SetResourceProvider(rp ai.ResourceProvider) {
 // SetMetadataProvider sets the metadata provider for AI URL discovery
 func (h *AISettingsHandler) SetMetadataProvider(mp ai.MetadataProvider) {
 	h.metadataProvider = mp
-	h.legacyAIService.SetMetadataProvider(mp)
+	if svc := h.ensureLegacyAIService(); svc != nil {
+		svc.SetMetadataProvider(mp)
+	}
 
 	h.aiServicesMu.Lock()
 	defer h.aiServicesMu.Unlock()
@@ -369,7 +398,9 @@ func (h *AISettingsHandler) IsAIEnabled(ctx context.Context) bool {
 // SetPatrolThresholdProvider sets the threshold provider for the patrol service
 func (h *AISettingsHandler) SetPatrolThresholdProvider(provider ai.ThresholdProvider) {
 	h.patrolThresholdProvider = provider
-	h.legacyAIService.SetPatrolThresholdProvider(provider)
+	if svc := h.ensureLegacyAIService(); svc != nil {
+		svc.SetPatrolThresholdProvider(provider)
+	}
 
 	h.aiServicesMu.Lock()
 	defer h.aiServicesMu.Unlock()
@@ -381,9 +412,11 @@ func (h *AISettingsHandler) SetPatrolThresholdProvider(provider ai.ThresholdProv
 // SetPatrolFindingsPersistence enables findings persistence for the patrol service
 func (h *AISettingsHandler) SetPatrolFindingsPersistence(persistence ai.FindingsPersistence) error {
 	var firstErr error
-	if patrol := h.legacyAIService.GetPatrolService(); patrol != nil {
-		if err := patrol.SetFindingsPersistence(persistence); err != nil {
-			firstErr = err
+	if svc := h.ensureLegacyAIService(); svc != nil {
+		if patrol := svc.GetPatrolService(); patrol != nil {
+			if err := patrol.SetFindingsPersistence(persistence); err != nil {
+				firstErr = err
+			}
 		}
 	}
 	// Also apply to active services
@@ -405,9 +438,11 @@ func (h *AISettingsHandler) SetPatrolFindingsPersistence(persistence ai.Findings
 // SetPatrolRunHistoryPersistence enables patrol run history persistence for the patrol service
 func (h *AISettingsHandler) SetPatrolRunHistoryPersistence(persistence ai.PatrolHistoryPersistence) error {
 	var firstErr error
-	if patrol := h.legacyAIService.GetPatrolService(); patrol != nil {
-		if err := patrol.SetRunHistoryPersistence(persistence); err != nil {
-			firstErr = err
+	if svc := h.ensureLegacyAIService(); svc != nil {
+		if patrol := svc.GetPatrolService(); patrol != nil {
+			if err := patrol.SetRunHistoryPersistence(persistence); err != nil {
+				firstErr = err
+			}
 		}
 	}
 	// Also apply to active services
@@ -429,7 +464,9 @@ func (h *AISettingsHandler) SetPatrolRunHistoryPersistence(persistence ai.Patrol
 // SetMetricsHistoryProvider sets the metrics history provider for enriched AI context
 func (h *AISettingsHandler) SetMetricsHistoryProvider(provider ai.MetricsHistoryProvider) {
 	h.metricsHistoryProvider = provider
-	h.legacyAIService.SetMetricsHistoryProvider(provider)
+	if svc := h.ensureLegacyAIService(); svc != nil {
+		svc.SetMetricsHistoryProvider(provider)
+	}
 
 	h.aiServicesMu.Lock()
 	defer h.aiServicesMu.Unlock()
@@ -441,7 +478,9 @@ func (h *AISettingsHandler) SetMetricsHistoryProvider(provider ai.MetricsHistory
 // SetBaselineStore sets the baseline store for anomaly detection
 func (h *AISettingsHandler) SetBaselineStore(store *ai.BaselineStore) {
 	h.baselineStore = store
-	h.legacyAIService.SetBaselineStore(store)
+	if svc := h.ensureLegacyAIService(); svc != nil {
+		svc.SetBaselineStore(store)
+	}
 
 	h.aiServicesMu.Lock()
 	defer h.aiServicesMu.Unlock()
@@ -453,7 +492,9 @@ func (h *AISettingsHandler) SetBaselineStore(store *ai.BaselineStore) {
 // SetChangeDetector sets the change detector for operational memory
 func (h *AISettingsHandler) SetChangeDetector(detector *ai.ChangeDetector) {
 	h.changeDetector = detector
-	h.legacyAIService.SetChangeDetector(detector)
+	if svc := h.ensureLegacyAIService(); svc != nil {
+		svc.SetChangeDetector(detector)
+	}
 
 	h.aiServicesMu.Lock()
 	defer h.aiServicesMu.Unlock()
@@ -465,7 +506,9 @@ func (h *AISettingsHandler) SetChangeDetector(detector *ai.ChangeDetector) {
 // SetRemediationLog sets the remediation log for tracking fix attempts
 func (h *AISettingsHandler) SetRemediationLog(remLog *ai.RemediationLog) {
 	h.remediationLog = remLog
-	h.legacyAIService.SetRemediationLog(remLog)
+	if svc := h.ensureLegacyAIService(); svc != nil {
+		svc.SetRemediationLog(remLog)
+	}
 
 	h.aiServicesMu.Lock()
 	defer h.aiServicesMu.Unlock()
@@ -477,7 +520,9 @@ func (h *AISettingsHandler) SetRemediationLog(remLog *ai.RemediationLog) {
 // SetIncidentStore sets the incident store for alert timelines.
 func (h *AISettingsHandler) SetIncidentStore(store *memory.IncidentStore) {
 	h.incidentStore = store
-	h.legacyAIService.SetIncidentStore(store)
+	if svc := h.ensureLegacyAIService(); svc != nil {
+		svc.SetIncidentStore(store)
+	}
 
 	h.aiServicesMu.Lock()
 	defer h.aiServicesMu.Unlock()
@@ -489,7 +534,9 @@ func (h *AISettingsHandler) SetIncidentStore(store *memory.IncidentStore) {
 // SetPatternDetector sets the pattern detector for failure prediction
 func (h *AISettingsHandler) SetPatternDetector(detector *ai.PatternDetector) {
 	h.patternDetector = detector
-	h.legacyAIService.SetPatternDetector(detector)
+	if svc := h.ensureLegacyAIService(); svc != nil {
+		svc.SetPatternDetector(detector)
+	}
 
 	h.aiServicesMu.Lock()
 	defer h.aiServicesMu.Unlock()
@@ -501,7 +548,9 @@ func (h *AISettingsHandler) SetPatternDetector(detector *ai.PatternDetector) {
 // SetCorrelationDetector sets the correlation detector for multi-resource correlation
 func (h *AISettingsHandler) SetCorrelationDetector(detector *ai.CorrelationDetector) {
 	h.correlationDetector = detector
-	h.legacyAIService.SetCorrelationDetector(detector)
+	if svc := h.ensureLegacyAIService(); svc != nil {
+		svc.SetCorrelationDetector(detector)
+	}
 
 	h.aiServicesMu.Lock()
 	defer h.aiServicesMu.Unlock()
@@ -574,8 +623,8 @@ func (h *AISettingsHandler) GetUnifiedStore() *unified.UnifiedStore {
 func (h *AISettingsHandler) SetDiscoveryStore(store *servicediscovery.Store) {
 	h.discoveryStore = store
 	// Also set on legacy service if it exists
-	if h.legacyAIService != nil {
-		h.legacyAIService.SetDiscoveryStore(store)
+	if svc := h.ensureLegacyAIService(); svc != nil {
+		svc.SetDiscoveryStore(store)
 	}
 	// Set on all existing tenant services
 	h.aiServicesMu.RLock()
@@ -632,7 +681,9 @@ func (h *AISettingsHandler) GetIncidentRecorder() *metrics.IncidentRecorder {
 
 // StopPatrol stops the background AI patrol service
 func (h *AISettingsHandler) StopPatrol() {
-	h.legacyAIService.StopPatrol()
+	if svc := h.ensureLegacyAIService(); svc != nil {
+		svc.StopPatrol()
+	}
 	h.aiServicesMu.Lock()
 	defer h.aiServicesMu.Unlock()
 	for _, svc := range h.aiServices {
@@ -642,7 +693,10 @@ func (h *AISettingsHandler) StopPatrol() {
 
 // GetAlertTriggeredAnalyzer returns the alert-triggered analyzer for wiring into alert callbacks
 func (h *AISettingsHandler) GetAlertTriggeredAnalyzer(ctx context.Context) *ai.AlertTriggeredAnalyzer {
-	return h.GetAIService(ctx).GetAlertTriggeredAnalyzer()
+	if svc := h.GetAIService(ctx); svc != nil {
+		return svc.GetAlertTriggeredAnalyzer()
+	}
+	return nil
 }
 
 // SetLicenseHandlers sets the license handlers for Pro feature gating
@@ -651,8 +705,13 @@ func (h *AISettingsHandler) SetLicenseHandlers(handlers *LicenseHandlers) {
 	// Update legacy service?
 	// legacy service needs a legacy/default license checker?
 	// We can try to get it using background context (default tenant)
+	if handlers == nil {
+		return
+	}
 	if svc, _, err := handlers.getTenantComponents(context.Background()); err == nil {
-		h.legacyAIService.SetLicenseChecker(svc)
+		if legacy := h.ensureLegacyAIService(); legacy != nil {
+			legacy.SetLicenseChecker(svc)
+		}
 	}
 }
 

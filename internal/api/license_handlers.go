@@ -17,10 +17,11 @@ import (
 // LicenseHandlers handles license management API endpoints.
 // LicenseHandlers handles license management API endpoints.
 type LicenseHandlers struct {
-	mtPersistence *config.MultiTenantPersistence
-	services      sync.Map // map[string]*license.Service
-	configDir     string   // Base config dir, though we use mtPersistence for tenants
-	auditOnce     sync.Once
+	mtPersistence     *config.MultiTenantPersistence
+	legacyPersistence *config.ConfigPersistence
+	services          sync.Map // map[string]*license.Service
+	configDir         string   // Base config dir, though we use mtPersistence for tenants
+	auditOnce         sync.Once
 }
 
 // NewLicenseHandlers creates a new license handlers instance.
@@ -28,6 +29,10 @@ func NewLicenseHandlers(mtp *config.MultiTenantPersistence) *LicenseHandlers {
 	return &LicenseHandlers{
 		mtPersistence: mtp,
 	}
+}
+
+func (h *LicenseHandlers) SetLegacyPersistence(persistence *config.ConfigPersistence) {
+	h.legacyPersistence = persistence
 }
 
 // getTenantComponents resolves the license service and persistence for the current tenant.
@@ -81,11 +86,17 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*license.Ser
 }
 
 func (h *LicenseHandlers) getPersistenceForOrg(orgID string) (*license.Persistence, error) {
-	configPersistence, err := h.mtPersistence.GetPersistence(orgID)
-	if err != nil {
-		return nil, err
+	if h.mtPersistence != nil {
+		configPersistence, err := h.mtPersistence.GetPersistence(orgID)
+		if err != nil {
+			return nil, err
+		}
+		return license.NewPersistence(configPersistence.GetConfigDir())
 	}
-	return license.NewPersistence(configPersistence.GetConfigDir())
+	if h.legacyPersistence == nil {
+		return nil, nil
+	}
+	return license.NewPersistence(h.legacyPersistence.GetConfigDir())
 }
 
 // initAuditLoggerIfLicensed initializes the SQLite audit logger if the license

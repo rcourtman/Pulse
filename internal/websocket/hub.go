@@ -366,6 +366,7 @@ type Hub struct {
 	allowedOrigins     []string                       // Allowed origins for CORS
 	orgAuthChecker     OrgAuthChecker                 // Org authorization checker
 	multiTenantChecker MultiTenantChecker             // Multi-tenant feature flag and license checker
+	singleTenantMode   bool                           // Ignore tenant selection and force default org
 	// Broadcast coalescing fields
 	coalesceWindow  time.Duration
 	coalescePending *Message
@@ -409,6 +410,13 @@ func (h *Hub) SetMultiTenantChecker(checker MultiTenantChecker) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.multiTenantChecker = checker
+}
+
+// SetSingleTenantMode forces all connections to use the default org.
+func (h *Hub) SetSingleTenantMode(enabled bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.singleTenantMode = enabled
 }
 
 // getStateForClient returns the state for a specific client based on their tenant
@@ -633,7 +641,15 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	h.mu.RLock()
 	mtChecker := h.multiTenantChecker
 	authChecker := h.orgAuthChecker
+	singleTenantMode := h.singleTenantMode
 	h.mu.RUnlock()
+
+	if singleTenantMode && orgID != "" && orgID != "default" {
+		log.Debug().
+			Str("requested_org", orgID).
+			Msg("Ignoring non-default org for single-tenant WebSocket runtime")
+		orgID = "default"
+	}
 
 	if orgID != "default" {
 		// Check if multi-tenant is enabled and licensed

@@ -333,7 +333,11 @@ func TestProxmoxSetup_RunForType(t *testing.T) {
 func TestRegisterWithPulseRetry(t *testing.T) {
 	// Server returns 503 twice, then 200
 	var attempt int32
+	var gotAuth string
+	var gotAPIToken string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		gotAPIToken = r.Header.Get("X-API-Token")
 		n := atomic.AddInt32(&attempt, 1)
 		if n <= 2 {
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -358,6 +362,12 @@ func TestRegisterWithPulseRetry(t *testing.T) {
 	}
 	if atomic.LoadInt32(&attempt) != 3 {
 		t.Errorf("expected 3 attempts, got %d", atomic.LoadInt32(&attempt))
+	}
+	if gotAuth != "Bearer test-token" {
+		t.Fatalf("Authorization = %q, want %q", gotAuth, "Bearer test-token")
+	}
+	if gotAPIToken != "test-token" {
+		t.Fatalf("X-API-Token = %q, want %q", gotAPIToken, "test-token")
 	}
 }
 

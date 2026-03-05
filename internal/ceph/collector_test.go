@@ -93,6 +93,103 @@ func TestParseStatus(t *testing.T) {
 	}
 }
 
+func TestParseStatus_CountOnlyFallbacks(t *testing.T) {
+	data := []byte(`{
+	  "fsid":"fsid-counts",
+	  "health":{"status":"HEALTH_OK","checks":{}},
+	  "monmap":{"epoch":9,"num_mons":3,"quorum_names":["mon-a","mon-b","mon-c"]},
+	  "mgrmap":{"available":true,"active_name":"mgr-a","num_standbys":1},
+	  "osdmap":{"epoch":4,"num_osds":6,"num_up_osds":6,"num_in_osds":6},
+	  "pgmap":{"num_pgs":128,"bytes_total":1000,"bytes_used":100,"bytes_avail":900}
+	}`)
+
+	status, err := parseStatus(data)
+	if err != nil {
+		t.Fatalf("parseStatus returned error: %v", err)
+	}
+
+	if status.MonMap.NumMons != 3 {
+		t.Fatalf("NumMons = %d, want 3", status.MonMap.NumMons)
+	}
+	if len(status.MonMap.Monitors) != 3 {
+		t.Fatalf("len(Monitors) = %d, want 3", len(status.MonMap.Monitors))
+	}
+	if status.MgrMap.NumMgrs != 2 {
+		t.Fatalf("NumMgrs = %d, want 2", status.MgrMap.NumMgrs)
+	}
+	if status.MgrMap.Standbys != 1 {
+		t.Fatalf("Standbys = %d, want 1", status.MgrMap.Standbys)
+	}
+
+	var monSvc, mgrSvc *ServiceInfo
+	for i := range status.Services {
+		switch status.Services[i].Type {
+		case "mon":
+			monSvc = &status.Services[i]
+		case "mgr":
+			mgrSvc = &status.Services[i]
+		}
+	}
+	if monSvc == nil || monSvc.Total != 3 {
+		t.Fatalf("mon service = %+v, want total 3", monSvc)
+	}
+	if mgrSvc == nil || mgrSvc.Total != 2 {
+		t.Fatalf("mgr service = %+v, want total 2", mgrSvc)
+	}
+}
+
+func TestParseStatus_ServiceMapFallbacks(t *testing.T) {
+	data := []byte(`{
+	  "fsid":"fsid-servicemap",
+	  "health":{"status":"HEALTH_OK","checks":{}},
+	  "monmap":{"epoch":1},
+	  "mgrmap":{"available":true},
+	  "servicemap":{
+	    "services":{
+	      "mon":{"daemons":{
+	        "a":{"status":"running","hostname":"node1"},
+	        "b":{"status":"running","hostname":"node2"},
+	        "c":{"status":"stopped","hostname":"node3"}
+	      }},
+	      "mgr":{"daemons":{
+	        "mgr-a":{"status":"active","hostname":"node1"},
+	        "mgr-b":{"status":"standby","hostname":"node2"}
+	      }}
+	    }
+	  },
+	  "osdmap":{"epoch":3,"num_osds":3,"num_up_osds":3,"num_in_osds":3},
+	  "pgmap":{"num_pgs":64,"bytes_total":1000,"bytes_used":100,"bytes_avail":900}
+	}`)
+
+	status, err := parseStatus(data)
+	if err != nil {
+		t.Fatalf("parseStatus returned error: %v", err)
+	}
+
+	if status.MonMap.NumMons != 3 {
+		t.Fatalf("NumMons = %d, want 3", status.MonMap.NumMons)
+	}
+	if status.MgrMap.NumMgrs != 2 {
+		t.Fatalf("NumMgrs = %d, want 2", status.MgrMap.NumMgrs)
+	}
+
+	var monSvc, mgrSvc *ServiceInfo
+	for i := range status.Services {
+		switch status.Services[i].Type {
+		case "mon":
+			monSvc = &status.Services[i]
+		case "mgr":
+			mgrSvc = &status.Services[i]
+		}
+	}
+	if monSvc == nil || monSvc.Total != 3 || monSvc.Running != 2 {
+		t.Fatalf("mon service = %+v, want total 3 running 2", monSvc)
+	}
+	if mgrSvc == nil || mgrSvc.Total != 2 || mgrSvc.Running != 1 {
+		t.Fatalf("mgr service = %+v, want total 2 running 1", mgrSvc)
+	}
+}
+
 func TestIsAvailable(t *testing.T) {
 	t.Run("available", func(t *testing.T) {
 		withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {

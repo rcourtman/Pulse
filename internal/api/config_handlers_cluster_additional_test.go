@@ -455,3 +455,33 @@ func TestHandleAgentInstallCommand(t *testing.T) {
 		t.Fatalf("expected API token to be persisted")
 	}
 }
+
+func TestHandleAgentInstallCommandIgnoresOrgID(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	handler := newTestConfigHandlers(t, cfg)
+
+	body := []byte(`{"type":"pve"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/config/agent-install", bytes.NewReader(body))
+	req.Host = "example.com:8080"
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "acme"))
+	rec := httptest.NewRecorder()
+	handler.HandleAgentInstallCommand(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status OK, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp AgentInstallCommandResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if bytes.Contains([]byte(resp.Command), []byte("--org-id")) {
+		t.Fatalf("expected command to remain single-tenant, got %q", resp.Command)
+	}
+	if len(cfg.APITokens) != 1 {
+		t.Fatalf("expected API token to be persisted")
+	}
+	if cfg.APITokens[0].OrgID != "" {
+		t.Fatalf("expected generated token to stay unbound, got %q", cfg.APITokens[0].OrgID)
+	}
+}

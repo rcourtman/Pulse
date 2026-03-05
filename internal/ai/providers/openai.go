@@ -490,6 +490,24 @@ func (c *OpenAIClient) modelsEndpoint() string {
 	return u.Scheme + "://" + u.Host + path
 }
 
+func (c *OpenAIClient) usesCustomModelsListing() bool {
+	if c.isDeepSeek() {
+		return true
+	}
+
+	u, err := url.Parse(c.baseURL)
+	if err != nil {
+		return false
+	}
+
+	host := strings.ToLower(strings.TrimSpace(u.Hostname()))
+	if host == "" {
+		return false
+	}
+
+	return host != "api.openai.com"
+}
+
 // SupportsThinking returns true if the model supports extended thinking
 func (c *OpenAIClient) SupportsThinking(model string) bool {
 	// DeepSeek reasoner models support extended thinking
@@ -863,23 +881,26 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 
 	models := make([]ModelInfo, 0, len(result.Data))
 	cache := GetNotableCache()
+	allowAllModels := c.usesCustomModelsListing()
 	for _, m := range result.Data {
-		// Filter to only chat-capable models
-		if strings.Contains(m.ID, "gpt") || strings.Contains(m.ID, "o1") ||
+		chatCapable := strings.Contains(m.ID, "gpt") || strings.Contains(m.ID, "o1") ||
 			strings.Contains(m.ID, "o3") || strings.Contains(m.ID, "o4") ||
-			strings.Contains(m.ID, "deepseek") {
-			// Use correct provider for notable detection
-			provider := "openai"
-			if strings.Contains(m.ID, "deepseek") {
-				provider = "deepseek"
-			}
-			models = append(models, ModelInfo{
-				ID:        m.ID,
-				Name:      m.ID, // OpenAI uses ID as name
-				CreatedAt: m.Created,
-				Notable:   cache.IsNotable(provider, m.ID, m.Created),
-			})
+			strings.Contains(m.ID, "deepseek")
+		if !allowAllModels && !chatCapable {
+			continue
 		}
+
+		// Use correct provider for notable detection
+		provider := "openai"
+		if strings.Contains(m.ID, "deepseek") {
+			provider = "deepseek"
+		}
+		models = append(models, ModelInfo{
+			ID:        m.ID,
+			Name:      m.ID, // OpenAI uses ID as name
+			CreatedAt: m.Created,
+			Notable:   cache.IsNotable(provider, m.ID, m.Created),
+		})
 	}
 
 	return models, nil

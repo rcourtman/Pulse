@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 )
@@ -195,21 +196,35 @@ func parseStatus(data []byte) (*ClusterStatus, error) {
 			} `json:"checks"`
 		} `json:"health"`
 		MonMap struct {
-			Epoch int `json:"epoch"`
-			Mons  []struct {
+			Epoch       int      `json:"epoch"`
+			NumMons     int      `json:"num_mons"`
+			QuorumNames []string `json:"quorum_names"`
+			Mons        []struct {
 				Name string `json:"name"`
 				Rank int    `json:"rank"`
 				Addr string `json:"addr"`
 			} `json:"mons"`
 		} `json:"monmap"`
 		MgrMap struct {
-			Available  bool   `json:"available"`
-			NumActive  int    `json:"num_active_name,omitempty"`
-			ActiveName string `json:"active_name"`
-			Standbys   []struct {
+			Available   bool   `json:"available"`
+			ActiveName  string `json:"active_name"`
+			NumStandbys int    `json:"num_standbys"`
+			NumStandby  int    `json:"num_standby"`
+			Standbys    []struct {
 				Name string `json:"name"`
 			} `json:"standbys"`
 		} `json:"mgrmap"`
+		ServiceMap struct {
+			Services map[string]struct {
+				Daemons map[string]struct {
+					Status   string `json:"status"`
+					Hostname string `json:"hostname"`
+					Metadata struct {
+						Hostname string `json:"hostname"`
+					} `json:"metadata"`
+				} `json:"daemons"`
+			} `json:"services"`
+		} `json:"servicemap"`
 		OSDMap struct {
 			Epoch  int `json:"epoch"`
 			NumOSD int `json:"num_osds"`
@@ -235,6 +250,63 @@ func parseStatus(data []byte) (*ClusterStatus, error) {
 		return nil, fmt.Errorf("unmarshal: %w", err)
 	}
 
+	monitors := make([]Monitor, 0, len(raw.MonMap.Mons))
+	for _, mon := range raw.MonMap.Mons {
+		monitors = append(monitors, Monitor{
+			Name: mon.Name,
+			Rank: mon.Rank,
+			Addr: mon.Addr,
+		})
+	}
+	if len(monitors) == 0 && len(raw.MonMap.QuorumNames) > 0 {
+		for i, name := range raw.MonMap.QuorumNames {
+			monitors = append(monitors, Monitor{
+				Name:   name,
+				Rank:   i,
+				Status: "up",
+			})
+		}
+	}
+
+	monCount := len(monitors)
+	if raw.MonMap.NumMons > monCount {
+		monCount = raw.MonMap.NumMons
+	}
+
+	standbyCount := len(raw.MgrMap.Standbys)
+	if raw.MgrMap.NumStandbys > standbyCount {
+		standbyCount = raw.MgrMap.NumStandbys
+	}
+	if raw.MgrMap.NumStandby > standbyCount {
+		standbyCount = raw.MgrMap.NumStandby
+	}
+
+	managerCount := standbyCount
+	if raw.MgrMap.ActiveName != "" || raw.MgrMap.Available {
+		managerCount++
+	}
+
+	services := buildServiceSummary(raw.ServiceMap.Services)
+	if monCount == 0 {
+		if monService, ok := services["mon"]; ok && monService.Total > 0 {
+			monCount = monService.Total
+			if len(monitors) == 0 {
+				for i, daemon := range monService.Daemons {
+					monitors = append(monitors, Monitor{
+						Name:   daemon,
+						Rank:   i,
+						Status: "unknown",
+					})
+				}
+			}
+		}
+	} else if monService, ok := services["mon"]; ok && monService.Total > monCount {
+		monCount = monService.Total
+	}
+	if mgrService, ok := services["mgr"]; ok && mgrService.Total > managerCount {
+		managerCount = mgrService.Total
+	}
+
 	status := &ClusterStatus{
 		FSID: raw.FSID,
 		Health: HealthStatus{
@@ -242,14 +314,15 @@ func parseStatus(data []byte) (*ClusterStatus, error) {
 			Checks: make(map[string]Check),
 		},
 		MonMap: MonitorMap{
-			Epoch:   raw.MonMap.Epoch,
-			NumMons: len(raw.MonMap.Mons),
+			Epoch:    raw.MonMap.Epoch,
+			NumMons:  monCount,
+			Monitors: monitors,
 		},
 		MgrMap: ManagerMap{
 			Available: raw.MgrMap.Available,
-			NumMgrs:   1 + len(raw.MgrMap.Standbys),
+			NumMgrs:   managerCount,
 			ActiveMgr: raw.MgrMap.ActiveName,
-			Standbys:  len(raw.MgrMap.Standbys),
+			Standbys:  standbyCount,
 		},
 		OSDMap: OSDMap{
 			Epoch:   raw.OSDMap.Epoch,
@@ -279,15 +352,6 @@ func parseStatus(data []byte) (*ClusterStatus, error) {
 		status.PGMap.UsagePercent = float64(raw.PGMap.BytesUsed) / float64(raw.PGMap.BytesTotal) * 100
 	}
 
-	// Parse monitors
-	for _, mon := range raw.MonMap.Mons {
-		status.MonMap.Monitors = append(status.MonMap.Monitors, Monitor{
-			Name: mon.Name,
-			Rank: mon.Rank,
-			Addr: mon.Addr,
-		})
-	}
-
 	// Parse health checks
 	for name, check := range raw.Health.Checks {
 		details := make([]string, 0, len(check.Detail))
@@ -301,14 +365,116 @@ func parseStatus(data []byte) (*ClusterStatus, error) {
 		}
 	}
 
-	// Build service summary
-	status.Services = []ServiceInfo{
-		{Type: "mon", Running: len(raw.MonMap.Mons), Total: len(raw.MonMap.Mons)},
-		{Type: "mgr", Running: boolToInt(raw.MgrMap.Available), Total: status.MgrMap.NumMgrs},
-		{Type: "osd", Running: raw.OSDMap.NumUp, Total: raw.OSDMap.NumOSD},
+	if len(services) > 0 {
+		keys := make([]string, 0, len(services))
+		for serviceType := range services {
+			keys = append(keys, serviceType)
+		}
+		sort.Strings(keys)
+		status.Services = make([]ServiceInfo, 0, len(keys)+1)
+		for _, serviceType := range keys {
+			status.Services = append(status.Services, services[serviceType])
+		}
+	} else {
+		status.Services = []ServiceInfo{
+			{Type: "mon", Running: status.MonMap.NumMons, Total: status.MonMap.NumMons, Daemons: monitorNames(status.MonMap.Monitors)},
+			{Type: "mgr", Running: boolToInt(raw.MgrMap.Available), Total: status.MgrMap.NumMgrs, Daemons: managerNames(raw.MgrMap.ActiveName, raw.MgrMap.Standbys)},
+		}
+	}
+	if !serviceInfoExists(status.Services, "osd") {
+		status.Services = append(status.Services, ServiceInfo{Type: "osd", Running: raw.OSDMap.NumUp, Total: raw.OSDMap.NumOSD})
 	}
 
 	return status, nil
+}
+
+func buildServiceSummary(services map[string]struct {
+	Daemons map[string]struct {
+		Status   string `json:"status"`
+		Hostname string `json:"hostname"`
+		Metadata struct {
+			Hostname string `json:"hostname"`
+		} `json:"metadata"`
+	} `json:"daemons"`
+}) map[string]ServiceInfo {
+	if len(services) == 0 {
+		return nil
+	}
+
+	result := make(map[string]ServiceInfo, len(services))
+	for serviceType, definition := range services {
+		summary := ServiceInfo{Type: serviceType}
+		if len(definition.Daemons) > 0 {
+			daemonNames := make([]string, 0, len(definition.Daemons))
+			for daemonName, daemon := range definition.Daemons {
+				summary.Total++
+				if isServiceRunning(daemon.Status) {
+					summary.Running++
+				}
+				label := daemonName
+				host := strings.TrimSpace(daemon.Hostname)
+				if host == "" {
+					host = strings.TrimSpace(daemon.Metadata.Hostname)
+				}
+				if host != "" {
+					label = fmt.Sprintf("%s@%s", daemonName, host)
+				}
+				daemonNames = append(daemonNames, label)
+			}
+			sort.Strings(daemonNames)
+			summary.Daemons = daemonNames
+		}
+		result[serviceType] = summary
+	}
+
+	return result
+}
+
+func isServiceRunning(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "running", "active", "up":
+		return true
+	default:
+		return false
+	}
+}
+
+func monitorNames(monitors []Monitor) []string {
+	if len(monitors) == 0 {
+		return nil
+	}
+
+	names := make([]string, 0, len(monitors))
+	for _, mon := range monitors {
+		if strings.TrimSpace(mon.Name) != "" {
+			names = append(names, mon.Name)
+		}
+	}
+	return names
+}
+
+func managerNames(activeName string, standbys []struct {
+	Name string `json:"name"`
+}) []string {
+	names := make([]string, 0, 1+len(standbys))
+	if strings.TrimSpace(activeName) != "" {
+		names = append(names, activeName)
+	}
+	for _, standby := range standbys {
+		if strings.TrimSpace(standby.Name) != "" {
+			names = append(names, standby.Name)
+		}
+	}
+	return names
+}
+
+func serviceInfoExists(services []ServiceInfo, serviceType string) bool {
+	for _, service := range services {
+		if service.Type == serviceType {
+			return true
+		}
+	}
+	return false
 }
 
 // parseDF parses the output of `ceph df --format json`.

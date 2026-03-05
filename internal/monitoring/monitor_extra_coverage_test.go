@@ -241,10 +241,13 @@ func TestMonitor_LinkNodeToHostAgent_Extra(t *testing.T) {
 
 type mockPVEClientExtra struct {
 	mockPVEClient
-	resources []proxmox.ClusterResource
-	vmStatus  *proxmox.VMStatus
-	fsInfo    []proxmox.VMFileSystem
-	netIfaces []proxmox.VMNetworkInterface
+	resources   []proxmox.ClusterResource
+	vms         []proxmox.VM
+	vmStatus    *proxmox.VMStatus
+	vmStatusErr error
+	fsInfo      []proxmox.VMFileSystem
+	netIfaces   []proxmox.VMNetworkInterface
+	vmRRDPoints []proxmox.GuestRRDPoint
 }
 
 func (m *mockPVEClientExtra) GetClusterResources(ctx context.Context, resourceType string) ([]proxmox.ClusterResource, error) {
@@ -252,6 +255,9 @@ func (m *mockPVEClientExtra) GetClusterResources(ctx context.Context, resourceTy
 }
 
 func (m *mockPVEClientExtra) GetVMStatus(ctx context.Context, node string, vmid int) (*proxmox.VMStatus, error) {
+	if m.vmStatusErr != nil {
+		return nil, m.vmStatusErr
+	}
 	return m.vmStatus, nil
 }
 
@@ -304,7 +310,11 @@ func (m *mockPVEClientExtra) GetLXCRRDData(ctx context.Context, node string, vmi
 }
 
 func (m *mockPVEClientExtra) GetVMRRDData(ctx context.Context, node string, vmid int, timeframe string, cf string, ds []string) ([]proxmox.GuestRRDPoint, error) {
-	return nil, nil
+	return m.vmRRDPoints, nil
+}
+
+func (m *mockPVEClientExtra) GetVMs(ctx context.Context, node string) ([]proxmox.VM, error) {
+	return m.vms, nil
 }
 
 func (m *mockPVEClientExtra) GetNodeStatus(ctx context.Context, node string) (*proxmox.NodeStatus, error) {
@@ -387,6 +397,105 @@ func TestMonitor_PollVMsAndContainersEfficient_Extra(t *testing.T) {
 	}
 	if len(state.Containers) != 1 {
 		t.Errorf("Expected 1 Container, got %d", len(state.Containers))
+	}
+}
+
+func TestMonitor_PollVMsAndContainersEfficient_UsesVMRRDMemUsedWhenStatusUnavailable(t *testing.T) {
+	const total = uint64(8 << 30)
+	const inflatedUsed = uint64(6 << 30)
+	const rrdUsed = uint64(3 << 30)
+
+	m := &Monitor{
+		state:                    models.NewState(),
+		guestAgentFSInfoTimeout:  time.Second,
+		guestAgentRetries:        1,
+		guestAgentNetworkTimeout: time.Second,
+		guestAgentOSInfoTimeout:  time.Second,
+		guestAgentVersionTimeout: time.Second,
+		guestMetadataCache:       make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter:     make(map[string]time.Time),
+		rateTracker:              NewRateTracker(),
+		metricsHistory:           NewMetricsHistory(100, time.Hour),
+		alertManager:             alerts.NewManager(),
+		stalenessTracker:         NewStalenessTracker(nil),
+		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
+		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
+		vmAgentMemCache:          make(map[string]agentMemCacheEntry),
+	}
+	defer m.alertManager.Stop()
+
+	client := &mockPVEClientExtra{
+		resources: []proxmox.ClusterResource{
+			{Type: "qemu", VMID: 100, Name: "vm100", Node: "node1", Status: "running", MaxMem: total, Mem: inflatedUsed},
+		},
+		vmStatusErr: fmt.Errorf("API error 403: status unavailable"),
+		vmRRDPoints: []proxmox.GuestRRDPoint{
+			{MaxMem: floatPtr(float64(total)), MemUsed: floatPtr(float64(rrdUsed))},
+		},
+	}
+
+	success := m.pollVMsAndContainersEfficient(context.Background(), "pve1", "", false, client, map[string]string{"node1": "online"})
+	if !success {
+		t.Fatal("pollVMsAndContainersEfficient failed")
+	}
+
+	state := m.GetState()
+	if len(state.VMs) != 1 {
+		t.Fatalf("expected 1 VM, got %d", len(state.VMs))
+	}
+	if state.VMs[0].Memory.Used != int64(rrdUsed) {
+		t.Fatalf("memory used mismatch: got %d want %d", state.VMs[0].Memory.Used, rrdUsed)
+	}
+	if state.VMs[0].MemorySource != "rrd-memused" {
+		t.Fatalf("memory source mismatch: got %q want rrd-memused", state.VMs[0].MemorySource)
+	}
+}
+
+func TestMonitor_PollVMsWithNodes_UsesVMRRDMemUsedWhenStatusUnavailable(t *testing.T) {
+	const total = uint64(8 << 30)
+	const inflatedUsed = uint64(6 << 30)
+	const rrdUsed = uint64(3 << 30)
+
+	m := &Monitor{
+		state:                    models.NewState(),
+		guestAgentFSInfoTimeout:  time.Second,
+		guestAgentRetries:        1,
+		guestAgentNetworkTimeout: time.Second,
+		guestAgentOSInfoTimeout:  time.Second,
+		guestAgentVersionTimeout: time.Second,
+		guestMetadataCache:       make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter:     make(map[string]time.Time),
+		rateTracker:              NewRateTracker(),
+		metricsHistory:           NewMetricsHistory(100, time.Hour),
+		alertManager:             alerts.NewManager(),
+		stalenessTracker:         NewStalenessTracker(nil),
+		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
+		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
+		vmAgentMemCache:          make(map[string]agentMemCacheEntry),
+	}
+	defer m.alertManager.Stop()
+
+	client := &mockPVEClientExtra{
+		vms: []proxmox.VM{
+			{VMID: 100, Name: "vm100", Node: "node1", Status: "running", MaxMem: total, Mem: inflatedUsed},
+		},
+		vmStatusErr: fmt.Errorf("API error 403: status unavailable"),
+		vmRRDPoints: []proxmox.GuestRRDPoint{
+			{MaxMem: floatPtr(float64(total)), MemUsed: floatPtr(float64(rrdUsed))},
+		},
+	}
+
+	m.pollVMsWithNodes(context.Background(), "pve1", "", false, client, []proxmox.Node{{Node: "node1", Status: "online"}}, map[string]string{"node1": "online"})
+
+	state := m.GetState()
+	if len(state.VMs) != 1 {
+		t.Fatalf("expected 1 VM, got %d", len(state.VMs))
+	}
+	if state.VMs[0].Memory.Used != int64(rrdUsed) {
+		t.Fatalf("memory used mismatch: got %d want %d", state.VMs[0].Memory.Used, rrdUsed)
+	}
+	if state.VMs[0].MemorySource != "rrd-memused" {
+		t.Fatalf("memory source mismatch: got %q want rrd-memused", state.VMs[0].MemorySource)
 	}
 }
 

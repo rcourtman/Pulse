@@ -316,6 +316,57 @@ func TestCollectDeviceSMARTNVMeTempFallback(t *testing.T) {
 	}
 }
 
+func TestCollectDeviceSMARTFreeBSDAdaFallback(t *testing.T) {
+	origRun := runCommandOutput
+	origLook := execLookPath
+	origNow := timeNow
+	origGOOS := runtimeGOOS
+	t.Cleanup(func() {
+		runCommandOutput = origRun
+		execLookPath = origLook
+		timeNow = origNow
+		runtimeGOOS = origGOOS
+	})
+
+	fixed := time.Date(2024, 4, 6, 7, 8, 9, 0, time.UTC)
+	timeNow = func() time.Time { return fixed }
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+	runtimeGOOS = "freebsd"
+
+	var attempts [][]string
+	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		attempts = append(attempts, append([]string(nil), args...))
+
+		payload := smartctlJSON{}
+		payload.Device.Protocol = "ATA"
+		payload.SmartStatus.Passed = true
+
+		if len(args) >= 2 && args[0] == "-d" && args[1] == "sat" {
+			payload.Temperature.Current = 37
+		}
+
+		out, _ := json.Marshal(payload)
+		return out, nil
+	}
+
+	result, err := collectDeviceSMART(context.Background(), "/dev/ada0")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || result.Temperature != 37 || !result.LastUpdated.Equal(fixed) {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+	if len(attempts) != 2 {
+		t.Fatalf("expected 2 attempts, got %d", len(attempts))
+	}
+	if len(attempts[0]) >= 2 && attempts[0][0] == "-d" {
+		t.Fatalf("expected first attempt without explicit device type, got %v", attempts[0])
+	}
+	if len(attempts[1]) < 2 || attempts[1][0] != "-d" || attempts[1][1] != "sat" {
+		t.Fatalf("expected sat fallback on second attempt, got %v", attempts[1])
+	}
+}
+
 func TestCollectDeviceSMARTWWN(t *testing.T) {
 	origRun := runCommandOutput
 	origLook := execLookPath

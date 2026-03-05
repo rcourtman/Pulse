@@ -13,7 +13,8 @@ import (
 
 // GuestMetadataHandler handles guest metadata operations
 type GuestMetadataHandler struct {
-	mtPersistence *config.MultiTenantPersistence
+	mtPersistence     *config.MultiTenantPersistence
+	legacyPersistence *config.ConfigPersistence
 }
 
 // NewGuestMetadataHandler creates a new guest metadata handler
@@ -21,6 +22,10 @@ func NewGuestMetadataHandler(mtPersistence *config.MultiTenantPersistence) *Gues
 	return &GuestMetadataHandler{
 		mtPersistence: mtPersistence,
 	}
+}
+
+func (h *GuestMetadataHandler) SetLegacyPersistence(persistence *config.ConfigPersistence) {
+	h.legacyPersistence = persistence
 }
 
 func (h *GuestMetadataHandler) getStore(ctx context.Context) *config.GuestMetadataStore {
@@ -31,8 +36,15 @@ func (h *GuestMetadataHandler) getStore(ctx context.Context) *config.GuestMetada
 			orgID = id
 		}
 	}
-	p, _ := h.mtPersistence.GetPersistence(orgID)
-	return p.GetGuestMetadataStore()
+	if h.mtPersistence != nil {
+		if p, err := h.mtPersistence.GetPersistence(orgID); err == nil && p != nil {
+			return p.GetGuestMetadataStore()
+		}
+	}
+	if h.legacyPersistence != nil {
+		return h.legacyPersistence.GetGuestMetadataStore()
+	}
+	return nil
 }
 
 // Reload reloads the guest metadata from disk
@@ -43,7 +55,10 @@ func (h *GuestMetadataHandler) Reload() error {
 	// But stores load on init. Reload() method on store might be needed if modified on disk externally.
 	// For now, this is a no-op or TODO for multi-tenant deep reload.
 	// Actually, we can get "default" store and reload it for legacy compat.
-	return h.getStore(context.Background()).Load()
+	if store := h.getStore(context.Background()); store != nil {
+		return store.Load()
+	}
+	return nil
 }
 
 // Store returns the underlying metadata store for the default tenant (Legacy support)

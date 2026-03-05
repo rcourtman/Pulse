@@ -37,6 +37,10 @@ func NewMultiTenantMonitor(baseCfg *config.Config, persistence *config.MultiTena
 // GetMonitor returns the monitor instance for a specific organization.
 // It lazily initializes the monitor if it doesn't exist.
 func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
+	if orgID == "" {
+		orgID = "default"
+	}
+
 	mtm.mu.RLock()
 	monitor, exists := mtm.monitors[orgID]
 	mtm.mu.RUnlock()
@@ -55,6 +59,24 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 
 	// Initialize new monitor for this tenant
 	log.Info().Str("org_id", orgID).Msg("Initializing tenant monitor")
+
+	// Single-tenant runtime path: no tenant persistence is available, so only
+	// the default monitor can be created from the base config directly.
+	if mtm.persistence == nil {
+		if orgID != "default" {
+			return nil, fmt.Errorf("tenant monitor unavailable in single-tenant mode: %s", orgID)
+		}
+
+		var err error
+		monitor, err = New(mtm.baseConfig.DeepCopy())
+		if err != nil {
+			return nil, fmt.Errorf("failed to create default monitor: %w", err)
+		}
+		monitor.SetOrgID("default")
+		go monitor.Start(mtm.globalCtx, mtm.wsHub)
+		mtm.monitors[orgID] = monitor
+		return monitor, nil
+	}
 
 	// 1. Load Tenant Config
 	// Deep copy the base config to ensure tenant isolation.
@@ -90,6 +112,22 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 			Int("pbs_count", len(nodesConfig.PBSInstances)).
 			Int("pmg_count", len(nodesConfig.PMGInstances)).
 			Msg("Loaded tenant nodes config")
+	}
+
+	// Load tenant-scoped API tokens in addition to any global tokens inherited
+	// from the base config so org-specific agents continue working after
+	// the tenant monitor is recreated.
+	tenantTokens, err := tenantPersistence.LoadAPITokens()
+	if err != nil {
+		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to load tenant API tokens")
+	} else if len(tenantTokens) > 0 {
+		tenantConfig.APITokens = mergeAPITokens(tenantConfig.APITokens, tenantTokens)
+		tenantConfig.SortAPITokens()
+		log.Info().
+			Str("org_id", orgID).
+			Int("tenant_tokens", len(tenantTokens)).
+			Int("total_tokens", len(tenantConfig.APITokens)).
+			Msg("Loaded tenant API tokens")
 	}
 
 	// 2. Create Monitor
@@ -147,4 +185,35 @@ func (mtm *MultiTenantMonitor) OrgExists(orgID string) bool {
 		return false
 	}
 	return mtm.persistence.OrgExists(orgID)
+}
+
+func mergeAPITokens(baseTokens, tenantTokens []config.APITokenRecord) []config.APITokenRecord {
+	if len(baseTokens) == 0 && len(tenantTokens) == 0 {
+		return nil
+	}
+
+	merged := make([]config.APITokenRecord, 0, len(baseTokens)+len(tenantTokens))
+	seen := make(map[string]struct{}, len(baseTokens)+len(tenantTokens))
+
+	appendUnique := func(tokens []config.APITokenRecord) {
+		for _, token := range tokens {
+			key := token.Hash
+			if key == "" {
+				key = token.ID
+			}
+			if key == "" {
+				continue
+			}
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			seen[key] = struct{}{}
+			merged = append(merged, token.Clone())
+		}
+	}
+
+	appendUnique(baseTokens)
+	appendUnique(tenantTokens)
+
+	return merged
 }

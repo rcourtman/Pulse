@@ -244,6 +244,14 @@ func (h *ConfigHandlers) SetConfig(cfg *config.Config) {
 	h.legacyConfig = cfg
 }
 
+// SetPersistence updates the legacy persistence used for single-tenant runtime paths.
+func (h *ConfigHandlers) SetPersistence(p *config.ConfigPersistence) {
+	if p == nil {
+		return
+	}
+	h.legacyPersistence = p
+}
+
 // getContextState helper to retrieve tenant-specific state
 func (h *ConfigHandlers) getContextState(ctx context.Context) (*config.Config, *config.ConfigPersistence, *monitoring.Monitor) {
 	orgID := "default"
@@ -835,6 +843,55 @@ func ipsOnSameNetwork(ip1, ip2 net.IP) bool {
 	return false
 }
 
+func interfaceNetwork(iface proxmox.NodeNetworkInterface) (*net.IPNet, net.IP) {
+	if strings.TrimSpace(iface.CIDR) != "" {
+		if ip, network, err := net.ParseCIDR(strings.TrimSpace(iface.CIDR)); err == nil {
+			return network, ip
+		}
+	}
+
+	address := net.ParseIP(strings.TrimSpace(iface.Address))
+	netmask := net.ParseIP(strings.TrimSpace(iface.Netmask))
+	if ipv4 := address.To4(); ipv4 != nil {
+		if maskIPv4 := netmask.To4(); maskIPv4 != nil {
+			mask := net.IPMask(maskIPv4)
+			return &net.IPNet{IP: ipv4.Mask(mask), Mask: mask}, ipv4
+		}
+	}
+
+	address6 := net.ParseIP(strings.TrimSpace(iface.Address6))
+	if strings.TrimSpace(iface.CIDR) != "" && address6 != nil {
+		if _, network, err := net.ParseCIDR(strings.TrimSpace(iface.CIDR)); err == nil {
+			return network, address6
+		}
+	}
+
+	return nil, nil
+}
+
+func likelySameSubnet(ip1, ip2 net.IP) bool {
+	if ip1 == nil || ip2 == nil {
+		return false
+	}
+
+	if ip1v4 := ip1.To4(); ip1v4 != nil {
+		ip2v4 := ip2.To4()
+		if ip2v4 == nil {
+			return false
+		}
+		mask := net.CIDRMask(24, 32)
+		return ip1v4.Mask(mask).Equal(ip2v4.Mask(mask))
+	}
+
+	ip1v6 := ip1.To16()
+	ip2v6 := ip2.To16()
+	if ip1v6 == nil || ip2v6 == nil {
+		return false
+	}
+	mask := net.CIDRMask(64, 128)
+	return ip1v6.Mask(mask).Equal(ip2v6.Mask(mask))
+}
+
 // findPreferredIP looks through a list of node network interfaces and returns
 // an IP that appears to be on the same network as the reference IP.
 // Returns empty string if no match found.
@@ -843,21 +900,38 @@ func findPreferredIP(interfaces []proxmox.NodeNetworkInterface, referenceIP net.
 		return ""
 	}
 
+	bestIP := ""
+	bestPrefix := -1
 	for _, iface := range interfaces {
 		// Skip inactive interfaces
 		if iface.Active != 1 {
 			continue
 		}
 
-		// Check IPv4 address
+		network, ifaceIP := interfaceNetwork(iface)
+		if network != nil && ifaceIP != nil && network.Contains(referenceIP) {
+			ones, _ := network.Mask.Size()
+			candidate := strings.TrimSpace(iface.Address)
+			if candidate == "" {
+				candidate = ifaceIP.String()
+			}
+			if candidate != "" && ones > bestPrefix {
+				bestIP = candidate
+				bestPrefix = ones
+			}
+			continue
+		}
+
+		// Fallback for older payloads that don't include CIDR/netmask details.
 		if iface.Address != "" {
-			ip := net.ParseIP(iface.Address)
-			if ip != nil && ipsOnSameNetwork(ip, referenceIP) {
-				return iface.Address
+			ip := net.ParseIP(strings.TrimSpace(iface.Address))
+			if ip != nil && likelySameSubnet(ip, referenceIP) {
+				return strings.TrimSpace(iface.Address)
 			}
 		}
 	}
-	return ""
+
+	return bestIP
 }
 
 var detectPVECluster = defaultDetectPVECluster
@@ -984,32 +1058,27 @@ func defaultDetectPVECluster(clientConfig proxmox.ClientConfig, nodeName string,
 
 			// Try to find a better IP on the same network as initial connection (management network)
 			// Only do this if no manual override is set
-			if endpoint.IPOverride == "" && connectionIP != nil && clusterNode.IP != "" {
-				// Check if cluster-reported IP is already on the same network as our connection
-				clusterIP := net.ParseIP(clusterNode.IP)
-				if clusterIP != nil && !ipsOnSameNetwork(clusterIP, connectionIP) {
-					// Cluster IP is on a different network, try to find one on the same network
-					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-					nodeInterfaces, err := tempClient.GetNodeNetworkInterfaces(ctx, clusterNode.Name)
-					cancel()
+			if endpoint.IPOverride == "" && connectionIP != nil && clusterNode.Name != "" {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				nodeInterfaces, err := tempClient.GetNodeNetworkInterfaces(ctx, clusterNode.Name)
+				cancel()
 
-					if err == nil {
-						preferredIP := findPreferredIP(nodeInterfaces, connectionIP)
-						if preferredIP != "" && preferredIP != clusterNode.IP {
-							log.Info().
-								Str("node", clusterNode.Name).
-								Str("cluster_ip", clusterNode.IP).
-								Str("preferred_ip", preferredIP).
-								Str("connection_ip", connectionIP.String()).
-								Msg("Found preferred management IP for cluster node")
-							endpoint.IPOverride = preferredIP
-						}
-					} else {
-						log.Debug().
-							Err(err).
+				if err == nil {
+					preferredIP := findPreferredIP(nodeInterfaces, connectionIP)
+					if preferredIP != "" && preferredIP != clusterNode.IP {
+						log.Info().
 							Str("node", clusterNode.Name).
-							Msg("Could not query node network interfaces for network preference")
+							Str("cluster_ip", clusterNode.IP).
+							Str("preferred_ip", preferredIP).
+							Str("connection_ip", connectionIP.String()).
+							Msg("Found preferred management IP for cluster node")
+						endpoint.IPOverride = preferredIP
 					}
+				} else {
+					log.Debug().
+						Err(err).
+						Str("node", clusterNode.Name).
+						Msg("Could not query node network interfaces for network preference")
 				}
 			}
 
@@ -1049,31 +1118,27 @@ func defaultDetectPVECluster(clientConfig proxmox.ClientConfig, nodeName string,
 				// Apply subnet preference even in fallback path (refs #929)
 				// Node validation may have failed because cluster-reported IPs are on internal
 				// network, but we can still query node interfaces via the initial connection
-				if connectionIP != nil && clusterNode.IP != "" && clusterNode.Name != "" {
-					clusterIP := net.ParseIP(clusterNode.IP)
-					if clusterIP != nil && !ipsOnSameNetwork(clusterIP, connectionIP) {
-						// Cluster IP is on a different network, try to find one on the same network
-						ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-						nodeInterfaces, err := tempClient.GetNodeNetworkInterfaces(ctx, clusterNode.Name)
-						cancel()
+				if connectionIP != nil && clusterNode.Name != "" {
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					nodeInterfaces, err := tempClient.GetNodeNetworkInterfaces(ctx, clusterNode.Name)
+					cancel()
 
-						if err == nil {
-							preferredIP := findPreferredIP(nodeInterfaces, connectionIP)
-							if preferredIP != "" && preferredIP != clusterNode.IP {
-								log.Info().
-									Str("node", clusterNode.Name).
-									Str("cluster_ip", clusterNode.IP).
-									Str("preferred_ip", preferredIP).
-									Str("connection_ip", connectionIP.String()).
-									Msg("Found preferred management IP for unvalidated cluster node")
-								endpoint.IPOverride = preferredIP
-							}
-						} else {
-							log.Debug().
-								Err(err).
+					if err == nil {
+						preferredIP := findPreferredIP(nodeInterfaces, connectionIP)
+						if preferredIP != "" && preferredIP != clusterNode.IP {
+							log.Info().
 								Str("node", clusterNode.Name).
-								Msg("Could not query node network interfaces in fallback path")
+								Str("cluster_ip", clusterNode.IP).
+								Str("preferred_ip", preferredIP).
+								Str("connection_ip", connectionIP.String()).
+								Msg("Found preferred management IP for unvalidated cluster node")
+							endpoint.IPOverride = preferredIP
 						}
+					} else {
+						log.Debug().
+							Err(err).
+							Str("node", clusterNode.Name).
+							Msg("Could not query node network interfaces in fallback path")
 					}
 				}
 
@@ -4922,7 +4987,7 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		Used:      false,
 		NodeType:  req.Type,
 		Host:      req.Host,
-		OrgID:     GetOrgID(r.Context()),
+		OrgID:     "default",
 	}
 	h.codeMutex.Unlock()
 
@@ -5143,11 +5208,43 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		Bool("hasConfigToken", h.getConfig(r.Context()).HasAPITokens()).
 		Msg("Checking authentication for auto-register")
 
+	validateAPIToken := func(rawToken string) (*config.APITokenRecord, bool) {
+		token := strings.TrimSpace(rawToken)
+		if token == "" {
+			return nil, false
+		}
+
+		// Mirror the main auth path: avoid taking the write lock for obviously invalid tokens,
+		// then update usage metadata only after a positive read-only check.
+		config.Mu.RLock()
+		valid := h.getConfig(r.Context()).IsValidAPIToken(token)
+		config.Mu.RUnlock()
+		if !valid {
+			return nil, false
+		}
+
+		config.Mu.Lock()
+		record, ok := h.getConfig(r.Context()).ValidateAPIToken(token)
+		config.Mu.Unlock()
+		return record, ok
+	}
+
+	requestAPIToken := func() string {
+		if token := strings.TrimSpace(r.Header.Get("X-API-Token")); token != "" {
+			return token
+		}
+		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+			return strings.TrimSpace(authHeader[7:])
+		}
+		return ""
+	}
+
 	// First check for setup code/auth token in the request
 	if authCode != "" {
 		matchedAPIToken := false
 		if h.getConfig(r.Context()).HasAPITokens() {
-			if record, ok := h.getConfig(r.Context()).ValidateAPIToken(authCode); ok {
+			if record, ok := validateAPIToken(authCode); ok {
 				// Accept settings:write (admin tokens) or host-agent:report (agent tokens)
 				if record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeHostReport) {
 					authenticated = true
@@ -5185,11 +5282,6 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				if setupCode.NodeType == req.Type {
 					setupCode.Used = true // Mark as used immediately
 
-					// Inject OrgID from setup code into context for subsequent processing
-					if setupCode.OrgID != "" {
-						ctx := context.WithValue(r.Context(), OrgIDContextKey, setupCode.OrgID)
-						r = r.WithContext(ctx)
-					}
 					// Allow a short grace period for follow-up actions without keeping tokens alive too long
 					graceExpiry := time.Now().Add(1 * time.Minute)
 					if setupCode.ExpiresAt.Before(graceExpiry) {
@@ -5221,8 +5313,8 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 
 	// If not authenticated via setup code, check API token if configured
 	if !authenticated && h.getConfig(r.Context()).HasAPITokens() {
-		apiToken := r.Header.Get("X-API-Token")
-		if record, ok := h.getConfig(r.Context()).ValidateAPIToken(apiToken); ok {
+		apiToken := requestAPIToken()
+		if record, ok := validateAPIToken(apiToken); ok {
 			// Accept settings:write (admin tokens) or host-agent:report (agent tokens)
 			if record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeHostReport) {
 				authenticated = true
@@ -6210,6 +6302,8 @@ func (h *ConfigHandlers) HandleAgentInstallCommand(w http.ResponseWriter, r *htt
 		return
 	}
 
+	defaultCtx := context.WithValue(r.Context(), OrgIDContextKey, "default")
+
 	// Generate a new API token with host report and host manage scopes
 	rawToken, err := internalauth.GenerateAPIToken()
 	if err != nil {
@@ -6232,16 +6326,15 @@ func (h *ConfigHandlers) HandleAgentInstallCommand(w http.ResponseWriter, r *htt
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
-
 	// Persist the token
 	config.Mu.Lock()
-	h.getConfig(r.Context()).APITokens = append(h.getConfig(r.Context()).APITokens, *record)
-	h.getConfig(r.Context()).SortAPITokens()
+	h.getConfig(defaultCtx).APITokens = append(h.getConfig(defaultCtx).APITokens, *record)
+	h.getConfig(defaultCtx).SortAPITokens()
 
-	if h.getPersistence(r.Context()) != nil {
-		if err := h.getPersistence(r.Context()).SaveAPITokens(h.getConfig(r.Context()).APITokens); err != nil {
+	if h.getPersistence(defaultCtx) != nil {
+		if err := h.getPersistence(defaultCtx).SaveAPITokens(h.getConfig(defaultCtx).APITokens); err != nil {
 			// Rollback the in-memory addition
-			h.getConfig(r.Context()).APITokens = h.getConfig(r.Context()).APITokens[:len(h.getConfig(r.Context()).APITokens)-1]
+			h.getConfig(defaultCtx).APITokens = h.getConfig(defaultCtx).APITokens[:len(h.getConfig(defaultCtx).APITokens)-1]
 			config.Mu.Unlock()
 			log.Error().Err(err).Msg("Failed to persist API tokens after creation")
 			http.Error(w, "Failed to save token to disk: "+err.Error(), http.StatusInternalServerError)
@@ -6253,9 +6346,9 @@ func (h *ConfigHandlers) HandleAgentInstallCommand(w http.ResponseWriter, r *htt
 	// Derive Pulse URL from the request
 	host := r.Host
 	if parsedHost, parsedPort, err := net.SplitHostPort(host); err == nil {
-		if (parsedHost == "127.0.0.1" || parsedHost == "localhost") && parsedPort == strconv.Itoa(h.getConfig(r.Context()).FrontendPort) {
+		if (parsedHost == "127.0.0.1" || parsedHost == "localhost") && parsedPort == strconv.Itoa(h.getConfig(defaultCtx).FrontendPort) {
 			// Prefer a user-configured public URL when we're running on loopback
-			if publicURL := strings.TrimSpace(h.getConfig(r.Context()).PublicURL); publicURL != "" {
+			if publicURL := strings.TrimSpace(h.getConfig(defaultCtx).PublicURL); publicURL != "" {
 				if parsedURL, err := url.Parse(publicURL); err == nil && parsedURL.Host != "" {
 					host = parsedURL.Host
 				}

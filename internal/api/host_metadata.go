@@ -13,7 +13,8 @@ import (
 
 // HostMetadataHandler handles host metadata operations
 type HostMetadataHandler struct {
-	mtPersistence *config.MultiTenantPersistence
+	mtPersistence     *config.MultiTenantPersistence
+	legacyPersistence *config.ConfigPersistence
 }
 
 // NewHostMetadataHandler creates a new host metadata handler
@@ -23,6 +24,10 @@ func NewHostMetadataHandler(mtPersistence *config.MultiTenantPersistence) *HostM
 	}
 }
 
+func (h *HostMetadataHandler) SetLegacyPersistence(persistence *config.ConfigPersistence) {
+	h.legacyPersistence = persistence
+}
+
 func (h *HostMetadataHandler) getStore(ctx context.Context) *config.HostMetadataStore {
 	orgID := "default"
 	if ctx != nil {
@@ -30,8 +35,15 @@ func (h *HostMetadataHandler) getStore(ctx context.Context) *config.HostMetadata
 			orgID = id
 		}
 	}
-	p, _ := h.mtPersistence.GetPersistence(orgID)
-	return p.GetHostMetadataStore()
+	if h.mtPersistence != nil {
+		if p, err := h.mtPersistence.GetPersistence(orgID); err == nil && p != nil {
+			return p.GetHostMetadataStore()
+		}
+	}
+	if h.legacyPersistence != nil {
+		return h.legacyPersistence.GetHostMetadataStore()
+	}
+	return nil
 }
 
 // Store returns the underlying metadata store for default tenant

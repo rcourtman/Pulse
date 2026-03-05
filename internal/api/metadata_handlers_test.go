@@ -119,3 +119,25 @@ func TestHostMetadataHandler(t *testing.T) {
 		t.Fatalf("unexpected status: %d", resp.Code)
 	}
 }
+
+func TestMetadataHandlers_FallbackToLegacyPersistence(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+
+	guestHandler := NewGuestMetadataHandler(nil)
+	guestHandler.SetLegacyPersistence(persistence)
+	if guestHandler.Store() == nil {
+		t.Fatal("expected guest metadata store from legacy persistence")
+	}
+
+	dockerHandler := NewDockerMetadataHandler(nil)
+	dockerHandler.SetLegacyPersistence(persistence)
+	if dockerHandler.Store() == nil {
+		t.Fatal("expected docker metadata store from legacy persistence")
+	}
+
+	hostHandler := NewHostMetadataHandler(nil)
+	hostHandler.SetLegacyPersistence(persistence)
+	if hostHandler.Store() == nil {
+		t.Fatal("expected host metadata store from legacy persistence")
+	}
+}

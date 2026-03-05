@@ -1862,6 +1862,23 @@ func TestAutoRegisterAcceptsAgentToken(t *testing.T) {
 	}
 }
 
+func TestAutoRegisterAcceptsBearerAgentToken(t *testing.T) {
+	rawToken := "agent-register-token-bearer-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeHostReport}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router.configHandlers.SetConfig(cfg)
+
+	body := `{"type":"pve","host":"https://192.168.1.1:8006","tokenId":"test@pam!pulse","tokenValue":"secret"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code == http.StatusUnauthorized {
+		t.Fatalf("expected bearer agent token with host-agent:report to be accepted, got 401")
+	}
+}
+
 func TestConfigExportRequiresProxyAdmin(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.ProxyAuthSecret = "proxy-secret"

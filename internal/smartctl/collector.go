@@ -250,37 +250,118 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 		return nil, err
 	}
 
-	// Run smartctl with standby check to avoid waking sleeping drives
-	// -n standby: don't check if drive is in standby (return exit code 2)
-	// -i: device info
-	// -A: attributes (for temperature)
-	// --json=o: output original smartctl JSON format
-	output, err := runCommandOutput(cmdCtx, smartctlPath, "-n", "standby", "-i", "-A", "-H", "--json=o", device)
+	attempts := smartctlProbeAttempts(device)
+	var firstParsed *DiskSMART
+	var lastErr error
 
-	// smartctl returns non-zero exit codes for various conditions
-	// Exit code 2 means drive is in standby - that's okay
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			exitCode := exitErr.ExitCode()
-			// Check for standby (bit 1 set in exit status)
-			if exitCode&2 != 0 {
-				return &DiskSMART{
-					Device:      filepath.Base(device),
-					Standby:     true,
-					LastUpdated: timeNow(),
-				}, nil
+	for i, args := range attempts {
+		output, err := runCommandOutput(cmdCtx, smartctlPath, args...)
+
+		// smartctl returns non-zero exit codes for various conditions.
+		// Exit code 2 means drive is in standby - that's okay.
+		if err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				exitCode := exitErr.ExitCode()
+				if exitCode&2 != 0 {
+					return &DiskSMART{
+						Device:      filepath.Base(device),
+						Standby:     true,
+						LastUpdated: timeNow(),
+					}, nil
+				}
+				if len(output) == 0 {
+					lastErr = err
+					continue
+				}
+			} else {
+				lastErr = err
+				continue
 			}
-			// Other exit codes might still have valid JSON output
-			// Continue parsing if we got output
-			if len(output) == 0 {
-				return nil, err
-			}
-		} else {
-			return nil, err
+		}
+
+		result, parseErr := parseSMARTOutput(output, device)
+		if parseErr != nil {
+			lastErr = parseErr
+			continue
+		}
+		if firstParsed == nil {
+			firstParsed = result
+		}
+		if !shouldRetryFreeBSDSMART(device, result, i, len(attempts)) {
+			log.Debug().
+				Str("device", result.Device).
+				Str("model", result.Model).
+				Int("temperature", result.Temperature).
+				Str("health", result.Health).
+				Msg("Collected SMART data")
+			return result, nil
 		}
 	}
 
-	// Parse JSON output
+	if firstParsed != nil {
+		log.Debug().
+			Str("device", firstParsed.Device).
+			Str("model", firstParsed.Model).
+			Int("temperature", firstParsed.Temperature).
+			Str("health", firstParsed.Health).
+			Msg("Collected SMART data")
+		return firstParsed, nil
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, nil
+}
+
+func smartctlProbeAttempts(device string) [][]string {
+	attempts := [][]string{
+		smartctlArgs(device, ""),
+	}
+
+	for _, deviceType := range freeBSDSmartctlDeviceTypes(filepath.Base(device)) {
+		attempts = append(attempts, smartctlArgs(device, deviceType))
+	}
+
+	return attempts
+}
+
+func smartctlArgs(device, deviceType string) []string {
+	args := []string{}
+	if deviceType != "" {
+		args = append(args, "-d", deviceType)
+	}
+	args = append(args, "-n", "standby", "-i", "-A", "-H", "--json=o", device)
+	return args
+}
+
+func freeBSDSmartctlDeviceTypes(device string) []string {
+	if runtimeGOOS != "freebsd" {
+		return nil
+	}
+
+	switch {
+	case strings.HasPrefix(device, "ada"), strings.HasPrefix(device, "ad"):
+		return []string{"sat"}
+	case strings.HasPrefix(device, "da"):
+		return []string{"sat,auto", "scsi"}
+	case strings.HasPrefix(device, "nvd"), strings.HasPrefix(device, "nvme"):
+		return []string{"nvme"}
+	default:
+		return nil
+	}
+}
+
+func shouldRetryFreeBSDSMART(device string, result *DiskSMART, attemptIndex, attemptCount int) bool {
+	if runtimeGOOS != "freebsd" || attemptIndex >= attemptCount-1 || result == nil {
+		return false
+	}
+	if result.Temperature > 0 {
+		return false
+	}
+	return len(freeBSDSmartctlDeviceTypes(filepath.Base(device))) > 0
+}
+
+func parseSMARTOutput(output []byte, device string) (*DiskSMART, error) {
 	var smartData smartctlJSON
 	if err := json.Unmarshal(output, &smartData); err != nil {
 		return nil, err
@@ -294,27 +375,19 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 		LastUpdated: timeNow(),
 	}
 
-	// Build WWN string if available
 	if smartData.WWN.NAA != 0 {
 		result.WWN = formatWWN(smartData.WWN.NAA, smartData.WWN.OUI, smartData.WWN.ID)
 	}
 
-	// Get temperature (different location for NVMe vs SATA).
-	// Try top-level fields first, then fall back to ATA attributes 194/190.
 	if smartData.Temperature.Current > 0 {
 		result.Temperature = smartData.Temperature.Current
 	} else if smartData.NVMeSmartHealthInformationLog.Temperature > 0 {
 		result.Temperature = smartData.NVMeSmartHealthInformationLog.Temperature
 	} else {
-		// Fallback: extract from ATA SMART attributes 194 (Temperature_Celsius)
-		// or 190 (Airflow_Temperature_Cel). Some drives don't populate the
-		// top-level temperature field.
 		for _, attr := range smartData.ATASmartAttributes.Table {
 			if attr.ID == 194 || attr.ID == 190 {
-				// Temperature is typically in the raw value's lower byte.
-				// raw.string format: "34" or "34 (Min/Max 22/45)" etc.
 				temp := int(parseRawValue(attr.Raw.String, attr.Raw.Value))
-				if temp > 0 && temp < 150 { // sanity: valid operating range
+				if temp > 0 && temp < 150 {
 					result.Temperature = temp
 					break
 				}
@@ -322,22 +395,13 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 		}
 	}
 
-	// Get health status
 	if smartData.SmartStatus.Passed {
 		result.Health = "PASSED"
 	} else {
 		result.Health = "FAILED"
 	}
 
-	// Parse SMART attributes
 	result.Attributes = parseSMARTAttributes(&smartData, result.Type)
-
-	log.Debug().
-		Str("device", result.Device).
-		Str("model", result.Model).
-		Int("temperature", result.Temperature).
-		Str("health", result.Health).
-		Msg("Collected SMART data")
 
 	return result, nil
 }

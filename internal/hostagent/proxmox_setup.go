@@ -743,7 +743,10 @@ func (p *ProxmoxSetup) doRegisterRequest(ctx context.Context, body []byte) error
 		return fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-API-Token", p.apiToken)
+	if token := strings.TrimSpace(p.apiToken); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("X-API-Token", token)
+	}
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {

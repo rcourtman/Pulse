@@ -137,3 +137,28 @@ func TestTenantMiddleware_MultiTenantLicenseRequired(t *testing.T) {
 		t.Fatalf("expected 402, got %d", rec.Code)
 	}
 }
+
+func TestTenantMiddleware_V5SingleTenantModeIgnoresHeaderAndCookie(t *testing.T) {
+	prevSingleTenant := isV5SingleTenantMode()
+	setV5SingleTenantModeForTests(true)
+	t.Cleanup(func() { setV5SingleTenantModeForTests(prevSingleTenant) })
+
+	mw := NewTenantMiddleware(nil)
+	handler := mw.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := GetOrgID(r.Context()); got != "default" {
+			t.Fatalf("expected default org in v5 single-tenant mode, got %q", got)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard", nil)
+	req.Header.Set("X-Pulse-Org-ID", "header-org")
+	req.AddCookie(&http.Cookie{Name: "pulse_org_id", Value: "cookie-org"})
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}

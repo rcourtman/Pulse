@@ -586,11 +586,12 @@ func ensureClusterEndpointURL(raw string) string {
 	return "https://" + net.JoinHostPort(value, "8006")
 }
 
-func clusterEndpointEffectiveURL(endpoint config.ClusterEndpoint, verifySSL bool, hasFingerprint bool) string {
+func clusterEndpointEffectiveURL(endpoint config.ClusterEndpoint, verifySSL bool, baseFingerprint string) string {
 	// When TLS hostname verification is required (VerifySSL=true and no fingerprint),
 	// prefer hostname over IP to ensure certificate CN/SAN validation works correctly.
 	// When TLS is not verified (VerifySSL=false) or a fingerprint is provided (which
 	// bypasses hostname checks), prefer IP to reduce DNS lookups (refs #620).
+	hasFingerprint := strings.TrimSpace(endpoint.Fingerprint) != "" || strings.TrimSpace(baseFingerprint) != ""
 	requiresHostnameForTLS := verifySSL && !hasFingerprint
 
 	// Use EffectiveIP() which prefers user-specified IPOverride over auto-discovered IP
@@ -614,6 +615,72 @@ func clusterEndpointEffectiveURL(endpoint config.ClusterEndpoint, verifySSL bool
 		}
 	}
 	return ""
+}
+
+func buildClusterClientEndpoints(pve config.PVEInstance) ([]string, map[string]string) {
+	endpoints := make([]string, 0, len(pve.ClusterEndpoints)+1)
+	endpointFingerprints := make(map[string]string)
+	hasValidEndpoints := false
+
+	for _, ep := range pve.ClusterEndpoints {
+		effectiveURL := clusterEndpointEffectiveURL(ep, pve.VerifySSL, pve.Fingerprint)
+		if effectiveURL == "" {
+			log.Warn().
+				Str("node", ep.NodeName).
+				Msg("Skipping cluster endpoint with no host/IP")
+			continue
+		}
+
+		if parsed, err := url.Parse(effectiveURL); err == nil {
+			hostname := parsed.Hostname()
+			if hostname != "" && (strings.Contains(hostname, ".") || net.ParseIP(hostname) != nil) {
+				hasValidEndpoints = true
+			}
+		} else {
+			hostname := normalizeEndpointHost(effectiveURL)
+			if hostname != "" && (strings.Contains(hostname, ".") || net.ParseIP(hostname) != nil) {
+				hasValidEndpoints = true
+			}
+		}
+
+		endpoints = append(endpoints, effectiveURL)
+		if ep.Fingerprint != "" {
+			endpointFingerprints[effectiveURL] = ep.Fingerprint
+		}
+	}
+
+	if !hasValidEndpoints || len(endpoints) == 0 {
+		fallback := ensureClusterEndpointURL(pve.Host)
+		if fallback != "" {
+			log.Info().
+				Str("instance", pve.Name).
+				Str("mainHost", pve.Host).
+				Msg("Cluster endpoints are not resolvable, using main host for all cluster operations")
+			return []string{fallback}, endpointFingerprints
+		}
+		return nil, endpointFingerprints
+	}
+
+	mainHostURL := ensureClusterEndpointURL(pve.Host)
+	if mainHostURL != "" {
+		mainHostAlreadyIncluded := false
+		for _, ep := range endpoints {
+			if ep == mainHostURL {
+				mainHostAlreadyIncluded = true
+				break
+			}
+		}
+		if !mainHostAlreadyIncluded {
+			log.Info().
+				Str("instance", pve.Name).
+				Str("mainHost", mainHostURL).
+				Int("clusterEndpoints", len(endpoints)).
+				Msg("Adding main host as fallback for remote cluster access")
+			endpoints = append(endpoints, mainHostURL)
+		}
+	}
+
+	return endpoints, endpointFingerprints
 }
 
 // PollExecutor defines the contract for executing polling tasks.
@@ -1269,12 +1336,12 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 	return entry, nil
 }
 
-// getVMRRDMetrics fetches Proxmox RRD memavailable for a single VM with a
+// getVMRRDMetrics fetches Proxmox RRD memory metrics for a single VM with a
 // short-lived cache to avoid a live API call on every poll for VMs that
 // consistently lack guest-agent memory data (e.g. Windows VMs).
-func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface, instance, node string, vmid int) (uint64, error) {
+func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface, instance, node string, vmid int) (rrdMemCacheEntry, error) {
 	if client == nil || node == "" || vmid <= 0 {
-		return 0, fmt.Errorf("invalid arguments for VM RRD lookup")
+		return rrdMemCacheEntry{}, fmt.Errorf("invalid arguments for VM RRD lookup")
 	}
 
 	cacheKey := fmt.Sprintf("%s/%s/%d", instance, node, vmid)
@@ -1283,39 +1350,75 @@ func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface
 	m.rrdCacheMu.RLock()
 	if entry, ok := m.vmRRDMemCache[cacheKey]; ok && now.Sub(entry.fetchedAt) < nodeRRDCacheTTL {
 		m.rrdCacheMu.RUnlock()
-		return entry.available, nil
+		if entry.negative {
+			return rrdMemCacheEntry{}, fmt.Errorf("vm RRD mem read previously failed (negative cache)")
+		}
+		return entry, nil
 	}
 	m.rrdCacheMu.RUnlock()
 
 	requestCtx, cancel := context.WithTimeout(ctx, nodeRRDRequestTimeout)
 	defer cancel()
 
-	points, err := client.GetVMRRDData(requestCtx, node, vmid, "hour", "AVERAGE", []string{"memavailable"})
+	points, err := client.GetVMRRDData(requestCtx, node, vmid, "hour", "AVERAGE", []string{"memavailable", "memused", "maxmem"})
 	if err != nil {
-		return 0, err
+		m.rrdCacheMu.Lock()
+		m.vmRRDMemCache[cacheKey] = rrdMemCacheEntry{negative: true, fetchedAt: now}
+		m.rrdCacheMu.Unlock()
+		return rrdMemCacheEntry{}, err
 	}
 	if len(points) == 0 {
-		return 0, fmt.Errorf("no RRD points for VM %s/%d", node, vmid)
+		m.rrdCacheMu.Lock()
+		m.vmRRDMemCache[cacheKey] = rrdMemCacheEntry{negative: true, fetchedAt: now}
+		m.rrdCacheMu.Unlock()
+		return rrdMemCacheEntry{}, fmt.Errorf("no RRD points for VM %s/%d", node, vmid)
 	}
 
+	var memUsed uint64
+	var memTotal uint64
 	var memAvailable uint64
 	for i := len(points) - 1; i >= 0; i-- {
 		p := points[i]
+		if memTotal == 0 && p.MaxMem != nil && !math.IsNaN(*p.MaxMem) && *p.MaxMem > 0 {
+			memTotal = uint64(math.Round(*p.MaxMem))
+		}
 		if p.MemAvailable != nil && !math.IsNaN(*p.MemAvailable) && *p.MemAvailable > 0 {
 			memAvailable = uint64(math.Round(*p.MemAvailable))
+		}
+		if memUsed == 0 && p.MemUsed != nil && !math.IsNaN(*p.MemUsed) && *p.MemUsed > 0 {
+			memUsed = uint64(math.Round(*p.MemUsed))
+		}
+		if memAvailable > 0 && (memUsed > 0 || memTotal > 0) {
 			break
 		}
 	}
-	if memAvailable == 0 {
-		return 0, fmt.Errorf("rrd memavailable not present for VM %s/%d", node, vmid)
+	if memTotal > 0 {
+		if memAvailable > memTotal {
+			memAvailable = memTotal
+		}
+		if memUsed > memTotal {
+			memUsed = memTotal
+		}
 	}
 
-	entry := rrdMemCacheEntry{available: memAvailable, fetchedAt: now}
+	if memAvailable == 0 && memUsed == 0 {
+		m.rrdCacheMu.Lock()
+		m.vmRRDMemCache[cacheKey] = rrdMemCacheEntry{negative: true, fetchedAt: now}
+		m.rrdCacheMu.Unlock()
+		return rrdMemCacheEntry{}, fmt.Errorf("rrd VM memory metrics not present for VM %s/%d", node, vmid)
+	}
+
+	entry := rrdMemCacheEntry{
+		available: memAvailable,
+		used:      memUsed,
+		total:     memTotal,
+		fetchedAt: now,
+	}
 	m.rrdCacheMu.Lock()
 	m.vmRRDMemCache[cacheKey] = entry
 	m.rrdCacheMu.Unlock()
 
-	return memAvailable, nil
+	return entry, nil
 }
 
 // getVMAgentMemAvailable reads MemAvailable via the QEMU guest agent file-read
@@ -4180,75 +4283,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 
 				// Check if this is a cluster
 			if pve.IsCluster && len(pve.ClusterEndpoints) > 0 {
-				// For clusters, check if endpoints have IPs/resolvable hosts
-				// If not, use the main host for all connections (Proxmox will route cluster API calls)
-				hasValidEndpoints := false
-				endpoints := make([]string, 0, len(pve.ClusterEndpoints))
-				endpointFingerprints := make(map[string]string)
-
-				for _, ep := range pve.ClusterEndpoints {
-					hasFingerprint := pve.Fingerprint != ""
-					effectiveURL := clusterEndpointEffectiveURL(ep, pve.VerifySSL, hasFingerprint)
-					if effectiveURL == "" {
-						log.Warn().
-							Str("node", ep.NodeName).
-							Msg("Skipping cluster endpoint with no host/IP")
-						continue
-					}
-
-					if parsed, err := url.Parse(effectiveURL); err == nil {
-						hostname := parsed.Hostname()
-						if hostname != "" && (strings.Contains(hostname, ".") || net.ParseIP(hostname) != nil) {
-							hasValidEndpoints = true
-						}
-					} else {
-						hostname := normalizeEndpointHost(effectiveURL)
-						if hostname != "" && (strings.Contains(hostname, ".") || net.ParseIP(hostname) != nil) {
-							hasValidEndpoints = true
-						}
-					}
-
-					endpoints = append(endpoints, effectiveURL)
-					// Store per-endpoint fingerprint for TOFU (Trust On First Use)
-					if ep.Fingerprint != "" {
-						endpointFingerprints[effectiveURL] = ep.Fingerprint
-					}
-				}
-
-				// If endpoints are just node names (not FQDNs or IPs), use main host only
-				// This is common when cluster nodes are discovered but not directly reachable
-				if !hasValidEndpoints || len(endpoints) == 0 {
-					log.Info().
-						Str("instance", pve.Name).
-						Str("mainHost", pve.Host).
-						Msg("Cluster endpoints are not resolvable, using main host for all cluster operations")
-					fallback := ensureClusterEndpointURL(pve.Host)
-					if fallback == "" {
-						fallback = ensureClusterEndpointURL(pve.Host)
-					}
-					endpoints = []string{fallback}
-				} else {
-					// Always include the main host URL as a fallback endpoint.
-					// This handles remote cluster scenarios where Proxmox reports internal IPs
-					// that aren't reachable from Pulse's network. The user-provided URL is
-					// reachable, so include it as a fallback for cluster API routing.
-					mainHostURL := ensureClusterEndpointURL(pve.Host)
-					mainHostAlreadyIncluded := false
-					for _, ep := range endpoints {
-						if ep == mainHostURL {
-							mainHostAlreadyIncluded = true
-							break
-						}
-					}
-					if !mainHostAlreadyIncluded && mainHostURL != "" {
-						log.Info().
-							Str("instance", pve.Name).
-							Str("mainHost", mainHostURL).
-							Int("clusterEndpoints", len(endpoints)).
-							Msg("Adding main host as fallback for remote cluster access")
-						endpoints = append(endpoints, mainHostURL)
-					}
-				}
+				endpoints, endpointFingerprints := buildClusterClientEndpoints(pve)
 
 				log.Info().
 					Str("cluster", pve.ClusterName).
@@ -4969,39 +5004,7 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 		// Try to recreate PVE clients
 		for _, pve := range missingPVE {
 			if pve.IsCluster && len(pve.ClusterEndpoints) > 0 {
-				// Create cluster client
-				hasValidEndpoints := false
-				endpoints := make([]string, 0, len(pve.ClusterEndpoints))
-				endpointFingerprints := make(map[string]string)
-
-				for _, ep := range pve.ClusterEndpoints {
-					// Use EffectiveIP() which prefers IPOverride over auto-discovered IP
-					host := ep.EffectiveIP()
-					if host == "" {
-						host = ep.Host
-					}
-					if host == "" {
-						continue
-					}
-					if strings.Contains(host, ".") || net.ParseIP(host) != nil {
-						hasValidEndpoints = true
-					}
-					if !strings.HasPrefix(host, "http") {
-						host = fmt.Sprintf("https://%s:8006", host)
-					}
-					endpoints = append(endpoints, host)
-					// Store per-endpoint fingerprint for TOFU
-					if ep.Fingerprint != "" {
-						endpointFingerprints[host] = ep.Fingerprint
-					}
-				}
-
-				if !hasValidEndpoints || len(endpoints) == 0 {
-					endpoints = []string{pve.Host}
-					if !strings.HasPrefix(endpoints[0], "http") {
-						endpoints[0] = fmt.Sprintf("https://%s:8006", endpoints[0])
-					}
-				}
+				endpoints, endpointFingerprints := buildClusterClientEndpoints(pve)
 
 				clientConfig := config.CreateProxmoxConfig(&pve)
 				clientConfig.Timeout = m.config.ConnectionTimeout
@@ -6826,7 +6829,6 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		}
 
 		// Update the online status for each cluster endpoint
-		hasFingerprint := instanceCfg.Fingerprint != ""
 		for i := range instanceCfg.ClusterEndpoints {
 			if online, exists := onlineNodes[instanceCfg.ClusterEndpoints[i].NodeName]; exists {
 				instanceCfg.ClusterEndpoints[i].Online = online
@@ -6838,7 +6840,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			// Update Pulse connectivity status
 			if pulseHealth != nil {
 				// Try to find the endpoint in the health map by matching the effective URL
-				endpointURL := clusterEndpointEffectiveURL(instanceCfg.ClusterEndpoints[i], instanceCfg.VerifySSL, hasFingerprint)
+				endpointURL := clusterEndpointEffectiveURL(instanceCfg.ClusterEndpoints[i], instanceCfg.VerifySSL, instanceCfg.Fingerprint)
 				if health, exists := pulseHealth[endpointURL]; exists {
 					reachable := health.Healthy
 					instanceCfg.ClusterEndpoints[i].PulseReachable = &reachable
@@ -7044,6 +7046,10 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				ListingMaxMem: res.MaxMem,
 			}
 			var detailedStatus *proxmox.VMStatus
+			memAvailable := uint64(0)
+			memInfoTotalMinusUsed := uint64(0)
+			rrdUsed := uint64(0)
+			agentEnabled := false
 
 			// Try to get actual disk usage from guest agent if VM is running
 			diskUsed := res.Disk
@@ -7078,8 +7084,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					guestRaw.Balloon = detailedStatus.Balloon
 					guestRaw.BalloonMin = detailedStatus.BalloonMin
 					guestRaw.Agent = detailedStatus.Agent.Value
-					memAvailable := uint64(0)
-					memInfoTotalMinusUsed := uint64(0)
+					agentEnabled = detailedStatus.Agent.Value > 0
 					if detailedStatus.MemInfo != nil {
 						guestRaw.MemInfoUsed = detailedStatus.MemInfo.Used
 						guestRaw.MemInfoFree = detailedStatus.MemInfo.Free
@@ -7112,105 +7117,6 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					// Refs: #1070
 					if detailedStatus.MaxMem > 0 {
 						memTotal = detailedStatus.MaxMem
-					}
-
-					// Fallback for Linux VMs when the guest agent doesn't provide MemInfo.Available:
-					// try Proxmox RRD's memavailable (cache-aware) before falling back to status.Mem
-					// which can include reclaimable page cache (inflating usage). Refs: #1270
-					if memAvailable == 0 {
-						if rrdAvailable, rrdErr := m.getVMRRDMetrics(ctx, client, instanceName, res.Node, res.VMID); rrdErr == nil && rrdAvailable > 0 {
-							memAvailable = rrdAvailable
-							memorySource = "rrd-memavailable"
-							guestRaw.MemInfoAvailable = memAvailable
-							log.Debug().
-								Str("vm", res.Name).
-								Str("node", res.Node).
-								Int("vmid", res.VMID).
-								Uint64("total", memTotal).
-								Uint64("available", memAvailable).
-								Msg("QEMU memory: using RRD memavailable fallback (excludes reclaimable cache)")
-						} else if rrdErr != nil {
-							log.Debug().
-								Err(rrdErr).
-								Str("instance", instanceName).
-								Str("vm", res.Name).
-								Int("vmid", res.VMID).
-								Msg("RRD memory data unavailable for VM, using status/cluster resources values")
-						}
-					}
-
-					// Fallback: use linked Pulse host agent's memory data.
-					// gopsutil's Used = Total - Available (excludes page cache),
-					// so we can derive accurate available memory. Refs: #1270
-					if memAvailable == 0 {
-						if agentHost, ok := vmIDToHostAgent[guestID]; ok {
-							agentAvailable := agentHost.Memory.Total - agentHost.Memory.Used
-							if agentAvailable > 0 {
-								memAvailable = uint64(agentAvailable)
-								memorySource = "host-agent"
-								guestRaw.HostAgentTotal = uint64(agentHost.Memory.Total)
-								guestRaw.HostAgentUsed = uint64(agentHost.Memory.Used)
-								log.Debug().
-									Str("vm", res.Name).
-									Str("node", res.Node).
-									Int("vmid", res.VMID).
-									Uint64("total", memTotal).
-									Uint64("available", memAvailable).
-									Int64("agentTotal", agentHost.Memory.Total).
-									Int64("agentUsed", agentHost.Memory.Used).
-									Msg("QEMU memory: using linked Pulse host agent memory (excludes page cache)")
-							}
-						}
-					}
-
-					// Last-resort fallback before status-mem: read /proc/meminfo via the
-					// QEMU guest agent's file-read endpoint. This works for Linux VMs with
-					// the guest agent running even when the balloon driver doesn't populate
-					// the meminfo fields. Results are cached with negative backoff. Refs: #1270
-					if memAvailable == 0 && detailedStatus.Agent.Value > 0 {
-						if agentAvail, agentErr := m.getVMAgentMemAvailable(ctx, client, instanceName, res.Node, res.VMID); agentErr == nil && agentAvail > 0 {
-							memAvailable = agentAvail
-							memorySource = "guest-agent-meminfo"
-							guestRaw.MemInfoAvailable = memAvailable
-							log.Debug().
-								Str("vm", res.Name).
-								Str("node", res.Node).
-								Int("vmid", res.VMID).
-								Uint64("total", memTotal).
-								Uint64("available", memAvailable).
-								Msg("QEMU memory: using guest agent /proc/meminfo fallback (excludes reclaimable cache)")
-						}
-					}
-
-					// Last-chance MemInfo fallback: use Total-Used only after RRD/agent
-					// attempts, so those more reliable cache-aware sources get priority.
-					if memAvailable == 0 && memInfoTotalMinusUsed > 0 {
-						memAvailable = memInfoTotalMinusUsed
-						memorySource = "meminfo-total-minus-used"
-					}
-
-					switch {
-					case memAvailable > 0:
-						if memAvailable > memTotal {
-							memAvailable = memTotal
-						}
-						memUsed = memTotal - memAvailable
-					case detailedStatus.Mem > 0:
-						// Prefer Mem over FreeMem: Proxmox calculates Mem as
-						// (total_mem - free_mem) using the balloon's guest-visible
-						// total, which is correct even when ballooning is active.
-						// FreeMem is relative to the balloon allocation (not MaxMem),
-						// so subtracting it from MaxMem produces wildly inflated
-						// usage when the balloon has reduced the VM's memory.
-						// Refs: #1185
-						memUsed = detailedStatus.Mem
-						memorySource = "status-mem"
-					case detailedStatus.FreeMem > 0 && memTotal >= detailedStatus.FreeMem:
-						memUsed = memTotal - detailedStatus.FreeMem
-						memorySource = "status-freemem"
-					}
-					if memUsed > memTotal {
-						memUsed = memTotal
 					}
 
 					// Gather guest metadata from the agent when available
@@ -7542,9 +7448,125 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				}
 			}
 
-			if res.Status != "running" {
+			// Fallback for Linux VMs when the guest agent doesn't provide MemInfo.Available:
+			// try Proxmox RRD memory first, even if detailed status was unavailable.
+			if res.Status == "running" && memAvailable == 0 {
+				if rrdEntry, rrdErr := m.getVMRRDMetrics(ctx, client, instanceName, res.Node, res.VMID); rrdErr == nil {
+					if rrdEntry.total > 0 {
+						memTotal = rrdEntry.total
+					}
+					if rrdEntry.available > 0 {
+						memAvailable = rrdEntry.available
+						memorySource = "rrd-memavailable"
+						guestRaw.RRDAvailable = rrdEntry.available
+						guestRaw.MemInfoAvailable = rrdEntry.available
+						log.Debug().
+							Str("vm", res.Name).
+							Str("node", res.Node).
+							Int("vmid", res.VMID).
+							Uint64("total", memTotal).
+							Uint64("available", memAvailable).
+							Msg("QEMU memory: using RRD memavailable fallback (excludes reclaimable cache)")
+					} else if rrdEntry.used > 0 {
+						rrdUsed = rrdEntry.used
+						memorySource = "rrd-memused"
+						guestRaw.RRDUsed = rrdEntry.used
+						log.Debug().
+							Str("vm", res.Name).
+							Str("node", res.Node).
+							Int("vmid", res.VMID).
+							Uint64("total", memTotal).
+							Uint64("used", rrdUsed).
+							Msg("QEMU memory: using RRD memused fallback")
+					}
+				} else {
+					log.Debug().
+						Err(rrdErr).
+						Str("instance", instanceName).
+						Str("vm", res.Name).
+						Int("vmid", res.VMID).
+						Msg("RRD memory data unavailable for VM, using status/cluster resources values")
+				}
+			}
+
+			// Fallback: use linked Pulse host agent's memory data.
+			// gopsutil's Used = Total - Available (excludes page cache),
+			// so we can derive accurate available memory. Refs: #1270
+			if res.Status == "running" && memAvailable == 0 {
+				if agentHost, ok := vmIDToHostAgent[guestID]; ok {
+					agentAvailable := agentHost.Memory.Total - agentHost.Memory.Used
+					if agentAvailable > 0 {
+						memAvailable = uint64(agentAvailable)
+						memorySource = "host-agent"
+						guestRaw.HostAgentTotal = uint64(agentHost.Memory.Total)
+						guestRaw.HostAgentUsed = uint64(agentHost.Memory.Used)
+						log.Debug().
+							Str("vm", res.Name).
+							Str("node", res.Node).
+							Int("vmid", res.VMID).
+							Uint64("total", memTotal).
+							Uint64("available", memAvailable).
+							Int64("agentTotal", agentHost.Memory.Total).
+							Int64("agentUsed", agentHost.Memory.Used).
+							Msg("QEMU memory: using linked Pulse host agent memory (excludes page cache)")
+					}
+				}
+			}
+
+			// Last-resort fallback before status-mem: read /proc/meminfo via the
+			// QEMU guest agent's file-read endpoint. This works for Linux VMs with
+			// the guest agent running even when the balloon driver doesn't populate
+			// the meminfo fields. Results are cached with negative backoff. Refs: #1270
+			if res.Status == "running" && memAvailable == 0 && agentEnabled {
+				if agentAvail, agentErr := m.getVMAgentMemAvailable(ctx, client, instanceName, res.Node, res.VMID); agentErr == nil && agentAvail > 0 {
+					memAvailable = agentAvail
+					memorySource = "guest-agent-meminfo"
+					guestRaw.MemInfoAvailable = memAvailable
+					log.Debug().
+						Str("vm", res.Name).
+						Str("node", res.Node).
+						Int("vmid", res.VMID).
+						Uint64("total", memTotal).
+						Uint64("available", memAvailable).
+						Msg("QEMU memory: using guest agent /proc/meminfo fallback (excludes reclaimable cache)")
+				}
+			}
+
+			// Last-chance MemInfo fallback: use Total-Used only after RRD/agent
+			// attempts, so those more reliable cache-aware sources get priority.
+			if res.Status == "running" && memAvailable == 0 && memInfoTotalMinusUsed > 0 {
+				memAvailable = memInfoTotalMinusUsed
+				memorySource = "meminfo-total-minus-used"
+			}
+
+			switch {
+			case res.Status != "running":
 				memorySource = "powered-off"
 				memUsed = 0
+			case memAvailable > 0:
+				if memAvailable > memTotal {
+					memAvailable = memTotal
+				}
+				memUsed = memTotal - memAvailable
+			case rrdUsed > 0:
+				memUsed = rrdUsed
+				memorySource = "rrd-memused"
+			case detailedStatus != nil && detailedStatus.Mem > 0:
+				// Prefer Mem over FreeMem: Proxmox calculates Mem as
+				// (total_mem - free_mem) using the balloon's guest-visible
+				// total, which is correct even when ballooning is active.
+				// FreeMem is relative to the balloon allocation (not MaxMem),
+				// so subtracting it from MaxMem produces wildly inflated
+				// usage when the balloon has reduced the VM's memory.
+				// Refs: #1185
+				memUsed = detailedStatus.Mem
+				memorySource = "status-mem"
+			case detailedStatus != nil && detailedStatus.FreeMem > 0 && memTotal >= detailedStatus.FreeMem:
+				memUsed = memTotal - detailedStatus.FreeMem
+				memorySource = "status-freemem"
+			}
+			if memUsed > memTotal {
+				memUsed = memTotal
 			}
 
 			memFree := uint64(0)
