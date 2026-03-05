@@ -144,6 +144,24 @@ func normalizeDiscovery(d *ResourceDiscovery) {
 	}
 }
 
+func extractLegacyStringField(data []byte, key string) (string, error) {
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return "", err
+	}
+
+	rawValue, ok := payload[key]
+	if !ok || len(rawValue) == 0 {
+		return "", nil
+	}
+
+	var value string
+	if err := json.Unmarshal(rawValue, &value); err != nil {
+		return "", nil
+	}
+	return strings.TrimSpace(value), nil
+}
+
 // unmarshalStoredDiscovery reads discovery data from disk while supporting
 // legacy host_id-only payloads from pre-target_id persistence.
 func unmarshalStoredDiscovery(data []byte, discovery *ResourceDiscovery) error {
@@ -151,17 +169,17 @@ func unmarshalStoredDiscovery(data []byte, discovery *ResourceDiscovery) error {
 		return fmt.Errorf("discovery output is required")
 	}
 
-	var stored struct {
-		ResourceDiscovery
-		LegacyHostID string `json:"host_id,omitempty"`
-	}
-	if err := json.Unmarshal(data, &stored); err != nil {
+	if err := json.Unmarshal(data, discovery); err != nil {
 		return err
 	}
-
-	*discovery = stored.ResourceDiscovery
-	if strings.TrimSpace(discovery.HostID) == "" && strings.TrimSpace(stored.LegacyHostID) != "" {
-		discovery.HostID = strings.TrimSpace(stored.LegacyHostID)
+	if strings.TrimSpace(discovery.HostID) == "" {
+		legacyHostID, err := extractLegacyStringField(data, "host_id")
+		if err != nil {
+			return err
+		}
+		if legacyHostID != "" {
+			discovery.HostID = legacyHostID
+		}
 	}
 	return nil
 }
@@ -171,17 +189,17 @@ func unmarshalStoredFingerprint(data []byte, fp *ContainerFingerprint) error {
 		return fmt.Errorf("fingerprint output is required")
 	}
 
-	var stored struct {
-		ContainerFingerprint
-		LegacyHostID string `json:"host_id,omitempty"`
-	}
-	if err := json.Unmarshal(data, &stored); err != nil {
+	if err := json.Unmarshal(data, fp); err != nil {
 		return err
 	}
-
-	*fp = stored.ContainerFingerprint
-	if strings.TrimSpace(fp.HostID) == "" && strings.TrimSpace(stored.LegacyHostID) != "" {
-		fp.HostID = strings.TrimSpace(stored.LegacyHostID)
+	if strings.TrimSpace(fp.HostID) == "" {
+		legacyHostID, err := extractLegacyStringField(data, "host_id")
+		if err != nil {
+			return err
+		}
+		if legacyHostID != "" {
+			fp.HostID = legacyHostID
+		}
 	}
 	return nil
 }
