@@ -199,7 +199,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 	r.mux.HandleFunc("/api/discovery/settings", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, r.discoveryHandlers.HandleUpdateSettings)))
 	r.mux.HandleFunc("/api/discovery/info/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleGetInfo)))
 	r.mux.HandleFunc("/api/discovery/type/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleListByType)))
-	handleDiscoveryHostLikeRoute := func(pathPrefix string) http.HandlerFunc {
+	handleDiscoveryAgentRoute := func(pathPrefix string) http.HandlerFunc {
 		return func(w http.ResponseWriter, req *http.Request) {
 			// Route based on method and path depth:
 			// GET /api/discovery/agent/{agentId} → list discoveries for an agent
@@ -218,7 +218,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 				}
 				if len(pathParts) == 1 && pathParts[0] != "" {
 					// GET /api/discovery/agent/{id} → list by agent
-					r.discoveryHandlers.HandleListByHost(w, req)
+					r.discoveryHandlers.HandleListByAgent(w, req)
 				} else if len(pathParts) >= 2 {
 					if strings.HasSuffix(req.URL.Path, "/progress") {
 						r.discoveryHandlers.HandleGetProgress(w, req)
@@ -254,7 +254,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 			}
 		}
 	}
-	r.mux.HandleFunc("/api/discovery/agent/", RequireAuth(r.config, handleDiscoveryHostLikeRoute("/api/discovery/agent/")))
+	r.mux.HandleFunc("/api/discovery/agent/", RequireAuth(r.config, handleDiscoveryAgentRoute("/api/discovery/agent/")))
 	r.mux.HandleFunc("/api/discovery/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
 		path := req.URL.Path
 		switch req.Method {

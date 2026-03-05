@@ -404,7 +404,7 @@ func TestHandleListByType_RejectsLegacyHostType(t *testing.T) {
 	assert.Equal(t, `unsupported resource type "host"`, body["message"])
 }
 
-func TestHandleListByHost(t *testing.T) {
+func TestHandleListByAgent(t *testing.T) {
 	h, _, store := setupDiscoveryHandlers(t)
 
 	d1 := &servicediscovery.ResourceDiscovery{ID: "vm:1", ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "1", HostID: "node1"}
@@ -415,11 +415,12 @@ func TestHandleListByHost(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/discovery/agent/node1", nil)
 	w := httptest.NewRecorder()
 
-	h.HandleListByHost(w, req)
+	h.HandleListByAgent(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var result map[string]interface{}
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&result))
+	assert.Equal(t, "node1", result["agentId"])
 	discoveries := result["discoveries"].([]interface{})
 	assert.Len(t, discoveries, 1) // Only node1
 }

@@ -606,19 +606,19 @@ func (h *DiscoveryHandlers) HandleListByType(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-// HandleListByHost handles GET /api/discovery/agent/{host}
-func (h *DiscoveryHandlers) HandleListByHost(w http.ResponseWriter, r *http.Request) {
+// HandleListByAgent handles GET /api/discovery/agent/{agentId}
+func (h *DiscoveryHandlers) HandleListByAgent(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
 		return
 	}
 
 	// Parse path
-	hostID := strings.TrimPrefix(r.URL.Path, "/api/discovery/agent/")
+	agentID := strings.TrimPrefix(r.URL.Path, "/api/discovery/agent/")
 
-	discoveries, err := h.service.ListDiscoveriesByHost(hostID)
+	discoveries, err := h.service.ListDiscoveriesByHost(agentID)
 	if err != nil {
-		log.Error().Err(err).Str("host", hostID).Msg("Failed to list discoveries by host")
+		log.Error().Err(err).Str("agentId", agentID).Msg("Failed to list discoveries by agent")
 		writeDiscoveryError(w, http.StatusInternalServerError, "Failed to list discoveries")
 		return
 	}
@@ -631,7 +631,7 @@ func (h *DiscoveryHandlers) HandleListByHost(w http.ResponseWriter, r *http.Requ
 	writeDiscoveryJSON(w, map[string]any{
 		"discoveries": summaries,
 		"total":       len(summaries),
-		"host":        hostID,
+		"agentId":     agentID,
 	})
 }
 

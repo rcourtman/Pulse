@@ -268,7 +268,7 @@ Service discovery is used by Pulse Assistant and the UI to inventory web service
 - `GET /api/discovery/status`
 - `PUT /api/discovery/settings` (admin, `settings:write`)
 - `GET /api/discovery/type/{type}`
-- `GET /api/discovery/agent/{agent}`
+- `GET /api/discovery/agent/{agentId}`
 - `GET /api/discovery/{type}/{host}/{id}`
 - `POST /api/discovery/{type}/{host}/{id}` (trigger discovery, optional `force`)
 - `DELETE /api/discovery/{type}/{host}/{id}`
@@ -579,7 +579,7 @@ Returns scheduler health, DLQ, and breaker status. Requires `monitoring:read`.
 - `GET /api/infra-updates` (requires `monitoring:read`)
 - `GET /api/infra-updates/summary` (requires `monitoring:read`)
 - `POST /api/infra-updates/check` (requires `monitoring:write`)
-- `GET /api/infra-updates/host/{hostId}` (requires `monitoring:read`)
+- `GET /api/infra-updates/agent/{agentId}` (requires `monitoring:read`)
 - `GET /api/infra-updates/{resourceId}` (requires `monitoring:read`)
 
 ### Diagnostics
