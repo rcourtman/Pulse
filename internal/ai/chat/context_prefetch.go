@@ -608,6 +608,17 @@ func parseStructuredDockerMentionID(mentionID string, rs unifiedresources.ReadSt
 	return parts[0], parts[1]
 }
 
+func canonicalDiscoveryTargetID(discovery *tools.ResourceDiscoveryInfo) string {
+	if discovery == nil {
+		return ""
+	}
+	targetID := strings.TrimSpace(discovery.TargetID)
+	if targetID == "" {
+		targetID = strings.TrimSpace(discovery.HostID)
+	}
+	return targetID
+}
+
 // getOrTriggerDiscovery gets existing discovery or triggers a new one
 func (p *ContextPrefetcher) getOrTriggerDiscovery(ctx context.Context, mention ResourceMention) (*tools.ResourceDiscoveryInfo, error) {
 	discoveryType := mention.ResourceType
@@ -651,10 +662,7 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 	// Create a map for quick discovery lookup
 	discoveryMap := make(map[string]*tools.ResourceDiscoveryInfo)
 	for _, d := range discoveries {
-		discoveryTargetID := strings.TrimSpace(d.TargetID)
-		if discoveryTargetID == "" {
-			discoveryTargetID = strings.TrimSpace(d.HostID)
-		}
+		discoveryTargetID := canonicalDiscoveryTargetID(d)
 		key := fmt.Sprintf("%s:%s:%s", d.ResourceType, discoveryTargetID, d.ResourceID)
 		discoveryMap[key] = d
 	}
