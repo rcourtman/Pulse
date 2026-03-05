@@ -47,7 +47,7 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
   const isAgentMetadataKind = createMemo(() => props.metadataKind === 'agent');
   const metadataId = createMemo(() => (props.metadataId || '').trim());
   const targetLabel = createMemo(
-    () => (props.targetLabel || '').trim() || (isAgentMetadataKind() ? 'agent' : 'guest'),
+    () => (props.targetLabel || '').trim() || (isAgentMetadataKind() ? 'agent' : 'workload'),
   );
   const currentCustomUrl = createMemo(() => props.customUrl ?? fetchedCustomUrl());
   const normalizedCurrentUrl = createMemo(() => currentCustomUrl().trim());
