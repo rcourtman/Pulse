@@ -2,6 +2,7 @@ package ai
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -150,7 +151,7 @@ func convertAlertFromModels(alert *models.Alert) AlertInfo {
 func inferResourceType(alertType string, metadata map[string]interface{}) string {
 	if metadata != nil {
 		if rt, ok := metadata["resourceType"].(string); ok {
-			return rt
+			return normalizeAlertResourceType(rt)
 		}
 	}
 
@@ -160,7 +161,7 @@ func inferResourceType(alertType string, metadata map[string]interface{}) string
 	case alertType == "storage_usage" || alertType == "storage":
 		return "storage"
 	case alertType == "docker_cpu" || alertType == "docker_memory" || alertType == "docker_restart" || alertType == "docker_offline":
-		return "docker"
+		return "app-container"
 	case alertType == "host_cpu" || alertType == "host_memory" || alertType == "host_offline" || alertType == "host_disk":
 		return "agent"
 	case alertType == "pmg" || alertType == "pmg_queue" || alertType == "pmg_quarantine":
@@ -170,7 +171,25 @@ func inferResourceType(alertType string, metadata map[string]interface{}) string
 	case alertType == "snapshot" || alertType == "snapshot_age":
 		return "snapshot"
 	default:
-		return "guest"
+		return "vm"
+	}
+}
+
+func normalizeAlertResourceType(raw string) string {
+	resourceType := strings.ToLower(strings.TrimSpace(raw))
+	switch resourceType {
+	case "guest", "vm", "qemu":
+		return "vm"
+	case "container", "lxc", "system-container", "system_container", "oci-container", "oci_container":
+		return "system-container"
+	case "docker", "docker_container", "docker_service", "docker-service", "app-container":
+		return "app-container"
+	case "host", "agent", "docker-host", "node":
+		return "agent"
+	case "kubernetes", "kubernetes_cluster", "k8s-cluster", "k8s":
+		return "k8s"
+	default:
+		return resourceType
 	}
 }
 

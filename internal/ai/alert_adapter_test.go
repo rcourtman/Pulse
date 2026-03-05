@@ -91,8 +91,8 @@ func TestAlertManagerAdapter_ConvertsAndFilters(t *testing.T) {
 	if len(gotActive) != 2 {
 		t.Fatalf("GetActiveAlerts = %d, want 2", len(gotActive))
 	}
-	if gotActive[0].ResourceType != "node" {
-		t.Fatalf("ResourceType = %q, want node", gotActive[0].ResourceType)
+	if gotActive[0].ResourceType != "agent" {
+		t.Fatalf("ResourceType = %q, want agent", gotActive[0].ResourceType)
 	}
 	if gotActive[1].Duration == "" {
 		t.Fatalf("expected Duration to be populated")
@@ -127,10 +127,10 @@ func TestInferResourceType(t *testing.T) {
 		{"node_temperature", "node_temperature", nil, "node"},
 		{"storage_usage", "storage_usage", nil, "storage"},
 		{"storage", "storage", nil, "storage"},
-		{"docker_cpu", "docker_cpu", nil, "docker"},
-		{"docker_memory", "docker_memory", nil, "docker"},
-		{"docker_restart", "docker_restart", nil, "docker"},
-		{"docker_offline", "docker_offline", nil, "docker"},
+		{"docker_cpu", "docker_cpu", nil, "app-container"},
+		{"docker_memory", "docker_memory", nil, "app-container"},
+		{"docker_restart", "docker_restart", nil, "app-container"},
+		{"docker_offline", "docker_offline", nil, "app-container"},
 		{"host_cpu", "host_cpu", nil, "agent"},
 		{"host_memory", "host_memory", nil, "agent"},
 		{"host_offline", "host_offline", nil, "agent"},
@@ -142,9 +142,9 @@ func TestInferResourceType(t *testing.T) {
 		{"backup_missing", "backup_missing", nil, "backup"},
 		{"snapshot", "snapshot", nil, "snapshot"},
 		{"snapshot_age", "snapshot_age", nil, "snapshot"},
-		{"unknown_type", "unknown_type", nil, "guest"},
+		{"unknown_type", "unknown_type", nil, "vm"},
 		{"with_metadata", "unknown", map[string]interface{}{"resourceType": "custom"}, "custom"},
-		{"with_metadata_host", "unknown", map[string]interface{}{"resourceType": "host"}, "host"},
+		{"with_metadata_host", "unknown", map[string]interface{}{"resourceType": "host"}, "agent"},
 	}
 
 	for _, tt := range tests {
@@ -152,6 +152,35 @@ func TestInferResourceType(t *testing.T) {
 			result := inferResourceType(tt.alertType, tt.metadata)
 			if result != tt.expected {
 				t.Errorf("inferResourceType(%q, %v) = %q, want %q", tt.alertType, tt.metadata, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNormalizeAlertResourceType(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{name: "vm legacy guest", input: "guest", expected: "vm"},
+		{name: "vm qemu", input: "qemu", expected: "vm"},
+		{name: "system container lxc", input: "lxc", expected: "system-container"},
+		{name: "system container oci", input: "oci_container", expected: "system-container"},
+		{name: "app container docker", input: "docker", expected: "app-container"},
+		{name: "app container docker service", input: "docker_service", expected: "app-container"},
+		{name: "agent host", input: "host", expected: "agent"},
+		{name: "agent node", input: "node", expected: "agent"},
+		{name: "k8s alias", input: "kubernetes_cluster", expected: "k8s"},
+		{name: "trim and case normalize", input: "  DOCKER-SERVICE  ", expected: "app-container"},
+		{name: "unknown passthrough", input: "storage", expected: "storage"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := normalizeAlertResourceType(tt.input)
+			if result != tt.expected {
+				t.Errorf("normalizeAlertResourceType(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
 	}
