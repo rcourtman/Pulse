@@ -137,7 +137,7 @@ func TestReportingHandlers_GenerateReport(t *testing.T) {
 	}
 }
 
-func TestReportingHandlers_GenerateReport_NormalizesLegacyResourceTypeAlias(t *testing.T) {
+func TestReportingHandlers_GenerateReport_RejectsLegacyResourceTypeAlias(t *testing.T) {
 	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
 	original := reporting.GetEngine()
 	reporting.SetEngine(engine)
@@ -149,11 +149,11 @@ func TestReportingHandlers_GenerateReport_NormalizesLegacyResourceTypeAlias(t *t
 
 	handler.HandleGenerateReport(rr, req)
 
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, rr.Code, rr.Body.String())
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusBadRequest, rr.Code, rr.Body.String())
 	}
-	if engine.lastReq.ResourceType != "system-container" {
-		t.Fatalf("expected canonical resource type system-container, got %q", engine.lastReq.ResourceType)
+	if engine.lastReq.ResourceType != "" {
+		t.Fatalf("expected engine not to be called for legacy alias, got %+v", engine.lastReq)
 	}
 }
 
@@ -174,6 +174,30 @@ func TestReportingHandlers_GenerateReport_RejectsUnsupportedResourceType(t *test
 	}
 	if engine.lastReq.ResourceType != "" {
 		t.Fatalf("expected engine not to be called for unsupported type, got %+v", engine.lastReq)
+	}
+}
+
+func TestReportingHandlers_GenerateReport_AcceptsCanonicalAppContainerType(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/reporting?format=pdf&resourceType=app-container&resourceId=docker-1",
+		nil,
+	)
+	rr := httptest.NewRecorder()
+
+	handler.HandleGenerateReport(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+	if engine.lastReq.ResourceType != "app-container" {
+		t.Fatalf("expected canonical resource type app-container, got %q", engine.lastReq.ResourceType)
 	}
 }
 

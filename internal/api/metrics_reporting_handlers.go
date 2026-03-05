@@ -25,8 +25,12 @@ func normalizeReportResourceType(raw string) (string, error) {
 	if trimmed == "" {
 		return "", fmt.Errorf("resourceType is required")
 	}
-	canonical := reporting.CanonicalResourceType(trimmed)
+	normalized := strings.ToLower(trimmed)
+	canonical := reporting.CanonicalResourceType(normalized)
 	if canonical == "" {
+		return "", fmt.Errorf("unsupported resourceType %q", trimmed)
+	}
+	if normalized != canonical {
 		return "", fmt.Errorf("unsupported resourceType %q", trimmed)
 	}
 	return canonical, nil

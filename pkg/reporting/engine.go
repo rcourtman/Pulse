@@ -57,21 +57,21 @@ func CanonicalResourceType(resourceType string) string {
 	switch strings.ToLower(strings.TrimSpace(resourceType)) {
 	case "node":
 		return "node"
-	case "vm", "guest":
+	case "vm":
 		return "vm"
-	case "system-container", "system_container", "container", "lxc":
+	case "system-container":
 		return "system-container"
-	case "oci-container", "oci_container":
+	case "oci-container":
 		return "oci-container"
-	case "app-container", "app_container", "docker", "docker-container", "docker_container", "dockercontainer":
+	case "app-container":
 		return "app-container"
-	case "docker-host", "docker_host", "dockerhost":
+	case "docker-host":
 		return "docker-host"
 	case "storage":
 		return "storage"
 	case "agent":
 		return "agent"
-	case "k8s", "k8s-node", "k8s-cluster", "cluster":
+	case "k8s":
 		return "k8s"
 	case "disk":
 		return "disk"

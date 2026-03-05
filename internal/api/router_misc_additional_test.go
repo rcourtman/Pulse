@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -104,9 +105,9 @@ func TestNormalizeMetricsHistoryResourceType_RejectsLegacyContainerAlias(t *test
 }
 
 func TestNormalizeMetricsHistoryResourceType_DockerHostCanonicalType(t *testing.T) {
-	responseType, runtimeType, storeTypes, err := normalizeMetricsHistoryResourceType("dockerhost")
+	responseType, runtimeType, storeTypes, err := normalizeMetricsHistoryResourceType("docker-host")
 	if err != nil {
-		t.Fatalf("normalizeMetricsHistoryResourceType(dockerhost) error = %v", err)
+		t.Fatalf("normalizeMetricsHistoryResourceType(docker-host) error = %v", err)
 	}
 	if responseType != "docker-host" {
 		t.Fatalf("responseType = %q, want %q", responseType, "docker-host")
@@ -116,6 +117,19 @@ func TestNormalizeMetricsHistoryResourceType_DockerHostCanonicalType(t *testing.
 	}
 	if len(storeTypes) != 1 || storeTypes[0] != "dockerHost" {
 		t.Fatalf("storeTypes = %v, want [dockerHost]", storeTypes)
+	}
+}
+
+func TestNormalizeMetricsHistoryResourceType_RejectsLegacyAliases(t *testing.T) {
+	legacyTypes := []string{"guest", "docker", "dockerhost", "dockercontainer", "system_container"}
+	for _, legacyType := range legacyTypes {
+		_, _, _, err := normalizeMetricsHistoryResourceType(legacyType)
+		if err == nil {
+			t.Fatalf("expected error for legacy alias %q", legacyType)
+		}
+		if !strings.Contains(err.Error(), fmt.Sprintf(`unsupported resourceType %q`, legacyType)) {
+			t.Fatalf("unexpected error for %q: %v", legacyType, err)
+		}
 	}
 }
 

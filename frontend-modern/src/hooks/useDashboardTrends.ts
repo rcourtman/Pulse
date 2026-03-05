@@ -104,16 +104,8 @@ function dedupeValues(values: string[]): string[] {
   return Array.from(new Set(values));
 }
 
-function normalizeHistoryResourceType(type: string): string {
-  const normalized = type.trim().toLowerCase();
-  if (normalized === 'guest') return 'vm';
-  if (normalized === 'docker') return 'app-container';
-  if (normalized === 'dockerhost' || normalized === 'docker-host') return 'docker-host';
-  return normalized;
-}
-
 function asHistoryResourceType(type: string): HistoryResourceType | null {
-  const normalizedType = normalizeHistoryResourceType(type);
+  const normalizedType = type.trim().toLowerCase();
   const historyTypes: HistoryResourceType[] = [
     'node',
     'vm',

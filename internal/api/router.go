@@ -7742,19 +7742,15 @@ func normalizeMetricsHistoryResourceType(input string) (responseType string, run
 		return "disk", "disk", []string{"disk"}, nil
 	case "k8s":
 		return "k8s", "k8s", []string{"k8s"}, nil
-	case "vm", "guest":
+	case "vm":
 		return "vm", "vm", []string{"vm"}, nil
-	case "system-container", "system_container":
+	case "system-container":
 		return "system-container", "container", []string{"container"}, nil
-	case "oci-container", "oci_container":
+	case "oci-container":
 		return "oci-container", "container", []string{"container"}, nil
-	case "app-container", "app_container":
+	case "app-container":
 		return "app-container", "dockerContainer", []string{"dockerContainer", "docker"}, nil
-	case "docker":
-		return "app-container", "dockerContainer", []string{"dockerContainer", "docker"}, nil
-	case "dockercontainer", "docker-container", "docker_container":
-		return "app-container", "dockerContainer", []string{"dockerContainer", "docker"}, nil
-	case "dockerhost", "docker-host", "docker_host":
+	case "docker-host":
 		return "docker-host", "dockerHost", []string{"dockerHost"}, nil
 	default:
 		return "", "", nil, fmt.Errorf("unsupported resourceType %q", input)

@@ -83,6 +83,7 @@ function toReportResourceType(type: ResourceType): string {
   if (type === 'system-container' || type === 'oci-container') return type;
   if (type === 'app-container') return 'app-container';
   if (type === 'docker-host') return 'docker-host';
+  if (type === 'k8s-node' || type === 'k8s-cluster' || type === 'pod') return 'k8s';
   return type;
 }
 
