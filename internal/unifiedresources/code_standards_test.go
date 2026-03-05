@@ -279,6 +279,57 @@ func TestNoLegacyHostToAgentMigrationHintsInRuntimeCode(t *testing.T) {
 // legacy /api/state.hosts or legacy agent.type="host" assumptions.
 func TestV6AgentRegistrationArtifactsStayCanonical(t *testing.T) {
 	repoRoot := filepath.Join("..", "..")
+	integrationRoots := []string{
+		filepath.Join(repoRoot, "tests", "integration", "tests"),
+		filepath.Join(repoRoot, "tests", "integration", "evals"),
+	}
+	globalBannedPatterns := []*regexp.Regexp{
+		regexp.MustCompile(`state\.hosts\b`),
+		regexp.MustCompile(`hosts array`),
+		regexp.MustCompile(`agent\.type\s*=\s*"host"`),
+		regexp.MustCompile(`type:\s*'host'`),
+		regexp.MustCompile(`"type"\s*:\s*"host"`),
+		regexp.MustCompile(`resourceType"\s*:\s*"host"`),
+		regexp.MustCompile(`resourceType:\s*'host'`),
+		regexp.MustCompile(`/api/resources\?type=host`),
+	}
+
+	for _, root := range integrationRoots {
+		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				return nil
+			}
+
+			switch filepath.Ext(path) {
+			case ".ts", ".tsx", ".md":
+			default:
+				return nil
+			}
+
+			data, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return readErr
+			}
+			content := string(data)
+			normalizedPath := filepath.ToSlash(path)
+
+			for _, pattern := range globalBannedPatterns {
+				matches := pattern.FindAllStringIndex(content, -1)
+				for _, match := range matches {
+					line := 1 + strings.Count(content[:match[0]], "\n")
+					t.Errorf("%s:%d: banned legacy integration/eval pattern %q", normalizedPath, line, pattern.String())
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("failed to scan %s: %v", root, err)
+		}
+	}
+
 	artifacts := []struct {
 		path             string
 		requiredSnippets []string

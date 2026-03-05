@@ -63,7 +63,10 @@ These are unrelated to the removed v5 resource type and should not be treated as
 ## Ratchets Added
 
 - `internal/unifiedresources/code_standards_test.go`
-  Added `TestV6AgentRegistrationArtifactsStayCanonical` to prevent regressions in:
+  Added `TestV6AgentRegistrationArtifactsStayCanonical` to:
+  - scan all `tests/integration/tests/**/*.{ts,tsx}` and `tests/integration/evals/**/*.md`
+    for legacy host-resource usage patterns
+  - prevent regressions in:
   - `tests/integration/tests/journeys/04-agent-install-registration.spec.ts`
   - `tests/integration/evals/tasks/agent-registration.md`
 
@@ -73,6 +76,8 @@ The ratchet bans:
 - `hosts array`
 - `type: 'host'`
 - `agent.type = "host"`
+- `resourceType: "host"` / `resourceType: 'host'`
+- `/api/resources?type=host`
 
 And requires:
 
