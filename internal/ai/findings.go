@@ -318,8 +318,11 @@ func inferFindingResourceType(resourceID, resourceName string) string {
 
 func canonicalFindingResourceType(resourceType string) string {
 	normalized := strings.ToLower(strings.TrimSpace(resourceType))
-	if canonical, ok := unifiedresources.CanonicalizeLegacyResourceTypeAlias(normalized); ok {
-		return canonical
+	if normalized == "" {
+		return ""
+	}
+	if unifiedresources.IsUnsupportedLegacyResourceTypeAlias(normalized) {
+		return ""
 	}
 	switch normalized {
 	case "guest", "qemu":
@@ -328,12 +331,14 @@ func canonicalFindingResourceType(resourceType string) string {
 		return "system-container"
 	case "docker", "docker-container", "app-container":
 		return "app-container"
-	case "docker-host", "dockerhost":
+	case "docker-host":
 		return "docker-host"
 	case "k8s", "kubernetes", "k8s-cluster":
 		return "k8s-cluster"
 	case "agent":
 		return "agent"
+	case "docker_service", "dockerhost":
+		return ""
 	default:
 		return normalized
 	}

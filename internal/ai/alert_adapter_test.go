@@ -144,7 +144,7 @@ func TestInferResourceType(t *testing.T) {
 		{"snapshot_age", "snapshot_age", nil, "snapshot"},
 		{"unknown_type", "unknown_type", nil, "vm"},
 		{"with_metadata", "unknown", map[string]interface{}{"resourceType": "custom"}, "custom"},
-		{"with_metadata_host", "unknown", map[string]interface{}{"resourceType": "host"}, "agent"},
+		{"with_metadata_host_legacy_ignored", "unknown", map[string]interface{}{"resourceType": "host"}, "vm"},
 	}
 
 	for _, tt := range tests {
@@ -169,14 +169,14 @@ func TestNormalizeAlertResourceType(t *testing.T) {
 		{name: "system container oci", input: "oci-container", expected: "system-container"},
 		{name: "app container docker", input: "docker", expected: "app-container"},
 		{name: "app container docker service", input: "docker-service", expected: "app-container"},
-		{name: "agent host alias", input: "host", expected: "agent"},
+		{name: "agent host alias rejected", input: "host", expected: ""},
 		{name: "agent node", input: "node", expected: "agent"},
-		{name: "docker host alias", input: "docker_host", expected: "docker-host"},
+		{name: "docker host alias rejected", input: "docker_host", expected: ""},
 		{name: "k8s alias", input: "k8s-cluster", expected: "k8s-cluster"},
-		{name: "legacy system_container alias", input: "system_container", expected: "system-container"},
-		{name: "legacy docker_container alias", input: "docker_container", expected: "app-container"},
-		{name: "legacy docker_service alias", input: "docker_service", expected: "app-container"},
-		{name: "legacy kubernetes_cluster alias", input: "kubernetes_cluster", expected: "k8s-cluster"},
+		{name: "legacy system_container alias rejected", input: "system_container", expected: ""},
+		{name: "legacy docker_container alias rejected", input: "docker_container", expected: ""},
+		{name: "legacy docker_service alias rejected", input: "docker_service", expected: ""},
+		{name: "legacy kubernetes_cluster alias rejected", input: "kubernetes_cluster", expected: ""},
 		{name: "trim and case normalize", input: "  DOCKER-SERVICE  ", expected: "app-container"},
 		{name: "unknown passthrough", input: "storage", expected: "storage"},
 	}

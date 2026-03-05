@@ -608,7 +608,11 @@ func normalizeFindingResourceTypes(findings []*Finding) {
 			f.ResourceType = inferFindingResourceType(f.ResourceID, f.ResourceName)
 			continue
 		}
-		f.ResourceType = canonicalFindingResourceType(f.ResourceType)
+		if normalized := canonicalFindingResourceType(f.ResourceType); normalized != "" {
+			f.ResourceType = normalized
+			continue
+		}
+		f.ResourceType = inferFindingResourceType(f.ResourceID, f.ResourceName)
 	}
 }
 

@@ -152,7 +152,9 @@ func convertAlertFromModels(alert *models.Alert) AlertInfo {
 func inferResourceType(alertType string, metadata map[string]interface{}) string {
 	if metadata != nil {
 		if rt, ok := metadata["resourceType"].(string); ok {
-			return normalizeAlertResourceType(rt)
+			if normalized := normalizeAlertResourceType(rt); normalized != "" {
+				return normalized
+			}
 		}
 	}
 
@@ -178,22 +180,27 @@ func inferResourceType(alertType string, metadata map[string]interface{}) string
 
 func normalizeAlertResourceType(raw string) string {
 	resourceType := strings.ToLower(strings.TrimSpace(raw))
-	if canonical, ok := unifiedresources.CanonicalizeLegacyResourceTypeAlias(resourceType); ok {
-		return canonical
+	if resourceType == "" {
+		return ""
+	}
+	if unifiedresources.IsUnsupportedLegacyResourceTypeAlias(resourceType) {
+		return ""
 	}
 	switch resourceType {
 	case "guest", "vm", "qemu":
 		return "vm"
 	case "container", "lxc", "system-container", "oci-container":
 		return "system-container"
-	case "docker", "docker-service", "docker_service", "docker-container", "app-container":
+	case "docker", "docker-service", "docker-container", "app-container":
 		return "app-container"
-	case "docker-host", "dockerhost":
+	case "docker-host":
 		return "docker-host"
 	case "agent", "node":
 		return "agent"
 	case "kubernetes", "k8s-cluster", "kubernetes-cluster", "k8s":
 		return "k8s-cluster"
+	case "docker_service", "dockerhost":
+		return ""
 	default:
 		return resourceType
 	}

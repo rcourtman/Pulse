@@ -442,20 +442,20 @@ func TestAlertTriggeredPatrolScope(t *testing.T) {
 	}
 }
 
-func TestPatrolScopeFactories_CanonicalizeLegacyResourceTypes(t *testing.T) {
+func TestPatrolScopeFactories_IgnoreLegacyResourceTypes(t *testing.T) {
 	scope := AlertTriggeredPatrolScope("alert-legacy", "res-legacy", "docker_container", "docker_cpu")
-	if len(scope.ResourceTypes) != 1 || scope.ResourceTypes[0] != "app-container" {
-		t.Fatalf("expected canonical app-container resource type, got %v", scope.ResourceTypes)
+	if len(scope.ResourceTypes) != 0 {
+		t.Fatalf("expected empty resource type filter for legacy alias, got %v", scope.ResourceTypes)
 	}
 
 	cleared := AlertClearedPatrolScope("alert-k8s", "res-k8s", "kubernetes_cluster")
-	if len(cleared.ResourceTypes) != 1 || cleared.ResourceTypes[0] != "k8s-cluster" {
-		t.Fatalf("expected canonical k8s-cluster resource type, got %v", cleared.ResourceTypes)
+	if len(cleared.ResourceTypes) != 0 {
+		t.Fatalf("expected empty resource type filter for legacy alias, got %v", cleared.ResourceTypes)
 	}
 
 	anomaly := AnomalyDetectedPatrolScope("res-host", "host", "cpu", 95, 50)
-	if len(anomaly.ResourceTypes) != 1 || anomaly.ResourceTypes[0] != "agent" {
-		t.Fatalf("expected canonical agent resource type, got %v", anomaly.ResourceTypes)
+	if len(anomaly.ResourceTypes) != 0 {
+		t.Fatalf("expected empty resource type filter for legacy alias, got %v", anomaly.ResourceTypes)
 	}
 }
 

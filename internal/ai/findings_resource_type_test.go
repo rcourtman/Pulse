@@ -107,11 +107,11 @@ func TestCanonicalFindingResourceType(t *testing.T) {
 		want string
 	}{
 		{in: "guest", want: "vm"},
-		{in: "system_container", want: "system-container"},
-		{in: "docker_container", want: "app-container"},
-		{in: "docker_host", want: "docker-host"},
-		{in: "kubernetes_cluster", want: "k8s-cluster"},
-		{in: "host", want: "agent"},
+		{in: "system_container", want: ""},
+		{in: "docker_container", want: ""},
+		{in: "docker_host", want: ""},
+		{in: "kubernetes_cluster", want: ""},
+		{in: "host", want: ""},
 		{in: "storage", want: "storage"},
 	}
 
@@ -122,7 +122,7 @@ func TestCanonicalFindingResourceType(t *testing.T) {
 	}
 }
 
-func TestNormalizeFindingResourceTypes_CanonicalizesAndInfers(t *testing.T) {
+func TestNormalizeFindingResourceTypes_RejectsLegacyAndInfers(t *testing.T) {
 	findings := []*Finding{
 		{ID: "f1", ResourceType: "docker_container", ResourceID: "docker://abc", ResourceName: "Docker Container"},
 		{ID: "f2", ResourceType: "", ResourceID: "lxc/101", ResourceName: "LXC Guest"},
@@ -131,7 +131,7 @@ func TestNormalizeFindingResourceTypes_CanonicalizesAndInfers(t *testing.T) {
 	normalizeFindingResourceTypes(findings)
 
 	if findings[0].ResourceType != "app-container" {
-		t.Fatalf("expected canonical app-container, got %q", findings[0].ResourceType)
+		t.Fatalf("expected inferred app-container, got %q", findings[0].ResourceType)
 	}
 	if findings[1].ResourceType != "system-container" {
 		t.Fatalf("expected inferred system-container, got %q", findings[1].ResourceType)
