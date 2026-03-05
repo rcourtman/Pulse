@@ -571,9 +571,9 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 			}
 			return result
 
-		case "docker", "dockerhost":
+		case "app-container", "docker-host", "docker", "dockerhost":
 			// Docker container or Docker host
-			result.ResolvedKind = loc.ResourceType
+			result.ResolvedKind = canonicalControlResourceType(loc.ResourceType)
 			result.ResolvedNode = loc.Node
 
 			if loc.DockerHostType == "system-container" {
@@ -632,6 +632,23 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 	}
 
 	return result
+}
+
+func canonicalControlResourceType(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "docker", "app-container":
+		return "app-container"
+	case "dockerhost", "docker-host":
+		return "docker-host"
+	case "k8s_cluster", "k8s-cluster":
+		return "k8s-cluster"
+	case "k8s_pod", "k8s-pod":
+		return "k8s-pod"
+	case "k8s_deployment", "k8s-deployment":
+		return "k8s-deployment"
+	default:
+		return strings.ToLower(strings.TrimSpace(raw))
+	}
 }
 
 // resolveTargetForCommand resolves a target_host to the correct agent and routing info.

@@ -282,6 +282,10 @@ func TestMetricsSummaryAndHelpers(t *testing.T) {
 				"cpu":    {{Value: 10, Timestamp: now}, {Value: 20, Timestamp: now.Add(time.Minute)}},
 				"memory": {{Value: 30, Timestamp: now}},
 			},
+			"200": {
+				"cpu":    {{Value: 5, Timestamp: now}},
+				"memory": {{Value: 15, Timestamp: now}},
+			},
 		},
 		node: map[string]map[string][]RawMetricPoint{
 			"node1": {
@@ -302,11 +306,14 @@ func TestMetricsSummaryAndHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(summary) != 2 {
-		t.Fatalf("expected summaries for vm and node, got %d", len(summary))
+	if len(summary) != 3 {
+		t.Fatalf("expected summaries for vm, system-container, and node, got %d", len(summary))
 	}
 	if summary["100"].ResourceName != "vm1" || summary["node1"].ResourceName != "node-1" {
 		t.Fatalf("unexpected summary names: %+v", summary)
+	}
+	if summary["200"].ResourceType != "system-container" {
+		t.Fatalf("expected canonical system-container type for container summary, got %q", summary["200"].ResourceType)
 	}
 
 	merged := mergeMetricsByTimestamp(map[string][]RawMetricPoint{

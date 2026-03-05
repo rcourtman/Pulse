@@ -329,6 +329,23 @@ func TestExecuteGetMetrics_FilterAndPagination(t *testing.T) {
 	if resp.Pagination == nil || resp.Pagination.Total != 2 || resp.Pagination.Offset != 1 {
 		t.Fatalf("unexpected pagination: %+v", resp.Pagination)
 	}
+
+	result, _ = executor.executeGetMetrics(context.Background(), map[string]interface{}{
+		"period":        "24h",
+		"resource_type": "system-container",
+	})
+	resp = MetricsResponse{}
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &resp); err != nil {
+		t.Fatalf("decode metrics response (system-container): %v", err)
+	}
+	if len(resp.Summary) != 1 {
+		t.Fatalf("expected one system-container summary, got %+v", resp.Summary)
+	}
+	for _, metric := range resp.Summary {
+		if metric.ResourceType != "system-container" {
+			t.Fatalf("expected canonical system-container output type, got %q", metric.ResourceType)
+		}
+	}
 }
 
 func TestExecuteGetBaselines_FilterAndErrors(t *testing.T) {

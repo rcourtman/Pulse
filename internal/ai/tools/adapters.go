@@ -308,7 +308,7 @@ func (a *MetricsHistoryMCPAdapter) GetAllMetricsSummary(period time.Duration) (m
 	}
 	for _, ct := range a.readState.Containers() {
 		ctID := fmt.Sprintf("%d", ct.VMID())
-		if summary := a.computeSummary(ctID, ct.Name(), "container", period); summary != nil {
+		if summary := a.computeSummary(ctID, ct.Name(), "system-container", period); summary != nil {
 			result[ctID] = *summary
 		}
 	}

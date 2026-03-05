@@ -58,7 +58,7 @@ func (e *PulseToolExecutor) resolveResourceLocation(name string) models.Resource
 			loc := models.ResourceLocation{
 				Found:          true,
 				Name:           dhName,
-				ResourceType:   "dockerhost",
+				ResourceType:   "docker-host",
 				DockerHostName: dhName,
 				TargetHost:     dhName,
 			}
@@ -105,7 +105,7 @@ func (e *PulseToolExecutor) resolveResourceLocation(name string) models.Resource
 			loc := models.ResourceLocation{
 				Found:          true,
 				Name:           name,
-				ResourceType:   "docker",
+				ResourceType:   "app-container",
 				DockerHostName: dhName,
 				TargetHost:     dhName,
 			}
@@ -156,7 +156,7 @@ func (e *PulseToolExecutor) resolveResourceLocation(name string) models.Resource
 			return models.ResourceLocation{
 				Found:          true,
 				Name:           cluster.Name(),
-				ResourceType:   "k8s_cluster",
+				ResourceType:   "k8s-cluster",
 				K8sClusterName: cluster.Name(),
 				K8sAgentID:     cluster.AgentID(),
 				TargetHost:     cluster.Name(),
@@ -180,7 +180,7 @@ func (e *PulseToolExecutor) resolveResourceLocation(name string) models.Resource
 			return models.ResourceLocation{
 				Found:          true,
 				Name:           pod.Name(),
-				ResourceType:   "k8s_pod",
+				ResourceType:   "k8s-pod",
 				K8sClusterName: clusterName,
 				K8sNamespace:   pod.Namespace(),
 				K8sAgentID:     agentID,
@@ -205,7 +205,7 @@ func (e *PulseToolExecutor) resolveResourceLocation(name string) models.Resource
 			return models.ResourceLocation{
 				Found:          true,
 				Name:           deploy.Name(),
-				ResourceType:   "k8s_deployment",
+				ResourceType:   "k8s-deployment",
 				K8sClusterName: clusterName,
 				K8sNamespace:   deploy.Namespace(),
 				K8sAgentID:     agentID,
