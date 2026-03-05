@@ -21,6 +21,15 @@ describe('discoveryTarget utils', () => {
       getAgentDiscoveryResourceId({
         resourceType: 'agent',
         resourceId: '',
+        agentId: 'agent-1',
+        hostId: 'host-1',
+      }),
+    ).toBe('agent-1');
+
+    expect(
+      getAgentDiscoveryResourceId({
+        resourceType: 'agent',
+        resourceId: '',
         hostId: 'host-1',
       }),
     ).toBe('host-1');

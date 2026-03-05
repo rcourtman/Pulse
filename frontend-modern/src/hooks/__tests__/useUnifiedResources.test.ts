@@ -216,6 +216,42 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('maps discoveryTarget.agentId into canonical discovery hostId', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            discoveryTarget: {
+              resourceType: 'agent',
+              agentId: 'agent-discovery-1',
+              resourceId: 'agent-discovery-1',
+              hostname: 'pve1',
+            },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+    expect(result!.resources()[0].discoveryTarget).toEqual({
+      resourceType: 'agent',
+      hostId: 'agent-discovery-1',
+      resourceId: 'agent-discovery-1',
+      hostname: 'pve1',
+    });
+
+    dispose();
+  });
+
   it('uses backend resources as canonical infrastructure state even with non-canonical websocket fields', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,

@@ -276,6 +276,7 @@ type APIResource = {
   };
   discoveryTarget?: {
     resourceType?: string;
+    agentId?: string;
     hostId?: string;
     resourceId?: string;
     hostname?: string;
@@ -509,11 +510,12 @@ const toResource = (v2: APIResource): Resource => {
     v2.proxmox?.nodeName || v2.agent?.hostname || v2.docker?.hostname || name || v2.id;
 
   const discoveryResourceType = resolveDiscoveryResourceType(v2.discoveryTarget?.resourceType);
+  const discoveryAgentId = v2.discoveryTarget?.agentId || v2.discoveryTarget?.hostId;
   const discoveryTarget =
-    discoveryResourceType && v2.discoveryTarget?.hostId && v2.discoveryTarget?.resourceId
+    discoveryResourceType && discoveryAgentId && v2.discoveryTarget?.resourceId
       ? {
           resourceType: discoveryResourceType,
-          hostId: v2.discoveryTarget.hostId,
+          hostId: discoveryAgentId,
           resourceId: v2.discoveryTarget.resourceId,
           hostname: v2.discoveryTarget.hostname,
         }

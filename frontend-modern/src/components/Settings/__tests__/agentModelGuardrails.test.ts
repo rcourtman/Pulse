@@ -23,6 +23,7 @@ import aiTypesSource from '@/types/ai.ts?raw';
 import resourceTypesSource from '@/types/resource.ts?raw';
 import unifiedResourcesHookSource from '@/hooks/useUnifiedResources.ts?raw';
 import discoveryTypesSource from '@/types/discovery.ts?raw';
+import discoveryTargetUtilsSource from '@/utils/discoveryTarget.ts?raw';
 import mentionAutocompleteSource from '@/components/AI/Chat/MentionAutocomplete.tsx?raw';
 import resourceLinksSource from '@/routing/resourceLinks.ts?raw';
 import alertsApiSource from '@/api/alerts.ts?raw';
@@ -82,6 +83,8 @@ describe('agent model guardrails', () => {
   it('keeps discovery resource types on canonical v6 names', () => {
     expect(discoveryTypesSource).not.toContain("| 'lxc'");
     expect(discoveryTypesSource).not.toContain("| 'docker_lxc'");
+    expect(discoveryTargetUtilsSource).toContain('discoveryTarget.agentId');
+    expect(unifiedResourcesHookSource).toContain('v2.discoveryTarget?.agentId || v2.discoveryTarget?.hostId');
   });
 
   it('keeps alerts agent thresholds sourced from unified agent resources', () => {

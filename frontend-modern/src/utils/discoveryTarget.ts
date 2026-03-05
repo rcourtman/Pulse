@@ -1,6 +1,7 @@
 type DiscoveryTargetLike = {
   resourceType?: string;
   resourceId?: string;
+  agentId?: string;
   hostId?: string;
 } | null;
 
@@ -21,5 +22,9 @@ export const getAgentDiscoveryResourceId = (
   if (!discoveryTarget || !isAgentDiscoveryResourceType(discoveryTarget.resourceType)) {
     return undefined;
   }
-  return asTrimmedString(discoveryTarget.resourceId) || asTrimmedString(discoveryTarget.hostId);
+  return (
+    asTrimmedString(discoveryTarget.resourceId) ||
+    asTrimmedString(discoveryTarget.agentId) ||
+    asTrimmedString(discoveryTarget.hostId)
+  );
 };
