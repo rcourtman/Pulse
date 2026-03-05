@@ -238,6 +238,9 @@ describe('agent model guardrails', () => {
     expect(chartsApiSource).not.toContain('hostData?: Record<string, ChartData>');
     expect(chartsApiSource).toContain('agents?: number;');
     expect(chartsApiSource).not.toContain('hosts?: number;');
+    expect(chartsApiSource).toContain("| 'system-container'");
+    expect(chartsApiSource).toContain("| 'app-container'");
+    expect(chartsApiSource).not.toContain("| 'container'");
   });
 
   it('keeps login and SSO settings on provider-based flows only', () => {

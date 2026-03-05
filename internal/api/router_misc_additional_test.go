@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,6 +36,71 @@ func syncTestResourceStore(t *testing.T, monitor *monitoring.Monitor, state *mod
 	adapter := unifiedresources.NewMonitorAdapter(nil)
 	adapter.PopulateFromSnapshot(state.GetSnapshot())
 	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(adapter))
+}
+
+func TestNormalizeMetricsHistoryResourceType_ContainerCanonicalTypes(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		wantResponse string
+		wantRuntime  string
+		wantStore    []string
+	}{
+		{
+			name:         "system container",
+			input:        "system-container",
+			wantResponse: "system-container",
+			wantRuntime:  "container",
+			wantStore:    []string{"container"},
+		},
+		{
+			name:         "oci container",
+			input:        "oci-container",
+			wantResponse: "oci-container",
+			wantRuntime:  "container",
+			wantStore:    []string{"container"},
+		},
+		{
+			name:         "app container",
+			input:        "app-container",
+			wantResponse: "app-container",
+			wantRuntime:  "dockerContainer",
+			wantStore:    []string{"dockerContainer", "docker"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			responseType, runtimeType, storeTypes, err := normalizeMetricsHistoryResourceType(tt.input)
+			if err != nil {
+				t.Fatalf("normalizeMetricsHistoryResourceType(%q) error = %v", tt.input, err)
+			}
+			if responseType != tt.wantResponse {
+				t.Fatalf("responseType = %q, want %q", responseType, tt.wantResponse)
+			}
+			if runtimeType != tt.wantRuntime {
+				t.Fatalf("runtimeType = %q, want %q", runtimeType, tt.wantRuntime)
+			}
+			if len(storeTypes) != len(tt.wantStore) {
+				t.Fatalf("storeTypes len = %d, want %d (%v)", len(storeTypes), len(tt.wantStore), storeTypes)
+			}
+			for i := range storeTypes {
+				if storeTypes[i] != tt.wantStore[i] {
+					t.Fatalf("storeTypes[%d] = %q, want %q (all=%v)", i, storeTypes[i], tt.wantStore[i], storeTypes)
+				}
+			}
+		})
+	}
+}
+
+func TestNormalizeMetricsHistoryResourceType_RejectsLegacyContainerAlias(t *testing.T) {
+	_, _, _, err := normalizeMetricsHistoryResourceType("container")
+	if err == nil {
+		t.Fatal("expected error for legacy container alias")
+	}
+	if !strings.Contains(err.Error(), `unsupported resourceType "container"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestHandleSchedulerHealth_MethodNotAllowed(t *testing.T) {

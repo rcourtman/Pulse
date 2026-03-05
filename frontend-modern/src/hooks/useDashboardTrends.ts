@@ -109,7 +109,9 @@ function asHistoryResourceType(type: string): HistoryResourceType | null {
     'node',
     'guest',
     'vm',
-    'container',
+    'system-container',
+    'oci-container',
+    'app-container',
     'storage',
     'docker',
     'dockerHost',
@@ -226,11 +228,13 @@ export function mapUnifiedTypeToHistoryType(type: string): string | null {
     case 'truenas':
       return 'node';
     case 'vm':
+      return 'vm';
     case 'system-container':
+      return 'system-container';
     case 'oci-container':
-      return 'guest';
+      return 'oci-container';
     case 'app-container':
-      return 'docker';
+      return 'app-container';
     case 'pod':
       return 'k8s';
     default:
