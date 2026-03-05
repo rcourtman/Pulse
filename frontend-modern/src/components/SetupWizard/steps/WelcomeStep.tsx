@@ -121,7 +121,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
               Unlock Setup
             </h3>
             <p class="text-sm text-muted mb-6">
-              Run the following command on your host to retrieve the secure bootstrap token:
+              Run the following command on your machine to retrieve the secure bootstrap token:
             </p>
 
             <div class="mb-8">

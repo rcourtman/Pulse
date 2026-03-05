@@ -63,7 +63,7 @@ const hasAgentFacet = (resource: Resource): boolean => {
   );
 };
 
-const toLegacyNodeShape = (resource: Resource) => {
+const toNodeSummaryShape = (resource: Resource) => {
   const platformData = pd(resource);
   const proxmox = asRecord(platformData?.proxmox);
   const name = resource.name || resource.displayName || resource.platformId || resource.id;
@@ -75,7 +75,7 @@ const toLegacyNodeShape = (resource: Resource) => {
   };
 };
 
-const toLegacyHostShape = (resource: Resource) => {
+const toAgentSummaryShape = (resource: Resource) => {
   const platformData = pd(resource);
   const agent = {
     ...(asRecord(platformData?.agent) || {}),
@@ -129,7 +129,7 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
         });
         const resources = state.resources || [];
         const nodeResources = resources.filter((resource) => resource.type === 'node');
-        const hostLikeResources = resources.filter(
+        const agentFacetResources = resources.filter(
           (resource) =>
             (resource.type === 'node' ||
               resource.type === 'pbs' ||
@@ -138,11 +138,11 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
             hasAgentFacet(resource),
         );
 
-        const nodes = nodeResources.map(toLegacyNodeShape);
-        const hosts = hostLikeResources.map(toLegacyHostShape);
+        const nodes = nodeResources.map(toNodeSummaryShape);
+        const agents = agentFacetResources.map(toAgentSummaryShape);
 
         // Check if we have new connections
-        const totalAgents = nodes.length + hosts.length;
+        const totalAgents = nodes.length + agents.length;
         if (!firstConnectionTracked && totalAgents > 0) {
           trackAgentFirstConnected(SETUP_WIZARD_TELEMETRY_SURFACE, 'first_agent');
           firstConnectionTracked = true;
@@ -174,8 +174,8 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
             }
           }
 
-          for (const host of hosts) {
-            const name = host.displayName || host.hostname || 'Unknown';
+          for (const agent of agents) {
+            const name = agent.displayName || agent.hostname || 'Unknown';
             const existing = agentMap.get(name);
             if (existing) {
               // Add Agent to existing PVE node
@@ -184,7 +184,7 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
               }
             } else {
               agentMap.set(name, {
-                id: host.id || `host-${name}`,
+                id: agent.id || `agent-${name}`,
                 name,
                 type: 'Agent',
                 host: '',
