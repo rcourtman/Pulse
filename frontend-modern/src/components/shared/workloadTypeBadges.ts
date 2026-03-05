@@ -73,14 +73,26 @@ const toTitleCase = (value: string): string =>
 const normalizeKey = (value: string | null | undefined): WorkloadTypeBadgeKey | null => {
   const normalized = (value || '').trim().toLowerCase();
   if (!normalized) return null;
-  if (normalized === 'vm') return 'vm';
-  if (normalized === 'system-container') return 'system-container';
-  if (normalized === 'docker' || normalized === 'app-container') {
+  if (normalized === 'vm' || normalized === 'qemu') return 'vm';
+  if (
+    normalized === 'system-container' ||
+    normalized === 'container' ||
+    normalized === 'lxc' ||
+    normalized === 'ct'
+  ) {
+    return 'system-container';
+  }
+  if (
+    normalized === 'docker' ||
+    normalized === 'app-container' ||
+    normalized === 'docker-container' ||
+    normalized === 'docker_container'
+  ) {
     return 'app-container';
   }
   if (normalized === 'k8s' || normalized === 'kubernetes') return 'k8s';
-  if (normalized === 'pod') return 'pod';
-  if (normalized === 'agent') return 'agent';
+  if (normalized === 'pod' || normalized === 'k8s-pod' || normalized === 'k8s_pod') return 'pod';
+  if (normalized === 'agent' || normalized === 'host') return 'agent';
   if (normalized === 'oci') return 'oci';
   return null;
 };

@@ -86,12 +86,22 @@ export function getSourceBadge(sourceType?: SourceType): ResourceBadge | null {
 
 export function getTypeBadge(resourceType?: ResourceType | string): ResourceBadge | null {
   if (!resourceType) return null;
-  const normalizedType = resourceType.trim().toLowerCase();
+  const normalizedType = canonicalType(resourceType);
   return {
     label: typeLabels[normalizedType] ?? normalizedType,
     classes: `${baseBadge} ${typeClasses}`,
     title: normalizedType,
   };
+}
+
+function canonicalType(resourceType: string): string {
+  const normalized = resourceType.trim().toLowerCase();
+  if (normalized === 'host') return 'agent';
+  if (normalized === 'dockerhost') return 'docker-host';
+  if (normalized === 'k8s_cluster') return 'k8s-cluster';
+  if (normalized === 'k8s_pod') return 'k8s-pod';
+  if (normalized === 'k8s_deployment') return 'k8s-deployment';
+  return normalized;
 }
 
 export function getUnifiedSourceBadges(sources?: string[] | null): ResourceBadge[] {

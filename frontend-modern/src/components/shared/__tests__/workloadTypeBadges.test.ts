@@ -10,10 +10,10 @@ describe('workloadTypeBadges', () => {
         expect(result.title).toBe('Virtual Machine');
       });
 
-      it('does not normalize legacy qemu alias', () => {
+      it('normalizes legacy qemu alias to VM', () => {
         const result = getWorkloadTypeBadge('qemu');
-        expect(result.label).toBe('Qemu');
-        expect(result.title).toBe('Qemu');
+        expect(result.label).toBe('VM');
+        expect(result.title).toBe('Virtual Machine');
       });
 
       it('returns VM badge for VM (case insensitive)', () => {
@@ -29,16 +29,16 @@ describe('workloadTypeBadges', () => {
         expect(result.title).toBe('System Container');
       });
 
-      it('does not normalize legacy ct alias', () => {
+      it('normalizes legacy ct alias to system-container', () => {
         const result = getWorkloadTypeBadge('ct');
-        expect(result.label).toBe('Ct');
-        expect(result.title).toBe('Ct');
+        expect(result.label).toBe('Container');
+        expect(result.title).toBe('System Container');
       });
 
-      it('does not normalize legacy container alias', () => {
+      it('normalizes legacy container alias to system-container', () => {
         const result = getWorkloadTypeBadge('container');
         expect(result.label).toBe('Container');
-        expect(result.title).toBe('Container');
+        expect(result.title).toBe('System Container');
       });
     });
 
@@ -48,16 +48,16 @@ describe('workloadTypeBadges', () => {
         expect(result.label).toBe('Containers');
       });
 
-      it('does not normalize legacy docker-container alias', () => {
+      it('normalizes legacy docker-container alias to app-container', () => {
         const result = getWorkloadTypeBadge('docker-container');
-        expect(result.label).toBe('Docker Container');
-        expect(result.title).toBe('Docker Container');
+        expect(result.label).toBe('Containers');
+        expect(result.title).toBe('Application Container');
       });
 
-      it('does not normalize legacy docker_container alias', () => {
+      it('normalizes legacy docker_container alias to app-container', () => {
         const result = getWorkloadTypeBadge('docker_container');
-        expect(result.label).toBe('Docker Container');
-        expect(result.title).toBe('Docker Container');
+        expect(result.label).toBe('Containers');
+        expect(result.title).toBe('Application Container');
       });
     });
 
@@ -79,10 +79,10 @@ describe('workloadTypeBadges', () => {
     });
 
     describe('Agent types', () => {
-      it('does not map legacy host alias to Agent', () => {
+      it('maps legacy host alias to Agent', () => {
         const result = getWorkloadTypeBadge('host');
-        expect(result.label).toBe('Host');
-        expect(result.title).toBe('Host');
+        expect(result.label).toBe('Agent');
+        expect(result.title).toBe('Agent');
       });
 
       it('returns Agent badge for agent', () => {
